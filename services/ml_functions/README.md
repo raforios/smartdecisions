@@ -66,6 +66,40 @@ A continuación se listan los endpoints principales de la API, organizados por s
 
 ---
 
+## 📦 Dependencias
+
+Las siguientes librerías son esenciales para el funcionamiento del **File-Handler-Service** y se gestionan a través de `requirements.txt` y Docker:
+
+* `fastapi`
+* `uvicorn`
+* `pydantic`
+* `pydantic-core`
+* `python-multipart`
+* `boto3`
+* `mangum`
+* `pandas`
+* `python-jose[cryptography]`
+* `numpy`
+* `python-dotenv`
+
+---
+
+## 🚀 Despliegue manual en AWS 
+
+```shell
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions 
+
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --destroy
+
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --skip-table-creation
+
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --skip-code-update
+
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --enable-sqs
+
+```
+---
+
 ## 🗂️ Estructura del Microservicio
 
 ```text
@@ -102,40 +136,6 @@ ml_functions/
 └── requirements.txt
 ```
 
----
-
-## 📦 Dependencias
-
-Las siguientes librerías son esenciales para el funcionamiento del **File-Handler-Service** y se gestionan a través de `requirements.txt` y Docker:
-
-* `fastapi`
-* `uvicorn`
-* `pydantic`
-* `pydantic-core`
-* `python-multipart`
-* `boto3`
-* `mangum`
-* `pandas`
-* `python-jose[cryptography]`
-* `numpy`
-* `python-dotenv`
-
----
-
-## 🚀 Despliegue manual en AWS 
-
-```shell
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/ml_functions 
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/ml_functions --destroy
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/ml_functions --skip-table-creation
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/ml_functions --skip-code-update
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/ml_functions --enable-sqs
-
-```
 ---
 
 ## 👤 Creado Por

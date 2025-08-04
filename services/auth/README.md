@@ -75,13 +75,13 @@ Las siguientes librerías son esenciales para el funcionamiento del **Auth-Handl
 ## 🚀 Despliegue manual en AWS 
 
 ```shell
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/auth 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth 
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/auth --destroy
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth --destroy
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/auth --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth --skip-code-update
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/services/auth --skip-table-creation 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth --skip-table-creation 
 
 ```
 ---

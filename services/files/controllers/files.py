@@ -58,10 +58,10 @@ def _handle_s3_client_error(
                 msg_context += f' or file {file_key}'
             if prefix:
                 msg_context += f' or prefix {prefix}'
-            
+
             if not msg_context:
                 msg_context = 'S3 resource'
-            
+
             error_msg = f"Access denied to {msg_context}."
             logger.error(error_msg, exc_info = True)
             raise ForbiddenError(
@@ -114,21 +114,21 @@ async def read_data_from_s3(
                 message = f'''CSV file '{file_key}' was accessed and processed by
                 user '{current_user}' on bucket '{bucket_name}'.'''
                 logger.info(message)
-            
+
             case '.xls' | '.xlsx':
                 file_content_bytes = response['Body'].read()
                 df = pd.read_excel(BytesIO(file_content_bytes))
                 message = f'''Excel file '{file_key}' was accessed and processed by
                 user '{current_user}' on bucket '{bucket_name}'.'''
                 logger.info(message)
-                
+
             case '.txt':
                 file_content = response['Body'].read().decode('utf-8')
                 message = f'''Text file '{file_key}' was accessed and read by
                 user '{current_user}' on bucket '{bucket_name}'.'''
                 logger.info(message)
                 return {'filename': file_key, 'content': file_content}
-            
+
             case _:
                 error_msg = f'''Unsupported file format for '{file_key}'. Only CSV (.csv)
                 and Excel (.xls, .xlsx) files are supported for processing.'''
