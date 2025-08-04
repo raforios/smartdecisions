@@ -118,6 +118,9 @@ app/
 |    |  │   ├── jwt_token.py
 |    |  │   ├── logger_config.py
 |    |  │   └── security.py
+|    |  ├── test/
+|    |  │   ├── __init__.py
+|    |  │   └── test_auth.py
 |    |  ├── .dockerignore
 |    |  ├── .env
 |    |  ├── .gitignore
@@ -144,6 +147,9 @@ app/
 |    |  │   ├── exceptions.py
 |    |  │   ├── logger_config.py
 |    |  │   └── security.py
+|    |  ├── test/
+|    |  │   ├── __init__.py
+|    |  │   └── test_files.py
 |    |  ├── .dockerignore
 |    |  ├── .env
 |    |  ├── .gitignore
@@ -177,6 +183,9 @@ app/
 |    |  │   ├── exceptions.py
 |    |  │   ├── logger_config.py
 |    |  │   └── security.py
+|    |  ├── test/
+|    |  │   ├── __init__.py
+|    |  │   └── test_forms.py
 |    |  ├── .dockerignore
 |    |  ├── .env
 |    |  ├── .gitignore
@@ -208,6 +217,9 @@ app/
 |    |  │   └── localization.py
 |    |  │   ├── logger_config.py
 |    |  │   └── security.py
+|    |  ├── test/
+|    |  │   ├── __init__.py
+|    |  │   └── test_localization.py
 |    |  ├── .dockerignore
 |    |  ├── .env
 |    |  ├── .gitignore
@@ -239,6 +251,9 @@ app/
 |    |  │   ├── logger_config.py
 |    |  │   ├── machine_learning.py
 |    |  │   └── security.py
+|    |  ├── test/
+|    |  │   ├── __init__.py
+|    |  │   └── test_ml.py
 |    |  ├── .dockerignore
 |    |  ├── .env
 |    |  ├── .gitignore
