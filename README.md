@@ -52,6 +52,207 @@ Todos los microservicios comparten un conjunto de tecnologías comunes que garan
 
 ---
 
+## 🗂️ Estructura del Microservicio
+
+```text
+app/
+└── frontend/
+|   └── layout/
+|   │   ├── __init__.py
+|   │   ├── menu.py
+|   │   └── utils.py
+|   ├── pages/
+|   │   ├── __init__.py
+|   │   ├── content_generator.py
+|   │   ├── dashboard.py
+|   │   ├── load_file.py
+|   │   ├── maps.py
+|   │   └── optimization.py
+|   ├── services/
+|   │   ├── __init__.py
+|   │   ├── load_data.py
+|   │   └── rest.py
+|   ├── utils/
+|   │   ├── __init__.py
+|   │   ├── create_office_files.py
+|   │   ├── data.py
+|   │   └── environmnet.py
+|   ├── .env
+|   ├── .gitignore
+|   ├── main.py
+|   ├── README.md
+|   └── requirements.txt
+├── notebooks/
+|    └── lib/
+|    │   ├── __init__.py
+|    │   ├── data.py
+|    │   ├── frontend_functions.py
+|    │   ├── graph.py
+|    │   ├── ml_functions.py
+|    │   ├── models.py
+|    │   └── rest.py
+|    ├── .env
+|    ├── .gitignore
+|    ├── frontend.ipynb
+|    ├── requirements.txt
+|    └── routes.ipynb
+├── services/
+|    └── auth/
+|    |  └── controllers/
+|    |  │   ├── __init__.py
+|    |  │   └── users.py
+|    |  ├── routes/
+|    |  │   ├── __init__.py
+|    |  │   ├── auth.py
+|    |  │   └── users.py
+|    |  ├── schemas/
+|    |  │   ├── __init__.py
+|    |  │   ├── auth.py
+|    |  │   ├── role.py
+|    |  │   └── users.py
+|    |  ├── services/
+|    |  │   ├── __init__.py
+|    |  │   ├── api_exceptions.py
+|    |  │   ├── dynamodb.py
+|    |  │   ├── exceptions.py
+|    |  │   ├── jwt_token.py
+|    |  │   ├── logger_config.py
+|    |  │   └── security.py
+|    |  ├── .dockerignore
+|    |  ├── .env
+|    |  ├── .gitignore
+|    |  ├── deploy.config
+|    |  ├── Dockerfile
+|    |  ├── main.py
+|    |  ├── README.md
+|    |  └── requirements.txt
+|    └── ci/
+|    |  └── build_and_deply.sh
+|    └── files/
+|    |  └── controllers/
+|    |  │   ├── __init__.py
+|    |  │   └── files.py
+|    |  ├── routes/
+|    |  │   ├── __init__.py
+|    |  │   └── files.py
+|    |  ├── schemas/
+|    |  │   ├── __init__.py
+|    |  │   └── files.py
+|    |  ├── services/
+|    |  │   ├── __init__.py
+|    |  │   ├── api_exceptions.py
+|    |  │   ├── exceptions.py
+|    |  │   ├── logger_config.py
+|    |  │   └── security.py
+|    |  ├── .dockerignore
+|    |  ├── .env
+|    |  ├── .gitignore
+|    |  ├── deploy.config
+|    |  ├── Dockerfile
+|    |  ├── main.py
+|    |  ├── README.md
+|    |  └── requirements.txt
+|    └── forms/
+|    |  └── controllers/
+|    |  │   ├── __init__.py
+|    |  │   ├── forms.py
+|    |  │   └── responses.py
+|    |  ├── models/
+|    |  │   ├── __init__.py
+|    |  │   ├── forms.py
+|    |  │   └── responses.py
+|    |  ├── routes/
+|    |  │   ├── __init__.py
+|    |  │   ├── forms.py
+|    |  │   └── responses.py
+|    |  ├── schemas/
+|    |  │   ├── __init__.py
+|    |  │   ├── forms.py
+|    |  │   └── responses.py
+|    |  ├── services/
+|    |  │   ├── __init__.py
+|    |  │   ├── crud.py
+|    |  │   ├── db_connection.py
+|    |  │   ├── dynamodb.py
+|    |  │   ├── exceptions.py
+|    |  │   ├── logger_config.py
+|    |  │   └── security.py
+|    |  ├── .dockerignore
+|    |  ├── .env
+|    |  ├── .gitignore
+|    |  ├── deploy.config
+|    |  ├── Dockerfile
+|    |  ├── dynamodb.sh
+|    |  ├── main.py
+|    |  ├── README.md
+|    |  └── requirements.txt
+|    └── localization/
+|    |  └── controllers/
+|    |  │   ├── init.py
+|    |  │   └── localization.py
+|    |  ├── models/
+|    |  │   ├── init.py
+|    |  │   └── localization.py
+|    |  ├── routes/
+|    |  │   ├── init.py
+|    |  │   └── localization.py
+|    |  ├── schemas/
+|    |  │   ├── init.py
+|    |  │   └── localization.py
+|    |  ├── services/
+|    |  │   ├── init.py
+|    |  │   ├── api_exceptions.py
+|    |  │   ├── crud.py
+|    |  │   ├── db_connection.py
+|    |  │   ├── exceptions.py
+|    |  │   └── localization.py
+|    |  │   ├── logger_config.py
+|    |  │   └── security.py
+|    |  ├── .dockerignore
+|    |  ├── .env
+|    |  ├── .gitignore
+|    |  ├── deploy.config
+|    |  ├── Dockerfile
+|    |  ├── main.py
+|    |  ├── README.md
+|    |  └── requirements.txt
+|    └── ml_functions/
+|    |  └── controllers/
+|    |  │   ├── __init__.py
+|    |  │   ├── classification.py
+|    |  │   ├── common.py
+|    |  │   └── prediction.py
+|    |  ├── routes/
+|    |  │   ├── __init__.py
+|    |  │   ├── classification.py
+|    |  │   ├── common.py
+|    |  │   └── prediction.py
+|    |  ├── schemas/
+|    |  │   ├── __init__.py
+|    |  │   ├── classification.py
+|    |  │   ├── common.py
+|    |  │   └── prediction.py
+|    |  ├── services/
+|    |  │   ├── __init__.py
+|    |  │   ├── api_exceptions.py
+|    |  │   ├── exceptions.py
+|    |  │   ├── logger_config.py
+|    |  │   ├── machine_learning.py
+|    |  │   └── security.py
+|    |  ├── .dockerignore
+|    |  ├── .env
+|    |  ├── .gitignore
+|    |  ├── deploy.config
+|    |  ├── Dockerfile
+|    |  ├── main.py
+|    |  ├── README.md
+|    |  └── requirements.txt
+├── .gitignore
+└── README.md
+
+```
+---
+
 ## 🚀 Despliegue y Ejecución
 
 Cada microservicio puede ser desplegado de forma independiente en **AWS Lambda** utilizando los scripts de shell proporcionados. La configuración se gestiona a través de archivos `.env`.
