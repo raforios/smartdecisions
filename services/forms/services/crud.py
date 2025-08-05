@@ -1,8 +1,8 @@
 '''
     CRUD service
 '''
-from typing import List, Optional, Dict, Any, Type
-from sqlalchemy.orm import Session, DeclarativeBase
+from typing import List, Optional, Dict, Any, Type, Union
+from sqlalchemy.orm import Session, DeclarativeBase, selectinload, Load
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from pydantic import BaseModel
 
@@ -102,30 +102,44 @@ def create_record(
 def get_record(
     db: Session, model: Type[DeclarativeBase],
     record_id: int,
-    eager_load_options: Optional[List] = None
+    eager_load_options: Optional[List[Union[str, Load]]] = None
 ) -> DeclarativeBase:
     '''
-        Generic function to retrieve a record by ID.
+        Generic function to retrieve a record by ID with flexible eager loading.
 
         Args:
             db (Session): The database session.
             model (Type[DeclarativeBase]): The SQLAlchemy model class to query.
             record_id (int): The ID of the record to retrieve.
-            eager_load_options (Optional[List]): List of joinedload options for eager loading.
+            eager_load_options (Optional[List[Union[str, Load]]]):
+                A list of relationship names (strings) or
+                SQLAlchemy Load objects for eager loading.
 
         Returns:
             DeclarativeBase: The retrieved database record.
 
         Raises:
-            RegisterNotFoundError: If model is FormHeader and record is not found.
-            Exception: For other models if record is not found (can be refined).
+            RegisterNotFoundError: If the record is not found.
+            Exception: For any other unexpected errors.
     '''
 
     try:
         query = db.query(model)
         if eager_load_options:
             for option in eager_load_options:
-                query = query.options(option)
+                match option:
+                    case str():
+                        # Use selectinload for simple relationship names
+                        query = query.options(selectinload(getattr(model, option)))
+                    case Load():
+                        # Pass Load objects directly
+                        query = query.options(option)
+                    case _:
+                        # Handle any other type
+                        message = f'''Invalid eager_load_option type: {type(option)}.
+                        Must be a string or a SQLAlchemy Load object.'''
+                        logger.error(message, exc_info = True)
+                        raise TypeError(message)
 
         record = query.filter(model.id == record_id).first()
         if not record:
@@ -133,7 +147,7 @@ def get_record(
             logger.warning(message)
             raise RegisterNotFoundError(detail = message)
         return record
-    except (SQLAlchemyError, RegisterNotFoundError) as e:
+    except (SQLAlchemyError, RegisterNotFoundError, TypeError) as e:
         handle_db_exception(e, 'retrieval', record_id)
         raise
     except Exception as e:
