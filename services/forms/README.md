@@ -126,10 +126,13 @@ Para ejecutar el microservicio localmente, sigue los siguientes pasos:
     * Asegúrate de tener una instancia local de DynamoDB en ejecución (puedes usar Docker como en el ejemplo del otro microservicio) y que las configuraciones sean correctas.
 
 3.  **Ejecuta el servidor de la API:**
+
     ```shell
     python main.py
     ```
+
     O si el entorno lo requiere:
+    
     ```shell
     python3 main.py
     ```

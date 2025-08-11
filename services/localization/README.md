@@ -95,10 +95,13 @@ Para ejecutar el microservicio localmente, sigue los siguientes pasos:
 2.  **Configura la base de datos:** Asegúrate de que tienes un servidor MySQL en ejecución y que las variables de conexión están correctamente configuradas en el archivo `.env`.
 
 3.  **Ejecuta el servidor de la API:**
+
     ```shell
     python main.py
     ```
+
     O si el entorno lo requiere:
+    
     ```shell
     python3 main.py
     ```
