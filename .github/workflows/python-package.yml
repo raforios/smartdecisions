@@ -19,8 +19,8 @@ jobs:
           - "services/files"
           - "services/forms"
           - "services/localization"
-          - "services/planning"
           - "services/ml_functions"
+          - "services/planning"
 
     steps:
     - name: Checkout repository

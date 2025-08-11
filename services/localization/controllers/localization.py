@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from services.db_connection import GET_DB_DEPENDENCY
 from services.crud import get_record
-from services.exceptions import RegisterNotFoundError, RegisterAlreadyExistsError, InvalidInputError
+from services.exceptions import (
+    RegisterNotFoundError,
+    RegisterAlreadyExistsError,
+    InvalidInputError
+)
 from services.logger_config import custom_logger as logger
 from services.localization import (
     create_planned_route_with_points,
@@ -15,7 +19,11 @@ from services.localization import (
     get_statistics_user_points,
     register_attendance
 )
-from models.localization import PlannedRoute, ExecutedRoute, ExecutedPoint
+from models.localization import (
+    PlannedRoute,
+    ExecutedRoute,
+    ExecutedPoint
+)
 from schemas.localization import (
     PlannedRouteCreateSchema,
     PlannedRouteResponseSchema,

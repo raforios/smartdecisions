@@ -10,7 +10,13 @@ from services.exceptions import (
     InvalidInputError
 )
 from services.logger_config import custom_logger as logger
-from models.localization import PlannedRoute, PlannedPoint, ExecutedPoint, Attendance, ExecutedRoute
+from models.localization import (
+    PlannedRoute,
+    PlannedPoint,
+    ExecutedPoint,
+    Attendance,
+    ExecutedRoute
+)
 from schemas.localization import (
     PlannedRouteCreateSchema,
     AttendanceCreateSchema

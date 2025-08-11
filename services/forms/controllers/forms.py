@@ -148,10 +148,10 @@ async def get_form_header_by_id(
         message = f'Form header {form_id} retrieved successfully.'
         logger.info(message)
         return form_header
-    except RegisterNotFoundError as exc:
+    except RegisterNotFoundError as e:
         message = f'Form with ID {form_id} not found.'
         logger.warning(message)
-        raise RegisterNotFoundError(detail = message) from exc
+        raise RegisterNotFoundError(detail = message) from e
     except Exception as e:
         error_msg = f'Unexpected error retrieving form header {form_id}: {e}'
         logger.error(error_msg, exc_info = True)
@@ -320,10 +320,10 @@ async def get_question_detail_by_id(
         message = f'Question detail {question_id} retrieved successfully.'
         logger.info(message)
         return question
-    except RegisterNotFoundError as exc: # Corrected W0707
+    except RegisterNotFoundError as e: # Corrected W0707
         message = f'Question detail with ID {question_id} not found.'
         logger.warning(message)
-        raise RegisterNotFoundError(detail = message) from exc
+        raise RegisterNotFoundError(detail = message) from e
     except Exception as e:
         error_msg = f'Unexpected error retrieving question detail {question_id}: {e}'
         logger.error(error_msg, exc_info = True)
@@ -417,8 +417,8 @@ async def delete_question_detail(
         message = f'Question detail {question_id} deleted successfully.'
         logger.info(message)
         return {'message': 'Question detail deleted successfully.'}
-    except RegisterNotFoundError as exc: # Corrected W0707
+    except RegisterNotFoundError as e: # Corrected W0707
         db.rollback()
         raise RegisterNotFoundError(
             detail = f'Question detail with ID {question_id} not found for deletion.'
-        ) from exc
+        ) from e
