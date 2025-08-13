@@ -28,7 +28,7 @@ from schemas.localization import (
     RouteComparisonsResponseSchema
 )
 
-router = APIRouter(prefix='/v1/localization', tags=['Localization'])
+router = APIRouter(prefix = '/v1/localization', tags = ['Localization'])
 
 @router.post(
     '/routes/planned',

@@ -1,7 +1,7 @@
 '''
     Database Models for Localization Microservice
 '''
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import text
 from services.db_connection import Base
@@ -39,8 +39,8 @@ class PlannedPoint(Base):# pylint: disable=too-few-public-methods
     id = Column(Integer, primary_key = True, index = True)
     planned_route_id = Column(Integer, ForeignKey('t_planned_routes.id'), nullable = False)
     point_name = Column(String(100), nullable = False)
-    latitude = Column(Float, nullable = False)
-    longitude = Column(Float, nullable = False)
+    latitude = Column(Numeric(10, 8), nullable = False)
+    longitude = Column(Numeric(10, 8), nullable = False)
     reference_data = Column(Text, nullable = True)
 
     planned_route = relationship('PlannedRoute', back_populates = 'points')
@@ -78,8 +78,8 @@ class ExecutedPoint(Base):# pylint: disable=too-few-public-methods
 
     id = Column(Integer, primary_key = True, index = True)
     executed_route_id = Column(Integer, ForeignKey('t_executed_routes.id'), nullable = False)
-    latitude = Column(Float, nullable = False)
-    longitude = Column(Float, nullable = False)
+    latitude = Column(Numeric(10, 8), nullable = False)
+    longitude = Column(Numeric(10, 8), nullable = False)
     timestamp = Column(DateTime, nullable = False, index = True)
 
     executed_route = relationship('ExecutedRoute', back_populates='points')
