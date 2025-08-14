@@ -1,10 +1,11 @@
 '''
     Database Models for Localization Microservice
 '''
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import text
 from services.db_connection import Base
+from schemas.localization import PlannedRouteStatusEnum
 
 class PlannedRoute(Base):# pylint: disable=too-few-public-methods
     '''
@@ -14,11 +15,18 @@ class PlannedRoute(Base):# pylint: disable=too-few-public-methods
 
     id = Column(Integer, primary_key = True, index = True)
     route_name = Column(String(150), nullable = False)
+    code = Column(String(50), nullable = False, unique = True)
     description = Column(String(500), nullable = True)
     user_id = Column(Integer, nullable = False, index = True)
     # Using text('now()') and server_default to fix Pylint error and ensure
     # the function is executed at the database level.
     created_at = Column(DateTime, nullable = False, server_default = text('now()'))
+
+    status = Column(
+        Enum(PlannedRouteStatusEnum),
+        default = PlannedRouteStatusEnum.IN_CREATION,
+        nullable = False
+    )
 
     points = relationship(
         'PlannedPoint',
@@ -39,8 +47,8 @@ class PlannedPoint(Base):# pylint: disable=too-few-public-methods
     id = Column(Integer, primary_key = True, index = True)
     planned_route_id = Column(Integer, ForeignKey('t_planned_routes.id'), nullable = False)
     point_name = Column(String(100), nullable = False)
-    latitude = Column(Numeric(10, 8), nullable = False)
-    longitude = Column(Numeric(10, 8), nullable = False)
+    latitude = Column(Numeric(16, 14), nullable = False)
+    longitude = Column(Numeric(16, 14), nullable = False)
     reference_data = Column(Text, nullable = True)
 
     planned_route = relationship('PlannedRoute', back_populates = 'points')
@@ -60,7 +68,7 @@ class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
     user_id = Column(Integer, nullable = False, index = True)
     planned_route_id = Column(Integer, ForeignKey('t_planned_routes.id'), nullable = True)
     # Using text('now()') and server_default for consistency and Pylint compatibility.
-    start_time = Column(DateTime, nullable = False, server_default=text('now()'))
+    start_time = Column(DateTime, nullable = False, server_default = text('now()'))
     end_time = Column(DateTime, nullable = True)
 
     planned_route = relationship('PlannedRoute', back_populates = 't_executed_routes')
@@ -78,11 +86,11 @@ class ExecutedPoint(Base):# pylint: disable=too-few-public-methods
 
     id = Column(Integer, primary_key = True, index = True)
     executed_route_id = Column(Integer, ForeignKey('t_executed_routes.id'), nullable = False)
-    latitude = Column(Numeric(10, 8), nullable = False)
-    longitude = Column(Numeric(10, 8), nullable = False)
+    latitude = Column(Numeric(16, 14), nullable = False)
+    longitude = Column(Numeric(16, 14), nullable = False)
     timestamp = Column(DateTime, nullable = False, index = True)
 
-    executed_route = relationship('ExecutedRoute', back_populates='points')
+    executed_route = relationship('ExecutedRoute', back_populates = 'points')
 
 class Attendance(Base):# pylint: disable=too-few-public-methods
     '''

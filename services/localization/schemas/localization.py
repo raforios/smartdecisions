@@ -3,7 +3,17 @@
 '''
 from typing import List, Optional
 from datetime import datetime
+from enum import Enum
+from fastapi import Query
 from pydantic import BaseModel, Field, ConfigDict
+
+class PlannedRouteStatusEnum(str, Enum):
+    '''
+        Enum for the status of a planned route.
+    '''
+    ACTIVE = 'ACTIVE'
+    INACTIVE = 'INACTIVE'
+    IN_CREATION = 'IN CREATION'
 
 class LocalizationBaseSchema(BaseModel):
     '''
@@ -38,6 +48,19 @@ class PlannedPointSchema(PointBase, LocalizationBaseSchema):
         description = 'Additional reference data or notes for the point.'
     )
 
+class PlannedPointCreateSchema(PointBase):
+    '''
+        Schema for adding a new point to a planned route.
+    '''
+    point_name: str = Field(
+        ..., max_length = 100,
+        description = 'Name of the planned point, e.g., "Office A".'
+    )
+    reference_data: Optional[str] = Field(
+        None, max_length = 255,
+        description = 'Additional reference data or notes for the point.'
+    )
+
 class PlannedRouteCreateSchema(BaseModel):
     '''
         Schema for creating a planned route.
@@ -45,6 +68,10 @@ class PlannedRouteCreateSchema(BaseModel):
     route_name: str = Field(
         ..., max_length = 150,
         description = 'Name of the planned route.'
+    )
+    code: str = Field(
+        ..., max_length = 50,
+        description = 'Unique code for the planned route.'
     )
     description: Optional[str] = Field(
         None, max_length = 500,
@@ -65,6 +92,29 @@ class PlannedRouteResponseSchema(PlannedRouteCreateSchema, LocalizationBaseSchem
     '''
     id: int
     created_at: datetime
+
+class PlannedRouteListResponseSchema(LocalizationBaseSchema):
+    '''
+        Response schema for a list of planned routes. This is the missing class
+        used by the list and filter endpoints.
+    '''
+    id: int
+    route_name: str
+    code: str
+    description: Optional[str]
+    user_id: int
+    created_at: datetime
+    status: PlannedRouteStatusEnum
+    points: List[PlannedPointSchema]
+
+class PlannedRouteUpdateStatusSchema(BaseModel):
+    '''
+        Schema for updating a planned route's status.
+    '''
+    status: PlannedRouteStatusEnum = Field(
+        ...,
+        description = 'New status for the planned route.'
+    )
 
 class ExecutedRouteCreateSchema(BaseModel):
     '''
@@ -87,6 +137,15 @@ class ExecutedRouteResponseSchema(ExecutedRouteCreateSchema, LocalizationBaseSch
     start_time: datetime
     end_time: Optional[datetime]
 
+class ExecutedRouteUpdateSchema(BaseModel):
+    '''
+        Schema for updating an executed route's end time.
+    '''
+    end_time: datetime = Field(
+        ...,
+        description = 'Timestamp when the executed route was finished.'
+    )
+
 class ExecutedPointCreateSchema(PointBase):
     '''
         Schema for a point in an executed route, sent from a mobile device.
@@ -105,6 +164,31 @@ class ExecutedPointResponseSchema(ExecutedPointCreateSchema, LocalizationBaseSch
         Response schema for an executed point, including the database ID.
     '''
     id: int
+
+class ExecutedRouteComparisonSchema(BaseModel):
+    '''
+        Schema for a single executed route for comparison purposes.
+    '''
+    id: int
+    user_id: int
+    start_time: datetime
+    end_time: Optional[datetime]
+    points: List[ExecutedPointResponseSchema]
+
+class PlannedRouteComparisonSchema(BaseModel):
+    '''
+        Schema for a planned route in the comparison response.
+    '''
+    id: int
+    route_name: str
+    points: List[PlannedPointSchema] # Reutilizamos el esquema existente
+
+class RouteComparisonFullResponseSchema(BaseModel):
+    '''
+        Response schema for the full route comparison endpoint.
+    '''
+    planned_route: PlannedRouteComparisonSchema
+    executed_routes: List[ExecutedRouteComparisonSchema]
 
 class AttendanceCreateSchema(BaseModel):
     '''
@@ -133,6 +217,15 @@ class AttendanceResponseSchema(AttendanceCreateSchema, LocalizationBaseSchema):
     '''
     id: int
 
+class AttendanceUpdateSchema(BaseModel):
+    '''
+        Schema for updating an attendance record with a check-out time.
+    '''
+    check_out_time: datetime = Field(
+        ...,
+        description = 'Timestamp for the check-out time.'
+    )
+
 class PointsVisitedResponseSchema(BaseModel):
     '''
         Response schema for the points visited statistics endpoint.
@@ -159,3 +252,29 @@ class RouteComparisonsResponseSchema(LocalizationBaseSchema):
         Response schema for the route comparisons endpoint.
     '''
     comparisons: List[RouteComparisonSchema]
+
+class MessageSchema(BaseModel):
+    '''
+        Schema for a generic message response.
+    '''
+    message: str = Field(
+        ...,
+        description = 'A descriptive message about the operation result.'
+    )
+
+class PlannedRouteFilterSchema(BaseModel):
+    '''
+        Schema to filter planned routes based on various criteria.
+    '''
+    code: Optional[str] = Query(None, description = 'Unique code of the planned route.')
+    route_name: Optional[str] = Query(None, description = 'Name of the planned route.')
+    route_status: Optional[str] = Query(None, alias = 'status',
+                                        description = 'Status of the planned route.')
+    user_id: Optional[int] = Query(None, description = 'ID of the user who owns the route.')
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            This setting allows the class to be instantiated without arguments in
+            the @router.get() decorator.
+        '''
+        arbitrary_types_allowed = True

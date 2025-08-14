@@ -38,25 +38,33 @@ class FileUploadData(BaseS3FileModel):
     content_type: str = Field(..., description = 'MIME type of the file (e.g., "text/csv").')
 
     class Config: # pylint: disable=too-few-public-methods
-        '''FileUploadData - Config Class - To get form attributes'''
+        '''
+            FileUploadData - Config Class - To get form attributes
+        '''
         arbitrary_types_allowed = True
 
 class ListFilesRequest(BaseModel):
-    '''ListFiles Request model for S3 bucket file listing.'''
+    '''
+        ListFiles Request model for S3 bucket file listing.
+    '''
     bucket_name: Optional[str] = Field(None,
                 description = 'Optional: Name of the S3 bucket.')
     prefix: Optional[str] = Field('',
                 description = 'Optional prefix to filter files.')
 
 class ListFilesResponse(BaseModel):
-    '''ListFiles Response model for listed S3 files.'''
+    '''
+        ListFiles Response model for listed S3 files.
+    '''
     bucket_name: str = Field(..., description = 'Name of the S3 bucket.')
     prefix: str = Field(..., description = 'Prefix used to filter files.')
     files: List[str] = Field(..., description = 'List of file keys found.')
     count: int = Field(..., description = 'Number of files in the list.')
 
 class PresignedUrlRequest(BaseS3FileModel):
-    '''PresignedUrl Request model for generating S3 pre-signed URLs.'''
+    '''
+        PresignedUrl Request model for generating S3 pre-signed URLs.
+    '''
     expiration_seconds: int = Field(3600,
                     description = 'Expiration time of the URL in seconds.')
     validation: bool = Field(...,
@@ -65,6 +73,8 @@ class PresignedUrlRequest(BaseS3FileModel):
                     description = 'Optional: The Content-Type of the file.')
 
 class PresignedUrlResponse(BaseModel):
-    '''PresignedUrl Response model containing the URL and file key.'''
+    '''
+        PresignedUrl Response model containing the URL and file key.
+    '''
     presigned_url: str = Field(..., description = 'The generated pre-signed URL.')
     file_key: str = Field(..., description = 'The full S3 key.')
