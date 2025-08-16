@@ -91,8 +91,8 @@ def get_all_planned_routes_endpoint(
     response_model = List[PlannedRouteListResponseSchema],
     status_code = status.HTTP_200_OK,
     summary = 'Filter planned routes',
-    description = '''Retrieves a list of planned routes filtered by code, name, status,
-                or user ID.'''
+    description = '''Retrieves a list of planned routes filtered by route_code,
+                name, status, or user ID.'''
 )
 def get_or_filter_planned_routes_endpoint(
     filters: PlannedRouteFilterSchema = Depends(),
@@ -103,12 +103,12 @@ def get_or_filter_planned_routes_endpoint(
         Endpoint to filter planned routes.
     '''
     message = f'''User: {current_user}. Received request to filter planned routes
-            with parameters: code = {filters.code}, route_name = {filters.route_name},
+            with parameters: route_code = {filters.route_code}, route_name = {filters.route_name},
             status = {filters.route_status}, user_id = {filters.user_id}'''
     logger.info(message)
     return filter_planned_routes_controller(
         db,
-        filters.code,
+        filters.route_code,
         filters.route_name,
         filters.route_status,
         filters.user_id

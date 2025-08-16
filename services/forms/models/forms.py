@@ -18,13 +18,13 @@ class FormHeader(Base):# pylint: disable=too-few-public-methods, too-many-ancest
     __tablename__ = 't_form_headers'
 
     id = Column(Integer, primary_key = True, index = True)
-    form_code = Column(String(10), unique = True, nullable = False, index = True)
+    form_code = Column(String(50), unique = True, nullable = False, index = True)
     name = Column(String(255), nullable = False)
     status = Column(SQLAlchemyEnum(
         *[status_member.value for status_member in FormStatus.__members__.values()]),
         nullable = False, default = FormStatus.ACTIVE)
     creation_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
-    user = Column(String(255), nullable = False) # Frontend user ID
+    user_id = Column(Integer, nullable = False, index = True)
 
     # Relationships: one-to-many with QuestionDetail and FormResponse
     questions = relationship(
@@ -32,7 +32,7 @@ class FormHeader(Base):# pylint: disable=too-few-public-methods, too-many-ancest
         back_populates = 'form_header',
         cascade = 'all, delete-orphan' # Deletes associated questions if form header is deleted
     )
-    t_form_responses = relationship(
+    form_responses = relationship(
         'FormResponse',
         back_populates = 'form_header',
         cascade = 'all, delete-orphan' # Deletes associated form responses if form header is deleted
@@ -66,7 +66,7 @@ class QuestionDetail(Base):# pylint: disable=too-few-public-methods, too-many-an
         back_populates = 'question_detail',
         cascade = 'all, delete-orphan' # Deletes associated flow rules if question is deleted
     )
-    t_form_answers = relationship(
+    answers = relationship(
         'FormAnswer',
         back_populates = 'question_detail',
         # Deletes associated answers if question is deleted

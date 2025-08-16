@@ -1,4 +1,3 @@
-# schemas/responses.py
 '''
     Responses Schemas (Request/Response)
     This file defines Pydantic schemas related to form responses, including
@@ -15,23 +14,36 @@ class FormResponseStatus(str, Enum):
         Enum for the possible statuses of a submitted form response.
         Used for tracking the review process of a completed form.
     '''
-    COMPLETED = 'completed'
-    REVIEWED = 'reviewed'
-    APPROVED = 'approved'
-    REJECTED = 'rejected'
-    PENDING_APPROVAL = 'pending_approval'
+    COMPLETED = 'COMPLETED'
+    REVIEWED = 'REVIEWED'
+    APPROVED = 'APPROVED'
+    REJECTED = 'REJECTED'
+    PENDING_APPROVAL = 'PENDING_APPROVAL'
 
 # --- Schemas for Persons (Encuestados/Entrevistados) ---
 class PersonBase(BaseModel):
     '''
         Base schema for a person (encuestado/entrevistado).
     '''
-    name: str = Field(..., description = 'Full name of the person.')
+    first_name: str = Field(..., description = 'First name of the person.')
+    paternal_last_name: str = Field(..., description = 'Paternal last name of the person.')
+    maternal_last_name: Optional[str] = Field(None,
+        description = 'Maternal last name of the person.')
     email: Optional[str] = Field(None, description = 'Email address of the person.')
-    phone_number: Optional[str] = Field(None, description = 'Phone number of the person.')
-    # Add any other general demographic data here
+    phone_number: Optional[str] = Field(None,
+        description = 'Primary phone number of the person.', min_length = 7, max_length = 50)
+    phone_number_2: Optional[str] = Field(None,
+        description = 'Secondary phone number of the person.', min_length = 7, max_length = 50)
+    birth_date: Optional[datetime] = Field(None, description = 'Date of birth of the person.')
+    identification_document_type: Optional[str] = Field(None,
+        description = 'Type of identification document.')
     identification_number: Optional[str] = Field(None,
         description = 'Identification number (e.g., ID card, passport).')
+    identification_expedition_place: Optional[str] = Field(None,
+        description = 'Place of expedition for the identification document.')
+    observations: Optional[str] = Field(None,
+        description = 'Notes or observations about the person.')
+    # The affiliation status, date, and user ID are handled automatically on the backend.
 
 class PersonCreate(PersonBase):
     '''
@@ -71,6 +83,8 @@ class ContactCreate(ContactBase):
     '''
     person_id: int = Field(...,
         description = 'ID of the person associated with this contact entry.')
+    executed_route_point_id: int = Field(...,
+        description = 'ID from the localization service for the executed point.')
 
 class ContactResponse(ContactBase):
     '''
@@ -120,7 +134,7 @@ class FormResponseBase(BaseModel):
         Base schema for a completed form response submission.
     '''
     form_id: int = Field(..., description = 'ID of the form to which these answers belong.')
-    user: str = Field(..., description = 'User ID from the Frontend who submitted the form.')
+    user_id: int = Field(..., description = 'User ID from the Frontend who submitted the form.')
     contact_id: int = Field(...,
         description = 'ID of the contact/location associated with this response.')
     # Status is often managed internally but included for completeness or initial setting
@@ -134,6 +148,7 @@ class FormResponseCreate(FormResponseBase):
     '''
     answers: List[FormAnswerCreate] = Field(..., min_items = 1,
         description = 'List of all individual answers for this completed form.')
+    person_id: int = Field(..., description = 'ID of the person associated with this response.')
 
 class FormResponseUpdate(BaseModel):
     '''
@@ -149,6 +164,7 @@ class FormResponseDetailResponse(FormResponseBase):
         Includes ID, submission_date, and nested answers.
     '''
     id: int
+    person_id: int = Field(..., description = 'ID of the person associated with this response.')
     submission_date: datetime = Field(...,
         description = 'Timestamp when the form response was submitted.')
     answers: List[FormAnswerResponse] = []
@@ -169,7 +185,7 @@ class FormResponseSummaryResponse(BaseModel):
     form_id: int
     submission_date: datetime
     status: FormResponseStatus
-    user: str
+    user_id: int
     contact_id: int
 
     class Config:# pylint: disable=too-few-public-methods
@@ -207,7 +223,7 @@ class CurrentFormSession(BaseModel):
     start_time: datetime = Field(..., description = 'Timestamp when the session began.')
     ttl: int = Field(..., description = '''Time-to-live for the session in Unix epoch seconds.
         Used by DynamoDB to automatically expire items.''')
-    user_id: str = Field(..., description = 'User ID (from frontend) initiating the session.')
+    user_id: int = Field(..., description = 'User ID (from frontend)')
     contact_info_id: Optional[int] = Field(None,
         description = '''ID of the temporary contact/person record if created at session start.
         This would eventually become the definitive contact_id.''')
@@ -215,6 +231,8 @@ class CurrentFormSession(BaseModel):
         description = 'Temporary latitude from session start.')
     contact_temp_longitude: Optional[float] = Field(None,
         description = 'Temporary longitude from session start.')
+    person_info_id: Optional[int] = Field(None,
+        description = 'ID of the person created at the start of the session.')
 
 # --- Schemas for Request/Response related to Question Flow and Answers ---
 class StartFormSessionRequest(BaseModel):
@@ -223,6 +241,9 @@ class StartFormSessionRequest(BaseModel):
         Requires form ID and initial contact/person info.
     '''
     form_id: int = Field(..., description = 'ID of the form to start answering.')
+    user_id: int = Field(..., description = 'User ID (from frontend)')
+    executed_route_point_id: int = Field(...,
+        description = 'ID from the localization service for the executed point.')
     person_data: PersonCreate = Field(...,
         description = 'Initial details of the person being interviewed/surveyed.')
     contact_data: ContactBase = Field(...,

@@ -56,14 +56,14 @@ def create_planned_route_with_points(
     '''
     try:
         existing_route = db.query(PlannedRoute).filter(
-            PlannedRoute.code == route_data.code
+            PlannedRoute.route_code == route_data.route_code
         ).first()
         if existing_route:
             raise RegisterAlreadyExistsError(
-                detail = f'Route with code "{route_data.code}" already exists.'
+                detail = f'Route with code "{route_data.route_code}" already exists.'
             )
 
-        message = f'Creating planned route with code: {route_data.code}'
+        message = f'Creating planned route with code: {route_data.route_code}'
         logger.debug(message)
         planned_route_data = route_data.model_dump(
             exclude={'points', 'user_id'}
@@ -111,7 +111,8 @@ def get_all_planned_routes(
         raise
 
 def filter_planned_routes(
-    db: Session, code: Optional[str] = None,
+    db: Session,
+    route_code: Optional[str] = None,
     route_name: Optional[str] = None,
     status: Optional[str] = None,
     user_id: Optional[int] = None
@@ -123,8 +124,8 @@ def filter_planned_routes(
         message = 'Filtering planned routes.'
         logger.debug(message)
         query = db.query(PlannedRoute)
-        if code:
-            query = query.filter(PlannedRoute.code == code)
+        if route_code:
+            query = query.filter(PlannedRoute.route_code == route_code)
         if route_name:
             query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
         if status:
@@ -621,7 +622,7 @@ def get_full_route_comparison(
             ExecutedRouteComparisonSchema.model_validate(er, from_attributes = True)
             for er in executed_routes
         ]
- 
+
         response_data = {
             'planned_route': planned_route_data,
             'executed_routes': executed_routes_data

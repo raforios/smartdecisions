@@ -68,7 +68,7 @@ A continuación se listan los endpoints principales de la API, que facilitan la 
 
 ```text
 forms/
-└── controllers/
+├── controllers/
 │   ├── __init__.py
 │   ├── forms.py
 │   └── responses.py

@@ -15,7 +15,7 @@ class PlannedRoute(Base):# pylint: disable=too-few-public-methods
 
     id = Column(Integer, primary_key = True, index = True)
     route_name = Column(String(150), nullable = False)
-    code = Column(String(50), nullable = False, unique = True)
+    route_code = Column(String(50), nullable = False, unique = True, index = True)
     description = Column(String(500), nullable = True)
     user_id = Column(Integer, nullable = False, index = True)
     # Using text('now()') and server_default to fix Pylint error and ensure

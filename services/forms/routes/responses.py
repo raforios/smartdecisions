@@ -53,24 +53,28 @@ async def start_form_session_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Initiates a new form-filling session for a given form,
-        creates initial Person and Contact records, and returns the first question.
-        The session state is stored temporarily in DynamoDB.
+        Initiates a new form-filling session for a given form. This endpoint
+        handles the session creation for a specific client (identified by `user_id`
+        in the request body) and is called by an authenticated user
+        (identified by `current_user` in the JWT token).
 
         Args:
-            session_data (StartFormSessionRequest): Contains form_id, person, and
-                                                    contact info.
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            session_data (StartFormSessionRequest): Contains the `form_id`,
+                                                    `user_id` (the client's numeric ID),
+                                                    and personal and contact info.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and audit purposes only.
 
         Returns:
             StartFormSessionResponse: Details of the started session and the first
-                                    question.
+                                    question to be displayed to the client.
     '''
-    message = f'''User {current_user} request to start form session for form_id:
-            {session_data.form_id}'''
+    message = f'''Authenticated user '{current_user}' requests to start a new
+            form session for form ID: {session_data.form_id},
+            on behalf of client ID: {session_data.user_id}.'''
     logger.info(message)
-    return await start_form_session(db, session_data, current_user)
+    return await start_form_session(db, session_data)
 
 @router.post(
     '/submit-answer',
@@ -83,30 +87,31 @@ async def submit_answer_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Submits an answer for the current question in a form session,
-        updates the temporary session cache in DynamoDB, and determines
-        and returns the next question based on form flow rules.
+        Submits an answer for the current question in a temporary form session.
+        The session is identified by `session_id`, and the state is updated
+        temporarily in DynamoDB. This endpoint is accessible only to authenticated
+        users.
 
         Args:
-            answer_data (SubmitAnswerRequest): Contains session_id, question_number,
-                                            and answer_value.
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            answer_data (SubmitAnswerRequest): Contains the `session_id`,
+                                            `question_number`, and the `answer_value`.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and audit purposes only.
 
         Returns:
-            NextQuestionResponse: Details of the next question or indicates form
-                                completion.
+            NextQuestionResponse: Details of the next question in the flow or indicates
+                                that the form is complete.
     '''
-    message = f'''User {current_user} request to submit answer for session
-            {answer_data.session_id}, question {answer_data.question_number}'''
+    message = f'''Authenticated user '{current_user}' submits an answer
+            for session: {answer_data.session_id}, question: {answer_data.question_number}.'''
     logger.info(message)
-    return await submit_answer_and_get_next_question(db, answer_data, current_user)
+    return await submit_answer_and_get_next_question(db, answer_data)
 
 @router.post(
     '/get-question-to-modify',
     response_model = GetQuestionToModifyResponse,
-    summary = '''Retrieves a specific question and its current answer from a session for
-            modification'''
+    summary = 'Retrieves a specific question and its current answer from a session for modification'
 )
 async def get_question_to_modify_route(
     request_data: GetQuestionToModifyRequest,
@@ -114,28 +119,29 @@ async def get_question_to_modify_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Allows the user to retrieve a previously answered question and its value
-        from a temporary form session. This is useful for 'back' functionality or review.
+        Retrieves a previously answered question and its value from a temporary
+        form session. This is useful for allowing users to review or modify a
+        specific answer before finalizing the form.
 
         Args:
-            request_data (GetQuestionToModifyRequest): Contains session_id and
-                                                    question_number.
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            request_data (GetQuestionToModifyRequest): Contains the `session_id` and
+                                                    `question_number` of the question to retrieve.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and audit purposes only.
 
         Returns:
             GetQuestionToModifyResponse: Details of the requested question and its
-                                        current answer.
+                                        current answer within the session.
     '''
-    message = f'''User {current_user} request to get question
-            {request_data.question_number} to modify in session
-            {request_data.session_id}'''
+    message = f'''Authenticated user '{current_user}' requests to modify
+            question {request_data.question_number} in session: {request_data.session_id}.'''
     logger.info(message)
-    return await get_question_to_modify(db, request_data, current_user)
+    return await get_question_to_modify(db, request_data)
 
 @router.put(
     '/update-answer-in-session',
-    response_model = NextQuestionResponse, # Same response as submit, as it re-evaluates flow
+    response_model = NextQuestionResponse,
     summary = 'Updates an answer for a specific question within a form session'
 )
 async def update_answer_in_session_route(
@@ -144,24 +150,25 @@ async def update_answer_in_session_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Updates the answer for a specific question in an ongoing form session.
-        After update, the form flow is re-evaluated from the updated question's point.
+        Updates a specific answer in an ongoing form session. The form flow is
+        re-evaluated from the updated question's point to determine the next
+        question to be presented.
 
         Args:
-            update_data (UpdateAnswerInSessionRequest): Contains session_id,
-                                                        question_number, and
-                                                        new_answer_value.
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            update_data (UpdateAnswerInSessionRequest): Contains the `session_id`,
+                                    `question_number`, and the `new_answer_value`.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and audit purposes only.
 
         Returns:
-            NextQuestionResponse: Details of the next question (after re-evaluation) or
-                                indicates form completion.
+            NextQuestionResponse: Details of the next question (after re-evaluation)
+                                or indicates that the form is complete.
     '''
-    message = f'''User {current_user} request to update answer for question
-            {update_data.question_number} in session {update_data.session_id}'''
+    message = f'''Authenticated user '{current_user}' updates an answer
+            for question {update_data.question_number} in session: {update_data.session_id}.'''
     logger.info(message)
-    return await update_answer_in_session(db, update_data, current_user)
+    return await update_answer_in_session(db, update_data)
 
 @router.post(
     '/finalize-session',
@@ -175,22 +182,24 @@ async def finalize_form_session_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Concludes a form-filling session, moves all temporary answers from DynamoDB
-        to the permanent MySQL database, and clears the temporary session.
+        Concludes a form-filling session. All temporary answers from DynamoDB
+        are moved to the permanent MySQL database, and the temporary session
+        is cleared.
 
         Args:
-            finalize_data (FinalizeFormRequest): Contains the session_id to finalize.
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            finalize_data (FinalizeFormRequest): Contains the `session_id` to finalize.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and audit purposes only.
 
         Returns:
             FinalizeFormResponse: Confirmation of finalization with the new
-                                form_response_id.
+                                permanent `form_response_id`.
     '''
-    message = f'''User {current_user} request to finalize form session:
-            {finalize_data.session_id}'''
+    message = f'''Authenticated user '{current_user}' requests to
+            finalize form session: {finalize_data.session_id}.'''
     logger.info(message)
-    return await finalize_form_session(db, finalize_data, current_user)
+    return await finalize_form_session(db, finalize_data)
 
 # --- Endpoints for Completed Form Responses (MySQL backed) ---
 
@@ -205,21 +214,23 @@ async def get_form_response_by_id_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Retrieves a single completed form response by its ID, including all
-        associated answers, and the contact and person details.
+        Retrieves a single completed form response by its ID from the permanent
+        database. This endpoint includes all associated answers, contact, and
+        person details.
 
         Args:
             form_response_id (int): The ID of the completed form response.
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and to enforce access control.
 
         Returns:
             FormResponseDetailResponse: The detailed completed form response.
     '''
-    message = f'''User {current_user} request to get form response by ID:
-            {form_response_id}'''
+    message = f'''Authenticated user '{current_user}' requests to get
+            form response by ID: {form_response_id}.'''
     logger.info(message)
-    return await get_form_response_by_id(db, form_response_id, current_user)
+    return await get_form_response_by_id(db, form_response_id)
 
 @router.get(
     '/',
@@ -233,23 +244,24 @@ async def get_all_form_responses_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Retrieves a paginated list of all completed form responses.
-        This endpoint returns a summary view, without nested answers, for performance.
+        Retrieves a paginated list of all completed form responses. This endpoint
+        returns a summary view for performance, avoiding the load of nested answers.
+        Access is restricted to authenticated users.
 
         Args:
-            skip (int): The number of items to skip (for pagination).
-            limit (int): The maximum number of items to return (for pagination).
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            skip (int): The number of items to skip for pagination.
+            limit (int): The maximum number of items to return.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and to enforce access control.
 
         Returns:
             List[FormResponseSummaryResponse]: A list of summarized form responses.
     '''
-    message = f'''User {current_user} request to get all form responses (skip: {skip},
-            limit: {limit})'''
+    message = f'''Authenticated user '{current_user}' requests to get all form
+            responses (skip: {skip}, limit: {limit}).'''
     logger.info(message)
-
-    return await get_all_form_responses(db, current_user, skip = skip, limit = limit)
+    return await get_all_form_responses(db, skip = skip, limit = limit)
 
 @router.put(
     '/{form_response_id}/status',
@@ -264,18 +276,20 @@ async def update_form_response_status_route(
 ):
     '''
         Updates the administrative status of a previously completed form response
-        (e.g., from 'PENDING' to 'REVIEWED').
+        (e.g., from 'PENDING' to 'REVIEWED'). This action is performed by
+        an authenticated user.
 
         Args:
             form_response_id (int): The ID of the form response to update.
             status_data (FormResponseUpdate): The new status to apply.
-            db (Session): The database session.
-            current_user (str): The ID of the authenticated user.
+            db (Session): The database session dependency.
+            current_user (str): The email of the authenticated user from the JWT token.
+                                Used for logging and to enforce access control.
 
         Returns:
             FormResponseDetailResponse: The updated form response with its new status.
     '''
-    message = f'''User {current_user} request to update status for form response
-            {form_response_id} to {status_data.status.value}'''
+    message = f'''Authenticated user {current_user} requests to update status
+            for form response {form_response_id} to {status_data.status.value}.'''
     logger.info(message)
-    return await update_form_response_status(db, form_response_id, status_data, current_user)
+    return await update_form_response_status(db, form_response_id, status_data)

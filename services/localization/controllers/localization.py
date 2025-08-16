@@ -109,7 +109,7 @@ def get_all_planned_routes_controller(
 
 def filter_planned_routes_controller(
     db: Session = Depends(GET_DB_DEPENDENCY),
-    code: Optional[str] = None,
+    route_code: Optional[str] = None,
     route_name: Optional[str] = None,
     status: Optional[str] = None,
     user_id: Optional[int] = None
@@ -117,11 +117,11 @@ def filter_planned_routes_controller(
     '''
         Controller to filter planned routes by various parameters.
     '''
-    message = f'''Filtering planned routes with parameters: code = {code},
+    message = f'''Filtering planned routes with parameters: route_code = {route_code},
             route_name = {route_name}, status = {status}, user_id = {user_id}'''
     logger.info(message)
     try:
-        routes = filter_planned_routes(db, code, route_name, status, user_id)
+        routes = filter_planned_routes(db, route_code, route_name, status, user_id)
         return [PlannedRouteListResponseSchema.model_validate(route) for route in routes]
     except Exception as e:
         error_msg = f'Failed to filter planned routes: {e}'

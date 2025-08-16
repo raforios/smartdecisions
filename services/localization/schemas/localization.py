@@ -69,7 +69,7 @@ class PlannedRouteCreateSchema(BaseModel):
         ..., max_length = 150,
         description = 'Name of the planned route.'
     )
-    code: str = Field(
+    route_code: str = Field(
         ..., max_length = 50,
         description = 'Unique code for the planned route.'
     )
@@ -100,7 +100,7 @@ class PlannedRouteListResponseSchema(LocalizationBaseSchema):
     '''
     id: int
     route_name: str
-    code: str
+    route_code: str
     description: Optional[str]
     user_id: int
     created_at: datetime
@@ -266,7 +266,7 @@ class PlannedRouteFilterSchema(BaseModel):
     '''
         Schema to filter planned routes based on various criteria.
     '''
-    code: Optional[str] = Query(None, description = 'Unique code of the planned route.')
+    route_code: Optional[str] = Query(None, description = 'Unique code of the planned route.')
     route_name: Optional[str] = Query(None, description = 'Name of the planned route.')
     route_status: Optional[str] = Query(None, alias = 'status',
                                         description = 'Status of the planned route.')

@@ -1,16 +1,24 @@
-# models/responses.py
 '''
    Responses Models - Defines the database models for form submissions,
    including respondent (person) and contact details, and individual answers.
 '''
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float
-from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Integer,
+    Numeric,
+    String,
+    DateTime,
+    Text,
+    ForeignKey,
+    UniqueConstraint,
+    Boolean,
+    Enum as SQLAlchemyEnum
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy import Enum as SQLAlchemyEnum
 
 from services.db_connection import Base
-from schemas.responses import FormResponseStatus # Import the enum from schemas/responses.py
+from schemas.responses import FormResponseStatus
 
 # --- Person Model (Encuestado/Entrevistado) ---
 class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
@@ -19,18 +27,39 @@ class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
         Represents an individual (e.g., interviewee, surveyed person).
     '''
     __tablename__ = 't_persons'
+    __table_args__ = (
+        UniqueConstraint('email', name = 'uq_person_email'),
+        UniqueConstraint('phone_number', name = 'uq_person_phone_number'),
+        UniqueConstraint('identification_number', name = 'uq_person_identification_number'),
+    )
 
     id = Column(Integer, primary_key = True, index = True)
-    name = Column(String(255), nullable = False)
+    # Reemplazo de 'name' por campos más detallados
+    first_name = Column(String(255), nullable = False)
+    paternal_last_name = Column(String(255), nullable = False)
+    maternal_last_name = Column(String(255), nullable = True)
     email = Column(String(255), nullable = True, unique = True, index = True)
+    # Cambio de 'phone_number' por los campos más detallados de la base de datos
     phone_number = Column(String(50), nullable = True, unique = True, index = True)
+    phone_number_2 = Column(String(50), nullable = True)
+    birth_date = Column(DateTime, nullable = True)
+    identification_document_type = Column(String(100), nullable = True)
     identification_number = Column(String(50), nullable = True, unique = True, index = True)
+    identification_expedition_place = Column(String(255), nullable = True)
+    observations = Column(String(1024), nullable = True)
+    is_affiliated = Column(Boolean, default = False, nullable = False)
+    affiliation_date = Column(DateTime, nullable = True)
+    affiliation_user_id = Column(String(255), nullable = True) # User ID from frontend
 
-    # Relationships: one-to-many with Contact
+    # Relationships: one-to-many with Contact and FormResponse
     contacts = relationship(
         'Contact',
         back_populates = 'person',
-        cascade = 'all, delete-orphan' # Deletes associated contacts if a person is deleted
+        cascade = 'all, delete-orphan'
+    )
+    form_responses = relationship(
+        'FormResponse',
+        back_populates = 'person'
     )
 
 # --- Contact Model (Georeferenced Location & Time of Interaction) ---
@@ -43,18 +72,18 @@ class Contact(Base): # pylint: disable=too-few-public-methods, too-many-ancestor
 
     id = Column(Integer, primary_key = True, index = True)
     person_id = Column(Integer, ForeignKey('t_persons.id'), nullable = False)
-    latitude = Column(Float, nullable = False)
-    longitude = Column(Float, nullable = False)
+    latitude = Column(Numeric(16, 14), nullable = False)
+    longitude = Column(Numeric(16, 14), nullable = False)
     start_datetime = Column(DateTime, nullable = False)
+    executed_route_point_id = Column(Integer, nullable = False)
 
     # Relationships: many-to-one with Person, one-to-many with FormResponse
     person = relationship('Person', back_populates = 'contacts')
-    t_form_responses = relationship(
+    form_responses = relationship(
         'FormResponse',
         back_populates = 'contact',
-        cascade = 'all, delete-orphan' # Deletes associated form responses if a contact is deleted
+        cascade = 'all, delete-orphan'
     )
-
 
 # --- FormResponse Model (Completed Form Submission) ---
 class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
@@ -67,12 +96,12 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
     id = Column(Integer, primary_key = True, index = True)
     form_id = Column(Integer, ForeignKey('t_form_headers.id'), nullable = False)
     contact_id = Column(Integer, ForeignKey('t_contacts.id'), nullable = False)
+    person_id = Column(Integer, ForeignKey('t_persons.id'), nullable = False)
     submission_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
     status = Column(SQLAlchemyEnum(
         *[status_member.value for status_member in FormResponseStatus.__members__.values()]),
         nullable = False, default = FormResponseStatus.COMPLETED)
-    # The user who submitted this specific form response (from frontend)
-    user = Column(String(255), nullable = False)
+    user_id = Column(Integer, nullable = False, index = True)
 
     # Relationships:
     # many-to-one with FormHeader (implicitly linked by form_id, no back_populates needed
@@ -92,16 +121,18 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
     # The 'form_header' relationship on this side is a simple reference back.
     # This maintains the link for querying from FormResponse to FormHeader.
     # The 'back_populates' on the FormHeader side will be important.
-    form_header = relationship('FormHeader', primaryjoin="FormResponse.form_id == FormHeader.id")
+    form_header = relationship('FormHeader', primaryjoin = "FormResponse.form_id == FormHeader.id")
 
     # Link to the new Contact model
-    contact = relationship('Contact', back_populates = 't_form_responses')
+    contact = relationship('Contact', back_populates = 'form_responses')
 
     answers = relationship(
         'FormAnswer',
         back_populates = 'form_response',
-        cascade = 'all, delete-orphan' # Deletes individual answers if form response is deleted
+        cascade = 'all, delete-orphan'
     )
+    person = relationship('Person', back_populates = 'form_responses')
+    contact = relationship('Contact', back_populates = 'form_responses')
 
 # --- FormAnswer Model (Individual Answer within a Submission) ---
 class FormAnswer(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
@@ -120,13 +151,9 @@ class FormAnswer(Base): # pylint: disable=too-few-public-methods, too-many-ances
     # Relationships:
     # many-to-one with FormResponse and QuestionDetail
     form_response = relationship('FormResponse', back_populates = 'answers')
-    # QuestionDetail (from models/forms.py) will reference 'FormAnswer' (this model)
-    # The 'question_detail' relationship on this side is a simple reference back.
-    # The 'back_populates' on the QuestionDetail side will be important.
-    question_detail = relationship('QuestionDetail',
-                    primaryjoin = "FormAnswer.question_id == QuestionDetail.id")
+    question_detail = relationship('QuestionDetail', back_populates = 'answers')
 
     # Constraint to ensure unique answer per form_response_id and question_id
     __table_args__ = (
-        UniqueConstraint('form_response_id', 'question_id', name = '_response_Youtube_uc'),
+        UniqueConstraint('form_response_id', 'question_id', name = '_response_unique'),
     )

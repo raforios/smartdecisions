@@ -13,8 +13,8 @@ class FormStatus(str, Enum):
         'active' indicates the form is available for use.
         'inactive' indicates the form is not available.
     '''
-    ACTIVE = 'active'
-    INACTIVE = 'inactive'
+    ACTIVE = 'ACTIVE'
+    INACTIVE = 'INACTIVE'
 
 # Enum for QuestionDetail response type
 class QuestionType(str, Enum):
@@ -22,11 +22,11 @@ class QuestionType(str, Enum):
         Enum for the expected response type of a question.
         Defines how the answer should be captured and validated.
     '''
-    TRUE_FALSE = 'true_false'       # Expected answer: 'Si' or 'No'
-    MULTIPLE_CHOICE = 'multiple_choice' # Expected answer: one of predefined options
-    NUMERIC = 'numeric'             # Expected answer: a number
-    LITERAL = 'literal'             # Expected answer: long text
-    FILE_UPLOAD = 'file_upload'     # Expected answer: a file upload (JPG/PNG)
+    TRUE_FALSE = 'TRUE_FALSE'       # Expected answer: 'Si' or 'No'
+    MULTIPLE_CHOICE = 'MULTIPLE_CHOICE' # Expected answer: one of predefined options
+    NUMERIC = 'NUMERIC'             # Expected answer: a number
+    LITERAL = 'LITERAL'             # Expected answer: long text
+    FILE_UPLOAD = 'FILE_UPLOAD'     # Expected answer: a file upload (JPG/PNG)
 
 # --- Schemas for Multiple Choice Options ---
 class MultipleChoiceOptionBase(BaseModel):
@@ -151,7 +151,8 @@ class FormHeaderBase(BaseModel):
             description = 'Alphanumeric code for the form, max 10 chars, unique.')
     name: str = Field(..., description = 'Name or description of the form.')
     status: FormStatus = Field(..., description = 'Status of the form: active or inactive.')
-    user: str = Field(..., description = 'User ID from the Frontend (not from AUTH microservice).')
+    user_id: int = Field(...,
+                description = 'User ID from the Frontend (not from AUTH microservice).')
 
 class FormHeaderCreate(FormHeaderBase):
     '''
@@ -169,7 +170,7 @@ class FormHeaderUpdate(FormHeaderBase):
     form_code: Optional[str] = Field(None, max_length = 10)
     name: Optional[str] = None
     status: Optional[FormStatus] = None
-    user: Optional[str] = None
+    user_id: Optional[int] = None
     # Questions are updated via their own endpoints (e.g.,
     # PUT /forms/{formId}/questions/{questionId})
     # or a dedicated endpoint for bulk updates if needed, not directly

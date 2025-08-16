@@ -25,11 +25,9 @@ from schemas.responses import (
     UpdateAnswerInSessionRequest,
     FinalizeFormRequest,
     FinalizeFormResponse,
-    FormResponseCreate,
     FormResponseDetailResponse,
     FormResponseSummaryResponse,
     FormResponseUpdate,
-    FormAnswerCreate
 )
 # Import custom exceptions
 from services.exceptions import (
@@ -162,81 +160,53 @@ async def _create_person_and_contact(
     session_data: StartFormSessionRequest
 ) -> Dict[str, Any]:
     '''
-        Helper to create Person and Contact records.
+        Helper to create or find Person and create Contact records.
     '''
     person_data = session_data.person_data
     contact_data = session_data.contact_data
 
-    db_person = None
+    # Check for existing person by unique identifiers
+    existing_person = db.query(Person).filter(
+        (Person.email == person_data.email) |
+        (Person.phone_number == person_data.phone_number) |
+        (Person.identification_number == person_data.identification_number)
+    ).first()
 
-    if person_data and person_data.email:
-        message = f'Attempting to find person with email: {person_data.email}'
+    if existing_person:
+        message = f'Existing person found with ID: {existing_person.id}'
         logger.info(message)
-        db_person = db.query(Person).filter(Person.email == person_data.email).first()
-
-    if db_person:
-        message = f'Existing person found with email: {person_data.email}, ID: {db_person.id}'
-        logger.info(message)
-        db_contact = db.query(Contact).filter(Contact.person_id == db_person.id).first()
-
-        if db_contact is None:
-            message = f'''Person with ID: {db_person.id} found, but no associated contact.
-                    Creating new contact.'''
-            logger.info(message)
-            contact_create_data = contact_data.model_dump(exclude_unset = True) if contact_data \
-                                else {}
-            db_contact = Contact(person_id = db_person.id, **contact_create_data)
-            db.add(db_contact)
-            db.flush()
-            message = f'''New contact created for existing person ID: {db_person.id},
-                    Contact ID: {db_contact.id}'''
-            logger.info(message)
+        db_person = existing_person
     else:
-        message = f'''No existing person found with email: {person_data.email}.
-                Creating new person and contact.'''
-        logger.info(message)
         try:
+            # New person, create the record
             db_person = create_record(db, Person, person_data)
             message = f'New person created with ID: {db_person.id}'
             logger.info(message)
-
-            contact_create_data = contact_data.model_dump(exclude_unset = True) if contact_data \
-                                else {}
-            db_contact = Contact(person_id = db_person.id, **contact_create_data)
-            db_contact = create_record(
-                db,
-                Contact,
-                db_contact
-            )
-            message = f'New contact created with ID: {db_contact.id} for person ID: {db_person.id}'
-            logger.info(message)
         except IntegrityError as e:
             db.rollback()
-            error_msg = f'Integrity error during person/contact creation: {e}'
+            error_msg = f'Integrity error creating person: {e}'
             logger.error(error_msg, exc_info=True)
             raise InvalidInputError(
-                detail = '''Failed to create person or contact due to data conflict
-                    (e.g., email already exists).'''
-                ) from e
-        except Exception as e:
-            db.rollback()
-            error_msg = f'Unexpected error during person/contact creation: {e}'
-            logger.error(error_msg, exc_info=True)
-            raise ServiceUnavailableError(
-                detail = 'An unexpected error occurred during person/contact creation.'
+                detail='Person creation failed due to data conflict.'
             ) from e
 
-    db.flush()
-    return {
+    # Create a new Contact record regardless of whether person is new or existing
+    extra_fields = {
         'person_id': db_person.id,
-        'contact_id': db_contact.id if db_contact else None
+        'executed_route_point_id': session_data.executed_route_point_id
     }
+    db_contact = create_record(db, Contact, contact_data, extra_fields = extra_fields)
+    message = f'New contact created with ID: {db_contact.id} for person ID: {db_person.id}'
+    logger.info(message)
+
+    db.flush() # Ensure Contact record is available before commit
+    return {'person_id': db_person.id, 'contact_id': db_contact.id}
 
 async def _initialize_dynamodb_session(
     session_id: str,
     form_id: int,
     first_question_number: int,
-    current_user_id: str,
+    user_id: int,
     contact_info: Dict[str, Any]
 ) -> CurrentFormSession:
     '''
@@ -252,10 +222,11 @@ async def _initialize_dynamodb_session(
         answers = {},
         start_time = datetime.now(),
         ttl = ttl_timestamp,
-        user_id = current_user_id,
+        user_id = user_id,
         contact_info_id = contact_info['contact_id'],
         contact_temp_latitude = contact_info.get('latitude'),
-        contact_temp_longitude = contact_info.get('longitude')
+        contact_temp_longitude = contact_info.get('longitude'),
+        person_info_id = contact_info['person_info_id']
     )
     await save_session(initial_session_state.model_dump())
     return initial_session_state
@@ -305,10 +276,17 @@ async def _create_form_response_and_answers(
     '''
     question_id_map = {q.question_number: q.id for q in questions_map.values()}
 
-    collected_answers_for_create = []
+    db_form_response = FormResponse(
+        form_id = current_session.form_id,
+        user_id = current_session.user_id,
+        contact_id = current_session.contact_info_id,
+        person_id = current_session.person_info_id
+    )
+    db.add(db_form_response)
+    db.flush()
 
-    for q_num_str in current_session.answers:
-        temp_ans = current_session.answers[q_num_str]
+    db_answers = []
+    for q_num_str, temp_ans in current_session.answers.items():
         question_db_id = question_id_map.get(int(q_num_str))
         if not question_db_id:
             message = f'''Question number {q_num_str} from session
@@ -317,42 +295,19 @@ async def _create_form_response_and_answers(
             logger.warning(message)
             continue
 
-        collected_answers_for_create.append(
-            FormAnswerCreate(
-                question_id = question_db_id,
-                answer_value = temp_ans.answer_value
-            )
-        )
+        db_answers.append(FormAnswer(
+            form_response_id = db_form_response.id,
+            question_id = question_db_id,
+            answer_value = temp_ans.answer_value
+        ))
 
-    form_response_create_data = FormResponseCreate(
-        form_id = current_session.form_id,
-        user = current_session.user_id,
-        contact_id = current_session.contact_info_id,
-        answers = collected_answers_for_create
-    )
-
-    db_form_response = create_record(
-        db,
-        FormResponse,
-        form_response_create_data,
-        exclude_relations = ['answers']
-    )
-    db.flush()
-
-    for ans_data in form_response_create_data.answers:
-        create_record(
-            db,
-            FormAnswer,
-            ans_data,
-            extra_fields = {'form_response_id': db_form_response.id}
-        )
-
+    db.add_all(db_answers)
     db.commit()
+
     return db_form_response.id
 
 async def _common_session_load_and_validate(
     session_id: str,
-    current_user_id: str,
     db: Session
 ):
     '''
@@ -364,9 +319,6 @@ async def _common_session_load_and_validate(
             detail = f'Session {session_id} not found or expired.'
         )
     current_session = CurrentFormSession(**session_state_dict)
-
-    if current_session.user_id != current_user_id:
-        raise InvalidInputError(detail = 'Session does not belong to the current user.')
 
     questions_map = await _get_question_details_for_form(db, current_session.form_id)
     if not questions_map:
@@ -406,16 +358,11 @@ async def _prepare_next_question_response(
 async def start_form_session(
     db: Session,
     session_data: StartFormSessionRequest,
-    current_user_id: str
 ) -> StartFormSessionResponse:
     '''
         Initiates a new form-filling session, creates person/contact records,
         and returns the first question.
     '''
-    message = f'''User {current_user_id} attempting to start form session
-            for form_id: {session_data.form_id}'''
-    logger.info(message)
-
     try:
         # 1. Create Person and Contact records
         contact_info = await _create_person_and_contact(db, session_data)
@@ -430,19 +377,20 @@ async def start_form_session(
         contact_details_for_session = {
             'contact_id': contact_info['contact_id'],
             'latitude': session_data.contact_data.latitude,
-            'longitude': session_data.contact_data.longitude
+            'longitude': session_data.contact_data.longitude,
+            'person_info_id': contact_info['person_id']
         }
 
         _ = await _initialize_dynamodb_session(
             session_id = session_id,
             form_id = session_data.form_id,
             first_question_number = first_question_number,
-            current_user_id = current_user_id,
+            user_id = session_data.user_id,
             contact_info = contact_details_for_session
         )
         db.commit() # Commit MySQL changes
 
-        message = f'''User {current_user_id} started session {session_id}
+        message = f'''User {session_data.user_id,} started session {session_id}
                 for form {session_data.form_id}. First question: {first_question_number}'''
         logger.info(message)
 
@@ -473,23 +421,18 @@ async def start_form_session(
 async def submit_answer_and_get_next_question(
     db: Session,
     answer_data: SubmitAnswerRequest,
-    current_user_id: str # User ID from auth microservice
 ) -> NextQuestionResponse:
     '''
         Submits an answer for the current question, updates the session cache,
         and determines the next question based on flow rules.
     '''
-    message = f'''User {current_user_id} submitting answer for session
-            {answer_data.session_id}, question {answer_data.question_number}'''
-    logger.info(message)
-
     try:
         current_session, questions_map = await _common_session_load_and_validate(
-            answer_data.session_id, current_user_id, db)
+            answer_data.session_id, db)
 
         # Ensure the submitted question is the expected current question or a valid prior one
         if current_session.current_question_number != answer_data.question_number:
-            message = f'''User {current_user_id} submitted answer for question
+            message = f'''User submitted answer for question
                     {answer_data.question_number} but current session question is
                     {current_session.current_question_number}. Allowing for now,
                     but consider stricter check.'''
@@ -550,26 +493,20 @@ async def submit_answer_and_get_next_question(
         logger.error(error_msg, exc_info = True)
         raise e
     except Exception as e:
-        error_msg = f'''Unexpected error submitting answer and getting next question: {e}'''
+        error_msg = f'Unexpected error submitting answer and getting next question: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
 
 async def get_question_to_modify(
     db: Session,
     request_data: GetQuestionToModifyRequest,
-    current_user_id: str
 ) -> GetQuestionToModifyResponse:
     '''
         Retrieves a specific question and its current answer from a session for modification.
     '''
-    message = f'''User {current_user_id} requesting to modify question
-            {request_data.question_number} for session {request_data.session_id}'''
-    logger.info(message)
-
     try:
         current_session, questions_map = await _common_session_load_and_validate(
-            request_data.session_id, current_user_id, db # form_id is derived from session
-        )
+            request_data.session_id, db)
 
         target_question = questions_map.get(request_data.question_number)
         if not target_question:
@@ -606,9 +543,8 @@ async def get_question_to_modify(
                 for opt in sorted(target_question.options, key=lambda o: o.order)
             ]
 
-        message = f'''User {current_user_id} retrieved question
-                {request_data.question_number} from session {request_data.session_id}
-                for modification.'''
+        message = f'''User retrieved question {request_data.question_number}
+                from session {request_data.session_id} for modification.'''
         logger.info(message)
         return GetQuestionToModifyResponse(**response_data)
 
@@ -618,31 +554,25 @@ async def get_question_to_modify(
         logger.error(error_msg, exc_info = True)
         raise e
     except ServiceUnavailableError as e:
-        error_msg = f'''DynamoDB error retrieving question for modification: {e}'''
+        error_msg = f'DynamoDB error retrieving question for modification: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
     except Exception as e:
-        error_msg = f'''Unexpected error retrieving question for modification: {e}'''
+        error_msg = f'Unexpected error retrieving question for modification: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
 
 async def update_answer_in_session(
     db: Session,
     update_data: UpdateAnswerInSessionRequest,
-    current_user_id: str
 ) -> NextQuestionResponse: # Using NextQuestionResponse as it provides session status
     '''
         Updates the answer for a specific question within a form session in DynamoDB.
         This also re-evaluates the flow from that point.
     '''
-    message = f'''User {current_user_id} updating answer for session
-            {update_data.session_id}, question {update_data.question_number}'''
-    logger.info(message)
-
     try:
         current_session, questions_map = await _common_session_load_and_validate(
-            update_data.session_id, current_user_id, db # form_id is derived from session
-        )
+            update_data.session_id, db)
 
         target_question_detail = questions_map.get(update_data.question_number)
         if not target_question_detail:
@@ -681,9 +611,8 @@ async def update_answer_in_session(
         )
         await save_session(current_session.model_dump())
 
-        message = f'''User {current_user_id} updated question
-            {update_data.question_number} in session {update_data.session_id}.
-            Form complete: {is_form_complete}'''
+        message = f'''User updated question {update_data.question_number}
+                in session {update_data.session_id}. Form complete: {is_form_complete}'''
         logger.info(message)
         return await _prepare_next_question_response(
             current_session, next_question, is_form_complete, message_response
@@ -695,11 +624,11 @@ async def update_answer_in_session(
         logger.error(error_msg, exc_info = True)
         raise e
     except ServiceUnavailableError as e:
-        error_msg = f'''DynamoDB error updating answer in session: {e}'''
+        error_msg = f'DynamoDB error updating answer in session: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
     except Exception as e:
-        error_msg = f'''Unexpected error updating answer in session: {e}'''
+        error_msg = f'Unexpected error updating answer in session: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
 
@@ -707,19 +636,13 @@ async def update_answer_in_session(
 async def finalize_form_session(
     db: Session,
     finalize_data: FinalizeFormRequest,
-    current_user_id: str
 ) -> FinalizeFormResponse:
     '''
         Finalizes a form session, persists all answers to MySQL, and clears the cache.
     '''
-    message = f'''User {current_user_id} attempting to finalize session
-            {finalize_data.session_id}'''
-    logger.info(message)
-
     try:
         current_session, questions_map = await _common_session_load_and_validate(
-            finalize_data.session_id, current_user_id, db # form_id is derived from session
-        )
+            finalize_data.session_id, db)
 
         if not current_session.answers:
             raise InvalidInputError(detail='Cannot finalize an empty form session.')
@@ -732,7 +655,7 @@ async def finalize_form_session(
         # Delete session from DynamoDB (cleanup)
         await delete_session_by_id(current_session.session_id)
 
-        message = f'''User {current_user_id} finalized session {current_session.session_id}.
+        message = f'''User finalized session {current_session.session_id}.
                 Permanent FormResponse ID: {form_response_id}'''
         logger.info(message)
         return FinalizeFormResponse(form_response_id=form_response_id)
@@ -745,12 +668,12 @@ async def finalize_form_session(
         raise e
     except ServiceUnavailableError as e:
         db.rollback() # Rollback MySQL changes if DynamoDB cleanup fails
-        error_msg = f'''DynamoDB error during finalization: {e}'''
+        error_msg = f'DynamoDB error during finalization: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
     except Exception as e:
         db.rollback()
-        error_msg = f'''Unexpected error finalizing form session: {e}'''
+        error_msg = f'Unexpected error finalizing form session: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
 
@@ -759,19 +682,15 @@ async def finalize_form_session(
 async def get_form_response_by_id(
     db: Session,
     form_response_id: int,
-    current_user_id: str
 ) -> FormResponseDetailResponse:
     '''
         Retrieves a completed form response by its ID, including all associated answers,
         contact, and person details.
     '''
-    message = f'''User {current_user_id} attempting to retrieve
-        form response with ID: {form_response_id}'''
-    logger.info(message)
-
     eager_load_options = [
         joinedload(FormResponse.answers),
-        joinedload(FormResponse.contact).joinedload(Contact.person)
+        joinedload(FormResponse.contact).joinedload(Contact.person),
+        joinedload(FormResponse.person)
     ]
     try:
         db_form_response = get_record(db, FormResponse, form_response_id, eager_load_options)
@@ -785,13 +704,12 @@ async def get_form_response_by_id(
             detail = f'Form response with ID {form_response_id} not found.'
         ) from exc
     except Exception as e:
-        error_msg = f'''Unexpected error retrieving form response {form_response_id}: {e}'''
+        error_msg = f'Unexpected error retrieving form response {form_response_id}: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
 
 async def get_all_form_responses(
     db: Session,
-    current_user_id: str,
     skip: int = 0,
     limit: int = 100,
 ) -> List[FormResponseSummaryResponse]:
@@ -799,9 +717,6 @@ async def get_all_form_responses(
         Retrieves a paginated list of all completed form responses.
         Does not load nested answers by default for performance (uses summary schema).
     '''
-    message = f'''User {current_user_id} attempting to retrieve all form
-            responses (skip: {skip}, limit: {limit}).'''
-    logger.info(message)
     # Using the generic get_all_records_paginated from crud service
     return get_all_records_paginated(db, FormResponse, skip, limit)
 
@@ -809,22 +724,17 @@ async def update_form_response_status(
     db: Session,
     form_response_id: int,
     status_data: FormResponseUpdate,
-    current_user_id: str
 ) -> FormResponseDetailResponse:
     '''
         Updates the status of an existing completed form response.
     '''
-    message = f'''User {current_user_id} attempting to update status for form response
-            with ID: {form_response_id} to {status_data.status}'''
-    logger.info(message)
     db_form_response = get_record(db, FormResponse, form_response_id)
-
     try:
         updated_response = update_record(db, db_form_response, status_data)
         db.commit()
         db.refresh(updated_response)
         # Eager load for the response schema
-        return await get_form_response_by_id(db, updated_response.id, current_user_id)
+        return await get_form_response_by_id(db, updated_response.id)
     except RegisterNotFoundError:
         db.rollback()
         raise
