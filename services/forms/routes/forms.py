@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 # Import schemas
 from schemas.forms import (
+    FormFilters,
     FormHeaderCreate,
     FormHeaderResponse,
     FormHeaderUpdate,
@@ -96,27 +97,37 @@ async def get_form_header_by_id_route(
     summary = 'Get all form headers (paginated)'
 )
 async def get_all_form_headers_route(
+    filters: FormFilters = Depends(),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Retrieves a list of all form headers.
+    Retrieves a list of all form headers based on optional filter criteria.
     Supports pagination through 'skip' and 'limit' query parameters.
 
     Args:
+        filters (FormFilters): Optional filters to apply, including company_id,
+                                form_code, name, and status.
         skip (int): The number of items to skip (for pagination).
         limit (int): The maximum number of items to return (for pagination).
         db (Session): The database session.
+        current_user (str): The authenticated user from the JWT token.
 
     Returns:
-        List[FormHeaderResponse]: A list of form headers.
+        List[FormHeaderResponse]: A list of form headers that match the criteria.
     '''
     message = f'''User: {current_user}. Received request to get all form headers
             (skip: {skip}, limit: {limit})'''
     logger.info(message)
-    form_headers = await get_all_form_headers(db, skip=skip, limit=limit)
+    form_headers = await get_all_form_headers(
+        db,
+        filters = filters,
+        skip = skip,
+        limit = limit
+    )
+
     message = f'{len(form_headers)} form headers retrieved successfully via API.'
     logger.info(message)
     return form_headers

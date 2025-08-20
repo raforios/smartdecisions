@@ -24,7 +24,8 @@ class FormHeader(Base):# pylint: disable=too-few-public-methods, too-many-ancest
         *[status_member.value for status_member in FormStatus.__members__.values()]),
         nullable = False, default = FormStatus.ACTIVE)
     creation_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
-    user_id = Column(Integer, nullable = False, index = True)
+    company_id = Column(Integer, nullable = False, index = True)
+    app_id = Column(Integer, nullable = False, index = True)
 
     # Relationships: one-to-many with QuestionDetail and FormResponse
     questions = relationship(

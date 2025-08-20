@@ -176,6 +176,9 @@ async def upload_s3_file(
     file_content = upload_data.file_content
     content_type = upload_data.content_type
 
+    s3_file_key = upload_data.file_key
+    file_url = f'https://{bucket_name}.s3.amazonaws.com/{s3_file_key}'
+
     try:
         s3_client.put_object(
             Bucket = bucket_name,
@@ -188,7 +191,11 @@ async def upload_s3_file(
             to bucket {bucket_name}/{file_path}.'''
 
         logger.info(message)
-        return {'message': f'File {file_name} uploaded successfully to {bucket_name}/{file_path}'}
+        return {
+            'message': f'File {file_name} uploaded successfully to {bucket_name}/{file_path}',
+            'url': file_url,
+            'file_key': s3_file_key
+        }
 
     except ClientError as e:
         _handle_s3_client_error(

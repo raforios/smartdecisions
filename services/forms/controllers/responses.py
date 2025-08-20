@@ -3,11 +3,17 @@
     Handles the business logic for managing form responses, including
     temporary caching in DynamoDB and final persistence in MySQL.
 '''
+import mimetypes
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
+from json.decoder import JSONDecodeError
+import httpx
+from fastapi import UploadFile
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
+from dotenv import dotenv_values
 
 # Import models
 from models.forms import FormHeader, QuestionDetail # Needed to fetch form structure
@@ -52,6 +58,8 @@ from services.dynamodb import (
 # Configuration for DynamoDB TTL (e.g., 24 hours)
 # This should ideally come from configuration (e.env or config service)
 DYNAMODB_SESSION_TTL_HOURS = 24
+
+_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
 
 async def _get_question_details_for_form(
     db: Session,
@@ -185,7 +193,7 @@ async def _create_person_and_contact(
         except IntegrityError as e:
             db.rollback()
             error_msg = f'Integrity error creating person: {e}'
-            logger.error(error_msg, exc_info=True)
+            logger.error(error_msg, exc_info = True)
             raise InvalidInputError(
                 detail='Person creation failed due to data conflict.'
             ) from e
@@ -352,6 +360,88 @@ async def _prepare_next_question_response(
         response_data.update(await _get_question_response_data(next_question))
     return NextQuestionResponse(**response_data)
 
+async def _handle_file_upload_logic(
+    uploaded_file: UploadFile,
+    auth_token: str
+) -> str:
+    '''
+    Handles the logic for uploading a file to the FILES microservice.
+    This version expects a standard file upload (multipart/form-data).
+
+    Args:
+        uploaded_file (UploadFile): The file object from the FastAPI request.
+        auth_header (str): The raw 'Authorization' header string, e.g., 'Bearer abc...'.
+
+    Returns:
+        str: The S3 URL of the uploaded file.
+
+    Raises:
+        ServiceUnavailableError: If the FILES service is not available or returns an error.
+    '''
+    try:
+        file_content_bytes = await uploaded_file.read()
+
+        files_service_url = os.environ.get('FILES_SERVICE_URL') or \
+                            _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
+
+        if not files_service_url:
+            message = 'FILES_SERVICE_URL environment variable is not set.'
+            raise ServiceUnavailableError(detail = message)
+
+        upload_endpoint = f'{files_service_url}/v1/s3/upload'
+
+        mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
+        if not mime_type:
+            mime_type = 'application/octet-stream' # Fallback por si no se detecta
+
+        async with httpx.AsyncClient() as client:
+            try:
+                files = {'file': (uploaded_file.filename, file_content_bytes, mime_type)}
+                data = {
+                    'bucket_name': os.environ.get('BUCKET_NAME') or \
+                            _LOCAL_ENV_PARAMS.get('BUCKET_NAME'),
+                    'file_path': os.environ.get('BUCKET_PATH') or \
+                            _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
+                }
+                headers = {'Authorization': f'{auth_token}'}
+
+                response = await client.post(
+                    upload_endpoint,
+                    files = files,
+                    data = data,
+                    headers = headers
+                )
+                response.raise_for_status()
+
+                s3_upload_response = response.json()
+                file_url = s3_upload_response.get('url')
+
+                if not file_url:
+                    message = 'FILES service did not return a valid URL.'
+                    raise ServiceUnavailableError(detail = message)
+
+                message = f'File uploaded successfully. URL received: {file_url}'
+                logger.info(message)
+                return file_url
+
+            except httpx.HTTPStatusError as e:
+                message = f'''Failed to upload file to FILES service. Status:
+                            {e.response.status_code}, Detail: {e.response.text}'''
+                logger.error(message, exc_info = True)
+                raise ServiceUnavailableError(detail = message) from e
+            except Exception as e:
+                message = f'''Unexpected error during file upload to FILES service:
+                            {e}'''
+                logger.error(message, exc_info = True)
+                raise ServiceUnavailableError(detail = message) from e
+
+    except JSONDecodeError as e:
+        message = 'answer_value has an invalid JSON format.'
+        raise InvalidInputError(detail = message) from e
+    except Exception as e:
+        message = f'Unexpected error in file upload logic: {e}'
+        logger.error(message, exc_info = True)
+        raise e
 
 # --- Controller Functions ---
 
@@ -421,6 +511,8 @@ async def start_form_session(
 async def submit_answer_and_get_next_question(
     db: Session,
     answer_data: SubmitAnswerRequest,
+    auth_token: str,
+    uploaded_file: Optional[UploadFile] = None
 ) -> NextQuestionResponse:
     '''
         Submits an answer for the current question, updates the session cache,
@@ -441,10 +533,18 @@ async def submit_answer_and_get_next_question(
         submitted_question_detail = questions_map.get(answer_data.question_number)
         if not submitted_question_detail:
             raise RegisterNotFoundError(
-                detail=(
-                    f'Question number {answer_data.question_number} not found '
-                    f'in form {current_session.form_id}.'
-                )
+                detail = f'''Question number {answer_data.question_number} not found
+                        in form {current_session.form_id}.'''
+            )
+
+     # Si el tipo de pregunta es "file upload", maneja la lógica de subida de archivo.
+        if submitted_question_detail.response_type == 'FILE_UPLOAD':
+            if not uploaded_file:
+                raise InvalidInputError(detail = 'File upload question requires a file.')
+
+            # Llama a la función auxiliar con el objeto UploadFile
+            answer_data.answer_value = await _handle_file_upload_logic(
+                uploaded_file, auth_token
             )
 
         # Store the submitted answer in the session cache
@@ -484,17 +584,17 @@ async def submit_answer_and_get_next_question(
         )
 
     except (RegisterNotFoundError, InvalidInputError) as e:
-        error_msg = f'''Error submitting answer:
+        message = f'''Error submitting answer:
             {e.detail if hasattr(e, 'detail') else str(e)}'''
-        logger.error(error_msg, exc_info = True)
+        logger.error(message, exc_info = True)
         raise e
     except ServiceUnavailableError as e:
-        error_msg = f'''DynamoDB error submitting answer: {e}'''
-        logger.error(error_msg, exc_info = True)
+        message = f'''DynamoDB error submitting answer: {e}'''
+        logger.error(message, exc_info = True)
         raise e
     except Exception as e:
-        error_msg = f'Unexpected error submitting answer and getting next question: {e}'
-        logger.error(error_msg, exc_info = True)
+        message = f'Unexpected error submitting answer and getting next question: {e}'
+        logger.error(message, exc_info = True)
         raise e
 
 async def get_question_to_modify(

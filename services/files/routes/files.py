@@ -6,10 +6,23 @@ from typing import Dict, Any
 from mimetypes import guess_type
 from fastapi import APIRouter, Depends, UploadFile, File
 from fastapi import Form
-from controllers.files import read_data_from_s3, upload_s3_file, delete_s3_file, list_s3_files
+from controllers.files import (
+    read_data_from_s3,
+    upload_s3_file,
+    delete_s3_file,
+    list_s3_files
+)
 from controllers.files import create_presigned_upload_url
-from schemas.files import S3FileRequest, ListFilesRequest, ListFilesResponse, FileUploadData
-from schemas.files import PresignedUrlRequest, PresignedUrlResponse
+from schemas.files import (
+    S3FileRequest,
+    ListFilesRequest,
+    ListFilesResponse,
+    FileUploadData
+)
+from schemas.files import (
+    PresignedUrlRequest,
+    PresignedUrlResponse
+)
 
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
@@ -62,7 +75,7 @@ async def upload_file_to_s3(
         current_user (str): The authenticated user.
 
     Returns:
-        Dict[str, str]: A message indicating success.
+        Dict[str, str]: A dictionary containing the S3 URL of the uploaded file.
 
     '''
     message = f'''User: {current_user} attempting to upload file: {file.filename}

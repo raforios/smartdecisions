@@ -15,6 +15,7 @@ from models.forms import (
 )
 # Import schemas
 from schemas.forms import (
+    FormFilters,
     FormHeaderCreate,
     FormHeaderUpdate,
     QuestionDetailCreate,
@@ -159,16 +160,29 @@ async def get_form_header_by_id(
 
 async def get_all_form_headers(
     db: Session,
+    filters: FormFilters,
     skip: int = 0,
     limit: int = 100
 ) -> List[FormHeader]:
     '''
-        Retrieves a list of all form headers, with optional pagination.
-        Does not load nested questions by default for performance.
+        Retrieves a list of all form headers, with optional filters and pagination.
     '''
     message = f'Attempting to retrieve all form headers (skip: {skip}, limit: {limit}).'
     logger.info(message)
-    return db.query(FormHeader).offset(skip).limit(limit).all()
+
+    query = db.query(FormHeader)
+
+    # Apply filters dynamically if they exist
+    if filters.company_id is not None:
+        query = query.filter(FormHeader.company_id == filters.company_id)
+    if filters.form_code:
+        query = query.filter(FormHeader.form_code == filters.form_code)
+    if filters.status:
+        query = query.filter(FormHeader.status == filters.status)
+    if filters.name:
+        query = query.filter(FormHeader.name.ilike(f"%{filters.name}%"))
+
+    return query.offset(skip).limit(limit).all()
 
 async def update_form_header(
     db: Session, form_id: int, form_data: FormHeaderUpdate

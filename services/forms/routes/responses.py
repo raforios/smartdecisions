@@ -1,8 +1,8 @@
 '''
     Responses: routes handler
 '''
-from typing import List
-from fastapi import APIRouter, Depends, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Form, Header, UploadFile, status
 from sqlalchemy.orm import Session
 
 # Import schemas for form responses
@@ -76,14 +76,35 @@ async def start_form_session_route(
     logger.info(message)
     return await start_form_session(db, session_data)
 
+async def _get_submit_answer_request(
+    session_id: str = Form(..., description = 'ID of the temporary form filling session.'),
+    question_id: int = Form(..., description = 'ID of the question being answered.'),
+    question_number: int = Form(..., description = 'Number of the question being answered.'),
+    answer_value: Optional[str] = Form(None, description = 'The user\'s answer to the question.'),
+    uploaded_file: Optional[UploadFile] = None
+) -> SubmitAnswerRequest:
+    '''
+    Private helper function that handles multipart/form-data and consolidates
+    the fields into a single SubmitAnswerRequest object.
+    '''
+    return SubmitAnswerRequest(
+        session_id=session_id,
+        question_id=question_id,
+        question_number=question_number,
+        answer_value=answer_value,
+        uploaded_file=uploaded_file
+    )
+
 @router.post(
     '/submit-answer',
     response_model = NextQuestionResponse,
     summary = 'Submits an answer and gets the next question in the session'
 )
 async def submit_answer_route(
-    answer_data: SubmitAnswerRequest,
+    answer_data: SubmitAnswerRequest = Depends(_get_submit_answer_request),
+    uploaded_file: Optional[UploadFile] = None,
     db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
     current_user: str = Depends(get_current_user)
 ):
     '''
@@ -106,7 +127,7 @@ async def submit_answer_route(
     message = f'''Authenticated user '{current_user}' submits an answer
             for session: {answer_data.session_id}, question: {answer_data.question_number}.'''
     logger.info(message)
-    return await submit_answer_and_get_next_question(db, answer_data)
+    return await submit_answer_and_get_next_question(db, answer_data, auth_token, uploaded_file)
 
 @router.post(
     '/get-question-to-modify',

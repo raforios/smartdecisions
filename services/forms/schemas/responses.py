@@ -6,6 +6,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from enum import Enum
+from fastapi import UploadFile
 from pydantic import BaseModel, Field
 
 # Enum for the status of a submitted form response
@@ -271,7 +272,7 @@ class SubmitAnswerRequest(BaseModel):
     question_id: int = Field(..., description = 'ID of the question being answered.')
     question_number: int = Field(..., description = 'Number of the question being answered.')
     answer_value: Optional[str] = Field(None, description = 'The user\'s answer to the question.')
-
+    uploaded_file: Optional[UploadFile] = None
 class NextQuestionResponse(BaseModel):
     '''
         Response schema for the next question to be displayed or a completion message.

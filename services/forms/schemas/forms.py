@@ -151,8 +151,8 @@ class FormHeaderBase(BaseModel):
             description = 'Alphanumeric code for the form, max 10 chars, unique.')
     name: str = Field(..., description = 'Name or description of the form.')
     status: FormStatus = Field(..., description = 'Status of the form: active or inactive.')
-    user_id: int = Field(...,
-                description = 'User ID from the Frontend (not from AUTH microservice).')
+    company_id: int = Field(..., description = 'Company ID from the Frontend.')
+    app_id: int = Field(..., description = 'Application ID from the Frontend.')
 
 class FormHeaderCreate(FormHeaderBase):
     '''
@@ -162,6 +162,18 @@ class FormHeaderCreate(FormHeaderBase):
     questions: List[QuestionDetailCreate] = Field(..., min_items = 1,
             description = 'List of question details for the form.')
 
+class FormFilters(BaseModel):
+    '''
+        Schema for FormFilters
+    '''
+    company_id: Optional[int] = Field(None,
+            description = 'The ID of the company to filter by')
+    form_code: Optional[str] = Field(None,
+            description = 'The unique code of the form to filter by')
+    name: Optional[str] = Field(None,
+            description = 'The name of the form (supports partial matching)')
+    status: Optional[FormStatus] = Field(None,
+            description = 'The status of the form to filter by')
 class FormHeaderUpdate(FormHeaderBase):
     '''
         Schema for updating an existing form header.
@@ -170,7 +182,8 @@ class FormHeaderUpdate(FormHeaderBase):
     form_code: Optional[str] = Field(None, max_length = 10)
     name: Optional[str] = None
     status: Optional[FormStatus] = None
-    user_id: Optional[int] = None
+    company_id: Optional[int] = None
+    app_id: Optional[int] = None
     # Questions are updated via their own endpoints (e.g.,
     # PUT /forms/{formId}/questions/{questionId})
     # or a dedicated endpoint for bulk updates if needed, not directly
