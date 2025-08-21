@@ -1,9 +1,7 @@
-# `schemas/planning.py`
-
 '''
     Pydantic schemas for Planning microservice.
 '''
-from typing import Optional
+from typing import List, Optional
 from datetime import date, datetime
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
@@ -12,9 +10,9 @@ class PlanningStatus(str, Enum):
     '''
         Enum to define the possible states of a planning.
     '''
-    CREATED = 'created'
-    IN_PROGRESS = 'in_progress'
-    FINISHED = 'finished'
+    CREATED = 'CREATED'
+    IN_PROGRESS = 'IN_PROGRESS'
+    FINISHED = 'FINISHED'
 
 class PlanningBaseSchema(BaseModel):
     '''
@@ -23,13 +21,95 @@ class PlanningBaseSchema(BaseModel):
     '''
     model_config = ConfigDict(from_attributes=True)
 
+class PlanningDetailBaseSchema(BaseModel):
+    '''
+        Base schema for planning details.
+    '''
+    team_id: int = Field(
+        ...,
+        description = 'ID of the assigned team or group.'
+    )
+    service_id: int = Field(
+        ...,
+        description = 'ID of the service to which the schedule corresponds.'
+    )
+    planned_route_id: int = Field(
+        ...,
+        description = 'ID of the planned route from the Localization microservice.'
+    )
+
+class PlanningDetailCreateSchema(PlanningDetailBaseSchema):
+    '''
+        Schema for creating a planning detail record.
+    '''
+    planning_id: int = Field(
+        ...,
+        description = 'ID of the parent planning record.'
+    )
+
+class PlanningDetailUpdateSchema(PlanningDetailBaseSchema):
+    '''
+        Schema for updating a planning detail record.
+    '''
+    team_id: Optional[int] = Field(
+        None,
+        description = 'ID of the assigned team or group.'
+    )
+    service_id: Optional[int] = Field(
+        None,
+        description = 'ID of the service to which the schedule corresponds.'
+    )
+    planned_route_id: Optional[int] = Field(
+        None,
+        description = 'ID of the planned route from the Localization microservice.'
+    )
+
+class MaterialAssignmentSchema(BaseModel):
+    '''
+        Schema for assigning materials to a planning.
+    '''
+    material_id: int = Field(
+        ...,
+        description = 'ID of the material being assigned.'
+    )
+    quantity_assigned: int = Field(
+        ..., gt = 0,
+        description = 'Quantity of the material assigned.'
+    )
+
+class MaterialAssignmentResponseSchema(MaterialAssignmentSchema):
+    '''
+        Response schema for material assignments, including its database ID and creation timestamp.
+    '''
+    id: int = Field(
+        ...,
+        description = 'Unique identifier for the material assignment record.'
+    )
+    created_at: datetime = Field(
+        ...,
+        description = 'Timestamp when the material assignment was created.'
+    )
+
+class PlanningDetailWithMaterialsSchema(PlanningDetailBaseSchema):
+    '''
+        Schema for creating a planning detail with associated material assignments.
+    '''
+    materials: List[MaterialAssignmentSchema] = Field(
+        ...,
+        description = 'List of materials assigned to this detail.'
+    )
+
 class PlanningCreateSchema(BaseModel):
     '''
         Schema for creating a new planning record.
     '''
-    user_id: int = Field(
+    company_id: int = Field(
         ...,
-        description = 'ID of the user creating the planning.'
+        description = 'ID of the company creating the route.'
+    )
+    app_id: int = Field(
+        ...,
+        description = 'ID of the application that uses the service.'
     )
     planning_name: str = Field(
         ..., max_length = 255,
@@ -48,25 +128,16 @@ class PlanningCreateSchema(BaseModel):
         description = 'End date of the planning.'
     )
     week_number: int = Field(
-        ..., ge = 1, le = 53,
+        ..., ge=1, le=53,
         description = 'The week number for the planning.'
     )
     status: PlanningStatus = Field(
         PlanningStatus.CREATED,
         description = 'Current status of the planning.'
     )
-
-class PlanningResponseSchema(PlanningBaseSchema, PlanningCreateSchema):
-    '''
-        Response schema for a planning, including its database ID and creation timestamp.
-    '''
-    id: int = Field(
-        ...,
-        description = 'Unique identifier for the planning record.'
-    )
-    created_at: datetime = Field(
-        ...,
-        description = 'Timestamp when the planning was created.'
+    details: Optional[List[PlanningDetailWithMaterialsSchema]] = Field(
+        None,
+        description = 'List of planning details, including team, route, and materials.'
     )
 
 class PlanningUpdateSchema(BaseModel):
@@ -97,63 +168,53 @@ class PlanningUpdateSchema(BaseModel):
         None,
         description = 'Current status of the planning.'
     )
+    # Note: For updates, handling nested lists is complex.
+    # For now, we'll keep the top-level fields for simplicity.
+    # We will create a separate endpoint for updating details.
 
-class PlanningDetailBase(BaseModel):
+class PlanningResponseSchema(PlanningBaseSchema, PlanningCreateSchema):
     '''
-        Base schema for planning details.
-    '''
-    team_id: int = Field(
-        ...,
-        description = 'ID of the assigned team or group.'
-    )
-    planned_route_id: int = Field(
-        ...,
-        description = 'ID of the planned route from the Localization microservice.'
-    )
-
-class PlanningDetailCreateSchema(PlanningDetailBase):
-    '''
-        Schema for creating a planning detail record.
-    '''
-    planning_id: int = Field(
-        ...,
-        description = 'ID of the parent planning record.'
-    )
-
-class PlanningDetailResponseSchema(PlanningBaseSchema, PlanningDetailBase):
-    '''
-        Response schema for planning details.
+        Response schema for a planning, including its database ID and creation timestamp.
     '''
     id: int = Field(
         ...,
-        description = 'Unique identifier for the planning detail record.'
+        description = 'Unique identifier for the planning record.'
     )
     created_at: datetime = Field(
         ...,
-        description = 'Timestamp when the detail was created.'
+        description = 'Timestamp when the planning was created.'
     )
 
-class MaterialAssignmentSchema(BaseModel):
+class MaterialAssignmentUpdateSchema(BaseModel):
     '''
-        Schema for assigning materials to a planning.
+        Schema for updating a material assignment.
     '''
-    planning_detail_id: int = Field(
-        ...,
-        description = 'ID of the planning detail this material is assigned to.'
-    )
-    material_id: int = Field(
-        ...,
-        description = 'ID of the material being assigned.'
-    )
-    quantity_assigned: float = Field(
-        ..., gt = 0,
-        description = 'Quantity of the material assigned.'
-    )
-    quantity_used: Optional[float] = Field(
-        None, gt = 0,
+    quantity_used: Optional[int] = Field(
+        None,
         description = 'Quantity of the material used during the activity.'
     )
-    quantity_returned: Optional[float] = Field(
-        None, gt = 0,
+    quantity_returned: Optional[int] = Field(
+        None,
         description = 'Quantity of the material returned after the activity.'
     )
+class PlanningDetailResponseSchema(PlanningBaseSchema, PlanningDetailBaseSchema):
+    '''
+        Response schema for planning details, including its database ID and creation timestamp.
+    '''
+    id: int = Field(
+        ...,
+        description='Unique identifier for the planning detail record.'
+    )
+    created_at: datetime = Field(
+        ...,
+        description='Timestamp when the detail was created.'
+    )
+
+class PlanningFilterSchema(BaseModel):
+    '''
+        Schema to encapsulate filtering parameters for plannings.
+    '''
+    company_id: Optional[int] = None
+    team_id: Optional[int] = None
+    service_id: Optional[int] = None
+    planned_route_id: Optional[int] = None

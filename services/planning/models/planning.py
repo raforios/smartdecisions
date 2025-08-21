@@ -14,7 +14,8 @@ class Planning(Base): # pylint: disable=too-few-public-methods
     __tablename__ = 't_plannings'
 
     id = Column(Integer, primary_key = True, index = True)
-    user_id = Column(Integer, nullable = False, index = True)
+    company_id = Column(Integer, nullable = False, index = True)
+    app_id = Column(Integer, nullable = False, index = True)
     planning_name = Column(String(255), nullable = False)
     description = Column(String(500), nullable=True)
     start_date = Column(Date, nullable = False)
@@ -42,6 +43,7 @@ class PlanningDetail(Base): # pylint: disable=too-few-public-methods
                         ForeignKey('t_plannings.id', ondelete = 'CASCADE'),
                         nullable = False)
     team_id = Column(Integer, nullable = False, index = True)
+    service_id = Column(Integer, nullable = False, index = True)
     planned_route_id = Column(Integer, nullable = False, index = True)
     created_at = Column(DateTime, nullable = False, server_default = text('now()'))
 
