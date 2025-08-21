@@ -58,7 +58,7 @@ def create_planned_route_controller(
     '''
         Controller to create a new planned route with all its points.
     '''
-    message = f'Attempting to create a new planned route for user: {route_data.user_id}'
+    message = f'Attempting to create a new planned route for company: {route_data.company_id}'
     logger.info(message)
     try:
         new_route = create_planned_route_with_points(db, route_data)
@@ -112,16 +112,16 @@ def filter_planned_routes_controller(
     route_code: Optional[str] = None,
     route_name: Optional[str] = None,
     status: Optional[str] = None,
-    user_id: Optional[int] = None
+    company_id: Optional[int] = None
 ) -> List[PlannedRouteListResponseSchema]:
     '''
         Controller to filter planned routes by various parameters.
     '''
     message = f'''Filtering planned routes with parameters: route_code = {route_code},
-            route_name = {route_name}, status = {status}, user_id = {user_id}'''
+            route_name = {route_name}, status = {status}, user_id = {company_id}'''
     logger.info(message)
     try:
-        routes = filter_planned_routes(db, route_code, route_name, status, user_id)
+        routes = filter_planned_routes(db, route_code, route_name, status, company_id)
         return [PlannedRouteListResponseSchema.model_validate(route) for route in routes]
     except Exception as e:
         error_msg = f'Failed to filter planned routes: {e}'

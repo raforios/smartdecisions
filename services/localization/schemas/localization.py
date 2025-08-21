@@ -77,9 +77,13 @@ class PlannedRouteCreateSchema(BaseModel):
         None, max_length = 500,
         description = 'Description of the route.'
     )
-    user_id: int = Field(
+    company_id: int = Field(
         ...,
-        description = 'ID of the user creating the route.'
+        description = 'ID of the company creating the route.'
+    )
+    app_id: int = Field(
+        ...,
+        description = 'ID of the application that uses the service.'
     )
     points: List[PlannedPointSchema] = Field(
         ...,
@@ -102,7 +106,7 @@ class PlannedRouteListResponseSchema(LocalizationBaseSchema):
     route_name: str
     route_code: str
     description: Optional[str]
-    user_id: int
+    company_id: int
     created_at: datetime
     status: PlannedRouteStatusEnum
     points: List[PlannedPointSchema]
@@ -123,6 +127,10 @@ class ExecutedRouteCreateSchema(BaseModel):
     user_id: int = Field(
         ...,
         description = 'ID of the user for this executed route.'
+    )
+    start_time: datetime = Field(
+        ...,
+        description = 'Date Time recived from frontend app.'
     )
     planned_route_id: Optional[int] = Field(
         None,
@@ -270,7 +278,7 @@ class PlannedRouteFilterSchema(BaseModel):
     route_name: Optional[str] = Query(None, description = 'Name of the planned route.')
     route_status: Optional[str] = Query(None, alias = 'status',
                                         description = 'Status of the planned route.')
-    user_id: Optional[int] = Query(None, description = 'ID of the user who owns the route.')
+    company_id: Optional[int] = Query(None, description = 'ID of the company who owns the route.')
 
     class Config:# pylint: disable=too-few-public-methods
         '''

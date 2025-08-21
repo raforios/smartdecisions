@@ -63,8 +63,8 @@ def create_planned_route_endpoint(
     '''
         Endpoint to create a new planned route.
     '''
-    message = f'''User: {current_user}. Received request to create planned route for user:
-            {route_data.user_id}'''
+    message = f'''User: {current_user}. Received request to create planned route for company:
+            {route_data.company_id}'''
     logger.info(message)
     return create_planned_route_controller(route_data, db)
 
@@ -104,14 +104,14 @@ def get_or_filter_planned_routes_endpoint(
     '''
     message = f'''User: {current_user}. Received request to filter planned routes
             with parameters: route_code = {filters.route_code}, route_name = {filters.route_name},
-            status = {filters.route_status}, user_id = {filters.user_id}'''
+            status = {filters.route_status}, company_id = {filters.company_id}'''
     logger.info(message)
     return filter_planned_routes_controller(
         db,
         filters.route_code,
         filters.route_name,
         filters.route_status,
-        filters.user_id
+        filters.company_id
     )
 
 @router.get(

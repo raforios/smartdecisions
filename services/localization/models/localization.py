@@ -17,7 +17,8 @@ class PlannedRoute(Base):# pylint: disable=too-few-public-methods
     route_name = Column(String(150), nullable = False)
     route_code = Column(String(50), nullable = False, unique = True, index = True)
     description = Column(String(500), nullable = True)
-    user_id = Column(Integer, nullable = False, index = True)
+    company_id = Column(Integer, nullable = False, index = True)
+    app_id = Column(Integer, nullable = False, index = True)
     # Using text('now()') and server_default to fix Pylint error and ensure
     # the function is executed at the database level.
     created_at = Column(DateTime, nullable = False, server_default = text('now()'))
@@ -68,7 +69,7 @@ class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
     user_id = Column(Integer, nullable = False, index = True)
     planned_route_id = Column(Integer, ForeignKey('t_planned_routes.id'), nullable = True)
     # Using text('now()') and server_default for consistency and Pylint compatibility.
-    start_time = Column(DateTime, nullable = False, server_default = text('now()'))
+    start_time = Column(DateTime, nullable = False)
     end_time = Column(DateTime, nullable = True)
 
     planned_route = relationship('PlannedRoute', back_populates = 't_executed_routes')

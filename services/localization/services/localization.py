@@ -66,9 +66,10 @@ def create_planned_route_with_points(
         message = f'Creating planned route with code: {route_data.route_code}'
         logger.debug(message)
         planned_route_data = route_data.model_dump(
-            exclude={'points', 'user_id'}
+            # exclude = {'points', 'user_id'}
+            exclude = {'points'}
         )
-        planned_route_data['user_id'] = route_data.user_id # Ensure user_id is included
+        # planned_route_data['user_id'] = route_data.user_id # Ensure user_id is included
         db_route = PlannedRoute(**planned_route_data)
 
         db.add(db_route)
@@ -115,7 +116,7 @@ def filter_planned_routes(
     route_code: Optional[str] = None,
     route_name: Optional[str] = None,
     status: Optional[str] = None,
-    user_id: Optional[int] = None
+    company_id: Optional[int] = None
 ) -> List[PlannedRoute]:
     '''
         Filters planned routes based on various optional parameters.
@@ -123,15 +124,18 @@ def filter_planned_routes(
     try:
         message = 'Filtering planned routes.'
         logger.debug(message)
+
         query = db.query(PlannedRoute)
+
+        if company_id:
+            query = query.filter(PlannedRoute.company_id == company_id)
         if route_code:
             query = query.filter(PlannedRoute.route_code == route_code)
-        if route_name:
-            query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
         if status:
             query = query.filter(PlannedRoute.status == status)
-        if user_id:
-            query = query.filter(PlannedRoute.user_id == user_id)
+        if route_name:
+            query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
+
         return query.all()
     except Exception as e:
         error_msg = f'Failed to filter planned routes: {e}'
@@ -184,7 +188,7 @@ def register_executed_point(
 
         new_point = create_record(db, ExecutedPoint, point_data)
 
-        executed_route.end_time = datetime.now()
+        # executed_route.end_time = datetime.now()
         db.add(executed_route)
 
         db.commit()
