@@ -40,13 +40,21 @@ class PlannedPointSchema(PointBase, LocalizationBaseSchema):
         Schema for a point in a planned route.
     '''
     point_name: str = Field(
-        ..., max_length=100,
+        ..., max_length = 100,
         description = 'Name of the planned point, e.g., "Office A".'
     )
     reference_data: Optional[str] = Field(
         None, max_length = 255,
         description = 'Additional reference data or notes for the point.'
     )
+
+class PlannedPointResponseSchema(PlannedPointSchema, LocalizationBaseSchema):
+    '''
+        Response schema for a planned point, including the database ID.
+    '''
+    id: int
+    created_at: datetime
+    planned_route_id: int
 
 class PlannedPointCreateSchema(PointBase):
     '''
@@ -96,6 +104,7 @@ class PlannedRouteResponseSchema(PlannedRouteCreateSchema, LocalizationBaseSchem
     '''
     id: int
     created_at: datetime
+    points: List[PlannedPointResponseSchema]
 
 class PlannedRouteListResponseSchema(LocalizationBaseSchema):
     '''
@@ -109,7 +118,7 @@ class PlannedRouteListResponseSchema(LocalizationBaseSchema):
     company_id: int
     created_at: datetime
     status: PlannedRouteStatusEnum
-    points: List[PlannedPointSchema]
+    points: List[PlannedPointResponseSchema]
 
 class PlannedRouteUpdateStatusSchema(BaseModel):
     '''

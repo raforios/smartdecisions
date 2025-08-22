@@ -1,12 +1,9 @@
 '''
     Planning controllers.
 '''
-from typing import List, Callable, Any
+from typing import List
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.exc import SQLAlchemyError
-from services.logger_config import custom_logger as logger
-from services.exceptions import RegisterNotFoundError
 from services.crud import get_record
 from services.planning import (
     assign_material_to_planning_detail,
@@ -23,47 +20,24 @@ from services.planning import (
     update_planning_detail,
     update_planning_with_details
 )
+from services.utils import handle_controller_call
 from models.planning import (
     MaterialAssignment,
     Planning,
     PlanningDetail
 )
 from schemas.planning import (
+    MaterialAssignmentResponseSchema,
     MaterialAssignmentSchema,
     MaterialAssignmentUpdateSchema,
     PlanningCreateSchema,
     PlanningDetailCreateSchema,
+    PlanningDetailResponseSchema,
     PlanningDetailUpdateSchema,
     PlanningFilterSchema,
+    PlanningResponseSchema,
     PlanningUpdateSchema
 )
-
-def _handle_controller_call(
-    func: Callable,
-    operation: str,
-    *args: Any,
-    **kwargs: Any
-) -> Any:
-    '''
-        Generic utility function to handle common try/except blocks in controllers.
-        
-        Args:
-            func (Callable): The function to be called (the core logic).
-            operation (str): A string describing the operation for logging purposes.
-            *args, **kwargs: Arguments to pass to the function.
-    '''
-    try:
-        message = f'Starting controller operation: {operation}'
-        logger.info(message)
-        return func(*args, **kwargs)
-    except (RegisterNotFoundError, SQLAlchemyError) as e:
-        error_msg = f'Failed to {operation}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        error_msg = f'Unexpected error during {operation}: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
 
 def create_planning_controller(
     planning_data: PlanningCreateSchema,
@@ -72,9 +46,10 @@ def create_planning_controller(
     '''
         Controller to create a new planning.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         create_planning_with_details,
         'create planning',
+        response_model = PlanningResponseSchema,
         db = db,
         planning_data = planning_data
     )
@@ -92,9 +67,10 @@ def get_planning_by_id_controller(
         ]
         return get_record(db, Planning, planning_id, eager_load_options=eager_options)
 
-    return _handle_controller_call(
+    return handle_controller_call(
         _fetch_planning,
-        f'fetch planning with ID {planning_id}'
+        f'fetch planning with ID {planning_id}',
+        response_model = PlanningResponseSchema
     )
 
 def update_planning_controller(
@@ -105,9 +81,10 @@ def update_planning_controller(
     '''
         Controller to update an existing planning record.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         update_planning_with_details,
         f'update planning with ID {planning_id}',
+        response_model = PlanningResponseSchema,
         db = db,
         planning_id = planning_id,
         planning_data = planning_data
@@ -120,9 +97,10 @@ def get_weekly_plannings_controller(
     '''
         Controller to get all plannings for a specific week.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         get_plannings_by_week,
         f'fetch weekly plannings for week {week_number}',
+        response_model = List[PlanningResponseSchema],
         db = db,
         week_number = week_number
     )
@@ -134,9 +112,10 @@ def get_daily_plannings_controller(
     '''
         Controller to get all plannings for a specific date.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         get_plannings_by_date,
         f'fetch daily plannings for date {date_to_filter}',
+        response_model = List[PlanningResponseSchema],
         db = db,
         planning_date = date_to_filter
     )
@@ -148,9 +127,10 @@ def create_planning_detail_controller(
     '''
         Controller to create a new planning detail for an existing planning.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         create_planning_detail,
         'create planning detail',
+        response_model = PlanningDetailResponseSchema,
         db = db,
         detail_data = detail_data
     )
@@ -162,7 +142,7 @@ def delete_planning_controller(
     '''
         Controller to delete a planning by its ID.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         delete_planning_by_id,
         f'delete planning with ID {planning_id}',
         db = db,
@@ -176,9 +156,10 @@ def get_materials_controller(
     '''
         Controller to retrieve all materials for a specific planning detail.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         get_materials_by_detail_id,
         f'fetch materials for planning detail {planning_detail_id}',
+        response_model = List[MaterialAssignmentResponseSchema],
         db = db,
         planning_detail_id = planning_detail_id
     )
@@ -191,9 +172,10 @@ def assign_material_controller(
     '''
         Controller to assign a material to a planning detail.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         assign_material_to_planning_detail,
         f'assign material to planning detail {planning_detail_id}',
+        response_model = MaterialAssignmentResponseSchema,
         db = db,
         planning_detail_id = planning_detail_id,
         material_data = material_data
@@ -207,9 +189,10 @@ def update_material_controller(
     '''
         Controller to update a material assignment record.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         update_material_quantities,
         f'update material with ID {material_assignment_id}',
+        response_model = MaterialAssignmentResponseSchema,
         db = db,
         material_assignment_id = material_assignment_id,
         update_data = material_data
@@ -222,7 +205,7 @@ def delete_material_controller(
     '''
         Controller to delete a material assignment by its ID.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         delete_material_by_id,
         f'delete material with ID {material_assignment_id}',
         db = db,
@@ -236,9 +219,10 @@ def get_filtered_plannings_controller(
     '''
         Controller to get plannings by a single, exclusive filter criterion.
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         get_filtered_plannings,
         'get filtered plannings',
+        response_model = List[PlanningResponseSchema],
         db = db,
         company_id = filters.company_id,
         team_id = filters.team_id,
@@ -254,7 +238,7 @@ def delete_planning_detail_controller(
         Controller to delete a planning detail record.
     
     '''
-    return _handle_controller_call(
+    return handle_controller_call(
         delete_planning_detail_by_id,
         f'delete planning detail with ID {planning_detail_id}',
         db=db,
@@ -272,9 +256,10 @@ def update_planning_detail_controller(
     # We convert the Pydantic schema to a dictionary, excluding fields that are None.
     data_to_update = update_data.model_dump(exclude_unset=True)
 
-    return _handle_controller_call(
+    return handle_controller_call(
         update_planning_detail,
         f'update planning detail with ID {planning_detail_id}',
+        response_model = PlanningDetailResponseSchema,
         db = db,
         planning_detail_id = planning_detail_id,
         update_data = data_to_update

@@ -4,7 +4,6 @@
 from typing import Any, Dict, List, Optional
 from datetime import date
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from services.crud import (
     create_record,
@@ -17,6 +16,7 @@ from services.exceptions import (
     InvalidInputError
 )
 from services.logger_config import custom_logger as logger
+from services.utils import handle_service_errors
 
 from models.planning import (
     Planning, PlanningDetail,
@@ -31,6 +31,7 @@ from schemas.planning import (
     PlanningUpdateSchema
 )
 
+@handle_service_errors
 def get_plannings_by_week(
     db: Session,
     week_number: int
@@ -47,6 +48,7 @@ def get_plannings_by_week(
         )
     return plannings
 
+@handle_service_errors
 def get_plannings_by_date(
     db: Session,
     planning_date: date
@@ -66,6 +68,7 @@ def get_plannings_by_date(
         )
     return plannings
 
+@handle_service_errors
 def create_planning_with_details(
     db: Session,
     planning_data: PlanningCreateSchema
@@ -74,49 +77,39 @@ def create_planning_with_details(
         Creates a planning record and its nested details and materials
         in a transactional block.
     '''
-    try:
-        if planning_data.start_date > planning_data.end_date:
-            raise InvalidInputError(detail='`start_date` cannot be after `end_date`')
+    if planning_data.start_date > planning_data.end_date:
+        raise InvalidInputError(detail='`start_date` cannot be after `end_date`')
 
-        # 1. Create the main Planning record.
-        planning_dict = planning_data.model_dump(exclude = {'details'})
-        db_planning = Planning(**planning_dict)
-        db.add(db_planning)
-        db.flush()
+    # 1. Create the main Planning record.
+    planning_dict = planning_data.model_dump(exclude = {'details'})
+    db_planning = Planning(**planning_dict)
+    db.add(db_planning)
+    db.flush()
 
-        # 2. Iterate through planning details and materials to create nested records.
-        if planning_data.details:
-            for detail_data in planning_data.details:
-                db_detail = create_record(
+    # 2. Iterate through planning details and materials to create nested records.
+    if planning_data.details:
+        for detail_data in planning_data.details:
+            db_detail = create_record(
+                db,
+                PlanningDetail,
+                detail_data,
+                extra_fields={'planning_id': db_planning.id},
+                exclude_relations=['materials']
+            )
+
+            for material_data in detail_data.materials:
+                create_record(
                     db,
-                    PlanningDetail,
-                    detail_data,
-                    extra_fields={'planning_id': db_planning.id},
-                    exclude_relations=['materials']
+                    MaterialAssignment,
+                    material_data,
+                    extra_fields={'planning_detail_id': db_detail.id}
                 )
 
-                for material_data in detail_data.materials:
-                    create_record(
-                        db,
-                        MaterialAssignment,
-                        material_data,
-                        extra_fields={'planning_detail_id': db_detail.id}
-                    )
+    db.commit()
+    db.refresh(db_planning)
+    return db_planning
 
-        db.commit()
-        db.refresh(db_planning)
-        return db_planning
-    except (IntegrityError, SQLAlchemyError, InvalidInputError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to create planning {planning_data.planning_name}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error creating planning: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
-
+@handle_service_errors
 def update_planning_with_details(
     db: Session,
     planning_id: int,
@@ -126,29 +119,19 @@ def update_planning_with_details(
         Updates a planning record in a transactional block.
         Note: This function does not handle updates for details or materials.
     '''
-    try:
-        db_planning = get_record(db, Planning, planning_id)
+    db_planning = get_record(db, Planning, planning_id)
 
-        if (planning_data.start_date and planning_data.end_date and
-                planning_data.start_date > planning_data.end_date):
-            raise InvalidInputError(detail='`start_date` cannot be after `end_date`')
+    if (planning_data.start_date and planning_data.end_date and
+            planning_data.start_date > planning_data.end_date):
+        raise InvalidInputError(detail='`start_date` cannot be after `end_date`')
 
-        db_planning = update_record(db, db_planning, planning_data)
+    db_planning = update_record(db, db_planning, planning_data)
 
-        db.commit()
-        db.refresh(db_planning)
-        return db_planning
-    except (IntegrityError, SQLAlchemyError, InvalidInputError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to update planning {planning_id}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error updating planning: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    db.commit()
+    db.refresh(db_planning)
+    return db_planning
 
+@handle_service_errors
 def create_planning_detail(
     db: Session,
     detail_data: PlanningDetailCreateSchema
@@ -158,22 +141,12 @@ def create_planning_detail(
     '''
     message = f'Creating planning detail for planning ID: {detail_data.planning_id}'
     logger.info(message)
-    try:
-        db_detail = create_record(db, PlanningDetail, detail_data)
-        db.commit()
-        db.refresh(db_detail)
-        return db_detail
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to create planning detail: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error creating planning detail: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    db_detail = create_record(db, PlanningDetail, detail_data)
+    db.commit()
+    db.refresh(db_detail)
+    return db_detail
 
+@handle_service_errors
 def delete_planning_by_id(
     db: Session,
     planning_id: int
@@ -183,28 +156,17 @@ def delete_planning_by_id(
     '''
     message = f'Attempting to delete planning with ID: {planning_id}'
     logger.info(message)
-    try:
-        db_planning = get_record(db, Planning, planning_id)
+    db_planning = get_record(db, Planning, planning_id)
 
-        if db_planning.status != PlanningStatus.CREATED:
-            raise InvalidInputError(
-                detail = f'''Cannot delete planning with status {db_planning.status}.
-                        Only CREATED plannings can be deleted.'''
-            )
+    if db_planning.status != PlanningStatus.CREATED:
+        raise InvalidInputError(
+            detail = f'''Cannot delete planning with status {db_planning.status}.
+                    Only CREATED plannings can be deleted.'''
+        )
 
-        delete_record(db, Planning, planning_id)
-        db.commit()
-        return {'message': f'Planning {planning_id} deleted successfully.'}
-    except (IntegrityError, SQLAlchemyError, InvalidInputError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to delete planning {planning_id}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error deleting planning: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    delete_record(db, Planning, planning_id)
+    db.commit()
+    return {'message': f'Planning {planning_id} deleted successfully.'}
 
 def get_materials_by_detail_id(
     db: Session,
@@ -224,6 +186,7 @@ def get_materials_by_detail_id(
         )
     return materials
 
+@handle_service_errors
 def assign_material_to_planning_detail(
     db: Session,
     planning_detail_id: int,
@@ -235,27 +198,17 @@ def assign_material_to_planning_detail(
     message = f'''Assigning material {material_data.material_id} to planning detail
             {planning_detail_id}'''
     logger.info(message)
-    try:
-        db_material = create_record(
-            db,
-            MaterialAssignment,
-            material_data,
-            extra_fields={'planning_detail_id': planning_detail_id}
-        )
-        db.commit()
-        db.refresh(db_material)
-        return db_material
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to assign material to planning detail {planning_detail_id}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error assigning material to planning detail: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    db_material = create_record(
+        db,
+        MaterialAssignment,
+        material_data,
+        extra_fields={'planning_detail_id': planning_detail_id}
+    )
+    db.commit()
+    db.refresh(db_material)
+    return db_material
 
+@handle_service_errors
 def update_material_quantities(
     db: Session,
     material_assignment_id: int,
@@ -267,37 +220,27 @@ def update_material_quantities(
     '''
     message = f'Updating material quantities for material assignment ID: {material_assignment_id}'
     logger.info(message)
-    try:
-        db_material = get_record(db, MaterialAssignment, material_assignment_id)
+    db_material = get_record(db, MaterialAssignment, material_assignment_id)
 
-        update_dict = update_data.model_dump(exclude_unset=True)
-        quantity_returned = update_dict.get('quantity_returned')
+    update_dict = update_data.model_dump(exclude_unset=True)
+    quantity_returned = update_dict.get('quantity_returned')
 
-        if quantity_returned is not None:
-            if db_material.quantity_assigned < quantity_returned:
-                raise InvalidInputError(
-                    detail='Quantity returned cannot be greater than quantity assigned.'
-                )
-            # Calculate quantity_used
-            update_dict['quantity_used'] = db_material.quantity_assigned - quantity_returned
+    if quantity_returned is not None:
+        if db_material.quantity_assigned < quantity_returned:
+            raise InvalidInputError(
+                detail='Quantity returned cannot be greater than quantity assigned.'
+            )
+        # Calculate quantity_used
+        update_dict['quantity_used'] = db_material.quantity_assigned - quantity_returned
 
-        # Update the record using the generic crud function
-        db_material = update_record(db, db_material, MaterialAssignmentUpdateSchema(**update_dict))
+    # Update the record using the generic crud function
+    db_material = update_record(db, db_material, MaterialAssignmentUpdateSchema(**update_dict))
 
-        db.commit()
-        db.refresh(db_material)
-        return db_material
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError, InvalidInputError) as e:
-        db.rollback()
-        error_msg = f'Failed to update material {material_assignment_id}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error updating material: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    db.commit()
+    db.refresh(db_material)
+    return db_material
 
+@handle_service_errors
 def delete_material_by_id(
     db: Session,
     material_assignment_id: int
@@ -307,20 +250,9 @@ def delete_material_by_id(
     '''
     message = f'Attempting to delete material with ID: {material_assignment_id}'
     logger.info(message)
-    try:
-        delete_record(db, MaterialAssignment, material_assignment_id)
-        db.commit()
-        return {'message': f'Material assignment {material_assignment_id} deleted successfully.'}
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to delete material {material_assignment_id}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error deleting material: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    delete_record(db, MaterialAssignment, material_assignment_id)
+    db.commit()
+    return {'message': f'Material assignment {material_assignment_id} deleted successfully.'}
 
 def get_filtered_plannings(
     db: Session,
@@ -365,6 +297,7 @@ def get_filtered_plannings(
 
     return plannings
 
+@handle_service_errors
 def delete_planning_detail_by_id(
     db: Session,
     planning_detail_id: int
@@ -374,21 +307,11 @@ def delete_planning_detail_by_id(
     '''
     message = f'Attempting to delete planning detail with ID: {planning_detail_id}'
     logger.info(message)
-    try:
-        delete_record(db, PlanningDetail, planning_detail_id)
-        db.commit()
-        return {'message': f'Planning detail {planning_detail_id} deleted successfully.'}
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to delete planning detail {planning_detail_id}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error deleting planning detail: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    delete_record(db, PlanningDetail, planning_detail_id)
+    db.commit()
+    return {'message': f'Planning detail {planning_detail_id} deleted successfully.'}
 
+@handle_service_errors
 def update_planning_detail(
     db: Session,
     planning_detail_id: int,
@@ -397,31 +320,20 @@ def update_planning_detail(
     '''
         Updates a planning detail record with the provided data.
     '''
-    try:
-        db_detail = db.query(PlanningDetail).filter(
-            PlanningDetail.id == planning_detail_id
-        ).first()
+    db_detail = db.query(PlanningDetail).filter(
+        PlanningDetail.id == planning_detail_id
+    ).first()
 
-        if not db_detail:
-            raise RegisterNotFoundError(
-                detail=f"Planning detail with ID {planning_detail_id} not found."
-            )
+    if not db_detail:
+        raise RegisterNotFoundError(
+            detail=f"Planning detail with ID {planning_detail_id} not found."
+        )
 
-        # Update fields with provided data
-        for field, value in update_data.items():
-            if value is not None:
-                setattr(db_detail, field, value)
+    # Update fields with provided data
+    for field, value in update_data.items():
+        if value is not None:
+            setattr(db_detail, field, value)
 
-        db.commit()
-        db.refresh(db_detail)
-        return db_detail
-    except (SQLAlchemyError, RegisterNotFoundError) as e:
-        db.rollback()
-        error_msg = f'Failed to update planning detail {planning_detail_id}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except Exception as e:
-        db.rollback()
-        error_msg = f'Unexpected error updating planning detail: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('An unexpected internal error occurred.') from e
+    db.commit()
+    db.refresh(db_detail)
+    return db_detail

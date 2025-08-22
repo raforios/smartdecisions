@@ -30,6 +30,7 @@ from schemas.localization import (
     ExecutedRouteUpdateSchema,
     MessageSchema,
     PlannedPointCreateSchema,
+    PlannedPointResponseSchema,
     PlannedRouteCreateSchema,
     PlannedRouteFilterSchema,
     PlannedRouteListResponseSchema,
@@ -179,7 +180,7 @@ def delete_planned_route_endpoint(
 
 @router.post(
     '/routes/planned/{planned_route_id}/points',
-    response_model = PlannedPointCreateSchema,
+    response_model = PlannedPointResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Add a point to a planned route',
     description = '''Adds a new point to a planned route.
