@@ -1,7 +1,7 @@
 '''
     API Routes for Localization Microservice
 '''
-from typing import List
+from typing import Any, List
 from fastapi import APIRouter, Depends, Path, status
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
@@ -23,6 +23,7 @@ from controllers.localization import (
     register_attendance_controller,
     update_attendance_checkout_time_controller,
     update_executed_route_end_time_controller,
+    update_planned_route_controller,
     update_planned_route_status_controller
 )
 from schemas.localization import (
@@ -41,6 +42,7 @@ from schemas.localization import (
     ExecutedPointResponseSchema,
     AttendanceCreateSchema,
     AttendanceResponseSchema,
+    PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
     PointsVisitedResponseSchema,
     RouteComparisonFullResponseSchema,
@@ -156,6 +158,31 @@ def update_planned_route_status_endpoint(
             route {planned_route_id} to {status_data.status}'''
     logger.info(message)
     return update_planned_route_status_controller(planned_route_id, status_data, db)
+
+@router.patch(
+    '/routes/planned/{planned_route_id}',
+    response_model = PlannedRouteResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Update a planned route',
+    description = 'Updates specific fields of an existing planned route.'
+)
+def update_planned_route_endpoint(
+    planned_route_id: int,
+    route_data: PlannedRouteUpdateSchema,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> Any:
+    '''
+        Endpoint to update specific fields of a planned route.
+    '''
+    message = f'''User: {current_user}. Received request to update planned route
+            {planned_route_id}.'''
+    logger.info(message)
+    return update_planned_route_controller(
+        planned_route_id,
+        route_data,
+        db
+    )
 
 @router.delete(
     '/routes/planned/{planned_route_id}',

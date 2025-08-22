@@ -18,6 +18,7 @@ from services.localization import (
     register_attendance,
     update_attendance_checkout_time,
     update_executed_route_end_time,
+    update_planned_route_service,
     update_planned_route_status,
     create_executed_route,
     register_executed_point,
@@ -41,6 +42,7 @@ from schemas.localization import (
     ExecutedPointResponseSchema,
     AttendanceCreateSchema,
     AttendanceResponseSchema,
+    PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
     PointsVisitedResponseSchema,
     RouteComparisonFullResponseSchema,
@@ -128,6 +130,23 @@ def update_planned_route_status_controller(
         db = db,
         planned_route_id = planned_route_id,
         status_data = status_data
+    )
+
+def update_planned_route_controller(
+    planned_route_id: int,
+    route_data: PlannedRouteUpdateSchema,
+    db: Session
+) -> PlannedRouteResponseSchema:
+    '''
+        Controller to update specific fields of a planned route.
+    '''
+    return handle_controller_call(
+        update_planned_route_service,
+        f'update planned route with ID {planned_route_id}',
+        response_model = PlannedRouteResponseSchema,
+        db = db,
+        planned_route_id = planned_route_id,
+        route_data = route_data
     )
 
 def delete_planned_route_controller(

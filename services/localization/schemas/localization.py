@@ -106,6 +106,24 @@ class PlannedRouteResponseSchema(PlannedRouteCreateSchema, LocalizationBaseSchem
     created_at: datetime
     points: List[PlannedPointResponseSchema]
 
+class PlannedRouteUpdateSchema(BaseModel):
+    '''
+        Schema for updating specific fields of a planned route.
+        All fields are optional for partial updates.
+    '''
+    route_name: Optional[str] = Field(
+        None, max_length = 150,
+        description = 'Updated name of the planned route.'
+    )
+    route_code: Optional[str] = Field(
+        None, max_length = 50,
+        description = 'Updated unique code for the planned route.'
+    )
+    description: Optional[str] = Field(
+        None, max_length = 500,
+        description = 'Updated description of the route.'
+    )
+
 class PlannedRouteListResponseSchema(LocalizationBaseSchema):
     '''
         Response schema for a list of planned routes. This is the missing class

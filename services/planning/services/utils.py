@@ -2,7 +2,7 @@
     Utils service
 '''
 
-from typing import Any, Callable, List, Optional, Type
+from typing import Any, Callable, Optional, Type
 from functools import wraps
 from pydantic import BaseModel, TypeAdapter
 from sqlalchemy.orm import Session
@@ -61,8 +61,7 @@ def handle_controller_call(
                 and response_model.__origin__ is list:
                 adapter = TypeAdapter(response_model)
                 return adapter.validate_python(result, from_attributes = True)
-            else:
-                return response_model.model_validate(result, from_attributes = True)
+            return response_model.model_validate(result, from_attributes = True)
 
         return result
     except (RegisterNotFoundError, RegisterAlreadyExistsError, InvalidInputError) as e:

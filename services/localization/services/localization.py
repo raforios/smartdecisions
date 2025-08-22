@@ -4,6 +4,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc
 from services.exceptions import (
     RegisterNotFoundError,
@@ -31,6 +32,7 @@ from schemas.localization import (
     PlannedRouteComparisonSchema,
     PlannedRouteCreateSchema,
     PlannedRouteStatusEnum,
+    PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
     AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
@@ -225,6 +227,40 @@ def update_planned_route_status(
     message = f'Status for planned route {planned_route_id} updated to {status_data.status}.'
     logger.info(message)
     return updated_route
+
+@handle_service_errors
+def update_planned_route_service(
+    db: Session,
+    planned_route_id: int,
+    route_data: PlannedRouteUpdateSchema
+) -> PlannedRoute:
+    '''
+        Service to update specific fields of a planned route.
+    '''
+    # Fetch the record
+    db_planned_route = get_record(db, PlannedRoute, planned_route_id)
+
+    # Convert the Pydantic model to a dictionary, excluding unset fields
+    update_data: Dict[str, Any] = route_data.model_dump(exclude_unset = True)
+
+    # Check if there are any fields to update
+    if not update_data:
+        # Return the original record if no updates are requested
+        return db_planned_route
+
+    # Update the model instance with the provided data
+    for key, value in update_data.items():
+        if key != 'points':
+            setattr(db_planned_route, key, value)
+
+    # If the `points` list is being updated, it's a special case
+    if 'points' in update_data:
+        db_planned_route.points = update_data['points']
+        flag_modified(db_planned_route, 'points')
+
+    db.commit()
+    db.refresh(db_planned_route)
+    return db_planned_route
 
 @handle_service_errors
 def delete_planned_route(
