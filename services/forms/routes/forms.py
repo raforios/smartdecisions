@@ -58,10 +58,7 @@ async def create_new_form_header_route(
     '''
     message = f'User: {current_user}. Received request to create form header: {form_data.form_code}'
     logger.info(message)
-    db_form_header = await create_form_header(db, form_data)
-    message = f'Form header {db_form_header.id} created successfully via API.'
-    logger.info(message)
-    return db_form_header
+    return await create_form_header(db, form_data)
 
 @router.get(
     '/{form_id}',
@@ -86,10 +83,7 @@ async def get_form_header_by_id_route(
     '''
     message = f'User: {current_user}. Received request to get form header with ID: {form_id}'
     logger.info(message)
-    form_header = await get_form_header_by_id(db, form_id)
-    message = f'Form header {form_id} retrieved successfully via API.'
-    logger.info(message)
-    return form_header
+    return await get_form_header_by_id(db, form_id)
 
 @router.get(
     '/',
@@ -121,16 +115,12 @@ async def get_all_form_headers_route(
     message = f'''User: {current_user}. Received request to get all form headers
             (skip: {skip}, limit: {limit})'''
     logger.info(message)
-    form_headers = await get_all_form_headers(
+    return await get_all_form_headers(
         db,
         filters = filters,
         skip = skip,
         limit = limit
     )
-
-    message = f'{len(form_headers)} form headers retrieved successfully via API.'
-    logger.info(message)
-    return form_headers
 
 @router.put(
     '/{form_id}',
@@ -158,10 +148,7 @@ async def update_existing_form_header_route(
     '''
     message = f'User: {current_user}. Received request to update form header with ID: {form_id}'
     logger.info(message)
-    updated_form_header = await update_form_header(db, form_id, form_data)
-    message = f'Form header {form_id} updated successfully via API.'
-    logger.info(message)
-    return updated_form_header
+    return await update_form_header(db, form_id, form_data)
 
 @router.delete(
     '/{form_id}',
@@ -187,10 +174,7 @@ async def delete_existing_form_header_route(
     '''
     message = f'User: {current_user}. Received request to delete form header with ID: {form_id}'
     logger.info(message)
-    response = await delete_form_header(db, form_id)
-    message = f'Form header {form_id} deleted successfully via API.'
-    logger.info(message)
-    return response
+    return await delete_form_header(db, form_id)
 
 # --- Endpoints for QuestionDetail ---
 
@@ -221,10 +205,7 @@ async def create_new_question_detail_route(
     message = f'''User: {current_user}. Received request to create question for form ID: {form_id},
             question number: {question_data.question_number}'''
     logger.info(message)
-    db_question = await create_question_detail(db, form_id, question_data)
-    message = f'Question {db_question.id} created successfully for form {form_id} via API.'
-    logger.info(message)
-    return db_question
+    return await create_question_detail(db, form_id, question_data)
 
 @router.get(
     '/questions/{question_id}',
@@ -250,10 +231,7 @@ async def get_question_detail_by_id_route(
     message = f'''User: {current_user}. Received request to get question detail
             with ID: {question_id}'''
     logger.info(message)
-    question_detail = await get_question_detail_by_id(db, question_id)
-    message = f'Question detail {question_id} retrieved successfully via API.'
-    logger.info(message)
-    return question_detail
+    return await get_question_detail_by_id(db, question_id)
 
 @router.put(
     '/questions/{question_id}',
@@ -282,10 +260,7 @@ async def update_existing_question_detail_route(
     message = f'''User: {current_user}. Received request to update question detail
             with ID: {question_id}'''
     logger.info(message)
-    updated_question_detail = await update_question_detail(db, question_id, question_data)
-    message = f'Question detail {question_id} updated successfully via API.'
-    logger.info(message)
-    return updated_question_detail
+    return await update_question_detail(db, question_id, question_data)
 
 @router.delete(
     '/questions/{question_id}',
@@ -312,7 +287,4 @@ async def delete_existing_question_detail_route(
     message = f'''User: {current_user}. Received request to delete question detail
             with ID: {question_id}'''
     logger.info(message)
-    response = await delete_question_detail(db, question_id)
-    message = f'Question detail {question_id} deleted successfully via API.'
-    logger.info(message)
-    return response
+    return await delete_question_detail(db, question_id)

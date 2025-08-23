@@ -35,7 +35,7 @@ from controllers.responses import (
 
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user # To get current_user_id from JWT
+from services.security import get_current_user
 
 router = APIRouter(prefix = '/v1/form-responses', tags = ['Form Responses'])
 
@@ -76,7 +76,7 @@ async def start_form_session_route(
     logger.info(message)
     return await start_form_session(db, session_data)
 
-async def _get_submit_answer_request(
+def _get_submit_answer_request(
     session_id: str = Form(..., description = 'ID of the temporary form filling session.'),
     question_id: int = Form(..., description = 'ID of the question being answered.'),
     question_number: int = Form(..., description = 'Number of the question being answered.'),
@@ -229,7 +229,7 @@ async def finalize_form_session_route(
     response_model = FormResponseDetailResponse,
     summary = 'Get a completed form response by ID with all answers and contact info'
 )
-async def get_form_response_by_id_route(
+def get_form_response_by_id_route(
     form_response_id: int,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -251,14 +251,14 @@ async def get_form_response_by_id_route(
     message = f'''Authenticated user '{current_user}' requests to get
             form response by ID: {form_response_id}.'''
     logger.info(message)
-    return await get_form_response_by_id(db, form_response_id)
+    return get_form_response_by_id(db, form_response_id)
 
 @router.get(
     '/',
     response_model = List[FormResponseSummaryResponse],
     summary = 'Get all completed form responses (paginated)'
 )
-async def get_all_form_responses_route(
+def get_all_form_responses_route(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -282,14 +282,14 @@ async def get_all_form_responses_route(
     message = f'''Authenticated user '{current_user}' requests to get all form
             responses (skip: {skip}, limit: {limit}).'''
     logger.info(message)
-    return await get_all_form_responses(db, skip = skip, limit = limit)
+    return get_all_form_responses(db, skip = skip, limit = limit)
 
 @router.put(
     '/{form_response_id}/status',
     response_model = FormResponseDetailResponse,
     summary = 'Update the status of a completed form response'
 )
-async def update_form_response_status_route(
+def update_form_response_status_route(
     form_response_id: int,
     status_data: FormResponseUpdate,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -313,4 +313,4 @@ async def update_form_response_status_route(
     message = f'''Authenticated user {current_user} requests to update status
             for form response {form_response_id} to {status_data.status.value}.'''
     logger.info(message)
-    return await update_form_response_status(db, form_response_id, status_data)
+    return update_form_response_status(db, form_response_id, status_data)
