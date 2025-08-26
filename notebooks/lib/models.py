@@ -7,6 +7,16 @@ from dataclasses import dataclass
 import numpy as np
 
 @dataclass
+class OptimizationParams:
+    '''
+        Class to define Optimization Params
+    '''
+    route_id: int
+    day: int
+    primary: int
+    dist: int = 1500
+
+@dataclass
 class UploadFileParams:
     '''
         Class to define Upload file params
@@ -29,16 +39,6 @@ class UploadFileParams:
             File Name property
         '''
         return os.path.basename(self.full_local_file_path)
-
-@dataclass
-class OptimizationParams:
-    '''
-        Class to define Optimization Params
-    '''
-    route_id: int
-    day: int
-    primary: int
-    dist: int = 1500
 
 @dataclass
 class DeleteFileParams:
@@ -88,21 +88,11 @@ class PredictLogisticParams:
     b: float
 
 @dataclass
-class LinearCostParams:
-    '''
-        Class to define parameters for linear regression cost calculation.
-    '''
-    x_matrix: np.ndarray
-    y: np.ndarray
-    w: np.ndarray
-    b: float
-
-@dataclass
 class LinearGradientDescentParams:
     '''
         Class to define parameters for linear regression gradient descent.
     '''
-    x_matrix: np.ndarray
+    x: np.ndarray
     y: np.ndarray
     w_in: np.ndarray
     b_in: float
@@ -119,16 +109,6 @@ class PredictLinearParams:
     b: float
 
 @dataclass
-class LinearCostSingleParams:
-    '''
-        Class to define parameters for linear regression (single-feature) cost calculation.
-    '''
-    x: np.ndarray
-    y: np.ndarray
-    w: float
-    b: float
-
-@dataclass
 class LinearGradientSingleDescentParams:
     '''
         Class to define parameters for linear regression (single-feature) gradient descent.
@@ -136,19 +116,6 @@ class LinearGradientSingleDescentParams:
     x: np.ndarray
     y: np.ndarray
     w_in: float
-    b_in: float
-    alpha: float
-    num_iters: int
-
-@dataclass
-class GradientDescentMatrixParams:
-    '''
-        Class to define parameters for multi-feature linear regression
-        gradient descent using matrix operations.
-    '''
-    x_matrix: np.ndarray
-    y: np.ndarray
-    w_in: np.ndarray
     b_in: float
     alpha: float
     num_iters: int

@@ -22,14 +22,11 @@ from lib.models import (
     DeleteFileParams,
     LogisticCostParams,
     GradientDescentParams,
-    PredictLogisticParams,
     NormalizeFeaturesParams,
-    LinearCostParams,
+    PredictLogisticParams,
     LinearGradientDescentParams,
     PredictLinearParams,
-    LinearCostSingleParams,
-    LinearGradientSingleDescentParams,
-    GradientDescentMatrixParams
+    LinearGradientSingleDescentParams
 )
 from dotenv import dotenv_values
 
@@ -38,26 +35,6 @@ logging.basicConfig(level = logging.INFO,
 
 BASEDIR = os.path.dirname(os.path.abspath(__file__))
 PARAMETERS = dotenv_values(os.path.join(os.path.dirname(os.path.dirname(BASEDIR)), 'notebooks', '.env'))
-
-def parse_txt_data(file_content: str, delimiter: str,
-    until_col: int, skip_rows: int) -> tuple:
-    '''
-        Parses the contents of a TXT file (in CSV format) to extract a
-        feature matrix X and a label array Y.
-
-        Args:
-            file_content (str): The contents of the TXT file as a string.
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: A tuple containing the matrix X and the array Y.
-    '''
-    # Usar StringIO para que numpy.loadtxt pueda leer la cadena como un archivo
-    data_io = StringIO(file_content)
-
-    data = np.loadtxt(data_io, delimiter = delimiter, skiprows = skip_rows, dtype = np.float64)
-    x_matrix = data[:,:until_col]
-    y = data[:,until_col]
-    return x_matrix, y
 
 def _prepare_payload_from_params(params: object) -> dict:
     '''
@@ -274,6 +251,26 @@ def delete_file(token: str, url: str, endpoint: str, params: DeleteFileParams) -
     '''
     return _call_api(token, url, endpoint, params = params, http_method = 'DELETE')
 
+def parse_txt_data(file_content: str, delimiter: str,
+    until_col: int, skip_rows: int) -> tuple:
+    '''
+        Parses the contents of a TXT file (in CSV format) to extract a
+        feature matrix X and a label array Y.
+
+        Args:
+            file_content (str): The contents of the TXT file as a string.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: A tuple containing the matrix X and the array Y.
+    '''
+    # Usar StringIO para que numpy.loadtxt pueda leer la cadena como un archivo
+    data_io = StringIO(file_content)
+
+    data = np.loadtxt(data_io, delimiter = delimiter, skiprows = skip_rows, dtype = np.float64)
+    x_matrix = data[:,:until_col]
+    y = data[:,until_col]
+    return x_matrix, y
+
 def calculate_sigmoid_batch(token: str, url: str, endpoint: str,
         z_values: List[Union[float, int]]) -> List[float]:
     '''
@@ -405,51 +402,6 @@ def normalize_features(
 # --- Funciones para el Microservicio de PREDICCIONES (Regresión Lineal) ---
 # --- Regresión Lineal de Múltiples Características ---
 
-def compute_cost_linear_regression(
-    token: str,
-    url: str,
-    endpoint: str,
-    params: LinearCostParams
-) -> float:
-    '''
-        Calculates the linear regression cost via the prediction microservice
-        (POST endpoint).
-
-        Args:
-            token (str): Authentication token.
-            url (str): Base URL of the API Gateway.
-            endpoint (str): The specific endpoint path for cost calculation
-            (e.g., 'predictions/compute-cost').
-            params (LinearCostParams): An object containing x_matrix, y, w, and b.
-
-        Returns:
-            float: The calculated linear regression cost.
-    '''
-    response = _call_api(token, url, endpoint, params = params, http_method = 'POST')
-    return response.get('cost') # Asumiendo que el campo de respuesta es 'cost'
-
-def compute_gradient_linear_regression(
-    token: str,
-    url: str,
-    endpoint: str,
-    params: LinearCostParams # Reusa LinearCostParams, ya que tiene las mismas entradas
-) -> dict:
-    '''
-        Calculates the linear regression gradient via the prediction microservice
-        (POST endpoint).
-
-        Args:
-            token (str): Authentication token.
-            url (str): Base URL of the API Gateway.
-            endpoint (str): The specific endpoint path for gradient calculation.
-            params (LinearCostParams): An object containing x_matrix, y, w, and b.
-
-        Returns:
-            dict: A dictionary containing 'dj_db' (float) and 'dj_dw' (List[float]).
-    '''
-    return _call_api(token, url, endpoint, params = params, http_method = 'POST')
-
-
 def train_linear_regression(
     token: str,
     url: str,
@@ -496,33 +448,6 @@ def predict_linear_regression(
     response = _call_api(token, url, endpoint, params = params, http_method = 'POST')
     return response.get('predictions', [])
 
-def compute_cost_single_linear_regression(
-    token: str,
-    url: str,
-    endpoint: str,
-    params: LinearCostSingleParams
-) -> float:
-    '''
-        Calculates the single-feature linear regression cost via the prediction microservice.
-        Returns:
-            float: The calculated linear regression cost.
-    '''
-    response = _call_api(token, url, endpoint, params = params, http_method = 'POST')
-    return response.get('cost')
-
-def compute_gradient_single_linear_regression(
-    token: str,
-    url: str,
-    endpoint: str,
-    params: LinearCostSingleParams
-) -> dict:
-    '''
-        Calculates the single-feature linear regression gradient via the prediction microservice.
-        Returns:
-            dict: A dictionary containing 'dj_db' (float) and 'dj_dw' (float).
-    '''
-    return _call_api(token, url, endpoint, params = params, http_method = 'POST')
-
 def train_single_linear_regression(
     token: str,
     url: str,
@@ -535,30 +460,5 @@ def train_single_linear_regression(
         Returns:
             dict: A dictionary containing 'w_final' (final weight), 'b_final' (final bias),
                 'J_history' (list of costs), and 'p_history' (list of [w, b] pairs).
-    '''
-    return _call_api(token, url, endpoint, params = params, http_method = 'POST')
-
-def train_matrix_linear_regression(
-    token: str,
-    url: str,
-    endpoint: str,
-    params: GradientDescentMatrixParams
-) -> dict:
-    '''
-        Performs multi-feature linear regression training using gradient descent
-        via the prediction microservice (POST endpoint for matrix operations).
-
-        Args:
-            token (str): Authentication token.
-            url (str): Base URL of the API Gateway.
-            endpoint (str): The specific endpoint path for training
-                            (e.g., 'prediction/train-matrix-linear-regression').
-            params (GradientDescentMatrixParams): An object containing x_matrix, y,
-            w_in, b_in, alpha, and num_iters.
-
-        Returns:
-            dict: A dictionary containing 'w_final' (final weights), 'b_final'
-            (final bias), 'J_history' (list of costs), and 'p_history'
-            (list of [w, b] pairs).
     '''
     return _call_api(token, url, endpoint, params = params, http_method = 'POST')

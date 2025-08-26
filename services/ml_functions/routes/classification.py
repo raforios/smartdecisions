@@ -1,15 +1,15 @@
 '''
     Classification: routes handler
 '''
-from typing import Union, List
 from fastapi import APIRouter, Depends
-
+from services.security import get_current_user
+from services.logger_config import custom_logger as logger
 from controllers.classification import (
     calculating_sigmoid,
     calculating_cost_logistic,
     calculating_gradient_logistic,
     performing_gradient_descent_logistic,
-    predicting_logistic_classification,
+    predicting_logistic_classification
 )
 from schemas.classification import (
     SigmoidBatchRequest,
@@ -17,69 +17,35 @@ from schemas.classification import (
     ComputeGradientLogisticRequest,
     ComputeGradientLogisticResponse,
     GradientDescentLogisticRequest,
-    GradientDescentLogisticResponse,
     PredictLogisticRequest,
     PredictLogisticResponse
 )
-from services.security import get_current_user
-from services.logger_config import custom_logger as logger
 
 router = APIRouter(prefix = '/v1/classification', tags = ['ML Classification'])
 
-# --- Endpoint para un único valor (GET) ---
-@router.get(
-    '/sigmoid/{z_value}',
-    response_model = float,
-    summary = "Calculate sigmoid for a single value",
-    description = '''Calculates the sigmoid function for a given single
-        numeric input value.'''
-)
-async def sigmoid_scalar_algorithm(z_value: Union[float, int],
-    current_user: str = Depends(get_current_user)):
-    '''
-    Calculates the sigmoid of a single Z-value using the machine learning service.
-
-    This endpoint takes a single numeric input 'z_value' from the URL path
-    and returns its sigmoid transformation. Authentication is required.
-
-    Args:
-        z_value (Union[float, int]): The input numeric value for which to calculate the sigmoid.
-        current_user (str): The authenticated user's identifier (injected by dependency).
-
-    Returns:
-        float: The sigmoid value, which will be a float between 0 and 1.
-
-    Raises:
-        UnauthorizedError: If authentication fails.
-        ServiceUnavailableError: If an internal server error occurs during calculation.
-    '''
-    message = f'User: {current_user} requested sigmoid for scalar z_value: {z_value}'
-    logger.info(message)
-    # Convertir a float para asegurar que el controlador reciba un tipo consistente
-    return await calculating_sigmoid(float(z_value))
-
-# --- Endpoint para una lista de valores (POST) ---
 @router.post(
     '/sigmoid-batch',
-    response_model = List[float],
-    summary = "Calculate sigmoid for a batch of values",
-    description = '''Calculates the sigmoid function for a list of numeric
-        input values.'''
+    summary = 'Calculate sigmoid function for a batch of values',
+    description = '''Calculates the sigmoid function for each value in a batch
+        and returns the results. This is useful for testing the sigmoid service.'''
 )
-async def sigmoid_batch_algorithm(request: SigmoidBatchRequest,
-    current_user: str = Depends(get_current_user)):
+async def sigmoid_batch_algorithm(
+    request: SigmoidBatchRequest,
+    current_user: str = Depends(get_current_user)
+):
     '''
-    Calculates the sigmoid for a batch of Z-values using the machine learning service.
-
-    This endpoint takes a list of numeric 'z_values' in the request body
-    and returns a list of their sigmoid transformations. Authentication is required.
+    Calculates the sigmoid function for each value in a list of `z_values`.
 
     Args:
-        request (SigmoidBatchRequest): A Pydantic model containing a list of Z-values.
-        current_user (str): The authenticated user's identifier (injected by dependency).
+        request (SigmoidBatchRequest): A Pydantic model containing
+                                        a list of `z_values`.
+        current_user (str): The authenticated user's identifier
+                            (dependency-injected).
 
     Returns:
-        List[float]: A list of sigmoid values, each a float between 0 and 1.
+        Union[float, numpy.ndarray]: The result of the sigmoid calculation.
+                                     Returns a float if a single value was passed,
+                                     or a NumPy array if a list was passed.
 
     Raises:
         UnauthorizedError: If authentication fails.
@@ -87,28 +53,30 @@ async def sigmoid_batch_algorithm(request: SigmoidBatchRequest,
     '''
     message = f'User: {current_user} requested sigmoid for batch z_values: {request.z_values}'
     logger.info(message)
-    # Pasar directamente la lista de valores al controlador
-    return await calculating_sigmoid(request.z_values)
+    return await calculating_sigmoid(request)
 
 @router.post(
-    '/compute-cost-logistic',
-    response_model = float,
-    summary = "Compute logistic regression cost",
-    description = '''Calculates the cost for logistic regression based on
-        provided data, weights, and bias.'''
+    '/cost-logistic',
+    summary = 'Compute logistic regression cost',
+    description = '''Calculates the cost (J) for a given logistic regression
+        model (x, y, w, b).'''
 )
-async def compute_cost_logistic_algorithm(request: ComputeCostLogisticRequest,
-    current_user: str = Depends(get_current_user)):
+async def compute_cost_logistic_route(
+    request: ComputeCostLogisticRequest,
+    current_user: str = Depends(get_current_user)
+):
     '''
     Calculates the cost for logistic regression based on provided data, weights, and bias.
 
     This endpoint takes the feature matrix X, target array y, weight parameters w,
-    and bias b in the request body, and returns the computed logistic cost.
+    and bias b in the request body, and returns the computed logistic regression cost.
     Authentication is required.
 
     Args:
-        request (ComputeCostLogisticRequest): A Pydantic model containing X, y, w, and b.
-        current_user (str): The authenticated user's identifier (injected by dependency).
+        request (ComputeCostLogisticRequest): A Pydantic model containing
+                                                      x_matrix, y, w, and b.
+        current_user (str): The authenticated user's identifier
+                            (dependency-injected).
 
     Returns:
         float: The calculated logistic regression cost.
@@ -117,61 +85,56 @@ async def compute_cost_logistic_algorithm(request: ComputeCostLogisticRequest,
         UnauthorizedError: If authentication fails.
         ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'User: {current_user} requested logistic cost calculation.'
+    message = f'User: {current_user} requested logistic regression cost calculation.'
     logger.info(message)
-    return await calculating_cost_logistic(
-        x_matrix = request.x_matrix,
-        y = request.y,
-        w = request.w,
-        b = request.b
-    )
+    return await calculating_cost_logistic(request)
 
 @router.post(
-    '/compute-gradient-logistic',
+    '/gradient-logistic',
     response_model = ComputeGradientLogisticResponse,
-    summary = "Compute logistic regression gradient",
-    description = '''Calculates the gradient for logistic regression based on
-        provided data, weights, and bias.'''
+    summary = 'Compute logistic regression gradient',
+    description = '''Calculates the gradients (dj_dw, dj_db) for a given logistic
+        regression model (x, y, w, b).'''
 )
-async def compute_gradient_logistic_algorithm(request: ComputeGradientLogisticRequest,
-    current_user: str = Depends(get_current_user)):
+async def compute_gradient_logistic_route(
+    request: ComputeGradientLogisticRequest,
+    current_user: str = Depends(get_current_user)
+):
     '''
     Calculates the gradient for logistic regression based on provided data, weights, and bias.
 
     This endpoint takes the feature matrix X, target array y, weight parameters w,
-    and bias b in the request body, and returns the computed logistic gradient (dj_db, dj_dw).
-    Authentication is required.
+    and bias b in the request body, and returns the computed logistic regression
+    gradient (dj_db, dj_dw). Authentication is required.
 
     Args:
-        request (ComputeGradientLogisticRequest): A Pydantic model containing X, y, w, and b.
-        current_user (str): The authenticated user's identifier (injected by dependency).
+        request (ComputeGradientLogisticRequest): A Pydantic model containing
+                                                          x_matrix, y, w, and b.
+        current_user (str): The authenticated user's identifier
+                            (dependency-injected).
 
     Returns:
-        ComputeGradientLogisticResponse: An object containing the calculated dj_db (scalar)
-                                         and dj_dw (list of floats).
+        ComputeGradientLogisticResponse: An object containing dj_db (float)
+                                                 and dj_dw (list of floats).
 
     Raises:
         UnauthorizedError: If authentication fails.
         ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'User: {current_user} requested logistic gradient calculation.'
+    message = f'User: {current_user} requested logistic regression gradient calculation.'
     logger.info(message)
-    return await calculating_gradient_logistic(
-        x_matrix = request.x_matrix,
-        y = request.y,
-        w = request.w,
-        b = request.b
-    )
+    return await calculating_gradient_logistic(request)
 
 @router.post(
-    '/gradient-descent-logistic',
-    response_model = GradientDescentLogisticResponse,
-    summary = "Perform logistic regression gradient descent",
-    description = '''Performs logistic regression gradient descent to find
-        optimal parameters (w, b).'''
+    '/train-logistic-regression',
+    summary = 'Train logistic regression model using gradient descent',
+    description = '''Performs batch gradient descent to train a logistic regression
+        model and returns the final parameters (w, b) and training history.'''
 )
-async def gradient_descent_logistic_algorithm(request: GradientDescentLogisticRequest,
-    current_user: str = Depends(get_current_user)):
+async def train_logistic_regression_route(
+    request: GradientDescentLogisticRequest,
+    current_user: str = Depends(get_current_user)
+):
     '''
     Performs logistic regression gradient descent to find optimal parameters (w, b).
 
@@ -182,40 +145,46 @@ async def gradient_descent_logistic_algorithm(request: GradientDescentLogisticRe
 
     Args:
         request (GradientDescentLogisticRequest): A Pydantic model containing
-                                                  X, y, w_in, b_in, alpha, and num_iters.
-        current_user (str): The authenticated user's identifier (injected by dependency).
+                                                  x_matrix, y, initial w, initial b,
+                                                  alpha, and num_iters.
+        current_user (str): The authenticated user's identifier
+                            (dependency-injected).
 
     Returns:
-        GradientDescentLogisticResponse: An object containing the final w, b,
-                                         and the history of cost and parameters.
+        dict: A dictionary containing the final w, b, and the history of cost
+              and parameters.
 
     Raises:
         UnauthorizedError: If authentication fails.
         ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'User: {current_user} requested logistic gradient descent.'
+    message = f'User: {current_user} requested logistic regression training using gradient descent.'
     logger.info(message)
     return await performing_gradient_descent_logistic(request)
 
 @router.post(
-    '/predict-classification',
+    '/predict-logistic-classification',
     response_model = PredictLogisticResponse,
-    summary = "Predict labels using logistic regression",
-    description = '''Predicts labels (0 or 1) using learned logistic regression
-        parameters (w, b) and new data.'''
+    summary = 'Make predictions using a trained logistic regression model',
+    description = '''Uses a trained logistic regression model (w, b) to predict
+        output for new input features (x_test).'''
 )
-async def predict_classification_algorithm(request: PredictLogisticRequest,
-    current_user: str = Depends(get_current_user)):
+async def predict_logistic_classification_route(
+    request: PredictLogisticRequest,
+    current_user: str = Depends(get_current_user)
+):
     '''
-    Predicts labels (0 or 1) using learned logistic regression parameters (w, b) and new data.
+    Predicts values using learned logistic regression parameters (w, b) and new data.
 
-    This endpoint takes a feature matrix X, learned weight parameters w, and bias b
-    in the request body, and returns a list of predicted labels (0 or 1).
+    This endpoint takes a feature matrix X_test, learned weight parameters w,
+    and bias b in the request body, and returns a list of predicted labels (0 or 1).
     Authentication is required.
 
     Args:
-        request (PredictLogisticRequest): A Pydantic model containing X, w, and b for prediction.
-        current_user (str): The authenticated user's identifier (injected by dependency).
+        request (PredictLogisticRequest): A Pydantic model containing
+                                                  x_test, w, and b for prediction.
+        current_user (str): The authenticated user's identifier
+                            (dependency-injected).
 
     Returns:
         PredictLogisticResponse: An object containing the list of predicted labels.
@@ -224,6 +193,6 @@ async def predict_classification_algorithm(request: PredictLogisticRequest,
         UnauthorizedError: If authentication fails.
         ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'User: {current_user} requested logistic prediction.'
+    message = f'User: {current_user} requested logistic regression prediction for new data.'
     logger.info(message)
     return await predicting_logistic_classification(request)

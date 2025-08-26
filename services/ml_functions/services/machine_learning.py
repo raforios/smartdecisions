@@ -61,7 +61,7 @@ def compute_gradient(x, y, w, b):
 
     return dj_dw, dj_db
 
-def gradient_descent(x, y, w_in, b_in, alpha, num_iters):#pylint: disable=R0913 disable=R0917
+def gradient_descent(x, y, w_in, b_in, config):
     '''
     Performs gradient descent to fit w,b. Updates w,b by taking
     num_iters gradient steps with learning rate alpha
@@ -70,8 +70,10 @@ def gradient_descent(x, y, w_in, b_in, alpha, num_iters):#pylint: disable=R0913 
       x (ndarray (m,)) : Data, m examples
       y (ndarray (m,)) : target values
       w_in,b_in (scalar): initial values of model parameters
-      alpha (float):     Learning rate
-      num_iters (int):   number of iterations to run gradient descent
+      config (Dict): {
+        alpha (float):     Learning rate
+        num_iters (int):   number of iterations to run gradient descent
+      }
 
     Returns:
       w (scalar): Updated value of parameter after running gradient descent
@@ -85,6 +87,7 @@ def gradient_descent(x, y, w_in, b_in, alpha, num_iters):#pylint: disable=R0913 
     p_history = []
     b = b_in
     w = w_in
+    num_iters = config['num_iters']
     save_interval = np.ceil(num_iters/10000) # prevent resource exhaustion for long runs
 
     for i in range(num_iters):
@@ -92,8 +95,8 @@ def gradient_descent(x, y, w_in, b_in, alpha, num_iters):#pylint: disable=R0913 
         dj_dw, dj_db = compute_gradient(x, y, w , b)
 
         # Update Parameters using equation (3) above
-        b = b - alpha * dj_db
-        w = w - alpha * dj_dw
+        b = b - config['alpha'] * dj_db
+        w = w - config['alpha'] * dj_dw
 
         # Save cost J at each iteration
         if i == 0 or i % save_interval == 0:
@@ -102,22 +105,22 @@ def gradient_descent(x, y, w_in, b_in, alpha, num_iters):#pylint: disable=R0913 
 
         # Print cost every at intervals 10 times or as many iterations if < 10
         if i % math.ceil(num_iters / 10) == 0:
-            log_msg = f'''Iteration {i: 9d}:
+            message = f'''Iteration {i: 9d}:
                 Cost {j_history[-1]: 0.2f}
                 w: {w: 0.2f}, b:{b: 0.2f}
                 dj_dw: {dj_dw: 0.2f}, dj_db: {dj_db: 0.2f}'''
-            logger.info(log_msg)
+            logger.info(message)
 
         if i == num_iters - 1:
-            log_msg = f'Final Iteration {i + 1: 9d}:'
-            logger.info(log_msg)
-            log_msg = f'''
+            message = f'Final Iteration {i + 1: 9d}:'
+            logger.info(message)
+            message = f'''
                 Cost:  {j_history[-1]: 0.2f}
                 w:     {w: 0.2f}
                 b:     {b: 0.2f}
                 dj_dw: {dj_dw: 0.2f}
                 dj_db: {dj_db: 0.2f}'''
-            logger.info(log_msg)
+            logger.info(message)
 
     return w, b, j_history, p_history
 
@@ -184,7 +187,7 @@ def compute_gradient_matrix(x_matrix, y, w, b):
 
     return dj_dw, dj_db
 
-def gradient_descent_matrix(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint: disable=R0913 disable=R0917
+def gradient_descent_matrix(x_matrix, y, w_in, b_in, config):
     '''
     Performs batch gradient descent to learn w and b. Updates w and b by taking 
     num_iters gradient steps with learning rate alpha
@@ -196,8 +199,10 @@ def gradient_descent_matrix(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint: 
       b_in (scalar)      : initial model parameter
       cost_function      : function to compute cost
       gradient_function  : function to compute the gradient
-      alpha (float)      : Learning rate
-      num_iters (int)    : number of iterations to run gradient descent
+      config (Dict): {
+        alpha (float):     Learning rate
+        num_iters (int):   number of iterations to run gradient descent
+      }
       
     Returns:
       w (ndarray (n,)): Updated values of parameters 
@@ -207,6 +212,8 @@ def gradient_descent_matrix(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint: 
     # An array to store cost J and w's at each iteration primarily for graphing later
     w = copy.deepcopy(w_in)  #avoid modifying global w within function
     b = b_in
+    alpha = config['alpha']
+    num_iters = config['num_iters']
     save_interval = np.ceil(num_iters/10000) # prevent resource exhaustion for long runs
     hist = {
         'cost': [],
@@ -231,25 +238,25 @@ def gradient_descent_matrix(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint: 
 
         # Print cost every at intervals 10 times or as many iterations if < 10
         if i % math.ceil(num_iters / 10) == 0:
-            log_msg = f'''Iteration {i: 9d}:
+            message = f'''Iteration {i: 9d}:
                 Cost {hist['cost'][-1]: 0.2f}
                 w: {w}
                 b:{b: 0.2f}
                 dj_dw: {dj_dw}
                 dj_db: {dj_db: 0.2f}'''
 
-            logger.info(log_msg)
+            logger.info(message)
 
         if i == num_iters - 1:
-            log_msg = f'Final Iteration {i + 1: 9d}:'
-            logger.info(log_msg)
-            log_msg = f'''
+            message = f'Final Iteration {i + 1: 9d}:'
+            logger.info(message)
+            message = f'''
                 Cost:  {hist['cost'][-1]: 0.2f}
                 w:     {w}
                 b:     {b: 0.2f}
                 dj_dw: {dj_dw}
                 dj_db: {dj_db: 0.2f}'''
-            logger.info(log_msg)
+            logger.info(message)
 
     return w, b, hist
 
@@ -350,7 +357,7 @@ def compute_gradient_logistic(x_matrix, y, w, b):
     return dj_dw, dj_db
 
 
-def gradient_descent_logistic(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint: disable=R0917 disable=R0913
+def gradient_descent_logistic(x_matrix, y, w_in, b_in, config):
     '''
     Performs batch gradient descent to learn theta. Updates theta by taking
     num_iters gradient steps with learning rate alpha
@@ -360,8 +367,10 @@ def gradient_descent_logistic(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint
       y:    (ndarray Shape (m,))  target value
       w_in: (ndarray Shape (n,))  Initial values of parameters of the model
       b_in: (scalar)              Initial value of parameter of the model
-      alpha: (float)              Learning rate
-      num_iters: (int)            number of iterations to run gradient descent
+      config (Dict): {
+        alpha (float):     Learning rate
+        num_iters (int):   number of iterations to run gradient descent
+      }
       lambda_: (scalar, float)    regularization constant
 
     Returns:
@@ -382,6 +391,7 @@ def gradient_descent_logistic(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint
     # --- Early Stopping Variables ---
     previous_cost = float('inf')
     epsilon = 1e-6
+    num_iters = config['num_iters']
 
     for i in range(num_iters):
 
@@ -389,8 +399,8 @@ def gradient_descent_logistic(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint
         dj_dw, dj_db = compute_gradient_logistic(x_matrix, y, w_in, b_in)
 
         # Update Parameters using w, b, alpha and gradient
-        w_in = w_in - alpha * dj_dw
-        b_in = b_in - alpha * dj_db
+        w_in = w_in - config['alpha'] * dj_dw
+        b_in = b_in - config['alpha'] * dj_db
 
        # Calculate the current cost for this iteration (needed for early stopping)
         current_cost = compute_cost_logistic(x_matrix, y, w_in, b_in)
@@ -403,12 +413,12 @@ def gradient_descent_logistic(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint
         # --- Early Stopping ---
         if i > 0:
             if abs(previous_cost - current_cost) < epsilon or current_cost > previous_cost:
-                log_msg = f'Convergence or lack of significant improvement detected. Iter: {i+1}.'
-                logger.info(log_msg)
-                log_msg = f'Current Cost:  {current_cost:.6f} Previous Cost: {previous_cost:.6f}'
-                logger.info(log_msg)
-                log_msg = f'w: {w_in} b: {b_in: .2f}'
-                logger.info(log_msg)
+                message = f'Convergence or lack of significant improvement detected. Iter: {i+1}.'
+                logger.info(message)
+                message = f'Current Cost:  {current_cost:.6f} Previous Cost: {previous_cost:.6f}'
+                logger.info(message)
+                message = f'w: {w_in} b: {b_in: .2f}'
+                logger.info(message)
 
                 break
 
@@ -417,23 +427,23 @@ def gradient_descent_logistic(x_matrix, y, w_in, b_in, alpha, num_iters):#pylint
 
         # Print cost every at intervals 10 times or as many iterations if < 10
         if i % math.ceil(num_iters / 10) == 0:
-            log_msg = f'''Iteration {i: 9d}:
+            message = f'''Iteration {i: 9d}:
                 Cost {j_history[-1]: 0.2f}
                 w: {[f'{x:.2f}' for x in w_in]}, b:{b_in: 0.2f}
                 dj_dw: {[f'{x:.2f}' for x in dj_dw]}, dj_db: {dj_db: 0.2f}'''
 
-            logger.info(log_msg)
+            logger.info(message)
 
         if i == num_iters - 1:
-            log_msg = f'Final Iteration {i + 1: 9d}:'
-            logger.info(log_msg)
-            log_msg = f'''
+            message = f'Final Iteration {i + 1: 9d}:'
+            logger.info(message)
+            message = f'''
                 Cost:  {j_history[-1]: 0.2f}
                 w:     {[f'{x:.2f}' for x in w_in]}
                 b:     {b_in: .2f}
                 dj_dw: {[f'{x:.2f}' for x in dj_dw]}
                 dj_db: {dj_db: .2f}'''
-            logger.info(log_msg)
+            logger.info(message)
 
     return w_in, b_in, j_history, w_history
 

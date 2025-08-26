@@ -26,7 +26,11 @@ app = FastAPI(
     title = 'Machine Learning Service',
     description = '''It is a Machine Learning service that uses Regression algorithms
     (linear, logarithmic, gradient) and Sigmoid, with and without data normalization.''',
-    version = '1.0.0'
+    version = '1.0.0',
+    contact={
+        'name': 'API Support',
+        'email': 'raforios@gmail.com',
+    },
 )
 
 setup_exception_handlers(app)
