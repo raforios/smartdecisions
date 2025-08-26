@@ -10,20 +10,17 @@ from controllers.files import (
     read_data_from_s3,
     upload_s3_file,
     delete_s3_file,
-    list_s3_files
+    list_s3_files,
+    create_presigned_upload_url
 )
-from controllers.files import create_presigned_upload_url
 from schemas.files import (
     S3FileRequest,
     ListFilesRequest,
     ListFilesResponse,
-    FileUploadData
-)
-from schemas.files import (
+    FileUploadData,
     PresignedUrlRequest,
     PresignedUrlResponse
 )
-
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
 from services.exceptions import InvalidInputError
@@ -39,7 +36,7 @@ ALLOWED_CONTENT_TYPES = [
 ]
 
 @router.get('/read/{bucket_name}/{file_key}', response_model = Dict[str, Any])
-async def read_s3_file(
+async def read_s3_file_route(
     bucket_name: str,
     file_key: str,
     current_user: str = Depends(get_current_user)):
@@ -47,19 +44,19 @@ async def read_s3_file(
     Reads a CSV file from an S3 bucket, processes it, and returns the data as JSON.
 
     Args:
-        bucket_name (str): bucket S3 name.
+        bucket_name (str): S3 bucket name.
         file_key (str): The file key (full path) within the S3 bucket.
+        current_user (str): The authenticated user.
 
     Returns:
         Dict[str, Any]: A dictionary containing the processed data from the file.
-
     '''
     message = f'User: {current_user} accessing file: {file_key} in bucket: {bucket_name}.'
     logger.info(message)
     return await read_data_from_s3(bucket_name, file_key, current_user)
 
 @router.post('/upload', response_model = Dict[str, str])
-async def upload_file_to_s3(
+async def upload_file_to_s3_route(
     file: UploadFile = File(...),
     bucket_name: str = Form(..., description = 'Name of the S3 bucket.'),
     file_path: str = Form('', description='Path within the S3 bucket.'),
@@ -76,7 +73,6 @@ async def upload_file_to_s3(
 
     Returns:
         Dict[str, str]: A dictionary containing the S3 URL of the uploaded file.
-
     '''
     message = f'''User: {current_user} attempting to upload file: {file.filename}
     to bucket: {bucket_name}/{file_path}.'''
@@ -86,9 +82,7 @@ async def upload_file_to_s3(
         error_msg = f'''Unsupported file type: {file.content_type}.
         Only CSV, Excel and TXT files are allowed.'''
         logger.error(error_msg)
-        raise InvalidInputError(
-            detail = error_msg
-        )
+        raise InvalidInputError(detail = error_msg)
 
     file_content = await file.read()
 
@@ -100,13 +94,10 @@ async def upload_file_to_s3(
         content_type = file.content_type
     )
 
-    return await upload_s3_file(
-        upload_data_obj,
-        current_user
-    )
+    return await upload_s3_file(upload_data_obj, current_user)
 
 @router.delete('/delete', response_model = Dict[str, str])
-async def delete_file_from_s3(
+async def delete_file_from_s3_route(
     request: S3FileRequest,
     current_user: str = Depends(get_current_user)
 ):
@@ -119,7 +110,6 @@ async def delete_file_from_s3(
 
     Returns:
         Dict[str, str]: A message indicating success.
-
     '''
     message = f'''User: {current_user} attempting to delete file:
     {request.file_key} from bucket: {request.bucket_name}.'''
@@ -128,7 +118,7 @@ async def delete_file_from_s3(
     return await delete_s3_file(request.bucket_name, request.file_key, current_user)
 
 @router.post('/list-files', response_model = ListFilesResponse)
-async def list_files_s3(
+async def list_files_s3_route(
     request: ListFilesRequest,
     current_user: str = Depends(get_current_user)
 ):
@@ -141,10 +131,8 @@ async def list_files_s3(
 
     Returns:
         ListFilesResponse: A dictionary with the list of files.
-
     '''
     predefined_ml_data_bucket = os.environ.get('ML_DATA_BUCKET_NAME')
-
     target_bucket = request.bucket_name if request.bucket_name else predefined_ml_data_bucket
 
     message = f'''User: {current_user} attempting to list files in bucket:
@@ -164,13 +152,13 @@ def get_content_type_from_filename(
     filename: str
 ) -> str:
     '''
-        Try to guess the MIME type, if not, use a generic value.
+    Tries to guess the MIME type, if not, uses a generic value.
     '''
     mime_type, _ = guess_type(filename)
     return mime_type if mime_type else 'application/octet-stream'
 
 @router.post('/upload-presigned', response_model = PresignedUrlResponse)
-async def get_presigned_upload_url(
+async def get_presigned_upload_url_route(
     request: PresignedUrlRequest,
     current_user: str = Depends(get_current_user)
 ):
@@ -179,27 +167,26 @@ async def get_presigned_upload_url(
 
     Args:
         request (PresignedUrlRequest): Contains bucket_name, file_path, file_name,
-        expiration_seconds. current_user (str): The authenticated user.
+        expiration_seconds.
+        current_user (str): The authenticated user.
 
     Returns:
         PresignedUrlResponse: A dictionary containing the pre-signed URL and the full S3 key.
     '''
     file_extension = os.path.splitext(request.file_name)[1].lower()
 
-    if request.validation :
+    if request.validation:
         if file_extension not in ALLOWED_EXTENSIONS:
             error_msg = f'''Unsupported file type: {file_extension}.
             Only CSV (.csv), Excel (.xls, .xlsx) and TXT (.txt) files are allowed for upload.'''
 
-            raise InvalidInputError(
-                detail = error_msg
-            )
+            raise InvalidInputError(detail = error_msg)
 
     content_type_for_signature = request.content_type
-    message = f'Content-Type provided by client: {content_type_for_signature}'
+    message = f'Content-Type provided by client: {content_type_for_signature}.'
     if not content_type_for_signature:
-        message = f'Content-Type not provided by client. Inferred: {content_type_for_signature}'
         content_type_for_signature = get_content_type_from_filename(request.file_name)
+        message = f'Content-Type not provided by client. Inferred: {content_type_for_signature}.'
 
     logger.info(message)
 
