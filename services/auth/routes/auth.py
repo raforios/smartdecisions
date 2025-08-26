@@ -9,8 +9,6 @@ from services.logger_config import custom_logger as logger
 from services.jwt_token import create_access_token
 from services.exceptions import (
     UnauthorizedError,
-    RegisterAlreadyExistsError,
-    ServiceUnavailableError
 )
 
 router = APIRouter(prefix = '/v1/auth', tags = ['Authentication'])
@@ -25,7 +23,7 @@ async def login(request: LoginRequest):
         error_msg = f'Invalid credentials for: {request.email}'
         logger.error(error_msg)
         raise UnauthorizedError(
-            detail = error_msg
+            detail = 'Incorrect email or password.'
         )
 
     access_token = create_access_token({'email': user.email})
@@ -38,22 +36,7 @@ async def signup(user_data: UserRequest):
     '''
         Sign-up route for creating a new user and storing their credentials securely.
     '''
-    try:
-        response = await create_user(user_data)
-        message = f'User {user_data.email} created successfully'
-        logger.info(message)
-        return SignupResponse(user_email = response['user_email'], message = response['message'])
-    except RegisterAlreadyExistsError as e:
-        error_msg = f'Signup error: {e} for email: {user_data.email}'
-        logger.error(error_msg)
-        raise e
-    except ServiceUnavailableError as e:
-        error_msg = f'Service unavailable during signup: {e}'
-        logger.critical(error_msg)
-        raise e
-    except Exception as e:
-        error_msg = f'Unhandled error during signup for email: {user_data.email}: {e}'
-        logger.critical(error_msg)
-        raise ServiceUnavailableError(
-            detail = 'Internal server error during signup'
-        ) from e
+    response = await create_user(user_data)
+    message = f'User {user_data.email} created successfully'
+    logger.info(message)
+    return SignupResponse(user_email = response['user_email'], message = response['message'])

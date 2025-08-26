@@ -27,7 +27,7 @@ app = FastAPI(
     description = '''It is a Machine Learning service that uses Regression algorithms
     (linear, logarithmic, gradient) and Sigmoid, with and without data normalization.''',
     version = '1.0.0',
-    contact={
+    contact = {
         'name': 'API Support',
         'email': 'raforios@gmail.com',
     },

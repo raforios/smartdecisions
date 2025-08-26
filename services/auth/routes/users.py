@@ -1,7 +1,7 @@
 '''
     Users: routes handler
 '''
-from typing import Dict, List
+from typing import List
 from fastapi import APIRouter, Depends, status
 from controllers.users import (
     read_users,
@@ -10,6 +10,7 @@ from controllers.users import (
     update_user,
     delete_user
 )
+from schemas.auth import SignupResponse
 from schemas.users import UserUpdateRequest, UserResponse
 from services.logger_config import custom_logger as logger
 from services.exceptions import RegisterNotFoundError
@@ -51,11 +52,11 @@ async def patch_user(email: str, user_update_data: UserUpdateRequest) -> UserRes
         Endpoint to update a user.
     '''
     updated_user = await update_user(email, user_update_data)
-    if updated_user is None:
+    if not updated_user:
         error_msg = f'Failed to update user {email} for unknown reasons.'
         logger.error(error_msg)
         raise RegisterNotFoundError(
-            detail = error_msg
+            detail = 'User not found'
         )
 
     message = f'User: {email} was updated'
@@ -63,13 +64,18 @@ async def patch_user(email: str, user_update_data: UserUpdateRequest) -> UserRes
     return updated_user
 
 @router.delete('/{email}', status_code = status.HTTP_200_OK,
-                dependencies = [Depends(get_current_active_user)])
-async def del_user(email: str) -> Dict[str, str]:
+                dependencies = [Depends(get_current_active_user)],
+                response_model = SignupResponse)
+async def del_user(email: str) -> SignupResponse:
     '''
     Endpoint para eliminar un usuario.
     '''
-    await delete_user(email)
+    deleted = await delete_user(email)
+    if not deleted:
+        message = f'User "{email}" not found for deletion.'
+        logger.warning(message)
+        raise RegisterNotFoundError(detail = 'User not found')
 
     message = f'User: {email} was deleted'
     logger.info(message)
-    return {'message': 'User was deleted successfully'}
+    return SignupResponse(user_email = email, message = 'User was deleted successfully')

@@ -24,7 +24,11 @@ PARAMETERS = dotenv_values('.env')
 app = FastAPI(
     title = 'Authentication & User Management Service',
     description = 'Handles user registration, login, JWT management, and user CRUD operations.',
-    version = '1.0.0'
+    version = '1.0.0',
+    contact = {
+        'name': 'API Support',
+        'email': 'raforios@gmail.com',
+    },
 )
 
 setup_exception_handlers(app)

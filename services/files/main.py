@@ -23,7 +23,11 @@ PARAMETERS = dotenv_values('.env')
 app = FastAPI(
     title = 'AWS S3 Bucket File Management Service',
     description = 'Managing data files stored in AWS S3 buckets',
-    version = '1.0.0'
+    version = '1.0.0',
+    contact = {
+        'name': 'API Support',
+        'email': 'raforios@gmail.com',
+    },
 )
 
 setup_exception_handlers(app)

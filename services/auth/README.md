@@ -50,29 +50,29 @@ El **Auth-Handler-Service** no expone una interfaz pública directa para el usua
 # ml_response = requests.get("URL_ML_SERVICE/predict", headers=headers)
 
 ```
----
+-----
 
 ## 📦 Dependencias
 
 Las siguientes librerías son esenciales para el funcionamiento del **Auth-Handler-Service** y se gestionan a través de `requirements.txt` y Docker:
 
-* `fastapi`
-* `uvicorn`
-* `pydantic`
-* `pydantic-core`
-* `python-multipart`
-* `boto3`
-* `mangum`
-* `pandas`
-* `passlib==1.7.4`
-* `bcrypt==4.0.1`
-* `python-jose[cryptography]`
-* `email-validator`
-* `python-dotenv`
+  * `fastapi`
+  * `uvicorn`
+  * `pydantic`
+  * `pydantic-core`
+  * `python-multipart`
+  * `boto3`
+  * `mangum`
+  * `pandas`
+  * `passlib==1.7.4`
+  * `bcrypt==4.0.1`
+  * **`python-jose`**
+  * `email-validator`
+  * `python-dotenv`
 
----
+-----
 
-## 🚀 Despliegue manual en AWS 
+## 🚀 Despliegue manual en AWS
 
 ```shell
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth 
@@ -82,9 +82,8 @@ Las siguientes librerías son esenciales para el funcionamiento del **Auth-Handl
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth --skip-code-update
 
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth --skip-table-creation 
-
 ```
----
+-----
 
 ## 🗂️ Estructura del Microservicio
 
@@ -119,11 +118,11 @@ auth/
 ├── README.md
 └── requirements.txt
 ```
----
+-----
 
 ## 👤 Creado Por
 
 **Rafael Ríos Bascón**
 [raforios@gmail.com](mailto:raforios@gmail.com)
 
-
+-----

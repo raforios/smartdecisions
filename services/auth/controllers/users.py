@@ -1,13 +1,11 @@
 '''
-    User and Auth Controller (DynamoDB adapted)
+    User and Auth Controller
 '''
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from botocore.exceptions import ClientError
-
 from services.dynamodb import (
     create_user_item,
     get_user_by_email,
@@ -21,16 +19,14 @@ from services.logger_config import custom_logger as logger
 from services.exceptions import (
     UnauthorizedError,
     InvalidInputError,
-    RegisterAlreadyExistsError,
-    ServiceUnavailableError
+    RegisterAlreadyExistsError
 )
-
 from schemas.users import UserRequest, UserUpdateRequest, UserResponse
 from schemas.role import Role
 
 class InternalUser(UserResponse): # pylint: disable=too-few-public-methods
     '''
-        Temp Class for User Schema
+        Internal User Schema with hashed password
     '''
     hashed_password: str
 
@@ -44,7 +40,7 @@ async def get_user_payload(
         raise UnauthorizedError(detail = 'Authentication token missing.')
 
     payload = decode_access_token(token.credentials)
-    if payload is None:
+    if not payload:
         logger.warning('Invalid or expired token detected.')
         raise UnauthorizedError(
             detail = 'Invalid or expired token.'
@@ -72,16 +68,7 @@ async def get_current_user(
             detail = error_msg
         )
 
-    try:
-        user_response = UserResponse(**user_item)
-    except Exception as e:
-        error_msg = f'Error creating UserResponse from DynamoDB item for {email}: {e}'
-        logger.error(error_msg)
-        raise ServiceUnavailableError(
-            detail = error_msg
-        ) from e
-
-    return user_response
+    return UserResponse(**user_item)
 
 async def get_current_active_user(
     current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
@@ -103,70 +90,39 @@ async def authenticate_user(
         Function to authenticate a user by verifying their credentials against DynamoDB.
     '''
     user_item = get_user_by_email(email)
-    if not user_item:
-        message = f'Authentication failed: User {email} not found.'
+    if not user_item or not verify_password(password, user_item['hashed_password']):
+        message = f'Authentication failed for user {email}.'
         logger.warning(message)
         return None
 
-    if not verify_password(password, user_item['hashed_password']):
-        message = f'Authentication failed: Invalid password for user {email}.'
-        logger.warning(message)
-        return None
-
-    try:
-        return InternalUser(**user_item)
-    except Exception as e:
-        error_msg = f'Error creating Internal User from DynamoDB item for {email}: {e}'
-        logger.error(error_msg)
-        raise ServiceUnavailableError(
-            detail = error_msg
-        ) from e
-
+    return InternalUser(**user_item)
 
 async def create_user(user_data: UserRequest) -> Dict[str, Any]:
     '''
         Create User
     '''
-    try:
-        existing_user = get_user_by_email(user_data.email)
-        if existing_user:
-            message = f'Registration failed: User with email {user_data.email} already exists.'
-            logger.warning(message)
-            raise RegisterAlreadyExistsError(detail = 'Email already registered')
+    existing_user = get_user_by_email(user_data.email)
+    if existing_user:
+        message = f'Registration failed: User with email {user_data.email} already exists.'
+        logger.warning(message)
+        raise RegisterAlreadyExistsError(detail = 'Email already registered')
 
-        hashed_pw = hash_password(user_data.password)
-        current_time = datetime.now(timezone.utc)
-
-        new_user_item = {
-            'email': user_data.email,
-            'first_name': user_data.first_name,
-            'last_name': user_data.last_name,
-            'hashed_password': hashed_pw,
-            'role': Role.USER.value,
-            'status': True,
-            'date_register': current_time.isoformat(),
-            'date_update': current_time.isoformat()
-        }
-
-        created_item = create_user_item(new_user_item)
-        message = f'User {created_item['email']} registered successfully in DynamoDB.'
-        logger.info(message)
-        return {'user_email': created_item['email'], 'message': 'User created successfully'}
-
-    except ClientError as e:
-        error_msg = f'DynamoDB error during registration: {e}'
-        logger.error(error_msg)
-        raise ServiceUnavailableError(
-            detail = f'Database error: {e.response['Error']['Message']}'
-        ) from e
-    except RegisterAlreadyExistsError:
-        raise
-    except Exception as e:
-        error_msg = f'Unexpected error during registration logic: {e}'
-        logger.critical(error_msg)
-        raise ServiceUnavailableError(
-            detail = error_msg
-        ) from e
+    hashed_pw = hash_password(user_data.password)
+    current_time = datetime.now(timezone.utc)
+    new_user_item = {
+        'email': user_data.email,
+        'first_name': user_data.first_name,
+        'last_name': user_data.last_name,
+        'hashed_password': hashed_pw,
+        'role': Role.USER.value,
+        'status': True,
+        'date_register': current_time.isoformat(),
+        'date_update': current_time.isoformat()
+    }
+    created_item = create_user_item(new_user_item)
+    message = f'User {created_item['email']} registered successfully in DynamoDB.'
+    logger.info(message)
+    return {'user_email': created_item['email'], 'message': 'User created successfully'}
 
 async def read_users() -> List[UserResponse]:
     '''
@@ -186,33 +142,37 @@ async def read_user_by_email(email: str) -> Optional[UserResponse]:
 
 def build_user_update_params(user_update_data: UserUpdateRequest) -> tuple[str, dict, dict]:
     '''
-        Helper function that validates the structure and user content when updating
+        Helper function that builds DynamoDB update expressions and attribute values
+        from a UserUpdateRequest object.
     '''
     update_expression_parts = []
     expression_attribute_values = {}
     expression_attribute_names = {}
 
-    # Mapeo de campos a expresiones y valores
     update_fields_map = {
         'first_name': 'first_name',
         'last_name': 'last_name',
-        'client': 'client',
-        'password': 'hashed_password'
+        'client': 'client'
     }
 
-    for field, value in user_update_data.model_dump(exclude_unset = True).items():
+    data_to_update = user_update_data.model_dump(exclude_unset = True)
+
+    for field, value in data_to_update.items():
         if field == 'password':
             hashed_pw = hash_password(value)
             update_expression_parts.append('hashed_password = :hashed_password')
             expression_attribute_values[':hashed_password'] = hashed_pw
-        if field == 'status':
+        elif field == 'status':
             update_expression_parts.append('#status_alias = :status')
             expression_attribute_values[':status'] = value
             expression_attribute_names['#status_alias'] = 'status'
-        if field in update_fields_map:
+        elif field in update_fields_map:
             db_field = update_fields_map[field]
             update_expression_parts.append(f'{db_field} = :{field}')
             expression_attribute_values[f':{field}'] = value
+
+    if not update_expression_parts:
+        return None, None, None
 
     update_expression_parts.append('date_update = :date_update')
     expression_attribute_values[':date_update'] = datetime.now(timezone.utc).isoformat()
@@ -231,16 +191,13 @@ async def update_user(email: str, user_update_data: UserUpdateRequest) -> Option
         logger.warning(message)
         return None
 
-    expression_attribute_values = {}
-    expression_attribute_names = {}
+    final_update_expression, expression_attribute_values, expression_attribute_names = \
+        build_user_update_params(user_update_data)
 
-    if not user_update_data.model_dump(exclude_unset = True):
+    if not final_update_expression:
         message = f'No update data provided for user {email}.'
         logger.info(message)
         return UserResponse(**current_user_item)
-
-    final_update_expression, expression_attribute_values, expression_attribute_names = \
-        build_user_update_params(user_update_data)
 
     updated_item = update_user_item(
         email,
@@ -257,5 +214,4 @@ async def delete_user(email: str) -> bool:
     '''
         Delete user
     '''
-    deleted = delete_user_item(email)
-    return deleted
+    return delete_user_item(email)
