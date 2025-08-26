@@ -3,6 +3,7 @@
 '''
 
 import os
+import base64
 from io import StringIO
 import logging
 from mimetypes import guess_type
@@ -34,7 +35,8 @@ logging.basicConfig(level = logging.INFO,
         format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 BASEDIR = os.path.dirname(os.path.abspath(__file__))
-PARAMETERS = dotenv_values(os.path.join(os.path.dirname(os.path.dirname(BASEDIR)), 'notebooks', '.env'))
+PARAMETERS = dotenv_values(os.path.join(os.path.dirname(os.path.dirname(BASEDIR)),
+            'notebooks', '.env'))
 
 def _prepare_payload_from_params(params: object) -> dict:
     '''
@@ -123,7 +125,8 @@ def login(url: str, email: str = None, password: str = None) -> str:
                         reported by the API response.
             Exception: For unexpected errors during the HTTP request or response processing.
     '''
-    message = f'BASEDIR:  {os.path.join(os.path.dirname(os.path.dirname(BASEDIR)), 'notebooks', '.env')}'
+    message = f'BASEDIR:  {os.path.join(os.path.dirname(os.path.dirname(BASEDIR)),
+            'notebooks', '.env')}'
     logging.info(message)
     login_email = email if email is not None else PARAMETERS.get('EMAIL')
     login_password = password if password is not None else PARAMETERS.get('PASSWORD')
@@ -236,6 +239,43 @@ def upload_file(token: str, url: str, endpoint: str, params: UploadFileParams) -
         error_msg = f'Unexpected error: {error}'
         logging.error(error_msg, exc_info = True)
         raise error
+
+def read_file(
+    token: str,
+    url: str,
+    endpoint: str,
+    bucket_name: str,
+    file_key: str
+) -> Union[pd.DataFrame, bytes, str]:
+    '''
+    Reads a file from S3 via the file microservice and returns its content.
+    
+    This function handles different file types:
+    - CSV/Excel: Returns a pandas DataFrame.
+    - TXT: Returns a string.
+    - Binary (images, documents): Returns the raw bytes.
+    '''
+    headers = {'Authorization': f'Bearer {token}'}
+    full_url = f'{url}/v1/{endpoint}/{bucket_name}/{file_key}'
+
+    try:
+        response = get_data(url = full_url, headers = headers, primary = 2)
+
+        if 'data' in response:
+            return pd.DataFrame.from_records(response['data'])
+        if 'content' in response:
+            return response['content']
+        if 'content_base64' in response:
+            # Si el JSON contiene 'content_base64', decodifícalo a bytes.
+            return base64.b64decode(response['content_base64'])
+
+        logging.error('Unsupported response format from API for JSON.')
+        return None
+
+    except Exception as e:
+        error_msg = f'Error reading file from API: {e}'
+        logging.error(error_msg, exc_info = True)
+        raise e
 
 def list_bucket(token: str, url: str, endpoint: str, bucket: str) -> dict:
     '''

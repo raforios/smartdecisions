@@ -27,12 +27,18 @@ from services.exceptions import InvalidInputError
 
 router = APIRouter(prefix = '/v1/s3', tags = ['Management S3 File System'])
 
-ALLOWED_EXTENSIONS = ['.csv', '.xls', '.xlsx', '.txt']
+ALLOWED_EXTENSIONS = ['.csv', '.xls', '.xlsx', '.txt', '.doc', '.docx', '.pdf',
+                      '.jpg', '.jpeg', '.png']
 ALLOWED_CONTENT_TYPES = [
     'text/csv',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain'
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/pdf',
+    'image/jpeg',
+    'image/png'
 ]
 
 @router.get('/read/{bucket_name}/{file_key}', response_model = Dict[str, Any])
@@ -41,7 +47,7 @@ async def read_s3_file_route(
     file_key: str,
     current_user: str = Depends(get_current_user)):
     '''
-    Reads a CSV file from an S3 bucket, processes it, and returns the data as JSON.
+    Reads a file from an S3 bucket, processes it, and returns the data.
 
     Args:
         bucket_name (str): S3 bucket name.
@@ -63,10 +69,10 @@ async def upload_file_to_s3_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Uploads a CSV, Excel, or TXT file to a specified S3 bucket.
+    Uploads a file to a specified S3 bucket.
 
     Args:
-        file (UploadFile): The file to upload (CSV, Excel, or TXT).
+        file (UploadFile): The file to upload.
         bucket_name (str): The S3 bucket name.
         file_path (str): The path within the S3 bucket (e.g., 'data/raw/').
         current_user (str): The authenticated user.
@@ -75,12 +81,12 @@ async def upload_file_to_s3_route(
         Dict[str, str]: A dictionary containing the S3 URL of the uploaded file.
     '''
     message = f'''User: {current_user} attempting to upload file: {file.filename}
-    to bucket: {bucket_name}/{file_path}.'''
+            to bucket: {bucket_name}/{file_path}.'''
     logger.info(message)
 
     if file.content_type not in ALLOWED_CONTENT_TYPES:
-        error_msg = f'''Unsupported file type: {file.content_type}.
-        Only CSV, Excel and TXT files are allowed.'''
+        error_msg = f'''Unsupported file type: '{file.content_type}'.
+                    Allowed file types are: {', '.join(ALLOWED_EXTENSIONS)}.'''
         logger.error(error_msg)
         raise InvalidInputError(detail = error_msg)
 
@@ -112,7 +118,7 @@ async def delete_file_from_s3_route(
         Dict[str, str]: A message indicating success.
     '''
     message = f'''User: {current_user} attempting to delete file:
-    {request.file_key} from bucket: {request.bucket_name}.'''
+            {request.file_key} from bucket: {request.bucket_name}.'''
 
     logger.info(message)
     return await delete_s3_file(request.bucket_name, request.file_key, current_user)
@@ -136,7 +142,7 @@ async def list_files_s3_route(
     target_bucket = request.bucket_name if request.bucket_name else predefined_ml_data_bucket
 
     message = f'''User: {current_user} attempting to list files in bucket:
-    {target_bucket} with prefix: {request.prefix}.'''
+            {target_bucket} with prefix: {request.prefix}.'''
 
     logger.info(message)
     files_list = await list_s3_files(target_bucket, request.prefix, current_user)
@@ -178,21 +184,16 @@ async def get_presigned_upload_url_route(
     if request.validation:
         if file_extension not in ALLOWED_EXTENSIONS:
             error_msg = f'''Unsupported file type: {file_extension}.
-            Only CSV (.csv), Excel (.xls, .xlsx) and TXT (.txt) files are allowed for upload.'''
+                        Allowed file types are: {', '.join(ALLOWED_EXTENSIONS)}.'''
 
             raise InvalidInputError(detail = error_msg)
 
     content_type_for_signature = request.content_type
-    message = f'Content-Type provided by client: {content_type_for_signature}.'
     if not content_type_for_signature:
         content_type_for_signature = get_content_type_from_filename(request.file_name)
-        message = f'Content-Type not provided by client. Inferred: {content_type_for_signature}.'
-
-    logger.info(message)
 
     message = f'''User: {current_user} requesting presigned URL for {request.file_key}
-    in bucket {request.bucket_name}.'''
-
+            in bucket {request.bucket_name} with Content-Type: {content_type_for_signature}.'''
     logger.info(message)
 
     presigned_url = await create_presigned_upload_url(

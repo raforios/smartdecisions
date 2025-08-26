@@ -2,15 +2,15 @@
     Files controller
 '''
 import os
+import base64
 from io import StringIO, BytesIO
-from typing import List, Any
+from typing import List
 import pandas as pd
 import boto3
 from schemas.files import FileUploadData
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
-    InvalidInputError,
-    ServiceUnavailableError
+    InvalidInputError
 )
 from services.utils import handle_aws_operation
 
@@ -26,7 +26,8 @@ async def read_data_from_s3(
     Loads data from a given S3 bucket and processes it based on file extension.
 
     This function supports CSV and Excel files, returning their content as a
-    list of dictionaries. It also supports reading plain text files.
+    list of dictionaries. It also supports reading plain text files, and
+    binary files like images and documents (JPG, PNG, DOC, PDF).
 
     Args:
         bucket_name (str): The name of the S3 bucket.
@@ -35,7 +36,7 @@ async def read_data_from_s3(
 
     Returns:
         dict: A dictionary containing the filename and the processed data or
-              text content.
+              text/binary content.
 
     Raises:
         InvalidInputError: If the file extension is not supported or the file
@@ -44,48 +45,50 @@ async def read_data_from_s3(
     '''
     response = s3_client.get_object(Bucket = bucket_name, Key = file_key)
     file_extension = os.path.splitext(file_key)[1].lower()
-    df: pd.DataFrame
-    processed_data: Any
 
     match file_extension:
-        case '.csv':
-            file_content = response['Body'].read().decode('utf-8')
-            df = pd.read_csv(StringIO(file_content))
-            message = f'''CSV file {file_key} was accessed and processed by
-                    user {current_user} on bucket {bucket_name}.'''
-            logger.info(message)
+        case '.csv' | '.xls' | '.xlsx':
+            try:
+                file_content = response['Body'].read()
+                df: pd.DataFrame
+                if file_extension == '.csv':
+                    df = pd.read_csv(StringIO(file_content.decode('utf-8')))
+                else:
+                    df = pd.read_excel(BytesIO(file_content))
 
-        case '.xls' | '.xlsx':
-            file_content_bytes = response['Body'].read()
-            df = pd.read_excel(BytesIO(file_content_bytes))
-            message = f'''Excel file {file_key} was accessed and processed by
-                    user {current_user} on bucket {bucket_name}.'''
-            logger.info(message)
+                processed_data = df.to_dict(orient='records')
+                message = f'''Data file {file_key} was accessed and processed by
+                        user {current_user} on bucket {bucket_name}.'''
+                logger.info(message)
+                return {'filename': file_key, 'data': processed_data}
+            except pd.errors.EmptyDataError as e:
+                error_msg = f'File {file_key} is empty or not in the expected format.'
+                logger.error(error_msg, exc_info=True)
+                raise InvalidInputError(detail=error_msg) from e
 
         case '.txt':
             file_content = response['Body'].read().decode('utf-8')
-            message = f'''Text file {file_key} was accessed and read by
-                    user {current_user} on bucket {bucket_name}.'''
+            message = f'''Text file {file_key} was accessed and read by user {current_user}
+                    on bucket {bucket_name}.'''
             logger.info(message)
             return {'filename': file_key, 'content': file_content}
 
+        case '.doc' | '.docx' | '.pdf' | '.jpg' | '.jpeg' | '.png':
+            file_content_bytes = response['Body'].read()
+            encoded_content = base64.b64encode(file_content_bytes).decode('utf-8')
+            message = f'''Binary file {file_key} was accessed and read by user {current_user}
+                    on bucket {bucket_name}.'''
+            logger.info(message)
+            return {'filename': file_key, 'content_base64': encoded_content}
+
         case _:
-            error_msg = f'''Unsupported file format for {file_key}. Only CSV (.csv) and Excel
-                        (.xls, .xlsx) files are supported for processing.'''
-            logger.error(error_msg, exc_info = True)
-            raise InvalidInputError(detail = error_msg)
-
-    try:
-        processed_data = df.to_dict(orient='records')
-    except Exception as e:
-        error_msg = f'Internal server error while processing the file: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(detail = error_msg) from e
-
-    message = f'''File {file_key} was successfully processed and returned by
-            user {current_user} on bucket {bucket_name}.'''
-    logger.info(message)
-    return {'filename': file_key, 'data': processed_data}
+            allowed_extensions = [
+                '.csv', '.xls', '.xlsx', '.txt', '.doc', '.docx', '.pdf', '.jpg', '.jpeg', '.png'
+            ]
+            error_msg = f'''Unsupported file format for {file_key}.
+                    Allowed file types are: {', '.join(allowed_extensions)}.'''
+            logger.error(error_msg, exc_info=True)
+            raise InvalidInputError(detail=error_msg)
 
 @handle_aws_operation
 async def upload_s3_file(
