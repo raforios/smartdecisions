@@ -2,7 +2,17 @@
     Database Models for Localization Microservice
 '''
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Numeric,
+    DateTime,
+    ForeignKey,
+    Text,
+    Enum,
+    UniqueConstraint
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import text
 from services.db_connection import Base
@@ -49,6 +59,7 @@ class PlannedPoint(Base):# pylint: disable=too-few-public-methods
     id = Column(Integer, primary_key = True, index = True)
     planned_route_id = Column(Integer, ForeignKey('t_planned_routes.id'), nullable = False)
     point_name = Column(String(100), nullable = False)
+    secuencial = Column(Integer, nullable = False)
     latitude = Column(Numeric(16, 14), nullable = False)
     longitude = Column(Numeric(16, 14), nullable = False)
     reference_data = Column(Text, nullable = True)
@@ -60,6 +71,7 @@ class PlannedPoint(Base):# pylint: disable=too-few-public-methods
         back_populates = 'planned_point',
         cascade = 'all, delete-orphan'
     )
+    __table_args__ = (UniqueConstraint('planned_route_id', 'secuencial'),)
 
 class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
     '''
@@ -73,6 +85,12 @@ class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
     # Using text('now()') and server_default for consistency and Pylint compatibility.
     start_time = Column(DateTime, nullable = False)
     end_time = Column(DateTime, nullable = True)
+
+    start_latitude = Column(Numeric(16, 14), nullable = False)
+    start_longitude = Column(Numeric(16, 14), nullable = False)
+
+    end_latitude = Column(Numeric(16, 14), nullable = True)
+    end_longitude = Column(Numeric(16, 14), nullable = True)
 
     planned_route = relationship('PlannedRoute', back_populates = 't_executed_routes')
     points = relationship(

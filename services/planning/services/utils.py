@@ -32,7 +32,8 @@ def handle_service_errors(func):
             logger.error(error_msg, exc_info = True)
             raise e
         except Exception as e:
-            if isinstance(e, (RegisterAlreadyExistsError, RegisterNotFoundError, InvalidInputError)):
+            if isinstance(e, (RegisterAlreadyExistsError, RegisterNotFoundError,
+                            InvalidInputError)):
                 raise e
 
             if db:

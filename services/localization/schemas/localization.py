@@ -43,6 +43,10 @@ class PlannedPointSchema(PointBase, LocalizationBaseSchema):
         ..., max_length = 100,
         description = 'Name of the planned point, e.g., "Office A".'
     )
+    secuencial: int = Field(
+        ..., gt = 0,
+        description = 'The sequential order of the planned point in the route.'
+    )
     reference_data: Optional[str] = Field(
         None, max_length = 255,
         description = 'Additional reference data or notes for the point.'
@@ -163,6 +167,14 @@ class ExecutedRouteCreateSchema(BaseModel):
         None,
         description = 'ID of the planned route to which this executed route corresponds.'
     )
+    start_latitude: float = Field(
+        ..., ge = -90.0, le = 90.0,
+        description = 'The latitude of the executed start point.'
+    )
+    start_longitude: float = Field(
+        ..., ge = -180.0, le = 180.0,
+        description = 'The longitude of the executed start point.'
+    )
 
 class ExecutedRouteResponseSchema(ExecutedRouteCreateSchema, LocalizationBaseSchema):
     '''
@@ -179,6 +191,14 @@ class ExecutedRouteUpdateSchema(BaseModel):
     end_time: datetime = Field(
         ...,
         description = 'Timestamp when the executed route was finished.'
+    )
+    end_latitude: float = Field(
+        ..., ge = -90.0, le = 90.0,
+        description = 'The latitude of the executed end point.'
+    )
+    end_longitude: float = Field(
+        ..., ge = -180.0, le = 180.0,
+        description = 'The longitude of the executed end point.'
     )
 
 class ExecutedPointCreateSchema(PointBase):
@@ -313,3 +333,26 @@ class PlannedRouteFilterSchema(BaseModel):
             the @router.get() decorator.
         '''
         arbitrary_types_allowed = True
+
+class PlannedRouteBulkCreateSchema(BaseModel):
+    '''
+        Schema for creating a planned route via bulk upload.
+        This schema maps to the CSV format.
+    '''
+    route_name: str = Field(..., max_length = 150)
+    route_code: str = Field(..., max_length = 50)
+    company_id: int
+    app_id: int
+    point_name: str = Field(..., max_length = 100)
+    secuencial: int = Field(..., gt = 0)
+    latitude: float = Field(..., ge = -90.0, le = 90.0)
+    longitude: float = Field(..., ge = -180.0, le = 180.0)
+    reference_data: Optional[str] = Field(None, max_length = 255)
+
+class BulkUploadResponseSchema(BaseModel):
+    '''
+        Response schema for the bulk upload endpoint.
+    '''
+    message: str
+    routes_created: int
+    points_created: int

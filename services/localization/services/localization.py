@@ -1,15 +1,23 @@
 '''
     Localization Service
 '''
+import os
+import math
+import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from dotenv import dotenv_values
+import requests as req
+
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc
 from services.exceptions import (
     RegisterNotFoundError,
     RegisterAlreadyExistsError,
-    InvalidInputError
+    InvalidInputError,
+    ResourceNotFoundError,
+    ServiceUnavailableError
 )
 from services.logger_config import custom_logger as logger
 from services.crud import (
@@ -39,8 +47,229 @@ from schemas.localization import (
     ExecutedRouteCreateSchema,
     ExecutedPointCreateSchema,
     PlannedPointCreateSchema,
-    RouteComparisonFullResponseSchema
+    RouteComparisonFullResponseSchema,
+    PlannedRouteBulkCreateSchema
 )
+
+_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
+
+# Geofencing Parameters
+GEOTAG_RADIUS_METERS = 70
+EARTH_RADIUS_KM = 6371
+
+def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    '''
+    Calculates the distance between two coordinates in meters using the Haversine formula.
+    '''
+    # Convert latitude and longitude from degrees to radians
+    lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
+    lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
+
+    # Haversine formula
+    delta_lat = lat2_rad - lat1_rad
+    delta_lon = lon2_rad - lon1_rad
+    a = math.sin(delta_lat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * \
+        math.sin(delta_lon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    # Distance in kilometers
+    distance_km = EARTH_RADIUS_KM * c
+
+    # Return distance in meters
+    return distance_km * 1000
+
+def _check_geofence_start_point(
+    db: Session,
+    planned_route_id: int,
+    user_latitude: float,
+    user_longitude: float
+):
+    '''
+    Checks if the user's current location is within the geofence of the planned route's
+    starting point.
+    '''
+    # Find the starting point of the planned route (the one with secuencial=1)
+    start_point = db.query(PlannedPoint).filter(
+        PlannedPoint.planned_route_id == planned_route_id,
+        PlannedPoint.secuencial == 1
+    ).first()
+
+    if not start_point:
+        raise RegisterNotFoundError(
+            detail = f'Starting point not found for planned route {planned_route_id}.'
+        )
+
+    distance = _calculate_distance(
+        user_latitude, user_longitude, start_point.latitude, start_point.longitude
+    )
+
+    if distance > GEOTAG_RADIUS_METERS:
+        raise InvalidInputError(
+            detail = f'Distance: {distance:.2f}m. Geofence radius: {GEOTAG_RADIUS_METERS}m.'
+        )
+
+async def _handle_files_service_logic(
+    action: str,
+    file_name: str,
+    auth_token: str
+) -> Optional[str]:
+    '''
+    Handles communication with the FILES microservice for reading and deleting files.
+    This function standardizes file service interactions.
+    '''
+    try:
+        files_service_url = os.environ.get('FILES_SERVICE_URL') or \
+                            _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
+        bucket_name = os.environ.get('BUCKET_NAME') or \
+                      _LOCAL_ENV_PARAMS.get('BUCKET_NAME')
+        bucket_path = os.environ.get('BUCKET_PATH') or \
+                      _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
+
+        if not files_service_url or not bucket_name:
+            raise ServiceUnavailableError(
+                detail = 'FILES_SERVICE_URL or BUCKET_NAME environment variables are not set.'
+            )
+
+        headers = {
+            'Authorization': f'{auth_token}',
+            'Content-Type': 'application/json'
+        }
+
+        if action == 'read':
+            response = req.get(
+                f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}',
+                headers = headers,
+                timeout = 600
+            )
+            response.raise_for_status()
+            return response.text
+
+        if action == 'delete':
+            payload = {
+                'bucket_name': bucket_name,
+                'file_name': file_name,
+                'file_path': bucket_path
+            }
+            response = req.delete(
+                f'{files_service_url}/v1/s3/delete',
+                json = payload,
+                headers = headers,
+                timeout = 600
+            )
+            response.raise_for_status()
+            message = f'File {file_name} successfully deleted from FILES service.'
+            logger.info(message)
+            return None
+
+
+        raise ValueError(f'Invalid action: {action}')
+    except req.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            raise ResourceNotFoundError(
+                detail=f'File \'{file_name}\' not found in FILES microservice.'
+            ) from e
+        raise ServiceUnavailableError(
+            detail=f'Failed to communicate with FILES microservice: {e}'
+        ) from e
+    except Exception as e:
+        raise ServiceUnavailableError(
+            detail = f'Unexpected error during file communication with FILES service: {e}'
+        ) from e
+
+async def _read_and_parse_file_content(
+    file_name: str,
+    auth_token: str
+) -> List[Dict[str, Any]]:
+    '''
+    Reads and parses the file content from the FILES microservice.
+    '''
+    file_content = await _handle_files_service_logic(
+        action = 'read',
+        file_name = file_name,
+        auth_token = auth_token
+    )
+    if not file_content:
+        raise InvalidInputError(
+            detail = 'File content is empty or could not be retrieved.'
+        )
+    try:
+        file_data = json.loads(file_content)
+        return file_data.get('data', [])
+    except json.JSONDecodeError as e:
+        raise InvalidInputError(
+            detail = f'Invalid JSON format in file content. Error: {e}'
+        ) from e
+
+def _process_json_data(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    '''
+    Processes JSON data and groups it by route code.
+    '''
+    routes_to_create = {}
+    for row in rows:
+        try:
+            row_data = PlannedRouteBulkCreateSchema(**row)
+            route_code = row_data.route_code
+            if route_code not in routes_to_create:
+                routes_to_create[route_code] = {
+                    'route_data': row_data.model_dump(
+                        exclude = {
+                            'point_name',
+                            'secuencial',
+                            'latitude',
+                            'longitude',
+                            'reference_data'
+                        }),
+                    'points_data': []
+                }
+            routes_to_create[route_code]['points_data'].append(
+                row_data.model_dump(
+                    exclude = {
+                        'route_name',
+                        'route_code',
+                        'company_id',
+                        'app_id'
+                    })
+            )
+        except (ValueError, TypeError) as e:
+            raise InvalidInputError(
+                detail = f'Invalid data format in JSON row: {row}. Error: {e}'
+            ) from e
+    return routes_to_create
+
+async def _perform_atomic_db_insertion(
+    db: Session,
+    routes_to_create: Dict[str, Any],
+    file_name: str,
+    auth_token: str
+) -> Dict[str, int]:
+    '''
+    Performs the atomic database insertion for routes and points.
+    '''
+    routes_created = 0
+    points_created = 0
+    with db.begin_nested():
+        for route_code, data in routes_to_create.items():
+            if db.query(PlannedRoute).filter_by(route_code=route_code).first():
+                await _handle_files_service_logic(
+                    action = 'delete',
+                    file_name = file_name,
+                    auth_token = auth_token
+                )
+                raise RegisterAlreadyExistsError(
+                    detail = f'Route with code "{route_code}" already exists.'
+                )
+
+            route = PlannedRoute(**data['route_data'])
+            db.add(route)
+            db.flush()
+            points = [
+                PlannedPoint(planned_route_id = route.id, **point)
+                for point in data['points_data']
+            ]
+            db.add_all(points)
+            routes_created += 1
+            points_created += len(points)
+    return {'routes_created': routes_created, 'points_created': points_created}
 
 @handle_service_errors
 def create_planned_route_with_points(
@@ -69,10 +298,8 @@ def create_planned_route_with_points(
     message = f'Creating planned route with code: {route_data.route_code}'
     logger.debug(message)
     planned_route_data = route_data.model_dump(
-        # exclude = {'points', 'user_id'}
         exclude = {'points'}
     )
-    # planned_route_data['user_id'] = route_data.user_id # Ensure user_id is included
     db_route = PlannedRoute(**planned_route_data)
 
     db.add(db_route)
@@ -147,6 +374,13 @@ def create_executed_route(
                 detail = f'''Cannot start a route. Planned route with ID {planned_route.id}
                         is not in ACTIVE status.'''
             )
+        # Check if the user is at the starting point of the route
+        _check_geofence_start_point(
+            db,
+            planned_route_id = route_data.planned_route_id,
+            user_latitude = route_data.start_latitude,
+            user_longitude = route_data.start_longitude
+        )
 
     new_route = create_record(db, ExecutedRoute, route_data)
     db.commit()
@@ -169,10 +403,7 @@ def register_executed_point(
     executed_route = get_record(db, ExecutedRoute, point_data.executed_route_id)
 
     new_point = create_record(db, ExecutedPoint, point_data)
-
-    # executed_route.end_time = datetime.now()
     db.add(executed_route)
-
     db.commit()
     db.refresh(new_point)
     message = f'Executed point {new_point.id} registered successfully.'
@@ -303,6 +534,16 @@ def add_planned_point(
             detail = 'Cannot add points to a route that is not in "IN CREATION" status.'
         )
 
+    # Check for sequential number existence
+    existing_point = db.query(PlannedPoint).filter(
+        PlannedPoint.planned_route_id == planned_route_id,
+        PlannedPoint.secuencial == point_data.secuencial
+    ).first()
+    if existing_point:
+        raise RegisterAlreadyExistsError(
+            detail = f'Sequential number {point_data.secuencial} already exists for this route.'
+        )
+
     point_data_dict = point_data.model_dump()
     point_data_dict['planned_route_id'] = db_route.id
     new_point = PlannedPoint(**point_data_dict)
@@ -357,13 +598,38 @@ def update_executed_route_end_time(
     '''
     message = f'Updating end_time for executed route {executed_route_id}.'
     logger.debug(message)
+
+    # 1. Get the executed route record.
     db_record = get_record(db, ExecutedRoute, executed_route_id)
+
+    # 2. Get the last planned point for the associated planned route.
+    planned_route_id = db_record.planned_route_id
+    last_planned_point = db.query(PlannedPoint).filter(
+        PlannedPoint.planned_route_id == planned_route_id
+    ).order_by(PlannedPoint.secuencial.desc()).first()
+
+    # 3. Validate if the planned point exists and perform the distance validation.
+    if last_planned_point:
+        distance = _calculate_distance(
+            lat1 = last_planned_point.latitude,
+            lon1 = last_planned_point.longitude,
+            lat2 = update_data.end_latitude,
+            lon2 = update_data.end_longitude
+        )
+
+        if distance > GEOTAG_RADIUS_METERS:
+            raise InvalidInputError(
+                detail = f'Distance: {distance:.2f} meters. Limit: {GEOTAG_RADIUS_METERS} meters.'
+            )
+
+    # 4. Update the record if the validation is successful.
     updated_record = update_record(db, db_record, update_data)
     db.commit()
     db.refresh(updated_record)
     message = f'End time for executed route {executed_route_id} updated.'
     logger.info(message)
     return updated_record
+
 
 @handle_service_errors
 def update_attendance_checkout_time(
@@ -441,7 +707,7 @@ def get_statistics_user_points(
         'total_points_visited': total_points_visited,
         'executed_points_count': len(executed_points),
         'attendance_points_count': len(attendance_points),
-        'points_details': points_details            
+        'points_details': points_details
     }
 
 @handle_service_errors
@@ -575,3 +841,45 @@ def get_full_route_comparison(
     logger.info(message)
 
     return RouteComparisonFullResponseSchema(**response_data)
+
+@handle_service_errors
+async def bulk_create_planned_routes(
+    db: Session,
+    file_name: str,
+    auth_token: str
+) -> Dict[str, Any]:
+    '''
+    Processes a CSV file from the FILES microservice to create planned routes and points.
+    The process is atomic; if any part fails, the entire transaction is rolled back.
+    '''
+    # Step 1: Read and parse the file content
+    rows = await _read_and_parse_file_content(file_name, auth_token)
+
+    if not rows:
+        return {
+            'message': 'No valid routes found in the file.',
+            'routes_created': 0,
+            'points_created': 0
+        }
+
+    # Step 2: Process JSON data and group by route
+    routes_to_create = _process_json_data(rows)
+
+    # Step 3: Atomic database insertion
+    creation_stats = await _perform_atomic_db_insertion(
+        db, routes_to_create, file_name, auth_token
+    )
+
+    db.commit()
+
+    # Step 4: Delete file from FILES microservice
+    await _handle_files_service_logic(
+        action = 'delete',
+        file_name = file_name,
+        auth_token = auth_token
+    )
+
+    return {
+        'message': 'Bulk upload successful.',
+        **creation_stats
+    }

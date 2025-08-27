@@ -2,7 +2,7 @@
     API Routes for Localization Microservice
 '''
 from typing import Any, List
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, Depends, Header, Path, status, Query
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
@@ -24,7 +24,8 @@ from controllers.localization import (
     update_attendance_checkout_time_controller,
     update_executed_route_end_time_controller,
     update_planned_route_controller,
-    update_planned_route_status_controller
+    update_planned_route_status_controller,
+    bulk_upload_planned_routes_controller
 )
 from schemas.localization import (
     AttendanceUpdateSchema,
@@ -46,7 +47,8 @@ from schemas.localization import (
     PlannedRouteUpdateStatusSchema,
     PointsVisitedResponseSchema,
     RouteComparisonFullResponseSchema,
-    RouteComparisonsResponseSchema
+    RouteComparisonsResponseSchema,
+    BulkUploadResponseSchema
 )
 
 router = APIRouter(prefix = '/v1/localization', tags = ['Localization'])
@@ -419,3 +421,29 @@ def get_full_route_comparison_endpoint(
             for planned route ID: {planned_route_id}.'''
     logger.info(message)
     return get_full_route_comparison_controller(planned_route_id, db)
+
+@router.post(
+    '/routes/planned/bulk-upload',
+    response_model = BulkUploadResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Bulk upload planned routes from a CSV file',
+    description = '''Processes a CSV file from the FILES microservice to create planned routes
+                 and their associated points in a single, atomic operation.'''
+)
+async def bulk_upload_planned_routes_endpoint(
+    file_name: str = Query(..., description='Name of the CSV file to process.'),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk upload of planned routes from a CSV file.
+    '''
+    message = f'''User: {current_user}. Received request for bulk upload from file:
+            {file_name}'''
+    logger.info(message)
+    return await bulk_upload_planned_routes_controller(
+        file_name = file_name,
+        db = db,
+        auth_token = auth_token
+    )
