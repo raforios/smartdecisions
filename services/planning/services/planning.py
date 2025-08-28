@@ -1,5 +1,5 @@
 '''
-    Business logic services for the Planning microservice.
+    Business logic services for the Planning Microservice.
 '''
 from typing import Any, Dict, List, Optional
 from datetime import date

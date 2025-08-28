@@ -1,5 +1,5 @@
 '''
-    API Routes for Localization Microservice
+    Localization: routes handler
 '''
 from typing import Any, List
 from fastapi import APIRouter, Depends, Header, Path, status, Query

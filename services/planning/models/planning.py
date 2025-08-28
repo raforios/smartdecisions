@@ -1,5 +1,5 @@
 '''
-    Database Models for the Planning Microservice.
+   Planning Models
 '''
 from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship

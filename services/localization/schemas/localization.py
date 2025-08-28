@@ -1,5 +1,5 @@
 '''
-    Localization Schemas
+    Localization Schemas (Request/Response)
 '''
 from typing import List, Optional
 from datetime import datetime

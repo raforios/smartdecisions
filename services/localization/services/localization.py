@@ -1,5 +1,5 @@
 '''
-    Localization Service
+    Business logic services for the Localization Microservice.
 '''
 import os
 import math

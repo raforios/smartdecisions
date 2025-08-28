@@ -1,5 +1,5 @@
 '''
-    Database Models for Localization Microservice
+   Localization Models
 '''
 from datetime import datetime, timezone
 from sqlalchemy import (

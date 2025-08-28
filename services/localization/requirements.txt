@@ -10,4 +10,3 @@ numpy
 sqlalchemy
 pymysql
 python-dotenv
-boto3

@@ -1,5 +1,5 @@
 '''
-    Pydantic schemas for Planning microservice.
+    Planning Schemas (Request/Response)
 '''
 from typing import List, Optional
 from datetime import date, datetime
@@ -128,7 +128,7 @@ class PlanningCreateSchema(BaseModel):
         description = 'End date of the planning.'
     )
     week_number: int = Field(
-        ..., ge=1, le=53,
+        ..., ge = 1, le = 53,
         description = 'The week number for the planning.'
     )
     status: PlanningStatus = Field(

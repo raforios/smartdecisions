@@ -1,5 +1,5 @@
 '''
-    API Routes for Planning Microservice.
+    Planning: routes handler
 '''
 from typing import List
 from datetime import date
