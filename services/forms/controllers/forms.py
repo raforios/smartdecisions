@@ -35,7 +35,7 @@ from services.utils import handle_service_errors
 
 # --- CRUD operations for FormHeader ---
 @handle_service_errors
-def create_form_header(
+async def create_form_header(
     db: Session,
     form_data: FormHeaderCreate
 ) -> FormHeader:
@@ -96,7 +96,7 @@ def create_form_header(
     return db_form_header
 
 @handle_service_errors
-def get_form_header_by_id(
+async def get_form_header_by_id(
     db: Session,
     form_id: int
 ) -> FormHeader:
@@ -116,7 +116,7 @@ def get_form_header_by_id(
     return form_header
 
 @handle_service_errors
-def get_all_form_headers(
+async def get_all_form_headers(
     db: Session,
     filters: FormFilters,
     skip: int = 0,
@@ -143,7 +143,7 @@ def get_all_form_headers(
     return query.offset(skip).limit(limit).all()
 
 @handle_service_errors
-def update_form_header(
+async def update_form_header(
     db: Session,
     form_id: int,
     form_data: FormHeaderUpdate
@@ -187,7 +187,7 @@ def update_form_header(
         ) from e
 
 @handle_service_errors
-def delete_form_header(
+async def delete_form_header(
     db: Session,
     form_id: int
 ) -> Dict[str, str]:
@@ -206,7 +206,7 @@ def delete_form_header(
 
 # --- CRUD operations for QuestionDetail ---
 @handle_service_errors
-def create_question_detail(
+async def create_question_detail(
     db: Session,
     form_id: int,
     question_data: QuestionDetailCreate
@@ -259,7 +259,7 @@ def create_question_detail(
         ) from e
 
 @handle_service_errors
-def get_question_detail_by_id(
+async def get_question_detail_by_id(
     db: Session,
     question_id: int
 ) -> QuestionDetail:
@@ -278,7 +278,7 @@ def get_question_detail_by_id(
     return question
 
 @handle_service_errors
-def update_question_detail(
+async def update_question_detail(
     db: Session,
     question_id: int,
     question_data: QuestionDetailUpdate
@@ -337,7 +337,7 @@ def update_question_detail(
         ) from e
 
 @handle_service_errors
-def delete_question_detail(
+async def delete_question_detail(
     db: Session,
     question_id: int
 ) -> Dict[str, str]:
