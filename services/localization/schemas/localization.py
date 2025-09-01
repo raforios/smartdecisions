@@ -68,11 +68,31 @@ class PlannedPointCreateSchema(PointBase):
         ..., max_length = 100,
         description = 'Name of the planned point, e.g., "Office A".'
     )
+    secuencial: int = Field(
+        ..., gt = 0,
+        description = 'The sequential order of the planned point in the route.'
+    )
     reference_data: Optional[str] = Field(
         None, max_length = 255,
         description = 'Additional reference data or notes for the point.'
     )
 
+class PlannedPointUpdateSchema(BaseModel):
+    '''
+        Schema para actualizar un punto planificado.
+    '''
+    secuencial: Optional[int] = Field(
+        None,
+        description = 'The sequential order of the planned point in the route.'
+    )
+    point_name: Optional[str] = Field(
+        None,
+        description = 'Name of the planned point, e.g., "Office A".'
+    )
+    reference_data: Optional[str] = Field(
+        None,
+        description = 'Additional reference data or notes for the point.'
+    )
 class PlannedRouteCreateSchema(BaseModel):
     '''
         Schema for creating a planned route.

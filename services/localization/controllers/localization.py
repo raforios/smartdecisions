@@ -25,6 +25,7 @@ from services.localization import (
     register_attendance,
     update_attendance_checkout_time,
     update_executed_route_end_time,
+    update_planned_point,
     update_planned_route_service,
     update_planned_route_status,
     create_executed_route,
@@ -40,7 +41,9 @@ from schemas.localization import (
     MessageSchema,
     PlannedPointCreateSchema,
     PlannedPointResponseSchema,
+    PlannedPointUpdateSchema,
     PlannedRouteCreateSchema,
+    PlannedRouteFilterSchema,
     PlannedRouteListResponseSchema,
     PlannedRouteResponseSchema,
     ExecutedRouteCreateSchema,
@@ -124,11 +127,8 @@ def get_all_planned_routes_controller(
 
 
 def filter_planned_routes_controller(
+    filters: PlannedRouteFilterSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
-    route_code: Optional[str] = None,
-    route_name: Optional[str] = None,
-    status: Optional[str] = None,
-    company_id: Optional[int] = None
 ) -> List[PlannedRouteListResponseSchema]:
     '''
         Controller to filter planned routes by various parameters.
@@ -138,10 +138,10 @@ def filter_planned_routes_controller(
         logger.info(message)
         routes = filter_planned_routes(
             db = db,
-            route_code = route_code,
-            route_name = route_name,
-            status = status,
-            company_id = company_id
+            route_code = filters.route_code,
+            route_name = filters.route_name,
+            route_status = filters.route_status,
+            company_id = filters.company_id
         )
         return [PlannedRouteListResponseSchema.model_validate(route) for route in routes]
     except Exception as e:
@@ -254,6 +254,34 @@ def add_planned_point_controller(
         logger.critical(error_msg, exc_info = True)
         raise RuntimeError('An unexpected internal error occurred.') from e
 
+def update_planned_point_controller(
+    db: Session,
+    planned_route_id: int,
+    planned_point_id: int,
+    point_data: PlannedPointUpdateSchema
+) -> PlannedPointResponseSchema:
+    '''
+        Controller to update a scheduled point.
+    '''
+    try:
+        message = f'''Starting controller operation: Update planned point
+                {planned_point_id} on route {planned_route_id}'''
+        logger.info(message)
+        result = update_planned_point(
+            db = db,
+            planned_route_id = planned_route_id,
+            planned_point_id = planned_point_id,
+            point_data = point_data
+        )
+        return PlannedPointResponseSchema.model_validate(result, from_attributes = True)
+    except (RegisterNotFoundError, InvalidInputError, RegisterAlreadyExistsError) as e:
+        error_msg = f'Error updating planned point: {e}'
+        logger.error(error_msg, exc_info = True)
+        raise e
+    except Exception as e:
+        error_msg = f'Unexpected error while updating the planned point: {e}'
+        logger.critical(error_msg, exc_info = True)
+        raise RuntimeError('An unexpected internal error occurred.') from e
 
 def delete_planned_point_controller(
     planned_route_id: int = Path(..., description = 'ID of the planned route.'),
@@ -492,6 +520,7 @@ def get_full_route_comparison_controller(
 async def bulk_upload_planned_routes_controller(
     auth_token: str,
     file_name: str,
+    delimiter: Optional[str] = ',',
     db: Session = Depends(GET_DB_DEPENDENCY)
 ) -> BulkUploadResponseSchema:
     '''
@@ -503,7 +532,8 @@ async def bulk_upload_planned_routes_controller(
         result = await bulk_create_planned_routes(
             db = db,
             file_name = file_name,
-            auth_token = auth_token
+            auth_token = auth_token,
+            delimiter = delimiter
         )
         return BulkUploadResponseSchema.model_validate(result, from_attributes = True)
     except (

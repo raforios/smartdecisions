@@ -37,6 +37,7 @@ from models.localization import (
 from schemas.localization import (
     AttendanceCreateSchema,
     ExecutedRouteComparisonSchema,
+    PlannedPointUpdateSchema,
     PlannedRouteComparisonSchema,
     PlannedRouteCreateSchema,
     PlannedRouteStatusEnum,
@@ -111,7 +112,8 @@ def _check_geofence_start_point(
 async def _handle_files_service_logic(
     action: str,
     file_name: str,
-    auth_token: str
+    auth_token: str,
+    delimiter: Optional[str] = None
 ) -> Optional[str]:
     '''
     Handles communication with the FILES microservice for reading and deleting files.
@@ -136,8 +138,9 @@ async def _handle_files_service_logic(
         }
 
         if action == 'read':
+            query_string = f'?delimiter={delimiter}' if delimiter else ''
             response = req.get(
-                f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}',
+                f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}{query_string}',
                 headers = headers,
                 timeout = 600
             )
@@ -178,7 +181,8 @@ async def _handle_files_service_logic(
 
 async def _read_and_parse_file_content(
     file_name: str,
-    auth_token: str
+    auth_token: str,
+    delimiter: Optional[str] = ','
 ) -> List[Dict[str, Any]]:
     '''
     Reads and parses the file content from the FILES microservice.
@@ -186,7 +190,8 @@ async def _read_and_parse_file_content(
     file_content = await _handle_files_service_logic(
         action = 'read',
         file_name = file_name,
-        auth_token = auth_token
+        auth_token = auth_token,
+        delimiter = delimiter
     )
     if not file_content:
         raise InvalidInputError(
@@ -334,7 +339,7 @@ def filter_planned_routes(
     db: Session,
     route_code: Optional[str] = None,
     route_name: Optional[str] = None,
-    status: Optional[str] = None,
+    route_status: Optional[str] = None,
     company_id: Optional[int] = None
 ) -> List[PlannedRoute]:
     '''
@@ -347,12 +352,21 @@ def filter_planned_routes(
 
     if company_id:
         query = query.filter(PlannedRoute.company_id == company_id)
-    if route_code:
-        query = query.filter(PlannedRoute.route_code == route_code)
-    if status:
-        query = query.filter(PlannedRoute.status == status)
-    if route_name:
-        query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
+        if route_code:
+            query = query.filter(PlannedRoute.route_code == route_code)
+        if route_name:
+            query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
+        if route_status:
+            query = query.filter(PlannedRoute.status == route_status)
+
+    if route_status:
+        query = query.filter(PlannedRoute.status == route_status)
+        if company_id:
+            query = query.filter(PlannedRoute.company_id == company_id)
+        if route_code:
+            query = query.filter(PlannedRoute.route_code == route_code)
+        if route_name:
+            query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
 
     return query.all()
 
@@ -553,6 +567,55 @@ def add_planned_point(
     message = f'Point {new_point.id} added to planned route {planned_route_id}.'
     logger.info(message)
     return new_point
+
+@handle_service_errors
+def update_planned_point(
+    db: Session,
+    planned_route_id: int,
+    planned_point_id: int,
+    point_data: PlannedPointUpdateSchema
+) -> PlannedPoint:
+    '''
+        Updates the fields of an existing planned point.
+    '''
+    message = f'''Updating planned point {planned_point_id}
+            on route {planned_route_id}.'''
+    logger.debug(message)
+
+    db_route = get_record(db, PlannedRoute, planned_route_id)
+
+    if db_route.status != PlannedRouteStatusEnum.IN_CREATION:
+        raise InvalidInputError(
+            detail = 'Points cannot be updated on a route that is not in "IN CREATION" status.'
+        )
+
+    db_point = db.query(PlannedPoint).filter(
+        PlannedPoint.id == planned_point_id,
+        PlannedPoint.planned_route_id == planned_route_id
+    ).first()
+
+    if not db_point:
+        raise RegisterNotFoundError(
+            detail = f'Point {planned_point_id} not found on planned route {planned_route_id}.'
+        )
+
+    if point_data.secuencial is not None and point_data.secuencial != db_point.secuencial:
+        existing_point_with_seq = db.query(PlannedPoint).filter(
+            PlannedPoint.planned_route_id == planned_route_id,
+            PlannedPoint.secuencial == point_data.secuencial
+        ).first()
+        if existing_point_with_seq:
+            raise RegisterAlreadyExistsError(
+                detail = f'''The sequence number {point_data.secuencial} already exists
+                        for this route.'''
+            )
+
+    updated_point = update_record(db, db_point, point_data)
+    db.commit()
+    db.refresh(updated_point)
+    message = f'Point {planned_point_id} successfully updated.'
+    logger.info(message)
+    return updated_point
 
 @handle_service_errors
 def delete_planned_point(
@@ -846,14 +909,19 @@ def get_full_route_comparison(
 async def bulk_create_planned_routes(
     db: Session,
     file_name: str,
-    auth_token: str
+    auth_token: str,
+    delimiter: Optional[str] = ','
 ) -> Dict[str, Any]:
     '''
     Processes a CSV file from the FILES microservice to create planned routes and points.
     The process is atomic; if any part fails, the entire transaction is rolled back.
     '''
     # Step 1: Read and parse the file content
-    rows = await _read_and_parse_file_content(file_name, auth_token)
+    rows = await _read_and_parse_file_content(
+        file_name = file_name,
+        auth_token = auth_token,
+        delimiter = delimiter
+    )
 
     if not rows:
         return {
@@ -864,6 +932,9 @@ async def bulk_create_planned_routes(
 
     # Step 2: Process JSON data and group by route
     routes_to_create = _process_json_data(rows)
+
+    # Step 2: Process CSV data and group by route
+    # routes_to_create = _process_csv_data(rows)
 
     # Step 3: Atomic database insertion
     creation_stats = await _perform_atomic_db_insertion(

@@ -1,8 +1,8 @@
 '''
     Localization: routes handler
 '''
-from typing import Any, List
-from fastapi import APIRouter, Depends, Header, Path, status, Query
+from typing import Any, List, Optional
+from fastapi import APIRouter, Body, Depends, Header, Path, status, Query
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
@@ -23,6 +23,7 @@ from controllers.localization import (
     register_attendance_controller,
     update_attendance_checkout_time_controller,
     update_executed_route_end_time_controller,
+    update_planned_point_controller,
     update_planned_route_controller,
     update_planned_route_status_controller,
     bulk_upload_planned_routes_controller
@@ -33,6 +34,7 @@ from schemas.localization import (
     MessageSchema,
     PlannedPointCreateSchema,
     PlannedPointResponseSchema,
+    PlannedPointUpdateSchema,
     PlannedRouteCreateSchema,
     PlannedRouteFilterSchema,
     PlannedRouteListResponseSchema,
@@ -91,6 +93,22 @@ def get_all_planned_routes_endpoint(
     logger.info(message)
     return get_all_planned_routes_controller(db)
 
+def get_filters_dependency(
+    route_code: Optional[str] = Query(None),
+    route_name: Optional[str] = Query(None),
+    route_status: Optional[str] = Query(None),
+    company_id: Optional[int] = Query(None),
+) -> PlannedRouteFilterSchema:
+    '''
+        Converts the Query String to a Pydantic object
+    '''
+    return PlannedRouteFilterSchema(
+        route_code = route_code,
+        route_name = route_name,
+        route_status = route_status,
+        company_id = company_id
+    )
+
 @router.get(
     '/routes/planned/filter',
     response_model = List[PlannedRouteListResponseSchema],
@@ -100,10 +118,10 @@ def get_all_planned_routes_endpoint(
                 name, status, or user ID.'''
 )
 def get_or_filter_planned_routes_endpoint(
-    filters: PlannedRouteFilterSchema = Depends(),
+    filters: PlannedRouteFilterSchema = Depends(get_filters_dependency),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
+) -> List[PlannedRouteListResponseSchema]:
     '''
         Endpoint to filter planned routes.
     '''
@@ -112,11 +130,8 @@ def get_or_filter_planned_routes_endpoint(
             status = {filters.route_status}, company_id = {filters.company_id}'''
     logger.info(message)
     return filter_planned_routes_controller(
-        db,
-        filters.route_code,
-        filters.route_name,
-        filters.route_status,
-        filters.company_id
+        db = db,
+        filters = filters
     )
 
 @router.get(
@@ -228,6 +243,36 @@ def add_planned_point_endpoint(
             route {planned_route_id}.'''
     logger.info(message)
     return add_planned_point_controller(planned_route_id, point_data, db)
+
+@router.patch(
+    '/routes/planned/{planned_route_id}/points/{planned_point_id}',
+    response_model = PlannedPointResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Update planned point',
+    description = '''Allows updating a specific planned point of a route,
+                identified by its planned route ID and point ID.'''
+)
+def update_planned_point_endpoint(
+    planned_route_id: int = Path(..., description = 'The ID of the planned route.'),
+    planned_point_id: int = Path(..., description = 'The ID of the planned point to update.'),
+    point_data: PlannedPointUpdateSchema = Body(...,
+                                        description = 'Data to update the planned point.'),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint para actualizar un punto planificado.
+    '''
+    message = f'''User: {current_user}. Received request to update planned point {planned_point_id}
+            on route {planned_route_id}.'''
+    logger.info(message)
+
+    return update_planned_point_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        planned_point_id = planned_point_id,
+        point_data = point_data
+    )
 
 @router.delete(
     '/routes/planned/{planned_route_id}/points/{planned_point_id}',
@@ -432,6 +477,9 @@ def get_full_route_comparison_endpoint(
 )
 async def bulk_upload_planned_routes_endpoint(
     file_name: str = Query(..., description='Name of the CSV file to process.'),
+    delimiter: Optional[str] = Query(',',
+        description = 'The delimiter used in the CSV file. Defaults to a comma (,).'
+    ),
     db: Session = Depends(GET_DB_DEPENDENCY),
     auth_token: str = Header(..., alias = 'Authorization'),
     current_user: str = Depends(get_current_user)
@@ -444,6 +492,7 @@ async def bulk_upload_planned_routes_endpoint(
     logger.info(message)
     return await bulk_upload_planned_routes_controller(
         file_name = file_name,
+        delimiter = delimiter,
         db = db,
         auth_token = auth_token
     )
