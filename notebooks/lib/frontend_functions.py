@@ -245,7 +245,8 @@ def read_file(
     url: str,
     endpoint: str,
     bucket_name: str,
-    file_key: str
+    file_key: str,
+    delimiter: str = None
 ) -> Union[pd.DataFrame, bytes, str]:
     '''
     Reads a file from S3 via the file microservice and returns its content.
@@ -256,7 +257,8 @@ def read_file(
     - Binary (images, documents): Returns the raw bytes.
     '''
     headers = {'Authorization': f'Bearer {token}'}
-    full_url = f'{url}/v1/{endpoint}/{bucket_name}/{file_key}'
+    query_string = f'?delimiter={delimiter}' if delimiter else ''
+    full_url = f'{url}/v1/{endpoint}/{bucket_name}/{file_key}{query_string}'
 
     try:
         response = get_data(url = full_url, headers = headers, primary = 2)
