@@ -4,7 +4,7 @@
 import os
 import base64
 from io import StringIO, BytesIO
-from typing import List
+from typing import List, Optional
 import pandas as pd
 import boto3
 from schemas.files import FileUploadData
@@ -20,7 +20,8 @@ s3_client = boto3.client('s3')
 async def read_data_from_s3(
     bucket_name: str,
     file_key: str,
-    current_user: str
+    current_user: str,
+    delimiter: Optional[str] = None
 ) -> dict:
     '''
     Loads data from a given S3 bucket and processes it based on file extension.
@@ -52,19 +53,19 @@ async def read_data_from_s3(
                 file_content = response['Body'].read()
                 df: pd.DataFrame
                 if file_extension == '.csv':
-                    df = pd.read_csv(StringIO(file_content.decode('utf-8')))
+                    df = pd.read_csv(StringIO(file_content.decode('utf-8')), delimiter = delimiter)
                 else:
                     df = pd.read_excel(BytesIO(file_content))
 
-                processed_data = df.to_dict(orient='records')
+                processed_data = df.to_dict(orient = 'records')
                 message = f'''Data file {file_key} was accessed and processed by
                         user {current_user} on bucket {bucket_name}.'''
                 logger.info(message)
                 return {'filename': file_key, 'data': processed_data}
             except pd.errors.EmptyDataError as e:
                 error_msg = f'File {file_key} is empty or not in the expected format.'
-                logger.error(error_msg, exc_info=True)
-                raise InvalidInputError(detail=error_msg) from e
+                logger.error(error_msg, exc_info = True)
+                raise InvalidInputError(detail = error_msg) from e
 
         case '.txt':
             file_content = response['Body'].read().decode('utf-8')
@@ -87,8 +88,8 @@ async def read_data_from_s3(
             ]
             error_msg = f'''Unsupported file format for {file_key}.
                     Allowed file types are: {', '.join(allowed_extensions)}.'''
-            logger.error(error_msg, exc_info=True)
-            raise InvalidInputError(detail=error_msg)
+            logger.error(error_msg, exc_info = True)
+            raise InvalidInputError(detail = error_msg)
 
 @handle_aws_operation
 async def upload_s3_file(

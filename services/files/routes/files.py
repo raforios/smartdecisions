@@ -2,9 +2,9 @@
     Files: routes handler
 '''
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from mimetypes import guess_type
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from fastapi import Form
 from controllers.files import (
     read_data_from_s3,
@@ -45,7 +45,9 @@ ALLOWED_CONTENT_TYPES = [
 async def read_s3_file_route(
     bucket_name: str,
     file_key: str,
-    current_user: str = Depends(get_current_user)):
+    current_user: str = Depends(get_current_user),
+    delimiter: Optional[str] = Query(None, description = 'The delimiter used for CSV files.')
+):
     '''
     Reads a file from an S3 bucket, processes it, and returns the data.
 
@@ -57,9 +59,15 @@ async def read_s3_file_route(
     Returns:
         Dict[str, Any]: A dictionary containing the processed data from the file.
     '''
-    message = f'User: {current_user} accessing file: {file_key} in bucket: {bucket_name}.'
+    message = f'''User: {current_user} accessing file: {file_key} in bucket: {bucket_name}
+            with delimiter {delimiter}.'''
     logger.info(message)
-    return await read_data_from_s3(bucket_name, file_key, current_user)
+    return await read_data_from_s3(
+        bucket_name = bucket_name,
+        file_key = file_key,
+        current_user = current_user,
+        delimiter= delimiter
+    )
 
 @router.post('/upload', response_model = Dict[str, str])
 async def upload_file_to_s3_route(
