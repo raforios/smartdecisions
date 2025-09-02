@@ -10,3 +10,4 @@ numpy
 sqlalchemy
 pymysql
 python-dotenv
+requests
