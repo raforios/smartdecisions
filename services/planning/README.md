@@ -42,7 +42,7 @@ A continuación se listan los endpoints principales de la API, agrupados por su 
 | `GET` | `/v1/plannings/filter` | Filtra planificaciones por ID de compañía, equipo, servicio o ruta planificada. |
 | `GET` | `/v1/plannings/{planning_id}` | Recupera una planificación específica por su ID, incluyendo sus detalles. |
 | `PUT` | `/v1/plannings/{planning_id}` | Actualiza los datos de una planificación existente. |
-| `DELETE`| `/v1/plannings/{planning_id}` | Elimina una planificación y sus detalles, solo si está en estado `CREATED`. |
+| `DELETE`| `/v1/plannings/{planning_id}` | Elimina una planificación y sus detalles, solo si está en estado `ACTIVE`. |
 | `GET` | `/v1/plannings/weekly/{week_number}` | Recupera todas las planificaciones para un número de semana específico. |
 | `GET` | `/v1/plannings/daily/{planning_date}` | Recupera todas las planificaciones activas en una fecha determinada. |
 

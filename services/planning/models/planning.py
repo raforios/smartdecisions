@@ -22,7 +22,7 @@ class Planning(Base): # pylint: disable=too-few-public-methods
     end_date = Column(Date, nullable = False)
     week_number = Column(Integer, nullable = False)
     status = Column(Enum(PlanningStatus),
-                    default=PlanningStatus.CREATED,
+                    default = PlanningStatus.ACTIVE,
                     nullable = False)
     created_at = Column(DateTime, nullable = False, server_default = text('now()'))
 
@@ -45,6 +45,7 @@ class PlanningDetail(Base): # pylint: disable=too-few-public-methods
     team_id = Column(Integer, nullable = False, index = True)
     service_id = Column(Integer, nullable = False, index = True)
     planned_route_id = Column(Integer, nullable = False, index = True)
+    date_of_day = Column(DateTime, nullable = False)
     created_at = Column(DateTime, nullable = False, server_default = text('now()'))
 
     planning = relationship('Planning', back_populates = 'details')

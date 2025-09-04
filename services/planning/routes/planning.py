@@ -3,7 +3,7 @@
 '''
 from typing import List
 from datetime import date
-from fastapi import APIRouter, Depends, status, Path
+from fastapi import APIRouter, Depends, Request, status, Path
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
@@ -47,8 +47,9 @@ router = APIRouter(prefix = '/v1/plannings', tags = ['Planning'])
     summary = 'Create a new planning',
     description = 'Creates a new planning record with general information.'
 )
-def create_planning_endpoint(
+async def create_planning_endpoint(
     planning_data: PlanningCreateSchema,
+    request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -57,7 +58,12 @@ def create_planning_endpoint(
     '''
     message = f'User: {current_user}. Received request to create planning.'
     logger.info(message)
-    return create_planning_controller(planning_data, db)
+    return await create_planning_controller(
+        planning_data = planning_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/filter',
@@ -67,7 +73,8 @@ def create_planning_endpoint(
     description = '''Retrieves a list of plannings based on a single, exclusive filter.
     Only one query parameter can be provided at a time.'''
 )
-def get_filtered_plannings_endpoint(
+async def get_filtered_plannings_endpoint(
+    request: Request,
     filters: PlanningFilterSchema = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -80,9 +87,11 @@ def get_filtered_plannings_endpoint(
             service_id = {filters.service_id}, planned_route_id = {filters.planned_route_id}'''
     logger.info(message)
 
-    return get_filtered_plannings_controller(
+    return await get_filtered_plannings_controller(
         db = db,
-        filters = filters
+        filters = filters,
+        request = request,
+        current_user = current_user
     )
 
 @router.get(
@@ -92,7 +101,8 @@ def get_filtered_plannings_endpoint(
     summary = 'Get a planning by ID',
     description = 'Retrieves a single planning record with its details by its unique ID.'
 )
-def get_planning_by_id_endpoint(
+async def get_planning_by_id_endpoint(
+    request: Request,
     planning_id: int = Path(..., gt = 0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -102,7 +112,12 @@ def get_planning_by_id_endpoint(
     '''
     message = f'User: {current_user}. Received request to get planning with ID: {planning_id}'
     logger.info(message)
-    return get_planning_by_id_controller(planning_id, db)
+    return await get_planning_by_id_controller(
+        db = db,
+        planning_id = planning_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.put(
     '/{planning_id}',
@@ -111,7 +126,8 @@ def get_planning_by_id_endpoint(
     summary = 'Update a planning',
     description = 'Updates an existing planning record by its unique ID.'
 )
-def update_planning_endpoint(
+async def update_planning_endpoint(
+    request: Request,
     planning_id: int = Path(..., gt = 0),
     planning_data: PlanningUpdateSchema = ...,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -122,7 +138,13 @@ def update_planning_endpoint(
     '''
     message = f'User: {current_user}. Received request to update planning with ID: {planning_id}'
     logger.info(message)
-    return update_planning_controller(planning_id, planning_data, db)
+    return await update_planning_controller(
+        db = db,
+        planning_id = planning_id,
+        planning_data = planning_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/weekly/{week_number}',
@@ -131,7 +153,8 @@ def update_planning_endpoint(
     summary = 'Get plannings for a specific week',
     description = 'Retrieves all planning records for a given week number.'
 )
-def get_weekly_plannings_endpoint(
+async def get_weekly_plannings_endpoint(
+    request: Request,
     week_number: int = Path(..., ge = 1, le = 53),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -142,7 +165,12 @@ def get_weekly_plannings_endpoint(
     message = f'''User: {current_user}. Received request to get weekly plannings
             for week {week_number}.'''
     logger.info(message)
-    return get_weekly_plannings_controller(week_number, db)
+    return await get_weekly_plannings_controller(
+        db = db,
+        week_number = week_number,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/daily/{planning_date}',
@@ -151,7 +179,8 @@ def get_weekly_plannings_endpoint(
     summary = 'Get plannings for a specific date',
     description = 'Retrieves all planning records that are active on a given date.'
 )
-def get_daily_plannings_endpoint(
+async def get_daily_plannings_endpoint(
+    request: Request,
     planning_date: date = Path(..., description = 'Date in YYYY-MM-DD format'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -162,7 +191,12 @@ def get_daily_plannings_endpoint(
     message = f'''User: {current_user}. Received request to get daily plannings
             for date {planning_date}.'''
     logger.info(message)
-    return get_daily_plannings_controller(planning_date, db)
+    return await get_daily_plannings_controller(
+        db = db,
+        date_to_filter = planning_date,
+        request = request,
+        current_user = current_user
+    )
 
 @router.post(
     '/{planning_id}/details',
@@ -171,7 +205,8 @@ def get_daily_plannings_endpoint(
     summary = 'Create a new planning detail',
     description = 'Creates a new planning detail for an existing planning.'
 )
-def create_planning_detail_endpoint(
+async def create_planning_detail_endpoint(
+    request: Request,
     detail_data: PlanningDetailBaseSchema,
     planning_id: int = Path(..., gt = 0),
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -188,17 +223,23 @@ def create_planning_detail_endpoint(
         planning_id = planning_id, **detail_data.model_dump()
     )
 
-    return create_planning_detail_controller(detail_with_id, db)
+    return await create_planning_detail_controller(
+        db = db,
+        detail_data = detail_with_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.delete(
     '/{planning_id}',
     status_code = status.HTTP_200_OK,
     summary = 'Delete a planning by ID',
     description = '''Deletes a planning record and all associated data by its ID,
-                but only if its status is CREATED.'''
+                but only if its status is ACTIVE.'''
 )
-def delete_planning_endpoint(
-    planning_id: int = Path(..., gt=0),
+async def delete_planning_endpoint(
+    request: Request,
+    planning_id: int = Path(..., gt = 0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -207,7 +248,13 @@ def delete_planning_endpoint(
     '''
     message = f'User: {current_user}. Received request to delete planning with ID: {planning_id}'
     logger.info(message)
-    return delete_planning_controller(planning_id, db)
+    await delete_planning_controller(
+        db = db,
+        planning_id = planning_id,
+        request = request,
+        current_user = current_user
+    )
+    return {'message': f'Planning {planning_id} deleted successfully.'}
 
 @router.get(
     '/{planning_id}/details/{planning_detail_id}/materials',
@@ -217,7 +264,8 @@ def delete_planning_endpoint(
     description = '''Retrieves all material assignments associated with a specific
                 planning detail record.'''
 )
-def get_materials_endpoint(
+async def get_materials_endpoint(
+    request: Request,
     planning_detail_id: int = Path(..., gt = 0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -228,7 +276,12 @@ def get_materials_endpoint(
     message = f'''User: {current_user}. Received request to get materials for planning
             detail ID: {planning_detail_id}'''
     logger.info(message)
-    return get_materials_controller(planning_detail_id, db)
+    return await get_materials_controller(
+        db = db,
+        planning_detail_id = planning_detail_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.post(
     '/{planning_id}/details/{planning_detail_id}/materials',
@@ -237,20 +290,27 @@ def get_materials_endpoint(
     summary = 'Assign material to a planning detail',
     description = 'Assigns a new material record to a specific planning detail.'
 )
-def assign_material_endpoint(
+async def assign_material_endpoint(
+    request: Request,
     planning_id: int = Path(..., gt = 0),
     planning_detail_id: int = Path(..., gt = 0),
     material_data: MaterialAssignmentSchema = ...,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
+): # pylint: disable=too-many-arguments, too-many-positional-arguments
     '''
         Endpoint to assign a new material.
     '''
     message = f'''User: {current_user}. Received request to assign material to planning detail
             ID: {planning_detail_id} and planning ID: {planning_id}'''
     logger.info(message)
-    return assign_material_controller(planning_detail_id, material_data, db)
+    return await assign_material_controller(
+        db = db,
+        planning_detail_id = planning_detail_id,
+        material_data = material_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.patch(
     '/{planning_id}/details/{planning_detail_id}/materials/{material_assignment_id}',
@@ -259,7 +319,8 @@ def assign_material_endpoint(
     summary = 'Update material quantities',
     description = 'Updates the used and returned quantities for a material assignment.'
 )
-def update_material_endpoint(
+async def update_material_endpoint(
+    request: Request,
     material_assignment_id: int = Path(..., gt = 0),
     material_data: MaterialAssignmentUpdateSchema = ...,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -271,7 +332,13 @@ def update_material_endpoint(
     message = f'''User: {current_user}. Received request to update material
             ID: {material_assignment_id}'''
     logger.info(message)
-    return update_material_controller(material_assignment_id, material_data, db)
+    return await update_material_controller(
+        db = db,
+        material_assignment_id = material_assignment_id,
+        material_data = material_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.patch(
     '/{planning_id}/details/{planning_detail_id}',
@@ -280,13 +347,14 @@ def update_material_endpoint(
     summary = 'Update a planning detail',
     description = 'Updates a specific planning detail record with partial data.'
 )
-def update_planning_detail_endpoint(
+async def update_planning_detail_endpoint(
+    request: Request,
     planning_id: int = Path(..., gt=0),
     planning_detail_id: int = Path(..., gt = 0),
     detail_data: PlanningDetailUpdateSchema = ...,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
+):# pylint: disable=too-many-arguments, too-many-positional-arguments
     '''
         Endpoint to update a planning detail.
     '''
@@ -294,19 +362,22 @@ def update_planning_detail_endpoint(
             ID: {planning_detail_id} for planning ID: {planning_id}'''
     logger.info(message)
 
-    return update_planning_detail_controller(
+    return await update_planning_detail_controller(
+        db = db,
         planning_detail_id = planning_detail_id,
         update_data = detail_data,
-        db = db
+        request = request,
+        current_user = current_user
     )
 
 @router.delete(
     '/{planning_id}/details/{planning_detail_id}/materials/{material_assignment_id}',
-    status_code=status.HTTP_200_OK,
-    summary='Delete a material assignment by ID',
+    status_code = status.HTTP_200_OK,
+    summary = 'Delete a material assignment by ID',
     description = 'Deletes a specific material assignment record.'
 )
-def delete_material_endpoint(
+async def delete_material_endpoint(
+    request: Request,
     material_assignment_id: int = Path(..., gt=0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -317,7 +388,14 @@ def delete_material_endpoint(
     message = f'''User: {current_user}. Received request to delete material
             ID: {material_assignment_id}'''
     logger.info(message)
-    return delete_material_controller(material_assignment_id, db)
+    await delete_material_controller(
+        db = db,
+        material_assignment_id = material_assignment_id,
+        request = request,
+        current_user = current_user
+    )
+    return {'message': f'Material assignment {material_assignment_id} deleted successfully.'}
+
 
 @router.delete(
     '/{planning_id}/details/{planning_detail_id}',
@@ -325,16 +403,23 @@ def delete_material_endpoint(
     summary = 'Delete a planning detail',
     description = 'Deletes a specific planning detail record.'
 )
-def delete_planning_detail_endpoint(
+async def delete_planning_detail_endpoint(
+    request: Request,
     planning_id: int = Path(..., gt=0),
     planning_detail_id: int = Path(..., gt=0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
+):# pylint: disable=too-many-arguments, too-many-positional-arguments
     '''
         Endpoint to delete a planning detail.
     '''
     message = f'''User: {current_user}. Received request to delete planning detail
             ID:{planning_detail_id} and ID plan: {planning_id}'''
     logger.info(message)
-    return delete_planning_detail_controller(planning_detail_id, db)
+    await delete_planning_detail_controller(
+        db = db,
+        planning_detail_id = planning_detail_id,
+        request = request,
+        current_user = current_user
+    )
+    return {'message': f'Planning {planning_detail_id} deleted successfully.'}

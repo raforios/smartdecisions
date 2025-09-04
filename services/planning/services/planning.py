@@ -1,7 +1,7 @@
 '''
     Business logic services for the Planning Microservice.
 '''
-from typing import Any, Dict, List, Optional
+from typing import List
 from datetime import date
 from sqlalchemy.orm import Session
 
@@ -16,23 +16,30 @@ from services.exceptions import (
     InvalidInputError
 )
 from services.logger_config import custom_logger as logger
-from services.utils import handle_service_errors
-
+from services.utils import (
+    handle_service_errors,
+    audit_event
+)
 from models.planning import (
     Planning, PlanningDetail,
     MaterialAssignment
 )
 from schemas.planning import (
+    MaterialAssignmentResponseSchema,
     MaterialAssignmentSchema,
     MaterialAssignmentUpdateSchema,
     PlanningCreateSchema,
     PlanningDetailCreateSchema,
+    PlanningDetailResponseSchema,
+    PlanningDetailUpdateSchema,
+    PlanningFilterSchema,
+    PlanningResponseSchema,
     PlanningStatus,
     PlanningUpdateSchema
 )
 
-@handle_service_errors
-def get_plannings_by_week(
+@handle_service_errors('PLANNING')
+async def get_plannings_by_week(
     db: Session,
     week_number: int
 ) -> List[Planning]:
@@ -48,8 +55,8 @@ def get_plannings_by_week(
         )
     return plannings
 
-@handle_service_errors
-def get_plannings_by_date(
+@handle_service_errors('PLANNING')
+async def get_plannings_by_date(
     db: Session,
     planning_date: date
 ) -> List[Planning]:
@@ -64,12 +71,13 @@ def get_plannings_by_date(
     ).all()
     if not plannings:
         raise RegisterNotFoundError(
-            detail=f'No plannings found for date {planning_date}.'
+            detail = f'No plannings found for date {planning_date}.'
         )
     return plannings
 
-@handle_service_errors
-def create_planning_with_details(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'Planning', 'CREATE', PlanningResponseSchema)
+async def create_planning_with_details(
     db: Session,
     planning_data: PlanningCreateSchema
 ) -> Planning:
@@ -109,8 +117,9 @@ def create_planning_with_details(
     db.refresh(db_planning)
     return db_planning
 
-@handle_service_errors
-def update_planning_with_details(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'Planning', 'UPDATE', PlanningResponseSchema)
+async def update_planning_with_details(
     db: Session,
     planning_id: int,
     planning_data: PlanningUpdateSchema
@@ -123,7 +132,7 @@ def update_planning_with_details(
 
     if (planning_data.start_date and planning_data.end_date and
             planning_data.start_date > planning_data.end_date):
-        raise InvalidInputError(detail='`start_date` cannot be after `end_date`')
+        raise InvalidInputError(detail = '`start_date` cannot be after `end_date`')
 
     db_planning = update_record(db, db_planning, planning_data)
 
@@ -131,8 +140,9 @@ def update_planning_with_details(
     db.refresh(db_planning)
     return db_planning
 
-@handle_service_errors
-def create_planning_detail(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'PlanningDetail', 'CREATE', PlanningDetailResponseSchema)
+async def create_planning_detail(
     db: Session,
     detail_data: PlanningDetailCreateSchema
 ) -> PlanningDetail:
@@ -146,29 +156,31 @@ def create_planning_detail(
     db.refresh(db_detail)
     return db_detail
 
-@handle_service_errors
-def delete_planning_by_id(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'Planning', 'DELETE')
+async def delete_planning_by_id(
     db: Session,
     planning_id: int
-) -> dict:
+) -> int:
     '''
-        Deletes a planning and its associated details only if its status is 'CREATED'.
+        Deletes a planning and its associated details only if its status is 'ACTIVE'.
     '''
     message = f'Attempting to delete planning with ID: {planning_id}'
     logger.info(message)
     db_planning = get_record(db, Planning, planning_id)
 
-    if db_planning.status != PlanningStatus.CREATED:
+    if db_planning.status != PlanningStatus.ACTIVE:
         raise InvalidInputError(
             detail = f'''Cannot delete planning with status {db_planning.status}.
-                    Only CREATED plannings can be deleted.'''
+                    Only ACTIVE plannings can be deleted.'''
         )
 
     delete_record(db, Planning, planning_id)
     db.commit()
-    return {'message': f'Planning {planning_id} deleted successfully.'}
+    return planning_id
 
-def get_materials_by_detail_id(
+@handle_service_errors('PLANNING')
+async def get_materials_by_detail_id(
     db: Session,
     planning_detail_id: int
 ) -> List[MaterialAssignment]:
@@ -186,8 +198,9 @@ def get_materials_by_detail_id(
         )
     return materials
 
-@handle_service_errors
-def assign_material_to_planning_detail(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'MaterialAssignment', 'CREATE', MaterialAssignmentResponseSchema)
+async def assign_material_to_planning_detail(
     db: Session,
     planning_detail_id: int,
     material_data: MaterialAssignmentSchema
@@ -208,8 +221,9 @@ def assign_material_to_planning_detail(
     db.refresh(db_material)
     return db_material
 
-@handle_service_errors
-def update_material_quantities(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'MaterialAssignment', 'UPDATE', MaterialAssignmentResponseSchema)
+async def update_material_quantities(
     db: Session,
     material_assignment_id: int,
     update_data: MaterialAssignmentUpdateSchema
@@ -240,11 +254,12 @@ def update_material_quantities(
     db.refresh(db_material)
     return db_material
 
-@handle_service_errors
-def delete_material_by_id(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'MaterialAssignment', 'DELETE')
+async def delete_material_by_id(
     db: Session,
     material_assignment_id: int
-) -> dict:
+) -> int:
     '''
         Deletes a material assignment by its ID.
     '''
@@ -252,56 +267,14 @@ def delete_material_by_id(
     logger.info(message)
     delete_record(db, MaterialAssignment, material_assignment_id)
     db.commit()
-    return {'message': f'Material assignment {material_assignment_id} deleted successfully.'}
+    return material_assignment_id
 
-def get_filtered_plannings(
-    db: Session,
-    company_id: Optional[int] = None,
-    team_id: Optional[int] = None,
-    service_id: Optional[int] = None,
-    planned_route_id: Optional[int] = None,
-) -> List[Planning]:
-    '''
-        Retrieves a list of plannings based on a single, exclusive filter criterion.
-    '''
-    # Check that only one filter is provided
-    provided_filters = [
-        company_id, team_id, service_id, planned_route_id
-    ]
-    if sum(1 for f in provided_filters if f is not None) > 1:
-        raise InvalidInputError(
-            detail = 'Only one filter can be provided at a time.'
-        )
-
-    # Build the query
-    query = db.query(Planning)
-
-    if company_id:
-        query = query.filter(Planning.company_id == company_id)
-    if team_id:
-        # Filter by team_id which is in PlanningDetail model, so we must join
-        query = query.join(Planning.details).filter(PlanningDetail.team_id == team_id)
-    if service_id:
-        # Filter by service_id
-        query = query.join(Planning.details).filter(PlanningDetail.service_id == service_id)
-    if planned_route_id:
-        # Filter by planned_route_id
-        query = query.join(Planning.details).filter(
-            PlanningDetail.planned_route_id == planned_route_id
-        )
-
-    plannings = query.all()
-
-    if not plannings:
-        raise RegisterNotFoundError(detail = 'No plannings found for the specified filter.')
-
-    return plannings
-
-@handle_service_errors
-def delete_planning_detail_by_id(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'PlanningDetail', 'DELETE')
+async def delete_planning_detail_by_id(
     db: Session,
     planning_detail_id: int
-) -> dict:
+) -> int:
     '''
         Deletes a planning detail by its ID.
     '''
@@ -309,13 +282,14 @@ def delete_planning_detail_by_id(
     logger.info(message)
     delete_record(db, PlanningDetail, planning_detail_id)
     db.commit()
-    return {'message': f'Planning detail {planning_detail_id} deleted successfully.'}
+    return planning_detail_id
 
-@handle_service_errors
-def update_planning_detail(
+@handle_service_errors('PLANNING')
+@audit_event('PLANNING', 'PlanningDetail', 'UPDATE', PlanningDetailResponseSchema)
+async def update_planning_detail(
     db: Session,
     planning_detail_id: int,
-    update_data: Dict[str, Any]
+    update_data: PlanningDetailUpdateSchema
 ) -> PlanningDetail:
     '''
         Updates a planning detail record with the provided data.
@@ -326,14 +300,51 @@ def update_planning_detail(
 
     if not db_detail:
         raise RegisterNotFoundError(
-            detail=f"Planning detail with ID {planning_detail_id} not found."
+            detail = f'Planning detail with ID {planning_detail_id} not found.'
         )
 
     # Update fields with provided data
-    for field, value in update_data.items():
+    for field, value in update_data.model_dump(exclude_unset = True).items():
         if value is not None:
             setattr(db_detail, field, value)
 
     db.commit()
     db.refresh(db_detail)
     return db_detail
+
+@handle_service_errors('PLANNING')
+async def get_filtered_plannings(
+    db: Session,
+    filters: PlanningFilterSchema
+) -> List[Planning]:
+    '''
+        Retrieves a list of plannings based on a single, exclusive filter criterion.
+    '''
+    # Check that only one filter is provided
+    company_id = filters.company_id
+    team_id = filters.team_id
+    service_id = filters.service_id
+    planned_route_id = filters.planned_route_id
+    # Build the query
+    query = db.query(Planning)
+
+    conditions = []
+
+    if company_id is not None:
+        conditions.append(Planning.company_id == company_id)
+    if team_id is not None:
+        conditions.append(PlanningDetail.team_id == team_id)
+        query = query.join(Planning.details)
+    if service_id is not None:
+        conditions.append(PlanningDetail.service_id == service_id)
+        query = query.join(Planning.details)
+    if planned_route_id is not None:
+        conditions.append(PlanningDetail.planned_route_id == planned_route_id)
+        query = query.join(Planning.details)
+
+    plannings = query.filter(*conditions).all()
+
+    if not plannings:
+        raise RegisterNotFoundError(detail = 'No plannings found for the specified filter.')
+
+    return plannings

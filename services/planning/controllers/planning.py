@@ -1,9 +1,10 @@
 '''
     Planning controllers.
 '''
-from typing import List
+from typing import List, Union
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
+from fastapi import Request
 from services.crud import get_record
 from services.planning import (
     assign_material_to_planning_detail,
@@ -38,21 +39,30 @@ from schemas.planning import (
     PlanningUpdateSchema
 )
 
-@handle_service_errors
-def create_planning_controller(
+@handle_service_errors('PLANNING')
+async def create_planning_controller(
     planning_data: PlanningCreateSchema,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> PlanningResponseSchema:
     '''
         Controller to create a new planning.
     '''
-    planning = create_planning_with_details(db = db, planning_data = planning_data)
-    return PlanningResponseSchema.model_validate(planning, from_attributes = True)
+    planning = await create_planning_with_details(db = db, planning_data = planning_data)
 
-@handle_service_errors
-def get_planning_by_id_controller(
+    response_data = planning_data.model_dump(exclude_unset = True)
+    response_data['id'] = planning.id
+    response_data['created_at'] = planning.created_at
+
+    return PlanningResponseSchema.model_validate(response_data, from_attributes = True)
+
+@handle_service_errors('PLANNING')
+async def get_planning_by_id_controller(
     planning_id: int,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> PlanningResponseSchema:
     '''
         Controller to retrieve a planning by its ID.
@@ -63,163 +73,194 @@ def get_planning_by_id_controller(
     planning = get_record(db, Planning, planning_id, eager_load_options = eager_options)
     return PlanningResponseSchema.model_validate(planning, from_attributes = True)
 
-@handle_service_errors
-def update_planning_controller(
+@handle_service_errors('PLANNING')
+async def update_planning_controller(
     planning_id: int,
     planning_data: PlanningUpdateSchema,
-    db: Session
-) -> PlanningResponseSchema:
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> Union[PlanningResponseSchema, dict]:
     '''
         Controller to update an existing planning record.
     '''
-    planning = update_planning_with_details(
+    planning = await update_planning_with_details(
         db = db,
         planning_id = planning_id,
         planning_data = planning_data
     )
     return PlanningResponseSchema.model_validate(planning, from_attributes = True)
 
-@handle_service_errors
-def get_weekly_plannings_controller(
+@handle_service_errors('PLANNING')
+async def get_weekly_plannings_controller(
     week_number: int,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> List[PlanningResponseSchema]:
     '''
         Controller to get all plannings for a specific week.
     '''
-    plannings = get_plannings_by_week(db = db, week_number = week_number)
+    plannings = await get_plannings_by_week(db = db, week_number = week_number)
     return [PlanningResponseSchema.model_validate(p, from_attributes = True) for p in plannings]
 
-@handle_service_errors
-def get_daily_plannings_controller(
+@handle_service_errors('PLANNING')
+async def get_daily_plannings_controller(
     date_to_filter: date,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> List[PlanningResponseSchema]:
     '''
         Controller to get all plannings for a specific date.
     '''
-    plannings = get_plannings_by_date(db = db, planning_date = date_to_filter)
+    plannings = await get_plannings_by_date(db = db, planning_date = date_to_filter)
     return [PlanningResponseSchema.model_validate(p, from_attributes = True) for p in plannings]
 
-@handle_service_errors
-def create_planning_detail_controller(
+@handle_service_errors('PLANNING')
+async def create_planning_detail_controller(
     detail_data: PlanningDetailCreateSchema,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> PlanningDetailResponseSchema:
     '''
         Controller to create a new planning detail for an existing planning.
     '''
-    detail = create_planning_detail(db=db, detail_data = detail_data)
+    detail = await create_planning_detail(db = db, detail_data = detail_data)
     return PlanningDetailResponseSchema.model_validate(detail, from_attributes = True)
 
-@handle_service_errors
-def delete_planning_controller(
+@handle_service_errors('PLANNING')
+async def delete_planning_controller(
     planning_id: int,
-    db: Session
-) -> dict:
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> int:
     '''
         Controller to delete a planning by its ID.
     '''
-    return delete_planning_by_id(db=db, planning_id=planning_id)
+    return await delete_planning_by_id(
+        db = db,
+        planning_id = planning_id
+    )
 
-@handle_service_errors
-def get_materials_controller(
+@handle_service_errors('PLANNING')
+async def get_materials_controller(
     planning_detail_id: int,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument # pylint: disable=unused-argument
 ) -> List[MaterialAssignmentResponseSchema]:
     '''
         Controller to retrieve all materials for a specific planning detail.
     '''
-    materials = get_materials_by_detail_id(db = db, planning_detail_id = planning_detail_id)
+    materials = await get_materials_by_detail_id(
+        db = db,
+        planning_detail_id = planning_detail_id
+    )
     return [MaterialAssignmentResponseSchema.model_validate(m,
                                         from_attributes = True) for m in materials]
 
-@handle_service_errors
-def assign_material_controller(
+@handle_service_errors('PLANNING')
+async def assign_material_controller(
     planning_detail_id: int,
     material_data: MaterialAssignmentSchema,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> MaterialAssignmentResponseSchema:
     '''
         Controller to assign a material to a planning detail.
     '''
-    material = assign_material_to_planning_detail(
+    material = await assign_material_to_planning_detail(
         db = db,
         planning_detail_id = planning_detail_id,
         material_data = material_data
     )
-    return MaterialAssignmentResponseSchema.model_validate(material, from_attributes = True)
+    return MaterialAssignmentResponseSchema.model_validate(material,
+                                                           from_attributes = True)
 
-@handle_service_errors
-def update_material_controller(
+@handle_service_errors('PLANNING')
+async def update_material_controller(
     material_assignment_id: int,
     material_data: MaterialAssignmentUpdateSchema,
-    db: Session
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> MaterialAssignmentResponseSchema:
     '''
         Controller to update a material assignment record.
     '''
-    material = update_material_quantities(
+    material = await update_material_quantities(
         db = db,
         material_assignment_id = material_assignment_id,
         update_data = material_data
     )
-    return MaterialAssignmentResponseSchema.model_validate(material, from_attributes = True)
+    return MaterialAssignmentResponseSchema.model_validate(material,
+                                                           from_attributes = True)
 
-@handle_service_errors
-def delete_material_controller(
+@handle_service_errors('PLANNING')
+async def delete_material_controller(
     material_assignment_id: int,
-    db: Session
-) -> dict:
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> int:
     '''
         Controller to delete a material assignment by its ID.
     '''
-    return delete_material_by_id(
+    return await delete_material_by_id(
         db = db,
         material_assignment_id = material_assignment_id
     )
 
-@handle_service_errors
-def get_filtered_plannings_controller(
+@handle_service_errors('PLANNING')
+async def get_filtered_plannings_controller(
     db: Session,
-    filters: PlanningFilterSchema
+    filters: PlanningFilterSchema,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> List[PlanningResponseSchema]:
     '''
         Controller to get plannings by a single, exclusive filter criterion.
     '''
-    plannings = get_filtered_plannings(
+    plannings = await get_filtered_plannings(
         db = db,
-        company_id = filters.company_id,
-        team_id = filters.team_id,
-        service_id = filters.service_id,
-        planned_route_id = filters.planned_route_id,
+        filters = filters
     )
     return [PlanningResponseSchema.model_validate(p, from_attributes = True) for p in plannings]
 
-@handle_service_errors
-def delete_planning_detail_controller(
+@handle_service_errors('PLANNING')
+async def delete_planning_detail_controller(
     planning_detail_id: int,
-    db: Session
-) -> dict:
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> int:
     '''
         Controller to delete a planning detail record.
     '''
-    return delete_planning_detail_by_id(db=db, planning_detail_id=planning_detail_id)
+    return await delete_planning_detail_by_id(
+        db = db,
+        planning_detail_id = planning_detail_id
+    )
 
-@handle_service_errors
-def update_planning_detail_controller(
+@handle_service_errors('PLANNING')
+async def update_planning_detail_controller(
     planning_detail_id: int,
     update_data: PlanningDetailUpdateSchema,
-    db: Session
-) -> PlanningDetailResponseSchema:
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> Union[PlanningDetailResponseSchema, dict]:
     '''
         Controller to update a planning detail record.
     '''
-    # We convert the Pydantic schema to a dictionary, excluding fields that are None.
-    data_to_update = update_data.model_dump(exclude_unset=True)
-    detail = update_planning_detail(
+    # Se pasa el objeto Pydantic directamente al servicio.
+    detail = await update_planning_detail(
         db = db,
         planning_detail_id = planning_detail_id,
-        update_data = data_to_update
+        update_data = update_data
     )
     return PlanningDetailResponseSchema.model_validate(detail, from_attributes = True)

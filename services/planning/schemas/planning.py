@@ -4,22 +4,22 @@
 from typing import List, Optional
 from datetime import date, datetime
 from enum import Enum
+from fastapi import Query
 from pydantic import BaseModel, Field, ConfigDict
 
 class PlanningStatus(str, Enum):
     '''
         Enum to define the possible states of a planning.
     '''
-    CREATED = 'CREATED'
-    IN_PROGRESS = 'IN_PROGRESS'
-    FINISHED = 'FINISHED'
+    ACTIVE = 'ACTIVE'
+    INACTIVE = 'INACTIVE'
 
 class PlanningBaseSchema(BaseModel):
     '''
         Base schema with `from_attributes=True` enabled to handle
         ORM objects from SQLAlchemy.
     '''
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes = True)
 
 class PlanningDetailBaseSchema(BaseModel):
     '''
@@ -37,6 +37,11 @@ class PlanningDetailBaseSchema(BaseModel):
         ...,
         description = 'ID of the planned route from the Localization microservice.'
     )
+    date_of_day: datetime = Field(
+        ...,
+        description = 'Timestamp when the material assignment was created.'
+    )
+
 
 class PlanningDetailCreateSchema(PlanningDetailBaseSchema):
     '''
@@ -62,6 +67,10 @@ class PlanningDetailUpdateSchema(PlanningDetailBaseSchema):
     planned_route_id: Optional[int] = Field(
         None,
         description = 'ID of the planned route from the Localization microservice.'
+    )
+    date_of_day: datetime = Field(
+        None,
+        description = 'Timestamp when the material assignment was created.'
     )
 
 class MaterialAssignmentSchema(BaseModel):
@@ -132,7 +141,7 @@ class PlanningCreateSchema(BaseModel):
         description = 'The week number for the planning.'
     )
     status: PlanningStatus = Field(
-        PlanningStatus.CREATED,
+        PlanningStatus.ACTIVE,
         description = 'Current status of the planning.'
     )
     details: Optional[List[PlanningDetailWithMaterialsSchema]] = Field(
@@ -168,9 +177,6 @@ class PlanningUpdateSchema(BaseModel):
         None,
         description = 'Current status of the planning.'
     )
-    # Note: For updates, handling nested lists is complex.
-    # For now, we'll keep the top-level fields for simplicity.
-    # We will create a separate endpoint for updating details.
 
 class PlanningResponseSchema(PlanningBaseSchema, PlanningCreateSchema):
     '''
@@ -197,6 +203,7 @@ class MaterialAssignmentUpdateSchema(BaseModel):
         None,
         description = 'Quantity of the material returned after the activity.'
     )
+
 class PlanningDetailResponseSchema(PlanningBaseSchema, PlanningDetailBaseSchema):
     '''
         Response schema for planning details, including its database ID and creation timestamp.
@@ -214,7 +221,15 @@ class PlanningFilterSchema(BaseModel):
     '''
         Schema to encapsulate filtering parameters for plannings.
     '''
-    company_id: Optional[int] = None
-    team_id: Optional[int] = None
-    service_id: Optional[int] = None
-    planned_route_id: Optional[int] = None
+    company_id: Optional[int] = Query(None, description = 'Company ID.')
+    team_id: Optional[int] = Query(None, description = 'Team ID.')
+    service_id: Optional[int] = Query(None, description = 'Service ID.')
+    planned_route_id: Optional[int] = Query(None,
+                                    description = 'Planned Route ID.')
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            This setting allows the class to be instantiated without arguments in
+            the @router.get() decorator.
+        '''
+        arbitrary_types_allowed = True
