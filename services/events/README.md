@@ -38,7 +38,7 @@ A continuación se listan los endpoints principales de la API, agrupados por su 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
 | `POST` | `/v1/events/audit` | Registra un evento de auditoría sobre una modificación de datos. |
-| `POST` | `/v1/events/usage_log` | Registra un evento de uso de la API. |
+| `POST` | `/v1/events/usage-log` | Registra un evento de uso de la API. |
 
 -----
 

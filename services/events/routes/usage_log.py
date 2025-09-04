@@ -11,7 +11,7 @@ from services.logger_config import custom_logger as logger
 router = APIRouter(prefix = '/v1/events', tags=['Events'])
 
 @router.post(
-    '/usage_log',
+    '/usage-log',
     response_model = UsageLogResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Create a new usage log',
