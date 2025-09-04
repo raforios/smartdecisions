@@ -63,7 +63,7 @@ class PlannedPoint(Base):# pylint: disable=too-few-public-methods
     latitude = Column(Numeric(16, 14), nullable = False)
     longitude = Column(Numeric(16, 14), nullable = False)
     reference_data = Column(Text, nullable = True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default = lambda: datetime.now(timezone.utc))
 
     planned_route = relationship('PlannedRoute', back_populates = 'points')
     t_attendances = relationship(
