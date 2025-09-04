@@ -88,8 +88,6 @@ def create_person_and_contact(
     person_data = session_data.person_data
     contact_data = session_data.contact_data
     existing_person = db.query(Person).filter(
-        (Person.email == person_data.email) |
-        (Person.phone_number == person_data.phone_number) |
         (Person.identification_number == person_data.identification_number)
     ).first()
     if existing_person:
