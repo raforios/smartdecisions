@@ -8,7 +8,7 @@ from sqlalchemy.sql import func
 from sqlalchemy import Enum as SQLAlchemyEnum
 
 from services.db_connection import Base
-from schemas.forms import FormStatus, QuestionType
+from schemas.forms import QuestionType
 
 class FormHeader(Base):# pylint: disable=too-few-public-methods, too-many-ancestors, too-many-ancestors
     '''
@@ -20,9 +20,7 @@ class FormHeader(Base):# pylint: disable=too-few-public-methods, too-many-ancest
     id = Column(Integer, primary_key = True, index = True)
     form_code = Column(String(50), unique = True, nullable = False, index = True)
     name = Column(String(255), nullable = False)
-    status = Column(SQLAlchemyEnum(
-        *[status_member.value for status_member in FormStatus.__members__.values()]),
-        nullable = False, default = FormStatus.ACTIVE)
+    status = Column(String(15), nullable = False)
     creation_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
     company_id = Column(Integer, nullable = False, index = True)
     app_id = Column(Integer, nullable = False, index = True)

@@ -150,7 +150,7 @@ class FormHeaderBase(BaseModel):
     form_code: str = Field(..., max_length = 10,
             description = 'Alphanumeric code for the form, max 10 chars, unique.')
     name: str = Field(..., description = 'Name or description of the form.')
-    status: FormStatus = Field(..., description = 'Status of the form: active or inactive.')
+    status: str = Field(..., description = 'Status of the form: active or inactive.')
     company_id: int = Field(..., description = 'Company ID from the Frontend.')
     app_id: int = Field(..., description = 'Application ID from the Frontend.')
 
@@ -172,7 +172,7 @@ class FormFilters(BaseModel):
             description = 'The unique code of the form to filter by')
     name: Optional[str] = Field(None,
             description = 'The name of the form (supports partial matching)')
-    status: Optional[FormStatus] = Field(None,
+    status: Optional[str] = Field(None,
             description = 'The status of the form to filter by')
 class FormHeaderUpdate(FormHeaderBase):
     '''
@@ -181,7 +181,7 @@ class FormHeaderUpdate(FormHeaderBase):
     '''
     form_code: Optional[str] = Field(None, max_length = 10)
     name: Optional[str] = None
-    status: Optional[FormStatus] = None
+    status: Optional[str] = None
     company_id: Optional[int] = None
     app_id: Optional[int] = None
     # Questions are updated via their own endpoints (e.g.,
