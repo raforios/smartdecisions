@@ -349,7 +349,7 @@ async def update_material_endpoint(
 )
 async def update_planning_detail_endpoint(
     request: Request,
-    planning_id: int = Path(..., gt=0),
+    planning_id: int = Path(..., gt = 0),
     planning_detail_id: int = Path(..., gt = 0),
     detail_data: PlanningDetailUpdateSchema = ...,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -378,7 +378,7 @@ async def update_planning_detail_endpoint(
 )
 async def delete_material_endpoint(
     request: Request,
-    material_assignment_id: int = Path(..., gt=0),
+    material_assignment_id: int = Path(..., gt = 0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -405,8 +405,8 @@ async def delete_material_endpoint(
 )
 async def delete_planning_detail_endpoint(
     request: Request,
-    planning_id: int = Path(..., gt=0),
-    planning_detail_id: int = Path(..., gt=0),
+    planning_id: int = Path(..., gt = 0),
+    planning_detail_id: int = Path(..., gt = 0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):# pylint: disable=too-many-arguments, too-many-positional-arguments

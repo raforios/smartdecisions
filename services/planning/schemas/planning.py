@@ -103,6 +103,10 @@ class PlanningDetailWithMaterialsSchema(PlanningDetailBaseSchema):
     '''
         Schema for creating a planning detail with associated material assignments.
     '''
+    id: int = Field(
+        ...,
+        description = 'Unique identifier for the planning detail record.'
+    )
     materials: List[MaterialAssignmentSchema] = Field(
         ...,
         description = 'List of materials assigned to this detail.'
@@ -210,11 +214,11 @@ class PlanningDetailResponseSchema(PlanningBaseSchema, PlanningDetailBaseSchema)
     '''
     id: int = Field(
         ...,
-        description='Unique identifier for the planning detail record.'
+        description = 'Unique identifier for the planning detail record.'
     )
     created_at: datetime = Field(
         ...,
-        description='Timestamp when the detail was created.'
+        description = 'Timestamp when the detail was created.'
     )
 
 class PlanningFilterSchema(BaseModel):

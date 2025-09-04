@@ -42,6 +42,39 @@ class CustomJSONEncoder(json.JSONEncoder):
             return o.isoformat()
         return super().default(o)
 
+class UsageLogData(BaseModel):
+    '''
+        Data class to manage the structure of the LOGS table.
+    '''
+    microservice: str
+    endpoint: str
+    method: str
+    status_code: int
+    ip_address: str
+    user_id: str
+    request_body: dict | None = None
+    response_body: dict | list | None = None
+    response_time_ms: int
+
+async def _process_and_send_usage_log(
+    log_data: UsageLogData
+):
+    '''
+       Processes and sends a usage log to the event service.
+    '''
+    try:
+        if isinstance(log_data.response_body, int):
+            log_data.response_body =  {
+                'message': f'Register with ID: {log_data.response_body} deleted successfully.'
+            }
+
+        log_data_json = json.dumps(log_data.model_dump(by_alias = True),
+                                   cls = CustomJSONEncoder)
+        asyncio.create_task(send_usage_log(json.loads(log_data_json)))
+    except (TypeError) as e:
+        error_msg = f'Error serializing log data: {e}'
+        logger.error(error_msg, exc_info = True)
+
 def handle_service_errors(microservice_name: str):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
@@ -72,7 +105,7 @@ def handle_service_errors(microservice_name: str):
                 if db:
                     db.rollback()
                 error_msg = f'Database error in {func.__name__}: {e}'
-                logger.error(error_msg, exc_info=True)
+                logger.error(error_msg, exc_info = True)
                 status_code = 500
                 response_data = {'detail': str(e)}
                 raise HTTPException(status_code = status_code, detail = str(e)) from e
@@ -90,35 +123,34 @@ def handle_service_errors(microservice_name: str):
                     detail=json.loads(e.json())
                 ) from e
             finally:
-                end_time = time.perf_counter()
                 if request and EVENTS_LOG_URL:
-                    log_data = {
-                        'microservice': microservice_name,
-                        'endpoint': request.url.path,
-                        'method': request.method,
-                        'status_code': status_code,
-                        'ip_address': request.client.host,
-                        'user_id': kwargs.get('current_user') if 'current_user' in kwargs\
-                            else 'anonymous',
-                        'request_body': request_body,
-                        # 'response_body': response_data.model_dump() if isinstance(
-                        #     response_data, BaseModel) else response_data,
-                        'response_body': response_data,
-                        'response_time_ms': int((end_time - start_time) * 1000)
-                    }
-                    try:
-                        if isinstance(response_data, list) and all(
-                            isinstance(item, BaseModel) for item in response_data):
-                            log_data['response_body'] = [
-                                item.model_dump() for item in response_data]
-                        elif isinstance(response_data, BaseModel):
-                            log_data['response_body'] = response_data.model_dump()
+                    end_time = time.perf_counter()
+                    user_id = kwargs.get('current_user') if 'current_user' in kwargs\
+                        else 'anonymous'
 
-                        log_data_json = json.dumps(log_data, cls = CustomJSONEncoder)
-                        asyncio.create_task(send_usage_log(json.loads(log_data_json)))
-                    except Exception as e:
-                        error_msg = f'Error serializing log data: {e}'
-                        logger.error(error_msg, exc_info = True)
+                    # Construye el objeto de datos de log
+                    log_data = UsageLogData(
+                        microservice = microservice_name,
+                        endpoint = request.url.path,
+                        method = request.method,
+                        status_code = status_code,
+                        ip_address = request.client.host,
+                        user_id = user_id,
+                        request_body = request_body,
+                        response_time_ms = int((end_time - start_time) * 1000)
+                    )
+
+                    # Procesa la respuesta para incluirla en el log
+                    if isinstance(response_data, list) and all(isinstance(item,
+                                                        BaseModel) for item in response_data):
+                        log_data.response_body = [item.model_dump() for item in response_data]
+                    elif isinstance(response_data, BaseModel):
+                        log_data.response_body = response_data.model_dump()
+                    else:
+                        log_data.response_body = response_data
+
+                    await _process_and_send_usage_log(log_data)
+
         return wrapper
     return decorator
 
@@ -183,7 +215,7 @@ def audit_event(
             try:
                 data_to_send = json.loads(json.dumps(audit_event_data, cls = CustomJSONEncoder))
                 asyncio.create_task(send_audit_event(data_to_send))
-            except Exception as e:
+            except (TypeError, AttributeError) as e:
                 error_msg = f'Error serializing audit data: {e}'
                 logger.error(error_msg, exc_info = True)
 
