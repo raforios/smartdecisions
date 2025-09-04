@@ -248,13 +248,12 @@ async def delete_planning_endpoint(
     '''
     message = f'User: {current_user}. Received request to delete planning with ID: {planning_id}'
     logger.info(message)
-    await delete_planning_controller(
+    return await delete_planning_controller(
         db = db,
         planning_id = planning_id,
         request = request,
         current_user = current_user
     )
-    return {'message': f'Planning {planning_id} deleted successfully.'}
 
 @router.get(
     '/{planning_id}/details/{planning_detail_id}/materials',
@@ -388,14 +387,12 @@ async def delete_material_endpoint(
     message = f'''User: {current_user}. Received request to delete material
             ID: {material_assignment_id}'''
     logger.info(message)
-    await delete_material_controller(
+    return await delete_material_controller(
         db = db,
         material_assignment_id = material_assignment_id,
         request = request,
         current_user = current_user
     )
-    return {'message': f'Material assignment {material_assignment_id} deleted successfully.'}
-
 
 @router.delete(
     '/{planning_id}/details/{planning_detail_id}',
@@ -409,17 +406,16 @@ async def delete_planning_detail_endpoint(
     planning_detail_id: int = Path(..., gt = 0),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):# pylint: disable=too-many-arguments, too-many-positional-arguments
+):
     '''
         Endpoint to delete a planning detail.
     '''
     message = f'''User: {current_user}. Received request to delete planning detail
             ID:{planning_detail_id} and ID plan: {planning_id}'''
     logger.info(message)
-    await delete_planning_detail_controller(
+    return await delete_planning_detail_controller(
         db = db,
         planning_detail_id = planning_detail_id,
         request = request,
         current_user = current_user
     )
-    return {'message': f'Planning {planning_detail_id} deleted successfully.'}

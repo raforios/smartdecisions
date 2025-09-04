@@ -136,14 +136,18 @@ async def delete_planning_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
-) -> int:
+) -> dict:
     '''
         Controller to delete a planning by its ID.
     '''
-    return await delete_planning_by_id(
+    result = await delete_planning_by_id(
         db = db,
         planning_id = planning_id
     )
+    return {
+        'message': f'Planning with ID {result} deleted successfully.',
+        'id': result
+    }
 
 @handle_service_errors('PLANNING')
 async def get_materials_controller(
@@ -206,14 +210,18 @@ async def delete_material_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
-) -> int:
+) -> dict:
     '''
         Controller to delete a material assignment by its ID.
     '''
-    return await delete_material_by_id(
+    result = await delete_material_by_id(
         db = db,
         material_assignment_id = material_assignment_id
     )
+    return {
+        'message': f'Material assignment {result} deleted successfully.',
+        'id': result
+    }
 
 @handle_service_errors('PLANNING')
 async def get_filtered_plannings_controller(
@@ -237,14 +245,18 @@ async def delete_planning_detail_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
-) -> int:
+) -> dict:
     '''
         Controller to delete a planning detail record.
     '''
-    return await delete_planning_detail_by_id(
+    result = await delete_planning_detail_by_id(
         db = db,
         planning_detail_id = planning_detail_id
     )
+    return {
+        'message': f'Planning detail {result} deleted successfully.',
+        'id': result
+    }
 
 @handle_service_errors('PLANNING')
 async def update_planning_detail_controller(
@@ -257,7 +269,6 @@ async def update_planning_detail_controller(
     '''
         Controller to update a planning detail record.
     '''
-    # Se pasa el objeto Pydantic directamente al servicio.
     detail = await update_planning_detail(
         db = db,
         planning_detail_id = planning_detail_id,

@@ -1,7 +1,7 @@
 '''
     Business logic services for the Planning Microservice.
 '''
-from typing import List
+from typing import List, Tuple, Dict
 from datetime import date
 from sqlalchemy.orm import Session
 
@@ -18,22 +18,20 @@ from services.exceptions import (
 from services.logger_config import custom_logger as logger
 from services.utils import (
     handle_service_errors,
-    audit_event
+    audit_event,
+    sqlalchemy_object_as_dict
 )
 from models.planning import (
     Planning, PlanningDetail,
     MaterialAssignment
 )
 from schemas.planning import (
-    MaterialAssignmentResponseSchema,
     MaterialAssignmentSchema,
     MaterialAssignmentUpdateSchema,
     PlanningCreateSchema,
     PlanningDetailCreateSchema,
-    PlanningDetailResponseSchema,
     PlanningDetailUpdateSchema,
     PlanningFilterSchema,
-    PlanningResponseSchema,
     PlanningStatus,
     PlanningUpdateSchema
 )
@@ -76,7 +74,7 @@ async def get_plannings_by_date(
     return plannings
 
 @handle_service_errors('PLANNING')
-@audit_event('PLANNING', 'Planning', 'CREATE', PlanningResponseSchema)
+@audit_event('PLANNING', 'Planning', 'CREATE')
 async def create_planning_with_details(
     db: Session,
     planning_data: PlanningCreateSchema
@@ -118,12 +116,12 @@ async def create_planning_with_details(
     return db_planning
 
 @handle_service_errors('PLANNING')
-@audit_event('PLANNING', 'Planning', 'UPDATE', PlanningResponseSchema)
+@audit_event('PLANNING', 'Planning', 'UPDATE')
 async def update_planning_with_details(
     db: Session,
     planning_id: int,
     planning_data: PlanningUpdateSchema
-) -> Planning:
+) -> Tuple[Planning, Dict]:
     '''
         Updates a planning record in a transactional block.
         Note: This function does not handle updates for details or materials.
@@ -134,14 +132,22 @@ async def update_planning_with_details(
             planning_data.start_date > planning_data.end_date):
         raise InvalidInputError(detail = '`start_date` cannot be after `end_date`')
 
+    old_values = sqlalchemy_object_as_dict(db_planning)
+
     db_planning = update_record(db, db_planning, planning_data)
 
     db.commit()
     db.refresh(db_planning)
-    return db_planning
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_planning)
+    }
+
+    return db_planning, auditable_data
 
 @handle_service_errors('PLANNING')
-@audit_event('PLANNING', 'PlanningDetail', 'CREATE', PlanningDetailResponseSchema)
+@audit_event('PLANNING', 'PlanningDetail', 'CREATE')
 async def create_planning_detail(
     db: Session,
     detail_data: PlanningDetailCreateSchema
@@ -161,7 +167,7 @@ async def create_planning_detail(
 async def delete_planning_by_id(
     db: Session,
     planning_id: int
-) -> int:
+) -> Tuple[int, Dict]:
     '''
         Deletes a planning and its associated details only if its status is 'ACTIVE'.
     '''
@@ -175,9 +181,17 @@ async def delete_planning_by_id(
                     Only ACTIVE plannings can be deleted.'''
         )
 
+    old_values = sqlalchemy_object_as_dict(db_planning)
+
     delete_record(db, Planning, planning_id)
     db.commit()
-    return planning_id
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': None
+    }
+
+    return planning_id, auditable_data
 
 @handle_service_errors('PLANNING')
 async def get_materials_by_detail_id(
@@ -199,7 +213,7 @@ async def get_materials_by_detail_id(
     return materials
 
 @handle_service_errors('PLANNING')
-@audit_event('PLANNING', 'MaterialAssignment', 'CREATE', MaterialAssignmentResponseSchema)
+@audit_event('PLANNING', 'MaterialAssignment', 'CREATE')
 async def assign_material_to_planning_detail(
     db: Session,
     planning_detail_id: int,
@@ -222,12 +236,12 @@ async def assign_material_to_planning_detail(
     return db_material
 
 @handle_service_errors('PLANNING')
-@audit_event('PLANNING', 'MaterialAssignment', 'UPDATE', MaterialAssignmentResponseSchema)
+@audit_event('PLANNING', 'MaterialAssignment', 'UPDATE')
 async def update_material_quantities(
     db: Session,
     material_assignment_id: int,
     update_data: MaterialAssignmentUpdateSchema
-) -> MaterialAssignment:
+) -> Tuple[MaterialAssignment, Dict]:
     '''
         Updates material quantities, calculating `quantity_used` based on `quantity_assigned`
         and `quantity_returned`.
@@ -236,7 +250,9 @@ async def update_material_quantities(
     logger.info(message)
     db_material = get_record(db, MaterialAssignment, material_assignment_id)
 
-    update_dict = update_data.model_dump(exclude_unset=True)
+    old_values = sqlalchemy_object_as_dict(db_material)
+
+    update_dict = update_data.model_dump(exclude_unset = True)
     quantity_returned = update_dict.get('quantity_returned')
 
     if quantity_returned is not None:
@@ -252,45 +268,70 @@ async def update_material_quantities(
 
     db.commit()
     db.refresh(db_material)
-    return db_material
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_material)
+    }
+
+    return db_material, auditable_data
 
 @handle_service_errors('PLANNING')
 @audit_event('PLANNING', 'MaterialAssignment', 'DELETE')
 async def delete_material_by_id(
     db: Session,
     material_assignment_id: int
-) -> int:
+) -> Tuple[int, Dict]:
     '''
         Deletes a material assignment by its ID.
     '''
     message = f'Attempting to delete material with ID: {material_assignment_id}'
     logger.info(message)
+    db_material = get_record(db, MaterialAssignment, material_assignment_id)
+
+    old_values = sqlalchemy_object_as_dict(db_material)
+
     delete_record(db, MaterialAssignment, material_assignment_id)
     db.commit()
-    return material_assignment_id
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': None
+    }
+
+    return material_assignment_id, auditable_data
 
 @handle_service_errors('PLANNING')
 @audit_event('PLANNING', 'PlanningDetail', 'DELETE')
 async def delete_planning_detail_by_id(
     db: Session,
     planning_detail_id: int
-) -> int:
+) -> Tuple[int, Dict]:
     '''
         Deletes a planning detail by its ID.
     '''
     message = f'Attempting to delete planning detail with ID: {planning_detail_id}'
     logger.info(message)
+    db_detail = get_record(db, PlanningDetail, planning_detail_id)
+
+    old_values = sqlalchemy_object_as_dict(db_detail)
+
     delete_record(db, PlanningDetail, planning_detail_id)
     db.commit()
-    return planning_detail_id
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': None
+    }
+    return planning_detail_id, auditable_data
 
 @handle_service_errors('PLANNING')
-@audit_event('PLANNING', 'PlanningDetail', 'UPDATE', PlanningDetailResponseSchema)
+@audit_event('PLANNING', 'PlanningDetail', 'UPDATE')
 async def update_planning_detail(
     db: Session,
     planning_detail_id: int,
     update_data: PlanningDetailUpdateSchema
-) -> PlanningDetail:
+) -> Tuple[PlanningDetail, Dict]:
     '''
         Updates a planning detail record with the provided data.
     '''
@@ -303,6 +344,8 @@ async def update_planning_detail(
             detail = f'Planning detail with ID {planning_detail_id} not found.'
         )
 
+    old_values = sqlalchemy_object_as_dict(db_detail)
+
     # Update fields with provided data
     for field, value in update_data.model_dump(exclude_unset = True).items():
         if value is not None:
@@ -310,7 +353,12 @@ async def update_planning_detail(
 
     db.commit()
     db.refresh(db_detail)
-    return db_detail
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_detail)
+    }
+    return db_detail, auditable_data
 
 @handle_service_errors('PLANNING')
 async def get_filtered_plannings(

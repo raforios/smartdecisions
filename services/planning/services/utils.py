@@ -8,13 +8,14 @@ import asyncio
 import json
 from datetime import date, datetime
 from functools import wraps
+from typing import Callable
 import httpx
 from dotenv import dotenv_values
 from fastapi import HTTPException, Request
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError, NoInspectionAvailable
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.inspection import inspect as sa_inspect
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
@@ -32,6 +33,15 @@ EVENTS_LOG_URL = None
 if EVENTS_SERVICE_URL:
     EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit'
     EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log'
+
+def sqlalchemy_object_as_dict(obj):
+    '''
+        Helper function to serialize a SQLAlchemy object to a dictionary.
+    '''
+    return {
+        c.key: getattr(obj, c.key)
+        for c in sa_inspect(obj).mapper.column_attrs
+    }
 
 class CustomJSONEncoder(json.JSONEncoder):
     '''
@@ -128,7 +138,6 @@ def handle_service_errors(microservice_name: str):
                     user_id = kwargs.get('current_user') if 'current_user' in kwargs\
                         else 'anonymous'
 
-                    # Construye el objeto de datos de log
                     log_data = UsageLogData(
                         microservice = microservice_name,
                         endpoint = request.url.path,
@@ -140,7 +149,6 @@ def handle_service_errors(microservice_name: str):
                         response_time_ms = int((end_time - start_time) * 1000)
                     )
 
-                    # Procesa la respuesta para incluirla en el log
                     if isinstance(response_data, list) and all(isinstance(item,
                                                         BaseModel) for item in response_data):
                         log_data.response_body = [item.model_dump() for item in response_data]
@@ -158,59 +166,46 @@ def handle_service_errors(microservice_name: str):
 def audit_event(
     microservice_name: str,
     entity_name: str,
-    action: str,
-    response_schema: BaseModel = None,
-    entity_id_field: str = 'id'
+    action: str
 ):
     '''
         Decorator factory to send an audit event after a service function call.
     '''
-    def decorator(func):
+    def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             user_id = kwargs.get('user_id', 'usr_test')
-
             result = await func(*args, **kwargs)
-            old_values = kwargs.get('old_values', None)
-            auditable_result = None
 
-            if response_schema:
-                # Lógica para CREATE y UPDATE, sin cambios.
-                if isinstance(result, BaseModel):
-                    auditable_result = result
-                else:
-                    try:
-                        state = sa_inspect(result)
-                        auditable_dict = {
-                            attr.key: getattr(result, attr.key)
-                            for attr in state.mapper.column_attrs
-                        }
-                    except NoInspectionAvailable:
-                        auditable_dict = result.__dict__
-
-                    if user_id:
-                        auditable_dict['user_id'] = user_id
-
-                    auditable_result = response_schema.model_validate(auditable_dict)
+            if isinstance(result, tuple) and len(result) == 2:
+                final_result, auditable_data = result
             else:
-                auditable_result = {
-                    'id': result,
-                    'user_id': user_id
+                final_result = result
+                auditable_data = {
+                    'old_values': None,
+                    'new_values': None
                 }
+
+            entity_id = None
+            if isinstance(final_result, (BaseModel, int)):
+                entity_id = final_result.id if isinstance(final_result, BaseModel) else final_result
+            elif hasattr(final_result, 'id'):
+                entity_id = final_result.id
+
+            new_values = None
+            if final_result and isinstance(final_result, BaseModel):
+                new_values = final_result.model_dump()
+            elif final_result and hasattr(final_result, '__dict__'):
+                new_values = sqlalchemy_object_as_dict(final_result)
 
             audit_event_data = {
                 'microservice': microservice_name,
                 'entity_name': entity_name,
-                'entity_id': (
-                    getattr(auditable_result, entity_id_field, None)
-                    if isinstance(auditable_result, BaseModel)
-                    else auditable_result.get(entity_id_field, None)
-                ),
-                  'action': action,
+                'entity_id': entity_id,
+                'action': action,
                 'user_id': user_id,
-                'old_values': old_values,
-                'new_values': auditable_result.model_dump() if isinstance(
-                    auditable_result, BaseModel) else auditable_result
+                'old_values': auditable_data.get('old_values'),
+                'new_values': new_values
             }
             try:
                 data_to_send = json.loads(json.dumps(audit_event_data, cls = CustomJSONEncoder))
@@ -219,7 +214,8 @@ def audit_event(
                 error_msg = f'Error serializing audit data: {e}'
                 logger.error(error_msg, exc_info = True)
 
-            return result
+            # Retornar el resultado final para que el controlador lo use.
+            return final_result
         return wrapper
     return decorator
 
