@@ -10,5 +10,4 @@ numpy
 sqlalchemy
 pymysql
 python-dotenv
-httpx
 requests

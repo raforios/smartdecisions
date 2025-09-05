@@ -9,7 +9,6 @@ import json
 from datetime import date, datetime
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
-import httpx
 import requests as req
 from dotenv import dotenv_values
 from fastapi import HTTPException, Request
@@ -46,6 +45,34 @@ def sqlalchemy_object_as_dict(obj):
         for c in sa_inspect(obj).mapper.column_attrs
     }
 
+async def _perform_request(
+    method: str,
+    url: str,
+    headers: Dict[str, str],
+    payload: Optional[Dict[str, Any]] = None
+):
+    '''
+        Helper function to perform a request call in a thread pool executor.
+    '''
+    try:
+        def request_call():
+            if method == 'GET':
+                return req.get(url, headers = headers, timeout = 600)
+
+            if method == 'POST':
+                return req.post(url, json = payload, headers = headers, timeout = 600)
+
+            if method == 'DELETE':
+                return req.delete(url, json = payload, headers = headers, timeout = 600)
+
+            raise ValueError(f'Unsupported method: {method}')
+
+        return await asyncio.to_thread(request_call)
+
+    except req.exceptions.RequestException as e:
+        error_msg = f'An error occurred while using _perform_request function: {e}'
+        logger.error(error_msg, exc_info = True)
+
 class CustomJSONEncoder(json.JSONEncoder):
     '''
         JSON encoder to handle date and datetime objects.
@@ -53,6 +80,8 @@ class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
+        if isinstance(o, BaseModel):
+            return o.model_dump()
         return super().default(o)
 
 class UsageLogData(BaseModel):
@@ -132,13 +161,13 @@ def handle_service_errors(microservice_name: str):
                 raise e
             except ValidationError as e:
                 raise HTTPException(
-                    status_code=422,
-                    detail=json.loads(e.json())
+                    status_code = 422,
+                    detail = json.loads(e.json())
                 ) from e
             finally:
                 if request and EVENTS_LOG_URL:
                     end_time = time.perf_counter()
-                    user_id = kwargs.get('current_user') if 'current_user' in kwargs\
+                    user_id = kwargs.get('current_user') if 'current_user' in kwargs \
                         else 'anonymous'
 
                     log_data = UsageLogData(
@@ -230,23 +259,11 @@ async def send_audit_event(audit_data: dict):
         logger.warning('EVENTS_SERVICE_URL is not set. Cannot send audit event.')
         return
 
-    async with httpx.AsyncClient() as client:
-        try:
-            if hasattr(audit_data, 'model_dump'):
-                data_to_send = audit_data.model_dump()
-            else:
-                data_to_send = audit_data
-
-            response = await client.post(EVENTS_AUDIT_URL, json = data_to_send, timeout = 5.0)
-            response.raise_for_status()
-            message = f'Audit event sent successfully. Status: {response.status_code}'
-            logger.info(message)
-        except httpx.HTTPStatusError as e:
-            error_msg = f'Error sending audit event: {e.response.status_code} - {e.response.text}'
-            logger.error(error_msg, exc_info = True)
-        except httpx.RequestError as e:
-            error_msg = f'An error occurred while sending the audit event: {e}'
-            logger.error(error_msg, exc_info = True)
+    url = EVENTS_AUDIT_URL
+    response = await _perform_request('POST', url, headers = {}, payload = audit_data)
+    response.raise_for_status()
+    message = f'Audit event sent successfully. Status: {response.status_code}'
+    logger.info(message)
 
 async def send_usage_log(log_data: dict):
     '''
@@ -256,18 +273,11 @@ async def send_usage_log(log_data: dict):
         logger.warning('EVENTS_SERVICE_URL is not set. Cannot send usage log.')
         return
 
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(EVENTS_LOG_URL, json = log_data, timeout = 5.0)
-            response.raise_for_status()
-            message = f'Usage log sent successfully. Status: {response.status_code}'
-            logger.info(message)
-        except httpx.HTTPStatusError as e:
-            error_msg = f'Error sending usage log: {e.response.status_code} - {e.response.text}'
-            logger.error(error_msg, exc_info = True)
-        except httpx.RequestError as e:
-            error_msg = f'An error occurred while sending the usage log: {e}'
-            logger.error(error_msg, exc_info = True)
+    url = EVENTS_LOG_URL
+    response = await _perform_request('POST', url, headers = {}, payload = log_data)
+    response.raise_for_status()
+    message = f'Usage log sent successfully. Status: {response.status_code}'
+    logger.info(message)
 
 async def _handle_files_service_logic(
     action: str,
@@ -276,8 +286,8 @@ async def _handle_files_service_logic(
     delimiter: Optional[str] = None
 ) -> Optional[str]:
     '''
-    Handles communication with the FILES microservice for reading and deleting files.
-    This function standardizes file service interactions.
+        Handles communication with the FILES microservice for reading and deleting files.
+        This function standardizes file service interactions.
     '''
     try:
         files_service_url = os.environ.get('FILES_SERVICE_URL') or \
@@ -299,26 +309,19 @@ async def _handle_files_service_logic(
 
         if action == 'read':
             query_string = f'?delimiter={delimiter}' if delimiter else ''
-            response = req.get(
-                f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}{query_string}',
-                headers = headers,
-                timeout = 600
-            )
+            url = f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}{query_string}'
+            response = await _perform_request('GET', url, headers)
             response.raise_for_status()
             return response.text
 
         if action == 'delete':
+            url = f'{files_service_url}/v1/s3/delete'
             payload = {
                 'bucket_name': bucket_name,
                 'file_name': file_name,
                 'file_path': bucket_path
             }
-            response = req.delete(
-                f'{files_service_url}/v1/s3/delete',
-                json = payload,
-                headers = headers,
-                timeout = 600
-            )
+            response = await _perform_request('DELETE', url, headers, payload)
             response.raise_for_status()
             message = f'File {file_name} successfully deleted from FILES service.'
             logger.info(message)
@@ -329,10 +332,10 @@ async def _handle_files_service_logic(
     except req.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             raise ResourceNotFoundError(
-                detail=f'File \'{file_name}\' not found in FILES microservice.'
+                detail = f'File \'{file_name}\' not found in FILES microservice.'
             ) from e
         raise ServiceUnavailableError(
-            detail=f'Failed to communicate with FILES microservice: {e}'
+            detail = f'Failed to communicate with FILES microservice: {e}'
         ) from e
     except Exception as e:
         raise ServiceUnavailableError(
