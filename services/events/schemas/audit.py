@@ -11,8 +11,8 @@ class AuditRecordCreateSchema(BaseModel):# pylint: disable=R0903
     '''
     microservice: str = Field(..., max_length = 50)
     entity_name: str = Field(..., max_length = 50)
-    entity_id: int = Field(..., ge = 1)
-    action: str = Field(..., max_length = 10)
+    entity_id: int = Field(..., ge = 0)
+    action: str = Field(..., max_length = 15)
     user_id: str = Field(..., max_length = 50)
     old_values: Optional[Any] = Field(None, description = 'The objects state before the change.')
     new_values: Any = Field(..., description = 'The objects new state after the change.')

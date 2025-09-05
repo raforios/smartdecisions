@@ -3,7 +3,6 @@
 '''
 from sqlalchemy import Column, Integer, String, DateTime, JSON, Text
 from sqlalchemy.sql import text
-from sqlalchemy.orm import declarative_base
 from services.db_connection import Base
 
 class UsageLog(Base):# pylint: disable=R0903
