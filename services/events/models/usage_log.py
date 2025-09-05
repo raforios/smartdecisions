@@ -12,7 +12,7 @@ class UsageLog(Base):# pylint: disable=R0903
     __tablename__ = 't_usage_logs'
 
     id = Column(Integer, primary_key = True, index = True)
-    user_id = Column(String(50), nullable = False)
+    user_app = Column(String(50), nullable = False)
     microservice = Column(String(50), nullable = False)
     endpoint = Column(Text, nullable = False)
     method = Column(String(10), nullable = False)

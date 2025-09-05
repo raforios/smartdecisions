@@ -9,7 +9,7 @@ class UsageLogCreateSchema(BaseModel):# pylint: disable=too-few-public-methods
     '''
         Pydantic schema for creating a new usage log record.
     '''
-    user_id: str = Field(..., max_length = 50)
+    user_app: str = Field(..., max_length = 50)
     microservice: str = Field(..., max_length = 50)
     endpoint: str
     method: str = Field(..., max_length = 10)

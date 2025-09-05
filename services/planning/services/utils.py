@@ -93,7 +93,7 @@ class UsageLogData(BaseModel):
     method: str
     status_code: int
     ip_address: str
-    user_id: str
+    user_app: str
     request_body: dict | None = None
     response_body: dict | list | None = None
     response_time_ms: int
@@ -167,7 +167,7 @@ def handle_service_errors(microservice_name: str):
             finally:
                 if request and EVENTS_LOG_URL:
                     end_time = time.perf_counter()
-                    user_id = kwargs.get('current_user') if 'current_user' in kwargs \
+                    user_app = kwargs.get('current_user') if 'current_user' in kwargs \
                         else 'anonymous'
 
                     log_data = UsageLogData(
@@ -176,7 +176,7 @@ def handle_service_errors(microservice_name: str):
                         method = request.method,
                         status_code = status_code,
                         ip_address = request.client.host,
-                        user_id = user_id,
+                        user_app = user_app,
                         request_body = request_body,
                         response_time_ms = int((end_time - start_time) * 1000)
                     )

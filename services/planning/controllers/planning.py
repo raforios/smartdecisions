@@ -25,7 +25,11 @@ from services.planning import (
     update_planning_detail,
     update_planning_with_details
 )
-from services.utils import UsageLogData, handle_service_errors, send_audit_event, send_usage_log
+from services.utils import (
+    UsageLogData,
+    handle_service_errors,
+    send_audit_event, send_usage_log
+)
 from services.logger_config import custom_logger as logger
 from models.planning import (
     Planning,
@@ -331,7 +335,7 @@ async def bulk_upload_planning_controller(
             method = request.method,
             status_code = status_code,
             ip_address = request.client.host,
-            user_id = current_user,
+            user_app = current_user,
             request_body = {'file_name': file_name},
             response_body = result,
             response_time_ms = int((end_time - start_time) * 1000)
