@@ -26,4 +26,4 @@ def create_audit_record_endpoint(
     '''
     message = 'Received request to create a new audit record.'
     logger.info(message)
-    return create_audit_record_controller(db=db, record_data=record_data)
+    return create_audit_record_controller(db = db, record_data = record_data)

@@ -14,5 +14,5 @@ def create_audit_record_controller(
     '''
         Controller to create a new audit record.
     '''
-    audit_record = create_audit_record(db=db, record_data=record_data)
+    audit_record = create_audit_record(db = db, record_data = record_data)
     return AuditRecordResponseSchema.model_validate(audit_record)
