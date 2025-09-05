@@ -430,6 +430,8 @@ async def delete_planning_detail_endpoint(
     description = '''Processes a CSV file from the FILES microservice to create planning
                  and their associated details in a single, atomic operation.'''
 )
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_planning_endpoint(
     request: Request,
     file_name: str = Query(..., description = 'Name of the CSV file to process.'),
@@ -451,5 +453,5 @@ async def bulk_upload_planning_endpoint(
         delimiter = delimiter,
         auth_token = auth_token,
         request = request,
-        current_user = current_user        
+        current_user = current_user
     )

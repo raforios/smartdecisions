@@ -281,6 +281,7 @@ async def update_planning_detail_controller(
     )
     return PlanningDetailResponseSchema.model_validate(detail, from_attributes = True)
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_planning_controller(
     request: Request,
     db: Session,
@@ -292,11 +293,12 @@ async def bulk_upload_planning_controller(
     '''
         Controller to handle the bulk upload of planning data from a CSV file.
     '''
-    logger.info(f'Starting bulk upload for file: {file_name}')
-    
+    message = f'Starting bulk upload for file: {file_name}'
+    logger.info(message)
+
     start_time = time.perf_counter()
     status_code = 201
-    
+
     try:
         result = await bulk_create_planning(
             db = db,
@@ -304,9 +306,7 @@ async def bulk_upload_planning_controller(
             delimiter = delimiter,
             auth_token = auth_token
         )
-        
-        # ✅ Llama a las funciones de auditoría y logs.
-        # Enviar evento de auditoría.
+
         audit_event_data = {
             'microservice': 'PLANNING',
             'entity_name': 'Planning',
@@ -322,9 +322,8 @@ async def bulk_upload_planning_controller(
         status_code = e.status_code
         result = {'detail': str(e.detail)}
         raise e
-    
+
     finally:
-        # Enviar log de uso
         end_time = time.perf_counter()
         log_data = UsageLogData(
             microservice = 'PLANNING',
@@ -338,5 +337,5 @@ async def bulk_upload_planning_controller(
             response_time_ms = int((end_time - start_time) * 1000)
         )
         asyncio.create_task(send_usage_log(log_data.model_dump()))
-        
+
     return result
