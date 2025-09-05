@@ -1,15 +1,16 @@
 '''
     Planning: routes handler
 '''
-from typing import List
+from typing import List, Optional
 from datetime import date
-from fastapi import APIRouter, Depends, Request, status, Path
+from fastapi import APIRouter, Depends, Header, Query, Request, status, Path
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
 from controllers.planning import (
     assign_material_controller,
+    bulk_upload_planning_controller,
     create_planning_controller,
     create_planning_detail_controller,
     delete_material_controller,
@@ -25,6 +26,7 @@ from controllers.planning import (
     update_planning_detail_controller
 )
 from schemas.planning import (
+    BulkUploadResponseSchema,
     MaterialAssignmentResponseSchema,
     MaterialAssignmentSchema,
     MaterialAssignmentUpdateSchema,
@@ -418,4 +420,36 @@ async def delete_planning_detail_endpoint(
         planning_detail_id = planning_detail_id,
         request = request,
         current_user = current_user
+    )
+
+@router.post(
+    '/bulk-upload',
+    response_model = BulkUploadResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Bulk upload plannings from a CSV file',
+    description = '''Processes a CSV file from the FILES microservice to create planning
+                 and their associated details in a single, atomic operation.'''
+)
+async def bulk_upload_planning_endpoint(
+    request: Request,
+    file_name: str = Query(..., description = 'Name of the CSV file to process.'),
+    delimiter: Optional[str] = Query(
+        ',', description = 'The delimiter used in the CSV file. Defaults to a comma (,).'
+    ),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk upload of planning data from a CSV file.
+    '''
+    message = f'User: {current_user}. Received request for bulk upload from file: {file_name}'
+    logger.info(message)
+    return await bulk_upload_planning_controller(
+        db = db,
+        file_name = file_name,
+        delimiter = delimiter,
+        auth_token = auth_token,
+        request = request,
+        current_user = current_user        
     )

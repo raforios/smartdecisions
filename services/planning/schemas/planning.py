@@ -226,10 +226,14 @@ class PlanningFilterSchema(BaseModel):
         Schema to encapsulate filtering parameters for plannings.
     '''
     company_id: Optional[int] = Query(None, description = 'Company ID.')
+    start_date: Optional[date] = Query(None, description = 'Start date of the planning.')
+    end_date: Optional[date] = Query(None, description = 'End date of the planning.')
     team_id: Optional[int] = Query(None, description = 'Team ID.')
     service_id: Optional[int] = Query(None, description = 'Service ID.')
     planned_route_id: Optional[int] = Query(None,
                                     description = 'Planned Route ID.')
+    date_of_day: Optional[date] = Query(None,
+                                description = 'Date of the day assigned for the detail.')
 
     class Config:# pylint: disable=too-few-public-methods
         '''
@@ -237,3 +241,28 @@ class PlanningFilterSchema(BaseModel):
             the @router.get() decorator.
         '''
         arbitrary_types_allowed = True
+
+class PlanningBulkCreateSchema(BaseModel):
+    '''
+        Schema for creating planning records via bulk upload.
+        This schema maps to the CSV format.
+    '''
+    company_id: int
+    app_id: int
+    planning_name: str
+    description: str
+    start_date: date
+    end_date: date
+    week_number: int
+    team_id: int
+    service_id: int
+    planned_route_id: int
+    date_of_day: date
+
+class BulkUploadResponseSchema(BaseModel):
+    '''
+        Response schema for the bulk upload endpoint.
+    '''
+    message: str
+    plannings_created: int
+    details_created: int

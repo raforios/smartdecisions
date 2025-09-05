@@ -8,8 +8,9 @@ import asyncio
 import json
 from datetime import date, datetime
 from functools import wraps
-from typing import Callable
+from typing import Any, Callable, Dict, List, Optional
 import httpx
+import requests as req
 from dotenv import dotenv_values
 from fastapi import HTTPException, Request
 
@@ -21,7 +22,9 @@ from services.logger_config import custom_logger as logger
 from services.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError,
-    RegisterNotFoundError
+    RegisterNotFoundError,
+    ResourceNotFoundError,
+    ServiceUnavailableError
 )
 
 _LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
@@ -229,7 +232,12 @@ async def send_audit_event(audit_data: dict):
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(EVENTS_AUDIT_URL, json = audit_data, timeout = 5.0)
+            if hasattr(audit_data, 'model_dump'):
+                data_to_send = audit_data.model_dump()
+            else:
+                data_to_send = audit_data
+
+            response = await client.post(EVENTS_AUDIT_URL, json = data_to_send, timeout = 5.0)
             response.raise_for_status()
             message = f'Audit event sent successfully. Status: {response.status_code}'
             logger.info(message)
@@ -260,3 +268,134 @@ async def send_usage_log(log_data: dict):
         except httpx.RequestError as e:
             error_msg = f'An error occurred while sending the usage log: {e}'
             logger.error(error_msg, exc_info = True)
+
+async def _handle_files_service_logic(
+    action: str,
+    file_name: str,
+    auth_token: str,
+    delimiter: Optional[str] = None
+) -> Optional[str]:
+    '''
+    Handles communication with the FILES microservice for reading and deleting files.
+    This function standardizes file service interactions.
+    '''
+    try:
+        files_service_url = os.environ.get('FILES_SERVICE_URL') or \
+                            _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
+        bucket_name = os.environ.get('BUCKET_NAME') or \
+                      _LOCAL_ENV_PARAMS.get('BUCKET_NAME')
+        bucket_path = os.environ.get('BUCKET_PATH') or \
+                      _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
+
+        if not files_service_url or not bucket_name:
+            raise ServiceUnavailableError(
+                detail = 'FILES_SERVICE_URL or BUCKET_NAME environment variables are not set.'
+            )
+
+        headers = {
+            'Authorization': f'{auth_token}',
+            'Content-Type': 'application/json'
+        }
+
+        if action == 'read':
+            query_string = f'?delimiter={delimiter}' if delimiter else ''
+            response = req.get(
+                f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}{query_string}',
+                headers = headers,
+                timeout = 600
+            )
+            response.raise_for_status()
+            return response.text
+
+        if action == 'delete':
+            payload = {
+                'bucket_name': bucket_name,
+                'file_name': file_name,
+                'file_path': bucket_path
+            }
+            response = req.delete(
+                f'{files_service_url}/v1/s3/delete',
+                json = payload,
+                headers = headers,
+                timeout = 600
+            )
+            response.raise_for_status()
+            message = f'File {file_name} successfully deleted from FILES service.'
+            logger.info(message)
+            return None
+
+
+        raise ValueError(f'Invalid action: {action}')
+    except req.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            raise ResourceNotFoundError(
+                detail=f'File \'{file_name}\' not found in FILES microservice.'
+            ) from e
+        raise ServiceUnavailableError(
+            detail=f'Failed to communicate with FILES microservice: {e}'
+        ) from e
+    except Exception as e:
+        raise ServiceUnavailableError(
+            detail = f'Unexpected error during file communication with FILES service: {e}'
+        ) from e
+
+async def _read_and_parse_file_content(
+    file_name: str,
+    auth_token: str,
+    delimiter: Optional[str] = ','
+) -> List[Dict[str, Any]]:
+    '''
+        Reads and parses the file content from the FILES microservice.
+    '''
+    file_content = await _handle_files_service_logic(
+        action = 'read',
+        file_name = file_name,
+        auth_token = auth_token,
+        delimiter = delimiter
+    )
+    if not file_content:
+        raise InvalidInputError(
+            detail = 'File content is empty or could not be retrieved.'
+        )
+    try:
+        file_data = json.loads(file_content)
+        return file_data.get('data', [])
+    except json.JSONDecodeError as e:
+        raise InvalidInputError(
+            detail = f'Invalid JSON format in file content. Error: {e}'
+        ) from e
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def perform_bulk_upload(
+    db: Session,
+    file_name: str,
+    auth_token: str,
+    bulk_schema: BaseModel,
+    processor_func: Callable,
+    inserter_func: Callable,
+    delimiter: Optional[str] = ','
+) -> Dict[str, Any]:
+    '''
+        Generic bulk upload processor.
+    '''
+    rows = await _read_and_parse_file_content(file_name, auth_token, delimiter)
+
+    if not rows:
+        return {'message': 'No valid data found in the file.',
+                'created_records': 0}
+
+    processed_data = processor_func(rows, bulk_schema)
+
+    if not processed_data:
+        raise InvalidInputError('The processed data is empty.')
+
+    stats = await inserter_func(db, processed_data, file_name, auth_token)
+
+    db.commit()
+
+    await _handle_files_service_logic('delete', file_name, auth_token)
+
+    return {
+        'message': 'Bulk upload successful.',
+        **stats
+    }

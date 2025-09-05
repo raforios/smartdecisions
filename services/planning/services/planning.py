@@ -1,10 +1,10 @@
 '''
     Business logic services for the Planning Microservice.
 '''
-from typing import List, Tuple, Dict
+from typing import Any, List, Tuple, Dict
 from datetime import date
-from sqlalchemy.orm import Session
-
+from pydantic import BaseModel
+from sqlalchemy.orm import Session, contains_eager, joinedload
 from services.crud import (
     create_record,
     delete_record,
@@ -12,13 +12,16 @@ from services.crud import (
     update_record
 )
 from services.exceptions import (
+    RegisterAlreadyExistsError,
     RegisterNotFoundError,
     InvalidInputError
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
+    _handle_files_service_logic,
     handle_service_errors,
     audit_event,
+    perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
 from models.planning import (
@@ -28,6 +31,7 @@ from models.planning import (
 from schemas.planning import (
     MaterialAssignmentSchema,
     MaterialAssignmentUpdateSchema,
+    PlanningBulkCreateSchema,
     PlanningCreateSchema,
     PlanningDetailCreateSchema,
     PlanningDetailUpdateSchema,
@@ -35,6 +39,91 @@ from schemas.planning import (
     PlanningStatus,
     PlanningUpdateSchema
 )
+
+def _process_planning_csv_data(
+    rows: List[Dict[str, Any]],
+    bulk_schema: BaseModel
+) -> Dict[str, Any]:
+    '''
+        Processes CSV data and groups it by planning name for insertion.
+    '''
+    plannings_to_create = {}
+    for row in rows:
+        try:
+            row_data = bulk_schema(**row)
+            planning_key = (
+                row_data.planning_name,
+                row_data.company_id,
+                row_data.app_id
+            )
+            if planning_key not in plannings_to_create:
+                plannings_to_create[planning_key] = {
+                    'planning_data': row_data.model_dump(
+                        exclude = {
+                            'team_id',
+                            'service_id',
+                            'planned_route_id',
+                            'date_of_day'
+                        }),
+                    'details_data': []
+                }
+            plannings_to_create[planning_key]['details_data'].append(
+                row_data.model_dump(
+                    exclude = {
+                        'company_id',
+                        'app_id',
+                        'planning_name',
+                        'description',
+                        'start_date',
+                        'end_date',
+                        'week_number'
+                    })
+            )
+        except (ValueError, TypeError) as e:
+            raise InvalidInputError(
+                detail = f'Invalid data format in row: {row}. Error: {e}'
+            ) from e
+    return plannings_to_create
+
+async def _perform_atomic_db_insertion_for_planning(
+    db: Session,
+    plannings_to_create: Dict[str, Any],
+    file_name: str,
+    auth_token: str
+) -> Dict[str, int]:
+    '''
+        Performs atomic database insertion for plannings and details.
+    '''
+    plannings_created = 0
+    details_created = 0
+    with db.begin_nested():
+        for planning_key, data in plannings_to_create.items():
+            if db.query(Planning).filter_by(
+                planning_name = data['planning_data']['planning_name'],
+                company_id = data['planning_data']['company_id']
+            ).first():
+                await _handle_files_service_logic(
+                    action = 'delete',
+                    file_name = file_name,
+                    auth_token = auth_token
+                )
+                raise RegisterAlreadyExistsError(
+                    detail = f'''Planning with name {planning_key[0]} already exists for company
+                            ID {planning_key[1]}.'''
+                )
+
+            planning = Planning(**data['planning_data'])
+            db.add(planning)
+            db.flush()
+            details = [
+                PlanningDetail(planning_id = planning.id, **detail)
+                for detail in data['details_data']
+            ]
+            db.add_all(details)
+            plannings_created += 1
+            details_created += len(details)
+
+    return {'plannings_created': plannings_created, 'details_created': details_created}
 
 @handle_service_errors('PLANNING')
 async def get_plannings_by_week(
@@ -368,31 +457,81 @@ async def get_filtered_plannings(
     '''
         Retrieves a list of plannings based on a single, exclusive filter criterion.
     '''
-    # Check that only one filter is provided
-    company_id = filters.company_id
-    team_id = filters.team_id
-    service_id = filters.service_id
-    planned_route_id = filters.planned_route_id
+    if all(value is None for value in filters.model_dump().values()):
+        raise InvalidInputError(
+            'At least one filter criterion must be provided to perform a search.'
+        )
+
     # Build the query
     query = db.query(Planning)
 
-    conditions = []
+    # Apply mandatory filters based on the presence of the fields in the schema
+    if filters.company_id is not None:
+        query = query.filter(Planning.company_id == filters.company_id)
 
-    if company_id is not None:
-        conditions.append(Planning.company_id == company_id)
-    if team_id is not None:
-        conditions.append(PlanningDetail.team_id == team_id)
-        query = query.join(Planning.details)
-    if service_id is not None:
-        conditions.append(PlanningDetail.service_id == service_id)
-        query = query.join(Planning.details)
-    if planned_route_id is not None:
-        conditions.append(PlanningDetail.planned_route_id == planned_route_id)
-        query = query.join(Planning.details)
+    if filters.start_date is not None and filters.end_date is not None:
+        query = query.filter(
+            Planning.start_date >= filters.start_date,
+            Planning.end_date <= filters.end_date
+        )
+    elif filters.start_date is not None:
+        query = query.filter(Planning.start_date >= filters.start_date)
 
-    plannings = query.filter(*conditions).all()
+    # Apply optional filters from PlanningDetail, performing a JOIN if necessary
+    # The join is only performed once if any of the following filters are present
+    join_needed = any([
+        filters.team_id is not None,
+        filters.service_id is not None,
+        filters.planned_route_id is not None,
+        filters.date_of_day is not None
+    ])
+
+    if join_needed:
+        query = query.join(Planning.details)
+        query = query.options(contains_eager(Planning.details))
+
+        if filters.team_id is not None:
+            query = query.filter(PlanningDetail.team_id == filters.team_id)
+
+        if filters.service_id is not None:
+            query = query.filter(PlanningDetail.service_id == filters.service_id)
+
+        if filters.planned_route_id is not None:
+            query = query.filter(PlanningDetail.planned_route_id == filters.planned_route_id)
+
+        if filters.date_of_day is not None:
+            query = query.filter(PlanningDetail.date_of_day == filters.date_of_day)
+    else:
+        # Si no hay filtros de detalle, solo carga los detalles normalmente
+        query = query.options(joinedload(Planning.details))
+
+    plannings = query.all()
 
     if not plannings:
         raise RegisterNotFoundError(detail = 'No plannings found for the specified filter.')
 
     return plannings
+
+async def bulk_create_planning(
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str,
+) -> Dict[str, Any]:
+    '''
+        Service function to handle the bulk upload of planning data.
+        It uses a generic utility to process the file and insert data.
+    '''
+    logger.info('Starting bulk upload process...')
+
+    result = await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = PlanningBulkCreateSchema,
+        processor_func = _process_planning_csv_data,
+        inserter_func = _perform_atomic_db_insertion_for_planning,
+        delimiter = delimiter
+    )
+
+    return result

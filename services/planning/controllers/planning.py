@@ -1,13 +1,17 @@
 '''
     Planning controllers.
 '''
-from typing import List, Union
+import asyncio
+import json
+import time
+from typing import Any, Dict, List, Optional, Union
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
-from fastapi import Request
+from fastapi import HTTPException, Request
 from services.crud import get_record
 from services.planning import (
     assign_material_to_planning_detail,
+    bulk_create_planning,
     create_planning_detail,
     delete_material_by_id,
     delete_planning_by_id,
@@ -21,7 +25,8 @@ from services.planning import (
     update_planning_detail,
     update_planning_with_details
 )
-from services.utils import handle_service_errors
+from services.utils import UsageLogData, handle_service_errors, send_audit_event, send_usage_log
+from services.logger_config import custom_logger as logger
 from models.planning import (
     Planning,
     PlanningDetail
@@ -275,3 +280,63 @@ async def update_planning_detail_controller(
         update_data = update_data
     )
     return PlanningDetailResponseSchema.model_validate(detail, from_attributes = True)
+
+async def bulk_upload_planning_controller(
+    request: Request,
+    db: Session,
+    file_name: str,
+    current_user: str,
+    delimiter: Optional[str] = ',',
+    auth_token: str = None,
+) -> Dict[str, Any]:
+    '''
+        Controller to handle the bulk upload of planning data from a CSV file.
+    '''
+    logger.info(f'Starting bulk upload for file: {file_name}')
+    
+    start_time = time.perf_counter()
+    status_code = 201
+    
+    try:
+        result = await bulk_create_planning(
+            db = db,
+            file_name = file_name,
+            delimiter = delimiter,
+            auth_token = auth_token
+        )
+        
+        # ✅ Llama a las funciones de auditoría y logs.
+        # Enviar evento de auditoría.
+        audit_event_data = {
+            'microservice': 'PLANNING',
+            'entity_name': 'Planning',
+            'entity_id': 0,
+            'action': 'BULK_CREATE',
+            'user_id': 'usr_test',
+            'old_values': None,
+            'new_values': json.dumps(result)
+        }
+        asyncio.create_task(send_audit_event(audit_event_data))
+
+    except HTTPException as e:
+        status_code = e.status_code
+        result = {'detail': str(e.detail)}
+        raise e
+    
+    finally:
+        # Enviar log de uso
+        end_time = time.perf_counter()
+        log_data = UsageLogData(
+            microservice = 'PLANNING',
+            endpoint = request.url.path,
+            method = request.method,
+            status_code = status_code,
+            ip_address = request.client.host,
+            user_id = current_user,
+            request_body = {'file_name': file_name},
+            response_body = result,
+            response_time_ms = int((end_time - start_time) * 1000)
+        )
+        asyncio.create_task(send_usage_log(log_data.model_dump()))
+        
+    return result
