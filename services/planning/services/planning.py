@@ -173,7 +173,7 @@ async def create_planning_with_details(
         in a transactional block.
     '''
     if planning_data.start_date > planning_data.end_date:
-        raise InvalidInputError(detail='`start_date` cannot be after `end_date`')
+        raise InvalidInputError(detail = '`start_date` cannot be after `end_date`')
 
     # 1. Create the main Planning record.
     planning_dict = planning_data.model_dump(exclude = {'details'})
@@ -188,8 +188,8 @@ async def create_planning_with_details(
                 db,
                 PlanningDetail,
                 detail_data,
-                extra_fields={'planning_id': db_planning.id},
-                exclude_relations=['materials']
+                extra_fields = {'planning_id': db_planning.id},
+                exclude_relations = ['materials']
             )
 
             for material_data in detail_data.materials:
@@ -197,7 +197,7 @@ async def create_planning_with_details(
                     db,
                     MaterialAssignment,
                     material_data,
-                    extra_fields={'planning_detail_id': db_detail.id}
+                    extra_fields = {'planning_detail_id': db_detail.id}
                 )
 
     db.commit()

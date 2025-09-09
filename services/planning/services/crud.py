@@ -42,8 +42,8 @@ def handle_db_exception(e: Exception, operation: str, entity_id: Any = None):
         logger.error(error_msg, exc_info = True)
         raise RuntimeError('A database error occurred during the operation.') from e
 
-    error_msg = f'''Unexpected error during {operation} for
-            {entity_id if entity_id else 'entity'}: {e}'''
+    error_msg = f'''Unexpected error during {operation} for {
+                entity_id if entity_id else 'entity'}: {e}'''
     logger.critical(error_msg, exc_info = True)
     raise RuntimeError('An unexpected internal error occurred.') from e
 
@@ -81,8 +81,8 @@ def create_record(
         # The nested dict list warning is still relevant if exclude_relations isn't perfect
         if any(isinstance(v, list) and
                any(isinstance(item, dict) for item in v) for v in data_dict.values()):
-            message = f'''Data dict for {model.__name__} still contains nested dict lists,
-                    despite exclusion: {data_dict}'''
+            message = f'''Data dict for {model.__name__
+                    } still contains nested dict lists, despite exclusion: {data_dict}'''
             logger.warning(message)
 
         db_record = model(**data_dict)
@@ -136,8 +136,8 @@ def get_record(
                         query = query.options(option)
                     case _:
                         # Handle any other type
-                        message = f'''Invalid eager_load_option type: {type(option)}.
-                        Must be a string or a SQLAlchemy Load object.'''
+                        message = f'''Invalid eager_load_option type: {
+                        type(option)}. Must be a string or a SQLAlchemy Load object.'''
                         logger.error(message, exc_info = True)
                         raise TypeError(message)
 
@@ -244,8 +244,8 @@ def get_all_records_paginated(
                 query = query.options(option)
 
         records = query.offset(skip).limit(limit).all()
-        message = f'''Retrieved {len(records)} records for model {model.__name__}
-                (skip: {skip}, limit: {limit}).'''
+        message = f'''Retrieved {len(records)} records for model {model.__name__
+                } (skip: {skip}, limit: {limit}).'''
         logger.debug(message)
         return records
     except SQLAlchemyError as e:
