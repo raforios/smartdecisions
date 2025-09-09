@@ -2,7 +2,7 @@
 
 Bienvenido al microservicio de planificación, un componente clave dentro de la arquitectura de la API **SMARTBEAR**. Este servicio es el centro de control para la gestión y el seguimiento de las planificaciones operativas, permitiendo la asignación de rutas, equipos y materiales a tareas específicas.
 
----
+-----
 
 ## 🎯 Propósito Principal
 
@@ -12,8 +12,9 @@ El **Planning-Service** está diseñado para ser el motor de la planificación o
   * **Gestión de Detalles de Planificación:** Facilita la creación, actualización y eliminación de los detalles específicos de cada planificación, como la ruta, el equipo y el servicio asociado.
   * **Control de Materiales:** Facilita el registro de la asignación, el uso y la devolución de materiales específicos para cada tarea planificada.
   * **Consulta por Período y Filtro:** Proporciona endpoints para consultar planificaciones por número de semana, por una fecha específica o a través de un filtro detallado (por ID de compañía, equipo, etc.).
+  * **Carga Masiva:** Permite la importación de datos de planificación a gran escala a través de archivos CSV, simplificando la creación de múltiples registros.
 
----
+-----
 
 ## 🛠️ Tecnologías Utilizadas
 
@@ -28,7 +29,7 @@ Este microservicio ha sido desarrollado con un enfoque en el rendimiento, la rob
   * **Contenedorización:** Docker 🐳
   * **Plataforma Cloud:** AWS Lambda y AWS CLI (para el despliegue a través de un script shell)
 
----
+-----
 
 ## 🚀 Endpoints de la API
 
@@ -45,6 +46,7 @@ A continuación se listan los endpoints principales de la API, agrupados por su 
 | `DELETE`| `/v1/plannings/{planning_id}` | Elimina una planificación y sus detalles, solo si está en estado `ACTIVE`. |
 | `GET` | `/v1/plannings/weekly/{week_number}` | Recupera todas las planificaciones para un número de semana específico. |
 | `GET` | `/v1/plannings/daily/{planning_date}` | Recupera todas las planificaciones activas en una fecha determinada. |
+| `POST`| `/v1/plannings/bulk-upload` | Carga masivamente planificaciones a partir de un archivo CSV. |
 
 ### Gestión de Detalles de Planificación
 
@@ -63,7 +65,7 @@ A continuación se listan los endpoints principales de la API, agrupados por su 
 | `PATCH`| `/v1/plannings/{planning_id}/details/{planning_detail_id}/materials/{material_assignment_id}`| Actualiza las cantidades usadas y devueltas para una asignación de material. |
 | `DELETE`| `/v1/plannings/{planning_id}/details/{planning_detail_id}/materials/{material_assignment_id}`| Elimina una asignación de material específica. |
 
----
+-----
 
 ## 🗂️ Estructura del Microservicio
 
