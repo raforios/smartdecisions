@@ -35,8 +35,8 @@ REQUIRED_DB_KEYS = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DATABASE', 'DB_PORT', 
 for key in REQUIRED_DB_KEYS:
     if DB_PARAMETERS.get(key) is None or DB_PARAMETERS.get(key) == '':
         raise EnvironmentError(
-            f'''Missing or empty required database environment variable: "{key}".
-            Ensure it\'s set in os.environ or in your .env file.'''
+            f'''Missing or empty required database environment variable: "{
+            key}". Ensure it\'s set in os.environ or in your .env file.'''
         )
 
 Base: DeclarativeMeta = declarative_base()

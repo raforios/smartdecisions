@@ -30,6 +30,7 @@ class PlannedRoute(Base):# pylint: disable=too-few-public-methods
     description = Column(String(500), nullable = True)
     company_id = Column(Integer, nullable = False, index = True)
     app_id = Column(Integer, nullable = False, index = True)
+    city_id = Column(Integer, nullable = False, index = True)
     # Using text('now()') and server_default to fix Pylint error and ensure
     # the function is executed at the database level.
     created_at = Column(DateTime, nullable = False, server_default = text('now()'))
@@ -88,9 +89,11 @@ class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
 
     start_latitude = Column(Numeric(16, 14), nullable = False)
     start_longitude = Column(Numeric(16, 14), nullable = False)
+    max_distance_start_point = Column(Numeric(10, 2), nullable = False)
 
     end_latitude = Column(Numeric(16, 14), nullable = True)
     end_longitude = Column(Numeric(16, 14), nullable = True)
+    max_distance_end_point = Column(Numeric(10, 2), nullable = True)
 
     planned_route = relationship('PlannedRoute', back_populates = 't_executed_routes')
     points = relationship(

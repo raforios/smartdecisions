@@ -2,7 +2,7 @@
     Localization: routes handler
 '''
 from typing import Any, List, Optional
-from fastapi import APIRouter, Body, Depends, Header, Path, status, Query
+from fastapi import APIRouter, Body, Depends, Header, Path, Request, status, Query
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
@@ -31,7 +31,6 @@ from controllers.localization import (
 from schemas.localization import (
     AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
-    MessageSchema,
     PlannedPointCreateSchema,
     PlannedPointResponseSchema,
     PlannedPointUpdateSchema,
@@ -62,7 +61,8 @@ router = APIRouter(prefix = '/v1/localization', tags = ['Localization'])
     summary = 'Create a new planned route',
     description = 'Creates a new planned route with a list of associated geographical points.'
 )
-def create_planned_route_endpoint(
+async def create_planned_route_endpoint(
+    request: Request,
     route_data: PlannedRouteCreateSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -70,10 +70,15 @@ def create_planned_route_endpoint(
     '''
         Endpoint to create a new planned route.
     '''
-    message = f'''User: {current_user}. Received request to create planned route for company:
-            {route_data.company_id}'''
+    message = f'''User: {current_user}. Received request to create planned route for company: {
+            route_data.company_id}'''
     logger.info(message)
-    return create_planned_route_controller(route_data, db)
+    return await create_planned_route_controller(
+        route_data = route_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/routes/planned',
@@ -82,7 +87,8 @@ def create_planned_route_endpoint(
     summary = 'Get all planned routes',
     description = 'Retrieves a list of all planned routes.'
 )
-def get_all_planned_routes_endpoint(
+async def get_all_planned_routes_endpoint(
+    request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -91,22 +97,10 @@ def get_all_planned_routes_endpoint(
     '''
     message = f'User: {current_user}. Received request to get all planned routes.'
     logger.info(message)
-    return get_all_planned_routes_controller(db)
-
-def get_filters_dependency(
-    route_code: Optional[str] = Query(None),
-    route_name: Optional[str] = Query(None),
-    route_status: Optional[str] = Query(None),
-    company_id: Optional[int] = Query(None),
-) -> PlannedRouteFilterSchema:
-    '''
-        Converts the Query String to a Pydantic object
-    '''
-    return PlannedRouteFilterSchema(
-        route_code = route_code,
-        route_name = route_name,
-        route_status = route_status,
-        company_id = company_id
+    return await get_all_planned_routes_controller(
+        db = db,
+        request = request,
+        current_user = current_user
     )
 
 @router.get(
@@ -117,8 +111,9 @@ def get_filters_dependency(
     description = '''Retrieves a list of planned routes filtered by route_code,
                 name, status, or user ID.'''
 )
-def get_or_filter_planned_routes_endpoint(
-    filters: PlannedRouteFilterSchema = Depends(get_filters_dependency),
+async def get_or_filter_planned_routes_endpoint(
+    request: Request,
+    filters: PlannedRouteFilterSchema = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ) -> List[PlannedRouteListResponseSchema]:
@@ -126,12 +121,15 @@ def get_or_filter_planned_routes_endpoint(
         Endpoint to filter planned routes.
     '''
     message = f'''User: {current_user}. Received request to filter planned routes
-            with parameters: route_code = {filters.route_code}, route_name = {filters.route_name},
-            status = {filters.route_status}, company_id = {filters.company_id}'''
+            with parameters: route_code = {filters.route_code}, route_name = {
+            filters.route_name}, status = {filters.route_status}, company_id = {
+            filters.company_id}'''
     logger.info(message)
-    return filter_planned_routes_controller(
+    return await filter_planned_routes_controller(
         db = db,
-        filters = filters
+        filters = filters,
+        request = request,
+        current_user = current_user
     )
 
 @router.get(
@@ -141,7 +139,8 @@ def get_or_filter_planned_routes_endpoint(
     summary = 'Get a planned route by ID',
     description = 'Retrieves a single planned route and its points by its unique ID.'
 )
-def get_planned_route_endpoint(
+async def get_planned_route_endpoint(
+    request: Request,
     planned_route_id: int,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -149,10 +148,15 @@ def get_planned_route_endpoint(
     '''
         Endpoint to retrieve a specific planned route.
     '''
-    message = f'''User: {current_user}. Received request to get planned
-            route with ID: {planned_route_id}'''
+    message = f'''User: {current_user}. Received request to get planned route with ID: {
+            planned_route_id}'''
     logger.info(message)
-    return get_planned_route_controller(planned_route_id, db)
+    return await get_planned_route_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.patch(
     '/routes/planned/{planned_route_id}/status',
@@ -162,7 +166,8 @@ def get_planned_route_endpoint(
     description = '''Changes the status of a planned route.
                 Valid statuses: "ACTIVE", "INACTIVE", "IN CREATION".'''
 )
-def update_planned_route_status_endpoint(
+async def update_planned_route_status_endpoint(
+    request: Request,
     planned_route_id: int,
     status_data: PlannedRouteUpdateStatusSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -171,10 +176,16 @@ def update_planned_route_status_endpoint(
     '''
         Endpoint to update the status of a planned route.
     '''
-    message = f'''User: {current_user}. Received request to update status for planned
-            route {planned_route_id} to {status_data.status}'''
+    message = f'''User: {current_user}. Received request to update status for planned route {
+            planned_route_id} to {status_data.status}'''
     logger.info(message)
-    return update_planned_route_status_controller(planned_route_id, status_data, db)
+    return await update_planned_route_status_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        status_data = status_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.patch(
     '/routes/planned/{planned_route_id}',
@@ -183,7 +194,8 @@ def update_planned_route_status_endpoint(
     summary = 'Update a planned route',
     description = 'Updates specific fields of an existing planned route.'
 )
-def update_planned_route_endpoint(
+async def update_planned_route_endpoint(
+    request: Request,
     planned_route_id: int,
     route_data: PlannedRouteUpdateSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -192,24 +204,26 @@ def update_planned_route_endpoint(
     '''
         Endpoint to update specific fields of a planned route.
     '''
-    message = f'''User: {current_user}. Received request to update planned route
-            {planned_route_id}.'''
+    message = f'''User: {current_user}. Received request to update planned route {
+            planned_route_id}.'''
     logger.info(message)
-    return update_planned_route_controller(
-        planned_route_id,
-        route_data,
-        db
+    return await update_planned_route_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        route_data = route_data,
+        request = request,
+        current_user = current_user
     )
 
 @router.delete(
     '/routes/planned/{planned_route_id}',
-    response_model = MessageSchema,
     status_code = status.HTTP_200_OK,
     summary = 'Delete a planned route',
     description = '''Deletes a planned route and its points. This is only
                 allowed if the route is in the "IN CREATION" status.'''
 )
-def delete_planned_route_endpoint(
+async def delete_planned_route_endpoint(
+    request: Request,
     planned_route_id: int,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -217,10 +231,15 @@ def delete_planned_route_endpoint(
     '''
         Endpoint to delete a planned route.
     '''
-    message = f'''User: {current_user}. Received request to delete planned
-            route {planned_route_id}.'''
+    message = f'''User: {current_user}. Received request to delete planned route {
+            planned_route_id}.'''
     logger.info(message)
-    return delete_planned_route_controller(planned_route_id, db)
+    return await delete_planned_route_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.post(
     '/routes/planned/{planned_route_id}/points',
@@ -230,7 +249,8 @@ def delete_planned_route_endpoint(
     description = '''Adds a new point to a planned route.
                 This is only allowed if the route is in the "IN CREATION" status.'''
 )
-def add_planned_point_endpoint(
+async def add_planned_point_endpoint(
+    request: Request,
     planned_route_id: int,
     point_data: PlannedPointCreateSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -239,10 +259,16 @@ def add_planned_point_endpoint(
     '''
         Endpoint to add a point to a planned route.
     '''
-    message = f'''User: {current_user}. Received request to add a point to planned
-            route {planned_route_id}.'''
+    message = f'''User: {current_user}. Received request to add a point to planned route {
+            planned_route_id}.'''
     logger.info(message)
-    return add_planned_point_controller(planned_route_id, point_data, db)
+    return await add_planned_point_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        point_data = point_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.patch(
     '/routes/planned/{planned_route_id}/points/{planned_point_id}',
@@ -252,7 +278,9 @@ def add_planned_point_endpoint(
     description = '''Allows updating a specific planned point of a route,
                 identified by its planned route ID and point ID.'''
 )
-def update_planned_point_endpoint(
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def update_planned_point_endpoint(
+    request: Request,
     planned_route_id: int = Path(..., description = 'The ID of the planned route.'),
     planned_point_id: int = Path(..., description = 'The ID of the planned point to update.'),
     point_data: PlannedPointUpdateSchema = Body(...,
@@ -261,28 +289,30 @@ def update_planned_point_endpoint(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Endpoint para actualizar un punto planificado.
+        Endpoint to update a scheduled point.
     '''
-    message = f'''User: {current_user}. Received request to update planned point {planned_point_id}
-            on route {planned_route_id}.'''
+    message = f'''User: {current_user}. Received request to update planned point {
+            planned_point_id} on route {planned_route_id}.'''
     logger.info(message)
 
-    return update_planned_point_controller(
+    return await update_planned_point_controller(
         db = db,
         planned_route_id = planned_route_id,
         planned_point_id = planned_point_id,
-        point_data = point_data
+        point_data = point_data,
+        request = request,
+        current_user = current_user
     )
 
 @router.delete(
     '/routes/planned/{planned_route_id}/points/{planned_point_id}',
-    response_model = MessageSchema,
     status_code = status.HTTP_200_OK,
     summary = 'Delete a point from a planned route',
     description = '''Deletes a specific point from a planned route.
                 This is only allowed if the route is in the "IN CREATION" status.'''
 )
-def delete_planned_point_endpoint(
+async def delete_planned_point_endpoint(
+    request: Request,
     planned_route_id: int,
     planned_point_id: int,
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -291,10 +321,16 @@ def delete_planned_point_endpoint(
     '''
         Endpoint to delete a point from a planned route.
     '''
-    message = f'''User: {current_user}. Received request to delete point {planned_point_id}
-            from planned route {planned_route_id}.'''
+    message = f'''User: {current_user}. Received request to delete point {
+            planned_point_id} from planned route {planned_route_id}.'''
     logger.info(message)
-    return delete_planned_point_controller(planned_route_id, planned_point_id, db)
+    return await delete_planned_point_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        planned_point_id = planned_point_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.post(
     '/routes/executed',
@@ -304,7 +340,8 @@ def delete_planned_point_endpoint(
     description = '''Initializes a new executed route instance for a user, optionally linking
                 it to a planned route.'''
 )
-def create_executed_route_endpoint(
+async def create_executed_route_endpoint(
+    request: Request,
     route_data: ExecutedRouteCreateSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -312,10 +349,15 @@ def create_executed_route_endpoint(
     '''
         Endpoint to create an executed route.
     '''
-    message = f'''User: {current_user}. Received request to create executed route
-            for user: {route_data.user_id}'''
+    message = f'''User: {current_user}. Received request to create executed route for user: {
+            route_data.user_id}'''
     logger.info(message)
-    return create_executed_route_controller(route_data, db)
+    return await create_executed_route_controller(
+        db = db,
+        route_data = route_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.post(
     '/routes/executed/points',
@@ -324,7 +366,8 @@ def create_executed_route_endpoint(
     summary = 'Register a new point for an executed route',
     description = 'Records a new geographical point for a specific executed route instance.'
 )
-def register_executed_point_endpoint(
+async def register_executed_point_endpoint(
+    request: Request,
     point_data: ExecutedPointCreateSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -332,10 +375,15 @@ def register_executed_point_endpoint(
     '''
         Endpoint to register a point for an executed route.
     '''
-    message = f'''User: {current_user}. Received request to register executed point for route:
-            {point_data.executed_route_id}'''
+    message = f'''User: {current_user}. Received request to register executed point for route: {
+            point_data.executed_route_id}'''
     logger.info(message)
-    return register_executed_point_controller(point_data, db)
+    return await register_executed_point_controller(
+        db = db,
+        point_data = point_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.patch(
     '/routes/executed/{executed_route_id}',
@@ -345,7 +393,8 @@ def register_executed_point_endpoint(
     description = '''Updates the end time for a specific executed route instance,
                 marking it as finished.'''
 )
-def update_executed_route_end_time_endpoint(
+async def update_executed_route_end_time_endpoint(
+    request: Request,
     update_data: ExecutedRouteUpdateSchema,
     executed_route_id: int = Path(..., description = 'ID of the executed route.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
@@ -354,10 +403,16 @@ def update_executed_route_end_time_endpoint(
     '''
         Endpoint to update the end time of an executed route.
     '''
-    message = f'''User: {current_user}. Received request to update end_time for executed route:
-            {executed_route_id}'''
+    message = f'''User: {current_user}. Received request to update end_time for executed route: {
+            executed_route_id}'''
     logger.info(message)
-    return update_executed_route_end_time_controller(executed_route_id, update_data, db)
+    return await update_executed_route_end_time_controller(
+        db = db,
+        executed_route_id = executed_route_id,
+        update_data = update_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/statistics/users/{user_id}/points-visited',
@@ -367,7 +422,9 @@ def update_executed_route_end_time_endpoint(
     description = '''Retrieves a count of all executed points and attendance records
                 for a user within a given date range.'''
 )
-def get_stats_points_visited_endpoint(
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def get_stats_points_visited_endpoint(
+    request: Request,
     user_id: int,
     start_date: str,
     end_date: str,
@@ -379,7 +436,14 @@ def get_stats_points_visited_endpoint(
     '''
     message = f'User: {current_user}. Received request to get stats for user {user_id}.'
     logger.info(message)
-    return get_stats_points_visited_controller(user_id, start_date, end_date, db)
+    return await get_stats_points_visited_controller(
+        db = db,
+        user_id = user_id,
+        start_date = start_date,
+        end_date = end_date,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/statistics/route-comparisons/{planned_route_id}',
@@ -389,7 +453,8 @@ def get_stats_points_visited_endpoint(
     description = '''Compares a planned route with its associated executed routes to
                 get statistical data.'''
 )
-def get_route_comparisons_endpoint(
+async def get_route_comparisons_endpoint(
+    request: Request,
     planned_route_id: int,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -397,10 +462,15 @@ def get_route_comparisons_endpoint(
     '''
         Endpoint to compare routes.
     '''
-    message = f'''User: {current_user}. Received request to compare routes for planned
-            route {planned_route_id}.'''
+    message = f'''User: {current_user}. Received request to compare routes for planned route {
+            planned_route_id}.'''
     logger.info(message)
-    return get_route_comparisons_controller(planned_route_id, db)
+    return await get_route_comparisons_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.post(
     '/attendances',
@@ -410,7 +480,8 @@ def get_route_comparisons_endpoint(
     description = '''Registers a new attendance (check-in) or updates an existing one
                 with a check-out time.'''
 )
-def register_attendance_endpoint(
+async def register_attendance_endpoint(
+    request: Request,
     attendance_data: AttendanceCreateSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -418,10 +489,15 @@ def register_attendance_endpoint(
     '''
         Endpoint to register or update attendance.
     '''
-    message = f'''User: {current_user}. Received request to register attendance for user:
-            {attendance_data.user_id}'''
+    message = f'''User: {current_user}. Received request to register attendance for user: {
+            attendance_data.user_id}'''
     logger.info(message)
-    return register_attendance_controller(attendance_data, db)
+    return await register_attendance_controller(
+        db = db,
+        attendance_data = attendance_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.patch(
     '/attendances/{attendance_id}',
@@ -430,7 +506,8 @@ def register_attendance_endpoint(
     summary = 'Update check-out time for an attendance record',
     description = '''Updates an existing attendance record with a check-out time.'''
 )
-def update_attendance_checkout_time_endpoint(
+async def update_attendance_checkout_time_endpoint(
+    request: Request,
     update_data: AttendanceUpdateSchema,
     attendance_id: int = Path(..., description='ID of the attendance record to update.'),
     current_user: str = Depends(get_current_user),
@@ -439,10 +516,16 @@ def update_attendance_checkout_time_endpoint(
     '''
         Endpoint to update the check-out time of an attendance record.
     '''
-    message = f'''User: {current_user}. Received request to update check-out time for
-            attendance {attendance_id}.'''
+    message = f'''User: {current_user}. Received request to update check-out time for attendance {
+            attendance_id}.'''
     logger.info(message)
-    return update_attendance_checkout_time_controller(attendance_id, update_data, db)
+    return await update_attendance_checkout_time_controller(
+        db = db,
+        attendance_id = attendance_id,
+        update_data = update_data,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/routes/comparison/{planned_route_id}',
@@ -454,7 +537,8 @@ def update_attendance_checkout_time_endpoint(
                 This is a resource-intensive endpoint, intended for detailed
                 visualization on the frontend.'''
 )
-def get_full_route_comparison_endpoint(
+async def get_full_route_comparison_endpoint(
+    request: Request,
     planned_route_id: int = Path(..., description='ID of the planned route to compare.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -462,10 +546,16 @@ def get_full_route_comparison_endpoint(
     '''
         Endpoint to get a full comparison of planned vs executed routes.
     '''
-    message = f'''User: {current_user}. Received request for full route comparison
-            for planned route ID: {planned_route_id}.'''
+    message = f'''User: {current_user
+            }. Received request for full route comparison for planned route ID: {
+            planned_route_id}.'''
     logger.info(message)
-    return get_full_route_comparison_controller(planned_route_id, db)
+    return await get_full_route_comparison_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        request = request,
+        current_user = current_user
+    )
 
 @router.post(
     '/routes/planned/bulk-upload',
@@ -475,24 +565,28 @@ def get_full_route_comparison_endpoint(
     description = '''Processes a CSV file from the FILES microservice to create planned routes
                  and their associated points in a single, atomic operation.'''
 )
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_planned_routes_endpoint(
-    file_name: str = Query(..., description='Name of the CSV file to process.'),
-    delimiter: Optional[str] = Query(',',
-        description = 'The delimiter used in the CSV file. Defaults to a comma (,).'
+    request: Request,
+    file_name: str = Query(..., description = 'Name of the CSV file to process.'),
+    delimiter: Optional[str] = Query(
+        ',', description = 'The delimiter used in the CSV file. Defaults to a comma (,).'
     ),
     db: Session = Depends(GET_DB_DEPENDENCY),
     auth_token: str = Header(..., alias = 'Authorization'),
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Endpoint to trigger a bulk upload of planned routes from a CSV file.
+        Endpoint to trigger a bulk upload of planning data from a CSV file.
     '''
-    message = f'''User: {current_user}. Received request for bulk upload from file:
-            {file_name}'''
+    message = f'User: {current_user}. Received request for bulk upload from file: {file_name}'
     logger.info(message)
     return await bulk_upload_planned_routes_controller(
+        db = db,
         file_name = file_name,
         delimiter = delimiter,
-        db = db,
-        auth_token = auth_token
+        auth_token = auth_token,
+        request = request,
+        current_user = current_user
     )

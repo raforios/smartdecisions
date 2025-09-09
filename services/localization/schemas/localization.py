@@ -117,6 +117,10 @@ class PlannedRouteCreateSchema(BaseModel):
         ...,
         description = 'ID of the application that uses the service.'
     )
+    city_id: int = Field(
+        ...,
+        description = 'ID of the city associated with the planned route.'
+    )
     points: List[PlannedPointSchema] = Field(
         ...,
         description = 'A list of geographical points for the route.'
@@ -147,6 +151,10 @@ class PlannedRouteUpdateSchema(BaseModel):
         None, max_length = 500,
         description = 'Updated description of the route.'
     )
+    city_id: Optional[int] = Field(
+        None,
+        description = 'Updated ID of the city associated with the planned route.'
+    )
 
 class PlannedRouteListResponseSchema(LocalizationBaseSchema):
     '''
@@ -158,6 +166,8 @@ class PlannedRouteListResponseSchema(LocalizationBaseSchema):
     route_code: str
     description: Optional[str]
     company_id: int
+    app_id: int
+    city_id: int
     created_at: datetime
     status: PlannedRouteStatusEnum
     points: List[PlannedPointResponseSchema]
@@ -195,6 +205,10 @@ class ExecutedRouteCreateSchema(BaseModel):
         ..., ge = -180.0, le = 180.0,
         description = 'The longitude of the executed start point.'
     )
+    max_distance_start_point: float = Field(
+        ..., gt = 0,
+        description = 'The maximum allowed distance (in meters) from the start point.'
+    )
 
 class ExecutedRouteResponseSchema(ExecutedRouteCreateSchema, LocalizationBaseSchema):
     '''
@@ -219,6 +233,10 @@ class ExecutedRouteUpdateSchema(BaseModel):
     end_longitude: float = Field(
         ..., ge = -180.0, le = 180.0,
         description = 'The longitude of the executed end point.'
+    )
+    max_distance_end_point: float = Field(
+        ..., gt = 0,
+        description = 'The maximum allowed distance (in meters) from the end point.'
     )
 
 class ExecutedPointCreateSchema(PointBase):
@@ -328,15 +346,6 @@ class RouteComparisonsResponseSchema(LocalizationBaseSchema):
     '''
     comparisons: List[RouteComparisonSchema]
 
-class MessageSchema(BaseModel):
-    '''
-        Schema for a generic message response.
-    '''
-    message: str = Field(
-        ...,
-        description = 'A descriptive message about the operation result.'
-    )
-
 class PlannedRouteFilterSchema(BaseModel):
     '''
         Schema to filter planned routes based on various criteria.
@@ -346,6 +355,8 @@ class PlannedRouteFilterSchema(BaseModel):
     route_status: Optional[str] = Query(None, alias = 'status',
                                         description = 'Status of the planned route.')
     company_id: Optional[int] = Query(None, description = 'ID of the company who owns the route.')
+    city_id: Optional[int] = Query(None,
+                            description = 'ID of the city associated with the planned route.')
 
     class Config:# pylint: disable=too-few-public-methods
         '''
@@ -361,8 +372,10 @@ class PlannedRouteBulkCreateSchema(BaseModel):
     '''
     route_name: str = Field(..., max_length = 150)
     route_code: str = Field(..., max_length = 50)
+    description: str = Field(..., max_length = 1000)
     company_id: int
     app_id: int
+    city_id: int
     point_name: str = Field(..., max_length = 100)
     secuencial: int = Field(..., gt = 0)
     latitude: float = Field(..., ge = -90.0, le = 90.0)

@@ -1,23 +1,16 @@
 '''
     Business logic services for the Localization Microservice.
 '''
-import os
 import math
-import json
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from dotenv import dotenv_values
-import requests as req
-
+from typing import List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc
 from services.exceptions import (
     RegisterNotFoundError,
     RegisterAlreadyExistsError,
-    InvalidInputError,
-    ResourceNotFoundError,
-    ServiceUnavailableError
+    InvalidInputError
 )
 from services.logger_config import custom_logger as logger
 from services.crud import (
@@ -26,7 +19,13 @@ from services.crud import (
     update_record,
     delete_record
 )
-from services.utils import handle_service_errors
+from services.utils import (
+    _handle_files_service_logic,
+    audit_event,
+    handle_service_errors,
+    perform_bulk_upload,
+    sqlalchemy_object_as_dict
+)
 from models.localization import (
     PlannedRoute,
     PlannedPoint,
@@ -38,8 +37,10 @@ from schemas.localization import (
     AttendanceCreateSchema,
     ExecutedRouteComparisonSchema,
     PlannedPointUpdateSchema,
+    PlannedRouteBulkCreateSchema,
     PlannedRouteComparisonSchema,
     PlannedRouteCreateSchema,
+    PlannedRouteFilterSchema,
     PlannedRouteStatusEnum,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
@@ -48,14 +49,10 @@ from schemas.localization import (
     ExecutedRouteCreateSchema,
     ExecutedPointCreateSchema,
     PlannedPointCreateSchema,
-    RouteComparisonFullResponseSchema,
-    PlannedRouteBulkCreateSchema
+    RouteComparisonFullResponseSchema
 )
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
-
 # Geofencing Parameters
-GEOTAG_RADIUS_METERS = 70
 EARTH_RADIUS_KM = 6371
 
 def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -83,11 +80,12 @@ def _check_geofence_start_point(
     db: Session,
     planned_route_id: int,
     user_latitude: float,
-    user_longitude: float
+    user_longitude: float,
+    max_distance: float
 ):
     '''
-    Checks if the user's current location is within the geofence of the planned route's
-    starting point.
+        Checks if the user's current location is within the geofence of the planned route's
+        starting point.
     '''
     # Find the starting point of the planned route (the one with secuencial=1)
     start_point = db.query(PlannedPoint).filter(
@@ -104,118 +102,28 @@ def _check_geofence_start_point(
         user_latitude, user_longitude, start_point.latitude, start_point.longitude
     )
 
-    if distance > GEOTAG_RADIUS_METERS:
+    if distance > max_distance:
         raise InvalidInputError(
-            detail = f'Distance: {distance:.2f}m. Geofence radius: {GEOTAG_RADIUS_METERS}m.'
+            detail = f'Distance: {distance:.2f} meters. Limit: {max_distance:.2f} meters.'
         )
 
-async def _handle_files_service_logic(
-    action: str,
-    file_name: str,
-    auth_token: str,
-    delimiter: Optional[str] = None
-) -> Optional[str]:
+def _process_localization_csv_data(
+    rows: List[Dict[str, Any]],
+    bulk_schema: PlannedRouteBulkCreateSchema
+) -> Dict[str, Any]:
     '''
-    Handles communication with the FILES microservice for reading and deleting files.
-    This function standardizes file service interactions.
+        Processes raw data from a CSV to group planned routes and their points.
     '''
-    try:
-        files_service_url = os.environ.get('FILES_SERVICE_URL') or \
-                            _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
-        bucket_name = os.environ.get('BUCKET_NAME') or \
-                      _LOCAL_ENV_PARAMS.get('BUCKET_NAME')
-        bucket_path = os.environ.get('BUCKET_PATH') or \
-                      _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
-
-        if not files_service_url or not bucket_name:
-            raise ServiceUnavailableError(
-                detail = 'FILES_SERVICE_URL or BUCKET_NAME environment variables are not set.'
-            )
-
-        headers = {
-            'Authorization': f'{auth_token}',
-            'Content-Type': 'application/json'
-        }
-
-        if action == 'read':
-            query_string = f'?delimiter={delimiter}' if delimiter else ''
-            response = req.get(
-                f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}{query_string}',
-                headers = headers,
-                timeout = 600
-            )
-            response.raise_for_status()
-            return response.text
-
-        if action == 'delete':
-            payload = {
-                'bucket_name': bucket_name,
-                'file_name': file_name,
-                'file_path': bucket_path
-            }
-            response = req.delete(
-                f'{files_service_url}/v1/s3/delete',
-                json = payload,
-                headers = headers,
-                timeout = 600
-            )
-            response.raise_for_status()
-            message = f'File {file_name} successfully deleted from FILES service.'
-            logger.info(message)
-            return None
-
-
-        raise ValueError(f'Invalid action: {action}')
-    except req.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            raise ResourceNotFoundError(
-                detail=f'File \'{file_name}\' not found in FILES microservice.'
-            ) from e
-        raise ServiceUnavailableError(
-            detail=f'Failed to communicate with FILES microservice: {e}'
-        ) from e
-    except Exception as e:
-        raise ServiceUnavailableError(
-            detail = f'Unexpected error during file communication with FILES service: {e}'
-        ) from e
-
-async def _read_and_parse_file_content(
-    file_name: str,
-    auth_token: str,
-    delimiter: Optional[str] = ','
-) -> List[Dict[str, Any]]:
-    '''
-    Reads and parses the file content from the FILES microservice.
-    '''
-    file_content = await _handle_files_service_logic(
-        action = 'read',
-        file_name = file_name,
-        auth_token = auth_token,
-        delimiter = delimiter
-    )
-    if not file_content:
-        raise InvalidInputError(
-            detail = 'File content is empty or could not be retrieved.'
-        )
-    try:
-        file_data = json.loads(file_content)
-        return file_data.get('data', [])
-    except json.JSONDecodeError as e:
-        raise InvalidInputError(
-            detail = f'Invalid JSON format in file content. Error: {e}'
-        ) from e
-
-def _process_json_data(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
-    '''
-    Processes JSON data and groups it by route code.
-    '''
-    routes_to_create = {}
+    routes_data = {}
     for row in rows:
         try:
-            row_data = PlannedRouteBulkCreateSchema(**row)
-            route_code = row_data.route_code
-            if route_code not in routes_to_create:
-                routes_to_create[route_code] = {
+            row_data = bulk_schema(**row)
+            route_key = (
+                row_data.route_code,
+                row_data.company_id
+            )
+            if route_key not in routes_data:
+                routes_data[route_key] = {
                     'route_data': row_data.model_dump(
                         exclude = {
                             'point_name',
@@ -226,71 +134,72 @@ def _process_json_data(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                         }),
                     'points_data': []
                 }
-            routes_to_create[route_code]['points_data'].append(
+            routes_data[route_key]['points_data'].append(
                 row_data.model_dump(
                     exclude = {
-                        'route_name',
-                        'route_code',
                         'company_id',
-                        'app_id'
+                        'app_id',
+                        'city_id',
+                        'route_code',
+                        'route_name',
+                        'description'
                     })
             )
         except (ValueError, TypeError) as e:
             raise InvalidInputError(
-                detail = f'Invalid data format in JSON row: {row}. Error: {e}'
+                detail = f'Invalid data format in row: {row}. Error: {e}'
             ) from e
-    return routes_to_create
+    return routes_data
 
-async def _perform_atomic_db_insertion(
+
+async def _perform_atomic_db_insertion_for_localization(
     db: Session,
     routes_to_create: Dict[str, Any],
     file_name: str,
     auth_token: str
 ) -> Dict[str, int]:
     '''
-    Performs the atomic database insertion for routes and points.
+        Performs atomic database insertion for planned routes and points.
     '''
     routes_created = 0
     points_created = 0
     with db.begin_nested():
-        for route_code, data in routes_to_create.items():
-            if db.query(PlannedRoute).filter_by(route_code=route_code).first():
+        for route_key, data in routes_to_create.items():
+            if db.query(PlannedRoute).filter_by(
+                route_code = data['route_data']['route_code'],
+                company_id = data['route_data']['company_id']
+            ).first():
                 await _handle_files_service_logic(
                     action = 'delete',
                     file_name = file_name,
                     auth_token = auth_token
                 )
                 raise RegisterAlreadyExistsError(
-                    detail = f'Route with code "{route_code}" already exists.'
+                    detail = f'''Planned route with code {route_key[0]
+                        } already exists for company ID {route_key[1]}.'''
                 )
 
-            route = PlannedRoute(**data['route_data'])
-            db.add(route)
+            planned_route = PlannedRoute(**data['route_data'])
+            db.add(planned_route)
             db.flush()
-            points = [
-                PlannedPoint(planned_route_id = route.id, **point)
-                for point in data['points_data']
+            details = [
+                PlannedPoint(planned_route_id = planned_route.id, **detail)
+                for detail in data['points_data']
             ]
-            db.add_all(points)
+            db.add_all(details)
             routes_created += 1
-            points_created += len(points)
+            points_created += len(details)
+
     return {'routes_created': routes_created, 'points_created': points_created}
 
-@handle_service_errors
-def create_planned_route_with_points(
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'PlannedRoute', 'CREATE')
+async def create_planned_route_with_points(
     db: Session,
     route_data: PlannedRouteCreateSchema
 ) -> PlannedRoute:
     '''
         Creates a new planned route along with its associated planned points.
-
-        Args:
-            db (Session): The database session.
-            route_data (PlannedRouteCreateSchema): Pydantic schema
-                with route and point data.
-
-        Returns:
-            PlannedRoute: The newly created planned route record.
     '''
     existing_route = db.query(PlannedRoute).filter(
         PlannedRoute.route_code == route_data.route_code
@@ -323,8 +232,8 @@ def create_planned_route_with_points(
     logger.info(message)
     return db_route
 
-@handle_service_errors
-def get_all_planned_routes(
+@handle_service_errors('LOCALIZATION')
+async def get_all_planned_routes(
     db: Session
 ) -> List[PlannedRoute]:
     '''
@@ -334,44 +243,41 @@ def get_all_planned_routes(
     logger.debug(message)
     return db.query(PlannedRoute).all()
 
-@handle_service_errors
-def filter_planned_routes(
+@handle_service_errors('LOCALIZATION')
+async def filter_planned_routes(
     db: Session,
-    route_code: Optional[str] = None,
-    route_name: Optional[str] = None,
-    route_status: Optional[str] = None,
-    company_id: Optional[int] = None
+    filter_params: PlannedRouteFilterSchema
 ) -> List[PlannedRoute]:
     '''
-        Filters planned routes based on various optional parameters.
+        Filters planned routes based on various optional parameters using a Pydantic schema.
     '''
     message = 'Filtering planned routes.'
     logger.debug(message)
 
     query = db.query(PlannedRoute)
 
-    if company_id:
-        query = query.filter(PlannedRoute.company_id == company_id)
-        if route_code:
-            query = query.filter(PlannedRoute.route_code == route_code)
-        if route_name:
-            query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
-        if route_status:
-            query = query.filter(PlannedRoute.status == route_status)
+    # Priority filters: company_id, city_id, and route_status
+    if filter_params.company_id:
+        query = query.filter(PlannedRoute.company_id == filter_params.company_id)
 
-    if route_status:
-        query = query.filter(PlannedRoute.status == route_status)
-        if company_id:
-            query = query.filter(PlannedRoute.company_id == company_id)
-        if route_code:
-            query = query.filter(PlannedRoute.route_code == route_code)
-        if route_name:
-            query = query.filter(PlannedRoute.route_name.ilike(f'%{route_name}%'))
+    if filter_params.city_id:
+        query = query.filter(PlannedRoute.city_id == filter_params.city_id)
+
+    if filter_params.route_status:
+        query = query.filter(PlannedRoute.status == filter_params.route_status)
+
+    # Secondary filters: route_code and route_name
+    if filter_params.route_code:
+        query = query.filter(PlannedRoute.route_code == filter_params.route_code)
+
+    if filter_params.route_name:
+        query = query.filter(PlannedRoute.route_name.ilike(f'%{filter_params.route_name}%'))
 
     return query.all()
 
-@handle_service_errors
-def create_executed_route(
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'ExecutedRoute', 'CREATE')
+async def create_executed_route(
     db: Session,
     route_data: ExecutedRouteCreateSchema
 ) -> ExecutedRoute:
@@ -385,15 +291,16 @@ def create_executed_route(
         planned_route = get_record(db, PlannedRoute, route_data.planned_route_id)
         if planned_route.status != PlannedRouteStatusEnum.ACTIVE:
             raise InvalidInputError(
-                detail = f'''Cannot start a route. Planned route with ID {planned_route.id}
-                        is not in ACTIVE status.'''
+                detail = f'''Cannot start a route. Planned route with ID {
+                    planned_route.id} is not in ACTIVE status.'''
             )
         # Check if the user is at the starting point of the route
         _check_geofence_start_point(
             db,
             planned_route_id = route_data.planned_route_id,
             user_latitude = route_data.start_latitude,
-            user_longitude = route_data.start_longitude
+            user_longitude = route_data.start_longitude,
+            max_distance = route_data.max_distance_start_point
         )
 
     new_route = create_record(db, ExecutedRoute, route_data)
@@ -404,8 +311,9 @@ def create_executed_route(
     logger.info(message)
     return new_route
 
-@handle_service_errors
-def register_executed_point(
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'ExecutedPoint', 'CREATE')
+async def register_executed_point(
     db: Session,
     point_data: ExecutedPointCreateSchema
 ) -> ExecutedPoint:
@@ -424,12 +332,13 @@ def register_executed_point(
     logger.info(message)
     return new_point
 
-@handle_service_errors
-def update_planned_route_status(
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'PlannedRoute', 'UPDATE_STATUS')
+async def update_planned_route_status(
     db: Session,
     planned_route_id: int,
     status_data: PlannedRouteUpdateStatusSchema
-) -> PlannedRoute:
+) -> Tuple[PlannedRoute, Dict]:
     '''
         Updates the status of a planned route.
     '''
@@ -437,23 +346,20 @@ def update_planned_route_status(
     logger.debug(message)
 
     db_route = get_record(db, PlannedRoute, planned_route_id)
+    old_values = sqlalchemy_object_as_dict(db_route)
 
-    # Retrieve the current and new status values for validation
     current_status = db_route.status
     new_status = status_data.status
 
-    # Validate the transition of statuses based on the business logic
-    # 1. A route can only transition from IN_CREATION to ACTIVE.
     if (
         current_status == PlannedRouteStatusEnum.IN_CREATION
         and new_status != PlannedRouteStatusEnum.ACTIVE
     ):
         raise InvalidInputError(
-            detail = f'''Routes in {PlannedRouteStatusEnum.IN_CREATION} status can only
-                    be changed to {PlannedRouteStatusEnum.ACTIVE}.'''
+            detail = f'''Routes in {PlannedRouteStatusEnum.IN_CREATION
+            } status can only be changed to {PlannedRouteStatusEnum.ACTIVE}.'''
         )
 
-    # 2. A route can transition from ACTIVE to INACTIVE and vice versa.
     if (
         current_status == PlannedRouteStatusEnum.ACTIVE
         and new_status not in [PlannedRouteStatusEnum.INACTIVE]
@@ -465,53 +371,60 @@ def update_planned_route_status(
             detail = f'Invalid status transition from {current_status} to {new_status}.'
         )
 
-
     updated_route = update_record(db, db_route, status_data)
     db.commit()
     db.refresh(updated_route)
     message = f'Status for planned route {planned_route_id} updated to {status_data.status}.'
     logger.info(message)
-    return updated_route
 
-@handle_service_errors
-def update_planned_route_service(
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(updated_route)
+    }
+
+    return updated_route, auditable_data
+
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'PlannedRoute', 'UPDATE')
+async def update_planned_route_service(
     db: Session,
     planned_route_id: int,
     route_data: PlannedRouteUpdateSchema
-) -> PlannedRoute:
+) -> Tuple[PlannedRoute, Dict]:
     '''
         Service to update specific fields of a planned route.
     '''
-    # Fetch the record
     db_planned_route = get_record(db, PlannedRoute, planned_route_id)
-
-    # Convert the Pydantic model to a dictionary, excluding unset fields
+    old_values = sqlalchemy_object_as_dict(db_planned_route)
     update_data: Dict[str, Any] = route_data.model_dump(exclude_unset = True)
 
-    # Check if there are any fields to update
     if not update_data:
-        # Return the original record if no updates are requested
-        return db_planned_route
+        return db_planned_route, old_values
 
-    # Update the model instance with the provided data
     for key, value in update_data.items():
         if key != 'points':
             setattr(db_planned_route, key, value)
 
-    # If the `points` list is being updated, it's a special case
     if 'points' in update_data:
         db_planned_route.points = update_data['points']
         flag_modified(db_planned_route, 'points')
 
     db.commit()
     db.refresh(db_planned_route)
-    return db_planned_route
 
-@handle_service_errors
-def delete_planned_route(
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_planned_route)
+    }
+
+    return db_planned_route, auditable_data
+
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'PlannedRoute', 'DELETE')
+async def delete_planned_route(
     db: Session,
     planned_route_id: int
-):
+) -> Tuple[int, Dict]:
     '''
         Deletes a planned route and its associated points.
     '''
@@ -525,13 +438,23 @@ def delete_planned_route(
             detail = 'Only routes in "IN CREATION" status can be deleted.'
         )
 
+    old_values = sqlalchemy_object_as_dict(db_route)
+
     delete_record(db, PlannedRoute, planned_route_id)
     db.commit()
     message = f'Planned route {planned_route_id} and its points deleted.'
     logger.info(message)
 
-@handle_service_errors
-def add_planned_point(
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': None
+    }
+
+    return planned_route_id, auditable_data
+
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'PlannedPoint', 'CREATE')
+async def add_planned_point(
     db: Session,
     planned_route_id: int,
     point_data: PlannedPointCreateSchema
@@ -568,18 +491,19 @@ def add_planned_point(
     logger.info(message)
     return new_point
 
-@handle_service_errors
-def update_planned_point(
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'PlannedPoint', 'UPDATE')
+async def update_planned_point(
     db: Session,
     planned_route_id: int,
     planned_point_id: int,
     point_data: PlannedPointUpdateSchema
-) -> PlannedPoint:
+) -> Tuple[PlannedPoint, Dict]:
     '''
         Updates the fields of an existing planned point.
     '''
-    message = f'''Updating planned point {planned_point_id}
-            on route {planned_route_id}.'''
+    message = f'''Updating planned point {planned_point_id} on route {
+            planned_route_id}.'''
     logger.debug(message)
 
     db_route = get_record(db, PlannedRoute, planned_route_id)
@@ -599,6 +523,8 @@ def update_planned_point(
             detail = f'Point {planned_point_id} not found on planned route {planned_route_id}.'
         )
 
+    old_values = sqlalchemy_object_as_dict(db_point)
+
     if point_data.secuencial is not None and point_data.secuencial != db_point.secuencial:
         existing_point_with_seq = db.query(PlannedPoint).filter(
             PlannedPoint.planned_route_id == planned_route_id,
@@ -606,8 +532,8 @@ def update_planned_point(
         ).first()
         if existing_point_with_seq:
             raise RegisterAlreadyExistsError(
-                detail = f'''The sequence number {point_data.secuencial} already exists
-                        for this route.'''
+                detail = f'''The sequence number {point_data.secuencial
+                } already exists for this route.'''
             )
 
     updated_point = update_record(db, db_point, point_data)
@@ -615,14 +541,21 @@ def update_planned_point(
     db.refresh(updated_point)
     message = f'Point {planned_point_id} successfully updated.'
     logger.info(message)
-    return updated_point
 
-@handle_service_errors
-def delete_planned_point(
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(updated_point)
+    }
+
+    return updated_point, auditable_data
+
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'PlannedPoint', 'DELETE')
+async def delete_planned_point(
     db: Session,
     planned_route_id: int,
     planned_point_id: int
-):
+) -> Tuple[int, Dict]:
     '''
         Deletes a specific planned point from a route.
     '''
@@ -645,34 +578,40 @@ def delete_planned_point(
             detail = f'Point {planned_point_id} not found in planned route {planned_route_id}.'
         )
 
-    db.delete(db_point)
-    db.commit()
-    message = f'Point {planned_point_id} deleted from planned route {planned_route_id}.'
-    logger.info(message)
+    old_values = sqlalchemy_object_as_dict(db_point)
 
-@handle_service_errors
-def update_executed_route_end_time(
+    delete_record(db, PlannedPoint, planned_point_id)
+    db.commit()
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': None
+    }
+
+    return planned_point_id, auditable_data
+
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'ExecutedRoute', 'UPDATE')
+async def update_executed_route_end_time(
     db: Session,
     executed_route_id: int,
     update_data: ExecutedRouteUpdateSchema
-) -> ExecutedRoute:
+) -> Tuple[ExecutedRoute, Dict]:
     '''
         Updates the end_time for an executed route.
     '''
     message = f'Updating end_time for executed route {executed_route_id}.'
     logger.debug(message)
 
-    # 1. Get the executed route record.
     db_record = get_record(db, ExecutedRoute, executed_route_id)
+    old_values = sqlalchemy_object_as_dict(db_record)
 
-    # 2. Get the last planned point for the associated planned route.
     planned_route_id = db_record.planned_route_id
     last_planned_point = db.query(PlannedPoint).filter(
         PlannedPoint.planned_route_id == planned_route_id
     ).order_by(PlannedPoint.secuencial.desc()).first()
 
-    # 3. Validate if the planned point exists and perform the distance validation.
-    if last_planned_point:
+    if last_planned_point and update_data.max_distance_end_point is not None:
         distance = _calculate_distance(
             lat1 = last_planned_point.latitude,
             lon1 = last_planned_point.longitude,
@@ -680,41 +619,54 @@ def update_executed_route_end_time(
             lon2 = update_data.end_longitude
         )
 
-        if distance > GEOTAG_RADIUS_METERS:
+        if distance > update_data.max_distance_end_point:
             raise InvalidInputError(
-                detail = f'Distance: {distance:.2f} meters. Limit: {GEOTAG_RADIUS_METERS} meters.'
+                detail = f'Distance: {distance:.2f} meters. Limit: {
+                    update_data.max_distance_end_point:.2f} meters.'
             )
 
-    # 4. Update the record if the validation is successful.
     updated_record = update_record(db, db_record, update_data)
     db.commit()
     db.refresh(updated_record)
     message = f'End time for executed route {executed_route_id} updated.'
     logger.info(message)
-    return updated_record
 
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(updated_record)
+    }
 
-@handle_service_errors
-def update_attendance_checkout_time(
+    return updated_record, auditable_data
+
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'Attendance', 'UPDATE')
+async def update_attendance_checkout_time(
     db: Session,
     attendance_id: int,
     update_data: AttendanceUpdateSchema
-) -> Attendance:
+) -> Tuple[Attendance, Dict]:
     '''
         Updates the check-out time of an attendance record.
     '''
     message = f'Updating check-out time for attendance {attendance_id}.'
     logger.debug(message)
     db_record = get_record(db, Attendance, attendance_id)
+    old_values = sqlalchemy_object_as_dict(db_record)
     updated_record = update_record(db, db_record, update_data)
     db.commit()
     db.refresh(updated_record)
     message = f'Check-out time for attendance {attendance_id} updated.'
     logger.info(message)
-    return updated_record
 
-@handle_service_errors
-def get_statistics_user_points(
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(updated_record)
+    }
+
+    return updated_record, auditable_data
+
+@handle_service_errors('LOCALIZATION')
+async def get_statistics_user_points(
     db: Session,
     user_id: int,
     start_date: datetime,
@@ -742,8 +694,8 @@ def get_statistics_user_points(
 
     # Simple aggregation for now, more complex logic can be added later
     total_points_visited = len(executed_points) + len(attendance_points)
-    message = f'''User {user_id} visited {total_points_visited} points between
-            {start_date} and {end_date}.'''
+    message = f'''User {user_id} visited {total_points_visited
+        } points between {start_date} and {end_date}.'''
     logger.info(message)
 
     # Compile a list of details for all visited points
@@ -773,8 +725,8 @@ def get_statistics_user_points(
         'points_details': points_details
     }
 
-@handle_service_errors
-def get_route_comparisons(
+@handle_service_errors('LOCALIZATION')
+async def get_route_comparisons(
     db: Session,
     planned_route_id: int
 ) -> Dict[str, Any]:
@@ -808,16 +760,17 @@ def get_route_comparisons(
         'comparisons': comparisons_list
     }
 
-@handle_service_errors
-def register_attendance(
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'Attendance', 'CREATE')
+async def register_attendance(
     db: Session,
     attendance_data: AttendanceCreateSchema
 ) -> Attendance:
     '''
         Registers or updates an attendance record based on user and point.
     '''
-    message = f'''Registering attendance for user {attendance_data.user_id}
-            at point {attendance_data.planned_point_id}.'''
+    message = f'''Registering attendance for user {attendance_data.user_id
+        } at point {attendance_data.planned_point_id}.'''
     logger.debug(message)
 
     planned_point = get_record(db, PlannedPoint, attendance_data.planned_point_id)
@@ -826,8 +779,8 @@ def register_attendance(
 
     if planned_route.status != PlannedRouteStatusEnum.ACTIVE:
         raise InvalidInputError(
-            detail = f'''Cannot register attendance. The planned route {planned_route.id}
-                    is not in ACTIVE status.'''
+            detail = f'''Cannot register attendance. The planned route {
+                planned_route.id} is not in ACTIVE status.'''
         )
 
     existing_attendance = db.query(Attendance).filter(
@@ -844,26 +797,18 @@ def register_attendance(
     db_attendance = create_record(db, Attendance, attendance_data)
     db.commit()
     db.refresh(db_attendance)
-    message = f'''Attendance for user {attendance_data.user_id}
-            at point {attendance_data.planned_point_id} created successfully.'''
+    message = f'''Attendance for user {attendance_data.user_id} at point {
+            attendance_data.planned_point_id} created successfully.'''
     logger.info(message)
     return db_attendance
 
-@handle_service_errors
-def get_full_route_comparison(
+@handle_service_errors('LOCALIZATION')
+async def get_full_route_comparison(
     db: Session,
     planned_route_id: int
 ) -> RouteComparisonFullResponseSchema:
     '''
         Retrieves a planned route and all its executed routes for comparison.
-
-        Args:
-            db (Session): The database session.
-            planned_route_id (int): The ID of the planned route to compare.
-
-        Returns:
-            RouteComparisonFullResponseSchema: A complete object with all data
-                for the comparison.
     '''
     message = f'Getting full comparison data for planned route {planned_route_id}.'
     logger.debug(message)
@@ -905,52 +850,26 @@ def get_full_route_comparison(
 
     return RouteComparisonFullResponseSchema(**response_data)
 
-@handle_service_errors
 async def bulk_create_planned_routes(
     db: Session,
     file_name: str,
+    delimiter: str,
     auth_token: str,
-    delimiter: Optional[str] = ','
 ) -> Dict[str, Any]:
     '''
-    Processes a CSV file from the FILES microservice to create planned routes and points.
-    The process is atomic; if any part fails, the entire transaction is rolled back.
+        Service function to handle the bulk upload of planned routes.
+        It uses a generic utility to process the file and insert data.
     '''
-    # Step 1: Read and parse the file content
-    rows = await _read_and_parse_file_content(
+    logger.info('Starting bulk upload process...')
+
+    result = await perform_bulk_upload(
+        db = db,
         file_name = file_name,
         auth_token = auth_token,
+        bulk_schema = PlannedRouteBulkCreateSchema,
+        processor_func = _process_localization_csv_data,
+        inserter_func = _perform_atomic_db_insertion_for_localization,
         delimiter = delimiter
     )
 
-    if not rows:
-        return {
-            'message': 'No valid routes found in the file.',
-            'routes_created': 0,
-            'points_created': 0
-        }
-
-    # Step 2: Process JSON data and group by route
-    routes_to_create = _process_json_data(rows)
-
-    # Step 2: Process CSV data and group by route
-    # routes_to_create = _process_csv_data(rows)
-
-    # Step 3: Atomic database insertion
-    creation_stats = await _perform_atomic_db_insertion(
-        db, routes_to_create, file_name, auth_token
-    )
-
-    db.commit()
-
-    # Step 4: Delete file from FILES microservice
-    await _handle_files_service_logic(
-        action = 'delete',
-        file_name = file_name,
-        auth_token = auth_token
-    )
-
-    return {
-        'message': 'Bulk upload successful.',
-        **creation_stats
-    }
+    return result
