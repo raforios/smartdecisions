@@ -2,7 +2,7 @@
 
 Bienvenido al microservicio de localización, un componente esencial dentro de la arquitectura de la API **SMARTBEAR**. Este servicio es el centro de control para la gestión y el análisis de todos los datos geográficos, permitiendo el seguimiento de rutas, el control de asistencia y la obtención de información estadística clave.
 
----
+-----
 
 ## 🎯 Propósito Principal
 
@@ -12,8 +12,9 @@ El **Localization-Service** está diseñado para ser la fuente de verdad para la
   * **Creación Dinámica de Rutas:** Registra y genera "rutas ejecutadas" en tiempo real a partir de los datos de localización enviados continuamente desde la aplicación móvil. El inicio de una ruta ejecutada está validado para garantizar que la ruta planificada asociada se encuentre en estado `ACTIVE`.
   * **Registro de Asistencia:** Procesa los **`check-in`** y **`check-out`** del personal en puntos geográficos asignados, vinculando la asistencia a las rutas planificadas. Este proceso también valida que la ruta planificada se encuentre en estado `ACTIVE`.
   * **Análisis y Estadísticas:** Proporciona **endpoints** para obtener análisis comparativos detallados entre las rutas planificadas y las ejecutadas, así como estadísticas de puntos visitados por usuario en un rango de fechas.
+  * **Carga Masiva:** Permite la importación de datos de rutas planificadas a gran escala a través de archivos CSV, simplificando la creación de múltiples registros.
 
----
+-----
 
 ## 🛠️ Tecnologías Utilizadas
 
@@ -28,7 +29,7 @@ Este microservicio ha sido desarrollado con un enfoque en el rendimiento, la rob
   * **Contenedorización:** Docker 🐳
   * **Plataforma Cloud:** AWS Lambda y AWS CLI (para el despliegue a través de un script shell)
 
----
+-----
 
 ## 🚀 Endpoints de la API
 
@@ -47,6 +48,7 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | `DELETE`| `/v1/localization/routes/planned/{planned_route_id}` | Elimina una **ruta planificada** y sus puntos. |
 | `POST` | `/v1/localization/routes/planned/{planned_route_id}/points`| Añade un nuevo punto a una **ruta planificada**. |
 | `DELETE`| `/v1/localization/routes/planned/{planned_route_id}/points/{planned_point_id}`| Elimina un punto específico de una **ruta planificada**. |
+| `POST`| `/v1/localization/routes/planned/bulk-upload` | Carga masivamente rutas planificadas a partir de un archivo CSV. |
 
 ### Rutas Ejecutadas
 
@@ -71,7 +73,7 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | `GET` | `/v1/localization/statistics/route-comparisons/{planned_route_id}`| Compara una **ruta planificada** con las **rutas ejecutadas** asociadas para obtener datos estadísticos. |
 | `GET` | `/v1/localization/routes/comparison/{planned_route_id}` | Obtiene una comparación detallada entre una **ruta planificada** y sus **rutas ejecutadas** para visualización. |
 
----
+-----
 
 ## 🗂️ Estructura del Microservicio
 
