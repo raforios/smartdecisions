@@ -352,8 +352,8 @@ class PlannedRouteFilterSchema(BaseModel):
     '''
     route_code: Optional[str] = Query(None, description = 'Unique code of the planned route.')
     route_name: Optional[str] = Query(None, description = 'Name of the planned route.')
-    route_status: Optional[str] = Query(None, alias = 'status',
-                                        description = 'Status of the planned route.')
+    route_status: Optional[PlannedRouteStatusEnum] = Query(None,
+                            description = 'Status of the planned route.')
     company_id: Optional[int] = Query(None, description = 'ID of the company who owns the route.')
     city_id: Optional[int] = Query(None,
                             description = 'ID of the city associated with the planned route.')
