@@ -12,13 +12,11 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     Boolean,
-    Enum as SQLAlchemyEnum
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from services.db_connection import Base
-from schemas.responses import FormResponseStatus
 
 # --- Person Model (Encuestado/Entrevistado) ---
 class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
@@ -34,12 +32,10 @@ class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
     )
 
     id = Column(Integer, primary_key = True, index = True)
-    # Reemplazo de 'name' por campos más detallados
     first_name = Column(String(255), nullable = False)
     paternal_last_name = Column(String(255), nullable = False)
     maternal_last_name = Column(String(255), nullable = True)
     email = Column(String(255), nullable = True, unique = True, index = True)
-    # Cambio de 'phone_number' por los campos más detallados de la base de datos
     phone_number = Column(String(50), nullable = True, unique = True, index = True)
     phone_number_2 = Column(String(50), nullable = True)
     birth_date = Column(DateTime, nullable = True)
@@ -49,9 +45,11 @@ class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
     observations = Column(String(1024), nullable = True)
     is_affiliated = Column(Boolean, default = False, nullable = False)
     affiliation_date = Column(DateTime, nullable = True)
-    affiliation_user_id = Column(String(255), nullable = True) # User ID from frontend
+    affiliation_user_id = Column(String(255), nullable = True)
 
-    # Relationships: one-to-many with Contact and FormResponse
+    is_referred = Column(Boolean, default=False, nullable = False)
+    referred_note = Column(Text, nullable=True)
+
     contacts = relationship(
         'Contact',
         back_populates = 'person',
@@ -92,38 +90,25 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
         Represents a completed submission of a form.
     '''
     __tablename__ = 't_form_responses'
+    __table_args__ = (
+        UniqueConstraint('form_id', 'company_id', 'affiliation_number',
+                         name = 'uq_form_company_affiliation_number'),
+    )
 
     id = Column(Integer, primary_key = True, index = True)
     form_id = Column(Integer, ForeignKey('t_form_headers.id'), nullable = False)
     contact_id = Column(Integer, ForeignKey('t_contacts.id'), nullable = False)
     person_id = Column(Integer, ForeignKey('t_persons.id'), nullable = False)
     submission_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
-    status = Column(SQLAlchemyEnum(
-        *[status_member.value for status_member in FormResponseStatus.__members__.values()]),
-        nullable = False, default = FormResponseStatus.COMPLETED)
+    status = Column(str(50), nullable = False)
     user_id = Column(Integer, nullable = False, index = True)
+    affiliation_number = Column(Integer, nullable = True)
+    company_id = Column(Integer, nullable = True)
 
-    # Relationships:
-    # many-to-one with FormHeader (implicitly linked by form_id, no back_populates needed
-    # here if FormHeader doesn't need to see responses)
-    # For now, FormHeader does not need a back_populates from here.
-    # If FormHeader needs to query its responses, we'd add:
-    # `t_form_responses = relationship('FormResponse', back_populates='form_header',
-    # cascade='all, delete-orphan')`
-    # to FormHeader model, and `form_header = relationship('FormHeader')` here.
-    # However, to maintain separation, we'll keep the link one-way for now
-    # (FormResponse -> FormHeader).
-    # Update: As per previous definition, FormHeader *did* have `t_form_responses` relation.
-    # We should re-add it to FormHeader's model and define the back_populates here.
+    rejection_reason = Column(Text, nullable=True)
+    affiliation_type = Column(String(50), nullable=True)
 
-    # Re-adding relationships as they were in forms.py but pointing to the new models/responses.py
-    # FormHeader (from models/forms.py) will reference 'FormResponse' (this model)
-    # The 'form_header' relationship on this side is a simple reference back.
-    # This maintains the link for querying from FormResponse to FormHeader.
-    # The 'back_populates' on the FormHeader side will be important.
-    form_header = relationship('FormHeader', primaryjoin = "FormResponse.form_id == FormHeader.id")
-
-    # Link to the new Contact model
+    form_header = relationship('FormHeader', back_populates = 'form_responses')
     contact = relationship('Contact', back_populates = 'form_responses')
 
     answers = relationship(
@@ -132,7 +117,13 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
         cascade = 'all, delete-orphan'
     )
     person = relationship('Person', back_populates = 'form_responses')
-    contact = relationship('Contact', back_populates = 'form_responses')
+
+    status_flow = relationship(
+        'FormResponseFlow',
+        back_populates='form_response',
+        cascade='all, delete-orphan',
+        order_by='FormResponseFlow.date_time'
+    )
 
 # --- FormAnswer Model (Individual Answer within a Submission) ---
 class FormAnswer(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
@@ -157,3 +148,21 @@ class FormAnswer(Base): # pylint: disable=too-few-public-methods, too-many-ances
     __table_args__ = (
         UniqueConstraint('form_response_id', 'question_id', name = '_response_unique'),
     )
+
+class FormResponseFlow(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
+    '''
+        SQLAlchemy model for the 't_form_responses_flow' table.
+        Records the history of status changes for each form response.
+    '''
+    __tablename__ = 't_form_responses_flow'
+
+    id = Column(Integer, primary_key = True, index = True)
+    form_response_id = Column(Integer, ForeignKey('t_form_responses.id'), nullable = False)
+    date_time = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
+    user_id = Column(Integer, nullable = False)
+    initial_status = Column(String(50), nullable = False)
+    next_status = Column(String(50), nullable = False)
+    observations = Column(Text, nullable = True)
+
+    # Relationships: many-to-one with FormResponse
+    form_response = relationship('FormResponse', back_populates = 'status_flow')

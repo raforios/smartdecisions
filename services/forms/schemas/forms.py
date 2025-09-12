@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
+from fastapi import Query
 
 # Enum for FormHeader status
 class FormStatus(str, Enum):
@@ -164,16 +165,25 @@ class FormHeaderCreate(FormHeaderBase):
 
 class FormFilters(BaseModel):
     '''
-        Schema for FormFilters
+        Schema to filter forms based on various criteria.
     '''
-    company_id: Optional[int] = Field(None,
-            description = 'The ID of the company to filter by')
-    form_code: Optional[str] = Field(None,
-            description = 'The unique code of the form to filter by')
-    name: Optional[str] = Field(None,
-            description = 'The name of the form (supports partial matching)')
-    status: Optional[str] = Field(None,
-            description = 'The status of the form to filter by')
+    company_id: Optional[int] = Query(None,
+            description = 'The ID of the company to filter by.')
+    service_id: Optional[int] = Query(None,
+            description = 'The ID of the service to filter by.')
+    form_code: Optional[str] = Query(None,
+            description = 'The unique code of the form to filter by.')
+    name: Optional[str] = Query(None,
+            description = 'The name of the form (supports partial matching).')
+    status: Optional[FormStatus] = Query(None,
+            description = 'The status of the form to filter by.')
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            This setting allows the class to be instantiated without arguments in
+            the @router.get() decorator.
+        '''
+        arbitrary_types_allowed = True
+
 class FormHeaderUpdate(FormHeaderBase):
     '''
         Schema for updating an existing form header.
@@ -184,10 +194,6 @@ class FormHeaderUpdate(FormHeaderBase):
     status: Optional[str] = None
     company_id: Optional[int] = None
     app_id: Optional[int] = None
-    # Questions are updated via their own endpoints (e.g.,
-    # PUT /forms/{formId}/questions/{questionId})
-    # or a dedicated endpoint for bulk updates if needed, not directly
-    # via header update.
 
 class FormHeaderResponse(FormHeaderBase):
     '''

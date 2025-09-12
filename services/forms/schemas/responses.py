@@ -44,13 +44,35 @@ class PersonBase(BaseModel):
         description = 'Place of expedition for the identification document.')
     observations: Optional[str] = Field(None,
         description = 'Notes or observations about the person.')
-    # The affiliation status, date, and user ID are handled automatically on the backend.
+
+    is_referred: Optional[bool] = Field(False,
+        description = 'Indicates if the person was referred by another person.')
+    referred_note: Optional[str] = Field(None,
+        description = 'Notes related to the referral.')
 
 class PersonCreate(PersonBase):
     '''
         Schema for creating a new person record.
     '''
-    # No additional fields beyond base for creation for now
+    # pass
+
+class PersonUpdate(BaseModel):
+    '''
+        Schema for updating an existing person record. All fields are optional.
+    '''
+    first_name: Optional[str] = None
+    paternal_last_name: Optional[str] = None
+    maternal_last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    phone_number_2: Optional[str] = None
+    birth_date: Optional[datetime] = None
+    identification_document_type: Optional[str] = None
+    identification_number: Optional[str] = None
+    identification_expedition_place: Optional[str] = None
+    observations: Optional[str] = None
+    is_referred: Optional[bool] = None
+    referred_note: Optional[str] = None
 
 class PersonResponse(PersonBase):
     '''
@@ -58,12 +80,22 @@ class PersonResponse(PersonBase):
         Includes the auto-generated ID.
     '''
     id: int
+    is_affiliated: bool
+    affiliation_date: Optional[datetime]
+    affiliation_user_id: Optional[str]
 
     class Config:# pylint: disable=too-few-public-methods
         '''
             PersonResponse - Config Class - To get form attributes
         '''
         from_attributes = True
+
+class PersonListResponse(BaseModel):
+    '''
+        Response schema for a list of persons, useful for listings.
+    '''
+    items: List[PersonResponse]
+    total: int
 
 # --- Schemas for Contacts (Georeferenced Location & Time of Interaction) ---
 class ContactBase(BaseModel):
@@ -113,7 +145,7 @@ class FormAnswerCreate(FormAnswerBase):
     '''
         Schema for creating a new individual form answer.
     '''
-    # No additional fields for creation.
+    # pass
 
 class FormAnswerResponse(FormAnswerBase):
     '''
@@ -121,8 +153,6 @@ class FormAnswerResponse(FormAnswerBase):
         Includes the auto-generated ID.
     '''
     id: int
-    # form_response_id: int # This will be part of the parent FormResponseResponse
-
     class Config:# pylint: disable=too-few-public-methods
         '''
             FormAnswerResponse - Config Class - To get form attributes
@@ -138,9 +168,15 @@ class FormResponseBase(BaseModel):
     user_id: int = Field(..., description = 'User ID from the Frontend who submitted the form.')
     contact_id: int = Field(...,
         description = 'ID of the contact/location associated with this response.')
-    # Status is often managed internally but included for completeness or initial setting
-    status: FormResponseStatus = Field(FormResponseStatus.COMPLETED,
+    status: str = Field(...,
         description = 'Current status of the form response (e.g., completed, reviewed).')
+
+    rejection_reason: Optional[str] = Field(None,
+        description = 'Reason for rejection if the response status is REJECTED.')
+    affiliation_type: Optional[str] = Field(None,
+        description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
+    company_id: Optional[int] = Field(None)
+    affiliation_number: Optional[int] = Field(None)
 
 class FormResponseCreate(FormResponseBase):
     '''
@@ -156,8 +192,43 @@ class FormResponseUpdate(BaseModel):
         Schema for updating a completed form response.
         Primarily used for updating the status after review.
     '''
-    status: FormResponseStatus = Field(...,
+    user_id: int = Field(...,
+        description = 'User ID from the Frontend who submitted the form.')
+    status: str = Field(...,
         description = 'New status for the form response (e.g., reviewed, approved).')
+    observations: Optional[str] = Field(None,
+        description = 'Notes or observations on the status change.')
+    rejection_reason: Optional[str] = Field(None,
+        description = 'Reason for rejection, only required if status is REJECTED.')
+
+class FormResponseFlowBase(BaseModel):
+    '''
+        Base schema for a record in the form response status flow.
+    '''
+    user_id: int
+    initial_status: str
+    next_status: str
+    observations: Optional[str] = None
+
+class FormResponseFlowCreate(FormResponseFlowBase):
+    '''
+        Schema for creating a new flow record.
+    '''
+    form_response_id: int
+
+class FormResponseFlowResponse(FormResponseFlowBase):
+    '''
+        Response schema for a form response flow record.
+    '''
+    id: int
+    date_time: datetime
+
+    class Config: # pylint: disable=too-few-public-methods
+        '''
+            This setting allows the class to be instantiated without arguments in
+            the @router.get() decorator.
+        '''
+        from_attributes = True
 
 class FormResponseDetailResponse(FormResponseBase):
     '''
@@ -169,7 +240,8 @@ class FormResponseDetailResponse(FormResponseBase):
     submission_date: datetime = Field(...,
         description = 'Timestamp when the form response was submitted.')
     answers: List[FormAnswerResponse] = []
-    contact: ContactResponse # Nested schema for the associated contact and person
+    contact: ContactResponse
+    status_flow: List[FormResponseFlowResponse] = []
 
     class Config:# pylint: disable=too-few-public-methods
         '''
@@ -185,9 +257,13 @@ class FormResponseSummaryResponse(BaseModel):
     id: int
     form_id: int
     submission_date: datetime
-    status: FormResponseStatus
+    status: str
     user_id: int
     contact_id: int
+    company_id: Optional[int] = Field(None)
+    affiliation_number: Optional[int] = Field(None)
+    rejection_reason: Optional[str] = Field(None)
+    affiliation_type: Optional[str] = Field(None)
 
     class Config:# pylint: disable=too-few-public-methods
         '''
@@ -206,8 +282,6 @@ class TemporaryAnswer(BaseModel):
         description = 'The value of the answer provided.')
     response_type: str = Field(...,
         description = 'Type of question response (e.g., "numeric", "true_false").')
-    # Potentially add metadata about options/flow rules used for this specific answer
-    # if complex validation needed on backend
 
 class CurrentFormSession(BaseModel):
     '''
@@ -234,6 +308,13 @@ class CurrentFormSession(BaseModel):
         description = 'Temporary longitude from session start.')
     person_info_id: Optional[int] = Field(None,
         description = 'ID of the person created at the start of the session.')
+
+    rejection_reason: Optional[str] = Field(None,
+        description = 'Reason for rejection if the response status is REJECTED.')
+    affiliation_type: Optional[str] = Field(None,
+        description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
+    form_response_id: Optional[int] = Field(None,
+        description = 'ID of the initial FormResponse record created in MySQL.')
 
 # --- Schemas for Request/Response related to Question Flow and Answers ---
 class StartFormSessionRequest(BaseModel):
@@ -263,6 +344,8 @@ class StartFormSessionResponse(BaseModel):
     options: Optional[List[Dict[str, Any]]] = Field(None,
         description = 'Options for multiple choice questions.')
     message: str = 'Form session started. Here is the first question.'
+    form_response_id: int = Field(...,
+        description = 'ID of the initial FormResponse record created in MySQL.')
 
 class SubmitAnswerRequest(BaseModel):
     '''
@@ -273,6 +356,7 @@ class SubmitAnswerRequest(BaseModel):
     question_number: int = Field(..., description = 'Number of the question being answered.')
     answer_value: Optional[str] = Field(None, description = 'The user\'s answer to the question.')
     uploaded_file: Optional[UploadFile] = None
+
 class NextQuestionResponse(BaseModel):
     '''
         Response schema for the next question to be displayed or a completion message.
@@ -285,13 +369,18 @@ class NextQuestionResponse(BaseModel):
     response_type: Optional[str] = Field(None,
         description = 'Expected response type of the next question. None if form is complete.')
     options: Optional[List[Dict[str, Any]]] = Field(None,
-        description = 'Options for multiple choice questions.') # Simplified for response
+        description = 'Options for multiple choice questions.')
     is_form_complete: bool = Field(..., description = 'True if all questions have been answered.')
     message: str = Field(...,
         description = 'Status message (e.g., "Next question", "Form completed").')
     current_answers: Optional[Dict[str, Any]] = Field(None,
         description = '''Currently recorded answers for the session,
         including the last submitted one. Keyed by question_number.''')
+
+    company_id: Optional[int] = Field(None)
+    affiliation_number: Optional[int] = Field(None)
+    rejection_reason: Optional[str] = Field(None)
+    affiliation_type: Optional[str] = Field(None)
 
 class GetQuestionToModifyRequest(BaseModel):
     '''
@@ -331,7 +420,8 @@ class FinalizeFormRequest(BaseModel):
         Request schema to finalize a form session and persist answers.
     '''
     session_id: str = Field(..., description = 'ID of the temporary form filling session.')
-    # Additional fields could be added here if needed for final submission (e.g., final notes)
+    affiliation_type: Optional[str] = Field(None,
+        description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
 
 class FinalizeFormResponse(BaseModel):
     '''
@@ -340,3 +430,4 @@ class FinalizeFormResponse(BaseModel):
     form_response_id: int = Field(...,
         description = 'ID of the newly created permanent form response record.')
     message: str = 'Form successfully finalized and answers saved permanently.'
+    affiliation_number: Optional[int] = Field(None)

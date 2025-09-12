@@ -11,16 +11,24 @@ from typing import List, Dict, Any, Optional
 import httpx
 from fastapi import UploadFile
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from dotenv import dotenv_values
 
 # Import models
 from models.responses import (
     Contact,
-    FormResponse
+    FormResponse,
+    Person
 )
+# Import FormHeader to get company_id
+from models.forms import FormHeader
+
 # Import schemas
 from schemas.responses import (
+    PersonCreate,
+    PersonListResponse,
+    PersonResponse,
+    PersonUpdate,
     StartFormSessionRequest,
     StartFormSessionResponse,
     SubmitAnswerRequest,
@@ -34,7 +42,7 @@ from schemas.responses import (
     FinalizeFormResponse,
     FormResponseDetailResponse,
     FormResponseSummaryResponse,
-    FormResponseUpdate,
+    FormResponseUpdate
 )
 # Import custom exceptions
 from services.exceptions import (
@@ -44,19 +52,22 @@ from services.exceptions import (
 )
 from services.crud import (
     get_record,
-    update_record,
     get_all_records_paginated
 )
-# New: DynamoDB Service
+# DynamoDB Service
 from services.dynamodb import (
     get_session_by_id,
     save_session,
     delete_session_by_id
 )
-# New: Utility for handling service layer errors
+# Utility for handling service layer errors
 from services.utils import handle_service_errors
-# New: Import auxiliary functions from the new service layer
+# Import auxiliary functions from the new service layer
 from services.responses import (
+    create_person_logic,
+    delete_person_logic,
+    get_all_persons_logic,
+    get_person_by_id_logic,
     get_question_details_for_form,
     get_next_question_number,
     get_question_response_data,
@@ -64,6 +75,8 @@ from services.responses import (
     process_next_question_logic,
     create_form_response_and_answers,
     prepare_next_question_response,
+    update_form_response_logic,
+    update_person_logic
 )
 # Configuration for DynamoDB TTL (e.g., 24 hours)
 # This should ideally come from configuration (e.env or config service)
@@ -95,7 +108,7 @@ async def _initialize_dynamodb_session(
         contact_info_id = contact_info['contact_id'],
         contact_temp_latitude = contact_info.get('latitude'),
         contact_temp_longitude = contact_info.get('longitude'),
-        person_info_id = contact_info['person_info_id']
+        person_info_id = contact_info['person_id']
     )
     await save_session(initial_session_state.model_dump())
     return initial_session_state
@@ -360,11 +373,38 @@ async def finalize_form_session(
         finalize_data.session_id, db)
     if not current_session.answers:
         raise InvalidInputError(detail = 'Cannot finalize an empty form session.')
+
+    # Get the company_id from the FormHeader
+    form_header = db.query(FormHeader).filter(FormHeader.id == current_session.form_id).first()
+    if not form_header:
+        raise RegisterNotFoundError(
+            detail = f'FormHeader with ID {current_session.form_id} not found.'
+        )
+    company_id = form_header.company_id
+
+    # Get the latest affiliation_number for this company and form
+    latest_affiliation = db.query(func.max(FormResponse.affiliation_number)).filter(
+        FormResponse.form_id == current_session.form_id,
+        FormResponse.company_id == company_id
+    ).scalar()
+
+    # Calcular el nuevo número de afiliación. Si no existe, es 1.
+    new_affiliation_number = (latest_affiliation or 0) + 1
+    affiliation_type = finalize_data.affiliation_type
+
     form_response_id = create_form_response_and_answers(
-        db, current_session, questions_map
+        db,
+        current_session,
+        questions_map,
+        company_id = company_id,
+        affiliation_number = new_affiliation_number,
+        affiliation_type = affiliation_type
     )
     await delete_session_by_id(current_session.session_id)
-    return FinalizeFormResponse(form_response_id = form_response_id)
+    return FinalizeFormResponse(
+        form_response_id = form_response_id,
+        affiliation_number = new_affiliation_number
+    )
 
 @handle_service_errors
 def get_form_response_by_id(
@@ -378,7 +418,8 @@ def get_form_response_by_id(
     eager_load_options = [
         joinedload(FormResponse.answers),
         joinedload(FormResponse.contact).joinedload(Contact.person),
-        joinedload(FormResponse.person)
+        joinedload(FormResponse.person),
+        joinedload(FormResponse.status_flow)
     ]
     db_form_response = get_record(db, FormResponse, form_response_id, eager_load_options)
     return db_form_response
@@ -405,15 +446,52 @@ def update_form_response_status(
     '''
         Updates the status of an existing completed form response.
     '''
-    db_form_response = get_record(db, FormResponse, form_response_id)
-    try:
-        updated_response = update_record(db, db_form_response, status_data)
-        db.commit()
-        db.refresh(updated_response)
-        # Eager load for the response schema
-        return get_form_response_by_id(db, updated_response.id)
-    except IntegrityError as e:
-        raise InvalidInputError(
-            detail = '''Error updating form response: provided status is invalid
-                    o conflicts with current data.'''
-        ) from e
+    updated_response = update_form_response_logic(db, form_response_id, status_data)
+
+    # Eager load for the response schema
+    return get_form_response_by_id(db, updated_response.id)
+
+@handle_service_errors
+def create_person(db: Session, person_data: PersonCreate) -> PersonResponse:
+    '''
+        Creates a new person record in the database.
+    '''
+    return create_person_logic(db, person_data)
+
+
+@handle_service_errors
+def get_person_by_id(db: Session, person_id: int) -> PersonResponse:
+    '''
+    Retrieves a person record by its ID.
+    '''
+    return get_person_by_id_logic(db, person_id)
+
+
+@handle_service_errors
+def get_all_persons(db: Session, skip: int = 0, limit: int = 100) -> PersonListResponse:
+    '''
+    Retrieves a paginated list of all person records.
+    '''
+    persons = get_all_persons_logic(db, skip, limit)
+    total_count = db.query(Person).count()
+    return PersonListResponse(items = persons, total = total_count)
+
+
+@handle_service_errors
+def update_person(
+    db: Session,
+    person_id: int,
+    person_data: PersonUpdate
+) -> PersonResponse:
+    '''
+    Updates an existing person record by ID.
+    '''
+    return update_person_logic(db, person_id, person_data)
+
+
+@handle_service_errors
+def delete_person(db: Session, person_id: int) -> Dict[str, str]:
+    '''
+    Deletes a person record by ID.
+    '''
+    return delete_person_logic(db, person_id)

@@ -1,14 +1,36 @@
 '''
     Business logic services for the Forms microservice.
 '''
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from models.forms import QuestionDetail
-from models.responses import Person, Contact, FormResponse, FormAnswer
-from schemas.responses import StartFormSessionRequest, CurrentFormSession
-from services.exceptions import RegisterNotFoundError, InvalidInputError
-from services.crud import create_record
+from models.responses import (
+    FormResponseFlow,
+    Person,
+    Contact,
+    FormResponse,
+    FormAnswer
+)
+from schemas.responses import (
+    FormResponseFlowCreate,
+    FormResponseUpdate,
+    PersonCreate,
+    PersonUpdate,
+    StartFormSessionRequest,
+    CurrentFormSession
+)
+from services.exceptions import (
+    RegisterNotFoundError,
+    InvalidInputError
+)
+from services.crud import (
+    create_record,
+    delete_record,
+    get_all_records_paginated,
+    get_record,
+    update_record
+)
 from services.logger_config import custom_logger as logger
 from services.utils import handle_service_errors
 
@@ -140,7 +162,9 @@ def process_next_question_logic(
 def create_form_response_and_answers(
     db: Session,
     current_session: CurrentFormSession,
-    questions_map: Dict[int, QuestionDetail]
+    questions_map: Dict[int, QuestionDetail],
+    company_id: Optional[int],
+    affiliation_number: Optional[int]
 ):
     '''
         Helper to persist form response and answers to MySQL.
@@ -150,7 +174,9 @@ def create_form_response_and_answers(
         form_id = current_session.form_id,
         user_id = current_session.user_id,
         contact_id = current_session.contact_info_id,
-        person_id = current_session.person_info_id
+        person_id = current_session.person_info_id,
+        company_id = company_id,
+        affiliation_number = affiliation_number
     )
     db.add(db_form_response)
     db.flush()
@@ -194,3 +220,107 @@ def prepare_next_question_response(
     if next_question:
         response_data.update(get_question_response_data(next_question))
     return response_data
+
+@handle_service_errors
+def update_form_response_logic(
+    db: Session,
+    form_response_id: int,
+    status_data: FormResponseUpdate
+) -> FormResponse:
+    '''
+        Business logic to update a form response's status and record the change in the flow table.
+    '''
+    db_form_response = get_record(db, FormResponse, form_response_id)
+    initial_status = db_form_response.status
+
+    if status_data.status == 'REJECTED' and not status_data.rejection_reason:
+        raise InvalidInputError(
+            detail = 'Rejection reason is required for REJECTED status.'
+        )
+
+    updated_response = update_record(db, db_form_response, status_data)
+
+    flow_record_data = FormResponseFlowCreate(
+        form_response_id = form_response_id,
+        user_id = status_data.user_id,
+        initial_status = initial_status,
+        next_status = status_data.status,
+        observations = status_data.observations
+    )
+    create_record(db, FormResponseFlow, flow_record_data)
+
+    db.commit()
+    db.refresh(updated_response)
+
+    return updated_response
+
+@handle_service_errors
+def create_person_logic(
+    db: Session,
+    person_data: PersonCreate
+) -> Person:
+    '''
+        Business logic to create a new person record.
+        Checks for existing unique fields (e.g., email, identification_number)
+        to prevent duplicates.
+    '''
+    # Se realiza una comprobación de duplicados para los campos únicos
+    existing_person = db.query(Person).filter(
+        (Person.email == person_data.email) |
+        (Person.phone_number == person_data.phone_number) |
+        (Person.identification_number == person_data.identification_number)
+    ).first()
+
+    if existing_person:
+        raise InvalidInputError(
+            detail = '''A person with this email, phone number, or identification number
+                    already exists.'''
+        )
+
+    try:
+        db_person = create_record(db, Person, person_data)
+        db.commit()
+        db.refresh(db_person)
+        return db_person
+    except IntegrityError as e:
+        db.rollback()
+        raise InvalidInputError(
+            detail = 'Failed to create person due to a data integrity issue.'
+        ) from e
+
+@handle_service_errors
+def get_person_by_id_logic(db: Session, person_id: int) -> Person:
+    '''
+        Business logic to retrieve a person record by ID.
+    '''
+    db_person = get_record(db, Person, person_id)
+    return db_person
+
+@handle_service_errors
+def get_all_persons_logic(db: Session, skip: int, limit: int) -> List[Person]:
+    '''
+        Business logic to retrieve a paginated list of all person records.
+    '''
+    return get_all_records_paginated(db, Person, skip, limit)
+
+@handle_service_errors
+def update_person_logic(db: Session, person_id: int, person_data: PersonUpdate) -> Person:
+    '''
+        Business logic to update an existing person record.
+    '''
+    db_person = get_record(db, Person, person_id)
+    # Aquí podríamos añadir validaciones adicionales si es necesario
+    updated_person = update_record(db, db_person, person_data)
+    db.commit()
+    db.refresh(updated_person)
+    return updated_person
+
+@handle_service_errors
+def delete_person_logic(db: Session, person_id: int) -> Dict[str, str]:
+    '''
+        Business logic to delete a person record by ID.
+    '''
+    db_person = get_record(db, Person, person_id)
+    delete_record(db, db_person, person_id)
+    db.commit()
+    return {'message': f'Person with ID {person_id} has been successfully deleted.'}
