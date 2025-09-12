@@ -141,8 +141,7 @@ def _process_localization_csv_data(
                         'app_id',
                         'city_id',
                         'route_code',
-                        'route_name',
-                        'description'
+                        'route_name'
                     })
             )
         except (ValueError, TypeError) as e:
