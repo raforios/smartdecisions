@@ -46,15 +46,8 @@ async def create_new_form_header_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Creates a new form header, including its questions, multiple choice options,
-    and flow rules.
-
-    Args:
-        form_data (FormHeaderCreate): The form header data with nested questions.
-        db (Session): The database session.
-
-    Returns:
-        FormHeaderResponse: The created form header with all its details.
+        Creates a new form header, including its questions, multiple choice options,
+        and flow rules.
     '''
     message = f'User: {current_user}. Received request to create form header: {form_data.form_code}'
     logger.info(message)
@@ -71,15 +64,8 @@ async def get_form_header_by_id_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Retrieves a single form header by its ID, including all associated questions,
-    multiple choice options, and flow rules.
-
-    Args:
-        form_id (int): The ID of the form header to retrieve.
-        db (Session): The database session.
-
-    Returns:
-        FormHeaderResponse: The requested form header.
+        Retrieves a single form header by its ID, including all associated questions,
+        multiple choice options, and flow rules.
     '''
     message = f'User: {current_user}. Received request to get form header with ID: {form_id}'
     logger.info(message)
@@ -98,19 +84,8 @@ async def get_all_form_headers_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Retrieves a list of all form headers based on optional filter criteria.
-    Supports pagination through 'skip' and 'limit' query parameters.
-
-    Args:
-        filters (FormFilters): Optional filters to apply, including company_id,
-                                form_code, name, and status.
-        skip (int): The number of items to skip (for pagination).
-        limit (int): The maximum number of items to return (for pagination).
-        db (Session): The database session.
-        current_user (str): The authenticated user from the JWT token.
-
-    Returns:
-        List[FormHeaderResponse]: A list of form headers that match the criteria.
+        Retrieves a list of all form headers based on optional filter criteria.
+        Supports pagination through 'skip' and 'limit' query parameters.
     '''
     message = f'''User: {current_user}. Received request to get all form headers
             (skip: {skip}, limit: {limit})'''
@@ -134,17 +109,9 @@ async def update_existing_form_header_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Updates an existing form header by its ID.
-    Note: This endpoint updates only the header's direct attributes.
-    Questions, options, and flow rules should be updated via their specific endpoints.
-
-    Args:
-        form_id (int): The ID of the form header to update.
-        form_data (FormHeaderUpdate): The updated data for the form header.
-        db (Session): The database session.
-
-    Returns:
-        FormHeaderResponse: The updated form header.
+        Updates an existing form header by its ID.
+        Note: This endpoint updates only the header's direct attributes.
+        Questions, options, and flow rules should be updated via their specific endpoints.
     '''
     message = f'User: {current_user}. Received request to update form header with ID: {form_id}'
     logger.info(message)
@@ -161,16 +128,9 @@ async def delete_existing_form_header_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Deletes a form header by its ID.
-    This action will also delete all associated questions, options, flow rules,
-    and form responses due to cascade settings in the database models.
-
-    Args:
-        form_id (int): The ID of the form header to delete.
-        db (Session): The database session.
-
-    Returns:
-        Dict[str, str]: A success message.
+        Deletes a form header by its ID.
+        This action will also delete all associated questions, options, flow rules,
+        and form responses due to cascade settings in the database models.
     '''
     message = f'User: {current_user}. Received request to delete form header with ID: {form_id}'
     logger.info(message)
@@ -191,16 +151,8 @@ async def create_new_question_detail_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Creates a new question detail for a specified form header,
-    including its multiple choice options and flow rules.
-
-    Args:
-        form_id (int): The ID of the form header to associate the question with.
-        question_data (QuestionDetailCreate): The question detail data.
-        db (Session): The database session.
-
-    Returns:
-        QuestionDetailResponse: The created question detail.
+        Creates a new question detail for a specified form header,
+        including its multiple choice options and flow rules.
     '''
     message = f'''User: {current_user}. Received request to create question for form ID: {form_id},
             question number: {question_data.question_number}'''
@@ -218,15 +170,8 @@ async def get_question_detail_by_id_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Retrieves a single question detail by its ID, including associated
-    multiple choice options and flow rules.
-
-    Args:
-        question_id (int): The ID of the question detail to retrieve.
-        db (Session): The database session.
-
-    Returns:
-        QuestionDetailResponse: The requested question detail.
+        Retrieves a single question detail by its ID, including associated
+        multiple choice options and flow rules.
     '''
     message = f'''User: {current_user}. Received request to get question detail
             with ID: {question_id}'''
@@ -245,17 +190,9 @@ async def update_existing_question_detail_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Updates an existing question detail by its ID.
-    This endpoint supports updating question attributes, and replacing
-    (deleting old and adding new) associated options and flow rules.
-
-    Args:
-        question_id (int): The ID of the question detail to update.
-        question_data (QuestionDetailUpdate): The updated data for the question detail.
-        db (Session): The database session.
-
-    Returns:
-        QuestionDetailResponse: The updated question detail.
+        Updates an existing question detail by its ID.
+        This endpoint supports updating question attributes, and replacing
+        (deleting old and adding new) associated options and flow rules.
     '''
     message = f'''User: {current_user}. Received request to update question detail
             with ID: {question_id}'''
@@ -273,16 +210,9 @@ async def delete_existing_question_detail_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Deletes a question detail by its ID.
-    This action will also delete all associated multiple choice options and
-    flow rules due to cascade settings in the database models.
-
-    Args:
-        question_id (int): The ID of the question detail to delete.
-        db (Session): The database session.
-
-    Returns:
-        Dict[str, str]: A success message.
+        Deletes a question detail by its ID.
+        This action will also delete all associated multiple choice options and
+        flow rules due to cascade settings in the database models.
     '''
     message = f'''User: {current_user}. Received request to delete question detail
             with ID: {question_id}'''

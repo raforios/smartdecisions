@@ -17,6 +17,7 @@ from dotenv import dotenv_values
 
 from routes.forms import router as form_router
 from routes.responses import router as response_router
+from routes.responses import persons_router as person_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
@@ -88,6 +89,7 @@ def root() -> Dict[str, Any]:
 
 app.include_router(form_router, tags = ['Forms'])
 app.include_router(response_router, tags = ['Form Responses'])
+app.include_router(person_router, tags = ['Persons'])
 
 # Entry point to run the app
 if __name__ == '__main__':

@@ -25,6 +25,7 @@ from models.forms import FormHeader
 
 # Import schemas
 from schemas.responses import (
+    FormResponseStatusFlow,
     PersonCreate,
     PersonListResponse,
     PersonResponse,
@@ -67,16 +68,19 @@ from services.responses import (
     create_person_logic,
     delete_person_logic,
     get_all_persons_logic,
+    get_form_response_status_flow_logic,
     get_person_by_id_logic,
     get_question_details_for_form,
     get_next_question_number,
     get_question_response_data,
     create_person_and_contact,
     process_next_question_logic,
-    create_form_response_and_answers,
     prepare_next_question_response,
-    update_form_response_logic,
-    update_person_logic
+    update_form_response_data_logic,
+    update_form_response_status_logic,
+    update_person_logic,
+    create_initial_form_response_record_logic,
+    update_final_form_response_logic
 )
 # Configuration for DynamoDB TTL (e.g., 24 hours)
 # This should ideally come from configuration (e.env or config service)
@@ -84,12 +88,14 @@ DYNAMODB_SESSION_TTL_HOURS = 24
 
 _LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def _initialize_dynamodb_session(
     session_id: str,
     form_id: int,
     first_question_number: int,
     user_id: int,
-    contact_info: Dict[str, Any]
+    contact_info: Dict[str, Any],
+    form_response_id: int
 ) -> CurrentFormSession:
     '''
         Helper to initialize and save a new session in DynamoDB.
@@ -108,7 +114,8 @@ async def _initialize_dynamodb_session(
         contact_info_id = contact_info['contact_id'],
         contact_temp_latitude = contact_info.get('latitude'),
         contact_temp_longitude = contact_info.get('longitude'),
-        person_info_id = contact_info['person_id']
+        person_info_id = contact_info['person_id'],
+        form_response_id = form_response_id
     )
     await save_session(initial_session_state.model_dump())
     return initial_session_state
@@ -138,18 +145,8 @@ async def _handle_file_upload_logic(
     auth_token: str
 ) -> str:
     '''
-    Handles the logic for uploading a file to the FILES microservice.
-    This version expects a standard file upload (multipart/form-data).
-
-    Args:
-        uploaded_file (UploadFile): The file object from the FastAPI request.
-        auth_header (str): The raw 'Authorization' header string, e.g., 'Bearer abc...'.
-
-    Returns:
-        str: The S3 URL of the uploaded file.
-
-    Raises:
-        ServiceUnavailableError: If the FILES service is not available or returns an error.
+        Handles the logic for uploading a file to the FILES microservice.
+        This version expects a standard file upload (multipart/form-data).
     '''
     try:
         file_content_bytes = await uploaded_file.read()
@@ -206,28 +203,61 @@ async def start_form_session(
         Initiates a new form-filling session, creates person/contact records,
         and returns the first question.
     '''
+    # 1. Create or find the Person and the Contact
     contact_info = create_person_and_contact(db, session_data)
+
+    # 2. Get the company_id from the FormHeader
+    form_header = db.query(FormHeader).filter(FormHeader.id == session_data.form_id).first()
+    if not form_header:
+        raise RegisterNotFoundError(
+            detail = f'FormHeader with ID {session_data.form_id} not found.'
+        )
+    company_id = form_header.company_id
+
+    initial_data = {
+        'form_id': session_data.form_id,
+        'user_id': session_data.user_id,
+        'contact_id': contact_info['contact_id'],
+        'person_id': contact_info['person_id'],
+        'status': session_data.status, 
+        'company_id': company_id
+    }
+
+    # 3. Create the form header record in MySQL with the status from the frontend
+    form_response_id = create_initial_form_response_record_logic(
+        db,
+        initial_data
+    )
+
+    # 4. Get form information
     questions_map = get_question_details_for_form(db, session_data.form_id)
     first_question_number = min(questions_map.keys())
     first_question = questions_map[first_question_number]
+
+    # 5. Initialize and save the session in DynamoDB with the new header ID
     session_id = str(uuid.uuid4())
     contact_details_for_session = {
         'contact_id': contact_info['contact_id'],
         'latitude': session_data.contact_data.latitude,
         'longitude': session_data.contact_data.longitude,
-        'person_info_id': contact_info['person_id']
+        'person_id': contact_info['person_id']
     }
     await _initialize_dynamodb_session(
         session_id = session_id,
         form_id = session_data.form_id,
         first_question_number = first_question_number,
         user_id = session_data.user_id,
-        contact_info = contact_details_for_session
+        contact_info = contact_details_for_session,
+        form_response_id = form_response_id
     )
+
     db.commit()
+
     return StartFormSessionResponse(
         session_id = session_id,
         form_id = session_data.form_id,
+        form_response_id = form_response_id,
+        status = session_data.status,
         **get_question_response_data(first_question)
     )
 
@@ -388,22 +418,30 @@ async def finalize_form_session(
         FormResponse.company_id == company_id
     ).scalar()
 
-    # Calcular el nuevo número de afiliación. Si no existe, es 1.
+    # Calculate the new affiliation number. If none exists, it's 1.
     new_affiliation_number = (latest_affiliation or 0) + 1
     affiliation_type = finalize_data.affiliation_type
 
-    form_response_id = create_form_response_and_answers(
+    db_form_response = get_record(db, FormResponse, current_session.form_response_id)
+    if not db_form_response:
+        raise RegisterNotFoundError(
+            detail = f"Form response with ID {current_session.form_response_id} not found."
+        )
+
+    # MODIFIED: The logic to create the final records has been moved to a new service function.
+    updated_form_response = update_final_form_response_logic(
         db,
         current_session,
         questions_map,
-        company_id = company_id,
-        affiliation_number = new_affiliation_number,
-        affiliation_type = affiliation_type
+        company_id,
+        new_affiliation_number,
+        affiliation_type
     )
+
     await delete_session_by_id(current_session.session_id)
     return FinalizeFormResponse(
-        form_response_id = form_response_id,
-        affiliation_number = new_affiliation_number
+        form_response_id = updated_form_response.id,
+        affiliation_number = updated_form_response.affiliation_number
     )
 
 @handle_service_errors
@@ -446,10 +484,31 @@ def update_form_response_status(
     '''
         Updates the status of an existing completed form response.
     '''
-    updated_response = update_form_response_logic(db, form_response_id, status_data)
+    updated_response = update_form_response_status_logic(db, form_response_id, status_data)
 
     # Eager load for the response schema
     return get_form_response_by_id(db, updated_response.id)
+
+@handle_service_errors
+def update_form_response_data(
+    db: Session,
+    form_response_id: int,
+    form_response_data: FormResponseUpdate
+) -> FormResponse:
+    '''
+        Controller function to update a form response record.
+    '''
+    return update_form_response_data_logic(db, form_response_id, form_response_data)
+
+@handle_service_errors
+def get_form_response_status_flow_controller(
+    db: Session,
+    form_response_id: int
+) -> List[FormResponseStatusFlow]:
+    '''
+        Retrieves the status flow history for a given form response.
+    '''
+    return get_form_response_status_flow_logic(db, form_response_id)
 
 @handle_service_errors
 def create_person(db: Session, person_data: PersonCreate) -> PersonResponse:
@@ -462,7 +521,7 @@ def create_person(db: Session, person_data: PersonCreate) -> PersonResponse:
 @handle_service_errors
 def get_person_by_id(db: Session, person_id: int) -> PersonResponse:
     '''
-    Retrieves a person record by its ID.
+        Retrieves a person record by its ID.
     '''
     return get_person_by_id_logic(db, person_id)
 
@@ -470,7 +529,7 @@ def get_person_by_id(db: Session, person_id: int) -> PersonResponse:
 @handle_service_errors
 def get_all_persons(db: Session, skip: int = 0, limit: int = 100) -> PersonListResponse:
     '''
-    Retrieves a paginated list of all person records.
+        Retrieves a paginated list of all person records.
     '''
     persons = get_all_persons_logic(db, skip, limit)
     total_count = db.query(Person).count()
@@ -484,7 +543,7 @@ def update_person(
     person_data: PersonUpdate
 ) -> PersonResponse:
     '''
-    Updates an existing person record by ID.
+        Updates an existing person record by ID.
     '''
     return update_person_logic(db, person_id, person_data)
 
@@ -492,6 +551,6 @@ def update_person(
 @handle_service_errors
 def delete_person(db: Session, person_id: int) -> Dict[str, str]:
     '''
-    Deletes a person record by ID.
+        Deletes a person record by ID.
     '''
     return delete_person_logic(db, person_id)

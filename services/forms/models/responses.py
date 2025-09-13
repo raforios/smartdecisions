@@ -26,8 +26,8 @@ class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
     '''
     __tablename__ = 't_persons'
     __table_args__ = (
-        UniqueConstraint('email', name = 'uq_person_email'),
-        UniqueConstraint('phone_number', name = 'uq_person_phone_number'),
+        # UniqueConstraint('email', name = 'uq_person_email'),
+        # UniqueConstraint('phone_number', name = 'uq_person_phone_number'),
         UniqueConstraint('identification_number', name = 'uq_person_identification_number'),
     )
 
@@ -100,7 +100,7 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
     contact_id = Column(Integer, ForeignKey('t_contacts.id'), nullable = False)
     person_id = Column(Integer, ForeignKey('t_persons.id'), nullable = False)
     submission_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
-    status = Column(str(50), nullable = False)
+    status = Column(String(50), nullable = False)
     user_id = Column(Integer, nullable = False, index = True)
     affiliation_number = Column(Integer, nullable = True)
     company_id = Column(Integer, nullable = True)

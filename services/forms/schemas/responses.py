@@ -20,6 +20,8 @@ class FormResponseStatus(str, Enum):
     APPROVED = 'APPROVED'
     REJECTED = 'REJECTED'
     PENDING_APPROVAL = 'PENDING_APPROVAL'
+    # NEW: Default status for the form header
+    CREATED = 'CREATED'
 
 # --- Schemas for Persons (Encuestados/Entrevistados) ---
 class PersonBase(BaseModel):
@@ -176,7 +178,8 @@ class FormResponseBase(BaseModel):
     affiliation_type: Optional[str] = Field(None,
         description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
     company_id: Optional[int] = Field(None)
-    affiliation_number: Optional[int] = Field(None)
+    affiliation_number: Optional[int] = Field(None,
+        description = 'Number of affiliation from 1 to N.')
 
 class FormResponseCreate(FormResponseBase):
     '''
@@ -192,14 +195,18 @@ class FormResponseUpdate(BaseModel):
         Schema for updating a completed form response.
         Primarily used for updating the status after review.
     '''
-    user_id: int = Field(...,
+    user_id: Optional[int] = Field(None,
         description = 'User ID from the Frontend who submitted the form.')
-    status: str = Field(...,
+    status: Optional[str] = Field(None,
         description = 'New status for the form response (e.g., reviewed, approved).')
     observations: Optional[str] = Field(None,
         description = 'Notes or observations on the status change.')
     rejection_reason: Optional[str] = Field(None,
         description = 'Reason for rejection, only required if status is REJECTED.')
+    affiliation_number: Optional[int] = Field(None,
+        description = 'Number of affiliation from 1 to N.')
+    affiliation_type: Optional[str] = Field(None,
+        description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
 
 class FormResponseFlowBase(BaseModel):
     '''
@@ -330,6 +337,8 @@ class StartFormSessionRequest(BaseModel):
         description = 'Initial details of the person being interviewed/surveyed.')
     contact_data: ContactBase = Field(...,
         description = 'Geospatial and time data for the start of the interaction.')
+    status: Optional[str] = Field('CREATED',
+        description = 'Initial status of the form header. Defaults to CREATED if not provided.')
 
 class StartFormSessionResponse(BaseModel):
     '''
@@ -346,6 +355,8 @@ class StartFormSessionResponse(BaseModel):
     message: str = 'Form session started. Here is the first question.'
     form_response_id: int = Field(...,
         description = 'ID of the initial FormResponse record created in MySQL.')
+    status: str = Field(...,
+        description = 'Initial status of the form header, passed from the request.')
 
 class SubmitAnswerRequest(BaseModel):
     '''
@@ -431,3 +442,28 @@ class FinalizeFormResponse(BaseModel):
         description = 'ID of the newly created permanent form response record.')
     message: str = 'Form successfully finalized and answers saved permanently.'
     affiliation_number: Optional[int] = Field(None)
+
+class FormResponseStatusFlow(BaseModel):
+    '''
+        Schema to represent a single entry in the status flow history.
+        Records the chronological changes in a form response's status.
+    '''
+    id: int = Field(..., description = 'Unique ID for the status flow entry.')
+    form_response_id: int = Field(...,
+        description = 'ID of the form response to which this status change belongs.')
+    date_time: datetime = Field(...,
+        description = 'Timestamp when the status change occurred.')
+    user_id: int = Field(...,
+        description = 'ID of the user who initiated the status change.')
+    initial_status: str = Field(...,
+        description = 'The status of the form before the change.')
+    next_status: str = Field(...,
+        description = 'The new status of the form after the change.')
+    observations: Optional[str] = Field(None,
+        description = 'Notes or observations related to the status change.')
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            FormResponseStatusFlow - Config Class - To get form attributes
+        '''
+        from_attributes = True

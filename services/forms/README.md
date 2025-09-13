@@ -49,6 +49,8 @@ A continuación se listan los endpoints principales de la API, que facilitan la 
 | `PUT` | `/v1/forms/questions/{question_id}` | Actualiza una pregunta existente. |
 | `DELETE`| `/v1/forms/questions/{question_id}` | Elimina una pregunta y su información asociada. |
 
+---
+
 ### Gestión de Respuestas y Sesiones (DynamoDB & MySQL)
 
 | Método | Endpoint | Descripción |
@@ -60,7 +62,21 @@ A continuación se listan los endpoints principales de la API, que facilitan la 
 | `POST` | `/v1/form-responses/finalize-session` | Finaliza una sesión y guarda las respuestas en la base de datos permanente. |
 | `GET` | `/v1/form-responses/{form_response_id}` | Obtiene una respuesta de formulario completa por su ID. |
 | `GET` | `/v1/form-responses/` | Obtiene una lista paginada de todas las respuestas de formularios. |
-| `PUT` | `/v1/form-responses/{form_response_id}/status` | Actualiza el estado de una respuesta de formulario completada. |
+| `PUT` | `/v1/form-responses/{form_response_id}` | Actualiza una respuesta de formulario con nuevos datos. |
+| `PUT` | `/v1/form-responses/{form_response_id}/status` | Actualiza el estado de una respuesta y registra el cambio en el flujo de estado. |
+| `GET` | `/v1/form-responses/{form_response_id}/status-flow` | Obtiene el historial del flujo de estado de una respuesta de formulario. |
+
+---
+
+### Gestión de Personas (MySQL)
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/v1/persons/` | Crea un nuevo registro de persona. |
+| `GET` | `/v1/persons/{person_id}` | Obtiene un registro de persona por su ID. |
+| `GET` | `/v1/persons/` | Obtiene una lista paginada de todos los registros de personas. |
+| `PUT` | `/v1/persons/{person_id}` | Actualiza un registro de persona por su ID. |
+| `DELETE` | `/v1/persons/{person_id}` | Elimina un registro de persona por su ID. |
 
 -----
 
@@ -102,7 +118,7 @@ forms/
 ├── main.py
 ├── README.md
 └── requirements.txt
-```
+````
 
 -----
 
@@ -126,8 +142,8 @@ Para ejecutar el microservicio localmente, sigue los siguientes pasos:
 
 2.  **Configura las bases de datos:**
 
-    * Asegúrate de tener un servidor MySQL en ejecución y que las variables de conexión estén correctamente configuradas en el archivo `.env`.
-    * Asegúrate de tener una instancia local de DynamoDB en ejecución (puedes usar Docker como en el ejemplo del otro microservicio) y que las configuraciones sean correctas.
+      * Asegúrate de tener un servidor MySQL en ejecución y que las variables de conexión estén correctamente configuradas en el archivo `.env`.
+      * Asegúrate de tener una instancia local de DynamoDB en ejecución (puedes usar Docker como en el ejemplo del otro microservicio) y que las configuraciones sean correctas.
 
 3.  **Ejecuta el servidor de la API:**
 

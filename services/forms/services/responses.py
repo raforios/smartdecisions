@@ -159,44 +159,78 @@ def process_next_question_logic(
     }
 
 @handle_service_errors
-def create_form_response_and_answers(
+def create_initial_form_response_record_logic(
+    db: Session,
+    inital_data: Dict
+) -> int:
+    '''
+        Creates the initial form response record in MySQL at the start of the session.
+        Returns the ID of the new record.
+    '''
+    db_form_response = FormResponse(
+        form_id = inital_data['form_id'],
+        user_id = inital_data['user_id'],
+        contact_id = inital_data['contact_id'],
+        person_id = inital_data['person_id'],
+        status = inital_data['status'],
+        company_id = inital_data['company_id']
+    )
+    db.add(db_form_response)
+    db.flush()
+    return db_form_response.id
+
+@handle_service_errors
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+def update_final_form_response_logic(
     db: Session,
     current_session: CurrentFormSession,
     questions_map: Dict[int, QuestionDetail],
     company_id: Optional[int],
-    affiliation_number: Optional[int]
-):
+    affiliation_number: int,
+    affiliation_type: Optional[str]
+) -> FormResponse:
     '''
-        Helper to persist form response and answers to MySQL.
+        Updates the form header and persists all answers from the session cache to MySQL.
     '''
-    question_id_map = {q.question_number: q.id for q in questions_map.values()}
-    db_form_response = FormResponse(
-        form_id = current_session.form_id,
-        user_id = current_session.user_id,
-        contact_id = current_session.contact_info_id,
-        person_id = current_session.person_info_id,
+    logger.info('AFFILIATION NUMBER')
+    logger.info(affiliation_number)
+
+    # 1. Update the existing FormResponse header record
+    db_form_response = get_record(db, FormResponse, current_session.form_response_id)
+    update_data = FormResponseUpdate(
         company_id = company_id,
-        affiliation_number = affiliation_number
+        affiliation_number = affiliation_number,
+        affiliation_type = affiliation_type,
+        user_id = current_session.user_id,
+        # The final status will be set to 'COMPLETED' here, unless a 'REJECTED'
+        # status was already set from the frontend.
+        status = 'COMPLETED' if db_form_response.status != 'REJECTED' else 'REJECTED',
     )
-    db.add(db_form_response)
+
+    updated_form_response = update_record(db, db_form_response, update_data)
     db.flush()
+
+    # 2. Persist all individual answers
+    question_id_map = {q.question_number: q.id for q in questions_map.values()}
     db_answers = []
     for q_num_str, temp_ans in current_session.answers.items():
         question_db_id = question_id_map.get(int(q_num_str))
         if not question_db_id:
             message = f'''Question number {q_num_str} from session
-                    {current_session.session_id} not found in form
-                    {current_session.form_id} definitions. Skipping this answer.'''
+                        {current_session.session_id} not found in form
+                        {current_session.form_id} definitions. Skipping this answer.'''
             logger.warning(message)
             continue
         db_answers.append(FormAnswer(
-            form_response_id = db_form_response.id,
+            form_response_id = updated_form_response.id,
             question_id = question_db_id,
             answer_value = temp_ans.answer_value
         ))
     db.add_all(db_answers)
     db.commit()
-    return db_form_response.id
+    db.refresh(updated_form_response)
+
+    return updated_form_response
 
 def prepare_next_question_response(
     current_session: CurrentFormSession,
@@ -222,7 +256,7 @@ def prepare_next_question_response(
     return response_data
 
 @handle_service_errors
-def update_form_response_logic(
+def update_form_response_status_logic(
     db: Session,
     form_response_id: int,
     status_data: FormResponseUpdate
@@ -253,6 +287,40 @@ def update_form_response_logic(
     db.refresh(updated_response)
 
     return updated_response
+
+def update_form_response_data_logic(
+    db: Session,
+    form_response_id: int,
+    update_data: FormResponseUpdate
+) -> FormResponse:
+    '''
+        Updates an existing form response record in the database.        
+    '''
+    db_form_response = get_record(db, FormResponse, form_response_id)
+    if not db_form_response:
+        raise RegisterNotFoundError(
+            detail = f"Form response with ID {form_response_id} not found."
+        )
+
+    update_form_response = update_record(db, db_form_response, update_data)
+    db.commit()
+    db.refresh(update_form_response)
+
+    return update_form_response
+
+@handle_service_errors
+def get_form_response_status_flow_logic(
+    db: Session,
+    form_response_id: int
+) -> List[FormResponseFlow]:
+    '''
+        Retrieves the status flow for a specific form response ID.
+    '''
+    # Se obtienen todos los registros de la tabla de flujos de estado
+    # que coincidan con el ID del formulario
+    return db.query(FormResponseFlow).filter(
+        FormResponseFlow.form_response_id == form_response_id
+    ).order_by(FormResponseFlow.date_time).all()
 
 @handle_service_errors
 def create_person_logic(
@@ -309,7 +377,6 @@ def update_person_logic(db: Session, person_id: int, person_data: PersonUpdate) 
         Business logic to update an existing person record.
     '''
     db_person = get_record(db, Person, person_id)
-    # Aquí podríamos añadir validaciones adicionales si es necesario
     updated_person = update_record(db, db_person, person_data)
     db.commit()
     db.refresh(updated_person)
@@ -320,7 +387,6 @@ def delete_person_logic(db: Session, person_id: int) -> Dict[str, str]:
     '''
         Business logic to delete a person record by ID.
     '''
-    db_person = get_record(db, Person, person_id)
-    delete_record(db, db_person, person_id)
+    delete_record(db, Person, person_id)
     db.commit()
     return {'message': f'Person with ID {person_id} has been successfully deleted.'}

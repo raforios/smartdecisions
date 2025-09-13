@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 # Import schemas for form responses
 from schemas.responses import (
+    FormResponseStatusFlow,
     PersonCreate,
     PersonListResponse,
     PersonResponse,
@@ -30,6 +31,7 @@ from controllers.responses import (
     create_person,
     delete_person,
     get_all_persons,
+    get_form_response_status_flow_controller,
     get_person_by_id,
     start_form_session,
     submit_answer_and_get_next_question,
@@ -38,6 +40,7 @@ from controllers.responses import (
     finalize_form_session,
     get_form_response_by_id,
     get_all_form_responses,
+    update_form_response_data,
     update_form_response_status,
     update_person
 )
@@ -333,9 +336,50 @@ def delete_person_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Deletes a person record from the `t_persons` table by its ID.
+        Deletes a person record from the `t_persons` table by its ID.
     '''
     message = f'''User: {current_user
             }. Requests to delete person with ID: {person_id}.'''
     logger.info(message)
     return delete_person(db, person_id)
+
+@router.put(
+    '/{form_response_id}',
+    response_model = FormResponseDetailResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Updates a completed form response with new data'
+)
+def update_form_response_route(
+    form_response_id: int,
+    form_response_data: FormResponseUpdate,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Updates a previously completed form response with new data.
+        This endpoint is intended for administrative updates (e.g., modifying
+        affiliation details or other fields after the initial submission).
+    '''
+    message = f'''User: {current_user
+            }. Requests to update form response {form_response_id}.'''
+    logger.info(message)
+    return update_form_response_data(db, form_response_id, form_response_data)
+
+@router.get(
+    '/{form_response_id}/status-flow',
+    response_model = List[FormResponseStatusFlow],
+    summary = 'Get the status flow history for a completed form response'
+)
+def get_form_response_status_flow_route(
+    form_response_id: int,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Retrieves the chronological history of status changes for a specific
+        form response, including the old and new statuses and the timestamp.
+    '''
+    message = f'''User: {current_user
+            }. Requests status flow for form response {form_response_id}.'''
+    logger.info(message)
+    return get_form_response_status_flow_controller(db, form_response_id)
