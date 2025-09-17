@@ -4,6 +4,7 @@
 
 import os
 import time
+import decimal
 import asyncio
 import json
 from datetime import date, datetime
@@ -82,6 +83,8 @@ class CustomJSONEncoder(json.JSONEncoder):
             return o.isoformat()
         if isinstance(o, BaseModel):
             return o.model_dump()
+        if isinstance(o, decimal.Decimal):
+            return float(o)
         return super().default(o)
 
 class UsageLogData(BaseModel):
