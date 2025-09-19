@@ -3,16 +3,12 @@
     Handles the business logic for managing form responses, including
     temporary caching in DynamoDB and final persistence in MySQL.
 '''
-import mimetypes
-import os
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-import httpx
-from fastapi import UploadFile
+from fastapi import Request, UploadFile
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
-from dotenv import dotenv_values
 
 # Import models
 from models.responses import (
@@ -62,7 +58,7 @@ from services.dynamodb import (
     delete_session_by_id
 )
 # Utility for handling service layer errors
-from services.utils import handle_service_errors
+from services.utils import _handle_files_service, handle_service_errors
 # Import auxiliary functions from the new service layer
 from services.responses import (
     create_person_logic,
@@ -85,8 +81,6 @@ from services.responses import (
 # Configuration for DynamoDB TTL (e.g., 24 hours)
 # This should ideally come from configuration (e.env or config service)
 DYNAMODB_SESSION_TTL_HOURS = 24
-
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def _initialize_dynamodb_session(
@@ -133,78 +127,51 @@ async def _common_session_load_and_validate(
             detail = f'Session {session_id} not found or expired.'
         )
     current_session = CurrentFormSession(**session_state_dict)
-    questions_map = get_question_details_for_form(db, current_session.form_id)
+    questions_map = await get_question_details_for_form(db, current_session.form_id)
     if not questions_map:
         raise RegisterNotFoundError(
             detail = f'Form ID {current_session.form_id} has no questions defined.'
         )
     return current_session, questions_map
 
+@handle_service_errors('FORMS')
 async def _handle_file_upload_logic(
     uploaded_file: UploadFile,
     auth_token: str
 ) -> str:
     '''
         Handles the logic for uploading a file to the FILES microservice.
-        This version expects a standard file upload (multipart/form-data).
+        This version uses the standardized _perform_request function.
     '''
-    try:
-        file_content_bytes = await uploaded_file.read()
+    response = await _handle_files_service(
+        action = 'create',
+        file_name = '',
+        auth_token = auth_token,
+        uploaded_file = uploaded_file
+    )
 
-        files_service_url = os.environ.get('FILES_SERVICE_URL') or \
-                            _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
+    file_url = response.get('url')
 
-        if not files_service_url:
-            raise ServiceUnavailableError(
-                detail = 'FILES_SERVICE_URL environment variable is not set.'
-            )
-        upload_endpoint = f'{files_service_url}/v1/s3/upload'
+    if not file_url:
+        raise ServiceUnavailableError(detail = 'FILES service did not return a valid URL.')
 
-        mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
-        if not mime_type:
-            mime_type = 'application/octet-stream'
-        async with httpx.AsyncClient() as client:
-            files = {'file': (uploaded_file.filename, file_content_bytes, mime_type)}
-            data = {
-                'bucket_name': os.environ.get('BUCKET_NAME') or \
-                        _LOCAL_ENV_PARAMS.get('BUCKET_NAME'),
-                'file_path': os.environ.get('BUCKET_PATH') or \
-                        _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
-            }
-            headers = {'Authorization': f'{auth_token}'}
-            response = await client.post(
-                upload_endpoint,
-                files = files,
-                data = data,
-                headers = headers
-            )
-            response.raise_for_status()
-            s3_upload_response = response.json()
-            file_url = s3_upload_response.get('url')
-            if not file_url:
-                raise ServiceUnavailableError(detail = 'FILES service did not return a valid URL.')
-            return file_url
-    except httpx.HTTPStatusError as e:
-        message = f'''Failed to upload file to FILES service. Status:
-                    {e.response.status_code}, Detail: {e.response.text}'''
-        raise ServiceUnavailableError(detail = message) from e
-    except Exception as e:
-        raise ServiceUnavailableError(
-            detail = f'Unexpected error during file upload to FILES service: {e}'
-        ) from e
+    return file_url
+
 
 # --- Controller Functions ---
-@handle_service_errors
+@handle_service_errors('FORMS')
 async def start_form_session(
     db: Session,
     session_data: StartFormSessionRequest,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> StartFormSessionResponse:
     '''
         Initiates a new form-filling session, creates person/contact records,
         and returns the first question.
     '''
     # 1. Create or find the Person and the Contact
-    contact_info = create_person_and_contact(db, session_data)
+    contact_info = await create_person_and_contact(db, session_data)
 
     # 2. Get the company_id from the FormHeader
     form_header = db.query(FormHeader).filter(FormHeader.id == session_data.form_id).first()
@@ -224,13 +191,14 @@ async def start_form_session(
     }
 
     # 3. Create the form header record in MySQL with the status from the frontend
-    form_response_id = create_initial_form_response_record_logic(
+    db_form_response = await create_initial_form_response_record_logic(
         db,
         initial_data
     )
+    form_response_id = db_form_response.id
 
     # 4. Get form information
-    questions_map = get_question_details_for_form(db, session_data.form_id)
+    questions_map = await get_question_details_for_form(db, session_data.form_id)
     first_question_number = min(questions_map.keys())
     first_question = questions_map[first_question_number]
 
@@ -242,6 +210,7 @@ async def start_form_session(
         'longitude': session_data.contact_data.longitude,
         'person_id': contact_info['person_id']
     }
+
     await _initialize_dynamodb_session(
         session_id = session_id,
         form_id = session_data.form_id,
@@ -261,11 +230,12 @@ async def start_form_session(
         **get_question_response_data(first_question)
     )
 
-@handle_service_errors
 async def submit_answer_and_get_next_question(
     db: Session,
     answer_data: SubmitAnswerRequest,
     auth_token: str,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
     uploaded_file: Optional[UploadFile] = None
 ) -> NextQuestionResponse:
     '''
@@ -293,12 +263,12 @@ async def submit_answer_and_get_next_question(
         response_type = submitted_question_detail.response_type
     )
     current_session.answers[str(answer_data.question_number)] = temp_answer
-    next_question_number = get_next_question_number(
+    next_question_number = await get_next_question_number(
         current_question_number = answer_data.question_number,
         answer_value = answer_data.answer_value,
         questions_map = questions_map
     )
-    process_result = process_next_question_logic(
+    process_result = await process_next_question_logic(
         current_session, next_question_number, questions_map
     )
     next_question = process_result['next_question']
@@ -313,10 +283,12 @@ async def submit_answer_and_get_next_question(
             current_session, next_question, is_form_complete, message_response)
     )
 
-@handle_service_errors
+@handle_service_errors('FORMS')
 async def get_question_to_modify(
     db: Session,
     request_data: GetQuestionToModifyRequest,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> GetQuestionToModifyResponse:
     '''
         Retrieves a specific question and its current answer from a session for modification.
@@ -347,10 +319,12 @@ async def get_question_to_modify(
         ]
     return GetQuestionToModifyResponse(**response_data)
 
-@handle_service_errors
+@handle_service_errors('FORMS')
 async def update_answer_in_session(
     db: Session,
     update_data: UpdateAnswerInSessionRequest,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> NextQuestionResponse:
     '''
         Updates the answer for a specific question within a form session in DynamoDB.
@@ -371,12 +345,12 @@ async def update_answer_in_session(
         response_type = target_question_detail.response_type
     )
     current_session.answers[str(update_data.question_number)] = temp_answer
-    next_question_number = get_next_question_number(
+    next_question_number = await get_next_question_number(
         current_question_number = update_data.question_number,
         answer_value = update_data.new_answer_value,
         questions_map = questions_map
     )
-    process_result = process_next_question_logic(
+    process_result = await process_next_question_logic(
         current_session, next_question_number, questions_map
     )
     next_question = process_result['next_question']
@@ -391,10 +365,12 @@ async def update_answer_in_session(
             current_session, next_question, is_form_complete, message_response)
     )
 
-@handle_service_errors
+@handle_service_errors('FORMS')
 async def finalize_form_session(
     db: Session,
     finalize_data: FinalizeFormRequest,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> FinalizeFormResponse:
     '''
         Finalizes a form session, persists all answers to MySQL, and clears the cache.
@@ -429,7 +405,7 @@ async def finalize_form_session(
         )
 
     # MODIFIED: The logic to create the final records has been moved to a new service function.
-    updated_form_response = update_final_form_response_logic(
+    updated_form_response = await update_final_form_response_logic(
         db,
         current_session,
         questions_map,
@@ -444,10 +420,12 @@ async def finalize_form_session(
         affiliation_number = updated_form_response.affiliation_number
     )
 
-@handle_service_errors
-def get_form_response_by_id(
+@handle_service_errors('FORMS')
+async def get_form_response_by_id(
     db: Session,
     form_response_id: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> FormResponseDetailResponse:
     '''
         Retrieves a completed form response by its ID, including all associated answers,
@@ -460,11 +438,13 @@ def get_form_response_by_id(
         joinedload(FormResponse.status_flow)
     ]
     db_form_response = get_record(db, FormResponse, form_response_id, eager_load_options)
-    return db_form_response
+    return FormResponseDetailResponse.model_validate(db_form_response, from_attributes = True)
 
-@handle_service_errors
-def get_all_form_responses(
+@handle_service_errors('FORMS')
+async def get_all_form_responses(
     db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
     skip: int = 0,
     limit: int = 100,
 ) -> List[FormResponseSummaryResponse]:
@@ -475,82 +455,127 @@ def get_all_form_responses(
     # Using the generic get_all_records_paginated from crud service
     return get_all_records_paginated(db, FormResponse, skip, limit)
 
-@handle_service_errors
-def update_form_response_status(
+async def update_form_response_status(
     db: Session,
     form_response_id: int,
     status_data: FormResponseUpdate,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> FormResponseDetailResponse:
     '''
         Updates the status of an existing completed form response.
     '''
-    updated_response = update_form_response_status_logic(db, form_response_id, status_data)
+    updated_response = await update_form_response_status_logic(
+        db,
+        form_response_id,
+        status_data
+    )
 
     # Eager load for the response schema
-    return get_form_response_by_id(db, updated_response.id)
+    return await get_form_response_by_id(
+        db = db,
+        form_response_id = updated_response.id,
+        request = request,
+        current_user = current_user
+    )
 
-@handle_service_errors
-def update_form_response_data(
+@handle_service_errors('FORMS')
+async def update_form_response_data(
     db: Session,
     form_response_id: int,
-    form_response_data: FormResponseUpdate
+    form_response_data: FormResponseUpdate,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> FormResponse:
     '''
         Controller function to update a form response record.
     '''
-    return update_form_response_data_logic(db, form_response_id, form_response_data)
+    updated_response = await update_form_response_data_logic(
+        db,
+        form_response_id,
+        form_response_data
+    )
+    return updated_response
 
-@handle_service_errors
-def get_form_response_status_flow_controller(
+@handle_service_errors('FORMS')
+async def get_form_response_status_flow_controller(
     db: Session,
-    form_response_id: int
+    form_response_id: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> List[FormResponseStatusFlow]:
     '''
         Retrieves the status flow history for a given form response.
     '''
-    return get_form_response_status_flow_logic(db, form_response_id)
+    return await get_form_response_status_flow_logic(db, form_response_id)
 
-@handle_service_errors
-def create_person(db: Session, person_data: PersonCreate) -> PersonResponse:
+@handle_service_errors('FORMS')
+async def create_person(
+    db: Session,
+    person_data: PersonCreate,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> PersonResponse:
     '''
         Creates a new person record in the database.
     '''
-    return create_person_logic(db, person_data)
+    db_person = await create_person_logic(db, person_data)
+    return PersonResponse.model_validate(db_person, from_attributes = True)
 
 
-@handle_service_errors
-def get_person_by_id(db: Session, person_id: int) -> PersonResponse:
+@handle_service_errors('FORMS')
+async def get_person_by_id(
+    db: Session,
+    person_id: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> PersonResponse:
     '''
         Retrieves a person record by its ID.
     '''
-    return get_person_by_id_logic(db, person_id)
+    return await get_person_by_id_logic(db, person_id)
 
 
-@handle_service_errors
-def get_all_persons(db: Session, skip: int = 0, limit: int = 100) -> PersonListResponse:
+@handle_service_errors('FORMS')
+async def get_all_persons(
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+    skip: int = 0,
+    limit: int = 100
+) -> PersonListResponse:
     '''
         Retrieves a paginated list of all person records.
     '''
-    persons = get_all_persons_logic(db, skip, limit)
+    persons = await get_all_persons_logic(db, skip, limit)
     total_count = db.query(Person).count()
     return PersonListResponse(items = persons, total = total_count)
 
 
-@handle_service_errors
-def update_person(
+@handle_service_errors('FORMS')
+async def update_person(
     db: Session,
     person_id: int,
-    person_data: PersonUpdate
+    person_data: PersonUpdate,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
 ) -> PersonResponse:
     '''
         Updates an existing person record by ID.
     '''
-    return update_person_logic(db, person_id, person_data)
+    updated_person = await update_person_logic(db, person_id, person_data)
+    return PersonResponse.model_validate(updated_person, from_attributes = True)
 
 
-@handle_service_errors
-def delete_person(db: Session, person_id: int) -> Dict[str, str]:
+@handle_service_errors('FORMS')
+async def delete_person(
+    db: Session,
+    person_id: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+) -> Dict[str, str]:
     '''
         Deletes a person record by ID.
     '''
-    return delete_person_logic(db, person_id)
+    result = await delete_person_logic(db, person_id)
+    return result

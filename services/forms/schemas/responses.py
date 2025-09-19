@@ -40,9 +40,9 @@ class PersonBase(BaseModel):
     birth_date: Optional[datetime] = Field(None, description = 'Date of birth of the person.')
     identification_document_type: Optional[str] = Field(None,
         description = 'Type of identification document.')
-    identification_number: Optional[str] = Field(None,
+    identification_number: Optional[int] = Field(None,
         description = 'Identification number (e.g., ID card, passport).')
-    identification_expedition_place: Optional[str] = Field(None,
+    identification_expedition_place: Optional[int] = Field(None,
         description = 'Place of expedition for the identification document.')
     observations: Optional[str] = Field(None,
         description = 'Notes or observations about the person.')
@@ -72,6 +72,8 @@ class PersonUpdate(BaseModel):
     identification_document_type: Optional[str] = None
     identification_number: Optional[str] = None
     identification_expedition_place: Optional[str] = None
+    affiliation_date: Optional[datetime] = None
+    affiliation_user_id: Optional[int] = None
     observations: Optional[str] = None
     is_referred: Optional[bool] = None
     referred_note: Optional[str] = None
@@ -84,7 +86,7 @@ class PersonResponse(PersonBase):
     id: int
     is_affiliated: bool
     affiliation_date: Optional[datetime]
-    affiliation_user_id: Optional[str]
+    affiliation_user_id: Optional[int]
 
     class Config:# pylint: disable=too-few-public-methods
         '''

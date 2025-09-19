@@ -1,7 +1,8 @@
 '''
     Business logic services for the Forms microservice.
 '''
-from typing import Dict, Any, List, Optional
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from models.forms import QuestionDetail
@@ -32,10 +33,13 @@ from services.crud import (
     update_record
 )
 from services.logger_config import custom_logger as logger
-from services.utils import handle_service_errors
+from services.utils import (
+    handle_service_errors,
+    audit_event,
+    sqlalchemy_object_as_dict
+)
 
-@handle_service_errors
-def get_question_details_for_form(
+async def get_question_details_for_form(
     db: Session,
     form_id: int
 ) -> Dict[int, QuestionDetail]:
@@ -55,7 +59,7 @@ def get_question_details_for_form(
     questions_map = {q.question_number: q for q in questions}
     return questions_map
 
-def get_next_question_number(
+async def get_next_question_number(
     current_question_number: int,
     answer_value: Optional[str],
     questions_map: Dict[int, QuestionDetail]
@@ -82,7 +86,9 @@ def get_next_question_number(
         pass
     return None
 
-def get_question_response_data(question: QuestionDetail) -> Dict[str, Any]:
+def get_question_response_data(
+    question: QuestionDetail
+) -> Dict[str, Any]:
     '''
         Helper to format question data for NextQuestionResponse.
     '''
@@ -99,8 +105,9 @@ def get_question_response_data(question: QuestionDetail) -> Dict[str, Any]:
         'options': options_data
     }
 
-@handle_service_errors
-def create_person_and_contact(
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'Person', 'CREATE')
+async def create_person_and_contact(
     db: Session,
     session_data: StartFormSessionRequest
 ) -> Dict[str, Any]:
@@ -127,9 +134,11 @@ def create_person_and_contact(
     }
     db_contact = create_record(db, Contact, contact_data, extra_fields = extra_fields)
     db.flush()
-    return {'person_id': db_person.id, 'contact_id': db_contact.id}
+    result = {'person_id': db_person.id, 'contact_id': db_contact.id}
 
-def process_next_question_logic(
+    return result
+
+async def process_next_question_logic(
     current_session: CurrentFormSession,
     next_question_number: Optional[int],
     questions_map: Dict[int, QuestionDetail]
@@ -158,11 +167,12 @@ def process_next_question_logic(
         'message_response': message_response
     }
 
-@handle_service_errors
-def create_initial_form_response_record_logic(
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'FormResponse', 'CREATE')
+async def create_initial_form_response_record_logic(
     db: Session,
     inital_data: Dict
-) -> int:
+) -> FormResponse:
     '''
         Creates the initial form response record in MySQL at the start of the session.
         Returns the ID of the new record.
@@ -177,26 +187,29 @@ def create_initial_form_response_record_logic(
     )
     db.add(db_form_response)
     db.flush()
-    return db_form_response.id
+    db.refresh(db_form_response)
 
-@handle_service_errors
+    return db_form_response
+
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'FormResponse', 'UPDATE')
 # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-def update_final_form_response_logic(
+async def update_final_form_response_logic(
     db: Session,
     current_session: CurrentFormSession,
     questions_map: Dict[int, QuestionDetail],
     company_id: Optional[int],
     affiliation_number: int,
     affiliation_type: Optional[str]
-) -> FormResponse:
+) -> Tuple[FormResponse, Dict]:
     '''
         Updates the form header and persists all answers from the session cache to MySQL.
     '''
-    logger.info('AFFILIATION NUMBER')
-    logger.info(affiliation_number)
 
     # 1. Update the existing FormResponse header record
     db_form_response = get_record(db, FormResponse, current_session.form_response_id)
+    old_values = sqlalchemy_object_as_dict(db_form_response)
+
     update_data = FormResponseUpdate(
         company_id = company_id,
         affiliation_number = affiliation_number,
@@ -227,10 +240,27 @@ def update_final_form_response_logic(
             answer_value = temp_ans.answer_value
         ))
     db.add_all(db_answers)
+
+    # 3. Add the logic to update the Person record
+    if db_form_response.status == 'COMPLETED':
+        person_record = get_record(db, Person, updated_form_response.person_id)
+        if person_record:
+            person_update_data = PersonUpdate(
+                is_affiliated = True,
+                affiliation_date = datetime.now(),
+                affiliation_user_id = updated_form_response.user_id
+            )
+            update_record(db, person_record, person_update_data)
+
     db.commit()
     db.refresh(updated_form_response)
 
-    return updated_form_response
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(updated_form_response)
+    }
+
+    return updated_form_response, auditable_data
 
 def prepare_next_question_response(
     current_session: CurrentFormSession,
@@ -255,17 +285,19 @@ def prepare_next_question_response(
         response_data.update(get_question_response_data(next_question))
     return response_data
 
-@handle_service_errors
-def update_form_response_status_logic(
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'FormResponseFlow', 'UPDATE')
+async def update_form_response_status_logic(
     db: Session,
     form_response_id: int,
     status_data: FormResponseUpdate
-) -> FormResponse:
+) -> Tuple[FormResponse, Dict]:
     '''
         Business logic to update a form response's status and record the change in the flow table.
     '''
     db_form_response = get_record(db, FormResponse, form_response_id)
     initial_status = db_form_response.status
+    old_values = sqlalchemy_object_as_dict(db_form_response)
 
     if status_data.status == 'REJECTED' and not status_data.rejection_reason:
         raise InvalidInputError(
@@ -286,13 +318,20 @@ def update_form_response_status_logic(
     db.commit()
     db.refresh(updated_response)
 
-    return updated_response
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(updated_response)
+    }
 
-def update_form_response_data_logic(
+    return updated_response, auditable_data
+
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'FormResponse', 'UPDATE')
+async def update_form_response_data_logic(
     db: Session,
     form_response_id: int,
     update_data: FormResponseUpdate
-) -> FormResponse:
+) -> Tuple[FormResponse, Dict]:
     '''
         Updates an existing form response record in the database.        
     '''
@@ -301,29 +340,34 @@ def update_form_response_data_logic(
         raise RegisterNotFoundError(
             detail = f"Form response with ID {form_response_id} not found."
         )
+    old_values = sqlalchemy_object_as_dict(db_form_response)
 
     update_form_response = update_record(db, db_form_response, update_data)
     db.commit()
     db.refresh(update_form_response)
 
-    return update_form_response
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(update_form_response)
+    }
 
-@handle_service_errors
-def get_form_response_status_flow_logic(
+    return update_form_response, auditable_data
+
+@handle_service_errors('FORMS')
+async def get_form_response_status_flow_logic(
     db: Session,
     form_response_id: int
 ) -> List[FormResponseFlow]:
     '''
         Retrieves the status flow for a specific form response ID.
     '''
-    # Se obtienen todos los registros de la tabla de flujos de estado
-    # que coincidan con el ID del formulario
     return db.query(FormResponseFlow).filter(
         FormResponseFlow.form_response_id == form_response_id
     ).order_by(FormResponseFlow.date_time).all()
 
-@handle_service_errors
-def create_person_logic(
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'Person', 'CREATE')
+async def create_person_logic(
     db: Session,
     person_data: PersonCreate
 ) -> Person:
@@ -332,7 +376,6 @@ def create_person_logic(
         Checks for existing unique fields (e.g., email, identification_number)
         to prevent duplicates.
     '''
-    # Se realiza una comprobación de duplicados para los campos únicos
     existing_person = db.query(Person).filter(
         (Person.email == person_data.email) |
         (Person.phone_number == person_data.phone_number) |
@@ -345,48 +388,77 @@ def create_person_logic(
                     already exists.'''
         )
 
-    try:
-        db_person = create_record(db, Person, person_data)
-        db.commit()
-        db.refresh(db_person)
-        return db_person
-    except IntegrityError as e:
-        db.rollback()
-        raise InvalidInputError(
-            detail = 'Failed to create person due to a data integrity issue.'
-        ) from e
+    db_person = create_record(db, Person, person_data)
+    db.commit()
+    db.refresh(db_person)
 
-@handle_service_errors
-def get_person_by_id_logic(db: Session, person_id: int) -> Person:
+    return db_person
+
+@handle_service_errors('FORMS')
+async def get_person_by_id_logic(
+    db: Session,
+    person_id: int
+) -> Person:
     '''
         Business logic to retrieve a person record by ID.
     '''
     db_person = get_record(db, Person, person_id)
     return db_person
 
-@handle_service_errors
-def get_all_persons_logic(db: Session, skip: int, limit: int) -> List[Person]:
+@handle_service_errors('FORMS')
+async def get_all_persons_logic(
+    db: Session,
+    skip: int,
+    limit: int
+) -> List[Person]:
     '''
         Business logic to retrieve a paginated list of all person records.
     '''
     return get_all_records_paginated(db, Person, skip, limit)
 
-@handle_service_errors
-def update_person_logic(db: Session, person_id: int, person_data: PersonUpdate) -> Person:
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'Person', 'UPDATE')
+async def update_person_logic(
+    db: Session,
+    person_id: int,
+    person_data: PersonUpdate
+) -> Tuple[Person, Dict]:
     '''
         Business logic to update an existing person record.
     '''
     db_person = get_record(db, Person, person_id)
+    old_values = sqlalchemy_object_as_dict(db_person)
+
     updated_person = update_record(db, db_person, person_data)
     db.commit()
     db.refresh(updated_person)
-    return updated_person
 
-@handle_service_errors
-def delete_person_logic(db: Session, person_id: int) -> Dict[str, str]:
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(updated_person)
+    }
+
+    return updated_person, auditable_data
+
+@handle_service_errors('FORMS')
+@audit_event('FORMS', 'Person', 'DELETE')
+async def delete_person_logic(
+    db: Session,
+    person_id: int
+) -> Tuple[Dict[str, str], Dict]:
     '''
         Business logic to delete a person record by ID.
     '''
+    db_person = get_record(db, Person, person_id)
+    old_values = sqlalchemy_object_as_dict(db_person)
+
     delete_record(db, Person, person_id)
     db.commit()
-    return {'message': f'Person with ID {person_id} has been successfully deleted.'}
+
+    result = {'message': f'Person with ID {person_id} has been successfully deleted.'}
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': None
+    }
+
+    return result, auditable_data
