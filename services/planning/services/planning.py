@@ -18,7 +18,7 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
-    _handle_files_service_logic,
+    _handle_files_service,
     handle_service_errors,
     audit_event,
     perform_bulk_upload,
@@ -102,7 +102,7 @@ async def _perform_atomic_db_insertion_for_planning(
                 planning_name = data['planning_data']['planning_name'],
                 company_id = data['planning_data']['company_id']
             ).first():
-                await _handle_files_service_logic(
+                await _handle_files_service(
                     action = 'delete',
                     file_name = file_name,
                     auth_token = auth_token

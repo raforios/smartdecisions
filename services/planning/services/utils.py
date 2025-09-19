@@ -2,6 +2,7 @@
     Utils service
 '''
 
+import mimetypes
 import os
 import time
 import decimal
@@ -12,7 +13,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 import requests as req
 from dotenv import dotenv_values
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, UploadFile
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
@@ -30,12 +31,22 @@ from services.exceptions import (
 _LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
 EVENTS_SERVICE_URL = os.environ.get('EVENTS_SERVICE_URL') or \
                         _LOCAL_ENV_PARAMS.get('EVENTS_SERVICE_URL')
+FILES_SERVICE_URL = os.environ.get('FILES_SERVICE_URL') or \
+                    _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
+BUCKET_NAME = os.environ.get('BUCKET_NAME') or \
+                _LOCAL_ENV_PARAMS.get('BUCKET_NAME')
+BUCKET_PATH = os.environ.get('BUCKET_PATH') or \
+                _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
+
 EVENTS_AUDIT_URL = None
 EVENTS_LOG_URL = None
 
 if EVENTS_SERVICE_URL:
     EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit'
     EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log'
+
+if FILES_SERVICE_URL:
+    UPLOAD_ENDPOINT = f'{FILES_SERVICE_URL}/v1/s3/upload'
 
 def sqlalchemy_object_as_dict(obj):
     '''
@@ -50,7 +61,8 @@ async def _perform_request(
     method: str,
     url: str,
     headers: Dict[str, str],
-    payload: Optional[Dict[str, Any]] = None
+    payload: Optional[Dict[str, Any]] = None,
+    files: Optional[Dict[str, Any]] = None
 ):
     '''
         Helper function to perform a request call in a thread pool executor.
@@ -61,6 +73,15 @@ async def _perform_request(
                 return req.get(url, headers = headers, timeout = 600)
 
             if method == 'POST':
+                if files:
+                    return req.post(
+                        url,
+                        data = payload,
+                        files = files,
+                        headers = headers,
+                        timeout = 600
+                    )
+
                 return req.post(url, json = payload, headers = headers, timeout = 600)
 
             if method == 'DELETE':
@@ -282,25 +303,19 @@ async def send_usage_log(log_data: dict):
     message = f'Usage log sent successfully. Status: {response.status_code}'
     logger.info(message)
 
-async def _handle_files_service_logic(
+async def _handle_files_service(
     action: str,
     file_name: str,
     auth_token: str,
-    delimiter: Optional[str] = None
+    delimiter: Optional[str] = None,
+    uploaded_file: Optional[UploadFile] = None
 ) -> Optional[str]:
     '''
         Handles communication with the FILES microservice for reading and deleting files.
         This function standardizes file service interactions.
     '''
     try:
-        files_service_url = os.environ.get('FILES_SERVICE_URL') or \
-                            _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
-        bucket_name = os.environ.get('BUCKET_NAME') or \
-                      _LOCAL_ENV_PARAMS.get('BUCKET_NAME')
-        bucket_path = os.environ.get('BUCKET_PATH') or \
-                      _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
-
-        if not files_service_url or not bucket_name:
+        if not FILES_SERVICE_URL or not BUCKET_NAME:
             raise ServiceUnavailableError(
                 detail = 'FILES_SERVICE_URL or BUCKET_NAME environment variables are not set.'
             )
@@ -312,24 +327,53 @@ async def _handle_files_service_logic(
 
         if action == 'read':
             query_string = f'?delimiter={delimiter}' if delimiter else ''
-            url = f'{files_service_url}/v1/s3/read/{bucket_name}/{file_name}{query_string}'
+            url = f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_name}{query_string}'
             response = await _perform_request('GET', url, headers)
             response.raise_for_status()
             return response.text
 
+        if action == 'create':
+            upload_endpoint = f'{FILES_SERVICE_URL}/v1/s3/upload'
+
+            mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
+            if not mime_type:
+                mime_type = 'application/octet-stream'
+
+            file_content_bytes = await uploaded_file.read()
+
+            headers = {
+                'Authorization': f'{auth_token}'
+            }
+
+            response = await _perform_request(
+                method = 'POST',
+                url = upload_endpoint,
+                headers = headers,
+                payload = {
+                    'bucket_name': BUCKET_NAME,
+                    'file_path': BUCKET_PATH
+                },
+                files = {
+                    'file': (uploaded_file.filename, file_content_bytes, mime_type)
+                }
+            )
+
+            response.raise_for_status()
+
+            return response.json()
+
         if action == 'delete':
-            url = f'{files_service_url}/v1/s3/delete'
+            url = f'{FILES_SERVICE_URL}/v1/s3/delete'
             payload = {
-                'bucket_name': bucket_name,
+                'bucket_name': BUCKET_NAME,
                 'file_name': file_name,
-                'file_path': bucket_path
+                'file_path': BUCKET_PATH
             }
             response = await _perform_request('DELETE', url, headers, payload)
             response.raise_for_status()
             message = f'File {file_name} successfully deleted from FILES service.'
             logger.info(message)
             return None
-
 
         raise ValueError(f'Invalid action: {action}')
     except req.exceptions.HTTPError as e:
@@ -353,7 +397,7 @@ async def _read_and_parse_file_content(
     '''
         Reads and parses the file content from the FILES microservice.
     '''
-    file_content = await _handle_files_service_logic(
+    file_content = await _handle_files_service(
         action = 'read',
         file_name = file_name,
         auth_token = auth_token,
@@ -399,7 +443,7 @@ async def perform_bulk_upload(
 
     db.commit()
 
-    await _handle_files_service_logic('delete', file_name, auth_token)
+    await _handle_files_service('delete', file_name, auth_token)
 
     return {
         'message': 'Bulk upload successful.',
