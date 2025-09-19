@@ -97,6 +97,34 @@ async def get_filtered_plannings_endpoint(
     )
 
 @router.get(
+    '/daily',
+    response_model = List[PlanningResponseSchema],
+    status_code = status.HTTP_200_OK,
+    summary = 'Get planning details for a date range',
+    description = 'Retrieves all planning detail records that are active within a given date range.'
+)
+async def get_daily_plannings_endpoint(
+    request: Request,
+    start_date: date = Query(..., description = 'Start date of the range in YYYY-MM-DD format.'),
+    end_date: date = Query(..., description = 'End date of the range in YYYY-MM-DD format.'),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to get plannings by date.
+    '''
+    message = f'''User: {current_user}. Received request to get planning details
+            for date range from {start_date} to {end_date}.'''
+    logger.info(message)
+    return await get_daily_plannings_controller(
+        db = db,
+        start_date = start_date,
+        end_date = end_date,
+        request = request,
+        current_user = current_user
+    )
+
+@router.get(
     '/{planning_id}',
     response_model = PlanningResponseSchema,
     status_code = status.HTTP_200_OK,
@@ -170,32 +198,6 @@ async def get_weekly_plannings_endpoint(
     return await get_weekly_plannings_controller(
         db = db,
         week_number = week_number,
-        request = request,
-        current_user = current_user
-    )
-
-@router.get(
-    '/daily/{planning_date}',
-    response_model = List[PlanningResponseSchema],
-    status_code = status.HTTP_200_OK,
-    summary = 'Get plannings for a specific date',
-    description = 'Retrieves all planning records that are active on a given date.'
-)
-async def get_daily_plannings_endpoint(
-    request: Request,
-    planning_date: date = Path(..., description = 'Date in YYYY-MM-DD format'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to get plannings by date.
-    '''
-    message = f'''User: {current_user}. Received request to get daily plannings
-            for date {planning_date}.'''
-    logger.info(message)
-    return await get_daily_plannings_controller(
-        db = db,
-        date_to_filter = planning_date,
         request = request,
         current_user = current_user
     )

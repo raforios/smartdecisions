@@ -163,6 +163,39 @@ async def get_plannings_by_date(
     return plannings
 
 @handle_service_errors('PLANNING')
+async def get_planning_details_in_date_range(
+    db: Session,
+    start_date: date,
+    end_date: date
+) -> List[Planning]:
+    '''
+        Retrieves all planning details that fall within a given date range,
+        eager-loading the parent planning record.
+    '''
+    message = f'Fetching planning details for date range from {start_date} to {end_date}.'
+    logger.info(message)
+
+    # Use a JOIN to filter on the PlanningDetail table
+    plannings = db.query(Planning).join(
+        Planning.details
+    ).filter(
+        # Filter the joined details based on the date range
+        PlanningDetail.date_of_day.between(start_date, end_date)
+    ).options(
+        # Use contains_eager to tell SQLAlchemy that the details are already loaded
+        # and that the relationship should be populated with the filtered results.
+        contains_eager(Planning.details)
+    ).distinct().all()
+
+    if not plannings:
+        raise RegisterNotFoundError(
+            detail = f'No plannings found with details for the date range {
+                start_date} to {end_date}.'
+        )
+
+    return plannings
+
+@handle_service_errors('PLANNING')
 @audit_event('PLANNING', 'Planning', 'CREATE')
 async def create_planning_with_details(
     db: Session,

@@ -18,8 +18,8 @@ from services.planning import (
     delete_planning_detail_by_id,
     get_filtered_plannings,
     get_materials_by_detail_id,
+    get_planning_details_in_date_range,
     get_plannings_by_week,
-    get_plannings_by_date,
     create_planning_with_details,
     update_material_quantities,
     update_planning_detail,
@@ -115,7 +115,8 @@ async def get_weekly_plannings_controller(
 
 @handle_service_errors('PLANNING')
 async def get_daily_plannings_controller(
-    date_to_filter: date,
+    start_date: date,
+    end_date: date,
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
@@ -123,8 +124,12 @@ async def get_daily_plannings_controller(
     '''
         Controller to get all plannings for a specific date.
     '''
-    plannings = await get_plannings_by_date(db = db, planning_date = date_to_filter)
-    return [PlanningResponseSchema.model_validate(p, from_attributes = True) for p in plannings]
+    plannings = await get_planning_details_in_date_range(
+        db = db,
+        start_date = start_date,
+        end_date = end_date
+    )
+    return [PlanningResponseSchema.model_validate(p, from_attributes=True) for p in plannings]
 
 @handle_service_errors('PLANNING')
 async def create_planning_detail_controller(
