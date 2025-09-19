@@ -8,7 +8,7 @@ class NumPyValidatorBase(BaseModel):
     '''
     Base class with a common validator for NumPy-compatible data structures.
     '''
-    @field_validator('x_matrix', 'x', 'x_test', mode = 'before')
+    @field_validator('x_matrix', 'x', 'x_test', mode='before', check_fields = False)
     @classmethod
     def validate_numpy_array(cls, v, info):
         '''
