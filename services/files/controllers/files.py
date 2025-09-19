@@ -100,10 +100,10 @@ async def upload_s3_file(
     Uploads a file to a specified S3 bucket.
     '''
     s3_client.put_object(
-        Bucket=upload_data.bucket_name,
-        Key=upload_data.file_key,
-        Body=upload_data.file_content,
-        ContentType=upload_data.content_type
+        Bucket = upload_data.bucket_name,
+        Key = upload_data.file_key,
+        Body = upload_data.file_content,
+        ContentType = upload_data.content_type
     )
 
     file_url = f'https://{upload_data.bucket_name}.s3.amazonaws.com/{upload_data.file_key}'
@@ -126,7 +126,7 @@ async def delete_s3_file(
     '''
     Deletes a file from a given S3 bucket.
     '''
-    s3_client.delete_object(Bucket=bucket_name, Key=file_key)
+    s3_client.delete_object(Bucket = bucket_name, Key = file_key)
     message = f'''File {file_key} deleted successfully by user {current_user}
             from bucket {bucket_name}.'''
     logger.info(message)
@@ -143,7 +143,7 @@ async def list_s3_files(
     '''
     files = []
     paginator = s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+    pages = paginator.paginate(Bucket = bucket_name, Prefix = prefix)
 
     for page in pages:
         if 'Contents' in page:
