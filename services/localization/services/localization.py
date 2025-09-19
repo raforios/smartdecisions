@@ -20,7 +20,7 @@ from services.crud import (
     delete_record
 )
 from services.utils import (
-    _handle_files_service_logic,
+    _handle_files_service,
     audit_event,
     handle_service_errors,
     perform_bulk_upload,
@@ -168,7 +168,7 @@ async def _perform_atomic_db_insertion_for_localization(
                 route_code = data['route_data']['route_code'],
                 company_id = data['route_data']['company_id']
             ).first():
-                await _handle_files_service_logic(
+                await _handle_files_service(
                     action = 'delete',
                     file_name = file_name,
                     auth_token = auth_token
