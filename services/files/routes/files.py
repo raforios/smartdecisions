@@ -41,7 +41,10 @@ ALLOWED_CONTENT_TYPES = [
     'image/png'
 ]
 
-@router.get('/read/{bucket_name}/{file_key}', response_model = Dict[str, Any])
+@router.get(
+    '/read/{bucket_name}/{file_key}',
+    response_model = Dict[str, Any]
+)
 async def read_s3_file_route(
     bucket_name: str,
     file_key: str,
@@ -69,7 +72,10 @@ async def read_s3_file_route(
         delimiter= delimiter
     )
 
-@router.post('/upload', response_model = Dict[str, str])
+@router.post(
+    '/upload',
+    response_model = Dict[str, str]
+)
 async def upload_file_to_s3_route(
     file: UploadFile = File(...),
     bucket_name: str = Form(..., description = 'Name of the S3 bucket.'),
@@ -110,7 +116,10 @@ async def upload_file_to_s3_route(
 
     return await upload_s3_file(upload_data_obj, current_user)
 
-@router.delete('/delete', response_model = Dict[str, str])
+@router.delete(
+    '/delete',
+    response_model = Dict[str, str]
+)
 async def delete_file_from_s3_route(
     request: S3FileRequest,
     current_user: str = Depends(get_current_user)
@@ -131,7 +140,10 @@ async def delete_file_from_s3_route(
     logger.info(message)
     return await delete_s3_file(request.bucket_name, request.file_key, current_user)
 
-@router.post('/list-files', response_model = ListFilesResponse)
+@router.post(
+    '/list-files',
+    response_model = ListFilesResponse
+)
 async def list_files_s3_route(
     request: ListFilesRequest,
     current_user: str = Depends(get_current_user)
@@ -171,7 +183,10 @@ def get_content_type_from_filename(
     mime_type, _ = guess_type(filename)
     return mime_type if mime_type else 'application/octet-stream'
 
-@router.post('/upload-presigned', response_model = PresignedUrlResponse)
+@router.post(
+    '/upload-presigned',
+    response_model = PresignedUrlResponse
+)
 async def get_presigned_upload_url_route(
     request: PresignedUrlRequest,
     current_user: str = Depends(get_current_user)

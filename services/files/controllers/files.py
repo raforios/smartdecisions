@@ -17,6 +17,7 @@ from services.utils import handle_aws_operation
 s3_client = boto3.client('s3')
 
 @handle_aws_operation
+# pylint: disable=too-many-locals
 async def read_data_from_s3(
     bucket_name: str,
     file_key: str,
@@ -44,6 +45,7 @@ async def read_data_from_s3(
                            is empty.
         ServiceUnavailableError: For internal server errors during processing.
     '''
+    _context = {'bucket_name': bucket_name, 'file_key': file_key}
     response = s3_client.get_object(Bucket = bucket_name, Key = file_key)
     file_extension = os.path.splitext(file_key)[1].lower()
 
@@ -99,6 +101,7 @@ async def upload_s3_file(
     '''
     Uploads a file to a specified S3 bucket.
     '''
+    _context = {'bucket_name': upload_data.bucket_name, 'file_key': upload_data.file_key}
     s3_client.put_object(
         Bucket = upload_data.bucket_name,
         Key = upload_data.file_key,
@@ -126,6 +129,7 @@ async def delete_s3_file(
     '''
     Deletes a file from a given S3 bucket.
     '''
+    _context = {'bucket_name': bucket_name, 'file_key': file_key}
     s3_client.delete_object(Bucket = bucket_name, Key = file_key)
     message = f'''File {file_key} deleted successfully by user {current_user}
             from bucket {bucket_name}.'''
@@ -141,6 +145,7 @@ async def list_s3_files(
     '''
     Lists files in a given S3 bucket with an optional prefix.
     '''
+    _context = {'bucket_name': bucket_name, 'prefix': prefix}
     files = []
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(Bucket = bucket_name, Prefix = prefix)
@@ -148,7 +153,7 @@ async def list_s3_files(
     for page in pages:
         if 'Contents' in page:
             for obj in page['Contents']:
-                if not obj['Key'].endswith('/') and obj['Key'] != prefix:
+                if not obj['Key'].endswith('/'):
                     files.append(obj['Key'])
 
     message = f'''User {current_user} listed {len(files)} files in bucket {bucket_name}
@@ -167,6 +172,7 @@ async def create_presigned_upload_url(
     '''
     Generates a pre-signed URL for uploading an object to S3.
     '''
+    _context = {'bucket_name': bucket_name, 'file_key': file_key}
     response = s3_client.generate_presigned_url(
         ClientMethod='put_object',
         Params={

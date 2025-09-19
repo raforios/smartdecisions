@@ -66,15 +66,19 @@ def handle_aws_operation(func: Callable[..., Awaitable[Any]]) -> Callable[..., A
         try:
             return await func(*args, **kwargs)
         except ClientError as e:
-            # Assumes the first positional argument is the request body
-            request_body = args[0]
-            context = {}
-            if hasattr(request_body, 'bucket_name'):
-                context['bucket_name'] = request_body.bucket_name
-            if hasattr(request_body, 'file_key'):
-                context['file_key'] = request_body.file_key
-            if hasattr(request_body, 'prefix'):
-                context['prefix'] = request_body.prefix
+            # Check for explicit context argument first
+            context = kwargs.get('_context', {})
+
+            if not context and args:
+                # Fallback to the original logic if no _context is provided
+                request_body = args[0]
+                if hasattr(request_body, 'bucket_name'):
+                    context['bucket_name'] = request_body.bucket_name
+                if hasattr(request_body, 'file_key'):
+                    context['file_key'] = request_body.file_key
+                if hasattr(request_body, 'prefix'):
+                    context['prefix'] = request_body.prefix
+
             handle_aws_client_error(e, context)
         except Exception as e:
             error_msg = f"Internal server error while processing the operation: {e}"

@@ -2,6 +2,7 @@
     Files Schemas (Request/Response)
 '''
 
+import os
 from typing import Optional, List
 from pydantic import BaseModel, Field
 
@@ -18,11 +19,8 @@ class BaseS3FileModel(BaseModel):
         '''
             Generates the full S3 object key (path + filename).
         '''
-        effective_file_path = self.file_path if self.file_path is not None else ''
-        if effective_file_path and not effective_file_path.endswith('/'):
-            return f'{effective_file_path}/{self.file_name}'
-        return f'{effective_file_path}{self.file_name}'
-
+        effective_file_path = self.file_path or ''
+        return os.path.join(effective_file_path, self.file_name)
 class S3FileRequest(BaseS3FileModel):
     '''
         S3File Request model.
