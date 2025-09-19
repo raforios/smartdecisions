@@ -17,8 +17,12 @@ from services.exceptions import RegisterNotFoundError
 
 router = APIRouter(prefix = '/v1/users', tags = ['Users'])
 
-@router.get('/', response_model = List[UserResponse], status_code = status.HTTP_200_OK,
-             dependencies = [Depends(get_current_active_user)])
+@router.get(
+    '/',
+    response_model = List[UserResponse],
+    status_code = status.HTTP_200_OK,
+    dependencies = [Depends(get_current_active_user)]
+)
 async def read_all_users():
     '''
         Endpoint to read all users (requires active user authentication).
@@ -27,9 +31,15 @@ async def read_all_users():
     logger.info('Accessed all users list.')
     return users
 
-@router.get('/{email}', response_model = UserResponse, status_code = status.HTTP_200_OK,
-             dependencies = [Depends(get_current_active_user)])
-async def read_user(email: str):
+@router.get(
+    '/{email}',
+    response_model = UserResponse,
+    status_code = status.HTTP_200_OK,
+    dependencies = [Depends(get_current_active_user)]
+)
+async def read_user(
+    email: str
+):
     '''
         Endpoint to read a user's email (requires active user authentication).
     '''
@@ -45,9 +55,15 @@ async def read_user(email: str):
     return user
 
 
-@router.patch('/{email}', status_code = status.HTTP_200_OK,
-               dependencies = [Depends(get_current_active_user)])
-async def patch_user(email: str, user_update_data: UserUpdateRequest) -> UserResponse:
+@router.patch(
+    '/{email}',
+    status_code = status.HTTP_200_OK,
+    dependencies = [Depends(get_current_active_user)]
+)
+async def patch_user(
+    email: str,
+    user_update_data: UserUpdateRequest
+) -> UserResponse:
     '''
         Endpoint to update a user.
     '''
@@ -63,10 +79,15 @@ async def patch_user(email: str, user_update_data: UserUpdateRequest) -> UserRes
     logger.info(message)
     return updated_user
 
-@router.delete('/{email}', status_code = status.HTTP_200_OK,
-                dependencies = [Depends(get_current_active_user)],
-                response_model = SignupResponse)
-async def del_user(email: str) -> SignupResponse:
+@router.delete(
+    '/{email}',
+    status_code = status.HTTP_200_OK,
+    dependencies = [Depends(get_current_active_user)],
+    response_model = SignupResponse
+)
+async def del_user(
+    email: str
+) -> SignupResponse:
     '''
     Endpoint para eliminar un usuario.
     '''

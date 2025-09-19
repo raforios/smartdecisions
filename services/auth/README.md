@@ -30,6 +30,21 @@ Este microservicio ha sido desarrollado utilizando un stack moderno y eficiente 
 
 ---
 
+## 🗺️ API Endpoints
+
+The **Auth-Handler-Service** exposes the following programmatic API endpoints for authentication and user management.
+
+| Method | Path | Description | Authentication |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/v1/auth/login` | Authenticates a user and returns an access JWT token. | `None` |
+| `POST` | `/v1/auth/signup` | Registers a new user and returns their email and a confirmation message. | `None` |
+| `GET` | `/v1/users/` | Retrieves a list of all users. | `JWT Token` |
+| `GET` | `/v1/users/{email}` | Retrieves a single user's details by their email address. | `JWT Token` |
+| `PATCH` | `/v1/users/{email}` | Updates a user's information by their email address. | `JWT Token` |
+| `DELETE` | `/v1/users/{email}` | Deletes a user by their email address. | `JWT Token` |
+
+---
+
 ## 🚀 ¿Cómo se Usa?
 
 El **Auth-Handler-Service** no expone una interfaz pública directa para el usuario final. Su función es interna y programática:

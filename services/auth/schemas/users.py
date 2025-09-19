@@ -54,3 +54,9 @@ class UserResponse(BaseModel):
             User Response - Config Class - To get form attributes
         '''
         from_attributes = True
+
+class InternalUser(UserResponse): # pylint: disable=too-few-public-methods
+    '''
+        Internal User Schema with hashed password
+    '''
+    hashed_password: str

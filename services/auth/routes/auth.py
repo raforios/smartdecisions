@@ -13,8 +13,14 @@ from services.exceptions import (
 
 router = APIRouter(prefix = '/v1/auth', tags = ['Authentication'])
 
-@router.post('/login', response_model = Token, status_code = status.HTTP_200_OK)
-async def login(request: LoginRequest):
+@router.post(
+    '/login',
+    response_model = Token,
+    status_code = status.HTTP_200_OK
+)
+async def login(
+    request: LoginRequest
+):
     '''
         Login route for obtaining an access token after verifying credentials.
     '''
@@ -31,8 +37,14 @@ async def login(request: LoginRequest):
     logger.info(message)
     return Token(access_token = access_token, token_type = 'bearer')
 
-@router.post('/signup', response_model = SignupResponse, status_code = status.HTTP_201_CREATED)
-async def signup(user_data: UserRequest):
+@router.post(
+    '/signup',
+    response_model = SignupResponse,
+    status_code = status.HTTP_201_CREATED
+)
+async def signup(
+    user_data: UserRequest
+):
     '''
         Sign-up route for creating a new user and storing their credentials securely.
     '''

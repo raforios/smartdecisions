@@ -21,17 +21,17 @@ from services.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError
 )
-from schemas.users import UserRequest, UserUpdateRequest, UserResponse
+from schemas.users import (
+    UserRequest,
+    UserUpdateRequest,
+    UserResponse,
+    InternalUser
+)
 from schemas.role import Role
 
-class InternalUser(UserResponse): # pylint: disable=too-few-public-methods
-    '''
-        Internal User Schema with hashed password
-    '''
-    hashed_password: str
-
 async def get_user_payload(
-    token: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> Dict[str, Any]:
+    token: HTTPAuthorizationCredentials = Depends(HTTPBearer())
+) -> Dict[str, Any]:
     '''
         Function to extract and decode the JWT token payload.
     '''
@@ -49,7 +49,8 @@ async def get_user_payload(
     return payload
 
 async def get_current_user(
-    payload: Dict[str, Any] = Depends(get_user_payload)) -> UserResponse:
+    payload: Dict[str, Any] = Depends(get_user_payload)
+) -> UserResponse:
     '''
         Function to get the full User object from the JWT token.
     '''
@@ -71,7 +72,8 @@ async def get_current_user(
     return UserResponse(**user_item)
 
 async def get_current_active_user(
-    current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
+    current_user: UserResponse = Depends(get_current_user)
+) -> UserResponse:
     '''
         Function to check if the authenticated user is active.
     '''
@@ -85,7 +87,8 @@ async def get_current_active_user(
     return current_user
 
 async def authenticate_user(
-    email: str, password: str) -> Optional[InternalUser]:
+    email: str, password: str
+) -> Optional[InternalUser]:
     '''
         Function to authenticate a user by verifying their credentials against DynamoDB.
     '''
@@ -97,7 +100,9 @@ async def authenticate_user(
 
     return InternalUser(**user_item)
 
-async def create_user(user_data: UserRequest) -> Dict[str, Any]:
+async def create_user(
+    user_data: UserRequest
+) -> Dict[str, Any]:
     '''
         Create User
     '''
@@ -131,7 +136,9 @@ async def read_users() -> List[UserResponse]:
     user_items = scan_all_users()
     return [UserResponse(**item) for item in user_items]
 
-async def read_user_by_email(email: str) -> Optional[UserResponse]:
+async def read_user_by_email(
+    email: str
+) -> Optional[UserResponse]:
     '''
         Read user by email.
     '''
@@ -140,7 +147,9 @@ async def read_user_by_email(email: str) -> Optional[UserResponse]:
         return UserResponse(**user_item)
     return None
 
-def build_user_update_params(user_update_data: UserUpdateRequest) -> tuple[str, dict, dict]:
+def build_user_update_params(
+    user_update_data: UserUpdateRequest
+) -> tuple[str, dict, dict]:
     '''
         Helper function that builds DynamoDB update expressions and attribute values
         from a UserUpdateRequest object.
@@ -181,7 +190,10 @@ def build_user_update_params(user_update_data: UserUpdateRequest) -> tuple[str, 
     return final_update_expression, expression_attribute_values, \
            (expression_attribute_names if expression_attribute_names else None)
 
-async def update_user(email: str, user_update_data: UserUpdateRequest) -> Optional[UserResponse]:
+async def update_user(
+    email: str,
+    user_update_data: UserUpdateRequest
+) -> Optional[UserResponse]:
     '''
         Update user.
     '''
@@ -210,7 +222,9 @@ async def update_user(email: str, user_update_data: UserUpdateRequest) -> Option
         return UserResponse(**updated_item)
     return None
 
-async def delete_user(email: str) -> bool:
+async def delete_user(
+    email: str
+) -> bool:
     '''
         Delete user
     '''

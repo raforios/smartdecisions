@@ -1,53 +1,28 @@
 '''
     JWT Service Provider
 '''
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 from jose import jwt, JWTError
 
-from dotenv import dotenv_values
-
 from services.logger_config import custom_logger as logger
 from services.exceptions import ServiceUnavailableError
+from services.environment import load_and_validate_env_vars
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
+ENV_VARS = load_and_validate_env_vars({
+    'SECRET_KEY': str,
+    'ALGORITHM': str,
+    'ACCESS_TOKEN_EXPIRE_MINUTES': int
+})
 
-# Secret key to signature JWT tokens
-SECRET_KEY = os.environ.get('SECRET_KEY') or \
-                      _LOCAL_ENV_PARAMS.get('SECRET_KEY')
+SECRET_KEY = ENV_VARS['SECRET_KEY']
+ALGORITHM = ENV_VARS['ALGORITHM']
+ACCESS_TOKEN_EXPIRE_MINUTES = ENV_VARS['ACCESS_TOKEN_EXPIRE_MINUTES']
 
-if not SECRET_KEY:
-    ERROR_MSG = 'SECRET_KEY is not configured in environment or .env.'
-    logger.critical(ERROR_MSG)
-    raise ServiceUnavailableError(
-        detail = ERROR_MSG
-    )
-
-ALGORITHM = os.environ.get('ALGORITHM') or \
-                      _LOCAL_ENV_PARAMS.get('ALGORITHM')
-
-if not ALGORITHM:
-    ERROR_MSG = 'ALGORITHM for JWT is not configured in environment or .env.'
-    logger.critical(ERROR_MSG)
-    raise ServiceUnavailableError(
-        detail = ERROR_MSG
-    )
-
-ACCESS_TOKEN_EXPIRE_MINUTES = os.environ.get('ACCESS_TOKEN_EXPIRE_MINUTES') or \
-                      _LOCAL_ENV_PARAMS.get('ACCESS_TOKEN_EXPIRE_MINUTES')
-
-try:
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(ACCESS_TOKEN_EXPIRE_MINUTES)
-except (TypeError, ValueError) as e:
-    ERROR_MSG = '''ACCESS_TOKEN_EXPIRE_MINUTES is not configured or is not a
-                valid integer in environment or .env.'''
-    logger.critical(ERROR_MSG)
-    raise ServiceUnavailableError(
-        detail = ERROR_MSG
-    ) from e
-
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: Dict[str, Any],
+    expires_delta: Optional[timedelta] = None
+) -> str:
     '''
         Creates a JWT access token.
         data: Dictionary of data to include in the token (e.g., email, user_id).
@@ -73,7 +48,9 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
             detail = 'Failed to create authentication token.'
         ) from e
 
-def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
+def decode_access_token(
+    token: str
+) -> Optional[Dict[str, Any]]:
     '''
         Decodes and validates a JWT access token.
         Returns the token data if valid, None if not.
