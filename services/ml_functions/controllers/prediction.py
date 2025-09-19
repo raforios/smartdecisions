@@ -12,7 +12,7 @@ from services.machine_learning import (
     compute_gradient,
     gradient_descent
 )
-from services.utils import handle_ml_operation
+from services.utils import handle_operation
 from schemas.prediction import (
     ComputeCostLinearRequest,
     ComputeCostLinearResponse,
@@ -24,7 +24,7 @@ from schemas.prediction import (
     PredictLinearResponse
 )
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def compute_cost_linear_regression(
     request_body: ComputeCostLinearRequest
 ) -> ComputeCostLinearResponse:
@@ -42,7 +42,7 @@ async def compute_cost_linear_regression(
 
     return ComputeCostLinearResponse(cost = float(cost))
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def compute_gradient_linear_regression(
     request_body: ComputeGradientLinearRequest
 ) -> ComputeGradientLinearResponse:
@@ -63,7 +63,7 @@ async def compute_gradient_linear_regression(
         dj_dw = dj_dw.tolist() if isinstance(dj_dw, np.ndarray) else float(dj_dw)
     )
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def train_linear_regression(
     request_body: TrainLinearRegressionRequest
 ) -> TrainLinearRegressionResponse:
@@ -101,7 +101,7 @@ async def train_linear_regression(
         num_iters = request_body.num_iters
     )
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def predict_linear_regression(
     request_body: PredictLinearRequest
 ) -> PredictLinearResponse:

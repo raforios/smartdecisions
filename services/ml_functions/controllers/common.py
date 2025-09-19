@@ -3,7 +3,7 @@
 '''
 import numpy as np
 from services.logger_config import custom_logger as logger
-from services.utils import handle_ml_operation
+from services.utils import handle_operation
 from services.machine_learning import (
     zscore_normalize_features
 )
@@ -12,14 +12,13 @@ from schemas.common import (
     NormalizeFeaturesResponse
 )
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def normalize_features(
     request_body: NormalizeFeaturesRequest
 ) -> NormalizeFeaturesResponse:
     '''
     Normalizes a feature matrix using Z-score normalization.
     '''
-    # Convertir la lista de listas en una matriz NumPy
     x_matrix = np.array(request_body.x_matrix)
     x_norm, mu, sigma = zscore_normalize_features(x_matrix)
 

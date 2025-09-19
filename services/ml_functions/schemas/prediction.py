@@ -4,7 +4,9 @@
 from typing import Union, List
 from pydantic import BaseModel, Field
 
-class ComputeCostLinearRequest(BaseModel):
+from schemas.base import NumPyValidatorBase
+
+class ComputeCostLinearRequest(NumPyValidatorBase):
     '''
         Request model for calculating linear regression cost.
     '''
@@ -53,7 +55,7 @@ class ComputeCostLinearResponse(BaseModel):
         description = 'Calculated cost for the linear regression model.'
     )
 
-class ComputeGradientLinearRequest(BaseModel):
+class ComputeGradientLinearRequest(NumPyValidatorBase):
     '''
         Request model for calculating linear regression gradient.
     '''
@@ -106,7 +108,7 @@ class ComputeGradientLinearResponse(BaseModel):
         description = 'Gradient of cost with respect to weight(s) (w).'
     )
 
-class TrainLinearRegressionRequest(BaseModel):
+class TrainLinearRegressionRequest(NumPyValidatorBase):
     '''
         Request model for performing linear regression training (gradient descent).
     '''
@@ -183,7 +185,7 @@ class TrainLinearRegressionResponse(BaseModel):
         description = 'The number of iterations used for training.'
     )
 
-class PredictLinearRequest(BaseModel):
+class PredictLinearRequest(NumPyValidatorBase):
     '''
         Request model for linear regression prediction.
     '''

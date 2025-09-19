@@ -4,6 +4,8 @@
 from typing import Union, List
 from pydantic import BaseModel, Field
 
+from schemas.base import NumPyValidatorBase
+
 class SigmoidBatchRequest(BaseModel): # pylint: disable=too-few-public-methods
     '''
         Request model for calculating sigmoid on a batch of values.
@@ -23,7 +25,7 @@ class SigmoidBatchRequest(BaseModel): # pylint: disable=too-few-public-methods
         }
     }
 
-class ComputeCostLogisticRequest(BaseModel):
+class ComputeCostLogisticRequest(NumPyValidatorBase):
     '''
         Request model for calculating logistic regression cost.
     '''
@@ -57,7 +59,7 @@ class ComputeCostLogisticRequest(BaseModel):
         }
     }
 
-class ComputeGradientLogisticRequest(BaseModel):
+class ComputeGradientLogisticRequest(NumPyValidatorBase):
     '''
         Request model for calculating logistic regression gradient.
     '''
@@ -115,7 +117,7 @@ class ComputeGradientLogisticResponse(BaseModel):
         }
     }
 
-class GradientDescentLogisticRequest(BaseModel):
+class GradientDescentLogisticRequest(NumPyValidatorBase):
     '''
         Request model for performing logistic regression gradient descent.
     '''
@@ -193,7 +195,7 @@ class GradientDescentLogisticResponse(BaseModel):
         }
     }
 
-class PredictLogisticRequest(BaseModel):
+class PredictLogisticRequest(NumPyValidatorBase):
     '''
         Request model for logistic regression prediction.
     '''

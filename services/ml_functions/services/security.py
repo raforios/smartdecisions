@@ -1,37 +1,22 @@
 '''
     Security service
 '''
-import os
 from typing import Optional
 from fastapi import Header
 from jose import jwt, JWTError
 
-from dotenv import dotenv_values
-
 from services.logger_config import custom_logger as logger
-from services.exceptions import UnauthorizedError, ServiceUnavailableError
+from services.exceptions import UnauthorizedError
+from services.environment import load_and_validate_env_vars
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
-
-SECRET_KEY = os.environ.get('SECRET_KEY') or \
-                      _LOCAL_ENV_PARAMS.get('SECRET_KEY')
-
-if not SECRET_KEY:
-    ERROR_MSG = 'SECRET_KEY is not configured in environment or .env.'
-    logger.critical(ERROR_MSG)
-    raise ServiceUnavailableError(
-        detail = ERROR_MSG
-    )
-
-ALGORITHM = os.environ.get('ALGORITHM') or \
-                      _LOCAL_ENV_PARAMS.get('ALGORITHM')
-
-if not ALGORITHM:
-    ERROR_MSG = 'ALGORITHM for JWT is not configured in environment or .env.'
-    logger.critical(ERROR_MSG)
-    raise ServiceUnavailableError(
-        detail = ERROR_MSG
-    )
+ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'SECRET_KEY': str,
+        'ALGORITHM': str,
+    }
+)
+SECRET_KEY = ENV_VARS['SECRET_KEY']
+ALGORITHM = ENV_VARS['ALGORITHM']
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
     '''

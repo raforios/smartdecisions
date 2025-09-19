@@ -25,13 +25,9 @@ def compute_cost(x, y, w, b):
         to fit the data points in x and y
     '''
     m = x.shape[0]
-    cost = 0
 
-    for i in range(m):
-        fwb = w * x[i] + b
-        cost += (fwb - y[i]) ** 2
-
-    cost = cost / (2 * m)
+    f_wb = w * x + b
+    cost = np.sum((f_wb - y) ** 2) / (2 * m)
 
     return cost
 
@@ -291,14 +287,25 @@ def zscore_normalize_features(x_matrix):
 
 def sigmoid(z):
     '''
-    Compute the sigmoid of z
+    Compute the sigmoid of z.
+
+    The sigmoid function, also known as the logistic function,
+    is a non-linear activation function used primarily in logistic
+    regression and neural networks. It maps any real-valued number
+    into a value between 0 and 1, making it suitable for binary
+    classification problems.
 
     Args:
-        z (ndarray): A scalar, numpy array of any size.
+        z (ndarray): A scalar or NumPy array of any shape.
 
     Returns:
-        g (ndarray): sigmoid(z), with the same shape as z
+        g (ndarray): The result of sigmoid(z), with the same shape as z.
 
+    Note:
+        The input `z` is clipped to the range [-500, 500] to prevent
+        potential numerical overflow errors when computing `np.exp(-z)`.
+        This ensures computational stability for very large or small
+        input values.
     '''
 
     z = np.clip(z, -500, 500)

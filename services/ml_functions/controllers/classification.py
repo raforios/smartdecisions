@@ -3,7 +3,7 @@
 '''
 import numpy as np
 from services.logger_config import custom_logger as logger
-from services.utils import handle_ml_operation
+from services.utils import handle_operation
 from services.machine_learning import (
     sigmoid,
     compute_cost_logistic,
@@ -20,18 +20,19 @@ from schemas.classification import (
     PredictLogisticResponse
 )
 
-@handle_ml_operation
-async def calculating_sigmoid(request_body: SigmoidBatchRequest):
+@handle_operation(exc_type = (ValueError, TypeError))
+async def calculating_sigmoid(
+    request_body: SigmoidBatchRequest
+):
     '''
     Calculates the sigmoid function for a given input value or array of values.
     '''
-    # Se convierte a una lista para asegurar la serialización correcta
     response = sigmoid(np.array(request_body.z_values)).tolist()
     message = 'Batch sigmoid calculation completed.'
     logger.info(message)
     return response
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def calculating_cost_logistic(
     request_body: ComputeCostLogisticRequest
 ) -> float:
@@ -48,7 +49,7 @@ async def calculating_cost_logistic(
     logger.info(message)
     return float(cost)
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def calculating_gradient_logistic(
     request_body: ComputeGradientLogisticRequest
 ) -> dict:
@@ -66,7 +67,7 @@ async def calculating_gradient_logistic(
 
     return {"dj_db": float(dj_db), "dj_dw": dj_dw.tolist()}
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def performing_gradient_descent_logistic(
     request_body: GradientDescentLogisticRequest
 ) -> dict:
@@ -95,7 +96,7 @@ async def performing_gradient_descent_logistic(
     logger.info(message)
     return response_data
 
-@handle_ml_operation
+@handle_operation(exc_type = (ValueError, TypeError))
 async def predicting_logistic_classification(
     request_body: PredictLogisticRequest
 ) -> PredictLogisticResponse:

@@ -4,7 +4,9 @@
 from typing import List
 from pydantic import BaseModel, Field
 
-class NormalizeFeaturesRequest(BaseModel):
+from schemas.base import NumPyValidatorBase
+
+class NormalizeFeaturesRequest(NumPyValidatorBase):
     '''
         Request model for feature normalization (z-score).
     '''

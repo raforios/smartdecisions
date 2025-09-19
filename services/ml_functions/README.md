@@ -25,9 +25,7 @@ Este microservicio ha sido desarrollado con un enfoque en la eficiencia y el ren
   * **Cómputo Numérico:** NumPy (para operaciones matriciales eficientes)
   * **Contenedorización:** Docker 🐳 (para compilación de librerías, empaquetado y despliegue)
   * **Plataforma Cloud:** AWS Lambda ☁️
-  * **Autenticación/Autorización:** JWT (JSON Web Tokens) 🔑 (Para asegurar el acceso a los endpoints)
-  * **Almacenamiento de Objetos:** Amazon S3 🗄️ (Como sistema de almacenamiento principal para archivos)
-  * **Interacción con AWS:** Boto3 (SDK oficial de AWS para Python para interactuar con S3 y otros servicios)
+  * **Autenticación/Autorización:** JWT (JSON Web Tokens) 🔑 (El servicio valida tokens para asegurar los endpoints)
 
 -----
 
@@ -64,14 +62,13 @@ A continuación se listan los endpoints principales de la API, organizados por s
 
 ## 📦 Dependencias
 
-Las siguientes librerías son esenciales para el funcionamiento del **File-Handler-Service** y se gestionan a través de `requirements.txt` y Docker:
+Las siguientes librerías son esenciales para el funcionamiento del **ML-Functions-Service** y se gestionan a través de `requirements.txt` y Docker:
 
   * `fastapi`
   * `uvicorn`
   * `pydantic`
   * `pydantic-core`
   * `python-multipart`
-  * `boto3`
   * `mangum`
   * `pandas`
   * `python-jose[cryptography]`
