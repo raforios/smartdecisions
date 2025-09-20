@@ -1,57 +1,21 @@
 '''
     DynamoDB Connection
 '''
-from typing import TypedDict, Callable
+from typing import Callable
 import boto3
-from botocore.exceptions import ClientError as AWSClientError
+from botocore.exceptions import ClientError
+from services.logger_config import custom_logger as logger
 from services.environment import load_and_validate_env_vars
+from services.exceptions import ServiceUnavailableError
 
-class DynamoDBConfig(TypedDict):
-    '''
-    TypedDict to define the expected structure and types of DynamoDB parameters.
-    '''
-    AWS_REGION: str
-    DYNAMODB_ENDPOINT_URL: str
+# Carga las variables de entorno necesarias
+ENV_VARS = load_and_validate_env_vars({
+    'DYNAMODB_TABLE_NAME_AUDIT': str,
+    'DYNAMODB_TABLE_NAME_USAGE': str
+})
 
-_ENV_VARS = load_and_validate_env_vars(
-    env_vars = {
-        'AWS_REGION': str
-    },
-    optional_env_vars = {
-        'DYNAMODB_ENDPOINT_URL': str
-    }
-)
-
-def get_dynamodb_resource():
-    '''
-    Creates and returns a DynamoDB resource.
-    
-    Returns:
-        boto3.resources.factory.ServiceResource: The DynamoDB resource.
-    
-    Raises:
-        RuntimeError: If an unexpected error occurs during resource creation.
-    '''
-    try:
-        if _ENV_VARS.get('DYNAMODB_ENDPOINT_URL'):
-            # Conexión para entorno de desarrollo local (LocalStack o Docker)
-            return boto3.resource(
-                'dynamodb',
-                region_name = _ENV_VARS['AWS_REGION'],
-                endpoint_url = _ENV_VARS['DYNAMODB_ENDPOINT_URL']
-            )
-        # Conexión para entorno de producción en AWS
-        return boto3.resource(
-            'dynamodb',
-            region_name = _ENV_VARS['AWS_REGION']
-        )
-    except AWSClientError as e:
-        raise RuntimeError(f'Error de cliente de AWS al conectar a DynamoDB: {e}') from e
-    except Exception as e:
-        raise RuntimeError(f'Error inesperado al crear el recurso de DynamoDB: {e}') from e
-
-# Instancia del recurso de DynamoDB para inyección de dependencia
-DB_RESOURCE = get_dynamodb_resource()
+# Inicializa la conexión de boto3
+dynamodb_resource = boto3.resource('dynamodb')
 
 def get_db_resource() -> Callable:
     '''
@@ -64,7 +28,31 @@ def get_db_resource() -> Callable:
         '''
         Provides the DynamoDB resource as a dependency.
         '''
-        return DB_RESOURCE
+        return dynamodb_resource
     return _get_db
 
+def get_table(table_name: str):
+    '''
+        Returns a reference to the specified DynamoDB table.
+    '''
+    try:
+        table = dynamodb_resource.Table(table_name)
+        message = f'DynamoDB table "{table_name}" accessed successfully.'
+        logger.info(message)
+        return table
+    except ClientError as e:
+        error_msg = f'Error accessing DynamoDB table "{table_name}": {
+            e.response.get("Error", {}).get("Message")}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(
+            detail = f'Database initialization error: {error_msg}'
+        ) from e
+    except Exception as e:
+        error_msg = f'Unexpected error when getting DynamoDB table {table_name}: {e}'
+        logger.critical(error_msg, exc_info = True)
+        raise ServiceUnavailableError(
+            detail = 'Unexpected database initialization error.'
+        ) from e
+
+# Instancia de la dependencia para su uso en FastAPI
 GET_DB_DEPENDENCY: Callable = get_db_resource()
