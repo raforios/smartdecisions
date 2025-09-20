@@ -92,6 +92,7 @@ files/
 ├── services/
 │   ├── __init__.py
 │   ├── api_exceptions.py
+│   ├── environment.py
 │   ├── exceptions.py
 │   ├── logger_config.py
 │   ├── security.py
