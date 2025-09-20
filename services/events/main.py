@@ -1,50 +1,45 @@
 '''
     Events Microservice Main Handler
 '''
-import os
 import socket
 from datetime import datetime, date
 from typing import Dict, Any, AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-
+from fastapi.responses import FileResponse
 from mangum import Mangum
-
 import uvicorn
-
-from dotenv import dotenv_values
 
 from routes.audit import router as audit_router
 from routes.usage_log import router as usage_log_router
 
 from services.api_exceptions import setup_exception_handlers
-from services.db_connection import ENGINE, Base
 from services.logger_config import custom_logger as logger
+from services.environment import load_and_validate_env_vars
 
-PARAMETERS = dotenv_values('.env')
+ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'HOST': str,
+        'PORT': int,
+    },
+    optional_env_vars = {
+        'APP_ENV': str
+    }
+)
+
+UVICORN_HOST = ENV_VARS['HOST']
+UVICORN_PORT = ENV_VARS['PORT']
+APP_ENV = ENV_VARS['APP_ENV']
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     '''
         Handles the startup and shutdown events of the FastAPI application.
-        This is the recommended way to manage application lifecycle, including DB initialization.
+        DynamoDB tables are managed outside the application lifecycle.
     '''
-    message = 'Application startup: Attempting to initialize database tables.'
+    message = 'Application startup: Validating DynamoDB table existence.'
     logger.info(message)
-    try:
-        # Base.metadata.create_all requires all models to be imported before calling.
-        # Ensure your models (e.g., models/forms.py) are imported somewhere
-        # so Base.metadata knows about them. If models.forms is imported by controllers,
-        # it's usually fine. Otherwise, you might need to import models.forms here.
-        Base.metadata.create_all(bind = ENGINE)
-        message = 'Database tables created/verified successfully.'
-        logger.info(message)
-    except Exception as e:
-        error_msg = f'Database initialization failed on startup: {e}'
-        logger.critical(error_msg, exc_info = True)
-        # Raise to prevent the app from starting if DB init fails critically.
-        raise RuntimeError('Database initialization failed during application startup.') from e
 
     yield # The application will run after the 'yield' statement
 
@@ -67,6 +62,13 @@ app = FastAPI(
 
 setup_exception_handlers(app)
 
+@app.get('/favicon.ico', include_in_schema = False)
+async def favicon():
+    '''
+        Serves the favicon.ico file to prevent 404 errors from browsers.
+    '''
+    return FileResponse('favicon.ico')
+
 # Root path (Healtcheck function)
 @app.get('/', tags = ['Home'])
 def root() -> Dict[str, Any]:
@@ -81,12 +83,12 @@ def root() -> Dict[str, Any]:
     output = {
         'Api Healthcheck': 'OK',
         'Host': socket.gethostname(),
-        'Environment': os.environ.get('APP_ENV', PARAMETERS.get('APP_ENV')),
+        'Environment': APP_ENV,
         'Status': 'available',
         'Server Date Time': today.isoformat(),
         'Last Update': date.today().isoformat(),
         'Application': 'Python - FastAPI',
-        'Database': 'MySQL transactional Database',
+        'Database': 'AWS DynamoDB',
         'Owner': f'BearSoft {copyright_symbol} {today.year}'
     }
     return output
@@ -96,9 +98,6 @@ app.include_router(usage_log_router, tags = ['Events'])
 
 # Entry point to run the app
 if __name__ == '__main__':
-    UVICORN_HOST = os.environ.get('HOST', PARAMETERS.get('HOST'))
-    UVICORN_PORT = int(os.environ.get('PORT', PARAMETERS.get('PORT')))
-
     MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
     logger.info(MESSAGE)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)

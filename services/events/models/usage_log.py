@@ -1,30 +1,25 @@
 '''
-   Usage Log Models
+   Usage Log Model for DynamoDB
 '''
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Text
-from sqlalchemy.sql import text
-from services.db_connection import Base
+from typing import TypedDict
 
-class UsageLog(Base):# pylint: disable=R0903
+class UsageLog(TypedDict):
     '''
-        SQLAlchemy model for a usage log record.
+    Python model to represent a usage log document in DynamoDB.
+    
+    This TypedDict defines the expected structure of items in the
+    't_usage_logs' table, which is schemaless in DynamoDB.
+    
+    DynamoDB Partition Key: 'id' (String, e.g., UUID)
     '''
-    __tablename__ = 't_usage_logs'
-
-    id = Column(Integer, primary_key = True, index = True)
-    user_app = Column(String(50), nullable = False)
-    microservice = Column(String(50), nullable = False)
-    endpoint = Column(Text, nullable = False)
-    method = Column(String(10), nullable = False)
-    status_code = Column(Integer, nullable = False)
-    ip_address = Column(String(50), nullable = False)
-    request_body = Column(JSON, nullable = True)
-    response_body = Column(JSON, nullable = True)
-    response_time_ms = Column(Integer, nullable = True)
-    timestamp = Column(DateTime, nullable = False, server_default = text('now()'))
-
-    def __repr__(self):
-        return (
-            f"<UsageLog(id = {self.id}, microservice = '{self.microservice}', "
-            f"user_id = '{self.user_id}', endpoint = '{self.endpoint}')>"
-        )
+    id: str  # Unique identifier for the item (e.g., UUID)
+    user_app: str
+    microservice: str
+    endpoint: str
+    method: str
+    status_code: int
+    ip_address: str
+    request_body: dict
+    response_body: dict
+    response_time_ms: int
+    timestamp: str  # ISO 8601 format

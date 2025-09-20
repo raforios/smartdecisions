@@ -1,21 +1,46 @@
 '''
     Business logic services for the Usage Log Module.
 '''
-from sqlalchemy.orm import Session
-from models.usage_log import UsageLog
-from schemas.usage_log import UsageLogCreateSchema
-from services.utils import handle_service_errors
+from typing import Dict, Any
+from boto3.resources.base import ServiceResource
+from schemas.usage_log import UsageLogQuerySchema
+from services.crud import (
+    create_item,
+    get_all_records_paginated
+)
+from services.utils import handle_service_errors, process_query_params
+from services.logger_config import custom_logger as logger
+
+USAGE_LOG_TABLE_NAME = 'usage_logs'
 
 @handle_service_errors
 def create_usage_log(
-    db: Session,
-    log_data: UsageLogCreateSchema
-) -> UsageLog:
+    dynamodb_resource: ServiceResource,
+    log_data: Dict[str, Any]
+) -> Dict[str, Any]:
     '''
         Service to create a new usage log record in the database.
     '''
-    db_log = UsageLog(**log_data.model_dump())
-    db.add(db_log)
-    db.commit()
-    db.refresh(db_log)
-    return db_log
+    logger.debug('Attempting to create a new usage log.')
+    return create_item(
+        dynamodb_resource = dynamodb_resource,
+        table_name = USAGE_LOG_TABLE_NAME,
+        item_data = log_data
+    )
+
+@handle_service_errors
+def get_usage_logs(
+    dynamodb_resource: ServiceResource,
+    query_params: UsageLogQuerySchema
+) -> Dict[str, Any]:
+    '''
+        Retrieves a paginated list of usage logs with optional filters.
+    '''
+    message = 'Attempting to retrieve usage logs.'
+    logger.info(message)
+    processed_params = process_query_params(query_params)
+    return get_all_records_paginated(
+        dynamodb_resource = dynamodb_resource,
+        table_name = USAGE_LOG_TABLE_NAME,
+        query_params = processed_params
+    )

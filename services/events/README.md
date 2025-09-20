@@ -21,8 +21,8 @@ Este microservicio comparte el mismo enfoque en rendimiento y robustez que el re
   * **Lenguaje:** Python 3.13 🐍
   * **Framework Web:** FastAPI ✨
   * **Servidor ASGI:** Uvicorn 🚀
-  * **ORM:** SQLAlchemy
-  * **Base de Datos:** MySQL
+  * **AWS SDK:** Boto3 (para la gestión de datos)
+  * **Base de Datos:** AWS DynamoDB
   * **Validación de Datos:** Pydantic
   * **Contenedorización:** Docker 🐳
   * **Plataforma Cloud:** AWS Lambda y AWS CLI (para el despliegue a través de un script shell)
@@ -38,7 +38,9 @@ A continuación se listan los endpoints principales de la API, agrupados por su 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
 | `POST` | `/v1/events/audit` | Registra un evento de auditoría sobre una modificación de datos. |
+| `GET` | `/v1/events/audit` | Obtiene una lista paginada de registros de auditoría con filtros opcionales. |
 | `POST` | `/v1/events/usage-log` | Registra un evento de uso de la API. |
+| `GET` | `/v1/events/usage-log` | Obtiene una lista paginada de registros de uso con filtros opcionales. |
 
 -----
 
@@ -68,6 +70,7 @@ events/
 │   ├── audit.py
 │   ├── crud.py
 │   ├── db_connection.py
+│   ├── environment.py
 │   ├── exceptions.py
 │   ├── logger_config.py
 │   ├── security.py
@@ -95,7 +98,7 @@ Para ejecutar el microservicio localmente, sigue los siguientes pasos:
     pip install -r requirements.txt
     ```
 
-2.  **Configura la base de datos:** Asegúrate de que tienes un servidor MySQL en ejecución y que las variables de conexión están correctamente configuradas en el archivo `.env`.
+2.  **Configura la base de datos:** Asegúrate de que tienes una instancia de **DynamoDB local** en ejecución (por ejemplo, con **Docker**) y que las variables de conexión están correctamente configuradas en el archivo `.env`.
 
 3.  **Ejecuta el servidor de la API:**
 

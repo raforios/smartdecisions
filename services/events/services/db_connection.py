@@ -1,107 +1,70 @@
 '''
-    Database Connection
+    DynamoDB Connection
 '''
-import os
-from typing import TypedDict, Callable, Generator
-from sqlalchemy import create_engine, URL
-from sqlalchemy.orm import sessionmaker, declarative_base, DeclarativeMeta, Session
-from sqlalchemy.engine.base import Engine
-from dotenv import dotenv_values
+from typing import TypedDict, Callable
+import boto3
+from botocore.exceptions import ClientError as AWSClientError
+from services.environment import load_and_validate_env_vars
 
-class DatabaseConfig(TypedDict):
+class DynamoDBConfig(TypedDict):
     '''
-        TypedDict to define the expected structure and types of database parameters.
-        Ensures better type checking and clarity for DB_PARAMETERS.
+    TypedDict to define the expected structure and types of DynamoDB parameters.
     '''
-    DB_USER: str
-    DB_PASSWORD: str
-    DB_HOST: str
-    DATABASE: str
-    DB_PORT: str
-    DB_DIALECT: str
+    AWS_REGION: str
+    DYNAMODB_ENDPOINT_URL: str
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
+_ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'AWS_REGION': str
+    },
+    optional_env_vars = {
+        'DYNAMODB_ENDPOINT_URL': str
+    }
+)
 
-DB_PARAMETERS: DatabaseConfig = {
-    'DB_USER': os.environ.get('DB_USER') or _LOCAL_ENV_PARAMS.get('DB_USER'),
-    'DB_PASSWORD': os.environ.get('DB_PASSWORD') or _LOCAL_ENV_PARAMS.get('DB_PASSWORD'),
-    'DB_HOST': os.environ.get('DB_HOST') or _LOCAL_ENV_PARAMS.get('DB_HOST'),
-    'DATABASE': os.environ.get('DATABASE') or _LOCAL_ENV_PARAMS.get('DATABASE'),
-    'DB_PORT': os.environ.get('DB_PORT') or _LOCAL_ENV_PARAMS.get('DB_PORT'),
-    'DB_DIALECT': os.environ.get('DB_DIALECT') or _LOCAL_ENV_PARAMS.get('DB_DIALECT')
-} # type: ignore
-
-REQUIRED_DB_KEYS = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DATABASE', 'DB_PORT', 'DB_DIALECT']
-for key in REQUIRED_DB_KEYS:
-    if DB_PARAMETERS.get(key) is None or DB_PARAMETERS.get(key) == '':
-        raise EnvironmentError(
-            f'''Missing or empty required database environment variable: "{key}".
-            Ensure it\'s set in os.environ or in your .env file.'''
-        )
-
-Base: DeclarativeMeta = declarative_base()
-
-def get_database_engine(db_dialect: str) -> Engine:
+def get_dynamodb_resource():
     '''
-        Creates and returns a generic SQLAlchemy database engine.
-
-        Args:
-        db_dialect (str): The database dialect (e.g., 'mysql+pymysql',
-        'postgresql+psycopg2').
-
-        Returns:
-        sqlalchemy.engine.base.Engine: The configured database engine.
+    Creates and returns a DynamoDB resource.
+    
+    Returns:
+        boto3.resources.factory.ServiceResource: The DynamoDB resource.
+    
+    Raises:
+        RuntimeError: If an unexpected error occurs during resource creation.
     '''
     try:
-        url_database = URL.create(
-            db_dialect,
-            username = DB_PARAMETERS['DB_USER'],
-            password = DB_PARAMETERS['DB_PASSWORD'],
-            host = DB_PARAMETERS['DB_HOST'],
-            database = DB_PARAMETERS['DATABASE'],
-            port = int(DB_PARAMETERS['DB_PORT'])
+        if _ENV_VARS.get('DYNAMODB_ENDPOINT_URL'):
+            # Conexión para entorno de desarrollo local (LocalStack o Docker)
+            return boto3.resource(
+                'dynamodb',
+                region_name = _ENV_VARS['AWS_REGION'],
+                endpoint_url = _ENV_VARS['DYNAMODB_ENDPOINT_URL']
+            )
+        # Conexión para entorno de producción en AWS
+        return boto3.resource(
+            'dynamodb',
+            region_name = _ENV_VARS['AWS_REGION']
         )
-        return create_engine(
-            url_database,
-            pool_pre_ping = True,
-            pool_size = 10,
-            max_overflow = 20,
-            pool_timeout = 30,
-            echo = False
-        )
-    except ValueError as val_e:
-        raise ValueError(
-            f'Error creating database URL or engine: {val_e}. Check DB_PORT or dialect.'
-        ) from val_e
-    except Exception as general_e:
-        raise RuntimeError(
-            f'An unexpected error occurred while creating the database engine: {general_e}'
-        ) from general_e
+    except AWSClientError as e:
+        raise RuntimeError(f'Error de cliente de AWS al conectar a DynamoDB: {e}') from e
+    except Exception as e:
+        raise RuntimeError(f'Error inesperado al crear el recurso de DynamoDB: {e}') from e
 
+# Instancia del recurso de DynamoDB para inyección de dependencia
+DB_RESOURCE = get_dynamodb_resource()
 
-def get_db_session(engine: Engine) -> Callable:
+def get_db_resource() -> Callable:
     '''
-        Returns a generator function that provides a database session.
-
-        Args:
-        engine (sqlalchemy.engine.base.Engine): The database engine to use.
-
-        Returns:
-        Callable: A generator function to obtain a DB session.
+    Returns a callable that provides the DynamoDB resource.
+    
+    Returns:
+        Callable: A callable to obtain a DynamoDB resource.
     '''
-    session_factory = sessionmaker(autocommit = False, autoflush = False, bind = engine)
-
-    def _get_db() -> Generator[Session, None, None]:
+    def _get_db():
         '''
-            Obtains and manages the connection to the database.
+        Provides the DynamoDB resource as a dependency.
         '''
-        db: Session = session_factory()
-        try:
-            yield db
-        finally:
-            db.close()
+        return DB_RESOURCE
     return _get_db
 
-DATABASE_DIALECT: str = DB_PARAMETERS['DB_DIALECT']
-ENGINE: Engine = get_database_engine(DATABASE_DIALECT)
-GET_DB_DEPENDENCY: Callable = get_db_session(ENGINE)
+GET_DB_DEPENDENCY: Callable = get_db_resource()

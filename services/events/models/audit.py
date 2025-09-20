@@ -1,28 +1,23 @@
 '''
-   Audit Models
+   Audit Record Model for DynamoDB
 '''
-from sqlalchemy import Column, Integer, String, DateTime, JSON
-from sqlalchemy.sql import text
-from services.db_connection import Base
+from typing import TypedDict
 
-class AuditRecord(Base):# pylint: disable=R0903
+class AuditRecord(TypedDict):
     '''
-        SQLAlchemy model for an audit record.
+    Python model to represent an audit record document in DynamoDB.
+    
+    This TypedDict defines the expected structure of items in the
+    't_audit_records' table, which is schemaless in DynamoDB.
+    
+    DynamoDB Partition Key: 'id' (String, e.g., UUID)
     '''
-    __tablename__ = 't_audit_records'
-
-    id = Column(Integer, primary_key = True, index = True)
-    microservice = Column(String(50), nullable = False)
-    entity_name = Column(String(50), nullable = False)
-    entity_id = Column(Integer, nullable = False)
-    action = Column(String(15), nullable = False)
-    user_id = Column(String(50), nullable = False)
-    timestamp = Column(DateTime, nullable = False, server_default = text('now()'))
-    old_values = Column(JSON, nullable = True)
-    new_values = Column(JSON, nullable = True)
-
-    def __repr__(self):
-        return (
-            f"<AuditRecord(id = {self.id}, microservice = '{self.microservice}', "
-            f"entity_name = '{self.entity_name}', action = '{self.action}')>"
-        )
+    id: str  # Unique identifier for the item (e.g., UUID)
+    microservice: str
+    entity_name: str
+    entity_id: str  # Stored as a String for flexibility
+    action: str
+    user_id: str
+    timestamp: str  # ISO 8601 format
+    old_values: dict
+    new_values: dict

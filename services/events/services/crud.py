@@ -1,256 +1,129 @@
 '''
-    CRUD service
+    CRUD Service
 '''
-from typing import List, Optional, Dict, Any, Type, Union
-from sqlalchemy.orm import Session, DeclarativeBase, selectinload, Load
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from pydantic import BaseModel
-
-# Import custom exceptions for specific error scenarios
-from services.exceptions import (
-    RegisterNotFoundError
-)
+import json
+from typing import Any, Dict
+from boto3.resources.base import ServiceResource
+from boto3.dynamodb.conditions import Attr
+from botocore.exceptions import ClientError as AWSClientError
 from services.logger_config import custom_logger as logger
+from services.exceptions import RegisterAlreadyExistsError, RegisterNotFoundError
 
-def handle_db_exception(e: Exception, operation: str, entity_id: Any = None):
-    '''
-        Handles various database exceptions and re-raises appropriate
-        custom exceptions or generic errors.
+# Constantes para la gestión de las tablas y sus claves
+TABLE_SCHEMA = {
+    'audit_records': {'pk': 'id', 'sk': 'sk', 'index': 'sk-pk-index'},
+    'usage_logs': {'pk': 'id', 'sk': 'sk', 'index': 'sk-pk-index'},
+}
 
-        This function acts as a centralized point for database-related
-        exception handling, allowing controllers to focus on business logic.
-        Specific NotFound and AlreadyExists errors are expected to be
-        handled more granularly by the caller or get_record directly.
+def create_item(
+    dynamodb_resource: ServiceResource,
+    table_name: str,
+    item_data: Dict[str, Any]
+) -> Dict[str, Any]:
     '''
-    # Re-raise specific NotFoundErrors that might come from nested calls (e.g., get_record)
-    if isinstance(e, (RegisterNotFoundError)):
-        raise e
-    # Re-raise IntegrityError; controllers are expected to catch this
-    # to provide specific business context (e.g., 'Form with this code already exists').
-    if isinstance(e, IntegrityError):
-        error_msg = (
-            f'Integrity error during {operation} for '
-            f'{entity_id if entity_id else 'entity'}: {e}'
+        Adds a new item to a DynamoDB table.
+    '''
+    try:
+        table = dynamodb_resource.Table(table_name)
+        # Conditional put to prevent overwriting an existing item
+        table.put_item(
+            Item=item_data,
+            ConditionExpression='attribute_not_exists(id)'
         )
-        logger.error(error_msg, exc_info = True)
+        message = f'Item added successfully to {table_name}.'
+        logger.info(message)
+        return item_data
+    except AWSClientError as e:
+        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            error_msg = f'Item with id {item_data["id"]} already exists.'
+            logger.warning(error_msg, exc_info=True)
+            raise RegisterAlreadyExistsError(detail=error_msg) from e
+        error_msg = f'Error adding item to {table_name}: {e}'
+        logger.error(error_msg, exc_info=True)
         raise e
-    if isinstance(e, SQLAlchemyError):
-        error_msg = (
-            f'SQLAlchemy error during {operation} for '
-            f'{entity_id if entity_id else 'entity'}: {e}'
-        )
-        logger.error(error_msg, exc_info = True)
-        raise RuntimeError('A database error occurred during the operation.') from e
 
-    error_msg = f'''Unexpected error during {operation} for
-            {entity_id if entity_id else 'entity'}: {e}'''
-    logger.critical(error_msg, exc_info = True)
-    raise RuntimeError('An unexpected internal error occurred.') from e
-
-def create_record(
-    db: Session, model: Type[DeclarativeBase], create_data: BaseModel,
-    extra_fields: Optional[Dict[str, Any]] = None,
-    exclude_relations: Optional[List[str]] = None
-) -> DeclarativeBase:
+def get_item_by_id(
+    dynamodb_resource: ServiceResource,
+    table_name: str,
+    item_id: str
+) -> Dict[str, Any]:
     '''
-        Generic function to create a new record in the database.
-
-        Args:
-            db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class.
-            create_data (BaseModel): Pydantic schema with data for the new record.
-            extra_fields (Optional[Dict[str, Any]]): Additional fields to add/override.
-
-        Returns:
-            DeclarativeBase: The newly created database record.
-
-        Raises:
-            IntegrityError: If a unique constraint is violated (handled by handle_db_exception).
-            SQLAlchemyError: For other database-related errors (handled by handle_db_exception).
-            Exception: For any other unexpected errors.
+        Retrieves an item from a DynamoDB table by its ID.
     '''
-    try:
-        data_dict = create_data.model_dump(exclude = set(exclude_relations or []))
+    table = dynamodb_resource.Table(table_name)
+    response = table.get_item(
+        Key={
+            'id': item_id
+        }
+    )
+    item = response.get('Item')
+    if not item:
+        error_msg = f'Item with id {item_id} not found in {table_name}.'
+        logger.warning(error_msg)
+        raise RegisterNotFoundError(detail=error_msg)
 
-        # Merge extra_fields
-        if extra_fields:
-            data_dict.update(extra_fields)
-
-        message = f'Creating record for model {model.__name__} with data: {data_dict}'
-        logger.debug(message)
-        # The nested dict list warning is still relevant if exclude_relations isn't perfect
-        if any(isinstance(v, list) and
-               any(isinstance(item, dict) for item in v) for v in data_dict.values()):
-            message = f'''Data dict for {model.__name__} still contains nested dict lists,
-                    despite exclusion: {data_dict}'''
-            logger.warning(message)
-
-        db_record = model(**data_dict)
-        db.add(db_record)
-        db.flush() # Flush to get ID for relationships if needed before commit
-        # Add db.refresh here to ensure ID is populated immediately
-        db.refresh(db_record)
-        return db_record
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError) as e:
-        handle_db_exception(e, 'creation')
-        raise
-    except Exception as e:
-        db.rollback()
-        handle_db_exception(e, 'creation')
-        raise
-
-def get_record(
-    db: Session, model: Type[DeclarativeBase],
-    record_id: int,
-    eager_load_options: Optional[List[Union[str, Load]]] = None
-) -> DeclarativeBase:
-    '''
-        Generic function to retrieve a record by ID with flexible eager loading.
-
-        Args:
-            db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class to query.
-            record_id (int): The ID of the record to retrieve.
-            eager_load_options (Optional[List[Union[str, Load]]]):
-                A list of relationship names (strings) or
-                SQLAlchemy Load objects for eager loading.
-
-        Returns:
-            DeclarativeBase: The retrieved database record.
-
-        Raises:
-            RegisterNotFoundError: If the record is not found.
-            Exception: For any other unexpected errors.
-    '''
-
-    try:
-        query = db.query(model)
-        if eager_load_options:
-            for option in eager_load_options:
-                match option:
-                    case str():
-                        # Use selectinload for simple relationship names
-                        query = query.options(selectinload(getattr(model, option)))
-                    case Load():
-                        # Pass Load objects directly
-                        query = query.options(option)
-                    case _:
-                        # Handle any other type
-                        message = f'''Invalid eager_load_option type: {type(option)}.
-                        Must be a string or a SQLAlchemy Load object.'''
-                        logger.error(message, exc_info = True)
-                        raise TypeError(message)
-
-        record = query.filter(model.id == record_id).first()
-        if not record:
-            message = f'{model.__name__} with ID {record_id} not found.'
-            logger.warning(message)
-            raise RegisterNotFoundError(detail = message)
-        return record
-    except (SQLAlchemyError, RegisterNotFoundError, TypeError) as e:
-        handle_db_exception(e, 'retrieval', record_id)
-        raise
-    except Exception as e:
-        handle_db_exception(e, 'retrieval', record_id)
-        raise
-
-def update_record(
-    db: Session, db_record: DeclarativeBase,
-    update_data: BaseModel,
-    exclude_relations: Optional[List[str]] = None
-) -> DeclarativeBase:
-    '''
-        Generic function to update an existing record.
-
-        Args:
-            db (Session): The database session.
-            db_record (DeclarativeBase): The existing database record to update.
-            update_data (BaseModel): Pydantic schema with update data.
-
-        Returns:
-            DeclarativeBase: The updated database record.
-
-        Raises:
-            IntegrityError: If a unique constraint is violated (handled by handle_db_exception).
-            SQLAlchemyError: For other database-related errors (handled by handle_db_exception).
-            Exception: For any other unexpected errors.
-    '''
-    try:
-        update_data_dict = update_data.model_dump(exclude_unset = True,
-                            exclude=set(exclude_relations or []))
-        for key, value in update_data_dict.items():
-            setattr(db_record, key, value)
-        db.add(db_record)
-        db.flush() # Flush to apply changes before commit
-        return db_record
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError) as e:
-        handle_db_exception(e, 'update', db_record.id)
-        raise
-    except Exception as e:
-        db.rollback()
-        handle_db_exception(e, 'update', db_record.id)
-        raise
-
-def delete_record(db: Session, model: Type[DeclarativeBase], record_id: int):
-    '''
-        Generic function to delete a record by ID.
-
-        Args:
-            db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class.
-            record_id (int): The ID of the record to delete.
-
-        Raises:
-            RegisterNotFoundError: If model is FormHeader and record is not found.
-            Exception: For any other unexpected errors during deletion.
-    '''
-    try:
-        db_record = get_record(db, model, record_id)
-        db.delete(db_record)
-        db.flush() # Flush to ensure deletion is processed
-    except (IntegrityError, SQLAlchemyError, RegisterNotFoundError) as e:
-        handle_db_exception(e, 'deletion', record_id)
-    except Exception as e:
-        db.rollback()
-        handle_db_exception(e, 'deletion', record_id)
-        raise
+    message = f'Item with id {item_id} retrieved successfully.'
+    logger.info(message)
+    return item
 
 def get_all_records_paginated(
-    db: Session, model: Type[DeclarativeBase],
-    skip: int = 0, limit: int = 100,
-    eager_load_options: Optional[List] = None
-) -> List[DeclarativeBase]:
+    dynamodb_resource: ServiceResource,
+    table_name: str,
+    query_params: Dict[str, Any],
+) -> Dict[str, Any]:
     '''
-        Generic function to retrieve a paginated list of all records for a given model.
-
-        Args:
-            db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class to query.
-            skip (int): The number of records to skip (offset).
-            limit (int): The maximum number of records to retrieve.
-            eager_load_options (Optional[List]): List of joinedload options for eager loading.
-
-        Returns:
-            List[DeclarativeBase]: A list of retrieved database records.
-
-        Raises:
-            SQLAlchemyError: For database-related errors (handled by handle_db_exception).
-            Exception: For any other unexpected errors.
+        Retrieves all items from a DynamoDB table with optional pagination and filters.
     '''
     try:
-        query = db.query(model)
-        if eager_load_options:
-            for option in eager_load_options:
-                query = query.options(option)
+        table = dynamodb_resource.Table(table_name)
+        limit = query_params.get('limit', 100)
+        last_evaluated_key_str = query_params.get('last_evaluated_key', None)
 
-        records = query.offset(skip).limit(limit).all()
-        message = f'''Retrieved {len(records)} records for model {model.__name__}
-                (skip: {skip}, limit: {limit}).'''
-        logger.debug(message)
-        return records
-    except SQLAlchemyError as e:
-        handle_db_exception(e, 'pagination retrieval')
-        raise
-    except Exception as e:
-        handle_db_exception(e, 'pagination retrieval')
-        raise
+        scan_kwargs = {'Limit': limit}
+
+        # Construir la expresión de filtro dinámicamente
+        filters = {k: v for k, v in query_params.items() if v is not None}
+        filters.pop('limit', None)
+        filters.pop('last_evaluated_key', None)
+
+        if filters:
+            expressions = []
+            for key, value in filters.items():
+                expressions.append(Attr(key).eq(value))
+
+            filter_expression = expressions[0]
+            for expr in expressions[1:]:
+                filter_expression &= expr
+
+            scan_kwargs['FilterExpression'] = filter_expression
+
+        # Manejar la clave de paginación si está presente
+        if last_evaluated_key_str:
+            last_evaluated_key = json.loads(last_evaluated_key_str)
+            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+        response = table.scan(**scan_kwargs)
+
+        items = response.get('Items', [])
+        response_last_key = response.get('LastEvaluatedKey')
+
+        # Serializar la clave de paginación para la respuesta
+        if response_last_key:
+            response_last_key = json.dumps(response_last_key, separators=(',', ':'))
+
+        message = f'Retrieved {len(items)} records from {table_name}.'
+        logger.info(message)
+
+        return {
+            'items': items,
+            'last_evaluated_key': response_last_key
+        }
+
+    except AWSClientError as e:
+        error_msg = f'Error retrieving all items from {table_name}: {e}'
+        logger.error(error_msg, exc_info=True)
+        raise e
+    except json.JSONDecodeError as e:
+        error_msg = 'Invalid JSON format for last_evaluated_key.'
+        logger.error(error_msg, exc_info=True)
+        raise e

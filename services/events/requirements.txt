@@ -3,10 +3,8 @@ uvicorn
 pydantic
 pydantic-core
 python-multipart
+boto3
 mangum
 pandas
 python-jose[cryptography]
-numpy
-sqlalchemy
-pymysql
 python-dotenv

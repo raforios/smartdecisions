@@ -1,11 +1,10 @@
 '''
     Usage Log Schemas (Request/Response)
 '''
-from datetime import datetime
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 
-class UsageLogCreateSchema(BaseModel):# pylint: disable=too-few-public-methods
+class UsageLogCreateSchema(BaseModel):
     '''
         Pydantic schema for creating a new usage log record.
     '''
@@ -19,21 +18,28 @@ class UsageLogCreateSchema(BaseModel):# pylint: disable=too-few-public-methods
     response_body: Optional[Any] = None
     response_time_ms: Optional[int] = Field(None, ge = 0)
 
-    class Config:# pylint: disable=too-few-public-methods
-        '''
-            UsageLogCreateSchema - Config Class - To get form attributes
-        '''
-        from_attributes = True
 
-class UsageLogResponseSchema(UsageLogCreateSchema):# pylint: disable=too-few-public-methods
+class UsageLogResponseSchema(UsageLogCreateSchema):
     '''
         Pydantic schema for the usage log response.
     '''
-    id: int
-    timestamp: datetime
+    id: str
+    timestamp: str
 
-    class Config:# pylint: disable=too-few-public-methods
-        '''
-            UsageLogResponseSchema - Config Class - To get form attributes
-        '''
-        from_attributes = True
+
+class UsageLogQuerySchema(BaseModel):
+    '''
+        Pydantic schema for filtering usage logs.
+    '''
+    user_app: Optional[str] = Field(None, max_length = 50)
+    microservice: Optional[str] = Field(None, max_length = 50)
+    endpoint: Optional[str] = None
+    method: Optional[str] = Field(None, max_length = 10)
+    status_code: Optional[int] = Field(None, ge = 100, lt = 600)
+    start_date: Optional[str] = Field(None,
+                description = 'Start date for filtering (ISO 8601 format).')
+    end_date: Optional[str] = Field(None,
+                description = 'End date for filtering (ISO 8601 format).')
+    limit: int = Field(100, ge=1, le=100)
+    last_evaluated_key: Optional[str] = Field(None,
+                description = 'The last evaluated key for pagination.')

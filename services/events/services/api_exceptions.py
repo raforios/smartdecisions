@@ -130,7 +130,7 @@ def setup_exception_handlers(app):
             Handles any unhandled exceptions, returning a generic 500 Internal Server Error.
         '''
         error_msg = f'Unhandled exception: {exc} for path: {request.url.path}'
-        logger.critical(error_msg)
+        logger.critical(error_msg, exc_info = True)
 
         return JSONResponse(
             status_code = 500,
