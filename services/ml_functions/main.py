@@ -6,6 +6,7 @@ from datetime import datetime, date
 from typing import Dict, Any
 from fastapi import FastAPI
 
+from fastapi.responses import FileResponse
 from mangum import Mangum
 
 import uvicorn
@@ -47,6 +48,13 @@ APP_CONFIG = {
 app = FastAPI(**APP_CONFIG)
 
 setup_exception_handlers(app)
+
+@app.get('/favicon.ico', include_in_schema = False)
+async def favicon():
+    '''
+        Serves the favicon.ico file to prevent 404 errors from browsers.
+    '''
+    return FileResponse('favicon.ico')
 
 # Root path (Healtcheck function)
 @app.get('/', tags = ['Home'])
