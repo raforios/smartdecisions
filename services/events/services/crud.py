@@ -27,8 +27,8 @@ def create_item(
         table = dynamodb_resource.Table(table_name)
         # Conditional put to prevent overwriting an existing item
         table.put_item(
-            Item=item_data,
-            ConditionExpression='attribute_not_exists(id)'
+            Item = item_data,
+            ConditionExpression = 'attribute_not_exists(id)'
         )
         message = f'Item added successfully to {table_name}.'
         logger.info(message)
@@ -37,7 +37,7 @@ def create_item(
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             error_msg = f'Item with id {item_data["id"]} already exists.'
             logger.warning(error_msg, exc_info = True)
-            raise RegisterAlreadyExistsError(detail=error_msg) from e
+            raise RegisterAlreadyExistsError(detail = error_msg) from e
         error_msg = f'Error adding item to {table_name}: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
@@ -60,7 +60,7 @@ def get_item_by_id(
     if not item:
         error_msg = f'Item with id {item_id} not found in {table_name}.'
         logger.warning(error_msg)
-        raise RegisterNotFoundError(detail=error_msg)
+        raise RegisterNotFoundError(detail = error_msg)
 
     message = f'Item with id {item_id} retrieved successfully.'
     logger.info(message)

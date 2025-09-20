@@ -20,10 +20,10 @@ router = APIRouter(prefix='/v1/events', tags=['Events'])
 
 @router.post(
     '/usage-log',
-    response_model=UsageLogResponseSchema,
-    status_code=status.HTTP_201_CREATED,
-    summary='Create a new usage log',
-    description='Creates a new log record for a given API call.'
+    response_model = UsageLogResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Create a new usage log',
+    description = 'Creates a new log record for a given API call.'
 )
 def create_usage_log_endpoint(
     log_data: UsageLogCreateSchema,
@@ -35,16 +35,16 @@ def create_usage_log_endpoint(
     message = 'Received request to create a new usage log.'
     logger.info(message)
     return create_usage_log_controller(
-        dynamodb_resource=dynamodb_resource,
-        log_data=log_data
+        dynamodb_resource = dynamodb_resource,
+        log_data = log_data
     )
 
 @router.get(
     '/usage-log',
-    response_model=Dict[str, Any],
-    status_code=status.HTTP_200_OK,
-    summary='Get usage logs with filters',
-    description='''
+    response_model = Dict[str, Any],
+    status_code = status.HTTP_200_OK,
+    summary = 'Get usage logs with filters',
+    description = '''
         Retrieves a paginated list of usage logs with optional filters.
         
         The `last_evaluated_key` is a stringified JSON object that
@@ -61,6 +61,6 @@ def get_usage_logs_endpoint(
     message = 'Received request to retrieve usage logs.'
     logger.info(message)
     return get_usage_logs_controller(
-        dynamodb_resource=dynamodb_resource,
-        query_params=query_params
+        dynamodb_resource = dynamodb_resource,
+        query_params = query_params
     )
