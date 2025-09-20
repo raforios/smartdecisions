@@ -120,6 +120,7 @@ auth/
 │   ├── __init__.py
 │   ├── api_exceptions.py
 │   ├── dynamodb.py
+│   ├── environment.py
 │   ├── exceptions.py
 │   ├── jwt_token.py
 │   ├── logger_config.py
