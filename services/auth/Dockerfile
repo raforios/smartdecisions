@@ -31,7 +31,7 @@ RUN pip install --platform manylinux2014_x86_64 \
 COPY . .
 
 # Incluye todos los archivos en la carpeta python
-RUN cp -r main.py controllers routes schemas services python/
+RUN cp -r main.py favicon.ico controllers routes schemas services python/
 
 # Crea el ZIP final
 WORKDIR /app/python
