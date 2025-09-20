@@ -53,7 +53,7 @@ async def favicon():
     '''
         Serves the favicon.ico file to prevent 404 errors from browsers.
     '''
-    return FileResponse('favicon.ico')
+    return FileResponse('./favicon.ico')
 
 # Root path (Healtcheck function)
 @app.get('/', tags = ['Home'])
