@@ -36,10 +36,10 @@ def create_item(
     except AWSClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             error_msg = f'Item with id {item_data["id"]} already exists.'
-            logger.warning(error_msg, exc_info=True)
+            logger.warning(error_msg, exc_info = True)
             raise RegisterAlreadyExistsError(detail=error_msg) from e
         error_msg = f'Error adding item to {table_name}: {e}'
-        logger.error(error_msg, exc_info=True)
+        logger.error(error_msg, exc_info = True)
         raise e
 
 def get_item_by_id(
@@ -76,54 +76,38 @@ def get_all_records_paginated(
     '''
     try:
         table = dynamodb_resource.Table(table_name)
-        limit = query_params.get('limit', 100)
-        last_evaluated_key_str = query_params.get('last_evaluated_key', None)
+        scan_kwargs = {'Limit': query_params.get('limit', 100)}
 
-        scan_kwargs = {'Limit': limit}
-
-        # Construir la expresión de filtro dinámicamente
-        filters = {k: v for k, v in query_params.items() if v is not None}
-        filters.pop('limit', None)
-        filters.pop('last_evaluated_key', None)
+        filters = {k: v for k, v in query_params.items() if v is not None and k \
+            not in ['limit', 'last_evaluated_key']}
 
         if filters:
-            expressions = []
-            for key, value in filters.items():
-                expressions.append(Attr(key).eq(value))
+            filter_expressions = [Attr(key).eq(value) for key, value in filters.items()]
+            combined_expression = filter_expressions[0]
+            for expr in filter_expressions[1:]:
+                combined_expression &= expr
+            scan_kwargs['FilterExpression'] = combined_expression
 
-            filter_expression = expressions[0]
-            for expr in expressions[1:]:
-                filter_expression &= expr
-
-            scan_kwargs['FilterExpression'] = filter_expression
-
-        # Manejar la clave de paginación si está presente
-        if last_evaluated_key_str:
-            last_evaluated_key = json.loads(last_evaluated_key_str)
-            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+        if 'last_evaluated_key' in query_params and query_params['last_evaluated_key']:
+            scan_kwargs['ExclusiveStartKey'] = json.loads(query_params['last_evaluated_key'])
 
         response = table.scan(**scan_kwargs)
 
-        items = response.get('Items', [])
-        response_last_key = response.get('LastEvaluatedKey')
+        last_evaluated_key_json = json.dumps(response.get('LastEvaluatedKey'),
+                    separators=(',', ':')) if response.get('LastEvaluatedKey') else None
 
-        # Serializar la clave de paginación para la respuesta
-        if response_last_key:
-            response_last_key = json.dumps(response_last_key, separators=(',', ':'))
-
-        message = f'Retrieved {len(items)} records from {table_name}.'
+        message = f'Retrieved {len(response.get("Items", []))} records from {table_name}.'
         logger.info(message)
 
         return {
-            'items': items,
-            'last_evaluated_key': response_last_key
+            'items': response.get('Items', []),
+            'last_evaluated_key': last_evaluated_key_json
         }
 
     except AWSClientError as e:
         error_msg = f'Error retrieving all items from {table_name}: {e}'
-        logger.error(error_msg, exc_info=True)
+        logger.error(error_msg, exc_info = True)
         raise e
     except json.JSONDecodeError as e:
-        error_msg = 'Invalid JSON format for last_evaluated_key.'
-        logger.error(error_msg, exc_info=True)
+        logger.error('Invalid JSON format for last_evaluated_key.', exc_info = True)
         raise e
