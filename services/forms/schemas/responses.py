@@ -38,9 +38,9 @@ class PersonBase(BaseModel):
     phone_number_2: Optional[str] = Field(None,
         description = 'Secondary phone number of the person.', min_length = 7, max_length = 50)
     birth_date: Optional[datetime] = Field(None, description = 'Date of birth of the person.')
-    identification_document_type: Optional[str] = Field(None,
+    identification_document_type: Optional[int] = Field(None,
         description = 'Type of identification document.')
-    identification_number: Optional[int] = Field(None,
+    identification_number: Optional[str] = Field(None,
         description = 'Identification number (e.g., ID card, passport).')
     identification_expedition_place: Optional[int] = Field(None,
         description = 'Place of expedition for the identification document.')
@@ -69,9 +69,9 @@ class PersonUpdate(BaseModel):
     phone_number: Optional[str] = None
     phone_number_2: Optional[str] = None
     birth_date: Optional[datetime] = None
-    identification_document_type: Optional[str] = None
+    identification_document_type: Optional[int] = None
     identification_number: Optional[str] = None
-    identification_expedition_place: Optional[str] = None
+    identification_expedition_place: Optional[int] = None
     affiliation_date: Optional[datetime] = None
     affiliation_user_id: Optional[int] = None
     observations: Optional[str] = None
