@@ -2,7 +2,7 @@
     Audit Schemas (Request/Response)
 '''
 from typing import Optional, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class AuditRecordCreateSchema(BaseModel):
     '''
@@ -18,7 +18,7 @@ class AuditRecordCreateSchema(BaseModel):
                 description = 'The objects state before the change.')
     new_values: Any = Field(...,
                 description = 'The objects new state after the change.')
-
+    model_config = ConfigDict(extra='ignore')
 
 class AuditRecordResponseSchema(AuditRecordCreateSchema):
     '''

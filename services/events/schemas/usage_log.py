@@ -2,7 +2,7 @@
     Usage Log Schemas (Request/Response)
 '''
 from typing import Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class UsageLogCreateSchema(BaseModel):
     '''
@@ -17,7 +17,7 @@ class UsageLogCreateSchema(BaseModel):
     request_body: Optional[Any] = None
     response_body: Optional[Any] = None
     response_time_ms: Optional[int] = Field(None, ge = 0)
-
+    model_config = ConfigDict(extra='ignore')
 
 class UsageLogResponseSchema(UsageLogCreateSchema):
     '''
