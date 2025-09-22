@@ -1,7 +1,7 @@
 '''
     Audit Schemas (Request/Response)
 '''
-from typing import Optional, Any
+from typing import Optional, Any, Union
 from pydantic import BaseModel, ConfigDict, Field
 
 class AuditRecordCreateSchema(BaseModel):
@@ -10,10 +10,10 @@ class AuditRecordCreateSchema(BaseModel):
     '''
     microservice: str = Field(..., max_length = 50)
     entity_name: str = Field(..., max_length = 50)
-    entity_id: str = Field(...,
+    entity_id: Union[int, str] = Field(...,
                 description = 'ID of the entity, stored as a string.')
     action: str = Field(..., max_length = 15)
-    user_id: str = Field(..., max_length = 50)
+    user_id: Union[int, str] = Field(..., max_length = 50)
     old_values: Optional[Any] = Field(None,
                 description = 'The objects state before the change.')
     new_values: Any = Field(...,
