@@ -2,6 +2,7 @@
     CRUD Service
 '''
 import json
+import decimal
 from typing import Any, Dict
 from boto3.resources.base import ServiceResource
 from boto3.dynamodb.conditions import Attr
@@ -9,11 +10,23 @@ from botocore.exceptions import ClientError as AWSClientError
 from services.logger_config import custom_logger as logger
 from services.exceptions import RegisterAlreadyExistsError, RegisterNotFoundError
 
-# Constantes para la gestión de las tablas y sus claves
 TABLE_SCHEMA = {
     'audit_records': {'pk': 'id', 'sk': 'sk', 'index': 'sk-pk-index'},
     'usage_logs': {'pk': 'id', 'sk': 'sk', 'index': 'sk-pk-index'},
 }
+
+def _convert_floats_to_decimals(data: Any) -> Any:
+    '''
+        Recursively converts all float values in a dictionary or list
+        to Decimal objects for DynamoDB compatibility.
+    '''
+    if isinstance(data, float):
+        return decimal.Decimal(str(data))
+    if isinstance(data, dict):
+        return {k: _convert_floats_to_decimals(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_convert_floats_to_decimals(v) for v in data]
+    return data
 
 def create_item(
     dynamodb_resource: ServiceResource,
@@ -25,14 +38,16 @@ def create_item(
     '''
     try:
         table = dynamodb_resource.Table(table_name)
-        # Conditional put to prevent overwriting an existing item
+
+        item_data_processed = _convert_floats_to_decimals(item_data)
+
         table.put_item(
-            Item = item_data,
+            Item = item_data_processed,
             ConditionExpression = 'attribute_not_exists(id)'
         )
         message = f'Item added successfully to {table_name}.'
         logger.info(message)
-        return item_data
+        return item_data_processed
     except AWSClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             error_msg = f'Item with id {item_data["id"]} already exists.'
