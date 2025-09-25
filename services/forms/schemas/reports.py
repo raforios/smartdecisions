@@ -120,9 +120,9 @@ class ContactsByRouteReportRequestSchema(BaseModel):
         Includes all required and optional filtering variables.
     '''
     # --- Required Filtering Variables ---
-    company_id: int = Field(...,
+    company_id: Optional[int] = Field(None,
             description = 'ID of the company to filter the report.')
-    service_id: int = Field(...,
+    service_id:  Optional[int] = Field(None,
             description = 'ID of the service to filter the report.')
 
     # --- Date Filter (Required) ---

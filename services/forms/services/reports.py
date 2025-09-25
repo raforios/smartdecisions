@@ -3,7 +3,7 @@
 '''
 
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urlencode
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
@@ -17,7 +17,6 @@ from schemas.responses import FormResponseDetailResponse
 from services.exceptions import ServiceUnavailableError
 from services.utils import _perform_request, handle_service_errors
 from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
 
 # Carga las variables de entorno necesarias
 ENV_VARS = load_and_validate_env_vars({
@@ -232,8 +231,6 @@ async def _fetch_planned_routes_from_localization(
 
         response.raise_for_status()
         data = response.json()
-        logger.info('RESPONSE FROM LOCALIZATION')
-        logger.info(data)
 
         return [route['id'] for route in data]
     except Exception as exc:
@@ -274,6 +271,94 @@ async def _fetch_executed_points_from_localization(
         ) from exc
 
 
+async def _get_company_id_from_localization(
+    planned_route_id: int,
+    auth_token: str
+) -> Optional[int]:
+    '''
+        Fetches the company ID associated with a planned route from the Localization service.
+    '''
+    try:
+        url = f'{LOCALIZATION_ENDPOINT}/routes/planned/{planned_route_id}'
+        headers = {
+            'Authorization': f'{auth_token}',
+            'Content-Type': 'application/json'
+        }
+        response = await _perform_request('GET', url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('company_id')
+    except Exception as exc:
+        raise ServiceUnavailableError(
+            detail=f'Failed to fetch company ID from Localization service: {exc}'
+        ) from exc
+
+async def _get_planned_route_ids_from_request(
+    request_data: ContactsByRouteReportRequestSchema,
+    auth_token: str
+) -> Optional[Set[int]]:
+    '''
+        Applies the filtering hierarchy to get a set of planned route IDs.
+    '''
+    final_planned_route_ids = None
+
+    if request_data.planned_route_id:
+        final_planned_route_ids = {request_data.planned_route_id}
+    elif request_data.team_id or request_data.service_id:
+        ids_from_planning = await _fetch_planned_routes_from_planning(
+            request_data=request_data,
+            auth_token=auth_token
+        )
+        if ids_from_planning:
+            final_planned_route_ids = set(ids_from_planning)
+
+    if request_data.city_id:
+        ids_from_localization = await _fetch_planned_routes_from_localization(
+            request_data=request_data,
+            auth_token=auth_token
+        )
+        if ids_from_localization:
+            if final_planned_route_ids is None:
+                final_planned_route_ids = set(ids_from_localization)
+            else:
+                final_planned_route_ids &= set(ids_from_localization)
+
+    return final_planned_route_ids
+
+async def _get_executed_point_ids(
+    db: Session,
+    request_data: ContactsByRouteReportRequestSchema,
+    auth_token: str
+) -> List[int]:
+    '''
+        Determines the final list of executed point IDs based on request filters.
+    '''
+    final_executed_point_ids = []
+
+    if request_data.user_id and not request_data.planned_route_id:
+        # Jerarquía 2: user_id es el filtro principal si no hay planned_route_id.
+        executed_point_ids_from_user = db.query(Contact.executed_route_point_id)\
+            .join(FormResponse, FormResponse.contact_id == Contact.id)\
+            .filter(FormResponse.user_id == request_data.user_id).all()
+
+        final_executed_point_ids = [point[0] for point in executed_point_ids_from_user]
+    else:
+        # Aplica el resto de la jerarquía de filtros de ruta
+        final_planned_route_ids = await _get_planned_route_ids_from_request(
+            request_data=request_data,
+            auth_token=auth_token
+        )
+
+        if final_planned_route_ids:
+            for planned_id in final_planned_route_ids:
+                executed_ids = await _fetch_executed_points_from_localization(
+                    planned_route_id=planned_id,
+                    auth_token=auth_token
+                )
+                final_executed_point_ids.extend(executed_ids)
+
+    return final_executed_point_ids
+
 @handle_service_errors('FORMS-REPORTS')
 async def generate_contacts_by_route_report(
     db: Session,
@@ -284,66 +369,28 @@ async def generate_contacts_by_route_report(
         Generates a detailed report by combining filters to find contacts,
         persons, routes, and forms.
     '''
-    final_planned_route_ids = None
-    final_executed_point_ids = []
+    company_id = request_data.company_id
 
-    # 1. Aplicar los filtros de jerarquía
-    if request_data.planned_route_id:
-        # Jerarquía 1: planned_route_id es el filtro principal. Los demás se ignoran.
-        final_planned_route_ids = {request_data.planned_route_id}
-    elif request_data.user_id:
-        # Jerarquía 2: user_id es el filtro principal si no hay planned_route_id.
-        # En este caso, no hay un endpoint directo en la documentación para obtener
-        # planned_route_ids desde un user_id, por lo que asumimos que
-        # se obtendrán todos los planned_route_ids asociados a ese usuario
-        # desde la base de datos de FORMS (t_contacts, t_form_responses).
-        # Esto nos permitirá generar el reporte del trabajo del usuario.
+    # 1. Obtener la company_id si planned_route_id está presente y company_id no
+    if request_data.planned_route_id and not company_id:
+        company_id = await _get_company_id_from_localization(
+            planned_route_id=request_data.planned_route_id,
+            auth_token=auth_token
+        )
+        if not company_id:
+            return [] # No se pudo obtener la compañía, no hay resultados.
 
-        # Obtenemos los executed_point_ids del usuario directamente desde la BD local.
-        executed_point_ids_from_user_contacts = db.query(Contact.executed_route_point_id)\
-            .join(FormResponse, FormResponse.contact_id == Contact.id)\
-            .filter(FormResponse.user_id == request_data.user_id).all()
+    # 2. Obtener los executed_point_ids
+    final_executed_point_ids = await _get_executed_point_ids(
+        db=db,
+        request_data=request_data,
+        auth_token=auth_token
+    )
 
-        final_executed_point_ids = [point[0] for point in executed_point_ids_from_user_contacts]
-
-    else:
-        # Jerarquía 3: Usar filtros auxiliares si no hay planned_route_id ni user_id
-        # Obtenemos un conjunto de IDs de cada filtro y luego hacemos una intersección.
-
-        # Filtro por team_id o service_id (PLANNING)
-        if request_data.team_id or request_data.service_id:
-            ids_from_planning = await _fetch_planned_routes_from_planning(
-                request_data=request_data,
-                auth_token=auth_token
-            )
-            if ids_from_planning:
-                final_planned_route_ids = set(ids_from_planning)
-
-        # Filtro por city_id (LOCALIZATION)
-        if request_data.city_id:
-            ids_from_localization = await _fetch_planned_routes_from_localization(
-                request_data=request_data,
-                auth_token=auth_token
-            )
-            if ids_from_localization:
-                if final_planned_route_ids is None:
-                    final_planned_route_ids = set(ids_from_localization)
-                else:
-                    final_planned_route_ids &= set(ids_from_localization)
-
-    # Si tenemos IDs de ruta planificada, obtenemos los puntos ejecutados.
-    if final_planned_route_ids:
-        for planned_id in final_planned_route_ids:
-            executed_ids = await _fetch_executed_points_from_localization(
-                planned_route_id=planned_id,
-                auth_token=auth_token
-            )
-            final_executed_point_ids.extend(executed_ids)
-
-    # 2. Construir la consulta a la base de datos
     if not final_executed_point_ids:
         return []
 
+    # 3. Construir la consulta a la base de datos con los filtros
     query = db.query(FormResponse).join(
         FormResponse.contact
     ).join(
@@ -357,21 +404,16 @@ async def generate_contacts_by_route_report(
     )
 
     conditions = [
-        FormResponse.company_id == request_data.company_id,
-        Contact.executed_route_point_id.in_(final_executed_point_ids)
+        Contact.executed_route_point_id.in_(final_executed_point_ids),
+        FormResponse.submission_date.between(
+            request_data.submission_date_from,
+            request_data.submission_date_to
+        )
     ]
 
-    # Aplicar el filtro de rango de fechas como subfiltro
-    if request_data.submission_date_from and request_data.submission_date_to:
-        conditions.append(
-            FormResponse.submission_date.between(
-                request_data.submission_date_from,
-                request_data.submission_date_to
-            )
-        )
+    if company_id:
+        conditions.append(FormResponse.company_id == company_id)
 
-    # El filtro por user_id ya se manejó en la lógica de jerarquía.
-    # No se aplica aquí como subfiltro para evitar redundancia y mantener la coherencia.
     if request_data.user_id and not request_data.planned_route_id:
         conditions.append(FormResponse.user_id == request_data.user_id)
 

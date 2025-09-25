@@ -18,7 +18,6 @@ ENV_VARS = load_and_validate_env_vars(
     }
 )
 
-
 class DatabaseConfig(TypedDict):
     '''
         TypedDict to define the expected structure and types of database parameters.
