@@ -1,12 +1,23 @@
 '''
     Database Connection
 '''
-import os
 from typing import TypedDict, Callable, Generator
 from sqlalchemy import create_engine, URL
 from sqlalchemy.orm import sessionmaker, declarative_base, DeclarativeMeta, Session
 from sqlalchemy.engine.base import Engine
-from dotenv import dotenv_values
+from services.environment import load_and_validate_env_vars
+
+ENV_VARS = load_and_validate_env_vars(
+    {
+        'DB_USER': str,
+        'DB_PASSWORD': str,
+        'DB_HOST': str,
+        'DATABASE': str,
+        'DB_PORT': str,
+        'DB_DIALECT': str
+    }
+)
+
 
 class DatabaseConfig(TypedDict):
     '''
@@ -20,15 +31,13 @@ class DatabaseConfig(TypedDict):
     DB_PORT: str
     DB_DIALECT: str
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
-
 DB_PARAMETERS: DatabaseConfig = {
-    'DB_USER': os.environ.get('DB_USER') or _LOCAL_ENV_PARAMS.get('DB_USER'),
-    'DB_PASSWORD': os.environ.get('DB_PASSWORD') or _LOCAL_ENV_PARAMS.get('DB_PASSWORD'),
-    'DB_HOST': os.environ.get('DB_HOST') or _LOCAL_ENV_PARAMS.get('DB_HOST'),
-    'DATABASE': os.environ.get('DATABASE') or _LOCAL_ENV_PARAMS.get('DATABASE'),
-    'DB_PORT': os.environ.get('DB_PORT') or _LOCAL_ENV_PARAMS.get('DB_PORT'),
-    'DB_DIALECT': os.environ.get('DB_DIALECT') or _LOCAL_ENV_PARAMS.get('DB_DIALECT')
+    'DB_USER': ENV_VARS['DB_USER'],
+    'DB_PASSWORD': ENV_VARS['DB_PASSWORD'],
+    'DB_HOST': ENV_VARS['DB_HOST'],
+    'DATABASE': ENV_VARS['DATABASE'],
+    'DB_PORT': ENV_VARS['DB_PORT'],
+    'DB_DIALECT': ENV_VARS['DB_DIALECT']
 } # type: ignore
 
 REQUIRED_DB_KEYS = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DATABASE', 'DB_PORT', 'DB_DIALECT']

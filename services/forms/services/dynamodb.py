@@ -2,28 +2,31 @@
     DynamoDB Service for temporary form session management.
     Handles CRUD operations for form sessions stored in AWS DynamoDB.
 '''
-import os
 from decimal import Decimal
 from datetime import datetime, date
 from typing import Dict, Any, Optional
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
-from dotenv import dotenv_values
 
 from services.logger_config import custom_logger as logger
-from services.exceptions import ServiceUnavailableError # Import the custom exception
+from services.exceptions import ServiceUnavailableError
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
+from services.environment import load_and_validate_env_vars
+
+ENV_VARS = load_and_validate_env_vars(
+    {
+        'DYNAMODB_REGION': str,
+        'DYNAMODB_TABLE_NAME': str,
+        'DYNAMODB_ENDPOINT_URL': str
+    }
+)
 
 # Configuration for DynamoDB
 # These should ideally come from environment variables or a dedicated config file
 # Default values provided for local development, but highly recommend environment vars.
-DYNAMODB_REGION = os.environ.get('DYNAMODB_REGION') or \
-                  _LOCAL_ENV_PARAMS.get('DYNAMODB_REGION')
-DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME') or \
-                      _LOCAL_ENV_PARAMS.get('DYNAMODB_TABLE_NAME')
-DYNAMODB_ENDPOINT_URL = os.environ.get('DYNAMODB_ENDPOINT_URL') or \
-                        _LOCAL_ENV_PARAMS.get('DYNAMODB_ENDPOINT_URL')
+DYNAMODB_REGION = ENV_VARS['DYNAMODB_REGION']
+DYNAMODB_TABLE_NAME = ENV_VARS['DYNAMODB_TABLE_NAME']
+DYNAMODB_ENDPOINT_URL = ENV_VARS['DYNAMODB_ENDPOINT_URL']
 
 
 class DynamoDBClient: # pylint: disable=too-few-public-methods

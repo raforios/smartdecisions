@@ -21,6 +21,7 @@ from schemas.responses import (
     PersonCreate,
     PersonListResponse,
     PersonResponse,
+    PersonSearchFilters,
     PersonUpdate,
     StartFormSessionRequest,
     StartFormSessionResponse,
@@ -43,6 +44,7 @@ from controllers.responses import (
     get_all_persons,
     get_form_response_status_flow_controller,
     get_person_by_id,
+    search_persons,
     start_form_session,
     submit_answer_and_get_next_question,
     get_question_to_modify,
@@ -404,31 +406,6 @@ async def create_person_route(
     )
 
 @persons_router.get(
-    '/{person_id}',
-    response_model = PersonResponse,
-    summary = 'Get a person by ID',
-    description = 'Retrieves a person record from the `t_persons` table by its ID.'
-)
-async def get_person_by_id_route(
-    request: Request,
-    person_id: int = Path(..., gt = 0),
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to get a person by ID.
-    '''
-    message = f'''User: {current_user
-            }. Requests to get person with ID: {person_id}.'''
-    logger.info(message)
-    return await get_person_by_id(
-        db = db,
-        person_id = person_id,
-        request = request,
-        current_user = current_user
-    )
-
-@persons_router.get(
     '/',
     response_model = PersonListResponse,
     summary = 'Get all person records (paginated)',
@@ -455,6 +432,55 @@ async def get_all_persons_route(
         current_user = current_user
     )
 
+@persons_router.get(
+    '/search',
+    response_model = List[PersonResponse],
+    status_code = status.HTTP_200_OK,
+    summary = 'Searches for persons based on multiple criteria.',
+    description = '''Allows administrative users to search for person records using
+        an identification number, names, phone number, or email. All filters are optional
+        and are applied as an AND condition.'''
+)
+async def search_persons_route(
+    request: Request,
+    filters: PersonSearchFilters = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> List[PersonResponse]:
+    '''
+    Endpoint to search for a person.
+    '''
+    return await search_persons(
+        db = db,
+        filters = filters,
+        request = request,
+        current_user = current_user
+    )
+
+@persons_router.get(
+    '/{person_id}',
+    response_model = PersonResponse,
+    summary = 'Get a person by ID',
+    description = 'Retrieves a person record from the `t_persons` table by its ID.'
+)
+async def get_person_by_id_route(
+    request: Request,
+    person_id: int = Path(..., gt = 0),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to get a person by ID.
+    '''
+    message = f'''User: {current_user
+            }. Requests to get person with ID: {person_id}.'''
+    logger.info(message)
+    return await get_person_by_id(
+        db = db,
+        person_id = person_id,
+        request = request,
+        current_user = current_user
+    )
 
 @persons_router.put(
     '/{person_id}',

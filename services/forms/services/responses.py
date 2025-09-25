@@ -3,6 +3,7 @@
 '''
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from models.forms import QuestionDetail
@@ -17,6 +18,7 @@ from schemas.responses import (
     FormResponseFlowCreate,
     FormResponseUpdate,
     PersonCreate,
+    PersonSearchFilters,
     PersonUpdate,
     StartFormSessionRequest,
     CurrentFormSession
@@ -377,15 +379,12 @@ async def create_person_logic(
         to prevent duplicates.
     '''
     existing_person = db.query(Person).filter(
-        (Person.email == person_data.email) |
-        (Person.phone_number == person_data.phone_number) |
         (Person.identification_number == person_data.identification_number)
     ).first()
 
     if existing_person:
         raise InvalidInputError(
-            detail = '''A person with this email, phone number, or identification number
-                    already exists.'''
+            detail = 'A person with this identification number already exists.'
         )
 
     db_person = create_record(db, Person, person_data)
@@ -404,6 +403,37 @@ async def get_person_by_id_logic(
     '''
     db_person = get_record(db, Person, person_id)
     return db_person
+
+async def find_persons_by_filters(
+    db: Session,
+    filters: PersonSearchFilters
+) -> List[Person]:
+    '''
+        Service to search for person records based on various filters.
+    '''
+    query = db.query(Person)
+    conditions = []
+
+    if filters.identification_number:
+        conditions.append(Person.identification_number == filters.identification_number)
+    if filters.first_name:
+        conditions.append(Person.first_name.ilike(f'%{filters.first_name}%'))
+    if filters.paternal_last_name:
+        conditions.append(Person.paternal_last_name.ilike(f'%{filters.paternal_last_name}%'))
+    if filters.maternal_last_name:
+        conditions.append(Person.maternal_last_name.ilike(f'%{filters.maternal_last_name}%'))
+    if filters.phone_number:
+        conditions.append(or_(
+            Person.phone_number == filters.phone_number,
+            Person.phone_number_2 == filters.phone_number
+        ))
+    if filters.email:
+        conditions.append(Person.email == filters.email)
+
+    if conditions:
+        query = query.filter(and_(*conditions))
+
+    return query.all()
 
 @handle_service_errors('FORMS')
 async def get_all_persons_logic(

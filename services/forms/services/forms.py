@@ -127,8 +127,8 @@ async def get_all_form_headers(
     query = db.query(FormHeader)
     if filters.company_id is not None:
         query = query.filter(FormHeader.company_id == filters.company_id)
-    if filters.service_id is not None:
-        query = query.filter(FormHeader.service_id == filters.service_id)
+    # if filters.service_id is not None:
+    #     query = query.filter(FormHeader.service_id == filters.service_id)
     if filters.form_code:
         query = query.filter(FormHeader.form_code == filters.form_code)
     if filters.status:

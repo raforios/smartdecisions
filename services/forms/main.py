@@ -1,7 +1,6 @@
 '''
     Forms Microservice Main Handler
 '''
-import os
 import socket
 from datetime import datetime, date
 from typing import Dict, Any, AsyncIterator
@@ -13,17 +12,31 @@ from mangum import Mangum
 
 import uvicorn
 
-from dotenv import dotenv_values
-
 from routes.forms import router as form_router
 from routes.responses import router as response_router
 from routes.responses import persons_router as person_router
+from routes.reports import router as report_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
 from services.logger_config import custom_logger as logger
 
-PARAMETERS = dotenv_values('.env')
+from services.environment import load_and_validate_env_vars
+
+ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'HOST': str,
+        'PORT': int,
+    },
+    optional_env_vars = {
+        'APP_ENV': str
+    }
+)
+
+UVICORN_HOST = ENV_VARS['HOST']
+UVICORN_PORT = ENV_VARS['PORT']
+APP_ENV = ENV_VARS['APP_ENV']
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -53,13 +66,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     message = 'Application shutdown: Closing resources.'
     logger.info(message)
 
-app = FastAPI(
-    title = 'Forms Service',
-    description = '''This service manages the creation, storage, and retrieval of forms,
+APP_CONFIG = {
+    'title': 'Forms Service',
+    'description': '''This service manages the creation, storage, and retrieval of forms,
     including their headers, questions, multiple choice options, and flow logic.''',
-    version = '1.0.0',
-    lifespan = lifespan
-)
+    'version': '1.0.0',
+    'contact': {
+        'name': 'API Support',
+        'email': 'raforios@gmail.com'
+    },
+    'lifespan': lifespan
+
+}
+
+app = FastAPI(**APP_CONFIG)
 
 setup_exception_handlers(app)
 
@@ -77,7 +97,7 @@ def root() -> Dict[str, Any]:
     output = {
         'Api Healthcheck': 'OK',
         'Host': socket.gethostname(),
-        'Environment': os.environ.get('APP_ENV', PARAMETERS.get('APP_ENV')),
+        'Environment': APP_ENV,
         'Status': 'available',
         'Server Date Time': today.isoformat(),
         'Last Update': date.today().isoformat(),
@@ -90,12 +110,10 @@ def root() -> Dict[str, Any]:
 app.include_router(form_router, tags = ['Forms'])
 app.include_router(response_router, tags = ['Form Responses'])
 app.include_router(person_router, tags = ['Persons'])
+app.include_router(report_router, tags = ['Reports'])
 
 # Entry point to run the app
 if __name__ == '__main__':
-    UVICORN_HOST = os.environ.get('HOST', PARAMETERS.get('HOST'))
-    UVICORN_PORT = int(os.environ.get('PORT', PARAMETERS.get('PORT')))
-
     MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
     logger.info(MESSAGE)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)

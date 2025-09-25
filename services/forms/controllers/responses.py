@@ -25,6 +25,7 @@ from schemas.responses import (
     PersonCreate,
     PersonListResponse,
     PersonResponse,
+    PersonSearchFilters,
     PersonUpdate,
     StartFormSessionRequest,
     StartFormSessionResponse,
@@ -63,6 +64,7 @@ from services.utils import _handle_files_service, handle_service_errors
 from services.responses import (
     create_person_logic,
     delete_person_logic,
+    find_persons_by_filters,
     get_all_persons_logic,
     get_form_response_status_flow_logic,
     get_person_by_id_logic,
@@ -522,7 +524,6 @@ async def create_person(
     db_person = await create_person_logic(db, person_data)
     return PersonResponse.model_validate(db_person, from_attributes = True)
 
-
 @handle_service_errors('FORMS')
 async def get_person_by_id(
     db: Session,
@@ -535,6 +536,18 @@ async def get_person_by_id(
     '''
     return await get_person_by_id_logic(db, person_id)
 
+@handle_service_errors('PERSONS')
+async def search_persons(
+    db: Session,
+    filters: PersonSearchFilters,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+) -> List[PersonResponse]:
+    '''
+        Controller to process the search request and fetch matching person records.
+    '''
+    persons = await find_persons_by_filters(db, filters)
+    return [PersonResponse.model_validate(person) for person in persons]
 
 @handle_service_errors('FORMS')
 async def get_all_persons(
@@ -551,7 +564,6 @@ async def get_all_persons(
     total_count = db.query(Person).count()
     return PersonListResponse(items = persons, total = total_count)
 
-
 @handle_service_errors('FORMS')
 async def update_person(
     db: Session,
@@ -565,7 +577,6 @@ async def update_person(
     '''
     updated_person = await update_person_logic(db, person_id, person_data)
     return PersonResponse.model_validate(updated_person, from_attributes = True)
-
 
 @handle_service_errors('FORMS')
 async def delete_person(

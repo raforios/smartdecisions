@@ -6,7 +6,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from fastapi import UploadFile
+from fastapi import Query, UploadFile
 from pydantic import BaseModel, Field
 
 # Enum for the status of a submitted form response
@@ -130,6 +130,8 @@ class ContactResponse(ContactBase):
     '''
     id: int
     person: PersonResponse # Nested schema for the associated person
+    executed_route_point_id: int = Field(...,
+        description = 'ID from the localization service for the executed point.')
 
     class Config:# pylint: disable=too-few-public-methods
         '''
@@ -469,3 +471,27 @@ class FormResponseStatusFlow(BaseModel):
             FormResponseStatusFlow - Config Class - To get form attributes
         '''
         from_attributes = True
+
+class PersonSearchFilters(BaseModel):
+    '''
+        Schema to filter persons based on various criteria.
+        All fields are optional, to be used as query parameters.
+    '''
+    identification_number: Optional[str] = Query(None,
+        description = 'The identification number (e.g., ID card, passport) of the person.')
+    first_name: Optional[str] = Query(None,
+        description = 'The first name of the person (supports partial matching).')
+    paternal_last_name: Optional[str] = Query(None,
+        description = 'The paternal last name of the person (supports partial matching).')
+    maternal_last_name: Optional[str] = Query(None,
+        description = 'The maternal last name of the person (supports partial matching).')
+    phone_number: Optional[str] = Query(None,
+        description = 'The primary phone number of the person.')
+    email: Optional[str] = Query(None,
+        description = 'The email address of the person.')
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            Pydantic config.
+        '''
+        arbitrary_types_allowed = True
