@@ -1,7 +1,7 @@
 '''
     Planning: routes handler
 '''
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import date
 from fastapi import APIRouter, Depends, Header, Query, Request, status, Path
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from controllers.planning import (
     delete_planning_detail_controller,
     get_filtered_plannings_controller,
     get_materials_controller,
+    get_monitor_data_controller,
     get_planning_by_id_controller,
     update_material_controller,
     update_planning_controller,
@@ -36,6 +37,7 @@ from schemas.planning import (
     PlanningDetailResponseSchema,
     PlanningDetailUpdateSchema,
     PlanningFilterSchema,
+    PlanningMonitorFilterSchema,
     PlanningResponseSchema,
     PlanningUpdateSchema
 )
@@ -121,6 +123,30 @@ async def get_daily_plannings_endpoint(
         start_date = start_date,
         end_date = end_date,
         request = request,
+        current_user = current_user
+    )
+
+@router.get(
+    '/monitor-filter',
+    response_model = List[Dict[str, Any]],
+    status_code = status.HTTP_200_OK,
+    summary = 'Filter planning details for the Affiliation Monitor',
+    description = '''Retrieves a list of planned route IDs and other details
+                 based on complex filtering criteria for the Affiliation Monitor.'''
+)
+async def get_monitor_data_endpoint(
+    request: Request,
+    filters: PlanningMonitorFilterSchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    '''
+        Endpoint to get planned routes for the Affiliation Monitor report.
+    '''
+    return await get_monitor_data_controller(
+        db = db,
+        request = request,
+        filters = filters,
         current_user = current_user
     )
 

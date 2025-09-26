@@ -4,6 +4,7 @@
 from typing import Any, List, Tuple, Dict
 from datetime import date
 from pydantic import BaseModel
+from sqlalchemy import and_, extract, or_
 from sqlalchemy.orm import Session, contains_eager, joinedload
 from services.crud import (
     create_record,
@@ -36,6 +37,7 @@ from schemas.planning import (
     PlanningDetailCreateSchema,
     PlanningDetailUpdateSchema,
     PlanningFilterSchema,
+    PlanningMonitorFilterSchema,
     PlanningStatus,
     PlanningUpdateSchema
 )
@@ -566,5 +568,106 @@ async def bulk_create_planning(
         inserter_func = _perform_atomic_db_insertion_for_planning,
         delimiter = delimiter
     )
+
+    return result
+
+def _get_months_from_period(period: str) -> List[int]:
+    '''
+        Helper function to get a list of month numbers from a period string.
+        Handles quarterly, month names (in Spanish), and month numbers.
+    '''
+    period = period.upper().strip()
+    result = []
+
+    period_map = {
+        'Q1': [1, 2, 3],
+        'Q2': [4, 5, 6],
+        'Q3': [7, 8, 9],
+        'Q4': [10, 11, 12],
+        'ENERO': 1,
+        'FEBRERO': 2,
+        'MARZO': 3,
+        'ABRIL': 4,
+        'MAYO': 5,
+        'JUNIO': 6,
+        'JULIO': 7,
+        'AGOSTO': 8,
+        'SEPTIEMBRE': 9,
+        'OCTUBRE': 10,
+        'NOVIEMBRE': 11,
+        'DICIEMBRE': 12
+    }
+
+    # Busca el periodo en el mapa
+    if period in period_map:
+        months = period_map[period]
+        if isinstance(months, list):
+            result = months
+        else:
+            result = [months]
+    elif period.isdigit() and 1 <= int(period) <= 12:
+        result = [int(period)]
+
+    return result
+
+@handle_service_errors('PLANNING-SERVICE')
+async def get_planned_route_ids_for_monitor_service(
+    db: Session,
+    filters: PlanningMonitorFilterSchema
+) -> List[Dict[str, Any]]:
+    '''
+        Fetches planned route IDs based on a complex set of filtering criteria.
+        This is a service layer function.
+    '''
+    # Comienza la consulta desde PlanningDetail
+    query = db.query(PlanningDetail).join(
+        Planning, PlanningDetail.planning_id == Planning.id
+    )
+
+    # Lista para las condiciones del filtro
+    conditions = []
+
+    # --- Aplica filtros obligatorios ---
+    conditions.append(Planning.company_id == filters.company_id)
+    conditions.append(PlanningDetail.service_id == filters.service_id)
+
+    # --- Aplica el filtro de año (year) y periodo (period) ---
+    # El 'year' se filtra en el año de la fecha de inicio o de fin del planning.
+    conditions.append(
+        or_(
+            extract('year', Planning.start_date) == filters.year,
+            extract('year', Planning.end_date) == filters.year
+        )
+    )
+
+    if filters.period:
+        months = _get_months_from_period(filters.period)
+        if months:
+            conditions.append(extract('month', Planning.start_date).in_(months))
+
+    # --- Aplica los filtros opcionales de jerarquía ---
+    if filters.team_ids:
+        # Prioridad 1: Usa team_ids si se proporciona
+        conditions.append(PlanningDetail.team_id.in_(filters.team_ids))
+    elif filters.user_ids:
+        # Prioridad 2: Si no hay team_ids, se usarían user_ids, pero no
+        # hay relación directa aquí. El servicio no puede continuar con este filtro
+        # sin el mapeo a teams. Se registra una advertencia y se ignora.
+        logger.warning(
+            'Received user_ids but cannot filter directly. '
+            'This requires an external service to map users to teams.'
+        )
+
+    # Ejecuta la consulta con todas las condiciones
+    filtered_details = query.filter(and_(*conditions)).all()
+
+    # Construye el formato de respuesta final
+    result = []
+    for detail in filtered_details:
+        result.append({
+            'planned_route_id': detail.planned_route_id,
+            'team_id': detail.team_id,
+            'service_id': detail.service_id
+        })
 
     return result

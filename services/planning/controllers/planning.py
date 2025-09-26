@@ -18,6 +18,7 @@ from services.planning import (
     delete_planning_detail_by_id,
     get_filtered_plannings,
     get_materials_by_detail_id,
+    get_planned_route_ids_for_monitor_service,
     get_planning_details_in_date_range,
     get_plannings_by_week,
     create_planning_with_details,
@@ -44,6 +45,7 @@ from schemas.planning import (
     PlanningDetailResponseSchema,
     PlanningDetailUpdateSchema,
     PlanningFilterSchema,
+    PlanningMonitorFilterSchema,
     PlanningResponseSchema,
     PlanningUpdateSchema
 )
@@ -348,3 +350,17 @@ async def bulk_upload_planning_controller(
         asyncio.create_task(send_usage_log(log_data.model_dump()))
 
     return result
+
+async def get_monitor_data_controller(
+    db: Session,
+    filters: PlanningMonitorFilterSchema,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> List[Dict[str, Any]]:
+    '''
+    Controller to get a list of planned route IDs for the Affiliation Monitor.
+    '''
+    return await get_planned_route_ids_for_monitor_service(
+        db = db,
+        filters = filters
+    )
