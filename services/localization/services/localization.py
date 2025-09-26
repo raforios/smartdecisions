@@ -3,7 +3,7 @@
 '''
 import math
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Set, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc
@@ -872,3 +872,25 @@ async def bulk_create_planned_routes(
     )
 
     return result
+
+@handle_service_errors('LOCALIZATION-SERVICE')
+async def get_executed_point_ids_by_planned_routes(
+    db: Session,
+    planned_route_ids: List[int]
+) -> Set[int]:
+    '''
+        Retrieves a set of executed point IDs for a given list of planned route IDs.
+    '''
+    executed_points = db.query(
+        ExecutedPoint.id
+    ).join(
+        ExecutedRoute, ExecutedPoint.executed_route_id == ExecutedRoute.id
+    ).filter(
+        ExecutedRoute.planned_route_id.in_(planned_route_ids)
+    ).all()
+
+    if not executed_points:
+        return set()
+
+    # Extraer los IDs de los objetos de punto y convertirlos a un set.
+    return {point_id for point_id, in executed_points}

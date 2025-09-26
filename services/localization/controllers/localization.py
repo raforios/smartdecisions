@@ -5,7 +5,7 @@ from datetime import datetime
 import asyncio
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from fastapi import Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session, joinedload
 from services.utils import (
@@ -21,6 +21,7 @@ from services.localization import (
     create_planned_route_with_points,
     delete_planned_point,
     delete_planned_route,
+    get_executed_point_ids_by_planned_routes,
     get_full_route_comparison,
     get_route_comparisons,
     get_statistics_user_points,
@@ -493,3 +494,19 @@ async def bulk_upload_planned_routes_controller(
         asyncio.create_task(send_usage_log(log_data.model_dump()))
 
     return result
+
+async def get_executed_point_ids_by_planned_routes_controller(
+    db: Session,
+    planned_route_ids: List[int],
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> Set[int]:
+    '''
+        Controller to retrieve executed point IDs based on planned route IDs.
+    '''
+    executed_point_ids = await get_executed_point_ids_by_planned_routes(
+        db = db,
+        planned_route_ids = planned_route_ids
+    )
+
+    return executed_point_ids

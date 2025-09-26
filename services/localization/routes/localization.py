@@ -14,6 +14,7 @@ from controllers.localization import (
     delete_planned_route_controller,
     filter_planned_routes_controller,
     get_all_planned_routes_controller,
+    get_executed_point_ids_by_planned_routes_controller,
     get_full_route_comparison_controller,
     get_planned_route_controller,
     create_executed_route_controller,
@@ -131,6 +132,39 @@ async def get_or_filter_planned_routes_endpoint(
         request = request,
         current_user = current_user
     )
+
+@router.get(
+    '/routes/executed-points/filter',
+    response_model = List[int],
+    status_code = status.HTTP_200_OK,
+    summary = 'Filter executed points by planned route IDs',
+    description = '''Retrieves a list of executed point IDs associated with a
+                given list of planned route IDs.'''
+)
+async def get_executed_point_ids_by_planned_routes_endpoint(
+    request: Request,
+    planned_route_ids: List[int] = Query(
+        ...,
+        description='List of planned route IDs to filter by.'
+    ),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> List[int]:
+    '''
+        Endpoint to get executed point IDs from a list of planned route IDs.
+    '''
+    message = f'''User: {current_user}. Received request to get executed points for planned routes:
+            {planned_route_ids}'''
+    logger.info(message)
+
+    executed_points = await get_executed_point_ids_by_planned_routes_controller(
+        db = db,
+        planned_route_ids = planned_route_ids,
+        request = request,
+        current_user = current_user
+    )
+
+    return list(executed_points)
 
 @router.get(
     '/routes/planned/{planned_route_id}',
