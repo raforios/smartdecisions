@@ -3,7 +3,7 @@
 '''
 import math
 from datetime import datetime
-from typing import List, Dict, Any, Set, Tuple
+from typing import List, Dict, Any, Optional, Set, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc
@@ -205,7 +205,7 @@ async def create_planned_route_with_points(
     ).first()
     if existing_route:
         raise RegisterAlreadyExistsError(
-            detail = f'Route with code "{route_data.route_code}" already exists.'
+            detail = f'Route with code {route_data.route_code} already exists.'
         )
 
     message = f'Creating planned route with code: {route_data.route_code}'
@@ -804,12 +804,16 @@ async def register_attendance(
 @handle_service_errors('LOCALIZATION')
 async def get_full_route_comparison(
     db: Session,
-    planned_route_id: int
+    planned_route_id: int,
+    start_dt: Optional[datetime] = None,
+    end_dt: Optional[datetime] = None
 ) -> RouteComparisonFullResponseSchema:
     '''
-        Retrieves a planned route and all its executed routes for comparison.
+        Retrieves a planned route and all its executed routes for comparison,
+        optionally filtered by the start_time of the executed route.
     '''
-    message = f'Getting full comparison data for planned route {planned_route_id}.'
+    message = f'Getting full comparison data for planned route {
+        planned_route_id}. Filters: start_dt={start_dt}, end_dt={end_dt}.'
     logger.debug(message)
 
     planned_route = db.query(PlannedRoute).options(
@@ -823,11 +827,30 @@ async def get_full_route_comparison(
             detail = f'Planned route with ID {planned_route_id} not found.'
         )
 
-    executed_routes = db.query(ExecutedRoute).options(
+    executed_routes_query = db.query(ExecutedRoute).options(
         joinedload(ExecutedRoute.points)
     ).filter(
         ExecutedRoute.planned_route_id == planned_route_id
-    ).all()
+    )
+
+    # Aplicar el filtro de fecha de inicio (si existe)
+    # Filtramos por el start_time, ya que la ruta debe haber iniciado DENTRO del rango.
+    if start_dt:
+        executed_routes_query = executed_routes_query.filter(
+            ExecutedRoute.start_time >= start_dt
+        )
+
+    # Aplicar el filtro de fecha de fin (si existe)
+    if end_dt:
+        # Aquí filtramos las rutas que INICIARON antes o en la fecha de fin.
+        # Esto incluye rutas que:
+        # 1. Iniciaron y terminaron dentro del rango.
+        # 2. Iniciaron dentro del rango y aún están abiertas (end_time is NULL).
+        executed_routes_query = executed_routes_query.filter(
+            ExecutedRoute.start_time <= end_dt
+        )
+
+    executed_routes = executed_routes_query.all()
 
     planned_route_data = PlannedRouteComparisonSchema.model_validate(
         planned_route,
@@ -894,3 +917,30 @@ async def get_executed_point_ids_by_planned_routes(
 
     # Extraer los IDs de los objetos de punto y convertirlos a un set.
     return {point_id for point_id, in executed_points}
+
+@handle_service_errors('LOCALIZATION-SERVICE')
+async def get_executed_routes_by_planned_route_id_service(
+    db: Session,
+    planned_route_id: int
+) -> List[ExecutedRoute]:
+    '''
+        Retrieve all executed routes associated with a specific planned route ID.
+
+        Parameters:
+        - db: SQLAlchemy database session.
+        - planned_route_id: ID of the planned route to filter by.
+
+        Returns:
+        - A list of ExecutedRoute model objects.
+    '''
+    message = f'Attempting to retrieve executed routes for planned_route_id: {planned_route_id}'
+    logger.info(message)
+    executed_routes = (
+        db.query(ExecutedRoute)
+        .filter(ExecutedRoute.planned_route_id == planned_route_id)
+        .all()
+    )
+    message = f'Found {len(executed_routes)} executed routes for planned_route_id: {
+        planned_route_id}'
+    logger.info(message)
+    return executed_routes

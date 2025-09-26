@@ -22,6 +22,7 @@ from services.localization import (
     delete_planned_point,
     delete_planned_route,
     get_executed_point_ids_by_planned_routes,
+    get_executed_routes_by_planned_route_id_service,
     get_full_route_comparison,
     get_route_comparisons,
     get_statistics_user_points,
@@ -420,21 +421,42 @@ async def register_attendance_controller(
 
 
 @handle_service_errors('LOCALIZATION')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_full_route_comparison_controller(
     db: Session,
     planned_route_id: int,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+    start_date: Optional[str] = None, # Nuevo parámetro opcional
+    end_date: Optional[str] = None,   # Nuevo parámetro opcional
 ) -> RouteComparisonFullResponseSchema:
     '''
         Controller to get a complete comparison between a planned and executed routes.
     '''
     message = f'''Starting controller operation: get full route comparison for planned route {
-            planned_route_id}'''
+            planned_route_id} with optional filters: start_date={start_date}, end_date={end_date}'''
     logger.info(message)
-    result = await get_full_route_comparison(db = db, planned_route_id = planned_route_id)
-    return RouteComparisonFullResponseSchema.model_validate(result, from_attributes = True)
 
+    start_dt = None
+    end_dt = None
+
+    if start_date:
+        # Convierte la fecha de inicio a datetime, asumiendo el inicio del día (00:00:00)
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+
+    if end_date:
+        # Convierte la fecha de fin a datetime, asumiendo el final del día (23:59:59)
+        # Esto asegura que las ejecuciones de ese mismo día sean incluidas
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').replace(hour = 23,
+                                                        minute = 59, second = 59)
+
+    result = await get_full_route_comparison(
+        db = db,
+        planned_route_id = planned_route_id,
+        start_dt = start_dt,
+        end_dt = end_dt
+    )
+    return RouteComparisonFullResponseSchema.model_validate(result, from_attributes = True)
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_planned_routes_controller(
@@ -510,3 +532,20 @@ async def get_executed_point_ids_by_planned_routes_controller(
     )
 
     return executed_point_ids
+
+async def get_executed_routes_by_planned_route_id_controller(
+    db: Session,
+    planned_route_id: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> List[ExecutedRouteResponseSchema]:
+    '''
+    Controller for retrieving executed routes based on a planned route ID.
+    '''
+
+    executed_routes = await get_executed_routes_by_planned_route_id_service(
+        db = db,
+        planned_route_id = planned_route_id
+    )
+
+    return executed_routes

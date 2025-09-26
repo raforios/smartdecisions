@@ -3,7 +3,6 @@
 '''
 
 import mimetypes
-import os
 import time
 import decimal
 import asyncio
@@ -12,7 +11,6 @@ from datetime import date, datetime
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 import requests as req
-from dotenv import dotenv_values
 from fastapi import HTTPException, Request, UploadFile
 
 from pydantic import BaseModel, ValidationError
@@ -28,16 +26,24 @@ from services.exceptions import (
     ServiceUnavailableError
 )
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
-EVENTS_SERVICE_URL = os.environ.get('EVENTS_SERVICE_URL') or \
-                        _LOCAL_ENV_PARAMS.get('EVENTS_SERVICE_URL')
-FILES_SERVICE_URL = os.environ.get('FILES_SERVICE_URL') or \
-                    _LOCAL_ENV_PARAMS.get('FILES_SERVICE_URL')
-BUCKET_NAME = os.environ.get('BUCKET_NAME') or \
-                _LOCAL_ENV_PARAMS.get('BUCKET_NAME')
-BUCKET_PATH = os.environ.get('BUCKET_PATH') or \
-                _LOCAL_ENV_PARAMS.get('BUCKET_PATH')
+from services.environment import load_and_validate_env_vars
 
+# Carga las variables de entorno necesarias
+ENV_VARS = load_and_validate_env_vars(
+    {
+        'EVENTS_SERVICE_URL': str,
+        'FILES_SERVICE_URL': str,
+        'BUCKET_NAME': str
+    },
+        optional_env_vars = {
+        'BUCKET_PATH': str
+    }
+)
+
+EVENTS_SERVICE_URL = ENV_VARS['EVENTS_SERVICE_URL']
+FILES_SERVICE_URL = ENV_VARS['FILES_SERVICE_URL']
+BUCKET_NAME = ENV_VARS['BUCKET_NAME']
+BUCKET_PATH = ENV_VARS['BUCKET_PATH']
 EVENTS_AUDIT_URL = None
 EVENTS_LOG_URL = None
 

@@ -15,6 +15,7 @@ from controllers.localization import (
     filter_planned_routes_controller,
     get_all_planned_routes_controller,
     get_executed_point_ids_by_planned_routes_controller,
+    get_executed_routes_by_planned_route_id_controller,
     get_full_route_comparison_controller,
     get_planned_route_controller,
     create_executed_route_controller,
@@ -121,7 +122,8 @@ async def get_or_filter_planned_routes_endpoint(
     '''
         Endpoint to filter planned routes.
     '''
-    message = f'''User: {current_user}. Received request to filter planned routes
+    message = f'''User: {current_user
+            }. Received request to filter planned routes
             with parameters: route_code = {filters.route_code}, route_name = {
             filters.route_name}, status = {filters.route_status}, company_id = {
             filters.company_id}'''
@@ -153,8 +155,8 @@ async def get_executed_point_ids_by_planned_routes_endpoint(
     '''
         Endpoint to get executed point IDs from a list of planned route IDs.
     '''
-    message = f'''User: {current_user}. Received request to get executed points for planned routes:
-            {planned_route_ids}'''
+    message = f'''User: {current_user
+    }. Received request to get executed points for planned routes: {planned_route_ids}'''
     logger.info(message)
 
     executed_points = await get_executed_point_ids_by_planned_routes_controller(
@@ -480,6 +482,34 @@ async def get_stats_points_visited_endpoint(
     )
 
 @router.get(
+    '/routes/executed/by-planned/{planned_route_id}',
+    response_model = List[ExecutedRouteResponseSchema],
+    status_code = status.HTTP_200_OK,
+    summary = 'Retrieve executed routes by planned route ID',
+    description = '''Retrieves a list of all executed routes associated with a specific
+                planned route ID. This is used by the frontend to determine if the
+                route is currently open (end_time is NULL) or closed.'''
+)
+async def get_executed_routes_by_planned_route_id_endpoint(
+    request: Request,
+    planned_route_id: int = Path(..., description = 'ID of the planned route.'),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> List[ExecutedRouteResponseSchema]:
+    '''
+        Endpoint to retrieve executed routes based on a planned route ID.
+    '''
+    message = f'''User: {current_user
+    }. Received request to get executed routes for planned route: {planned_route_id}'''
+    logger.info(message)
+    return await get_executed_routes_by_planned_route_id_controller(
+        db = db,
+        planned_route_id = planned_route_id,
+        request = request,
+        current_user = current_user
+    )
+
+@router.get(
     '/statistics/route-comparisons/{planned_route_id}',
     response_model = RouteComparisonsResponseSchema,
     status_code = status.HTTP_200_OK,
@@ -569,11 +599,18 @@ async def update_attendance_checkout_time_endpoint(
     description = '''Retrieves a planned route, its points, and all associated
                 executed routes and their points for detailed comparison.
                 This is a resource-intensive endpoint, intended for detailed
-                visualization on the frontend.'''
+                visualization on the frontend. Now includes an **optional**
+                date range filter (start_date, end_date) for executed routes.'''
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_full_route_comparison_endpoint(
     request: Request,
-    planned_route_id: int = Path(..., description='ID of the planned route to compare.'),
+    planned_route_id: int = Path(...,
+        description = 'ID of the planned route to compare.'),
+    start_date: Optional[str] = Query(None,
+        description = 'Optional start date (YYYY-MM-DD) to filter executed routes by start_time.'),
+    end_date: Optional[str] = Query(None,
+        description = 'Optional end date (YYYY-MM-DD) to filter executed routes by start_time.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -582,11 +619,13 @@ async def get_full_route_comparison_endpoint(
     '''
     message = f'''User: {current_user
             }. Received request for full route comparison for planned route ID: {
-            planned_route_id}.'''
+            planned_route_id}. Filters: start_date={start_date}, end_date={end_date}.'''
     logger.info(message)
     return await get_full_route_comparison_controller(
         db = db,
         planned_route_id = planned_route_id,
+        start_date = start_date,
+        end_date = end_date,
         request = request,
         current_user = current_user
     )

@@ -47,6 +47,7 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | `PATCH`| `/v1/localization/routes/planned/{planned_route_id}/status` | Actualiza el estado de una **ruta planificada** (`ACTIVE`, `INACTIVE`, `IN CREATION`). |
 | `DELETE`| `/v1/localization/routes/planned/{planned_route_id}` | Elimina una **ruta planificada** y sus puntos. |
 | `POST` | `/v1/localization/routes/planned/{planned_route_id}/points`| Añade un nuevo punto a una **ruta planificada**. |
+| `PATCH`| `/v1/localization/routes/planned/{planned_route_id}/points/{planned_point_id}`| Actualiza campos específicos de un punto planificado. |
 | `DELETE`| `/v1/localization/routes/planned/{planned_route_id}/points/{planned_point_id}`| Elimina un punto específico de una **ruta planificada**. |
 | `POST`| `/v1/localization/routes/planned/bulk-upload` | Carga masivamente rutas planificadas a partir de un archivo CSV. |
 
@@ -57,6 +58,8 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | `POST` | `/v1/localization/routes/executed` | Inicia una nueva **ruta ejecutada**, opcionalmente vinculada a una ruta planificada. |
 | `POST` | `/v1/localization/routes/executed/points` | Registra un nuevo punto de localización para una **ruta ejecutada**. |
 | `PATCH`| `/v1/localization/routes/executed/{executed_route_id}` | Actualiza el tiempo de finalización (`end_time`) de una **ruta ejecutada**. |
+| `GET` | `/v1/localization/routes/executed-points/filter` | Obtiene los IDs de **puntos ejecutados** asociados a una lista de IDs de rutas planificadas. (Usado por Forms-Service). |
+| `GET` | `/v1/localization/routes/executed/by-planned/{planned_route_id}` | **ruta ejecutada** Obtiene todas las rutas ejecutadas de una ruta planificada para verificar su estado (abierta/cerrada). |
 
 ### Asistencia
 
@@ -71,7 +74,7 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | :--- | :--- | :--- |
 | `GET` | `/v1/localization/statistics/users/{user_id}/points-visited`| Obtiene estadísticas de puntos visitados para un usuario en un rango de fechas. |
 | `GET` | `/v1/localization/statistics/route-comparisons/{planned_route_id}`| Compara una **ruta planificada** con las **rutas ejecutadas** asociadas para obtener datos estadísticos. |
-| `GET` | `/v1/localization/routes/comparison/{planned_route_id}` | Obtiene una comparación detallada entre una **ruta planificada** y sus **rutas ejecutadas** para visualización. |
+| `GET` | `/v1/localization/routes/comparison/{planned_route_id}` | Obtiene una comparación detallada entre una **ruta planificada** y sus **rutas ejecutadas** para visualización, con filtros opcionales de **rango de fecha de ejecución**. |
 
 -----
 
@@ -96,6 +99,7 @@ localization/
 │   ├── api_exceptions.py
 │   ├── crud.py
 │   ├── db_connection.py
+│   ├── environment.py
 │   ├── exceptions.py
 │   ├── localization.py
 │   ├── logger_config.py

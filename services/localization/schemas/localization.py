@@ -217,6 +217,12 @@ class ExecutedRouteResponseSchema(ExecutedRouteCreateSchema, LocalizationBaseSch
     id: int
     start_time: datetime
     end_time: Optional[datetime]
+    start_latitude: float
+    start_longitude: float
+    max_distance_start_point: float
+    end_latitude: Optional[float] = None
+    end_longitude: Optional[float] = None
+    max_distance_end_point: Optional[float] = None
 
 class ExecutedRouteUpdateSchema(BaseModel):
     '''

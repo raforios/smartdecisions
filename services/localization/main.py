@@ -1,7 +1,6 @@
 '''
     Localization Microservice Main Handler
 '''
-import os
 import socket
 from datetime import datetime, date
 from typing import Dict, Any, AsyncIterator
@@ -14,15 +13,27 @@ from mangum import Mangum
 
 import uvicorn
 
-from dotenv import dotenv_values
-
 from routes.localization import router as localization_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
 from services.logger_config import custom_logger as logger
+from services.environment import load_and_validate_env_vars
 
-PARAMETERS = dotenv_values('.env')
+ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'HOST': str,
+        'PORT': int,
+    },
+    optional_env_vars = {
+        'APP_ENV': str
+    }
+)
+
+UVICORN_HOST = ENV_VARS['HOST']
+UVICORN_PORT = ENV_VARS['PORT']
+APP_ENV = ENV_VARS['APP_ENV']
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -52,17 +63,24 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     message = 'Application shutdown: Closing resources.'
     logger.info(message)
 
-app = FastAPI(
-    title = 'Localization Service',
-    description = '''
-        This microservice manages location and route information. It allows for the creation of planned routes
-        with associated geographical points, real-time registration of executed routes via dynamic points,
-        and attendance tracking at fixed points. Additionally, it offers endpoints to retrieve
-        visiting statistics and compare performance between planned and executed routes.
-    ''',
-    version = '1.0.0',
-    lifespan = lifespan
-)
+APP_CONFIG = {
+    'title': 'Localization Service',
+    'description': '''
+        This microservice manages location and route information. It allows for the creation of
+        planned routes with associated geographical points, real-time registration of executed
+        routes via dynamic points, and attendance tracking at fixed points. Additionally,
+        it offers endpoints to retrieve visiting statistics and compare performance between
+        planned and executed routes.''',
+    'version': '1.0.0',
+    'contact': {
+        'name': 'API Support',
+        'email': 'raforios@gmail.com'
+    },
+    'lifespan': lifespan
+
+}
+
+app = FastAPI(**APP_CONFIG)
 
 setup_exception_handlers(app)
 
@@ -80,7 +98,7 @@ def root() -> Dict[str, Any]:
     output = {
         'Api Healthcheck': 'OK',
         'Host': socket.gethostname(),
-        'Environment': os.environ.get('APP_ENV', PARAMETERS.get('APP_ENV')),
+        'Environment': APP_ENV,
         'Status': 'available',
         'Server Date Time': today.isoformat(),
         'Last Update': date.today().isoformat(),
@@ -107,9 +125,6 @@ app.include_router(localization_router, tags = ['Localization'])
 
 # Entry point to run the app
 if __name__ == '__main__':
-    UVICORN_HOST = os.environ.get('HOST', PARAMETERS.get('HOST'))
-    UVICORN_PORT = int(os.environ.get('PORT', PARAMETERS.get('PORT')))
-
     MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
     logger.info(MESSAGE)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
