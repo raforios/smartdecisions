@@ -12,6 +12,7 @@ El **Forms-Service** está diseñado para ser la interfaz principal para toda la
   * **Gestión del Ciclo de Vida del Formulario:** Proporciona un proceso de revisión que permite actualizar el estado de los formularios completados (ej. `Revisado`, `Aprobado`).
   * **Registro Temporal de Respuestas:** Almacena las respuestas de los usuarios de manera temporal en **DynamoDB**, procesando las preguntas una por una y solo persistiendo los datos de manera definitiva en **MySQL** cuando el formulario se finaliza.
   * **Gestión de Flujos Lógicos:** Permite la navegación controlada a través de las preguntas del formulario, respetando saltos condicionales basados en las respuestas del usuario.
+  * **Generación de Reportes Transversales:** Produce reportes complejos como el **Monitor de Afiliación** y **Contactos por Ruta**, orquestando datos de los microservicios de **Planning** y **Localization** con los datos de formularios locales.
 
 -----
 
@@ -19,15 +20,15 @@ El **Forms-Service** está diseñado para ser la interfaz principal para toda la
 
 Este microservicio ha sido desarrollado con un enfoque en la flexibilidad, la eficiencia y la integración con la nube:
 
-* **Lenguaje:** Python 3.13 🐍
-* **Framework Web:** FastAPI ✨
-* **Servidor ASGI:** Uvicorn 🚀
-* **ORM:** SQLAlchemy
-* **Base de Datos:** MySQL (Para la información permanente de formularios y respuestas)
-* **Base de Datos Temporal:** DynamoDB (Para el almacenamiento temporal de las respuestas de la sesión)
-* **Validación de Datos:** Pydantic
-* **Contenerización:** Docker 🐳
-* **Plataforma Cloud:** AWS Lambda y AWS CLI (para el despliegue a través de un script shell)
+  * **Lenguaje:** Python 3.13 🐍
+  * **Framework Web:** FastAPI ✨
+  * **Servidor ASGI:** Uvicorn 🚀
+  * **ORM:** SQLAlchemy
+  * **Base de Datos:** MySQL (Para la información permanente de formularios y respuestas)
+  * **Base de Datos Temporal:** DynamoDB (Para el almacenamiento temporal de las respuestas de la sesión)
+  * **Validación de Datos:** Pydantic
+  * **Contenerización:** Docker 🐳
+  * **Plataforma Cloud:** AWS Lambda y AWS CLI (para el despliegue a través de un script shell)
 
 -----
 
@@ -49,24 +50,31 @@ A continuación se listan los endpoints principales de la API, que facilitan la 
 | `PUT` | `/v1/forms/questions/{question_id}` | Actualiza una pregunta existente. |
 | `DELETE`| `/v1/forms/questions/{question_id}` | Elimina una pregunta y su información asociada. |
 
----
+-----
 
-### Gestión de Respuestas y Sesiones (DynamoDB & MySQL)
+### Gestión de Respuestas de Sesión (DynamoDB)
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/form-responses/start-session` | Inicia una nueva sesión para responder un formulario. |
-| `POST` | `/v1/form-responses/submit-answer` | Envía una respuesta y obtiene la siguiente pregunta. |
-| `POST` | `/v1/form-responses/get-question-to-modify` | Recupera una pregunta anterior para modificar su respuesta. |
+| `POST` | `/v1/form-responses/start-session` | **Inicia** una nueva sesión y devuelve la primera pregunta. |
+| `POST` | `/v1/form-responses/submit-answer` | **Envía** una respuesta y obtiene la siguiente pregunta, actualizando DynamoDB. |
+| `POST` | `/v1/form-responses/get-question-to-modify` | Recupera una pregunta anterior para **modificar** su respuesta. |
 | `PUT` | `/v1/form-responses/update-answer-in-session` | Actualiza la respuesta de una pregunta en una sesión activa. |
-| `POST` | `/v1/form-responses/finalize-session` | Finaliza una sesión y guarda las respuestas en la base de datos permanente. |
-| `GET` | `/v1/form-responses/{form_response_id}` | Obtiene una respuesta de formulario completa por su ID. |
-| `GET` | `/v1/form-responses/` | Obtiene una lista paginada de todas las respuestas de formularios. |
-| `PUT` | `/v1/form-responses/{form_response_id}` | Actualiza una respuesta de formulario con nuevos datos. |
-| `PUT` | `/v1/form-responses/{form_response_id}/status` | Actualiza el estado de una respuesta y registra el cambio en el flujo de estado. |
+| `POST` | `/v1/form-responses/finalize-session` | **Finaliza** la sesión y guarda todas las respuestas en MySQL. |
+
+-----
+
+### Gestión de Respuestas Finalizadas (MySQL)
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/v1/form-responses/{form_response_id}` | Obtiene una respuesta de formulario **completa** (con respuestas y persona). |
+| `GET` | `/v1/form-responses/` | Obtiene una lista paginada de todas las respuestas de formularios (resumen). |
+| `PUT` | `/v1/form-responses/{form_response_id}` | Actualiza una respuesta de formulario con nuevos datos (Admin). |
+| `PUT` | `/v1/form-responses/{form_response_id}/status` | Actualiza el **estado** de una respuesta y registra el cambio en el flujo. |
 | `GET` | `/v1/form-responses/{form_response_id}/status-flow` | Obtiene el historial del flujo de estado de una respuesta de formulario. |
 
----
+-----
 
 ### Gestión de Personas (MySQL)
 
@@ -75,8 +83,18 @@ A continuación se listan los endpoints principales de la API, que facilitan la 
 | `POST` | `/v1/persons/` | Crea un nuevo registro de persona. |
 | `GET` | `/v1/persons/{person_id}` | Obtiene un registro de persona por su ID. |
 | `GET` | `/v1/persons/` | Obtiene una lista paginada de todos los registros de personas. |
+| `GET` | `/v1/persons/search` | Busca personas usando filtros como ID, nombre, teléfono o email. |
 | `PUT` | `/v1/persons/{person_id}` | Actualiza un registro de persona por su ID. |
 | `DELETE` | `/v1/persons/{person_id}` | Elimina un registro de persona por su ID. |
+
+-----
+
+### Reportes (Transversales)
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/v1/reports/affiliation-monitor` | **Monitor de Afiliación.** Calcula métricas clave de afiliaciones, combinando datos de Formularios, Planning y Localization. |
+| `POST` | `/v1/reports/contacts-by-route` | **Contactos por Ruta/Punto.** Recupera respuestas detalladas de formularios filtradas por criterios de rutas y puntos. |
 
 -----
 
@@ -87,6 +105,7 @@ forms/
 ├── controllers/
 │   ├── __init__.py
 │   ├── forms.py
+│   ├── reports.py
 │   └── responses.py
 ├── models/
 │   ├── __init__.py
@@ -95,18 +114,25 @@ forms/
 ├── routes/
 │   ├── __init__.py
 │   ├── forms.py
+│   ├── reports.py
 │   └── responses.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── forms.py
+│   ├── reports.py
 │   └── responses.py
 ├── services/
 │   ├── __init__.py
+│   ├── api_exceptions.py
 │   ├── crud.py
 │   ├── db_connection.py
 │   ├── dynamodb.py
+│   ├── environment.py
 │   ├── exceptions.py
+│   ├── forms.py
 │   ├── logger_config.py
+│   ├── reports.py
+│   ├── responses.py
 │   ├── security.py
 │   └── utils.py
 ├── .dockerignore
@@ -118,7 +144,7 @@ forms/
 ├── main.py
 ├── README.md
 └── requirements.txt
-````
+```
 
 -----
 
