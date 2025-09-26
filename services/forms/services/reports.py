@@ -7,14 +7,12 @@ from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urlencode
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
-from models.forms import FormHeader
 from models.responses import FormResponse, Person, Contact
 from schemas.reports import (
     AffiliationMonitorRequestSchema,
     ContactsByRouteReportRequestSchema
 )
 from schemas.responses import FormResponseDetailResponse
-from services.exceptions import ServiceUnavailableError
 from services.utils import _perform_request, handle_service_errors
 from services.environment import load_and_validate_env_vars
 
@@ -35,48 +33,169 @@ if PLANNING_SERVICE_URL:
 if LOCALIZATION_SERVICE_URL:
     LOCALIZATION_ENDPOINT = f'{LOCALIZATION_SERVICE_URL}/v1/localization'
 
+@handle_service_errors('PLANNING')
+async def _fetch_planned_ids_from_planning(
+    request_data: AffiliationMonitorRequestSchema,
+    auth_token: str
+) -> Optional[Set[int]]:
+    '''
+        Fetches planned route IDs from the Planning microservice based on various filters.
+    '''
+    query_params = {
+        'company_id': request_data.company_id,
+        'service_id': request_data.service_id,
+        'year': request_data.year,
+        'period': request_data.period
+    }
+
+    # Agrega filtros opcionales si están presentes
+    if request_data.team_ids:
+        query_params['team_ids'] = request_data.team_ids
+    if request_data.user_ids:
+        query_params['user_ids'] = request_data.user_ids
+
+    # Asume un endpoint `monitor-filter` en el servicio Planning para esta lógica
+    url = f'{PLANNING_ENDPOINT}/monitor-filter?{urlencode(
+        query_params, doseq = True)}'
+    headers = {'Authorization': f'{auth_token}'}
+
+    response = await _perform_request('GET', url, headers = headers)
+    response.raise_for_status()
+    data = response.json()
+
+    # Extrae los planned_route_ids de la respuesta
+    return {item['planned_route_id'] for item in data}
+
+@handle_service_errors('LOCALIZATION')
+async def _fetch_planned_ids_from_localization(
+    request_data: AffiliationMonitorRequestSchema,
+    auth_token: str
+) -> Optional[Set[int]]:
+    '''
+        Fetches planned route IDs from the Localization microservice based on city ID.
+    '''
+    query_params = {'city_id': request_data.city_ids}
+    url = f'{LOCALIZATION_ENDPOINT}/routes/planned/filter?{urlencode(
+        query_params, doseq = True)}'
+    headers = {'Authorization': f'{auth_token}'}
+    response = await _perform_request('GET', url, headers = headers)
+    response.raise_for_status()
+    data = response.json()
+
+    return {route['id'] for route in data}
+
+# --- Orquestador de filtros ---
+
+async def _get_planned_route_ids_for_monitor(
+    request_data: AffiliationMonitorRequestSchema,
+    auth_token: str
+) -> Optional[Set[int]]:
+    '''
+        Determines the final set of planned route IDs based on the filtering hierarchy.
+    '''
+    if request_data.planned_route_ids:
+        # Prioridad 1: planned_route_ids es el filtro principal.
+        return set(request_data.planned_route_ids)
+
+    # Si no hay planned_route_ids, se aplican los filtros de Planning
+    planned_ids_from_planning = await _fetch_planned_ids_from_planning(
+        request_data,
+        auth_token
+    )
+    if not planned_ids_from_planning:
+        return None  # No hay datos para los filtros de Planning
+
+    planned_route_ids = planned_ids_from_planning
+
+    # Si hay city_ids, se hace la intersección
+    if request_data.city_ids:
+        planned_ids_from_localization = await _fetch_planned_ids_from_localization(
+            request_data,
+            auth_token
+        )
+        if planned_ids_from_localization:
+            planned_route_ids.intersection_update(planned_ids_from_localization)
+
+    return planned_route_ids
+
+
+@handle_service_errors('LOCALIZATION')
+async def _fetch_executed_point_ids_from_localization(
+    planned_route_ids: Set[int],
+    auth_token: str
+) -> Optional[Set[int]]:
+    '''
+        Fetches executed point IDs from the Localization microservice
+        based on a set of planned route IDs.
+    '''
+    query_params = {'planned_route_ids': list(planned_route_ids)}
+    url = f'{LOCALIZATION_ENDPOINT}/routes/executed-points/filter?{urlencode(
+        query_params, doseq = True)}'
+    headers = {'Authorization': f'{auth_token}'}
+
+    response = await _perform_request('GET', url, headers = headers)
+    response.raise_for_status()
+    data = response.json()
+
+    return set(data)
+
+# --- Lógica principal del reporte ---
 
 @handle_service_errors('FORMS-REPORTS')
-# pylint: disable=too-many-locals
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
 async def calculate_affiliation_monitor(
     db: Session,
-    request_data: AffiliationMonitorRequestSchema
+    request_data: AffiliationMonitorRequestSchema,
+    auth_token: str
 ) -> Dict[str, Any]:
     '''
         Calculates key metrics for the Affiliation Monitor report based on dynamic filters.
     '''
-    # Start with a base query on FormResponse
+    # 1. Obtener los planned_route_ids según la jerarquía
+    planned_route_ids = await _get_planned_route_ids_for_monitor(
+        request_data,
+        auth_token
+    )
+
+    if not planned_route_ids:
+        return {
+            'records': {},
+            'objectives': {},
+            'indicators': {}
+        }
+
+    # 2. Obtener los executed_point_ids a partir de los planned_route_ids
+    executed_point_ids = await _fetch_executed_point_ids_from_localization(
+        planned_route_ids,
+        auth_token
+    )
+
+    if not executed_point_ids:
+        return {
+            'records': {},
+            'objectives': {},
+            'indicators': {}
+        }
+
+    # 3. Construir la consulta a la base de datos local
     query = db.query(FormResponse).join(
         Contact, FormResponse.contact_id == Contact.id
     ).join(
         Person, FormResponse.person_id == Person.id
-    ).join(
-        FormHeader, FormResponse.form_id == FormHeader.id
     )
 
-    # List to hold the conditions for dynamic filtering
+    # Lista para las condiciones del filtro
     conditions = []
 
-    # --- Apply required filters ---
-    conditions.append(FormHeader.company_id == request_data.company_id)
-    # The 'service_id' and 'management' will be handled in a more complex way
-    # as they are likely stored in the FormHeader or related tables.
-    # We will need to confirm where these are stored.
-    # For now, let's assume they are simple fields on FormHeader.
-    conditions.append(FormHeader.service_id == request_data.service_id)
-    conditions.append(FormHeader.management == request_data.management)
+    # Filtro de executed_route_point_id (obligatorio)
+    conditions.append(Contact.executed_route_point_id.in_(executed_point_ids))
 
-    # --- Apply optional filters based on request_data ---
+    # Aplicar el resto de los filtros opcionales
     if request_data.date_from and request_data.date_to:
         conditions.append(FormResponse.submission_date.between(
             request_data.date_from, request_data.date_to))
     elif request_data.date_from:
         conditions.append(FormResponse.submission_date >= request_data.date_from)
-
-    if request_data.planned_route_ids:
-        # This will be tricky, as 'planned_route_id' is in the 'Contact' table.
-        # We need to filter based on that.
-        conditions.append(Contact.planned_route_id.in_(request_data.planned_route_ids))
 
     if request_data.affiliation_number_from and request_data.affiliation_number_to:
         conditions.append(FormResponse.affiliation_number.between(
@@ -90,63 +209,51 @@ async def calculate_affiliation_monitor(
     if request_data.statuses:
         conditions.append(FormResponse.status.in_(request_data.statuses))
 
-    # --- Execute the query with all conditions ---
     filtered_responses = query.filter(and_(*conditions)).all()
 
-    # --- Perform calculations based on the filtered data ---
-    # These calculations are done in Python after fetching the data.
+    # --- Realizar los cálculos con los datos filtrados ---
     q_affiliations_registered = len(filtered_responses)
 
     q_affiliations_approved = 0
     q_referred_registered = 0
-    q_persons_registered = 0
-    q_contacts_marked = 0
 
     unique_person_ids = set()
     unique_contact_ids = set()
     unique_affiliate_user_ids = set()
 
     for response in filtered_responses:
-        # Count approved affiliations based on the 'target_status'
         if response.status == request_data.target_status:
             q_affiliations_approved += 1
 
-        # Count unique persons, contacts, and affiliates
         unique_person_ids.add(response.person_id)
         unique_contact_ids.add(response.contact_id)
         unique_affiliate_user_ids.add(response.user_id)
 
-        # Check for referred persons
-        # Note: 'is_referred' is a field in the Person model
-        if response.person.is_referred:
+        if response.person and response.person.is_referred:
             q_referred_registered += 1
 
     q_persons_registered = len(unique_person_ids)
     q_contacts_marked = len(unique_contact_ids)
     q_affiliators = len(unique_affiliate_user_ids)
 
-    # Handle division by zero for percentage calculation
+    # Cálculo de métricas
     percent_affiliations_approved = (
         q_affiliations_approved / q_affiliations_registered
         ) * 100 if q_affiliations_registered > 0 else 0
 
-    # --- Calculate Objectives and Indicators ---
     period_target = request_data.target_affiliations * q_affiliators
     daily_target = period_target / request_data.working_days if request_data.working_days > 0 else 0
 
-    # Calculate days transpired in the period (assuming today's date)
-    # This is a simplification; a more robust solution would be needed
-    # for full implementation.
     today = datetime.now().date()
     days_transpired = (today - request_data.date_from).days if request_data.date_from else 1
 
     ratio = (q_affiliations_approved / days_transpired) if days_transpired > 0 else 0
     individual_ratio = (ratio / q_affiliators) if q_affiliators > 0 else 0
-    daily_need = (period_target - q_affiliations_approved) / (
-        request_data.working_days - days_transpired) if (
-            request_data.working_days - days_transpired) > 0 else 0
+    daily_need_denominator = request_data.working_days - days_transpired
+    daily_need = (period_target - q_affiliations_approved) / daily_need_denominator if \
+        daily_need_denominator > 0 else 0
 
-    # --- Build the response object ---
+    # --- Construir el objeto de respuesta ---
     return {
         'records': {
             'q_contacts_marked': q_contacts_marked,
@@ -168,6 +275,7 @@ async def calculate_affiliation_monitor(
         }
     }
 
+@handle_service_errors('PLANNING')
 async def _fetch_planned_routes_from_planning(
     request_data: ContactsByRouteReportRequestSchema,
     auth_token: str
@@ -178,35 +286,30 @@ async def _fetch_planned_routes_from_planning(
     if not request_data.team_id and not request_data.service_id:
         return None
 
-    try:
-        query_params = {
-            'company_id': request_data.company_id
-        }
-        if request_data.team_id:
-            query_params['team_id'] = request_data.team_id
-        if request_data.service_id:
-            query_params['service_id'] = request_data.service_id
-        url = f'{PLANNING_ENDPOINT}/filter?{urlencode(query_params)}'
-        headers = {
-            'Authorization': f'{auth_token}',
-            'Content-Type': 'application/json'            
-        }
-        response = await _perform_request('GET', url, headers = headers)
-        response.raise_for_status()
-        data = response.json()
+    query_params = {
+        'company_id': request_data.company_id
+    }
+    if request_data.team_id:
+        query_params['team_id'] = request_data.team_id
+    if request_data.service_id:
+        query_params['service_id'] = request_data.service_id
+    url = f'{PLANNING_ENDPOINT}/filter?{urlencode(query_params)}'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'            
+    }
+    response = await _perform_request('GET', url, headers = headers)
+    response.raise_for_status()
+    data = response.json()
 
-        planned_route_ids = set()
-        for planning in data:
-            for detail in planning.get('details', []):
-                planned_route_ids.add(detail['planned_route_id'])
+    planned_route_ids = set()
+    for planning in data:
+        for detail in planning.get('details', []):
+            planned_route_ids.add(detail['planned_route_id'])
 
-        return list(planned_route_ids)
+    return list(planned_route_ids)
 
-    except Exception as exc:
-        raise ServiceUnavailableError(
-            detail = f'Failed to fetch planned routes from Planning service: {exc}'
-        ) from exc
-
+@handle_service_errors('LOCALIZATION')
 async def _fetch_planned_routes_from_localization(
     request_data: ContactsByRouteReportRequestSchema,
     auth_token: str
@@ -217,28 +320,23 @@ async def _fetch_planned_routes_from_localization(
     if not request_data.city_id:
         return None
 
-    try:
-        query_params = {
-            'company_id': request_data.company_id,
-            'city_id': request_data.city_id
-        }
-        url = f'{LOCALIZATION_ENDPOINT}/routes/planned/filter?{urlencode(query_params)}'
-        headers = {
-            'Authorization': f'{auth_token}',
-            'Content-Type': 'application/json'            
-        }
-        response = await _perform_request('GET', url, headers = headers)
+    query_params = {
+        'company_id': request_data.company_id,
+        'city_id': request_data.city_id
+    }
+    url = f'{LOCALIZATION_ENDPOINT}/routes/planned/filter?{urlencode(query_params)}'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'            
+    }
+    response = await _perform_request('GET', url, headers = headers)
 
-        response.raise_for_status()
-        data = response.json()
+    response.raise_for_status()
+    data = response.json()
 
-        return [route['id'] for route in data]
-    except Exception as exc:
-        raise ServiceUnavailableError(
-            detail = f'Failed to fetch planned routes from Localization service: {exc}'
-        ) from exc
+    return [route['id'] for route in data]
 
-
+@handle_service_errors('LOCALIZATION')
 async def _fetch_executed_points_from_localization(
     planned_route_id: int,
     auth_token: str
@@ -248,29 +346,23 @@ async def _fetch_executed_points_from_localization(
         This function uses the /routes/comparison endpoint to extract the executed points based on 
         the provided schema.
     '''
-    try:
-        url = f'{LOCALIZATION_ENDPOINT}/routes/comparison/{planned_route_id}'
-        headers = {
-            'Authorization': f'{auth_token}',
-            'Content-Type': 'application/json'            
-        }
-        response = await _perform_request('GET', url, headers = headers)
-        response.raise_for_status()
-        data = response.json()
+    url = f'{LOCALIZATION_ENDPOINT}/routes/comparison/{planned_route_id}'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'            
+    }
+    response = await _perform_request('GET', url, headers = headers)
+    response.raise_for_status()
+    data = response.json()
 
-        executed_point_ids = []
-        for route in data.get('executed_routes', []):
-            for point in route.get('points', []):
-                executed_point_ids.append(point['id'])
+    executed_point_ids = []
+    for route in data.get('executed_routes', []):
+        for point in route.get('points', []):
+            executed_point_ids.append(point['id'])
 
-        return executed_point_ids
+    return executed_point_ids
 
-    except Exception as exc:
-        raise ServiceUnavailableError(
-            detail = f'Failed to fetch executed points from Localization service: {exc}'
-        ) from exc
-
-
+@handle_service_errors('LOCALIZATION')
 async def _get_company_id_from_localization(
     planned_route_id: int,
     auth_token: str
@@ -278,20 +370,15 @@ async def _get_company_id_from_localization(
     '''
         Fetches the company ID associated with a planned route from the Localization service.
     '''
-    try:
-        url = f'{LOCALIZATION_ENDPOINT}/routes/planned/{planned_route_id}'
-        headers = {
-            'Authorization': f'{auth_token}',
-            'Content-Type': 'application/json'
-        }
-        response = await _perform_request('GET', url, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        return data.get('company_id')
-    except Exception as exc:
-        raise ServiceUnavailableError(
-            detail=f'Failed to fetch company ID from Localization service: {exc}'
-        ) from exc
+    url = f'{LOCALIZATION_ENDPOINT}/routes/planned/{planned_route_id}'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'
+    }
+    response = await _perform_request('GET', url, headers = headers)
+    response.raise_for_status()
+    data = response.json()
+    return data.get('company_id')
 
 async def _get_planned_route_ids_from_request(
     request_data: ContactsByRouteReportRequestSchema,

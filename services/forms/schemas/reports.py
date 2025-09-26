@@ -6,7 +6,6 @@ from datetime import date
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-# Esquema para las variables de análisis que vienen desde el frontend
 class AffiliationMonitorRequestSchema(BaseModel):
     '''
         Schema to handle the request payload for the Affiliation Monitor report.
@@ -17,7 +16,7 @@ class AffiliationMonitorRequestSchema(BaseModel):
             description = 'ID of the company to filter affiliations.')
     service_id: int = Field(...,
             description = 'ID of the service to filter affiliations.')
-    management: int = Field(...,
+    year: int = Field(...,
             description = 'Year of management for the affiliations.')
     period: str = Field(...,
             description = 'Period for the affiliations (e.g., "Q1", "January", "2025-01").')

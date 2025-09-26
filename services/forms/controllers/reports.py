@@ -20,6 +20,7 @@ from services.utils import handle_service_errors
 @handle_service_errors('FORMS-REPORTS')
 async def get_affiliation_monitor_data(
     db: Session,
+    auth_token: str,
     request_data: AffiliationMonitorRequestSchema,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
@@ -28,7 +29,7 @@ async def get_affiliation_monitor_data(
     Controller to process the request and fetch data for the Affiliation Monitor report.
     '''
     # The actual business logic is delegated to the service layer.
-    report_data = await calculate_affiliation_monitor(db, request_data)
+    report_data = await calculate_affiliation_monitor(db, request_data, auth_token)
     return AffiliationMonitorResponseSchema(**report_data)
 
 @handle_service_errors('FORMS-REPORTS')

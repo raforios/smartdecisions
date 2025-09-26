@@ -27,6 +27,7 @@ router = APIRouter(prefix = '/v1/reports', tags = ['Reports'])
 async def get_affiliation_monitor_report(
     request_data: AffiliationMonitorRequestSchema,
     request: Request,
+    auth_token: str = Header(..., alias = 'Authorization'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ) -> Dict[str, Any]:
@@ -38,7 +39,8 @@ async def get_affiliation_monitor_report(
         db = db,
         request_data = request_data,
         request = request,
-        current_user = current_user
+        current_user = current_user,
+        auth_token = auth_token
     )
 
 @router.post(
