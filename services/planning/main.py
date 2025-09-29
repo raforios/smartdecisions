@@ -1,7 +1,6 @@
 '''
     Planning Microservice Main Handler
 '''
-import os
 import socket
 from datetime import datetime, date
 from typing import Dict, Any, AsyncIterator
@@ -13,15 +12,27 @@ from mangum import Mangum
 
 import uvicorn
 
-from dotenv import dotenv_values
-
 from routes.planning import router as planning_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
 from services.logger_config import custom_logger as logger
+from services.environment import load_and_validate_env_vars
 
-PARAMETERS = dotenv_values('.env')
+ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'HOST': str,
+        'PORT': int,
+    },
+    optional_env_vars = {
+        'APP_ENV': str
+    }
+)
+
+UVICORN_HOST = ENV_VARS['HOST']
+UVICORN_PORT = ENV_VARS['PORT']
+APP_ENV = ENV_VARS['APP_ENV']
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -51,17 +62,23 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     message = 'Application shutdown: Closing resources.'
     logger.info(message)
 
-app = FastAPI(
-    title = 'Planning Service',
-    description = '''
+APP_CONFIG = {
+    'title': 'Planning Service',
+    'description': '''
         This microservice manages the planning process, including the creation and management
         of planning records, the assignment of teams and routes (from the Localization service),
         and the tracking of material assignments. It provides endpoints for creating, retrieving,
-        and updating planning records, with filtering capabilities by week and date.
-    ''',
-    version = '1.0.0',
-    lifespan = lifespan
-)
+        and updating planning records, with filtering capabilities by week and date.''',
+    'version': '1.0.0',
+    'contact': {
+        'name': 'API Support',
+        'email': 'raforios@gmail.com'
+    },
+    'lifespan': lifespan
+
+}
+
+app = FastAPI(**APP_CONFIG)
 
 setup_exception_handlers(app)
 
@@ -79,7 +96,7 @@ def root() -> Dict[str, Any]:
     output = {
         'Api Healthcheck': 'OK',
         'Host': socket.gethostname(),
-        'Environment': os.environ.get('APP_ENV', PARAMETERS.get('APP_ENV')),
+        'Environment': APP_ENV,
         'Status': 'available',
         'Server Date Time': today.isoformat(),
         'Last Update': date.today().isoformat(),
@@ -93,9 +110,6 @@ app.include_router(planning_router, tags = ['Planning'])
 
 # Entry point to run the app
 if __name__ == '__main__':
-    UVICORN_HOST = os.environ.get('HOST', PARAMETERS.get('HOST'))
-    UVICORN_PORT = int(os.environ.get('PORT', PARAMETERS.get('PORT')))
-
     MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
     logger.info(MESSAGE)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
