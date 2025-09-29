@@ -395,3 +395,18 @@ class BulkUploadResponseSchema(BaseModel):
     message: str
     routes_created: int
     points_created: int
+
+class LastKnownLocationResponseSchema(BaseModel):
+    '''
+        Response schema for the last known location of a single user.
+    '''
+    user_id: int = Field(..., description = 'ID of the user being tracked.')
+    last_latitude: float = Field(..., description = 'The last reported latitude.')
+    last_longitude: float = Field(..., description = 'The last reported longitude.')
+    last_timestamp: datetime = Field(..., description = 'Timestamp of the last reported location.')
+
+class GroupLastKnownLocationsResponseSchema(BaseModel):
+    '''
+        Response schema for a list of last known locations for multiple users.
+    '''
+    locations: List[LastKnownLocationResponseSchema]

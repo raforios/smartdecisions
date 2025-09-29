@@ -24,6 +24,7 @@ from services.localization import (
     get_executed_point_ids_by_planned_routes,
     get_executed_routes_by_planned_route_id_service,
     get_full_route_comparison,
+    get_last_known_locations_service,
     get_route_comparisons,
     get_statistics_user_points,
     register_attendance,
@@ -42,6 +43,8 @@ from models.localization import PlannedRoute
 from schemas.localization import (
     AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
+    GroupLastKnownLocationsResponseSchema,
+    LastKnownLocationResponseSchema,
     PlannedPointCreateSchema,
     PlannedPointResponseSchema,
     PlannedPointUpdateSchema,
@@ -549,3 +552,29 @@ async def get_executed_routes_by_planned_route_id_controller(
     )
 
     return executed_routes
+
+@handle_service_errors('LOCALIZATION')
+async def get_last_known_locations_controller(
+    db: Session,
+    user_ids: List[int],
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> GroupLastKnownLocationsResponseSchema:
+    '''
+        Controller for retrieving the last recorded location for a list of users.
+    '''
+    message = f'''Starting controller operation: get last known locations for users {
+            user_ids}'''
+    logger.info(message)
+
+    locations_data = await get_last_known_locations_service(
+        db = db,
+        user_ids = user_ids
+    )
+
+    # Mapear los diccionarios a los schemas individuales
+    locations = [
+        LastKnownLocationResponseSchema(**data) for data in locations_data
+    ]
+
+    return GroupLastKnownLocationsResponseSchema(locations = locations)

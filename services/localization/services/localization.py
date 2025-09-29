@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Set, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from services.exceptions import (
     RegisterNotFoundError,
     RegisterAlreadyExistsError,
@@ -14,24 +14,16 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 from services.crud import (
-    create_record,
-    get_record,
-    update_record,
-    delete_record
+    create_record, get_record, update_record, delete_record
 )
 from services.utils import (
-    _handle_files_service,
-    audit_event,
-    handle_service_errors,
-    perform_bulk_upload,
+    _handle_files_service, audit_event,
+    handle_service_errors, perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
 from models.localization import (
-    PlannedRoute,
-    PlannedPoint,
-    Attendance,
-    ExecutedRoute,
-    ExecutedPoint
+    PlannedRoute, PlannedPoint, Attendance,
+    ExecutedRoute, ExecutedPoint
 )
 from schemas.localization import (
     AttendanceCreateSchema,
@@ -944,3 +936,63 @@ async def get_executed_routes_by_planned_route_id_service(
         planned_route_id}'
     logger.info(message)
     return executed_routes
+
+@handle_service_errors('LOCALIZATION-SERVICE')
+async def get_last_known_locations_service(
+    db: Session,
+    user_ids: List[int]
+) -> List[dict]:
+    '''
+        Retrieves the absolute last recorded ExecutedPoint for a given list of user IDs.
+
+        This query uses a subquery to find the MAX(timestamp) per user within their
+        executed routes and then joins back to ExecutedPoint to get the full record.
+    '''
+    message = f'Fetching last known location for user IDs: {user_ids}'
+    logger.info(message)
+
+    # 1. Definir la CTE (Common Table Expression) con la función de ventana
+    # Rankea los puntos ejecutados por timestamp descendente, particionado por user_id.
+    latest_points_cte = (
+        db.query(
+            ExecutedRoute.user_id,
+            ExecutedPoint.latitude.label('last_latitude'),
+            ExecutedPoint.longitude.label('last_longitude'),
+            ExecutedPoint.timestamp.label('last_timestamp'),
+            # Asigna un rango (1 para el más reciente) dentro de cada user_id
+            # pylint: disable=not-callable
+            func.rank().over(
+                order_by = ExecutedPoint.timestamp.desc(),
+                partition_by = ExecutedRoute.user_id
+            ).label('rank_number')
+        )
+        .join(ExecutedRoute, ExecutedRoute.id == ExecutedPoint.executed_route_id)
+        .filter(ExecutedRoute.user_id.in_(user_ids))
+        .cte('latest_points_cte')
+    )
+
+    # 2. Seleccionar solo el registro con rank_number = 1 (el último)
+    results = (
+        db.query(
+            latest_points_cte.c.user_id,
+            latest_points_cte.c.last_latitude,
+            latest_points_cte.c.last_longitude,
+            latest_points_cte.c.last_timestamp
+        )
+        .filter(latest_points_cte.c.rank_number == 1)
+        .all()
+    )
+
+    # Mapear a una lista de diccionarios
+    locations = [
+        {
+            'user_id': r[0],
+            'last_latitude': float(r[1]),
+            'last_longitude': float(r[2]),
+            'last_timestamp': r[3]
+        }
+        for r in results
+    ]
+    message = f'Retrieved {len(locations)} last known locations.'
+    logger.info(message)
+    return locations

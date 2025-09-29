@@ -17,6 +17,7 @@ from controllers.localization import (
     get_executed_point_ids_by_planned_routes_controller,
     get_executed_routes_by_planned_route_id_controller,
     get_full_route_comparison_controller,
+    get_last_known_locations_controller,
     get_planned_route_controller,
     create_executed_route_controller,
     register_executed_point_controller,
@@ -33,6 +34,7 @@ from controllers.localization import (
 from schemas.localization import (
     AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
+    GroupLastKnownLocationsResponseSchema,
     PlannedPointCreateSchema,
     PlannedPointResponseSchema,
     PlannedPointUpdateSchema,
@@ -167,6 +169,36 @@ async def get_executed_point_ids_by_planned_routes_endpoint(
     )
 
     return list(executed_points)
+
+@router.get(
+    '/routes/executed/last-location',
+    response_model = GroupLastKnownLocationsResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Get the last known location for multiple users',
+    description = '''Retrieves the absolute last recorded location
+    (latitude, longitude, and timestamp) for a list of user IDs. Essential for real-time
+    tracking dashboards.'''
+)
+async def get_last_known_locations_endpoint(
+    request: Request,
+    user_ids: List[int] = Query(...,
+        description = 'List of User IDs to track. Example: user_ids=1&user_ids=5&user_ids=8'),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> GroupLastKnownLocationsResponseSchema:
+    '''
+        Endpoint to get the last known location for a group of users.
+    '''
+    message = f'''User: {current_user
+            }. Received request for last known location for user IDs: {
+            user_ids}.'''
+    logger.info(message)
+    return await get_last_known_locations_controller(
+        db = db,
+        user_ids = user_ids,
+        request = request,
+        current_user = current_user
+    )
 
 @router.get(
     '/routes/planned/{planned_route_id}',
