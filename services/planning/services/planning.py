@@ -633,12 +633,13 @@ async def get_planned_route_ids_for_monitor_service(
 
     # --- Aplica el filtro de año (year) y periodo (period) ---
     # El 'year' se filtra en el año de la fecha de inicio o de fin del planning.
-    conditions.append(
-        or_(
-            extract('year', Planning.start_date) == filters.year,
-            extract('year', Planning.end_date) == filters.year
+    if  filters.year:
+        conditions.append(
+            or_(
+                extract('year', Planning.start_date) == filters.year,
+                extract('year', Planning.end_date) == filters.year
+            )
         )
-    )
 
     if filters.period:
         months = _get_months_from_period(filters.period)
