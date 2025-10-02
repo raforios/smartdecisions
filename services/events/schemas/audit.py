@@ -18,7 +18,7 @@ class AuditRecordCreateSchema(BaseModel):
                 description = 'The objects state before the change.')
     new_values: Any = Field(...,
                 description = 'The objects new state after the change.')
-    model_config = ConfigDict(extra='ignore')
+    model_config = ConfigDict(extra = 'ignore')
 
 class AuditRecordResponseSchema(AuditRecordCreateSchema):
     '''
