@@ -186,6 +186,7 @@ async def start_form_session(
     initial_data = {
         'form_id': session_data.form_id,
         'user_id': session_data.user_id,
+        'affiliation_type': session_data.affiliation_type,
         'contact_id': contact_info['contact_id'],
         'person_id': contact_info['person_id'],
         'status': session_data.status, 
@@ -228,6 +229,7 @@ async def start_form_session(
         session_id = session_id,
         form_id = session_data.form_id,
         form_response_id = form_response_id,
+        affiliation_type = session_data.affiliation_type,
         status = session_data.status,
         **get_question_response_data(first_question)
     )
@@ -398,7 +400,7 @@ async def finalize_form_session(
 
     # Calculate the new affiliation number. If none exists, it's 1.
     new_affiliation_number = (latest_affiliation or 0) + 1
-    affiliation_type = finalize_data.affiliation_type
+    status = finalize_data.status
 
     db_form_response = get_record(db, FormResponse, current_session.form_response_id)
     if not db_form_response:
@@ -413,7 +415,7 @@ async def finalize_form_session(
         questions_map,
         company_id,
         new_affiliation_number,
-        affiliation_type
+        status
     )
 
     await delete_session_by_id(current_session.session_id)
@@ -589,4 +591,9 @@ async def delete_person(
         Deletes a person record by ID.
     '''
     result = await delete_person_logic(db, person_id)
-    return result
+    
+    return {
+        'message': f'Person with ID: {person_id} deleted successfully.',
+        'id': result
+    }
+

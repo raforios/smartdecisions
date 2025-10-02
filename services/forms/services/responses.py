@@ -108,7 +108,7 @@ def get_question_response_data(
     }
 
 @handle_service_errors('FORMS')
-@audit_event('FORMS', 'Person', 'CREATE')
+# @audit_event('FORMS', 'Person', 'CREATE')
 async def create_person_and_contact(
     db: Session,
     session_data: StartFormSessionRequest
@@ -182,6 +182,7 @@ async def create_initial_form_response_record_logic(
     db_form_response = FormResponse(
         form_id = inital_data['form_id'],
         user_id = inital_data['user_id'],
+        affiliation_type = inital_data['affiliation_type'],
         contact_id = inital_data['contact_id'],
         person_id = inital_data['person_id'],
         status = inital_data['status'],
@@ -189,6 +190,9 @@ async def create_initial_form_response_record_logic(
     )
     db.add(db_form_response)
     db.flush()
+
+    db.commit()
+
     db.refresh(db_form_response)
 
     return db_form_response
@@ -202,7 +206,7 @@ async def update_final_form_response_logic(
     questions_map: Dict[int, QuestionDetail],
     company_id: Optional[int],
     affiliation_number: int,
-    affiliation_type: Optional[str]
+    status: Optional[str]
 ) -> Tuple[FormResponse, Dict]:
     '''
         Updates the form header and persists all answers from the session cache to MySQL.
@@ -215,11 +219,8 @@ async def update_final_form_response_logic(
     update_data = FormResponseUpdate(
         company_id = company_id,
         affiliation_number = affiliation_number,
-        affiliation_type = affiliation_type,
         user_id = current_session.user_id,
-        # The final status will be set to 'COMPLETED' here, unless a 'REJECTED'
-        # status was already set from the frontend.
-        status = 'COMPLETED' if db_form_response.status != 'REJECTED' else 'REJECTED',
+        status = status,
     )
 
     updated_form_response = update_record(db, db_form_response, update_data)
@@ -244,15 +245,14 @@ async def update_final_form_response_logic(
     db.add_all(db_answers)
 
     # 3. Add the logic to update the Person record
-    if db_form_response.status == 'COMPLETED':
-        person_record = get_record(db, Person, updated_form_response.person_id)
-        if person_record:
-            person_update_data = PersonUpdate(
-                is_affiliated = True,
-                affiliation_date = datetime.now(),
-                affiliation_user_id = updated_form_response.user_id
-            )
-            update_record(db, person_record, person_update_data)
+    person_record = get_record(db, Person, updated_form_response.person_id)
+    if person_record:
+        person_update_data = PersonUpdate(
+            is_affiliated = True,
+            affiliation_date = datetime.now(),
+            affiliation_user_id = updated_form_response.user_id
+        )
+        update_record(db, person_record, person_update_data)
 
     db.commit()
     db.refresh(updated_form_response)
@@ -482,13 +482,23 @@ async def delete_person_logic(
     db_person = get_record(db, Person, person_id)
     old_values = sqlalchemy_object_as_dict(db_person)
 
-    delete_record(db, Person, person_id)
-    db.commit()
+    try:
+        delete_record(db, Person, person_id)
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        error_msg = f'Deletion failed for Person ID {person_id}. Record is in use.'
+        logger.error(error_msg)
+        raise InvalidInputError(
+            detail = 'The person record cannot be deleted because it is referenced by data.'
+        ) from e
 
-    result = {'message': f'Person with ID {person_id} has been successfully deleted.'}
+    message = f'Person with ID {person_id} has been successfully deleted.'
+    logger.info(message)
+
     auditable_data = {
         'old_values': old_values,
         'new_values': None
     }
 
-    return result, auditable_data
+    return person_id, auditable_data

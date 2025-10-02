@@ -184,6 +184,8 @@ class FormResponseBase(BaseModel):
     company_id: Optional[int] = Field(None)
     affiliation_number: Optional[int] = Field(None,
         description = 'Number of affiliation from 1 to N.')
+    service_id: Optional[int] = Field(None,
+        description = 'ID of the service associated with this response.')
 
 class FormResponseCreate(FormResponseBase):
     '''
@@ -335,6 +337,8 @@ class StartFormSessionRequest(BaseModel):
     '''
     form_id: int = Field(..., description = 'ID of the form to start answering.')
     user_id: int = Field(..., description = 'User ID (from frontend)')
+    affiliation_type: str = Field(...,
+        description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
     executed_route_point_id: int = Field(...,
         description = 'ID from the localization service for the executed point.')
     person_data: PersonCreate = Field(...,
@@ -351,6 +355,8 @@ class StartFormSessionResponse(BaseModel):
     '''
     session_id: str = Field(..., description = 'Unique ID for the temporary form filling session.')
     form_id: int = Field(..., description = 'ID of the form being answered.')
+    affiliation_type: str = Field(...,
+        description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
     question_number: int = Field(..., description = 'Number of the first question to display.')
     question_content: str = Field(..., description = 'Content of the first question.')
     response_type: str = Field(..., description = 'Expected response type of the first question.')
@@ -435,8 +441,8 @@ class FinalizeFormRequest(BaseModel):
         Request schema to finalize a form session and persist answers.
     '''
     session_id: str = Field(..., description = 'ID of the temporary form filling session.')
-    affiliation_type: Optional[str] = Field(None,
-        description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
+    status: str = Field(...,
+        description = 'Initial status of the form header, passed from the request.')
 
 class FinalizeFormResponse(BaseModel):
     '''

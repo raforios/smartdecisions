@@ -43,12 +43,14 @@ async def _fetch_planned_ids_from_planning(
     '''
     query_params = {
         'company_id': request_data.company_id,
-        'service_id': request_data.service_id,
-        'year': request_data.year,
-        'period': request_data.period
+        'service_id': request_data.service_id
     }
 
     # Agrega filtros opcionales si están presentes
+    if request_data.year is not None:
+        query_params['year'] = request_data.year
+    if request_data.period is not None:
+        query_params['period'] = request_data.period
     if request_data.team_ids:
         query_params['team_ids'] = request_data.team_ids
     if request_data.user_ids:
@@ -74,7 +76,9 @@ async def _fetch_planned_ids_from_localization(
     '''
         Fetches planned route IDs from the Localization microservice based on city ID.
     '''
-    query_params = {'city_id': request_data.city_ids}
+    if request_data.city_ids is not None:
+        query_params = {'city_id': request_data.city_ids}
+
     url = f'{LOCALIZATION_ENDPOINT}/routes/planned/filter?{urlencode(
         query_params, doseq = True)}'
     headers = {'Authorization': f'{auth_token}'}
@@ -196,6 +200,8 @@ async def calculate_affiliation_monitor(
             request_data.date_from, request_data.date_to))
     elif request_data.date_from:
         conditions.append(FormResponse.submission_date >= request_data.date_from)
+    elif request_data.date_to:
+        conditions.append(FormResponse.submission_date <= request_data.date_to)
 
     if request_data.affiliation_number_from and request_data.affiliation_number_to:
         conditions.append(FormResponse.affiliation_number.between(
@@ -432,19 +438,54 @@ async def _get_executed_point_ids(
     else:
         # Aplica el resto de la jerarquía de filtros de ruta
         final_planned_route_ids = await _get_planned_route_ids_from_request(
-            request_data=request_data,
-            auth_token=auth_token
+            request_data = request_data,
+            auth_token = auth_token
         )
 
         if final_planned_route_ids:
             for planned_id in final_planned_route_ids:
                 executed_ids = await _fetch_executed_points_from_localization(
-                    planned_route_id=planned_id,
-                    auth_token=auth_token
+                    planned_route_id = planned_id,
+                    auth_token = auth_token
                 )
                 final_executed_point_ids.extend(executed_ids)
 
     return final_executed_point_ids
+
+@handle_service_errors('PLANNING')
+async def _fetch_single_service_id_from_planning(
+    planned_route_id: int,
+    auth_token: str
+) -> Optional[int]:
+    '''
+        Fetches the single service ID associated with a single planned route ID 
+        using a direct lookup endpoint in the Planning service.
+    '''
+    query_params = {'planned_route_id': planned_route_id}
+    url = f'{PLANNING_ENDPOINT}/filter?{urlencode(
+        query_params, doseq = True)}'
+    headers = {'Authorization': f'{auth_token}'}
+
+    response = await _perform_request('GET', url, headers = headers)
+
+    if response.status_code == 404:
+        return None
+
+    response.raise_for_status()
+    data = response.json()
+    
+    if not isinstance(data, list) or not data:
+        return None
+
+    for planning_header in data:
+        
+        details = planning_header.get('details', [])
+        
+        for detail in details:
+            if detail.get('planned_route_id') == planned_route_id:
+                return detail.get('service_id')
+
+    return None
 
 @handle_service_errors('FORMS-REPORTS')
 async def generate_contacts_by_route_report(
@@ -461,23 +502,34 @@ async def generate_contacts_by_route_report(
     # 1. Obtener la company_id si planned_route_id está presente y company_id no
     if request_data.planned_route_id and not company_id:
         company_id = await _get_company_id_from_localization(
-            planned_route_id=request_data.planned_route_id,
-            auth_token=auth_token
+            planned_route_id = request_data.planned_route_id,
+            auth_token = auth_token
         )
         if not company_id:
-            return [] # No se pudo obtener la compañía, no hay resultados.
+            return []
 
     # 2. Obtener los executed_point_ids
     final_executed_point_ids = await _get_executed_point_ids(
-        db=db,
-        request_data=request_data,
-        auth_token=auth_token
+        db = db,
+        request_data = request_data,
+        auth_token = auth_token
     )
 
     if not final_executed_point_ids:
         return []
 
-    # 3. Construir la consulta a la base de datos con los filtros
+    # 3. Lógica para obtener el service_id para enriquecimiento
+    service_id_to_enrich = None
+    
+    if request_data.planned_route_id:
+        service_id_to_enrich = await _fetch_single_service_id_from_planning(
+            planned_route_id = request_data.planned_route_id,
+            auth_token = auth_token
+        )
+    elif request_data.service_id:
+        service_id_to_enrich = request_data.service_id
+
+    # 4. Construir la consulta a la base de datos con los filtros
     query = db.query(FormResponse).join(
         FormResponse.contact
     ).join(
@@ -508,4 +560,15 @@ async def generate_contacts_by_route_report(
 
     results = query.all()
 
-    return [FormResponseDetailResponse.model_validate(item) for item in results]
+    # 5. Enriquecer la respuesta
+    enriched_responses = []
+    
+    for form_response in results:
+        response_schema = FormResponseDetailResponse.model_validate(form_response)
+        
+        updated_response = response_schema.model_copy(
+            update={'service_id': service_id_to_enrich}
+        )
+        enriched_responses.append(updated_response)
+    
+    return enriched_responses

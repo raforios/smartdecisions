@@ -47,13 +47,13 @@ class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
     affiliation_date = Column(DateTime, nullable = True)
     affiliation_user_id = Column(Integer, nullable = True)
 
-    is_referred = Column(Boolean, default=False, nullable = False)
-    referred_note = Column(Text, nullable=True)
+    is_referred = Column(Boolean, default = False, nullable = False)
+    referred_note = Column(Text, nullable = True)
 
     contacts = relationship(
         'Contact',
         back_populates = 'person',
-        cascade = 'all, delete-orphan'
+        # cascade = 'all, delete-orphan'
     )
     form_responses = relationship(
         'FormResponse',
@@ -105,8 +105,8 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
     affiliation_number = Column(Integer, nullable = True)
     company_id = Column(Integer, nullable = True)
 
-    rejection_reason = Column(Text, nullable=True)
-    affiliation_type = Column(String(50), nullable=True)
+    rejection_reason = Column(Text, nullable = True)
+    affiliation_type = Column(String(50), nullable = True)
 
     form_header = relationship('FormHeader', back_populates = 'form_responses')
     contact = relationship('Contact', back_populates = 'form_responses')

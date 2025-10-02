@@ -16,9 +16,9 @@ class AffiliationMonitorRequestSchema(BaseModel):
             description = 'ID of the company to filter affiliations.')
     service_id: int = Field(...,
             description = 'ID of the service to filter affiliations.')
-    year: int = Field(...,
+    year: Optional[int] = Field(None,
             description = 'Year of management for the affiliations.')
-    period: str = Field(...,
+    period: Optional[str] = Field(None,
             description = 'Period for the affiliations (e.g., "Q1", "January", "2025-01").')
 
     # --- Optional Filtering Variables ---
