@@ -76,6 +76,7 @@ async def _fetch_planned_ids_from_localization(
     '''
         Fetches planned route IDs from the Localization microservice based on city ID.
     '''
+    query_params = None
     if request_data.city_ids is not None:
         query_params = {'city_id': request_data.city_ids}
 
@@ -473,14 +474,14 @@ async def _fetch_single_service_id_from_planning(
 
     response.raise_for_status()
     data = response.json()
-    
+
     if not isinstance(data, list) or not data:
         return None
 
     for planning_header in data:
-        
+
         details = planning_header.get('details', [])
-        
+
         for detail in details:
             if detail.get('planned_route_id') == planned_route_id:
                 return detail.get('service_id')
@@ -520,7 +521,7 @@ async def generate_contacts_by_route_report(
 
     # 3. Lógica para obtener el service_id para enriquecimiento
     service_id_to_enrich = None
-    
+
     if request_data.planned_route_id:
         service_id_to_enrich = await _fetch_single_service_id_from_planning(
             planned_route_id = request_data.planned_route_id,
@@ -562,13 +563,13 @@ async def generate_contacts_by_route_report(
 
     # 5. Enriquecer la respuesta
     enriched_responses = []
-    
+
     for form_response in results:
         response_schema = FormResponseDetailResponse.model_validate(form_response)
-        
+
         updated_response = response_schema.model_copy(
             update={'service_id': service_id_to_enrich}
         )
         enriched_responses.append(updated_response)
-    
+
     return enriched_responses

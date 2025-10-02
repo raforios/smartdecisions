@@ -591,9 +591,8 @@ async def delete_person(
         Deletes a person record by ID.
     '''
     result = await delete_person_logic(db, person_id)
-    
+
     return {
         'message': f'Person with ID: {person_id} deleted successfully.',
         'id': result
     }
-
