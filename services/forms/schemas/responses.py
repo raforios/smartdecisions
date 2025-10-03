@@ -76,6 +76,7 @@ class PersonUpdate(BaseModel):
     affiliation_user_id: Optional[int] = None
     observations: Optional[str] = None
     is_referred: Optional[bool] = None
+    is_affiliated: Optional[bool] = None
     referred_note: Optional[str] = None
 
 class PersonResponse(PersonBase):
