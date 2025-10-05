@@ -12,9 +12,10 @@ HANDLER="main.handler"
 RUNTIME="python3.13"
 POLICIES=(
     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole" # AÑADIDO: Política para RDS/VPC (Punto 1)
     "arn:aws:iam::aws:policy/AmazonS3FullAccess" 
     "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
-    "arn:aws:iam::aws:policy/AmazonSQSFullAccess"
+    # ELIMINADO: "arn:aws:iam::aws:policy/AmazonSQSFullAccess" (Punto 2)
 )
 
 # --- Validación de Argumentos y Carga de Configuración ---
@@ -24,7 +25,7 @@ SERVICE_PATH=""
 DESTROY_MODE=false
 SKIP_TABLE_CREATION=false
 SKIP_CODE_UPDATE=false
-ENABLE_SQS=false
+# ELIMINADO: ENABLE_SQS=false (Punto 3)
 
 # Parsear argumentos
 while [[ "$#" -gt 0 ]]; do
@@ -42,9 +43,9 @@ while [[ "$#" -gt 0 ]]; do
         --skip-code-update)
             SKIP_CODE_UPDATE=true
             ;;
-        --enable-sqs)
-            ENABLE_SQS=true
-            ;;
+        # ELIMINADO: --enable-sqs) (Punto 3)
+        # ELIMINADO:     ENABLE_SQS=true (Punto 3)
+        # ELIMINADO:     ;; (Punto 3)
         *)
             echo "Uso: $0 --path <ruta_al_microservicio> [--destroy] [--skip-table-creation] [--skip-code-update]"
             echo "Ejemplo: $0 --path /Users/rafael/Work/projects/back/SmartBear/services/files"
@@ -129,75 +130,19 @@ destroy_resources() {
     local DYNAMODB_POLICY_NAME="DynamoDB${DYNAMODB_TABLE_NAME}AccessPolicy"
     local DYNAMODB_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${DYNAMODB_POLICY_NAME}"
 
-    echo "Eliminando permiso de invocación de API Gateway a Lambda..."
+    # ELIMINADO: Lógica para eliminar permiso de invocación de API Gateway a Lambda (Punto 4)
 
-    STATEMENT_ID="apigateway-v2-invoke-$FUNCTION_NAME"
-    aws lambda remove-permission \
-        --function-name "$FUNCTION_NAME" \
-        --statement-id "$STATEMENT_ID" \
-        --region "$REGION" \
-        --profile "$PROFILE" 2>/dev/null || echo "Permiso '$STATEMENT_ID' no encontrado o ya eliminado."
+    # ELIMINADO: Lógica para eliminar cola SQS y mapeo de eventos (Punto 4)
 
-    echo "Eliminando cola SQS y mapeo de eventos..."
-    local SQS_QUEUE_NAME="${FUNCTION_NAME}-requests-queue"
-    local SQS_QUEUE_URL=""
-    # Intentar obtener la URL de la cola, si no existe, el comando fallará pero el '|| true' lo ignora.
-    SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name "$SQS_QUEUE_NAME" --query 'QueueUrl' --output text --region "$REGION" --profile "$PROFILE" 2>/dev/null || true)
-
-    if [ -n "$SQS_QUEUE_URL" ]; then
-        echo "Eliminando mapeo de origen de eventos SQS para Lambda '$FUNCTION_NAME'..."
-        local SQS_QUEUE_ARN="arn:aws:sqs:${REGION}:${ACCOUNT_ID}:${SQS_QUEUE_NAME}"
-        EXISTING_MAPPING_UUID=$(aws lambda list-event-source-mappings \
-            --function-name "$FUNCTION_NAME" \
-            --event-source-arn "$SQS_QUEUE_ARN" \
-            --query 'EventSourceMappings[0].UUID' \
-            --output text \
-            --region "$REGION" \
-            --profile "$PROFILE" 2>/dev/null || echo "Permiso '$SQS_QUEUE_URL' no encontrado o ya eliminado.")
-        
-        if [ -n "$EXISTING_MAPPING_UUID" ]; then
-            aws lambda delete-event-source-mapping --uuid "$EXISTING_MAPPING_UUID" --region "$REGION" --profile "$PROFILE" 2>/dev/null || true
-            echo "Mapeo de origen de eventos SQS (UUID: $EXISTING_MAPPING_UUID) eliminado."
-        else
-            echo "No se encontró mapeo de origen de eventos SQS para eliminar."
-        fi
-
-        echo "Eliminando cola SQS '$SQS_QUEUE_NAME'..."
-        aws sqs delete-queue --queue-url "$SQS_QUEUE_URL" --region "$REGION" --profile "$PROFILE" 2>/dev/null || true
-        echo "Cola '$SQS_QUEUE_NAME' eliminada."
-    else
-        echo "Cola SQS '$SQS_QUEUE_NAME' no encontrada para eliminar."
-    fi
-
-    echo "Eliminando permiso de invocación de SQS a Lambda..."
-    STATEMENT_ID_SQS="SQSInvokeLambda"
-    aws lambda remove-permission \
-        --function-name "$FUNCTION_NAME" \
-        --statement-id "$STATEMENT_ID_SQS" \
-        --region "$REGION" \
-        --profile "$PROFILE" 2>/dev/null || echo "Permiso '$STATEMENT_ID_SQS' no encontrado o ya eliminado."
+    # ELIMINADO: Lógica para eliminar permiso de invocación de SQS a Lambda (Punto 4)
 
     echo "Eliminando función Lambda '$FUNCTION_NAME'..."
     aws lambda delete-function --function-name "$FUNCTION_NAME" --region "$REGION" --profile "$PROFILE" 2>/dev/null || true
 
-    echo "Eliminando API Gateway HTTP '$API_NAME'..."
-    API_ID=$(aws apigatewayv2 get-apis --region "$REGION" --profile "$PROFILE" --query "Items[?Name=='$API_NAME'].ApiId" --output text 2>/dev/null)
-    if [ -n "$API_ID" ]; then
-        echo "API Gateway ID: $API_ID. Eliminando..."
-        aws apigatewayv2 delete-api --api-id "$API_ID" --region "$REGION" --profile "$PROFILE" || echo "API Gateway '$API_NAME' no encontrada o ya eliminada."
-    else
-        echo "No se encontró ninguna API Gateway con el nombre '$API_NAME'."
-    fi
+    # ELIMINADO: Lógica para eliminar API Gateway HTTP '$API_NAME' (Punto 4)
+    # Se debe eliminar la lógica que usa $API_ID
 
-    # echo "Eliminando tabla DynamoDB '$DYNAMODB_TABLE_NAME'..."
-    # if aws dynamodb describe-table --table-name "$DYNAMODB_TABLE_NAME" --region "$REGION" --profile "$PROFILE" > /dev/null 2>&1; then
-    #     aws dynamodb delete-table --table-name "$DYNAMODB_TABLE_NAME" --region "$REGION" --profile "$PROFILE" || echo "Error al eliminar la tabla DynamoDB '$DYNAMODB_TABLE_NAME'."
-    #     echo "Esperando que la tabla '$DYNAMODB_TABLE_NAME' sea eliminada..."
-    #     aws dynamodb wait table-not-exists --table-name "$DYNAMODB_TABLE_NAME" --region "$REGION" --profile "$PROFILE" || true # Permitir que no falle si la tabla no existe al esperar
-    # else
-    #     echo "Tabla DynamoDB '$DYNAMODB_TABLE_NAME' no encontrada, no es necesario eliminarla."
-    # fi
-
+    # Lógica de eliminación de políticas y rol IAM
     # Primero, desadjuntar la política personalizada de DynamoDB si existe
     if aws iam list-attached-role-policies --role-name "$ROLE_NAME" --query "AttachedPolicies[?PolicyName=='$DYNAMODB_POLICY_NAME'].PolicyName" --output text --profile "$PROFILE" | grep -q "$DYNAMODB_POLICY_NAME"; then
         echo "Desadjuntando la política personalizada '$DYNAMODB_POLICY_NAME' del rol '$ROLE_NAME'..."
@@ -539,30 +484,8 @@ get_environment_variables() {
 # Se declara una variable global para las variables de entorno de Lambda.
 LAMBDA_ENV_VARS_JSON=$(get_environment_variables)
 
-# --- Creación y Gestión de SQS ---
-manage_sqs_queue() {
-    log_section "VERIFICANDO Y CREANDO COLA SQS: ${FUNCTION_NAME}-requests-queue"
-
-    local SQS_QUEUE_NAME="${FUNCTION_NAME}-requests-queue" # Nombre de la cola SQS
-    
-    local QUEUE_URL=""
-    QUEUE_URL=$(aws sqs get-queue-url --queue-name "$SQS_QUEUE_NAME" --query 'QueueUrl' --output text --region "$REGION" --profile "$PROFILE" 2>/dev/null || true)
-
-    if [ -z "$QUEUE_URL" ]; then
-        echo "Cola SQS '$SQS_QUEUE_NAME' no encontrada. Creando..."
-        aws sqs create-queue --queue-name "$SQS_QUEUE_NAME" --region "$REGION" --profile "$PROFILE" > /dev/null || { echo "Error: Falló la creación de la cola SQS '$SQS_QUEUE_NAME'."; exit 1; }
-        echo "Cola '$SQS_QUEUE_NAME' creada."
-        QUEUE_URL=$(aws sqs get-queue-url --queue-name "$SQS_QUEUE_NAME" --query 'QueueUrl' --output text --region "$REGION" --profile "$PROFILE")
-    else
-        echo "La cola '$SQS_QUEUE_NAME' ya existe. Continuando."
-    fi
-    echo "URL de la Cola SQS: $QUEUE_URL"
-    
-    # Exportar la URL de la cola para que esté disponible en otras funciones (ej. configure_lambda_permission)
-    export SQS_QUEUE_URL="$QUEUE_URL"
-    echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-    echo ""
-}
+# ELIMINADO: --- Creación y Gestión de SQS ---
+# ELIMINADO: manage_sqs_queue() { ... } (Punto 4)
 
 # --- Creación y Gestión de la Tabla DynamoDB ---
 manage_dynamodb_table() {
@@ -712,104 +635,12 @@ manage_lambda_function() {
         
 }
 
-# --- Creación o Vinculación de API Gateway HTTP ---
-manage_api_gateway() {
-    log_section "VERIFICANDO API GATEWAY HTTP: $API_NAME"
+# ELIMINADO: --- Creación o Vinculación de API Gateway HTTP ---
+# ELIMINADO: manage_api_gateway() { ... } (Punto 4)
 
-    API_ID=$(aws apigatewayv2 get-apis --region "$REGION" --profile "$PROFILE" \
-    --query "Items[?Name=='$API_NAME'].ApiId" --output text)
+# ELIMINADO: --- Permiso de Invocación API Gateway -> Lambda ---
+# ELIMINADO: configure_lambda_permission() { ... } (Punto 4)
 
-    ACCOUNT_ID=$(get_aws_account_id)
-
-    LAMBDA_ARN_TARGET="arn:aws:lambda:$REGION:$ACCOUNT_ID:function:$FUNCTION_NAME"
-
-    if [ -z "$API_ID" ]; then
-        echo "API Gateway HTTP no existente. Creando nueva API '$API_NAME' con target '$LAMBDA_ARN_TARGET'..."
-        API_ID=$(aws apigatewayv2 create-api \
-            --name "$API_NAME" \
-            --protocol-type HTTP \
-            --target "$LAMBDA_ARN_TARGET" \
-            --cors-configuration "AllowOrigins=[\"*\"],AllowMethods=[\"GET\",\"POST\",\"OPTIONS\",\"PUT\",\"DELETE\"],AllowHeaders=[\"*\"],MaxAge=86400" \
-            --region "$REGION" \
-            --profile "$PROFILE" \
-            --query 'ApiId' --output text) || { echo "Error: Falló la creación de la API Gateway HTTP."; exit 1; }
-        echo "API Gateway HTTP '$API_NAME' creada con ID: $API_ID."
-    else
-        echo "API Gateway HTTP existente con ID: $API_ID. "
-    fi
-    echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-    echo ""
-
-}
-
-# --- Permiso de Invocación API Gateway -> Lambda ---
-configure_lambda_permission() {
-    log_section "CONFIGURANDO PERMISOS DE INVOCACIÓN PARA LAMBDA DESDE API GATEWAY"
-
-    STATEMENT_ID="apigateway-v2-invoke-$FUNCTION_NAME"
-    SOURCE_ARN="arn:aws:execute-api:$REGION:$ACCOUNT_ID:$API_ID/*/*"
-
-    aws lambda add-permission \
-        --function-name "$FUNCTION_NAME" \
-        --statement-id "$STATEMENT_ID" \
-        --action "lambda:InvokeFunction" \
-        --principal "apigateway.amazonaws.com" \
-        --source-arn "$SOURCE_ARN" \
-        --profile "$PROFILE" \
-        --region "$REGION" || { echo "Advertencia: No se pudo añadir el permiso a Lambda. Puede que ya exista o haya un error. Continuando..."; }
-
-    echo "Permiso de invocación configurado con éxito."
-
-    if [[ "$ENABLE_SQS" == true ]]; then
-        echo "Configurando mapeo de origen de eventos SQS para Lambda '$FUNCTION_NAME'..."
-        # Se asume que SQS_QUEUE_URL ya ha sido exportado por manage_sqs_queue
-        if [ -z "$SQS_QUEUE_URL" ]; then
-            echo "Error: SQS_QUEUE_URL no está definida. La cola SQS no pudo ser creada o obtenida."
-            exit 1
-        fi
-        local SQS_QUEUE_NAME="${FUNCTION_NAME}-requests-queue"
-        local SQS_QUEUE_ARN="arn:aws:sqs:${REGION}:${ACCOUNT_ID}:${SQS_QUEUE_NAME}"
-
-        # Verificar si ya existe un mapeo para esta cola
-        local EXISTING_MAPPING=$(aws lambda list-event-source-mappings \
-            --function-name "$FUNCTION_NAME" \
-            --event-source-arn "$SQS_QUEUE_ARN" \
-            --query 'EventSourceMappings[0].UUID' \
-            --output text \
-            --region "$REGION" \
-            --profile "$PROFILE" 2>/dev/null || true)
-
-        if [ -z "$EXISTING_MAPPING" ]; then
-            aws lambda create-event-source-mapping \
-                --function-name "$FUNCTION_NAME" \
-                --event-source-arn "$SQS_QUEUE_ARN" \
-                --batch-size 1 \
-                --profile "$PROFILE" \
-                --region "$REGION" > /dev/null || { echo "Error: Falló la creación del mapeo de origen de eventos SQS."; exit 1; }
-            echo "Mapeo de origen de eventos SQS añadido."
-        else
-            echo "Mapeo de origen de eventos SQS ya existe (UUID: $EXISTING_MAPPING). Saltando creación."
-        fi
-        
-        # La política de invocación para el trigger de SQS
-        STATEMENT_ID_SQS="SQSInvokeLambda"
-        if ! aws lambda get-policy --function-name "$FUNCTION_NAME" --region "$REGION" --profile "$PROFILE" | grep -q "$STATEMENT_ID_SQS"; then
-            aws lambda add-permission \
-                --function-name "$FUNCTION_NAME" \
-                --statement-id "$STATEMENT_ID_SQS" \
-                --action lambda:InvokeFunction \
-                --principal sqs.amazonaws.com \
-                --source-arn "$SQS_QUEUE_ARN" \
-                --profile "$PROFILE" \
-                --region "$REGION" > /dev/null || { echo "Error: Falló al añadir el permiso de SQS a Lambda."; exit 1; }
-            echo "Permiso de invocación de SQS añadido."
-        else
-            echo "Permiso de invocación de SQS ya existe."
-        fi
-    fi
-    echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-    echo ""
-}
 
 # --- Flujo Principal de Despliegue ---
 main_deploy_flow() {
@@ -831,23 +662,10 @@ main_deploy_flow() {
         echo "Saltando la creación/verificación de la tabla DynamoDB (--skip-table-creation activado)."
     fi
 
-    # Paso 4: Gestión de la Cola SQS (opcional, solo si ENABLE_SQS es true)
-    if [[ "$ENABLE_SQS" == true ]]; then
-        manage_sqs_queue
-    else
-        echo "Saltando la creación/verificación de la cola SQS (--enable-sqs no activado)."
-    fi
-
-    # Paso 5: Gestión de la Función Lambda
+    # Paso 4: Gestión de la Función Lambda
     manage_lambda_function
 
-    # Paso 6: Gestión de API Gateway (siempre necesario)
-    manage_api_gateway
-
-    # Paso 7: Configuración de Permisos (siempre necesario)
-    configure_lambda_permission
-
-    # Paso 8: Limpieza del ZIP local (condicional)
+    # Paso 5: Limpieza del ZIP local (condicional)
     if [[ "$SKIP_CODE_UPDATE" == false ]]; then
         echo "Eliminando archivo ZIP local '$ZIP_FILE'..."
         rm -f "./$ZIP_FILE" 2>/dev/null || true
@@ -860,13 +678,5 @@ main_deploy_flow
 
 # --- Mostrar URL Pública Final ---
 log_section "DESPLIEGUE COMPLETADO CON ÉXITO."
-echo "URL pública de la API disponible:"
-# Verificar que API_ID y ACCOUNT_ID tengan valores antes de imprimir
-if [ -n "$API_ID" ] && [ -n "$ACCOUNT_ID" ]; then
-    echo "https://${API_ID}.execute-api.${REGION}.amazonaws.com/"
-else
-    echo "Advertencia: No se pudo obtener la URL completa de la API. API_ID o ACCOUNT_ID no están disponibles."
-    echo "API_ID: $API_ID"
-    echo "ACCOUNT_ID: $ACCOUNT_ID"
-fi
+echo "La función Lambda '$FUNCTION_NAME' está desplegada y lista para ser integrada en un API Gateway centralizado."
 echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"

@@ -35,3 +35,6 @@ logs/*.log
 
 # macOS
 .DS_Store
+
+# PEM files
+*.pem
