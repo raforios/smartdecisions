@@ -17,7 +17,7 @@ TABLES=(
 )
 
 REGION="us-east-1" # Asegúrate de que esta sea tu región de AWS
-
+PROFILE="deploy_binaria"
 # --- Bucle para crear las tablas ---
 echo "Iniciando la gestión de tablas de DynamoDB..."
 
@@ -28,7 +28,7 @@ for table_config in "${TABLES[@]}"; do
     echo "Verificando tabla: '$TABLE_NAME'..."
 
     # Verifica si la tabla ya existe
-    if aws dynamodb describe-table --table-name "$TABLE_NAME" --region "$REGION" &>/dev/null; then
+    if aws dynamodb describe-table --table-name "$TABLE_NAME" --region "$REGION" --profile "$PROFILE" &>/dev/null; then
         echo "Tabla '$TABLE_NAME' ya existe. Saltando la creación."
     else
         echo "Tabla '$TABLE_NAME' no encontrada. Creándola..."
@@ -37,10 +37,11 @@ for table_config in "${TABLES[@]}"; do
             --attribute-definitions AttributeName="$PRIMARY_KEY_NAME",AttributeType="$PRIMARY_KEY_TYPE" \
             --key-schema AttributeName="$PRIMARY_KEY_NAME",KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-            --region "$REGION"
+            --region "$REGION" \
+            --profile "$PROFILE"
         
         echo "Esperando a que la tabla '$TABLE_NAME' esté activa..."
-        aws dynamodb wait table-exists --table-name "$TABLE_NAME" --region "$REGION"
+        aws dynamodb wait table-exists --table-name "$TABLE_NAME" --region "$REGION" --profile "$PROFILE"
         echo "Tabla '$TABLE_NAME' creada y activa."
     fi
 done

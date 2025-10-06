@@ -12,10 +12,9 @@ HANDLER="main.handler"
 RUNTIME="python3.13"
 POLICIES=(
     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 
-    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole" # AÑADIDO: Política para RDS/VPC (Punto 1)
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
     "arn:aws:iam::aws:policy/AmazonS3FullAccess" 
     "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
-    # ELIMINADO: "arn:aws:iam::aws:policy/AmazonSQSFullAccess" (Punto 2)
 )
 
 # --- Validación de Argumentos y Carga de Configuración ---
@@ -25,7 +24,6 @@ SERVICE_PATH=""
 DESTROY_MODE=false
 SKIP_TABLE_CREATION=false
 SKIP_CODE_UPDATE=false
-# ELIMINADO: ENABLE_SQS=false (Punto 3)
 
 # Parsear argumentos
 while [[ "$#" -gt 0 ]]; do
@@ -43,9 +41,6 @@ while [[ "$#" -gt 0 ]]; do
         --skip-code-update)
             SKIP_CODE_UPDATE=true
             ;;
-        # ELIMINADO: --enable-sqs) (Punto 3)
-        # ELIMINADO:     ENABLE_SQS=true (Punto 3)
-        # ELIMINADO:     ;; (Punto 3)
         *)
             echo "Uso: $0 --path <ruta_al_microservicio> [--destroy] [--skip-table-creation] [--skip-code-update]"
             echo "Ejemplo: $0 --path /Users/rafael/Work/projects/back/SmartBear/services/files"
@@ -130,17 +125,8 @@ destroy_resources() {
     local DYNAMODB_POLICY_NAME="DynamoDB${DYNAMODB_TABLE_NAME}AccessPolicy"
     local DYNAMODB_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${DYNAMODB_POLICY_NAME}"
 
-    # ELIMINADO: Lógica para eliminar permiso de invocación de API Gateway a Lambda (Punto 4)
-
-    # ELIMINADO: Lógica para eliminar cola SQS y mapeo de eventos (Punto 4)
-
-    # ELIMINADO: Lógica para eliminar permiso de invocación de SQS a Lambda (Punto 4)
-
     echo "Eliminando función Lambda '$FUNCTION_NAME'..."
     aws lambda delete-function --function-name "$FUNCTION_NAME" --region "$REGION" --profile "$PROFILE" 2>/dev/null || true
-
-    # ELIMINADO: Lógica para eliminar API Gateway HTTP '$API_NAME' (Punto 4)
-    # Se debe eliminar la lógica que usa $API_ID
 
     # Lógica de eliminación de políticas y rol IAM
     # Primero, desadjuntar la política personalizada de DynamoDB si existe
@@ -484,9 +470,6 @@ get_environment_variables() {
 # Se declara una variable global para las variables de entorno de Lambda.
 LAMBDA_ENV_VARS_JSON=$(get_environment_variables)
 
-# ELIMINADO: --- Creación y Gestión de SQS ---
-# ELIMINADO: manage_sqs_queue() { ... } (Punto 4)
-
 # --- Creación y Gestión de la Tabla DynamoDB ---
 manage_dynamodb_table() {
     log_section "VERIFICANDO Y CREANDO TABLA DYNAMODB '$DYNAMODB_TABLE_NAME'"
@@ -570,6 +553,17 @@ manage_lambda_function() {
         env_args="--environment $LAMBDA_ENV_VARS_JSON"
     fi
 
+    # Lógica de Configuración VPC (RESTAURADA)
+    local vpc_config_args=""
+    if [ -n "$VPC_ID" ] && [ -n "$PRIVATE_SUBNET_IDS" ] && [ -n "$INTERNAL_SG_ID" ]; then
+        echo "Configuración VPC detectada. La función se desplegará en la red privada para acceder a RDS/MySQL."
+        vpc_config_args="--vpc-config SubnetIds=$PRIVATE_SUBNET_IDS,SecurityGroupIds=$INTERNAL_SG_ID"
+    else
+        echo "Advertencia: Las variables de 'Configuración VPC' (VPC_ID, PRIVATE_SUBNET_IDS, INTERNAL_SG_ID) no están completamente configuradas."
+        echo "La función Lambda se desplegará sin acceso a la VPC."
+    fi
+    # Fin de Lógica de Configuración VPC
+
     if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$REGION" --profile "$PROFILE" > /dev/null 2>&1; then
         echo "Función Lambda existente. Actualizando código y configuración de '$FUNCTION_NAME'..."
 
@@ -603,6 +597,7 @@ manage_lambda_function() {
             --role "$ROLE_ARN" \
             --region "$REGION" \
             --profile "$PROFILE" \
+            $vpc_config_args \
             $env_args || { echo "Error: Falló la actualización de la configuración de Lambda."; exit 1; }
 
         echo "Función Lambda '$FUNCTION_NAME' actualizada con éxito."
@@ -619,6 +614,7 @@ manage_lambda_function() {
             --memory-size "$MEMORY_SIZE" \
             --region "$REGION" \
             --profile "$PROFILE" \
+            $vpc_config_args \
             $env_args || { echo "Error: Falló la creación de la Lambda '$FUNCTION_NAME'."; exit 1; }
         
         echo "Esperando que la función Lambda '$FUNCTION_NAME' esté activa después de la creación..."
@@ -634,13 +630,6 @@ manage_lambda_function() {
     echo ""
         
 }
-
-# ELIMINADO: --- Creación o Vinculación de API Gateway HTTP ---
-# ELIMINADO: manage_api_gateway() { ... } (Punto 4)
-
-# ELIMINADO: --- Permiso de Invocación API Gateway -> Lambda ---
-# ELIMINADO: configure_lambda_permission() { ... } (Punto 4)
-
 
 # --- Flujo Principal de Despliegue ---
 main_deploy_flow() {
