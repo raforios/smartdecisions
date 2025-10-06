@@ -445,7 +445,7 @@ get_environment_variables() {
                 fi
                 
                 # Añadir el par clave-valor
-                env_string+="$key=$escaped_value"
+                env_string+="$key=\"$escaped_value\""
                 first_pair=false
 
             fi
@@ -453,6 +453,8 @@ get_environment_variables() {
 
         # Formato esperado por --environment "Variables={...}"
         env_string="Variables={$env_string}" 
+        env_string=$(echo "$env_string" | tr -d '\n\r')
+
         echo "Variables de entorno procesadas para Lambda: $env_string" >&2
 
     else
@@ -462,8 +464,6 @@ get_environment_variables() {
     echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" >&2
     echo "" >&2 # Redirigir a stderr
 
-    # echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-    # echo ""
     echo "$env_string" # Devuelve el JSON
 }
 
@@ -481,9 +481,9 @@ manage_dynamodb_table() {
 
     # Si TTL está habilitado, añadimos su atributo a las AttributeDefinitions
     # Asumimos que el atributo TTL siempre es de tipo Número (N) para timestamp Unix
-    if [[ "$DYNAMODB_TTL_ENABLED" == "true" ]]; then
-        LOCAL_ATTR_DEFS="${LOCAL_ATTR_DEFS} AttributeName=${DYNAMODB_TTL_ATTRIBUTE_NAME},AttributeType=N"
-    fi
+    # if [[ "$DYNAMODB_TTL_ENABLED" == "true" ]]; then
+    #     LOCAL_ATTR_DEFS="${LOCAL_ATTR_DEFS} AttributeName=${DYNAMODB_TTL_ATTRIBUTE_NAME},AttributeType=N"
+    # fi
 
     if aws dynamodb describe-table --table-name "$DYNAMODB_TABLE_NAME" --region "$REGION" --profile "$PROFILE" > /dev/null 2>&1; then
         echo "Tabla DynamoDB '$DYNAMODB_TABLE_NAME' ya existe. Saltando creación."
