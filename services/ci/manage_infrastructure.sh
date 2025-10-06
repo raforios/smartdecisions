@@ -133,7 +133,7 @@ run_setup() {
     # 4. 'Configuración de API Gateway'
     echo "Paso 4/4: 'Ejecutando setup_api_gateway.sh' (API Gateway Único, Integraciones)..."
     # El usuario lo dejó comentado, lo mantenemos así para el despliegue de Lambdas:
-    # ./setup_api_gateway.sh
+    ./setup_api_gateway.sh
 
     log_section "CREACIÓN DE TODA LA INFRAESTRUCTURA COMPLETADA"
 }

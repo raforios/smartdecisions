@@ -18,14 +18,8 @@ API_SERVICE_ROLE_NAME="ApiGatewayLambdaInvocationRole" # Nombre fijo del rol de 
 ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text --region "$REGION")
 
 # --- Mapeo Dinámico de Microservicios ---
-declare -A MICROSERVICES
 IFS=',' read -r -a MS_ARRAY <<< "$MICROSERVICES_LIST"
 
-for entry in "${MS_ARRAY[@]}"; do
-    # Formato: funcion_nombre:/ruta_api
-    IFS=':' read -r FUNC_NAME API_PATH <<< "$entry"
-    MICROSERVICES["$FUNC_NAME"]="$API_PATH"
-done
 
 # --- Funciones de Utilidad ---
 
@@ -57,9 +51,6 @@ manage_api_service_role() {
     
     if [ -z "$API_SERVICE_ROLE_ARN" ]; then
         echo "Creando 'Rol de Servicio API Gateway': $API_SERVICE_ROLE_NAME..."
-        
-        # ... (Resto de la lógica de creación de rol y adjuntar política) ...
-        # (Se mantiene la lógica original, asegurando que $REGION y $ACCOUNT_ID se usen en el policy document)
         
         # 2. 'Crear' el trust policy JSON
         TRUST_POLICY_JSON=$(cat <<EOF
@@ -173,7 +164,6 @@ configure_microservice() {
         return 1
     fi
     
-    # ... (Resto de la lógica para crear Resource, Method e Integration, que ya usa las variables dinámicas como $API_ID, $REGION, $API_SERVICE_ROLE_ARN, etc.) ...
     local INTEGRATION_URI="arn:aws:apigateway:$REGION:lambda:path/2015-03-31/functions/$LAMBDA_ARN/invocations"
 
     # 2. 'Crear' Recurso (e.g., /auth, /files)
@@ -265,10 +255,10 @@ deploy_api_stage() {
     echo "--------------------------------------------------------------------------------"
     echo "Endpoints de Microservicios:"
     
-    # Imprimir la lista final de endpoints
-    for function_name in "${!MICROSERVICES[@]}"; do
-        local api_path="${MICROSERVICES[$function_name]}"
-        echo " - MS $function_name: $API_URL$api_path"
+    # MODIFICADO: Ahora itera sobre el array simple MS_ARRAY y parsea los valores.
+    for entry in "${MS_ARRAY[@]}"; do
+        IFS=':' read -r FUNC_NAME API_PATH <<< "$entry"
+        echo " - MS $FUNC_NAME: $API_URL$API_PATH"
     done
 }
 
@@ -282,8 +272,10 @@ manage_api_service_role
 manage_api_gateway
 
 # 3. 'Configurar' cada microservicio (Recurso, Método, Integración, Permiso)
-for function_name in "${!MICROSERVICES[@]}"; do
-    configure_microservice "$function_name" "${MICROSERVICES[$function_name]}"
+# Iteramos sobre el array simple MS_ARRAY y parseamos en el bucle.
+for entry in "${MS_ARRAY[@]}"; do
+    IFS=':' read -r FUNC_NAME API_PATH <<< "$entry"
+    configure_microservice "$FUNC_NAME" "$API_PATH"
 done
 
 # 4. 'Desplegar' la API
