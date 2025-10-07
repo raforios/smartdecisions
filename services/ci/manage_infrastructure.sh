@@ -191,4 +191,3 @@ case "$COMMAND" in
         exit 1
         ;;
 esac 
-# El archivo debe terminar inmediatamente después de 'esac' sin saltos de línea adicionales.
