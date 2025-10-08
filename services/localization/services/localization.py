@@ -9,8 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc, func
 from services.exceptions import (
     RegisterNotFoundError,
-    RegisterAlreadyExistsError,
-    InvalidInputError
+    RegisterAlreadyExistsError, InvalidInputError
 )
 from services.logger_config import custom_logger as logger
 from services.crud import (
@@ -26,22 +25,14 @@ from models.localization import (
     ExecutedRoute, ExecutedPoint
 )
 from schemas.localization import (
-    AttendanceCreateSchema,
-    ExecutedRouteComparisonSchema,
-    PlannedPointUpdateSchema,
-    PlannedRouteBulkCreateSchema,
-    PlannedRouteComparisonSchema,
-    PlannedRouteCreateSchema,
-    PlannedRouteFilterSchema,
-    PlannedRouteStatusEnum,
-    PlannedRouteUpdateSchema,
-    PlannedRouteUpdateStatusSchema,
-    AttendanceUpdateSchema,
-    ExecutedRouteUpdateSchema,
-    ExecutedRouteCreateSchema,
-    ExecutedPointCreateSchema,
-    PlannedPointCreateSchema,
-    RouteComparisonFullResponseSchema
+    AttendanceCreateSchema, ExecutedRouteComparisonSchema,
+    PlannedPointUpdateSchema, PlannedRouteBulkCreateSchema,
+    PlannedRouteComparisonSchema, PlannedRouteCreateSchema,
+    PlannedRouteFilterSchema, PlannedRouteStatusEnum,
+    PlannedRouteUpdateSchema, PlannedRouteUpdateStatusSchema,
+    AttendanceUpdateSchema, ExecutedRouteUpdateSchema,
+    ExecutedRouteCreateSchema, ExecutedPointCreateSchema,
+    PlannedPointCreateSchema, RouteComparisonFullResponseSchema
 )
 
 # Geofencing Parameters
@@ -152,6 +143,14 @@ async def _perform_atomic_db_insertion_for_localization(
     '''
         Performs atomic database insertion for planned routes and points.
     '''
+    point_fields = {
+        'point_name', 
+        'secuencial', 
+        'latitude', 
+        'longitude', 
+        'reference_data'
+    }
+
     routes_created = 0
     points_created = 0
     with db.begin_nested():
@@ -174,7 +173,10 @@ async def _perform_atomic_db_insertion_for_localization(
             db.add(planned_route)
             db.flush()
             details = [
-                PlannedPoint(planned_route_id = planned_route.id, **detail)
+                PlannedPoint(
+                    planned_route_id = planned_route.id,
+                    **{k: v for k, v in detail.items() if k in point_fields}
+                )
                 for detail in data['points_data']
             ]
             db.add_all(details)

@@ -378,7 +378,7 @@ class PlannedRouteBulkCreateSchema(BaseModel):
     '''
     route_name: str = Field(..., max_length = 150)
     route_code: str = Field(..., max_length = 50)
-    description: str = Field(..., max_length = 1000)
+    description: Optional[str] = Field(None, max_length = 1000)
     company_id: int
     app_id: int
     city_id: int

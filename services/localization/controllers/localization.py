@@ -478,6 +478,7 @@ async def bulk_upload_planned_routes_controller(
 
     start_time = time.perf_counter()
     status_code = 201
+    result: Dict[str, Any] = {}
 
     try:
         result = await bulk_create_planned_routes(
