@@ -16,7 +16,9 @@ from services.environment import load_and_validate_env_vars
 ENV_VARS = load_and_validate_env_vars(
     {
         'DYNAMODB_REGION': str,
-        'DYNAMODB_TABLE_NAME': str,
+        'DYNAMODB_TABLE_NAME': str
+    },
+    optional_env_vars = {
         'DYNAMODB_ENDPOINT_URL': str
     }
 )
