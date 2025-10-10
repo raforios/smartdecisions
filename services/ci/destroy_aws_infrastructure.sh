@@ -250,6 +250,8 @@ destroy_network_resources() {
         aws ec2 delete-security-group --group-id "$SG_ID" --region "$REGION" 2>/dev/null || echo "Advertencia: El SG $SG_ID aún no pudo ser eliminado. Reintente si es necesario."
     done
 
+    sleep 40
+
     # 5. Eliminar Subredes
     local SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Project,Values=$PROJECT_TAG" --query 'Subnets[].SubnetId' --output text --region "$REGION" || true)
     for SUBNET_ID in $SUBNET_IDS; do
@@ -257,6 +259,8 @@ destroy_network_resources() {
         aws ec2 delete-subnet --subnet-id "$SUBNET_ID" --region "$REGION"
     done
 
+    sleep 30
+    
     # 6. Desasociar y Eliminar Internet Gateway
     # CRÍTICO: Capturamos el ID y limpiamos el output para evitar "None"
     local IGW_ID=$(aws ec2 describe-internet-gateways \

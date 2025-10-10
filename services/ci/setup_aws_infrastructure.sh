@@ -11,14 +11,16 @@ set -o pipefail # Terminar si un comando en un pipeline falla.
 : ${VPC_CIDR:?"Error: VPC_CIDR no está configurada en el entorno."}
 : ${PROJECT_TAG:?"Error: PROJECT_TAG no está configurada en el entorno."}
 
-# --- Configuración Derivada ---
+# --- Configuración Derivada (AÑADIDAS AZ C y AZ D) ---
 AZ_A="${REGION}a"
 AZ_B="${REGION}b"
+AZ_C="${REGION}c" # Nueva AZ para aumentar capacidad RDS
+AZ_D="${REGION}d" # Nueva AZ para aumentar capacidad RDS
 
 # Nombres de recursos dinámicos
 VPC_NAME="${PROJECT_TAG}-VPC"
 INTERNAL_SG_NAME="${PROJECT_TAG}-lambda-to-rds-sg"
-RDS_SG_NAME="${PROJECT_TAG}-rds-mysql-sg" # Mantenido para futura creación manual de RDS
+RDS_SG_NAME="${PROJECT_TAG}-rds-mysql-sg"
 PUBLIC_SG_NAME="${PROJECT_TAG}-ec2-public-sg"
 
 # --- Derivación de CIDR de Subredes (Lógica Interna) ---
@@ -30,8 +32,11 @@ PUBLIC_SUBNET_A_CIDR="${VPC_BASE_PREFIX}.1.0/24"
 PUBLIC_SUBNET_B_CIDR="${VPC_BASE_PREFIX}.2.0/24"
 PRIVATE_SUBNET_A_CIDR="${VPC_BASE_PREFIX}.10.0/24"
 PRIVATE_SUBNET_B_CIDR="${VPC_BASE_PREFIX}.11.0/24"
+# CIDRS ADICIONALES PARA MÁS CAPACIDAD RDS
+PRIVATE_SUBNET_C_CIDR="${VPC_BASE_PREFIX}.12.0/24" 
+PRIVATE_SUBNET_D_CIDR="${VPC_BASE_PREFIX}.13.0/24"
 
-# --- Funciones de Utilidad (get_public_ip, get_resource_id, log_section) ---
+# --- Funciones de Utilidad (sin cambios) ---
 
 log_section() {
     echo ""
@@ -91,6 +96,7 @@ get_resource_id() {
 # --- Funciones Principales ---
 
 manage_vpc() {
+# (Sin cambios, tu lógica es correcta aquí)
     log_section "CONFIGURACIÓN DE VPC Y GATEWAY DE INTERNET"
 
     VPC_ID=$(get_resource_id "vpc" "$VPC_NAME")
@@ -151,18 +157,20 @@ manage_vpc() {
     fi
 
     export VPC_ID
-
 }
 
 manage_subnets() {
     log_section "CREACIÓN DE SUBREDES"
 
     # Definir array de subredes: "NombreDescriptivo:CIDR:AZ:Tipo"
+    # AÑADIDAS PRIVATE-C Y PRIVATE-D PARA MAYOR CAPACIDAD RDS
     SUBNET_CONFIG=(
         "Public-A:${PUBLIC_SUBNET_A_CIDR}:${AZ_A}:Public"
         "Public-B:${PUBLIC_SUBNET_B_CIDR}:${AZ_B}:Public"
         "Private-A:${PRIVATE_SUBNET_A_CIDR}:${AZ_A}:Private"
         "Private-B:${PRIVATE_SUBNET_B_CIDR}:${AZ_B}:Private"
+        "Private-C:${PRIVATE_SUBNET_C_CIDR}:${AZ_C}:Private"
+        "Private-D:${PRIVATE_SUBNET_D_CIDR}:${AZ_D}:Private"
     )
 
     PUBLIC_SUBNETS=()
@@ -184,35 +192,29 @@ manage_subnets() {
                 --output text \
                 --region "$REGION")
 
-            # Aplica etiquetas básicas (Name, Project)
             aws ec2 create-tags \
                 --resources "$SUBNET_ID" \
                 --tags Key=Name,Value="$SUBNET_TAG_NAME" Key=Project,Value="$PROJECT_TAG" \
-                --region "$REGION"
+                --region "$REGION" > /dev/null
 
             if [ "$TYPE" = "Public" ]; then
-                # Habilitar asignación automática de IP pública
                 aws ec2 modify-subnet-attribute \
                     --subnet-id "$SUBNET_ID" \
                     --map-public-ip-on-launch \
-                    --region "$REGION"
-
-                echo "Subnet '$SUBNET_TAG_NAME' creada con ID: $SUBNET_ID."
-            else
-                echo "Subnet '$SUBNET_TAG_NAME' creada con ID: $SUBNET_ID."
+                    --region "$REGION" > /dev/null
+                
+                echo "Asignación automática de IP pública habilitada en Subred '$SUBNET_TAG_NAME'."
             fi
             
         else
             echo "Subnet '$SUBNET_TAG_NAME' ya existe con ID: $SUBNET_ID."
         fi
 
-        # --- Etiqueta de convención para RDS DB Subnet Group (Necesaria para creación manual) ---
-        if [ "$TYPE" = "Private" ]; then
-            aws ec2 create-tags \
-                --resources "$SUBNET_ID" \
-                --tags Key=Purpose,Value=rds-db-subnet-group-tagging \
-                --region "$REGION" > /dev/null
-        fi
+        # --- Etiqueta de convención para RDS DB Subnet Group (CRÍTICO para que RDS acepte las subredes) ---
+        aws ec2 create-tags \
+            --resources "$SUBNET_ID" \
+            --tags Key=Purpose,Value=rds-db-subnet-group-tagging \
+            --region "$REGION" > /dev/null
 
         if [ "$TYPE" = "Public" ]; then
             PUBLIC_SUBNETS+=("$SUBNET_ID")
@@ -222,8 +224,10 @@ manage_subnets() {
     done
 
     # Exportar IDs de Subredes
-    export PUBLIC_SUBNET_IDS="${PUBLIC_SUBNETS[@]}"
-    export PRIVATE_SUBNET_IDS="${PRIVATE_SUBNETS[@]}"
+    # El uso de 'echo "${ARRAY[@]}"' convierte el array en una lista separada por espacios, 
+    # lo cual es útil para pasar a scripts posteriores.
+    export PUBLIC_SUBNET_IDS=$(echo "${PUBLIC_SUBNETS[@]}")
+    export PRIVATE_SUBNET_IDS=$(echo "${PRIVATE_SUBNETS[@]}")
     export PUBLIC_SUBNET_A="${PUBLIC_SUBNETS[0]}"
     export PRIVATE_SUBNET_A="${PRIVATE_SUBNETS[0]}"
 }
@@ -249,11 +253,36 @@ manage_route_tables() {
         # Añadir ruta a IGW
         aws ec2 create-route --route-table-id "$PUB_RTB_ID" --destination-cidr-block 0.0.0.0/0 --gateway-id "$IGW_ID" --region "$REGION" > /dev/null
         echo "Ruta a IGW añadida a RTB Pública."
+        echo "Esperando 10 segundos para que la ruta IGW se propague..."
+        sleep 10 
+
+        # 1. Obtener el ID de la asociación de la Tabla de Ruta Principal actual
+        local MAIN_RTB_ASSOC_ID=$(aws ec2 describe-route-tables \
+            --filters Name=vpc-id,Values="$VPC_ID" Name=association.main,Values=true \
+            --query 'RouteTables[0].Associations[0].RouteTableAssociationId' \
+            --output text --region "$REGION" | tr -d '\n')
+        
+        # 2. Reemplazar la asociación de la Tabla de Ruta Principal por nuestra RTB Pública
+        if [ -n "$MAIN_RTB_ASSOC_ID" ]; then
+            aws ec2 replace-route-table-association \
+                --association-id "$MAIN_RTB_ASSOC_ID" \
+                --route-table-id "$PUB_RTB_ID" \
+                --region "$REGION" > /dev/null
+            echo "RTB Pública '$PUB_RTB_NAME' reemplazó la Tabla de Ruta Principal (Main) de la VPC."
+        else
+            # Si no había una asociación principal (lo cual es raro), simplemente asociamos la nuestra
+            aws ec2 associate-route-table --route-table-id "$PUB_RTB_ID" --vpc-id "$VPC_ID" --region "$REGION" > /dev/null
+            echo "RTB Pública '$PUB_RTB_NAME' establecida como Tabla de Ruta Principal (Main) de la VPC."
+        fi
+        # ***************************************************************
+
+
     else
         echo "Tabla de Ruta Pública '$PUB_RTB_NAME' ya existe."
     fi
     
     # Asociar RTB Pública con Subredes Públicas
+    # NOTA: PUBLIC_SUBNET_IDS ahora es una cadena separada por espacios
     for subnet_id in $PUBLIC_SUBNET_IDS; do
         if aws ec2 describe-route-tables --route-table-id "$PUB_RTB_ID" --filters "Name=association.subnet-id,Values=$subnet_id" --query 'RouteTables[].Associations[].RouteTableAssociationId' --output text --region "$REGION" | grep -q 'rtbassoc'; then
             echo "RTB Pública ya asociada con Subred '$subnet_id'."
@@ -312,7 +341,8 @@ manage_route_tables() {
         echo "Tabla de Ruta Privada '$PRIV_RTB_NAME' ya existe."
     fi
     
-    # Asociar RTB Privada con Subredes Privadas
+    # Asociar RTB Privada con TODAS las Subredes Privadas (ahora hay 4)
+    # NOTA: PRIVATE_SUBNET_IDS ahora es una cadena separada por espacios
     for subnet_id in $PRIVATE_SUBNET_IDS; do
         if aws ec2 describe-route-tables --route-table-id "$PRIV_RTB_ID" --filters "Name=association.subnet-id,Values=$subnet_id" --query 'RouteTables[].Associations[].RouteTableAssociationId' --output text --region "$REGION" | grep -q 'rtbassoc'; then
             echo "RTB Privada ya asociada con Subred '$subnet_id'."
@@ -326,13 +356,14 @@ manage_route_tables() {
 }
 
 manage_private_endpoints() {
+# (Sin cambios, tu lógica es correcta aquí)
     log_section "CONFIGURACIÓN DE VPC ENDPOINTS"
     
     # ---------------------------------------------------------------------------------
     # 1. CONFIGURACIÓN DEL VPC ENDPOINT DE GATEWAY S3
     # ---------------------------------------------------------------------------------
     local S3_ENDPOINT_NAME="API_BINARIA-S3-Endpoint"
-    local PRIVATE_RTB_NAME="API_BINARIA-Private-RTB"
+    local PRIVATE_RTB_NAME="${PROJECT_TAG}-Private-RTB"
 
     local PRIVATE_RTB_ID=$(get_resource_id "rtb" "$PRIVATE_RTB_NAME")
 
@@ -447,6 +478,7 @@ manage_private_endpoints() {
 }
 
 manage_security_groups() {
+# (Sin cambios, tu lógica es correcta aquí)
     log_section "CONFIGURACIÓN DE GRUPOS DE SEGURIDAD (SG)"
 
     USER_PUBLIC_IP=$(get_public_ip)
@@ -600,12 +632,13 @@ manage_security_groups
 manage_route_tables
 manage_private_endpoints
 
+export SG_RDS_ID="$RDS_SG_ID"
 # --- Salida Final ---
 log_section "CREACIÓN DE INFRAESTRUCTURA CORE COMPLETADA"
 echo "VPC ID: $VPC_ID"
 echo "Internal Lambda SG ID: $INT_SG_ID (Usar en la configuración VPC de Lambda!)"
 echo "EC2 Public SG ID: $PUB_SG_ID"
-echo "Private Subnets for RDS/Lambda: $PRIVATE_SUBNET_IDS"
+echo "Private Subnets for RDS/Lambda: $PRIVATE_SUBNET_IDS (Ahora incluye C y D)"
 echo "--------------------------------------------------------------------------------"
 echo "NOTA: Los IDs de SG y Subredes Privadas son necesarios para la creación manual de RDS."
 echo "SG de RDS (Necesario para la creación manual): $RDS_SG_ID"

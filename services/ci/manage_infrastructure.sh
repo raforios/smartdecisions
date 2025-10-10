@@ -53,26 +53,29 @@ retrieve_and_update_config() {
     PUB_SG_ID=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=${PROJECT_TAG}-ec2-public-sg" --query 'SecurityGroups[0].GroupId' --output text --region $REGION)
     echo "Public SG ID (EC2): $PUB_SG_ID"
 
-    # 3. Recuperar IDs de Subredes Privadas (separados por coma)
-    # Filtramos por el tag 'Purpose=rds-db-subnet-group-tagging'
+    # 2.75. Recuperar SG ID de RDS
+    SG_RDS_ID=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=${PROJECT_TAG}-rds-mysql-sg" --query 'SecurityGroups[0].GroupId' --output text --region $REGION)
+    echo "SG de RDS: $SG_RDS_ID"
+
+    # 3. Recuperar IDs de Subredes Privadas (Usando un filtro más robusto por el Tag Name)
     PRIVATE_SUBNET_IDS=$(aws ec2 describe-subnets \
-        --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Purpose,Values=rds-db-subnet-group-tagging" \
-        --query 'Subnets[*].SubnetId' \
+        --filters "Name=vpc-id,Values=$VPC_ID" \
+        --query "Subnets[?starts_with(Tags[?Key=='Name'].Value|[0], '${PROJECT_TAG}-Subnet-Private')].SubnetId" \
         --output text \
         --region $REGION | tr '\t' ',')
-    echo "Private Subnet IDs: $PRIVATE_SUBNET_IDS"
-    
-    # 3.5. Recuperar ID de la Subred Pública A (Necesario para EC2)
-    # Buscamos la subred pública que esté en la AZ 'a' y tenga el nombre/tag correcto.
-    # Usamos 'Subnets[?Tags[?Key==`Name` && Value==`${PROJECT_TAG}-Subnet-Public-A`]].SubnetId'
-    # para una búsqueda más precisa por nombre completo y la zona de disponibilidad.
-    PUBLIC_SUBNET_A=$(aws ec2 describe-subnets \
-        --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=${PROJECT_TAG}-Subnet-Public-A" \
-        --query 'Subnets[0].SubnetId' \
-        --output text \
-        --region $REGION 2>/dev/null | tr -d '\n' | sed 's/None//g' | xargs)
-    echo "Public Subnet A ID: $PUBLIC_SUBNET_A"
+    echo "Private Subnet IDs (Lambda): $PRIVATE_SUBNET_IDS"
 
+    # 3.5. Recuperar IDs de Subredes Públicas (Usando un filtro más robusto por el Tag Name)
+    PUBLIC_SUBNET_IDS=$(aws ec2 describe-subnets \
+        --filters "Name=vpc-id,Values=$VPC_ID" \
+        --query "Subnets[?starts_with(Tags[?Key=='Name'].Value|[0], '${PROJECT_TAG}-Subnet-Public')].SubnetId" \
+        --output text \
+        --region $REGION | tr '\t' ',')
+    echo "Public Subnet IDs (RDS/EC2): $PUBLIC_SUBNET_IDS"
+    
+    # La variable PUBLIC_SUBNET_A sigue siendo necesaria para la creación del NAT Gateway
+    PUBLIC_SUBNET_A=$(echo "$PUBLIC_SUBNET_IDS" | cut -d',' -f1)
+    
     # 4. Omisión del RDS Endpoint (Creación manual)
     echo "NOTA: El endpoint RDS se establecerá como vacío."
     
@@ -89,8 +92,10 @@ retrieve_and_update_config() {
     # Reemplazar valores en el archivo usando sed (macOS/BSD sed -i.bak)
     sed -i.bak -e "s/^export VPC_ID=.*/export VPC_ID=\"$VPC_ID\"/" "$CONFIG_FILE"
     sed -i.bak -e "s/^export PRIVATE_SUBNET_IDS=.*/export PRIVATE_SUBNET_IDS=\"$PRIVATE_SUBNET_IDS\"/" "$CONFIG_FILE"
+    sed -i.bak -e "s/^export PUBLIC_SUBNET_IDS=.*/export PUBLIC_SUBNET_IDS=\"$PUBLIC_SUBNET_IDS\"/" "$CONFIG_FILE" # <--- ¡AÑADIR ESTA LÍNEA!
     sed -i.bak -e "s/^export INTERNAL_SG_ID=.*/export INTERNAL_SG_ID=\"$INTERNAL_SG_ID\"/" "$CONFIG_FILE"
     sed -i.bak -e "s/^export PUB_SG_ID=.*/export PUB_SG_ID=\"$PUB_SG_ID\"/" "$CONFIG_FILE"
+    sed -i.bak -e "s/^export SG_RDS_ID=.*/export SG_RDS_ID=\"$SG_RDS_ID\"/" "$CONFIG_FILE"
     sed -i.bak -e "s/^export PUBLIC_SUBNET_A=.*/export PUBLIC_SUBNET_A=\"$PUBLIC_SUBNET_A\"/" "$CONFIG_FILE"
     sed -i.bak -e "s/^export RDS_DB_ENDPOINT=.*/export RDS_DB_ENDPOINT=\"$DB_ENDPOINT\"/" "$CONFIG_FILE"
     # Eliminar el backup de sed

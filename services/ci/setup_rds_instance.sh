@@ -53,7 +53,10 @@ RDS_SUBNET_GROUP_NAME="${PROJECT_TAG_SAFE}-rds-subnet-group"
 DB_INSTANCE_ID="${PROJECT_TAG_SAFE}-mysql-db"
 
 # Limpiar la lista de subredes para asegurar un formato simple (espacios)
-PRIVATE_SUBNET_IDS=$(echo "$PRIVATE_SUBNET_IDS" | tr ',' ' ')
+# PRIVATE_SUBNET_IDS=$(echo "$PRIVATE_SUBNET_IDS" | tr ',' ' ')
+
+DB_SUBNET_LIST=$(echo "$PRIVATE_SUBNET_IDS" | tr ',' ' ' | xargs)
+echo "Usando Subredes Privadas: $DB_SUBNET_LIST para RDS Subnet Group." 
 
 # Configurar el perfil de AWS para esta sesión
 export AWS_DEFAULT_PROFILE="$AWS_PROFILE"
@@ -96,11 +99,11 @@ manage_rds_subnet_group() {
     if [ -z "$SUBNET_GROUP_EXISTS" ]; then
         echo "Grupo de Subredes '$RDS_SUBNET_GROUP_NAME' no encontrado. Creando..."
         
-        # ATENCIÓN: Pasar los IDs como una lista simple (espacios)
+        # CRÍTICO: Pasar los IDs como una lista simple (espacios) combinando públicas y privadas
         aws rds create-db-subnet-group \
             --db-subnet-group-name "$RDS_SUBNET_GROUP_NAME" \
-            --db-subnet-group-description "Subnet group for ${PROJECT_TAG} private RDS instance" \
-            --subnet-ids $PRIVATE_SUBNET_IDS \
+            --db-subnet-group-description "Subnet group for ${PROJECT_TAG} DB instance" \
+            --subnet-ids $DB_SUBNET_LIST \
             --tags Key=Project,Value="$PROJECT_TAG" \
             --region "$REGION"
 
@@ -110,9 +113,23 @@ manage_rds_subnet_group() {
     fi
 }
 
-# 'manage_rds_instance': Crea o verifica la instancia de base de datos RDS.
+# Crea o verifica la instancia de base de datos RDS.
 manage_rds_instance() {
     log_section "GESTIÓN DE LA INSTANCIA RDS MYSQL"
+    
+    # Recuperamos el ID del SG de RDS FRESH (el creado en el Paso 1)
+    SG_RDS_ID=$(aws ec2 describe-security-groups \
+        --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=API_BINARIA-rds-mysql-sg" \
+        --query 'SecurityGroups[0].GroupId' \
+        --output text \
+        --region "$REGION" \
+        --profile "$PROFILE" 2>/dev/null)
+
+    if [[ ! "$SG_RDS_ID" =~ ^sg-[a-f0-9]+$ ]]; then
+        echo "Error FATAL: No se pudo recuperar un Security Group ID válido para RDS. SG actual: $SG_RDS_ID" >&2
+        exit 1
+    fi
+    echo "Recuperación exitosa. Usando el ID: $SG_RDS_ID"
     
     # Verificar si la instancia ya existe y está disponible
     DB_STATUS=$(aws rds describe-db-instances \
@@ -122,7 +139,7 @@ manage_rds_instance() {
         --region "$REGION" 2>/dev/null || echo "not-found")
 
     if [ "$DB_STATUS" = "not-found" ] || [ "$DB_STATUS" = "deleted" ]; then
-        echo "Instancia RDS '$DB_INSTANCE_ID' no encontrada. Creando..."
+        echo "Instancia RDS '$DB_INSTANCE_ID' no encontrada. Creando con SG: $SG_RDS_ID..."
 
         # Comando de creación de la instancia
         aws rds create-db-instance \
@@ -142,12 +159,26 @@ manage_rds_instance() {
 
         echo "Instancia RDS '$DB_INSTANCE_ID' creada. Esperando estado 'available' (esto puede tardar 10-20 min)..."
         
-        # CRÍTICO: Esperar a que la instancia esté disponible antes de continuar
+        # Esperar a que la instancia esté disponible antes de continuar
         aws rds wait db-instance-available \
             --db-instance-identifier "$DB_INSTANCE_ID" \
             --region "$REGION"
 
-        echo "Instancia RDS disponible."
+        echo "Instancia RDS disponible (Inicialmente privada)."
+        
+        # BYPASS DEFINITIVO DEL BUG DE AWS: Modificar a Publicly Accessible después de la creación
+        echo "Modificando instancia RDS para habilitar acceso público..."
+        
+        aws rds modify-db-instance \
+            --db-instance-identifier "$DB_INSTANCE_ID" \
+            --publicly-accessible \
+            --apply-immediately \
+            --region "$REGION" 
+            
+        echo "Modificación enviada. Esperando a que la instancia RDS esté lista de nuevo..."
+        aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_ID" --region "$REGION"
+        
+        echo "Instancia RDS modificada y ahora es Publicly Accessible."
 
     else
         echo "Instancia RDS '$DB_INSTANCE_ID' ya existe con estado: $DB_STATUS."
@@ -160,7 +191,7 @@ manage_rds_instance() {
         --output text \
         --region "$REGION")
     
-    export DB_ENDPOINT # Exportar el endpoint para la salida y futura integración.
+    export DB_ENDPOINT
 }
 
 # --- Flujo de Ejecución Principal ---
