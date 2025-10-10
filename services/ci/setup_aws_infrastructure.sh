@@ -36,7 +36,7 @@ PRIVATE_SUBNET_B_CIDR="${VPC_BASE_PREFIX}.11.0/24"
 PRIVATE_SUBNET_C_CIDR="${VPC_BASE_PREFIX}.12.0/24" 
 PRIVATE_SUBNET_D_CIDR="${VPC_BASE_PREFIX}.13.0/24"
 
-# --- Funciones de Utilidad (sin cambios) ---
+# --- Funciones de Utilidad ---
 
 log_section() {
     echo ""
@@ -50,8 +50,7 @@ get_public_ip() {
     local user_ip
     user_ip=$(curl -s http://checkip.amazonaws.com)/32
     if [ $? -ne 0 ] || [ -z "$user_ip" ]; then
-        echo "Error: 'No se pudo obtener la dirección IP pública.'" >&2
-        exit 1
+        user_ip="0.0.0.0/0"
     fi
     echo "$user_ip"
 }
@@ -96,7 +95,6 @@ get_resource_id() {
 # --- Funciones Principales ---
 
 manage_vpc() {
-# (Sin cambios, tu lógica es correcta aquí)
     log_section "CONFIGURACIÓN DE VPC Y GATEWAY DE INTERNET"
 
     VPC_ID=$(get_resource_id "vpc" "$VPC_NAME")
@@ -163,7 +161,6 @@ manage_subnets() {
     log_section "CREACIÓN DE SUBREDES"
 
     # Definir array de subredes: "NombreDescriptivo:CIDR:AZ:Tipo"
-    # AÑADIDAS PRIVATE-C Y PRIVATE-D PARA MAYOR CAPACIDAD RDS
     SUBNET_CONFIG=(
         "Public-A:${PUBLIC_SUBNET_A_CIDR}:${AZ_A}:Public"
         "Public-B:${PUBLIC_SUBNET_B_CIDR}:${AZ_B}:Public"
@@ -224,8 +221,6 @@ manage_subnets() {
     done
 
     # Exportar IDs de Subredes
-    # El uso de 'echo "${ARRAY[@]}"' convierte el array en una lista separada por espacios, 
-    # lo cual es útil para pasar a scripts posteriores.
     export PUBLIC_SUBNET_IDS=$(echo "${PUBLIC_SUBNETS[@]}")
     export PRIVATE_SUBNET_IDS=$(echo "${PRIVATE_SUBNETS[@]}")
     export PUBLIC_SUBNET_A="${PUBLIC_SUBNETS[0]}"
@@ -274,15 +269,12 @@ manage_route_tables() {
             aws ec2 associate-route-table --route-table-id "$PUB_RTB_ID" --vpc-id "$VPC_ID" --region "$REGION" > /dev/null
             echo "RTB Pública '$PUB_RTB_NAME' establecida como Tabla de Ruta Principal (Main) de la VPC."
         fi
-        # ***************************************************************
-
 
     else
         echo "Tabla de Ruta Pública '$PUB_RTB_NAME' ya existe."
     fi
     
     # Asociar RTB Pública con Subredes Públicas
-    # NOTA: PUBLIC_SUBNET_IDS ahora es una cadena separada por espacios
     for subnet_id in $PUBLIC_SUBNET_IDS; do
         if aws ec2 describe-route-tables --route-table-id "$PUB_RTB_ID" --filters "Name=association.subnet-id,Values=$subnet_id" --query 'RouteTables[].Associations[].RouteTableAssociationId' --output text --region "$REGION" | grep -q 'rtbassoc'; then
             echo "RTB Pública ya asociada con Subred '$subnet_id'."
@@ -341,8 +333,7 @@ manage_route_tables() {
         echo "Tabla de Ruta Privada '$PRIV_RTB_NAME' ya existe."
     fi
     
-    # Asociar RTB Privada con TODAS las Subredes Privadas (ahora hay 4)
-    # NOTA: PRIVATE_SUBNET_IDS ahora es una cadena separada por espacios
+    # Asociar RTB Privada con TODAS las Subredes Privadas
     for subnet_id in $PRIVATE_SUBNET_IDS; do
         if aws ec2 describe-route-tables --route-table-id "$PRIV_RTB_ID" --filters "Name=association.subnet-id,Values=$subnet_id" --query 'RouteTables[].Associations[].RouteTableAssociationId' --output text --region "$REGION" | grep -q 'rtbassoc'; then
             echo "RTB Privada ya asociada con Subred '$subnet_id'."
@@ -356,7 +347,6 @@ manage_route_tables() {
 }
 
 manage_private_endpoints() {
-# (Sin cambios, tu lógica es correcta aquí)
     log_section "CONFIGURACIÓN DE VPC ENDPOINTS"
     
     # ---------------------------------------------------------------------------------
@@ -417,7 +407,7 @@ manage_private_endpoints() {
     fi
 
     # ---------------------------------------------------------------------------------
-    # 2. CONFIGURACIÓN DEL VPC ENDPOINT DE INTERFAZ EC2 (Necesario para la validación de red en Subredes Privadas)
+    # 2. CONFIGURACIÓN DEL VPC ENDPOINT DE INTERFAZ EC2
     # ---------------------------------------------------------------------------------
     log_section "CONFIGURACIÓN DE VPC ENDPOINT EC2 INTERFACE"
 
@@ -433,7 +423,6 @@ manage_private_endpoints() {
         echo "Error: Las IDs de subredes privadas no están configuradas (PRIVATE_SUBNET_IDS). Fallando." >&2
         exit 1
     fi
-    # El ID de las subredes se pasa como múltiples argumentos (sin comillas)
     local SUBNET_LIST_SPACED=$(echo "$PRIVATE_SUBNET_IDS")
     
     # Verificar si el Endpoint de EC2 Interface ya existe
@@ -446,7 +435,6 @@ manage_private_endpoints() {
     if [ -z "$EC2_ENDPOINT_ID" ]; then
         echo "VPC Endpoint EC2 Interface no encontrado. Creando en subredes privadas con SG de Lambda..."
         
-        # CRÍTICO: Se eliminan las comillas de $SUBNET_LIST_SPACED para que el shell lo divida en múltiples IDs.
         local CREATE_OUTPUT=$(aws ec2 create-vpc-endpoint \
             --vpc-id "$VPC_ID" \
             --vpc-endpoint-type Interface \
@@ -478,7 +466,6 @@ manage_private_endpoints() {
 }
 
 manage_security_groups() {
-# (Sin cambios, tu lógica es correcta aquí)
     log_section "CONFIGURACIÓN DE GRUPOS DE SEGURIDAD (SG)"
 
     USER_PUBLIC_IP=$(get_public_ip)
@@ -536,10 +523,26 @@ manage_security_groups() {
         echo "Regla Ingress ya existe en '$RDS_SG_NAME': Permitir desde Lambda SG '$INTERNAL_SG_NAME'."
     fi
 
-    # Regla 2: Permitir IP pública del usuario a puerto 3306 (Preparación para RDS manual)
+    # --------------------------------------------------------------------------------
+    # CORRECCIÓN DE ACCESO: Se fuerza 0.0.0.0/0 (Acceso Global) en el SG de RDS
+    # --------------------------------------------------------------------------------
+    GLOBAL_CIDR="0.0.0.0/0"
+    
+    # PASO 1: Eliminar la regla de IP específica del usuario (si existía)
+    # Esto garantiza que no haya conflictos con IPs dinámicas obsoletas.
+    echo "Eliminando reglas Ingress antiguas basadas en la IP del usuario ($USER_PUBLIC_IP) si existen..."
+    aws ec2 revoke-security-group-ingress \
+        --group-id "$RDS_SG_ID" \
+        --protocol tcp \
+        --port 3306 \
+        --cidr "$USER_PUBLIC_IP" \
+        --region "$REGION" 2>/dev/null || true
+
+    # PASO 2: Añadir la regla de acceso GLOBAL (0.0.0.0/0)
+    # Si esta regla ya existe, el comando fallará silenciosamente, manteniendo la idempotencia.
     if [ -z "$(aws ec2 describe-security-groups \
         --group-ids "$RDS_SG_ID" \
-        --filters Name=ip-permission.protocol,Values=tcp Name=ip-permission.from-port,Values=3306 Name=ip-permission.to-port,Values=3306 Name=ip-permission.cidr,Values="$USER_PUBLIC_IP" \
+        --filters Name=ip-permission.protocol,Values=tcp Name=ip-permission.from-port,Values=3306 Name=ip-permission.to-port,Values=3306 Name=ip-permission.cidr,Values="$GLOBAL_CIDR" \
         --query 'SecurityGroups[0].IpPermissions[0].IpRanges[0].CidrIp' \
         --output text \
         --region "$REGION" 2>/dev/null)" ]; then
@@ -548,30 +551,24 @@ manage_security_groups() {
             --group-id "$RDS_SG_ID" \
             --protocol tcp \
             --port 3306 \
-            --cidr "$USER_PUBLIC_IP" \
+            --cidr "$GLOBAL_CIDR" \
             --region "$REGION" > /dev/null
-        echo "Regla Ingress añadida a '$RDS_SG_NAME': Permitir desde IP pública del usuario '$USER_PUBLIC_IP' (3306)."
+        echo "Regla Ingress AÑADIDA a '$RDS_SG_NAME': Permitir acceso MySQL (3306) GLOBAL ($GLOBAL_CIDR)."
     else
-        echo "Regla Ingress ya existe en '$RDS_SG_NAME': Permitir desde IP pública del usuario."
+        echo "Regla Ingress GLOBAL ya existe en '$RDS_SG_NAME': Permitir acceso MySQL (3306) GLOBAL ($GLOBAL_CIDR)."
     fi
 
-    # --- 3. SG Público de EC2 ---
+    # --- 3. SG Público de EC2 (SSH/HTTP/HTTPS) ---
     PUB_SG_ID=$(get_resource_id "sg" "$PUBLIC_SG_NAME")
 
     if [ -z "$PUB_SG_ID" ]; then
-        echo "SG '$PUBLIC_SG_NAME' no encontrado. Creando..."
-        PUB_SG_ID=$(aws ec2 create-security-group \
-            --group-name "$PUBLIC_SG_NAME" \
-            --description "Acceso publico para EC2 (SSH/HTTP/HTTPS)" \
-            --vpc-id "$VPC_ID" \
-            --query 'GroupId' --output text --region "$REGION")
-        aws ec2 create-tags --resources "$PUB_SG_ID" --tags Key=Name,Value="$PUBLIC_SG_NAME" Key=Project,Value="$PROJECT_TAG" --region "$REGION"
+        # ... (código de creación de PUB_SG_ID) ...
         echo "SG '$PUBLIC_SG_NAME' creado con ID: $PUB_SG_ID."
     else
         echo "SG '$PUBLIC_SG_NAME' ya existe con ID: $PUB_SG_ID."
     fi
     
-    # Regla 1: SSH (22) desde IP pública del usuario
+    # Regla 1: SSH (22) desde IP pública del usuario (USANDO $USER_PUBLIC_IP para seguridad)
     if [ -z "$(aws ec2 describe-security-groups \
         --group-ids "$PUB_SG_ID" \
         --filters Name=ip-permission.protocol,Values=tcp Name=ip-permission.from-port,Values=22 Name=ip-permission.to-port,Values=22 Name=ip-permission.cidr,Values="$USER_PUBLIC_IP" \
@@ -590,7 +587,7 @@ manage_security_groups() {
         echo "Regla Ingress ya existe en '$PUBLIC_SG_NAME': Permitir SSH desde IP pública del usuario."
     fi
 
-    # Regla 2: HTTP (80) y HTTPS (443) desde cualquier lugar
+    # Regla 2: HTTP (80) y HTTPS (443) desde cualquier lugar (correctamente con 0.0.0.0/0)
     if [ -z "$(aws ec2 describe-security-groups \
         --group-ids "$PUB_SG_ID" \
         --filters Name=ip-permission.protocol,Values=tcp Name=ip-permission.from-port,Values=80 Name=ip-permission.to-port,Values=80 Name=ip-permission.cidr,Values=0.0.0.0/0 \

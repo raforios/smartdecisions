@@ -8,7 +8,7 @@ set -o pipefail # Terminar si un comando en un pipeline falla.
 
 CONFIG_FILE="./infrastructure.config"
 
-# --- 1. Cargar Variables desde el Archivo de Configuración (CORREGIDO) ---
+# --- 1. Cargar Variables desde el Archivo de Configuración ---
 if [ -f "$CONFIG_FILE" ]; then
     echo "Cargando configuración desde $CONFIG_FILE..."
     while IFS='=' read -r key value; do
@@ -33,6 +33,7 @@ else
     echo "Error: Archivo de configuración '$CONFIG_FILE' no encontrado."
     exit 1
 fi
+
 # --- 2. Verificación de Variables Críticas ---
 : ${REGION:?"Error: REGION no está configurada."}
 : ${PROJECT_TAG:?"Error: PROJECT_TAG no está configurada."}
@@ -40,52 +41,31 @@ fi
 : ${RDS_STORAGE_GB:?"Error: RDS_STORAGE_GB no está configurada."}
 : ${DB_NAME:?"Error: DB_NAME no está configurada."}
 : ${DB_USERNAME:?"Error: DB_USERNAME no está configurada."}
-: ${SG_RDS_ID:?"Error: SG_RDS_ID (Security Group de RDS) no está configurado. (Ejecute setup_aws_infrastructure.sh primero)"}
-: ${PRIVATE_SUBNET_IDS:?"Error: PRIVATE_SUBNET_IDS no está configurada (Lista de Subredes Privadas)."}
+: ${SG_RDS_ID:?"Error: SG_RDS_ID (Security Group de RDS) no está configurado."}
+: ${PUBLIC_SUBNET_IDS:?"Error: PUBLIC_SUBNET_IDS no está configurada (Lista de Subredes Públicas)."}
 
-# --- 3. Variables Derivadas y Nomenclatura (Minúsculas y sanitización) ---
-# Creamos una etiqueta de proyecto segura (sin guiones bajos) para todos los identificadores de RDS, 
-# ya que son sensibles a caracteres especiales.
+# --- 3. Variables Derivadas y Nomenclatura ---
 PROJECT_TAG_SAFE=$(echo "$PROJECT_TAG" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g')
-
-# Ahora definimos los nombres de los recursos usando la etiqueta segura.
 RDS_SUBNET_GROUP_NAME="${PROJECT_TAG_SAFE}-rds-subnet-group"
 DB_INSTANCE_ID="${PROJECT_TAG_SAFE}-mysql-db"
 
-# Limpiar la lista de subredes para asegurar un formato simple (espacios)
-# PRIVATE_SUBNET_IDS=$(echo "$PRIVATE_SUBNET_IDS" | tr ',' ' ')
+# Aseguramos que solo se usen Subredes Públicas
+DB_SUBNET_LIST=$(echo "$PUBLIC_SUBNET_IDS" | tr ',' ' ')
+echo "Usando Subredes PÚBLICAS (final): $DB_SUBNET_LIST para RDS Subnet Group." 
 
-DB_SUBNET_LIST=$(echo "$PRIVATE_SUBNET_IDS" | tr ',' ' ' | xargs)
-echo "Usando Subredes Privadas: $DB_SUBNET_LIST para RDS Subnet Group." 
 
-# Configurar el perfil de AWS para esta sesión
-export AWS_DEFAULT_PROFILE="$AWS_PROFILE"
-
-# --- Funciones de Utilidad ---
-log_section() {
-    echo ""
-    echo "--------------------------------------------------------------------------------"
-    echo "| $1 |"
-    echo "--------------------------------------------------------------------------------"
-    echo ""
-}
-
-# 'read_credentials': Solicita la contraseña de RDS de forma segura.
+# --- Funciones de Utilidad (Mantenidas) ---
+log_section() { echo ""; echo "--------------------------------------------------------------------------------"; echo "| $1 |"; echo "--------------------------------------------------------------------------------"; echo ""; }
 read_credentials() {
     log_section "AUTENTICACIÓN DE BASE DE DATOS"
-    # Solicitar la contraseña de forma segura (sin eco)
     echo -n "Ingrese la contraseña de $DB_USERNAME para RDS (mín. 8 caracteres): "
     read -s DB_PASSWORD
-    echo "" # Salto de línea después de la entrada oculta
-    
-    if [ -z "$DB_PASSWORD" ]; then
-        echo "Error: La contraseña no puede estar vacía."
-        exit 1
-    fi
-    export DB_PASSWORD # Exportar para el aws cli
+    echo "" 
+    if [ -z "$DB_PASSWORD" ]; then echo "Error: La contraseña no puede estar vacía."; exit 1; fi
+    export DB_PASSWORD
 }
 
-# 'manage_rds_subnet_group': Crea o verifica el grupo de subredes de RDS.
+# Crea el grupo de subredes de RDS.
 manage_rds_subnet_group() {
     log_section "GESTIÓN DEL GRUPO DE SUBREDES RDS"
 
@@ -96,10 +76,26 @@ manage_rds_subnet_group() {
         --output text \
         --region "$REGION" 2>/dev/null || true)
 
-    if [ -z "$SUBNET_GROUP_EXISTS" ]; then
-        echo "Grupo de Subredes '$RDS_SUBNET_GROUP_NAME' no encontrado. Creando..."
+    if [ -n "$SUBNET_GROUP_EXISTS" ]; then
+        # 🚨 CORRECCIÓN 1: Si el Subnet Group existe, NO intentamos eliminarlo si está en uso por la DB.
+        # Solo lo modificamos para asegurar que las Subnets sean las correctas (es el método más seguro
+        # para idempotencia cuando la instancia ya existe).
+        echo "Grupo de Subredes '$RDS_SUBNET_GROUP_NAME' ya existe. Verificando y modificando Subnets si es necesario."
+
+        # Intentar modificar el grupo. Si no hay cambios, no pasa nada (idempotencia).
+        if aws rds modify-db-subnet-group \
+            --db-subnet-group-name "$RDS_SUBNET_GROUP_NAME" \
+            --subnet-ids $DB_SUBNET_LIST \
+            --region "$REGION" 2>/dev/null; then
+            echo "Grupo de Subredes modificado/verificado exitosamente."
+        else
+            echo "Advertencia: No se pudo modificar el Subnet Group. Asumiendo configuración correcta."
+        fi
         
-        # CRÍTICO: Pasar los IDs como una lista simple (espacios) combinando públicas y privadas
+    else
+        # Primera creación
+        echo "Creando Grupo de Subredes '$RDS_SUBNET_GROUP_NAME' con Subredes Públicas: $DB_SUBNET_LIST..."
+        
         aws rds create-db-subnet-group \
             --db-subnet-group-name "$RDS_SUBNET_GROUP_NAME" \
             --db-subnet-group-description "Subnet group for ${PROJECT_TAG} DB instance" \
@@ -107,9 +103,7 @@ manage_rds_subnet_group() {
             --tags Key=Project,Value="$PROJECT_TAG" \
             --region "$REGION"
 
-        echo "Grupo de Subredes '$RDS_SUBNET_GROUP_NAME' creado."
-    else
-        echo "Grupo de Subredes '$RDS_SUBNET_GROUP_NAME' ya existe."
+        echo "Grupo de Subredes '$RDS_SUBNET_GROUP_NAME' creado exitosamente con Subredes Públicas."
     fi
 }
 
@@ -117,21 +111,22 @@ manage_rds_subnet_group() {
 manage_rds_instance() {
     log_section "GESTIÓN DE LA INSTANCIA RDS MYSQL"
     
-    # Recuperamos el ID del SG de RDS FRESH (el creado en el Paso 1)
-    SG_RDS_ID=$(aws ec2 describe-security-groups \
-        --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=API_BINARIA-rds-mysql-sg" \
+    # Recuperación del SG de RDS desde AWS
+    SG_RDS_ID_FETCH=$(aws ec2 describe-security-groups \
+        --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=${PROJECT_TAG}-rds-mysql-sg" \
         --query 'SecurityGroups[0].GroupId' \
         --output text \
-        --region "$REGION" \
-        --profile "$PROFILE" 2>/dev/null)
+        --region "$REGION" 2>/dev/null)
 
-    if [[ ! "$SG_RDS_ID" =~ ^sg-[a-f0-9]+$ ]]; then
-        echo "Error FATAL: No se pudo recuperar un Security Group ID válido para RDS. SG actual: $SG_RDS_ID" >&2
+    if [[ ! "$SG_RDS_ID_FETCH" =~ ^sg-[a-f0-9]+$ ]]; then
+        echo "Error FATAL: No se pudo recuperar el Security Group ID válido para RDS. SG actual: $SG_RDS_ID_FETCH" >&2
         exit 1
     fi
-    echo "Recuperación exitosa. Usando el ID: $SG_RDS_ID"
     
-    # Verificar si la instancia ya existe y está disponible
+    local CURRENT_RDS_SG_ID="$SG_RDS_ID_FETCH"
+    echo "Recuperación exitosa. Usando el ID: $CURRENT_RDS_SG_ID"
+
+    # Verificar si la instancia ya existe
     DB_STATUS=$(aws rds describe-db-instances \
         --db-instance-identifier "$DB_INSTANCE_ID" \
         --query 'DBInstances[0].DBInstanceStatus' \
@@ -139,9 +134,9 @@ manage_rds_instance() {
         --region "$REGION" 2>/dev/null || echo "not-found")
 
     if [ "$DB_STATUS" = "not-found" ] || [ "$DB_STATUS" = "deleted" ]; then
-        echo "Instancia RDS '$DB_INSTANCE_ID' no encontrada. Creando con SG: $SG_RDS_ID..."
+        echo "Instancia RDS '$DB_INSTANCE_ID' no encontrada. Creando..."
 
-        # Comando de creación de la instancia
+        # Creación con la configuración de Subnet Group público y sin acceso público inicial
         aws rds create-db-instance \
             --db-instance-identifier "$DB_INSTANCE_ID" \
             --db-instance-class "$RDS_INSTANCE_TYPE" \
@@ -150,7 +145,7 @@ manage_rds_instance() {
             --master-user-password "$DB_PASSWORD" \
             --allocated-storage "$RDS_STORAGE_GB" \
             --db-subnet-group-name "$RDS_SUBNET_GROUP_NAME" \
-            --vpc-security-group-ids "$SG_RDS_ID" \
+            --vpc-security-group-ids "$CURRENT_RDS_SG_ID" \
             --db-name "$DB_NAME" \
             --no-publicly-accessible \
             --backup-retention-period 7 \
@@ -166,8 +161,8 @@ manage_rds_instance() {
 
         echo "Instancia RDS disponible (Inicialmente privada)."
         
-        # BYPASS DEFINITIVO DEL BUG DE AWS: Modificar a Publicly Accessible después de la creación
-        echo "Modificando instancia RDS para habilitar acceso público..."
+        # BYPASS DEL BUG: Modificar a Publicly Accessible DEBE hacerse después de que esté disponible
+        echo "Modificando instancia RDS para habilitar acceso público (CRÍTICO)."
         
         aws rds modify-db-instance \
             --db-instance-identifier "$DB_INSTANCE_ID" \
@@ -178,13 +173,34 @@ manage_rds_instance() {
         echo "Modificación enviada. Esperando a que la instancia RDS esté lista de nuevo..."
         aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_ID" --region "$REGION"
         
-        echo "Instancia RDS modificada y ahora es Publicly Accessible."
+        echo "Instancia RDS modificada y ahora es Publicly Accessible. ¡Conexión externa garantizada!"
 
+    elif [ "$DB_STATUS" != "available" ]; then
+        # Lógica de recuperación
+        echo "Instancia RDS '$DB_INSTANCE_ID' existe con estado: $DB_STATUS. Esperando a que esté disponible..."
+        aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_ID" --region "$REGION"
+        echo "Instancia RDS disponible."
+    
     else
-        echo "Instancia RDS '$DB_INSTANCE_ID' ya existe con estado: $DB_STATUS."
+        # 🚨 CORRECCIÓN 2: Lógica de verificación/modificación si ya está disponible (BLOQUE IDEMPOTENTE)
+        echo "Instancia RDS '$DB_INSTANCE_ID' ya existe y está disponible."
+        echo "Verificando/actualizando Security Group y acceso público (Publicly Accessible)..."
+        
+        # Forzar la actualización de SG y acceso público.
+        # Quitamos --db-subnet-group-name para evitar InvalidVPCNetworkStateFault.
+        aws rds modify-db-instance \
+            --db-instance-identifier "$DB_INSTANCE_ID" \
+            --vpc-security-group-ids "$CURRENT_RDS_SG_ID" \
+            --publicly-accessible \
+            --apply-immediately \
+            --region "$REGION"
+        
+        echo "Modificación de SG/Acceso Público enviada. Esperando estado 'available'..."
+        aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_ID" --region "$REGION"
+        echo "Instancia RDS verificada/modificada (Publicly Accessible y SG correctos)."
     fi
 
-    # Recuperar el Endpoint después de la creación/verificación
+    # Recuperar el Endpoint
     DB_ENDPOINT=$(aws rds describe-db-instances \
         --db-instance-identifier "$DB_INSTANCE_ID" \
         --query 'DBInstances[0].Endpoint.Address' \

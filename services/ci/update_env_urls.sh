@@ -15,11 +15,11 @@ AWS_PROFILE="deploy_binaria" # Ajusta a tu perfil
 # Función para obtener la URL de un microservicio
 get_api_url() {
     case "$1" in
-        "binaria-forms-handler-service") echo "https://ezfzu7xezd.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-localization-handler-service") echo "https://ijl1blxrp0.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-planning-handler-service") echo "https://9rn4ew9rog.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-events-handler-service") echo "https://cec7blvsoc.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-file-handler-service") echo "https://xqu724ssxd.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-file-handler-service") echo "https://mijwvdu4g6.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-events-handler-service") echo "https://ozg7itcrvg.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-forms-handler-service") echo "https://vk22i8orck.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-localization-handler-service") echo "https://yvivgga9i8.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-planning-handler-service") echo "https://9bdyb0z3ol.execute-api.us-east-1.amazonaws.com" ;;
         *) echo "" ;; # URL no encontrada
     esac
 }
