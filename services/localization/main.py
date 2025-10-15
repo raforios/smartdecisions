@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi.openapi.docs import get_swagger_ui_html
+
 from mangum import Mangum
 
 import uvicorn
@@ -26,13 +28,18 @@ ENV_VARS = load_and_validate_env_vars(
         'PORT': int,
     },
     optional_env_vars = {
-        'APP_ENV': str
+        'APP_ENV': str,
+        'ROOT_PATH': str
     }
 )
 
 UVICORN_HOST = ENV_VARS['HOST']
 UVICORN_PORT = ENV_VARS['PORT']
 APP_ENV = ENV_VARS['APP_ENV']
+
+ROOT_PATH_VALUE = ENV_VARS.get('ROOT_PATH', '').strip('/')
+ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
+OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED else '/openapi.json'
 
 
 @asynccontextmanager
@@ -45,9 +52,6 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info(message)
     try:
         # Base.metadata.create_all requires all models to be imported before calling.
-        # Ensure your models (e.g., models/forms.py) are imported somewhere
-        # so Base.metadata knows about them. If models.forms is imported by controllers,
-        # it's usually fine. Otherwise, you might need to import models.forms here.
         Base.metadata.create_all(bind = ENGINE)
         message = 'Database tables created/verified successfully.'
         logger.info(message)
@@ -57,13 +61,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # Raise to prevent the app from starting if DB init fails critically.
         raise RuntimeError('Database initialization failed during application startup.') from e
 
-    yield # The application will run after the 'yield' statement
+    yield
 
     # Code after yield runs on shutdown (e.g., closing connections)
     message = 'Application shutdown: Closing resources.'
     logger.info(message)
 
 APP_CONFIG = {
+    'root_path': ROOT_PATH_NORMALIZED,
     'title': 'Localization Service',
     'description': '''
         This microservice manages location and route information. It allows for the creation of
@@ -76,7 +81,12 @@ APP_CONFIG = {
         'name': 'API Support',
         'email': 'raforios@gmail.com'
     },
-    'lifespan': lifespan
+    'lifespan': lifespan,
+
+    # Disable automatic documentation routes to use manual routing below
+    'docs_url': None,
+    'redoc_url': None,
+    'openapi_url': None
 
 }
 
@@ -107,6 +117,23 @@ def root() -> Dict[str, Any]:
         'Owner': f'BearSoft {copyright_symbol} {today.year}'
     }
     return output
+
+@app.get('/openapi.json', include_in_schema = False)
+def custom_openapi():
+    '''
+        Returns the OpenAPI schema (JSON file) for the service.
+    '''
+    return app.openapi()
+
+@app.get('/docs', include_in_schema = False)
+async def custom_swagger_ui():
+    '''
+        Serves the Swagger UI documentation interface.
+    '''
+    return get_swagger_ui_html(
+        openapi_url = OPENAPI_URL,
+        title = app.title + ' - Docs'
+    )
 
 origins = [
     'http://127.0.0.1:5500',
