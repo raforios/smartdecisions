@@ -1,71 +1,329 @@
-# Gestión de Infraestructura AWS para API de Microservicios
+# GESTIÓN DE INFRAESTRUCTURA DE AWS PARA DESPLIEGUE DE API DE MICROSERVICIOS
 
 **Nota:** Esta infraestructura se ha construido bajo los principios de Clean Code, Arquitectura Limpia, SOLID y DRY. Toda la configuración es centralizada y parametrizable.
 
 ---
 
-## 1. Pre-requisitos
+## 1. PRE-REQUISITOS
 
-Antes de comenzar, asegúrese de que los siguientes componentes estén instalados y configurados:
+Antes de comenzar, asegurarse de que los siguientes componentes estén instalados y configurados:
 
 1.  **AWS CLI:** Instalado y configurado correctamente.
-2.  **Credenciales de AWS:** Un perfil nombrado (`[perfil_aws]`) configurado en `~/.aws/credentials` con permisos para crear/eliminar recursos de IAM, EC2, RDS y VPC.
-3.  **Scripts Shell:** Los scripts principales de IaC (`manage_infrastructure.sh`, `build_and_deploy.sh`, *y cualquier otro script de soporte*) deben estar en el directorio actual y tener permisos de ejecución (`chmod +x *.sh`).
-4.  **Archivo de Configuración:** El archivo **`infrastructure.config`** debe existir y contener los valores correctos y deseados para el despliegue de la infraestructura central.
+2.  **Credenciales de AWS:** Un perfil nombrado (`[perfil_aws]`) configurado en `~/.aws/credentials` con permisos para crear/eliminar recursos de IAM, EC2, RDS y VPC. Por ejemplo:
+
+```shell
+nano ~/.aws/credentials
+
+    [deploy_binaria]
+    aws_access_key_id = XXXXXXXXXXXXXXXX
+    aws_secret_access_key = XXXXXXXXXXXXXXXXXXXXX
+
+nano ~/.aws/config
+
+    [profile deploy_binaria]
+    region = us-east-1
+    output = json
+
+```
+
+3.  **Scripts Shell:** Los scripts principales de IaC son:
+
+- `manage_infrastructure.sh`
+- `build_and_deploy.sh`
+- `update_env_urls.sh`
+- `configure_https.sh`
+- `setup_elastic.sh`
+
+Los otros scripts son complementarios, de soporte y necesariamente deben estar en el directorio `CI` y tener permisos de ejecución (`chmod +x *.sh`).
+
+4. **Estructura del proceso de ejecuón:**
+
+El script `build_and_deploy.sh` es el primer script que debe ser ejecutado. Este script sirve para el despliegue de los microservicios (servicios `LAMBDA`), una vez que todos los microservicios hayan sido desplegados, recién se debe proceder a la creación del resto de la infraestructura.
+
+El script `manage_infrastructure.sh` cuando se ejecuta con la opción `setup` utiliza los siguientes scripts y archivo de configuración de manera complementaria y requerida.
+
+```text
+manage_infrastructure.sh setup
+├── infrastructure.config
+├── setup_aws_infrastructure.sh
+├── setup_rds_instance.sh
+├── setup_ec2_instance.sh
+├── configure_security_groups.sh
+├── setup_alb.sh
+└── setup_api_gateway.sh
+```
+
+El script `manage_infrastructure.sh` cuando se ejecuta con la opción `destroy` utiliza los siguientes scripts y archivo de configuración de manera complementaria y requerida.
+
+```text
+manage_infrastructure.sh destroy
+├── infrastructure.config
+└── destroy_aws_infrastructure.sh
+```
+
+Los otros archivos importantes para el despliegue de la infraestrtuctura son:
+
+- `configure_https.sh`
+- `setup_elastic.sh`
+- `update_env_urls.sh`
+
+Más adelante se explica el orden de ejecución de todos los archivos mencionados.
+
+También tenemos archivos complementarios para hacer ajustes y configuraciones adicionales luego de que se realicen previamente algunas configuraciones manuales. Estos archivos son:
+
+- **configure_https_and_api_domain.sh**
+- **map_api_base_paths.sh**
+
+
+- 
+- 
+- `build_and_deploy.sh`
+- **configure_https_and_api_domain.sh**
+- `configure_https.sh`
+- configure_security_groups.sh
+- 
+- 
+- destroy_aws_infrastructure.sh
+- infrastructure.config
+- `manage_infrastructure.sh`
+- **map_api_base_paths.sh**
+- 
+- setup_alb.sh
+- setup_api_gateway.sh
+- setup_aws_infrastructure.sh
+- setup_ec2_instance.sh
+- `setup_elastic.sh`
+- setup_rds_instance.sh
+- 
+- `update_env_urls.sh`
+
+
+Con esos tres archivos se construye y despliega la infraestructura.
+
+
+5.  **Archivo de Configuración:** El archivo **`infrastructure.config`** debe estar presente y previamente configurado con los valores deseados para el despliegue de la infraestructura central.
 
 ---
 
-## 2. Configuración
+## 2. CONFIGURACIÓN
 
-Revise y modifique el archivo **`infrastructure.config`**. Los parámetros clave a verificar son:
+Revisar y modificar el archivo **`infrastructure.config`**. Los parámetros clave a verificar son:
 
 * `REGION`: Región de despliegue de AWS.
 * `AWS_PROFILE`: Nombre de su perfil de AWS CLI.
 * `VPC_CIDR`: Rango de red deseado.
-* `EC2_AMI_ID`: **Crucial**. El ID de la AMI para el SO LINUX de su preferencia en su región.
+* `EC2_AMI_ID`: **Crucial**. El ID de la AMI para el SO LINUX de preferencia en la región seleccionada.
 
-Además, asegúrese de que cada microservicio tenga su archivo **`deploy.config`** y **`.env`** (si aplica) con los valores específicos necesarios (ej. `FUNCTION_NAME`, `DYNAMODB_TABLE_NAME`).
+Además, verificar de que cada microservicio tenga su archivo **`deploy.config`** y **`.env`** (si aplica) con los valores específicos necesarios (ej. `FUNCTION_NAME`, `DYNAMODB_TABLE_NAME`, etc.).
 
----
 
-## 3. Despliegue (Creación de Infraestructura)
+```shell
+HOST='0.0.0.0'
+PORT=3002
+APP_ENV="production"
+SECRET_KEY="ASDDSSDFASDSWEQEQWEERW"
+ALGORITHM="HS256"
+DB_USER="root"
+DB_PASSWORD="PASSWORD"
+DB_HOST="api-binaria-mysql-db.cgbqmuawkgko.us-east-1.rds.amazonaws.com"
+DB_PORT="3306"
+DATABASE="binaria"
+DB_DIALECT="mysql+pymysql"
+EVENTS_SERVICE_URL="https://[API_ID].execute-api.us-east-1.amazonaws.com"
+FILES_SERVICE_URL="https://[API_ID].execute-api.us-east-1.amazonaws.com"
+BUCKET_NAME="binaria-afiliaciones"
+BUCKET_PATH=""
 
-El script maestro `manage_infrastructure.sh` se encarga de la orquestación de la infraestructura central. Está diseñado para ser **idempotente** (puede ejecutarse múltiples veces) y automáticamente extrae los IDs de red críticos (`VPC_ID`, `PRIVATE_SUBNET_IDS`, `INTERNAL_SG_ID`) y los guarda en `infrastructure.config`.
-
-1.  **Ejecute el comando de configuración de la infraestructura base (VPC, RDS, EC2):**
-    ```bash
-    ./manage_infrastructure.sh setup
-    ```
-
-2.  **Siga las indicaciones:** El script le solicitará la **contraseña maestra de RDS** de forma segura.
-
-3.  **Despliegue de Microservicios (Lambda):** Una vez que la infraestructura central esté lista, proceda a desplegar sus funciones Lambda.
-
-    * El script **`build_and_deploy.sh`** ha sido modificado para **excluir la gestión de API Gateway y SQS**.
-    * El script **asociará automáticamente la función Lambda a la VPC** (permitiendo la conexión a la instancia RDS de MySQL) **solo si** las variables `VPC_ID`, `PRIVATE_SUBNET_IDS` e `INTERNAL_SG_ID` están definidas en su respectivo `deploy.config`. Si no están definidas (como es el caso de microservicios sin conexión a RDS), la función se desplegará en la red pública por defecto.
-
-    * **Ejemplo:** Para el microservicio `auth` (sin conexión RDS):
-        ```bash
-        ./build_and_deploy.sh --path /ruta/a/ms-auth/
-        ```
+```
 
 ---
 
-## 4. Destrucción (Eliminación de Infraestructura)
+## 3. CREACIÓN Y DESPLIEGUE DE INFRAESTRUCTURA Y SERVICIOS
 
-El proceso de destrucción está separado en dos partes para una **eliminación controlada**.
 
-1.  **Destruir Recursos de IaC Centrales (VPC, RDS, EC2):**
-    ```bash
-    ./manage_infrastructure.sh destroy
-    ```
-    * Este comando le pedirá confirmación antes de eliminar todos los recursos etiquetados como `API_PROJECT` (VPC, subredes, RDS, EC2, KeyPair, etc.).
-    * **Nota:** El archivo de clave privada local (`api-project-keypair.pem`) será eliminado.
+### CASO 1: DESPLIGUE DESDE INICIAL
 
-2.  **Destruir Microservicios (Lambdas, DynamoDB, S3 Artifacts):** Utilice el modo de destrucción incorporado de su script `build_and_deploy.sh` para cada servicio.
+```shell
+# --- PASO 1 ---
+# Deplegar servicios LAMBDA
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/events
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/localization --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/planning --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/forms 
 
-    * **Ejemplo:** Para el microservicio `auth`:
-        ```bash
-        ./build_and_deploy.sh --path /ruta/a/ms-auth/ --destroy
-        ```
-    * Este comando eliminará la función Lambda, la tabla DynamoDB y los artefactos de código almacenados en S3.
+# --- PASO 2 ---
+# Crear toda la infraestructura
+./manage_infrastructure.sh setup
+
+# --- PASO 3 ---
+# Modificar variables del archivo "deploy.config" con los valores obtenidos en el paso 2
+# --- Configuración VPC (Obligatoria para acceso a RDS) ---
+VPC_ID=vpc-00e5c84e1400a916f
+PRIVATE_SUBNET_IDS=subnet-07c1a8b67d2047ec3,subnet-07c7eeb3c2e5be2e0,subnet-007d8f014baf297ef,subnet-02403fd7434746c2d
+INTERNAL_SG_ID=sg-07495e1628e67b466
+# Esta configuración debe ser para los microservicios LOCALIZATION, FORMS, PLANNING
+
+# --- PASO 4 ---
+# Modificar el archivo ".env" con los valores del RDS
+DB_USER="root"
+DB_PASSWORD="D3s4P1_M1cr0S3rv"
+DB_HOST="api-binaria-mysql-db.cgbqmuawkgko.us-east-1.rds.amazonaws.com"
+DB_PORT="3306"
+
+# --- PASO 5 ---
+# Actualizar en el script "update_env_urls.sh" al inicio del archivo el segmento:
+    case "$1" in
+        "binaria-file-handler-service") echo "https://mijwvdu4g6.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-events-handler-service") echo "https://ozg7itcrvg.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-forms-handler-service") echo "https://vk22i8orck.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-localization-handler-service") echo "https://yvivgga9i8.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-planning-handler-service") echo "https://9bdyb0z3ol.execute-api.us-east-1.amazonaws.com" ;;
+        *) echo "" ;; # URL no encontrada
+    esac
+
+#  Esto se debe realizar con las URLs de los servicios lambda obtenidos durante el despliegue y ejecución del paso 2
+
+# --- PASO 6 ---
+# Actualización de los lambdas y sus variables de entorno y adesión a la infraestructura creada en el paso 2
+./update_env_urls.sh
+
+# --- PASO 7 ---
+# Configuración del ELASTIC IP para mantener el IP siempre igual indpendiente de la instancia EC2
+./setup_elastic.sh
+
+# --- PASO 8 ---
+# Configuración del HTTPS
+./configure_https.sh
+
+
+```
+
+### CASO 2: CAMBIOS EN RED, VPC, EC2, RDS O OTRS EN LA INFRAESTRUCTURA
+
+```shell
+# --- PASO 1 ---
+# Limpieza de toda la infraestructura (empezar desde 0)
+./manage_infrastructure.sh destroy
+
+# --- PASO 2 ---
+# En caso de que no se pueda eliminar algunos elementos desde el script se deberá hacer un borrado forzoso desde la consola de AWS con el ussuario principal
+
+# --- PASO 3 ---
+# Crear toda la infraestructura
+./manage_infrastructure.sh setup
+
+# --- PASO 4 ---
+# Modificar el archivo ".env" siguiendo el ejemplo del paso 4 del CASO 1
+
+# --- PASO 5 ---
+# Actualizar en el script "update_env_urls.sh" siguiendo el ejemplo del paso 5 del CASO 1. Esto se debe realizar con las URLs de los servicios lambda obtenidos durante el despliegue y ejecución del paso 3
+
+# --- PASO 6 ---
+# Reinicio y reintegro de los servicios lambda que utilizan el RDS para que estén integrados a la nueva infraestructura
+
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/localization --skip-table-creation  --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/planning --skip-table-creation  --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/forms --skip-table-creation  --skip-code-update
+
+# --- PASO 7 ---
+# Actualización de los lambdas y sus variables de entorno y adesión a la nueva infraestructura creada en el paso 3
+./update_env_urls.sh
+
+# --- PASO 8 ---
+# Configuración del HTTPS
+./configure_https.sh
+
+
+```
+
+### EJEMPLO DE SALIDA DE LA EJECUCIÓN DE CUALQUEIRA DE LOS CASOS
+
+```shell
+
+--------------------------------------------------------------------------------
+| CONFIGURACIÓN DE RDS COMPLETADA |
+--------------------------------------------------------------------------------
+
+RDS Instance ID: api-binaria-mysql-db
+RDS Subnet Group: api-binaria-rds-subnet-group
+RDS Endpoint: api-binaria-mysql-db.cgbqmuawkgko.us-east-1.rds.amazonaws.com
+RDS Database: binaria
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+| CONFIGURACIÓN DE EC2 COMPLETADA |
+--------------------------------------------------------------------------------
+
+ID de Instancia EC2: i-0f0ea3e94b7a4adbf
+IP Pública de EC2: 34.201.100.254
+Grupo de Seguridad Público Usado: sg-09fafff5d204ebd88
+Comando de Conexión SSH (usuario 'ec2-user' para AlmaLinux):
+ssh -i api-project-keypair.pem ec2-user@34.201.100.254
+
+
+--------------------------------------------------------------------------------
+| CONFIGURANDO API GATEWAY HTTP (V2) PARA: binaria-auth-handler-service |
+--------------------------------------------------------------------------------
+
+✅ API GATEWAY HTTP (V2) CONFIGURADA EXITOSAMENTE.
+URL de la API para binaria-auth-handler-service:
+https://v65w34fghh.execute-api.us-east-1.amazonaws.com/
+Ejemplo de uso de Swagger:
+-> https://v65w34fghh.execute-api.us-east-1.amazonaws.com/docs
+
+
+✅ API GATEWAY HTTP (V2) CONFIGURADA EXITOSAMENTE.
+URL de la API para binaria-file-handler-service:
+https://mijwvdu4g6.execute-api.us-east-1.amazonaws.com/
+Ejemplo de uso de Swagger:
+-> https://mijwvdu4g6.execute-api.us-east-1.amazonaws.com/docs
+
+
+✅ API GATEWAY HTTP (V2) CONFIGURADA EXITOSAMENTE.
+URL de la API para binaria-events-handler-service:
+https://ozg7itcrvg.execute-api.us-east-1.amazonaws.com/
+Ejemplo de uso de Swagger:
+-> https://ozg7itcrvg.execute-api.us-east-1.amazonaws.com/docs
+
+
+✅ API GATEWAY HTTP (V2) CONFIGURADA EXITOSAMENTE.
+URL de la API para binaria-forms-handler-service:
+https://vk22i8orck.execute-api.us-east-1.amazonaws.com/
+Ejemplo de uso de Swagger:
+-> https://vk22i8orck.execute-api.us-east-1.amazonaws.com/docs
+
+
+✅ API GATEWAY HTTP (V2) CONFIGURADA EXITOSAMENTE.
+URL de la API para binaria-localization-handler-service:
+https://yvivgga9i8.execute-api.us-east-1.amazonaws.com/
+Ejemplo de uso de Swagger:
+-> https://yvivgga9i8.execute-api.us-east-1.amazonaws.com/docs
+
+
+✅ API GATEWAY HTTP (V2) CONFIGURADA EXITOSAMENTE.
+URL de la API para binaria-planning-handler-service:
+https://9bdyb0z3ol.execute-api.us-east-1.amazonaws.com/
+Ejemplo de uso de Swagger:
+-> https://9bdyb0z3ol.execute-api.us-east-1.amazonaws.com/docs
+
+```
+
+## OTROS DATOS IMPORTANTES
+
+Una vez se desplegó toda la infraestructura usando `POSTMAN` podemos crear el ususairo de la aplicación, para este caso se utilizó:
+
+```json
+{
+    "email" : "psoto@binariaconsultores.com",
+    "password" : "PASSWORD"
+}
+
+```
+
+## 👤 Creado Por
+
+**Rafael Ríos Bascón**
+[raforios@gmail.com](mailto:raforios@gmail.com)

@@ -9,17 +9,17 @@ set -o pipefail
 # --- 1. CONFIGURACIÓN DE TU ENTORNO ---
 REGION="us-east-1"  # Ajusta a tu región
 AWS_PROFILE="deploy_binaria" # Ajusta a tu perfil
-
+CUSTOM_DOMAIN_BASE="https://api.binaria.app"
 # --- 2. FUNCIONES DE CONSULTA DE DATOS (Reemplazo de Arrays Asociativos) ---
 
 # Función para obtener la URL de un microservicio
 get_api_url() {
     case "$1" in
-        "binaria-file-handler-service") echo "https://mijwvdu4g6.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-events-handler-service") echo "https://ozg7itcrvg.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-forms-handler-service") echo "https://vk22i8orck.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-localization-handler-service") echo "https://yvivgga9i8.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-planning-handler-service") echo "https://9bdyb0z3ol.execute-api.us-east-1.amazonaws.com" ;;
+        "binaria-file-handler-service") echo "${CUSTOM_DOMAIN_BASE}/files" ;;
+        "binaria-events-handler-service") echo "${CUSTOM_DOMAIN_BASE}/events" ;;
+        "binaria-forms-handler-service") echo "${CUSTOM_DOMAIN_BASE}/forms" ;;
+        "binaria-localization-handler-service") echo "${CUSTOM_DOMAIN_BASE}/localization" ;;
+        "binaria-planning-handler-service") echo "${CUSTOM_DOMAIN_BASE}/planning" ;;
         *) echo "" ;; # URL no encontrada
     esac
 }

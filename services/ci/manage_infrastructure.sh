@@ -98,6 +98,7 @@ retrieve_and_update_config() {
     sed -i.bak -e "s/^export SG_RDS_ID=.*/export SG_RDS_ID=\"$SG_RDS_ID\"/" "$CONFIG_FILE"
     sed -i.bak -e "s/^export PUBLIC_SUBNET_A=.*/export PUBLIC_SUBNET_A=\"$PUBLIC_SUBNET_A\"/" "$CONFIG_FILE"
     sed -i.bak -e "s/^export RDS_DB_ENDPOINT=.*/export RDS_DB_ENDPOINT=\"$DB_ENDPOINT\"/" "$CONFIG_FILE"
+    sed -i.bak -e "s/^export EC2_INSTANCE_ID=.*/export EC2_INSTANCE_ID=\"$EC2_ID\"/" "$CONFIG_FILE"
     # Eliminar el backup de sed
     rm -f "$CONFIG_FILE".bak
     
@@ -115,29 +116,36 @@ run_setup() {
     # 'Establecer' el perfil de AWS CLI globalmente
     export AWS_DEFAULT_PROFILE="$AWS_PROFILE"
 
-    # 1. 'Configuración de Red y Seguridad'
-    echo "Paso 1/4: 'Ejecutando setup_aws_infrastructure.sh' (VPC, Subnets, SGs)..."
+    # 1. Configuración de Red y Seguridad
+    echo "Paso 1/6: 'Ejecutando setup_aws_infrastructure.sh' (VPC, Subnets, SGs)..."
     ./setup_aws_infrastructure.sh
     
     # Llamar a la función de recuperación que actualiza el archivo con IDs de red.
     # (Necesario para que el script de RDS tenga los IDs de Subredes y SG de RDS)
     retrieve_and_update_config
     
-    # 2. 'Configuración de Instancia RDS' (NUEVO PASO)
-    echo "Paso 2/4: 'Ejecutando setup_rds_instance.sh' (Base de Datos MySQL)..."
+    # 2. Configuración de Instancia RDS
+    echo "Paso 2/6: 'Ejecutando setup_rds_instance.sh' (Base de Datos MySQL)..."
     # Este script creará la instancia y, CRÍTICO, exportará la variable DB_ENDPOINT.
     ./setup_rds_instance.sh
 
     # Repetir la recuperación para PERSISTIR el Endpoint de RDS recién creado.
     retrieve_and_update_config
     
-    # 3. 'Configuración de Instancia EC2'
-    echo "Paso 3/4: 'Ejecutando setup_ec2_instance.sh' (Instancia EC2, Par de Claves)..."
+    # 3. Configuración de Instancia EC2
+    echo "Paso 3/6: 'Ejecutando setup_ec2_instance.sh' (Instancia EC2, Par de Claves)..."
     ./setup_ec2_instance.sh
     
-    # 4. 'Configuración de API Gateway'
-    echo "Paso 4/4: 'Ejecutando setup_api_gateway.sh' (API Gateway Único, Integraciones)..."
-    # El usuario lo dejó comentado, lo mantenemos así para el despliegue de Lambdas:
+    # 4. Configuración de reglas de INDBOUND Y OUTBOND para EC2 y RDS
+    echo "Paso 4/6: 'Ejecutando configure_security_groups.sh' (Refuerzo de Reglas de SG)..."
+    ./configure_security_groups.sh
+
+    # 5. Configuración del ALB (¡NUEVO PASO!)
+    echo "Paso 5/6: 'Ejecutando setup_alb.sh' (Application Load Balancer para EC2)..."
+    ./setup_alb.sh
+
+    # 6. Configuración de API Gateway
+    echo "Paso 6/6: 'Ejecutando setup_api_gateway.sh' (API Gateway Único, Integraciones)..."
     ./setup_api_gateway.sh
 
     log_section "CREACIÓN DE TODA LA INFRAESTRUCTURA COMPLETADA"
