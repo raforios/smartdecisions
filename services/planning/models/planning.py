@@ -3,8 +3,8 @@
 '''
 from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import text
 from services.db_connection import Base
+from services.utils import get_current_time_gmt
 from schemas.planning import PlanningStatus
 
 class Planning(Base): # pylint: disable=too-few-public-methods
@@ -24,7 +24,7 @@ class Planning(Base): # pylint: disable=too-few-public-methods
     status = Column(Enum(PlanningStatus),
                     default = PlanningStatus.ACTIVE,
                     nullable = False)
-    created_at = Column(DateTime, nullable = False, server_default = text('now()'))
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     details = relationship(
         'PlanningDetail',
@@ -46,7 +46,7 @@ class PlanningDetail(Base): # pylint: disable=too-few-public-methods
     service_id = Column(Integer, nullable = False, index = True)
     planned_route_id = Column(Integer, nullable = False, index = True)
     date_of_day = Column(DateTime, nullable = False)
-    created_at = Column(DateTime, nullable = False, server_default = text('now()'))
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     planning = relationship('Planning', back_populates = 'details')
     materials = relationship(
@@ -69,6 +69,6 @@ class MaterialAssignment(Base): # pylint: disable=too-few-public-methods
     quantity_assigned = Column(Integer, nullable = False)
     quantity_used = Column(Integer, nullable = True)
     quantity_returned = Column(Integer, nullable = True)
-    created_at = Column(DateTime, nullable = False, server_default = text('now()'))
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     planning_detail = relationship('PlanningDetail', back_populates = 'materials')
