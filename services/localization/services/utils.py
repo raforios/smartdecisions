@@ -8,6 +8,7 @@ import decimal
 import asyncio
 import json
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 import requests as req
@@ -33,7 +34,8 @@ ENV_VARS = load_and_validate_env_vars(
     {
         'EVENTS_SERVICE_URL': str,
         'FILES_SERVICE_URL': str,
-        'BUCKET_NAME': str
+        'BUCKET_NAME': str,
+        'TARGET_TIMEZONE': str
     },
         optional_env_vars = {
         'BUCKET_PATH': str
@@ -42,6 +44,7 @@ ENV_VARS = load_and_validate_env_vars(
 
 EVENTS_SERVICE_URL = ENV_VARS['EVENTS_SERVICE_URL']
 FILES_SERVICE_URL = ENV_VARS['FILES_SERVICE_URL']
+TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
 BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 BUCKET_PATH = ENV_VARS['BUCKET_PATH']
 EVENTS_AUDIT_URL = None
@@ -53,6 +56,16 @@ if EVENTS_SERVICE_URL:
 
 if FILES_SERVICE_URL:
     UPLOAD_ENDPOINT = f'{FILES_SERVICE_URL}/v1/s3/upload'
+
+
+def get_current_time_gmt() -> datetime:
+    '''
+        Returns the current datetime object aware of the target timezone.
+        This function should be used as the default value for all SQLAlchemy 
+        DateTime columns to ensure database consistency.
+    '''
+    tz = ZoneInfo(TARGET_TIMEZONE)
+    return datetime.now(tz = tz)
 
 def sqlalchemy_object_as_dict(obj):
     '''
@@ -309,12 +322,14 @@ async def send_usage_log(log_data: dict):
     message = f'Usage log sent successfully. Status: {response.status_code}'
     logger.info(message)
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
 async def _handle_files_service(
     action: str,
     file_name: str,
     auth_token: str,
     delimiter: Optional[str] = None,
-    uploaded_file: Optional[UploadFile] = None
+    uploaded_file: Optional[UploadFile] = None,
+    dynamic_path: Optional[str] = None
 ) -> Optional[str]:
     '''
         Handles communication with the FILES microservice for reading and deleting files.
@@ -351,13 +366,18 @@ async def _handle_files_service(
                 'Authorization': f'{auth_token}'
             }
 
+            path_to_use = dynamic_path or BUCKET_PATH
+
+            if path_to_use and not path_to_use.endswith('/'):
+                path_to_use += '/'
+
             response = await _perform_request(
                 method = 'POST',
                 url = upload_endpoint,
                 headers = headers,
                 payload = {
                     'bucket_name': BUCKET_NAME,
-                    'file_path': BUCKET_PATH
+                    'file_path': path_to_use if path_to_use else BUCKET_PATH
                 },
                 files = {
                     'file': (uploaded_file.filename, file_content_bytes, mime_type)

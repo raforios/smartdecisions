@@ -1,7 +1,6 @@
 '''
    Localization Models
 '''
-from datetime import datetime, timezone
 from sqlalchemy import (
     Column,
     Integer,
@@ -14,8 +13,8 @@ from sqlalchemy import (
     UniqueConstraint
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import text
 from services.db_connection import Base
+from services.utils import get_current_time_gmt
 from schemas.localization import PlannedRouteStatusEnum
 
 class PlannedRoute(Base):# pylint: disable=too-few-public-methods
@@ -31,9 +30,7 @@ class PlannedRoute(Base):# pylint: disable=too-few-public-methods
     company_id = Column(Integer, nullable = False, index = True)
     app_id = Column(Integer, nullable = False, index = True)
     city_id = Column(Integer, nullable = False, index = True)
-    # Using text('now()') and server_default to fix Pylint error and ensure
-    # the function is executed at the database level.
-    created_at = Column(DateTime, nullable = False, server_default = text('now()'))
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     status = Column(
         Enum(PlannedRouteStatusEnum),
@@ -64,7 +61,7 @@ class PlannedPoint(Base):# pylint: disable=too-few-public-methods
     latitude = Column(Numeric(16, 14), nullable = False)
     longitude = Column(Numeric(16, 14), nullable = False)
     reference_data = Column(Text, nullable = True)
-    created_at = Column(DateTime, default = lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default = get_current_time_gmt)
 
     planned_route = relationship('PlannedRoute', back_populates = 'points')
     t_attendances = relationship(
