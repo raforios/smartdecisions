@@ -91,7 +91,8 @@ async def _initialize_dynamodb_session(
     first_question_number: int,
     user_id: int,
     contact_info: Dict[str, Any],
-    form_response_id: int
+    form_response_id: int,
+    service_id: int
 ) -> CurrentFormSession:
     '''
         Helper to initialize and save a new session in DynamoDB.
@@ -111,7 +112,8 @@ async def _initialize_dynamodb_session(
         contact_temp_latitude = contact_info.get('latitude'),
         contact_temp_longitude = contact_info.get('longitude'),
         person_info_id = contact_info['person_id'],
-        form_response_id = form_response_id
+        form_response_id = form_response_id,
+        service_id = service_id
     )
     await save_session(initial_session_state.model_dump())
     return initial_session_state
@@ -139,7 +141,8 @@ async def _common_session_load_and_validate(
 @handle_service_errors('FORMS')
 async def _handle_file_upload_logic(
     uploaded_file: UploadFile,
-    auth_token: str
+    auth_token: str,
+    dynamic_path: str
 ) -> str:
     '''
         Handles the logic for uploading a file to the FILES microservice.
@@ -149,7 +152,8 @@ async def _handle_file_upload_logic(
         action = 'create',
         file_name = '',
         auth_token = auth_token,
-        uploaded_file = uploaded_file
+        uploaded_file = uploaded_file,
+        dynamic_path = dynamic_path
     )
 
     file_url = response.get('url')
@@ -220,7 +224,8 @@ async def start_form_session(
         first_question_number = first_question_number,
         user_id = session_data.user_id,
         contact_info = contact_details_for_session,
-        form_response_id = form_response_id
+        form_response_id = form_response_id,
+        service_id = session_data.service_id
     )
 
     db.commit()
@@ -234,6 +239,7 @@ async def start_form_session(
         **get_question_response_data(first_question)
     )
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
 async def submit_answer_and_get_next_question(
     db: Session,
     answer_data: SubmitAnswerRequest,
@@ -257,9 +263,28 @@ async def submit_answer_and_get_next_question(
     if submitted_question_detail.response_type == 'FILE_UPLOAD':
         if not uploaded_file:
             raise InvalidInputError(detail = 'File upload question requires a file.')
+
+        form_header = db.query(FormHeader).filter(
+            FormHeader.id == current_session.form_id
+        ).first()
+
+        if not form_header:
+            raise RegisterNotFoundError(
+                detail = f'FormHeader with ID {current_session.form_id} not found.'
+            )
+
+        company_id = form_header.company_id
+        person_id = current_session.person_info_id
+        service_id = current_session.service_id
+
+        dynamic_path = f'{company_id}/{service_id}/{person_id}'
+
         answer_data.answer_value = await _handle_file_upload_logic(
-            uploaded_file, auth_token
+            uploaded_file,
+            auth_token,
+            dynamic_path
         )
+
     temp_answer = TemporaryAnswer(
         question_id = submitted_question_detail.id,
         question_number = submitted_question_detail.question_number,

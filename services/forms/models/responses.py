@@ -14,9 +14,9 @@ from sqlalchemy import (
     Boolean,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 
 from services.db_connection import Base
+from services.utils import get_current_time_gmt
 
 # --- Person Model (Encuestado/Entrevistado) ---
 class Person(Base): # pylint: disable=too-few-public-methods, too-many-ancestors
@@ -99,7 +99,8 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
     form_id = Column(Integer, ForeignKey('t_form_headers.id'), nullable = False)
     contact_id = Column(Integer, ForeignKey('t_contacts.id'), nullable = False)
     person_id = Column(Integer, ForeignKey('t_persons.id'), nullable = False)
-    submission_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
+    submission_date = Column(DateTime, default = get_current_time_gmt,
+                    nullable = False)
     status = Column(String(50), nullable = False)
     user_id = Column(Integer, nullable = False, index = True)
     affiliation_number = Column(Integer, nullable = True)
@@ -158,7 +159,8 @@ class FormResponseFlow(Base): # pylint: disable=too-few-public-methods, too-many
 
     id = Column(Integer, primary_key = True, index = True)
     form_response_id = Column(Integer, ForeignKey('t_form_responses.id'), nullable = False)
-    date_time = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
+    date_time = Column(DateTime, default = get_current_time_gmt,
+                nullable = False)
     user_id = Column(Integer, nullable = False)
     initial_status = Column(String(50), nullable = False)
     next_status = Column(String(50), nullable = False)

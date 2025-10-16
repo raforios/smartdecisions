@@ -306,7 +306,7 @@ class CurrentFormSession(BaseModel):
     form_id: int = Field(..., description = 'ID of the form being answered.')
     current_question_number: int = Field(...,
         description = 'The number of the question currently being displayed/answered.')
-    answers: Dict[str, TemporaryAnswer] = Field(default_factory=dict,
+    answers: Dict[str, TemporaryAnswer] = Field(default_factory = dict,
         description = '''Dictionary of answers, keyed by question_id or question_number
         for easy lookup/update.''')
     start_time: datetime = Field(..., description = 'Timestamp when the session began.')
@@ -329,7 +329,8 @@ class CurrentFormSession(BaseModel):
         description = 'Type of affiliation (e.g., "new", "re-enrollment", etc.).')
     form_response_id: Optional[int] = Field(None,
         description = 'ID of the initial FormResponse record created in MySQL.')
-
+    service_id: int = Field(...,
+        description = 'ID of the service for file path generation in S3.')
 # --- Schemas for Request/Response related to Question Flow and Answers ---
 class StartFormSessionRequest(BaseModel):
     '''
@@ -348,7 +349,8 @@ class StartFormSessionRequest(BaseModel):
         description = 'Geospatial and time data for the start of the interaction.')
     status: Optional[str] = Field('CREATED',
         description = 'Initial status of the form header. Defaults to CREATED if not provided.')
-
+    service_id: int = Field(...,
+        description = 'ID of the service for file path generation.')
 class StartFormSessionResponse(BaseModel):
     '''
         Response schema upon starting a new form session.

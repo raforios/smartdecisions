@@ -4,10 +4,11 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text
 from sqlalchemy import Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from sqlalchemy import Enum as SQLAlchemyEnum
 
 from services.db_connection import Base
+from services.utils import get_current_time_gmt
+
 from schemas.forms import QuestionType
 
 class FormHeader(Base):# pylint: disable=too-few-public-methods, too-many-ancestors, too-many-ancestors
@@ -21,7 +22,8 @@ class FormHeader(Base):# pylint: disable=too-few-public-methods, too-many-ancest
     form_code = Column(String(50), unique = True, nullable = False, index = True)
     name = Column(String(255), nullable = False)
     status = Column(String(15), nullable = False)
-    creation_date = Column(DateTime, server_default = func.now(), nullable = False)# pylint: disable=not-callable
+    creation_date = Column(DateTime, default = get_current_time_gmt,
+                    nullable = False)
     company_id = Column(Integer, nullable = False, index = True)
     app_id = Column(Integer, nullable = False, index = True)
 
