@@ -30,6 +30,7 @@ nano ~/.aws/config
 
 - `manage_infrastructure.sh`
 - `build_and_deploy.sh`
+- `create_dynamodb_tables.sh`
 - `update_env_urls.sh`
 - `configure_https.sh`
 - `setup_elastic.sh`
@@ -39,6 +40,8 @@ Los otros scripts son complementarios, de soporte y necesariamente deben estar e
 4. **Estructura del proceso de ejecuón:**
 
 El script `build_and_deploy.sh` es el primer script que debe ser ejecutado. Este script sirve para el despliegue de los microservicios (servicios `LAMBDA`), una vez que todos los microservicios hayan sido desplegados, recién se debe proceder a la creación del resto de la infraestructura.
+
+El script `create_dynamodb_tables.sh` es el segundo script que debe ser ejecutado. Este script sirve crear todas las tablas necesarias en DynamoDB para el manejo de los `eventos`.
 
 El script `manage_infrastructure.sh` cuando se ejecuta con la opción `setup` utiliza los siguientes scripts y archivo de configuración de manera complementaria y requerida.
 
@@ -73,33 +76,6 @@ También tenemos archivos complementarios para hacer ajustes y configuraciones a
 
 - **configure_https_and_api_domain.sh**
 - **map_api_base_paths.sh**
-
-
-- 
-- 
-- `build_and_deploy.sh`
-- **configure_https_and_api_domain.sh**
-- `configure_https.sh`
-- configure_security_groups.sh
-- 
-- 
-- destroy_aws_infrastructure.sh
-- infrastructure.config
-- `manage_infrastructure.sh`
-- **map_api_base_paths.sh**
-- 
-- setup_alb.sh
-- setup_api_gateway.sh
-- setup_aws_infrastructure.sh
-- setup_ec2_instance.sh
-- `setup_elastic.sh`
-- setup_rds_instance.sh
-- 
-- `update_env_urls.sh`
-
-
-Con esos tres archivos se construye y despliega la infraestructura.
-
 
 5.  **Archivo de Configuración:** El archivo **`infrastructure.config`** debe estar presente y previamente configurado con los valores deseados para el despliegue de la infraestructura central.
 
@@ -146,12 +122,14 @@ BUCKET_PATH=""
 ```shell
 # --- PASO 1 ---
 # Deplegar servicios LAMBDA
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --skip-table-creation
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth 
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/events
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --skip-table-creation
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/localization --skip-table-creation
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/planning --skip-table-creation
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/forms 
+
+./create_dynamodb_tables.sh
 
 # --- PASO 2 ---
 # Crear toda la infraestructura
@@ -174,28 +152,44 @@ DB_PORT="3306"
 
 # --- PASO 5 ---
 # Actualizar en el script "update_env_urls.sh" al inicio del archivo el segmento:
-    case "$1" in
-        "binaria-file-handler-service") echo "https://mijwvdu4g6.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-events-handler-service") echo "https://ozg7itcrvg.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-forms-handler-service") echo "https://vk22i8orck.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-localization-handler-service") echo "https://yvivgga9i8.execute-api.us-east-1.amazonaws.com" ;;
-        "binaria-planning-handler-service") echo "https://9bdyb0z3ol.execute-api.us-east-1.amazonaws.com" ;;
-        *) echo "" ;; # URL no encontrada
-    esac
+CUSTOM_DOMAIN_BASE="https://api.binaria.app"
 
-#  Esto se debe realizar con las URLs de los servicios lambda obtenidos durante el despliegue y ejecución del paso 2
+# Esto se debe realizar con la URL del subdominio que se haya definido y a la cual se le ha creado un CERTIFICADO dentro del CERTIFICATE MANAGER de AWS. Este paso es manual y es mandatorio para los siguientes pasos. También se debe configurar el Cloud Flare con los valores del CNAME obtenido par ael dominio y los subdominios
 
 # --- PASO 6 ---
-# Actualización de los lambdas y sus variables de entorno y adesión a la infraestructura creada en el paso 2
-./update_env_urls.sh
-
-# --- PASO 7 ---
 # Configuración del ELASTIC IP para mantener el IP siempre igual indpendiente de la instancia EC2
 ./setup_elastic.sh
 
-# --- PASO 8 ---
+# --- PASO 7 ---
 # Configuración del HTTPS
 ./configure_https.sh
+
+# --- PASO 8 ---
+# Configurando el subdominio para los microservicios, previamente se debe editar algunos valores de este earchivo:
+CUSTOM_DOMAIN="api.binaria.app"
+CERTIFICATE_ARN="" # ARN obtenido del certificado creado
+ALB_ARN="" # Reemplaza con tu ALB ARN creado en el paso 2
+TG_ARN="" # Reemplaza con tu TG ARN creado en el paso 2
+
+./configure_https_and_api_domain.sh
+
+# --- PASO 9 ---
+# Mapear los ID de los lambdas creados en el paso 1 con la URL del subdominio que acaabmos de configurar
+CUSTOM_DOMAIN="api.binaria.app"
+API_MAPPINGS=(
+    "ID-LAMBDA-file:files"      # binaria-file-handler-service
+    "ID-LAMBDA-events:events"     # binaria-events-handler-service
+    "ID-LAMBDA-forms:forms"      # binaria-forms-handler-service
+    "ID-LAMBDA-localization:localization" # binaria-localization-handler-service
+    "ID-LAMBDA-planning:planning"    # binaria-planning-handler-service
+    "ID-LAMBDA-auth:auth"       # binaria-auth-handler-service
+)
+
+./map_api_base_paths.sh
+
+# --- PASO 10 ---
+# Actualización de los lambdas y sus variables de entorno y adesión a la infraestructura creada en el paso 2
+./update_env_urls.sh
 
 
 ```
@@ -218,22 +212,22 @@ DB_PORT="3306"
 # Modificar el archivo ".env" siguiendo el ejemplo del paso 4 del CASO 1
 
 # --- PASO 5 ---
-# Actualizar en el script "update_env_urls.sh" siguiendo el ejemplo del paso 5 del CASO 1. Esto se debe realizar con las URLs de los servicios lambda obtenidos durante el despliegue y ejecución del paso 3
-
-# --- PASO 6 ---
 # Reinicio y reintegro de los servicios lambda que utilizan el RDS para que estén integrados a la nueva infraestructura
 
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/localization --skip-table-creation  --skip-code-update
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/planning --skip-table-creation  --skip-code-update
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/forms --skip-table-creation  --skip-code-update
 
-# --- PASO 7 ---
-# Actualización de los lambdas y sus variables de entorno y adesión a la nueva infraestructura creada en el paso 3
-./update_env_urls.sh
-
-# --- PASO 8 ---
+# --- PASO 6 ---
 # Configuración del HTTPS
 ./configure_https.sh
+
+# --- PASO 7 ---
+# Actualizar en el script "map_api_base_paths.sh" y el script "configure_https_and_api_domain.sh" siguiendo el ejemplo de los pasos 8 y 9 del CASO 1 ejecutar ambos pasos según se describe. Esto se debe realizar con los ID y ARN de los servicios lambda y otros valores obtenidos durante el despliegue y ejecución del paso 3. Revisar en detalle el CASO 1.
+
+# --- PASO 8 ---
+# Actualización de los lambdas y sus variables de entorno y adesión a la nueva infraestructura creada en el paso 3
+./update_env_urls.sh
 
 
 ```
