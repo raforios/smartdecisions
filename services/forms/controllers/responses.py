@@ -3,6 +3,7 @@
     Handles the business logic for managing form responses, including
     temporary caching in DynamoDB and final persistence in MySQL.
 '''
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -142,12 +143,19 @@ async def _common_session_load_and_validate(
 async def _handle_file_upload_logic(
     uploaded_file: UploadFile,
     auth_token: str,
-    dynamic_path: str
+    dynamic_path: str,
+    person_id: int
 ) -> str:
     '''
         Handles the logic for uploading a file to the FILES microservice.
         This version uses the standardized _perform_request function.
     '''
+    _, file_extension = os.path.splitext(uploaded_file.filename)
+    current_time = datetime.now()
+    timestamp_part = current_time.strftime('%d-%m-%Y-%H-%M-%S')
+    new_file_name = f'{person_id}_{timestamp_part}{file_extension}'
+    uploaded_file.filename = new_file_name
+
     response = await _handle_files_service(
         action = 'create',
         file_name = '',
@@ -282,7 +290,8 @@ async def submit_answer_and_get_next_question(
         answer_data.answer_value = await _handle_file_upload_logic(
             uploaded_file,
             auth_token,
-            dynamic_path
+            dynamic_path,
+            person_id
         )
 
     temp_answer = TemporaryAnswer(
