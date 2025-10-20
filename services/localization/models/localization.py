@@ -81,7 +81,7 @@ class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
     user_id = Column(Integer, nullable = False, index = True)
     planned_route_id = Column(Integer, ForeignKey('t_planned_routes.id'), nullable = True)
     # Using text('now()') and server_default for consistency and Pylint compatibility.
-    start_time = Column(DateTime, nullable = False)
+    start_time = Column(DateTime, default = get_current_time_gmt, nullable = False)
     end_time = Column(DateTime, nullable = True)
 
     start_latitude = Column(Numeric(16, 14), nullable = False)
@@ -109,7 +109,7 @@ class ExecutedPoint(Base):# pylint: disable=too-few-public-methods
     executed_route_id = Column(Integer, ForeignKey('t_executed_routes.id'), nullable = False)
     latitude = Column(Numeric(16, 14), nullable = False)
     longitude = Column(Numeric(16, 14), nullable = False)
-    timestamp = Column(DateTime, nullable = False, index = True)
+    timestamp = Column(DateTime, default = get_current_time_gmt, nullable = False, index = True)
 
     executed_route = relationship('ExecutedRoute', back_populates = 'points')
 
