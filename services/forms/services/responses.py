@@ -1,7 +1,6 @@
 '''
     Business logic services for the Forms microservice.
 '''
-from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
@@ -36,6 +35,7 @@ from services.crud import (
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
+    get_current_time_gmt,
     handle_service_errors,
     audit_event,
     sqlalchemy_object_as_dict
@@ -249,7 +249,7 @@ async def update_final_form_response_logic(
     if person_record:
         person_update_data = PersonUpdate(
             is_affiliated = True,
-            affiliation_date = datetime.now(),
+            affiliation_date = get_current_time_gmt(),
             affiliation_user_id = updated_form_response.user_id
         )
         update_record(db, person_record, person_update_data)

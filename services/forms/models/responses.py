@@ -72,7 +72,7 @@ class Contact(Base): # pylint: disable=too-few-public-methods, too-many-ancestor
     person_id = Column(Integer, ForeignKey('t_persons.id'), nullable = False)
     latitude = Column(Numeric(16, 14), nullable = False)
     longitude = Column(Numeric(16, 14), nullable = False)
-    start_datetime = Column(DateTime, nullable = False)
+    start_datetime = Column(DateTime, default = get_current_time_gmt, nullable = False)
     executed_route_point_id = Column(Integer, nullable = False)
 
     # Relationships: many-to-one with Person, one-to-many with FormResponse

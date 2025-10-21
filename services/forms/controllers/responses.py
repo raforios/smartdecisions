@@ -60,7 +60,7 @@ from services.dynamodb import (
     delete_session_by_id
 )
 # Utility for handling service layer errors
-from services.utils import _handle_files_service, handle_service_errors
+from services.utils import _handle_files_service, get_current_time_gmt, handle_service_errors
 # Import auxiliary functions from the new service layer
 from services.responses import (
     create_person_logic,
@@ -151,8 +151,8 @@ async def _handle_file_upload_logic(
         This version uses the standardized _perform_request function.
     '''
     _, file_extension = os.path.splitext(uploaded_file.filename)
-    current_time = datetime.now()
-    timestamp_part = current_time.strftime('%d-%m-%Y-%H-%M-%S')
+    current_time = get_current_time_gmt()
+    timestamp_part = current_time.strftime('%Y%m%d-%H-%M-%S')
     new_file_name = f'{person_id}_{timestamp_part}{file_extension}'
     uploaded_file.filename = new_file_name
 
