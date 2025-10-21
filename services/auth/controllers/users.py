@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from services.utils import get_current_time_gmt
 from services.dynamodb import (
     create_user_item,
     get_user_by_email,
@@ -113,7 +114,9 @@ async def create_user(
         raise RegisterAlreadyExistsError(detail = 'Email already registered')
 
     hashed_pw = hash_password(user_data.password)
-    current_time = datetime.now(timezone.utc)
+    timestamp = get_current_time_gmt()
+    current_time = timestamp.isoformat()
+    
     new_user_item = {
         'email': user_data.email,
         'first_name': user_data.first_name,
@@ -121,8 +124,8 @@ async def create_user(
         'hashed_password': hashed_pw,
         'role': Role.USER.value,
         'status': True,
-        'date_register': current_time.isoformat(),
-        'date_update': current_time.isoformat()
+        'date_register': current_time,
+        'date_update': current_time
     }
     created_item = create_user_item(new_user_item)
     message = f'User {created_item['email']} registered successfully in DynamoDB.'
