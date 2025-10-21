@@ -116,7 +116,7 @@ async def create_user(
     hashed_pw = hash_password(user_data.password)
     timestamp = get_current_time_gmt()
     current_time = timestamp.isoformat()
-    
+
     new_user_item = {
         'email': user_data.email,
         'first_name': user_data.first_name,

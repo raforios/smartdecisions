@@ -25,7 +25,7 @@ def create_usage_log_controller(
     log_dict['id'] = str(uuid.uuid4())
     timestamp = get_current_time_gmt()
     log_dict['timestamp'] = timestamp.isoformat()
-    
+
     # Llama al servicio para crear el registro
     usage_log = create_usage_log(
         dynamodb_resource = dynamodb_resource,
