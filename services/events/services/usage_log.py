@@ -11,7 +11,14 @@ from services.crud import (
 from services.utils import handle_service_errors, process_query_params
 from services.logger_config import custom_logger as logger
 
-USAGE_LOG_TABLE_NAME = 'usage_logs'
+from services.environment import load_and_validate_env_vars
+
+ENV_VARS = load_and_validate_env_vars({
+    'DYNAMODB_TABLE_NAME_USAGE': str
+})
+
+
+USAGE_LOG_TABLE_NAME = ENV_VARS['DYNAMODB_TABLE_NAME_USAGE']
 
 @handle_service_errors
 def create_usage_log(

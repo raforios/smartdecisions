@@ -5,14 +5,7 @@ from typing import Callable
 import boto3
 from botocore.exceptions import ClientError
 from services.logger_config import custom_logger as logger
-from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
-
-# Carga las variables de entorno necesarias
-ENV_VARS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_AUDIT': str,
-    'DYNAMODB_TABLE_NAME_USAGE': str
-})
 
 # Inicializa la conexión de boto3
 dynamodb_resource = boto3.resource('dynamodb')

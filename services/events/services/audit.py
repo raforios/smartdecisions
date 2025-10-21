@@ -10,8 +10,14 @@ from services.crud import (
 )
 from services.utils import handle_service_errors, process_query_params
 from services.logger_config import custom_logger as logger
+from services.environment import load_and_validate_env_vars
 
-AUDIT_TABLE_NAME = 'audit_records'
+ENV_VARS = load_and_validate_env_vars({
+    'DYNAMODB_TABLE_NAME_AUDIT': str
+})
+
+
+AUDIT_TABLE_NAME = ENV_VARS['DYNAMODB_TABLE_NAME_AUDIT']
 
 @handle_service_errors
 def create_audit_record(
