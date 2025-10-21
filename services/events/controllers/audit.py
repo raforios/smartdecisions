@@ -3,14 +3,13 @@
 '''
 from typing import Dict, Any
 import uuid
-import datetime
 from boto3.resources.base import ServiceResource
 from schemas.audit import (
     AuditRecordCreateSchema,
     AuditRecordResponseSchema,
     AuditRecordQuerySchema
 )
-from services.utils import handle_service_errors
+from services.utils import get_current_time_gmt, handle_service_errors
 from services.audit import create_audit_record, get_audit_records
 
 @handle_service_errors
@@ -24,7 +23,8 @@ def create_audit_record_controller(
     # Genera un ID único y la marca de tiempo para el registro
     record_dict = record_data.model_dump()
     record_dict['id'] = str(uuid.uuid4())
-    record_dict['timestamp'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    timestamp = get_current_time_gmt()
+    record_dict['timestamp'] = timestamp.isoformat()
 
     # Llama al servicio para crear el registro
     audit_record = create_audit_record(

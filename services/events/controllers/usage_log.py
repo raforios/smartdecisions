@@ -3,14 +3,13 @@
 '''
 from typing import Dict, Any
 import uuid
-import datetime
 from boto3.resources.base import ServiceResource
 from schemas.usage_log import (
     UsageLogCreateSchema,
     UsageLogResponseSchema,
     UsageLogQuerySchema
 )
-from services.utils import handle_service_errors
+from services.utils import get_current_time_gmt, handle_service_errors
 from services.usage_log import create_usage_log, get_usage_logs
 
 @handle_service_errors
@@ -24,8 +23,9 @@ def create_usage_log_controller(
     # Genera un ID único y la marca de tiempo para el registro
     log_dict = log_data.model_dump()
     log_dict['id'] = str(uuid.uuid4())
-    log_dict['timestamp'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
+    timestamp = get_current_time_gmt()
+    log_dict['timestamp'] = timestamp.isoformat()
+    
     # Llama al servicio para crear el registro
     usage_log = create_usage_log(
         dynamodb_resource = dynamodb_resource,
