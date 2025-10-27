@@ -185,7 +185,7 @@ class FormResponseBase(BaseModel):
     company_id: Optional[int] = Field(None)
     affiliation_number: Optional[int] = Field(None,
         description = 'Number of affiliation from 1 to N.')
-    service_id: Optional[int] = Field(None,
+    service_id: int = Field(...,
         description = 'ID of the service associated with this response.')
 
 class FormResponseCreate(FormResponseBase):
@@ -275,6 +275,7 @@ class FormResponseSummaryResponse(BaseModel):
     user_id: int
     contact_id: int
     company_id: Optional[int] = Field(None)
+    service_id: Optional[int] = Field(None)
     affiliation_number: Optional[int] = Field(None)
     rejection_reason: Optional[str] = Field(None)
     affiliation_type: Optional[str] = Field(None)
@@ -504,3 +505,26 @@ class PersonSearchFilters(BaseModel):
             Pydantic config.
         '''
         arbitrary_types_allowed = True
+
+class FormResponseFilters(BaseModel):
+    '''
+        Schema to filter form responses based on various criteria.
+    '''
+    # Fechas mandatorias
+    submission_date_start: datetime = Query(...,
+        description = 'Start date and time (inclusive) for the submission date range.')
+    submission_date_end: datetime = Query(...,
+        description = 'End date and time (inclusive) for the submission date range.')
+
+    # Campos opcionales
+    form_id: Optional[int] = Query(None, description = 'Filter by the ID of the form.')
+    service_id: Optional[int] = Query(None, description = 'Filter by the ID of the service.')
+    user_id: Optional[int] = Query(None,
+        description = 'Filter by the user ID who submitted the form.')
+
+    class Config: # pylint: disable=too-few-public-methods
+        '''
+            Pydantic config.
+        '''
+        arbitrary_types_allowed = True
+        from_attributes = True

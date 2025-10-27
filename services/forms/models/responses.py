@@ -99,6 +99,7 @@ class FormResponse(Base): # pylint: disable=too-few-public-methods, too-many-anc
     form_id = Column(Integer, ForeignKey('t_form_headers.id'), nullable = False)
     contact_id = Column(Integer, ForeignKey('t_contacts.id'), nullable = False)
     person_id = Column(Integer, ForeignKey('t_persons.id'), nullable = False)
+    service_id = Column(Integer, nullable = False, index = True)
     submission_date = Column(DateTime, default = get_current_time_gmt,
                     nullable = False)
     status = Column(String(50), nullable = False)

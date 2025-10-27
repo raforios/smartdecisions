@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urlencode
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from models.responses import FormResponse, Person, Contact
 from schemas.reports import (
     AffiliationMonitorRequestSchema,
@@ -33,14 +33,44 @@ if PLANNING_SERVICE_URL:
 if LOCALIZATION_SERVICE_URL:
     LOCALIZATION_ENDPOINT = f'{LOCALIZATION_SERVICE_URL}/v1/localization'
 
+async def _check_service_and_company_existence(
+    db: Session,
+    company_id: int,
+    service_id: int
+) -> bool:
+    '''
+        Checks if at least one FormResponse exists for the given company_id and service_id.
+    '''
+
+    exists_query = select(FormResponse.id).filter(
+        and_(
+            FormResponse.company_id == company_id,
+            FormResponse.service_id == service_id
+        )
+    ).limit(1)
+
+    # db.scalar() ejecuta la consulta y retorna el primer elemento (el ID), o None si no hay.
+    result = db.execute(exists_query)
+    count = result.scalar()
+
+    return count is not None
+
 @handle_service_errors('PLANNING')
 async def _fetch_planned_ids_from_planning(
+    db: Session,
     request_data: AffiliationMonitorRequestSchema,
     auth_token: str
 ) -> Optional[Set[int]]:
     '''
         Fetches planned route IDs from the Planning microservice based on various filters.
     '''
+    if not await _check_service_and_company_existence(
+        db,
+        request_data.company_id,
+        request_data.service_id
+    ):
+        return None
+
     query_params = {
         'company_id': request_data.company_id,
         'service_id': request_data.service_id
@@ -92,6 +122,7 @@ async def _fetch_planned_ids_from_localization(
 # --- Orquestador de filtros ---
 
 async def _get_planned_route_ids_for_monitor(
+    db: Session,
     request_data: AffiliationMonitorRequestSchema,
     auth_token: str
 ) -> Optional[Set[int]]:
@@ -104,8 +135,9 @@ async def _get_planned_route_ids_for_monitor(
 
     # Si no hay planned_route_ids, se aplican los filtros de Planning
     planned_ids_from_planning = await _fetch_planned_ids_from_planning(
-        request_data,
-        auth_token
+        db = db,
+        request_data = request_data,
+        auth_token = auth_token
     )
     if not planned_ids_from_planning:
         return None  # No hay datos para los filtros de Planning
@@ -158,8 +190,9 @@ async def calculate_affiliation_monitor(
     '''
     # 1. Obtener los planned_route_ids según la jerarquía
     planned_route_ids = await _get_planned_route_ids_for_monitor(
-        request_data,
-        auth_token
+        db = db,
+        request_data = request_data,
+        auth_token = auth_token
     )
 
     if not planned_route_ids:
@@ -194,6 +227,9 @@ async def calculate_affiliation_monitor(
 
     # Filtro de executed_route_point_id (obligatorio)
     conditions.append(Contact.executed_route_point_id.in_(executed_point_ids))
+
+    # Filtro de service_id (Mandatorio por schema)
+    conditions.append(FormResponse.service_id == request_data.service_id)
 
     # Aplicar el resto de los filtros opcionales
     if request_data.date_from and request_data.date_to:
@@ -253,8 +289,12 @@ async def calculate_affiliation_monitor(
 
     today = datetime.now().date()
     days_transpired = (today - request_data.date_from).days if request_data.date_from else 1
+    # Asegurarse de que days_transpired sea al menos 1 para evitar divisiones por cero o lógicas
+    # negativas si no hay fecha de inicio.
+    if days_transpired <= 0:
+        days_transpired = 1
 
-    ratio = (q_affiliations_approved / days_transpired) if days_transpired > 0 else 0
+    ratio = q_affiliations_approved / days_transpired
     individual_ratio = (ratio / q_affiliators) if q_affiliators > 0 else 0
     daily_need_denominator = request_data.working_days - days_transpired
     daily_need = (period_target - q_affiliations_approved) / daily_need_denominator if \
@@ -284,22 +324,29 @@ async def calculate_affiliation_monitor(
 
 @handle_service_errors('PLANNING')
 async def _fetch_planned_routes_from_planning(
+    db: Session,
     request_data: ContactsByRouteReportRequestSchema,
     auth_token: str
 ) -> Optional[List[int]]:
     '''
         Fetches planned route IDs from the Planning microservice based on team ID or service ID.
     '''
-    if not request_data.team_id and not request_data.service_id:
+    if not request_data.team_id and not request_data.service_id and not request_data.company_id:
+        return None
+
+    if not await _check_service_and_company_existence(
+        db,
+        request_data.company_id,
+        request_data.service_id
+    ):
         return None
 
     query_params = {
-        'company_id': request_data.company_id
+        'company_id': request_data.company_id,
+        'service_id': request_data.service_id
     }
     if request_data.team_id:
         query_params['team_id'] = request_data.team_id
-    if request_data.service_id:
-        query_params['service_id'] = request_data.service_id
     url = f'{PLANNING_ENDPOINT}/filter?{urlencode(query_params)}'
     headers = {
         'Authorization': f'{auth_token}',
@@ -388,6 +435,7 @@ async def _get_company_id_from_localization(
     return data.get('company_id')
 
 async def _get_planned_route_ids_from_request(
+    db: Session,
     request_data: ContactsByRouteReportRequestSchema,
     auth_token: str
 ) -> Optional[Set[int]]:
@@ -400,16 +448,17 @@ async def _get_planned_route_ids_from_request(
         final_planned_route_ids = {request_data.planned_route_id}
     elif request_data.team_id or request_data.service_id:
         ids_from_planning = await _fetch_planned_routes_from_planning(
-            request_data=request_data,
-            auth_token=auth_token
+            db = db,
+            request_data = request_data,
+            auth_token = auth_token
         )
         if ids_from_planning:
             final_planned_route_ids = set(ids_from_planning)
 
     if request_data.city_id:
         ids_from_localization = await _fetch_planned_routes_from_localization(
-            request_data=request_data,
-            auth_token=auth_token
+            request_data = request_data,
+            auth_token = auth_token
         )
         if ids_from_localization:
             if final_planned_route_ids is None:
@@ -439,6 +488,7 @@ async def _get_executed_point_ids(
     else:
         # Aplica el resto de la jerarquía de filtros de ruta
         final_planned_route_ids = await _get_planned_route_ids_from_request(
+            db = db,
             request_data = request_data,
             auth_token = auth_token
         )
@@ -453,40 +503,6 @@ async def _get_executed_point_ids(
 
     return final_executed_point_ids
 
-@handle_service_errors('PLANNING')
-async def _fetch_single_service_id_from_planning(
-    planned_route_id: int,
-    auth_token: str
-) -> Optional[int]:
-    '''
-        Fetches the single service ID associated with a single planned route ID 
-        using a direct lookup endpoint in the Planning service.
-    '''
-    query_params = {'planned_route_id': planned_route_id}
-    url = f'{PLANNING_ENDPOINT}/filter?{urlencode(
-        query_params, doseq = True)}'
-    headers = {'Authorization': f'{auth_token}'}
-
-    response = await _perform_request('GET', url, headers = headers)
-
-    if response.status_code == 404:
-        return None
-
-    response.raise_for_status()
-    data = response.json()
-
-    if not isinstance(data, list) or not data:
-        return None
-
-    for planning_header in data:
-
-        details = planning_header.get('details', [])
-
-        for detail in details:
-            if detail.get('planned_route_id') == planned_route_id:
-                return detail.get('service_id')
-
-    return None
 
 @handle_service_errors('FORMS-REPORTS')
 async def generate_contacts_by_route_report(
@@ -496,7 +512,7 @@ async def generate_contacts_by_route_report(
 ) -> List[FormResponseDetailResponse]:
     '''
         Generates a detailed report by combining filters to find contacts,
-        persons, routes, and forms.
+        persons, routes, and forms. (Simplified: service_id taken from request/DB).
     '''
     company_id = request_data.company_id
 
@@ -519,18 +535,7 @@ async def generate_contacts_by_route_report(
     if not final_executed_point_ids:
         return []
 
-    # 3. Lógica para obtener el service_id para enriquecimiento
-    service_id_to_enrich = None
-
-    if request_data.planned_route_id:
-        service_id_to_enrich = await _fetch_single_service_id_from_planning(
-            planned_route_id = request_data.planned_route_id,
-            auth_token = auth_token
-        )
-    elif request_data.service_id:
-        service_id_to_enrich = request_data.service_id
-
-    # 4. Construir la consulta a la base de datos con los filtros
+    # 3. Construir la consulta a la base de datos con los filtros
     query = db.query(FormResponse).join(
         FormResponse.contact
     ).join(
@@ -554,6 +559,9 @@ async def generate_contacts_by_route_report(
     if company_id:
         conditions.append(FormResponse.company_id == company_id)
 
+    if request_data.service_id:
+        conditions.append(FormResponse.service_id == request_data.service_id)
+
     if request_data.user_id and not request_data.planned_route_id:
         conditions.append(FormResponse.user_id == request_data.user_id)
 
@@ -561,15 +569,6 @@ async def generate_contacts_by_route_report(
 
     results = query.all()
 
-    # 5. Enriquecer la respuesta
-    enriched_responses = []
-
-    for form_response in results:
-        response_schema = FormResponseDetailResponse.model_validate(form_response)
-
-        updated_response = response_schema.model_copy(
-            update={'service_id': service_id_to_enrich}
-        )
-        enriched_responses.append(updated_response)
-
-    return enriched_responses
+    # 4. Retornar las respuestas. El service_id ya está en el modelo FormResponse
+    # y será mapeado automáticamente por FormResponseDetailResponse.
+    return [FormResponseDetailResponse.model_validate(form_response) for form_response in results]

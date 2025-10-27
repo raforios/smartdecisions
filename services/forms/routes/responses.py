@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 # Import schemas for form responses
 from schemas.responses import (
+    FormResponseFilters,
     FormResponseStatusFlow,
     PersonCreate,
     PersonListResponse,
@@ -262,15 +263,16 @@ async def get_form_response_by_id_route(
 @router.get(
     '/',
     response_model = List[FormResponseSummaryResponse],
-    summary = 'Get all completed form responses (paginated)',
-    description = '''Retrieves a paginated list of all completed form responses. This endpoint
-        returns a summary view for performance, avoiding the load of nested answers.
-        Access is restricted to authenticated users.'''
+    summary = 'Get all completed form responses (paginated and filterable)',
+    description = '''Retrieves a paginated list of all completed form responses. Requires a
+        submission date range filter. Returns a summary view for performance.'''
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_all_form_responses_route(
     request: Request,
     skip: int = Query(0, ge = 0),
     limit: int = Query(100, ge = 1, le = 100),
+    filters: FormResponseFilters = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -284,6 +286,7 @@ async def get_all_form_responses_route(
         db = db,
         skip = skip,
         limit = limit,
+        filters = filters,
         request = request,
         current_user = current_user
     )

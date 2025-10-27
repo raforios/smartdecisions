@@ -22,6 +22,7 @@ from models.forms import FormHeader
 
 # Import schemas
 from schemas.responses import (
+    FormResponseFilters,
     FormResponseStatusFlow,
     PersonCreate,
     PersonListResponse,
@@ -65,6 +66,7 @@ from services.utils import _handle_files_service, get_current_time_gmt, handle_s
 from services.responses import (
     create_person_logic,
     delete_person_logic,
+    find_form_responses_by_filters,
     find_persons_by_filters,
     get_all_persons_logic,
     get_form_response_status_flow_logic,
@@ -202,7 +204,8 @@ async def start_form_session(
         'contact_id': contact_info['contact_id'],
         'person_id': contact_info['person_id'],
         'status': session_data.status, 
-        'company_id': company_id
+        'company_id': company_id,
+        'service_id': session_data.service_id
     }
 
     # 3. Create the form header record in MySQL with the status from the frontend
@@ -485,13 +488,21 @@ async def get_all_form_responses(
     current_user: str, # pylint: disable=unused-argument
     skip: int = 0,
     limit: int = 100,
+    filters: FormResponseFilters = None
 ) -> List[FormResponseSummaryResponse]:
     '''
-        Retrieves a paginated list of all completed form responses.
-        Does not load nested answers by default for performance (uses summary schema).
+        Retrieves a paginated list of all completed form responses, with optional filtering.
     '''
-    # Using the generic get_all_records_paginated from crud service
-    return get_all_records_paginated(db, FormResponse, skip, limit)
+    if not filters:
+        responses, _ = get_all_records_paginated(db, FormResponse, skip, limit)
+        return [FormResponseSummaryResponse.model_validate(r) for r in responses]
+
+    # Usar el nuevo servicio de filtrado
+    responses, _ = await find_form_responses_by_filters(
+        db, filters, skip, limit
+    )
+
+    return [FormResponseSummaryResponse.model_validate(r) for r in responses]
 
 async def update_form_response_status(
     db: Session,

@@ -14,6 +14,7 @@ from models.responses import (
     FormAnswer
 )
 from schemas.responses import (
+    FormResponseFilters,
     FormResponseFlowCreate,
     FormResponseUpdate,
     PersonCreate,
@@ -107,6 +108,43 @@ def get_question_response_data(
         'options': options_data
     }
 
+async def find_form_responses_by_filters(
+    db: Session,
+    filters: FormResponseFilters,
+    skip: int,
+    limit: int
+) -> Tuple[List[FormResponse], int]:
+    '''
+        Service to search and paginate form responses based on filters.
+    '''
+    query = db.query(FormResponse)
+    conditions = []
+
+    # 1. Filtros de Rango de Fechas (Mandatorio)
+    # Aseguramos que la hora de finalización incluya todo el día final
+    conditions.append(FormResponse.submission_date >= filters.submission_date_start)
+    conditions.append(FormResponse.submission_date <= filters.submission_date_end)
+
+    # 2. Campos Opcionales
+    if filters.form_id is not None:
+        conditions.append(FormResponse.form_id == filters.form_id)
+    if filters.service_id is not None:
+        conditions.append(FormResponse.service_id == filters.service_id)
+    if filters.user_id is not None:
+        conditions.append(FormResponse.user_id == filters.user_id)
+
+    if conditions:
+        query = query.filter(and_(*conditions))
+
+    # Obtener el total antes de aplicar la paginación
+    total_count = query.count()
+
+    # Aplicar orden y paginación
+    responses = query.order_by(FormResponse.submission_date.desc())\
+                     .offset(skip).limit(limit).all()
+
+    return responses, total_count
+
 @handle_service_errors('FORMS')
 # @audit_event('FORMS', 'Person', 'CREATE')
 async def create_person_and_contact(
@@ -186,7 +224,8 @@ async def create_initial_form_response_record_logic(
         contact_id = inital_data['contact_id'],
         person_id = inital_data['person_id'],
         status = inital_data['status'],
-        company_id = inital_data['company_id']
+        company_id = inital_data['company_id'],
+        service_id = inital_data['service_id']
     )
     db.add(db_form_response)
     db.flush()
