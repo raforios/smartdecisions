@@ -177,12 +177,14 @@ async def get_executed_point_ids_by_planned_routes_endpoint(
     summary = 'Get the last known location for multiple users',
     description = '''Retrieves the absolute last recorded location
     (latitude, longitude, and timestamp) for a list of user IDs. Essential for real-time
-    tracking dashboards.'''
+    tracking dashboards. Now includes an **optional** filter by service ID.'''
 )
 async def get_last_known_locations_endpoint(
     request: Request,
     user_ids: List[int] = Query(...,
         description = 'List of User IDs to track. Example: user_ids=1&user_ids=5&user_ids=8'),
+    service_id: Optional[int] = Query(None,
+        description = 'Optional ID of the service to filter locations by.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ) -> GroupLastKnownLocationsResponseSchema:
@@ -191,11 +193,12 @@ async def get_last_known_locations_endpoint(
     '''
     message = f'''User: {current_user
             }. Received request for last known location for user IDs: {
-            user_ids}.'''
+            user_ids} and service ID: {service_id}.'''
     logger.info(message)
     return await get_last_known_locations_controller(
         db = db,
         user_ids = user_ids,
+        service_id = service_id,
         request = request,
         current_user = current_user
     )
@@ -488,7 +491,7 @@ async def update_executed_route_end_time_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'Get points visited statistics',
     description = '''Retrieves a count of all executed points and attendance records
-                for a user within a given date range.'''
+    for a user within a given date range. Now includes an **optional** filter by service ID.'''
 )
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_stats_points_visited_endpoint(
@@ -496,19 +499,23 @@ async def get_stats_points_visited_endpoint(
     user_id: int,
     start_date: str,
     end_date: str,
+    service_id: Optional[int] = Query(None,
+        description = 'Optional ID of the service to filter statistics by.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
     '''
         Endpoint to retrieve user point visit statistics.
     '''
-    message = f'User: {current_user}. Received request to get stats for user {user_id}.'
+    message = f'User: {current_user}. Received request to get stats for user {
+        user_id} and service ID: {service_id}.'
     logger.info(message)
     return await get_stats_points_visited_controller(
         db = db,
         user_id = user_id,
         start_date = start_date,
         end_date = end_date,
+        service_id = service_id,
         request = request,
         current_user = current_user
     )
@@ -519,12 +526,15 @@ async def get_stats_points_visited_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'Retrieve executed routes by planned route ID',
     description = '''Retrieves a list of all executed routes associated with a specific
-                planned route ID. This is used by the frontend to determine if the
-                route is currently open (end_time is NULL) or closed.'''
+    planned route ID. This is used by the frontend to determine if the
+    route is currently open (end_time is NULL) or closed. Now includes an **optional**
+    filter by service ID.'''
 )
 async def get_executed_routes_by_planned_route_id_endpoint(
     request: Request,
     planned_route_id: int = Path(..., description = 'ID of the planned route.'),
+    service_id: Optional[int] = Query(None,
+        description = 'Optional ID of the service to filter executed routes by.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ) -> List[ExecutedRouteResponseSchema]:
@@ -532,11 +542,13 @@ async def get_executed_routes_by_planned_route_id_endpoint(
         Endpoint to retrieve executed routes based on a planned route ID.
     '''
     message = f'''User: {current_user
-    }. Received request to get executed routes for planned route: {planned_route_id}'''
+    }. Received request to get executed routes for planned route: {
+        planned_route_id} and service ID: {service_id}'''
     logger.info(message)
     return await get_executed_routes_by_planned_route_id_controller(
         db = db,
         planned_route_id = planned_route_id,
+        service_id = service_id,
         request = request,
         current_user = current_user
     )
@@ -547,11 +559,13 @@ async def get_executed_routes_by_planned_route_id_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'Compare planned vs. executed routes',
     description = '''Compares a planned route with its associated executed routes to
-                get statistical data.'''
+    get statistical data. Now includes an **optional** filter by service ID.'''
 )
 async def get_route_comparisons_endpoint(
     request: Request,
     planned_route_id: int,
+    service_id: Optional[int] = Query(None,
+        description = 'Optional ID of the service to filter executed routes by.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -559,11 +573,12 @@ async def get_route_comparisons_endpoint(
         Endpoint to compare routes.
     '''
     message = f'''User: {current_user}. Received request to compare routes for planned route {
-            planned_route_id}.'''
+            planned_route_id} and service ID: {service_id}.'''
     logger.info(message)
     return await get_route_comparisons_controller(
         db = db,
         planned_route_id = planned_route_id,
+        service_id = service_id,
         request = request,
         current_user = current_user
     )
@@ -629,10 +644,9 @@ async def update_attendance_checkout_time_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'Get a complete comparison between a planned and executed routes',
     description = '''Retrieves a planned route, its points, and all associated
-                executed routes and their points for detailed comparison.
-                This is a resource-intensive endpoint, intended for detailed
-                visualization on the frontend. Now includes an **optional**
-                date range filter (start_date, end_date) for executed routes.'''
+    executed routes and their points for detailed comparison.
+    Now includes an **optional** date range filter (start_date, end_date)
+    and **service ID** filter.'''
 )
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_full_route_comparison_endpoint(
@@ -643,6 +657,8 @@ async def get_full_route_comparison_endpoint(
         description = 'Optional start date (YYYY-MM-DD) to filter executed routes by start_time.'),
     end_date: Optional[str] = Query(None,
         description = 'Optional end date (YYYY-MM-DD) to filter executed routes by start_time.'),
+    service_id: Optional[int] = Query(None,
+        description = 'Optional ID of the service to filter executed routes by.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
@@ -651,13 +667,16 @@ async def get_full_route_comparison_endpoint(
     '''
     message = f'''User: {current_user
             }. Received request for full route comparison for planned route ID: {
-            planned_route_id}. Filters: start_date={start_date}, end_date={end_date}.'''
+            planned_route_id}. Filters: start_date = {start_date}, end_date = {end_date},
+            service_id={service_id}.'''
     logger.info(message)
+
     return await get_full_route_comparison_controller(
         db = db,
         planned_route_id = planned_route_id,
         start_date = start_date,
         end_date = end_date,
+        service_id = service_id,
         request = request,
         current_user = current_user
     )

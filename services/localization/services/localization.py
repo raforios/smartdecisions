@@ -1,189 +1,60 @@
 '''
     Business logic services for the Localization Microservice.
 '''
-import math
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, select
+from services.localization_utils import(
+    _calculate_distance,
+    _check_geofence_start_point,
+    _perform_atomic_db_insertion_for_localization,
+    _process_localization_csv_data
+)
 from services.exceptions import (
     RegisterNotFoundError,
-    RegisterAlreadyExistsError, InvalidInputError
+    RegisterAlreadyExistsError,
+    InvalidInputError
 )
 from services.logger_config import custom_logger as logger
 from services.crud import (
-    create_record, get_record, update_record, delete_record
+    create_record,
+    get_record,
+    update_record,
+    delete_record
 )
 from services.utils import (
-    _handle_files_service, audit_event,
-    handle_service_errors, perform_bulk_upload,
+    audit_event,
+    handle_service_errors,
+    perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
 from models.localization import (
-    PlannedRoute, PlannedPoint, Attendance,
-    ExecutedRoute, ExecutedPoint
+    PlannedRoute,
+    PlannedPoint,
+    Attendance,
+    ExecutedRoute,
+    ExecutedPoint
 )
 from schemas.localization import (
-    AttendanceCreateSchema, ExecutedRouteComparisonSchema,
-    PlannedPointUpdateSchema, PlannedRouteBulkCreateSchema,
-    PlannedRouteComparisonSchema, PlannedRouteCreateSchema,
-    PlannedRouteFilterSchema, PlannedRouteStatusEnum,
-    PlannedRouteUpdateSchema, PlannedRouteUpdateStatusSchema,
-    AttendanceUpdateSchema, ExecutedRouteUpdateSchema,
-    ExecutedRouteCreateSchema, ExecutedPointCreateSchema,
-    PlannedPointCreateSchema, RouteComparisonFullResponseSchema
+    AttendanceCreateSchema,
+    ExecutedRouteComparisonSchema,
+    PlannedPointUpdateSchema,
+    PlannedRouteBulkCreateSchema,
+    PlannedRouteComparisonSchema,
+    PlannedRouteCreateSchema,
+    PlannedRouteFilterSchema,
+    PlannedRouteStatusEnum,
+    PlannedRouteUpdateSchema,
+    PlannedRouteUpdateStatusSchema,
+    AttendanceUpdateSchema,
+    ExecutedRouteUpdateSchema,
+    ExecutedRouteCreateSchema,
+    ExecutedPointCreateSchema,
+    PlannedPointCreateSchema,
+    RouteComparisonFullResponseSchema
 )
-
-# Geofencing Parameters
-EARTH_RADIUS_KM = 6371
-
-def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    '''
-    Calculates the distance between two coordinates in meters using the Haversine formula.
-    '''
-    # Convert latitude and longitude from degrees to radians
-    lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
-    lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
-
-    # Haversine formula
-    delta_lat = lat2_rad - lat1_rad
-    delta_lon = lon2_rad - lon1_rad
-    a = math.sin(delta_lat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * \
-        math.sin(delta_lon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-    # Distance in kilometers
-    distance_km = EARTH_RADIUS_KM * c
-
-    # Return distance in meters
-    return distance_km * 1000
-
-def _check_geofence_start_point(
-    db: Session,
-    planned_route_id: int,
-    user_latitude: float,
-    user_longitude: float,
-    max_distance: float
-):
-    '''
-        Checks if the user's current location is within the geofence of the planned route's
-        starting point.
-    '''
-    # Find the starting point of the planned route (the one with secuencial=1)
-    start_point = db.query(PlannedPoint).filter(
-        PlannedPoint.planned_route_id == planned_route_id,
-        PlannedPoint.secuencial == 1
-    ).first()
-
-    if not start_point:
-        raise RegisterNotFoundError(
-            detail = f'Starting point not found for planned route {planned_route_id}.'
-        )
-
-    distance = _calculate_distance(
-        user_latitude, user_longitude, start_point.latitude, start_point.longitude
-    )
-
-    if distance > max_distance:
-        raise InvalidInputError(
-            detail = f'Distance: {distance:.2f} meters. Limit: {max_distance:.2f} meters.'
-        )
-
-def _process_localization_csv_data(
-    rows: List[Dict[str, Any]],
-    bulk_schema: PlannedRouteBulkCreateSchema
-) -> Dict[str, Any]:
-    '''
-        Processes raw data from a CSV to group planned routes and their points.
-    '''
-    routes_data = {}
-    for row in rows:
-        try:
-            row_data = bulk_schema(**row)
-            route_key = (
-                row_data.route_code,
-                row_data.company_id
-            )
-            if route_key not in routes_data:
-                routes_data[route_key] = {
-                    'route_data': row_data.model_dump(
-                        exclude = {
-                            'point_name',
-                            'secuencial',
-                            'latitude',
-                            'longitude',
-                            'reference_data'
-                        }),
-                    'points_data': []
-                }
-            routes_data[route_key]['points_data'].append(
-                row_data.model_dump(
-                    exclude = {
-                        'company_id',
-                        'app_id',
-                        'city_id',
-                        'route_code',
-                        'route_name'
-                    })
-            )
-        except (ValueError, TypeError) as e:
-            raise InvalidInputError(
-                detail = f'Invalid data format in row: {row}. Error: {e}'
-            ) from e
-    return routes_data
-
-
-async def _perform_atomic_db_insertion_for_localization(
-    db: Session,
-    routes_to_create: Dict[str, Any],
-    file_name: str,
-    auth_token: str
-) -> Dict[str, int]:
-    '''
-        Performs atomic database insertion for planned routes and points.
-    '''
-    point_fields = {
-        'point_name', 
-        'secuencial', 
-        'latitude', 
-        'longitude', 
-        'reference_data'
-    }
-
-    routes_created = 0
-    points_created = 0
-    with db.begin_nested():
-        for route_key, data in routes_to_create.items():
-            if db.query(PlannedRoute).filter_by(
-                route_code = data['route_data']['route_code'],
-                company_id = data['route_data']['company_id']
-            ).first():
-                await _handle_files_service(
-                    action = 'delete',
-                    file_name = file_name,
-                    auth_token = auth_token
-                )
-                raise RegisterAlreadyExistsError(
-                    detail = f'''Planned route with code {route_key[0]
-                        } already exists for company ID {route_key[1]}.'''
-                )
-
-            planned_route = PlannedRoute(**data['route_data'])
-            db.add(planned_route)
-            db.flush()
-            details = [
-                PlannedPoint(
-                    planned_route_id = planned_route.id,
-                    **{k: v for k, v in detail.items() if k in point_fields}
-                )
-                for detail in data['points_data']
-            ]
-            db.add_all(details)
-            routes_created += 1
-            points_created += len(details)
-
-    return {'routes_created': routes_created, 'points_created': points_created}
 
 @handle_service_errors('LOCALIZATION')
 @audit_event('LOCALIZATION', 'PlannedRoute', 'CREATE')
@@ -663,19 +534,27 @@ async def get_statistics_user_points(
     db: Session,
     user_id: int,
     start_date: datetime,
-    end_date: datetime
+    end_date: datetime,
+    service_id: Optional[int] = None
 ) -> Dict[str, Any]:
     '''
         Retrieves statistics on points visited by a user within a date range.
     '''
     # Get executed points within the date range
-    executed_points = (
+    executed_points_query = (
         db.query(ExecutedPoint)
         .join(ExecutedRoute)
         .filter(ExecutedRoute.user_id == user_id)
         .filter(ExecutedPoint.timestamp.between(start_date, end_date))
-        .all()
     )
+
+    # Aplicar filtro de service_id a las rutas ejecutadas
+    if service_id is not None:
+        executed_points_query = executed_points_query.filter(
+            ExecutedRoute.service_id == service_id
+        )
+
+    executed_points = executed_points_query.all()
 
     # Get attendance points within the date range
     attendance_points = (
@@ -721,21 +600,30 @@ async def get_statistics_user_points(
 @handle_service_errors('LOCALIZATION')
 async def get_route_comparisons(
     db: Session,
-    planned_route_id: int
+    planned_route_id: int,
+    service_id: Optional[int] = None
 ) -> Dict[str, Any]:
     '''
         Compares a planned route with its associated executed routes.
     '''
-    message = f'Getting comparisons for planned route {planned_route_id}.'
+    message = f'Getting comparisons for planned route {planned_route_id}. Service ID: {service_id}.'
     logger.debug(message)
+
     planned_route = get_record(
         db, PlannedRoute, planned_route_id, eager_load_options = ['points']
     )
-    executed_routes = db.query(ExecutedRoute).filter(
+
+    executed_routes_query = db.query(ExecutedRoute).filter(
         ExecutedRoute.planned_route_id == planned_route_id
     ).order_by(
         desc(ExecutedRoute.start_time)
-    ).all()
+    )
+
+    if service_id is not None:
+        executed_routes_query = executed_routes_query.filter(
+            ExecutedRoute.service_id == service_id
+        )
+    executed_routes = executed_routes_query.all()
 
     comparisons_list = []
     for er in executed_routes:
@@ -800,14 +688,15 @@ async def get_full_route_comparison(
     db: Session,
     planned_route_id: int,
     start_dt: Optional[datetime] = None,
-    end_dt: Optional[datetime] = None
+    end_dt: Optional[datetime] = None,
+    service_id: Optional[int] = None
 ) -> RouteComparisonFullResponseSchema:
     '''
         Retrieves a planned route and all its executed routes for comparison,
-        optionally filtered by the start_time of the executed route.
+        optionally filtered by the start_time of the executed route and service ID.
     '''
     message = f'Getting full comparison data for planned route {
-        planned_route_id}. Filters: start_dt={start_dt}, end_dt={end_dt}.'
+        planned_route_id}. Filters: start_dt={start_dt}, end_dt={end_dt}, service_id={service_id}.'
     logger.debug(message)
 
     planned_route = db.query(PlannedRoute).options(
@@ -826,6 +715,12 @@ async def get_full_route_comparison(
     ).filter(
         ExecutedRoute.planned_route_id == planned_route_id
     )
+
+    # Aplicar el filtro de service_id
+    if service_id is not None: # <-- FILTRO APLICADO
+        executed_routes_query = executed_routes_query.filter(
+            ExecutedRoute.service_id == service_id
+        )
 
     # Aplicar el filtro de fecha de inicio (si existe)
     # Filtramos por el start_time, ya que la ruta debe haber iniciado DENTRO del rango.
@@ -915,7 +810,8 @@ async def get_executed_point_ids_by_planned_routes(
 @handle_service_errors('LOCALIZATION-SERVICE')
 async def get_executed_routes_by_planned_route_id_service(
     db: Session,
-    planned_route_id: int
+    planned_route_id: int,
+    service_id: Optional[int] = None
 ) -> List[ExecutedRoute]:
     '''
         Retrieve all executed routes associated with a specific planned route ID.
@@ -923,17 +819,27 @@ async def get_executed_routes_by_planned_route_id_service(
         Parameters:
         - db: SQLAlchemy database session.
         - planned_route_id: ID of the planned route to filter by.
+        - service_id: Optional ID of the service to filter by. <--- DOCS ACTUALIZADOS
 
         Returns:
         - A list of ExecutedRoute model objects.
     '''
-    message = f'Attempting to retrieve executed routes for planned_route_id: {planned_route_id}'
+    message = f'Attempting to retrieve executed routes for planned_route_id: {
+        planned_route_id}. Service ID: {service_id}'
     logger.info(message)
-    executed_routes = (
+
+    executed_routes_query = (
         db.query(ExecutedRoute)
         .filter(ExecutedRoute.planned_route_id == planned_route_id)
-        .all()
     )
+
+    if service_id is not None:
+        executed_routes_query = executed_routes_query.filter(
+            ExecutedRoute.service_id == service_id
+        )
+
+    executed_routes = executed_routes_query.all()
+
     message = f'Found {len(executed_routes)} executed routes for planned_route_id: {
         planned_route_id}'
     logger.info(message)
@@ -942,7 +848,8 @@ async def get_executed_routes_by_planned_route_id_service(
 @handle_service_errors('LOCALIZATION-SERVICE')
 async def get_last_known_locations_service(
     db: Session,
-    user_ids: List[int]
+    user_ids: List[int],
+    service_id: Optional[int] = None
 ) -> List[dict]:
     '''
         Retrieves the absolute last recorded ExecutedPoint for a given list of user IDs.
@@ -950,48 +857,61 @@ async def get_last_known_locations_service(
         This query uses a subquery to find the MAX(timestamp) per user within their
         executed routes and then joins back to ExecutedPoint to get the full record.
     '''
-    message = f'Fetching last known location for user IDs: {user_ids}'
+    message = f'Fetching last known location for user IDs: {user_ids}. Service ID: {service_id}'
     logger.info(message)
 
-    # 1. Definir la CTE (Common Table Expression) con la función de ventana
-    # Rankea los puntos ejecutados por timestamp descendente, particionado por user_id.
-    latest_points_cte = (
-        db.query(
+    # 1. Definir la columna de ranking (sin cambios)
+    # pylint: disable=not-callable
+    rank_column = func.rank().over(
+        order_by = ExecutedPoint.timestamp.desc(),
+        partition_by = ExecutedRoute.user_id
+    ).label('rank_number')
+
+    # 2. Definir la consulta base usando select()
+    base_select = (
+        select(
             ExecutedRoute.user_id,
+            ExecutedRoute.service_id,
             ExecutedPoint.latitude.label('last_latitude'),
             ExecutedPoint.longitude.label('last_longitude'),
             ExecutedPoint.timestamp.label('last_timestamp'),
-            # Asigna un rango (1 para el más reciente) dentro de cada user_id
-            # pylint: disable=not-callable
-            func.rank().over(
-                order_by = ExecutedPoint.timestamp.desc(),
-                partition_by = ExecutedRoute.user_id
-            ).label('rank_number')
+            rank_column
         )
-        .join(ExecutedRoute, ExecutedRoute.id == ExecutedPoint.executed_route_id)
-        .filter(ExecutedRoute.user_id.in_(user_ids))
-        .cte('latest_points_cte')
+        .join_from(ExecutedRoute, ExecutedPoint)
+        .where(ExecutedRoute.user_id.in_(user_ids))
     )
 
-    # 2. Seleccionar solo el registro con rank_number = 1 (el último)
-    results = (
-        db.query(
+    # Aplicar filtro de service_id
+    if service_id is not None:
+        base_select = base_select.where(ExecutedRoute.service_id == service_id)
+
+    # 3. Crear la CTE
+    latest_points_cte = base_select.cte('latest_points_cte')
+
+
+    # 4. Ejecutar la consulta final (el SELECT de la CTE)
+    final_select = (
+        select(
             latest_points_cte.c.user_id,
+            latest_points_cte.c.service_id,
             latest_points_cte.c.last_latitude,
             latest_points_cte.c.last_longitude,
             latest_points_cte.c.last_timestamp
         )
-        .filter(latest_points_cte.c.rank_number == 1)
-        .all()
+        .where(latest_points_cte.c.rank_number == 1)
     )
+
+    # 5. Ejecutar y obtener resultados
+    results = db.execute(final_select).all()
 
     # Mapear a una lista de diccionarios
     locations = [
         {
             'user_id': r[0],
-            'last_latitude': float(r[1]),
-            'last_longitude': float(r[2]),
-            'last_timestamp': r[3]
+            'service_id': r[1],
+            'last_latitude': float(r[2]),
+            'last_longitude': float(r[3]),
+            'last_timestamp': r[4]
         }
         for r in results
     ]

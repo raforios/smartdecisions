@@ -372,7 +372,8 @@ async def get_stats_points_visited_controller(
     start_date: datetime = Query(...,
             description = 'Start date and time (ISO 8601 format, e.g., "2024-01-01T00:00:00").'),
     end_date: datetime = Query(...,
-            description = 'End date and time (ISO 8601 format, e.g., "2024-01-31T23:59:59").')
+            description = 'End date and time (ISO 8601 format, e.g., "2024-01-31T23:59:59").'),
+    service_id: Optional[int] = None
 ) -> PointsVisitedResponseSchema:
     '''
         Controller to get statistics on points visited by a user within a date range.
@@ -383,7 +384,8 @@ async def get_stats_points_visited_controller(
         db = db,
         user_id = user_id,
         start_date = start_date,
-        end_date = end_date
+        end_date = end_date,
+        service_id = service_id
     )
     return PointsVisitedResponseSchema.model_validate(result, from_attributes = True)
 
@@ -393,7 +395,8 @@ async def get_route_comparisons_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str, # pylint: disable=unused-argument
-    planned_route_id: int = Path(..., description = 'ID of the planned route.')
+    planned_route_id: int = Path(..., description = 'ID of the planned route.'),
+    service_id: Optional[int] = None
 ) -> RouteComparisonsResponseSchema:
     '''
         Controller to compare a planned route with its associated executed routes.
@@ -402,7 +405,11 @@ async def get_route_comparisons_controller(
             planned_route_id}'''
     logger.info(message)
 
-    result = await get_route_comparisons(db = db, planned_route_id = planned_route_id)
+    result = await get_route_comparisons(
+        db = db,
+        planned_route_id = planned_route_id,
+        service_id = service_id
+    )
     return RouteComparisonsResponseSchema.model_validate(result, from_attributes = True)
 
 
@@ -430,8 +437,9 @@ async def get_full_route_comparison_controller(
     planned_route_id: int,
     request: Request, # pylint: disable=unused-argument
     current_user: str, # pylint: disable=unused-argument
-    start_date: Optional[str] = None, # Nuevo parámetro opcional
-    end_date: Optional[str] = None,   # Nuevo parámetro opcional
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    service_id: Optional[int] = None
 ) -> RouteComparisonFullResponseSchema:
     '''
         Controller to get a complete comparison between a planned and executed routes.
@@ -457,7 +465,8 @@ async def get_full_route_comparison_controller(
         db = db,
         planned_route_id = planned_route_id,
         start_dt = start_dt,
-        end_dt = end_dt
+        end_dt = end_dt,
+        service_id = service_id
     )
     return RouteComparisonFullResponseSchema.model_validate(result, from_attributes = True)
 
@@ -541,7 +550,8 @@ async def get_executed_routes_by_planned_route_id_controller(
     db: Session,
     planned_route_id: int,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+    service_id: Optional[int] = None
 ) -> List[ExecutedRouteResponseSchema]:
     '''
     Controller for retrieving executed routes based on a planned route ID.
@@ -549,7 +559,8 @@ async def get_executed_routes_by_planned_route_id_controller(
 
     executed_routes = await get_executed_routes_by_planned_route_id_service(
         db = db,
-        planned_route_id = planned_route_id
+        planned_route_id = planned_route_id,
+        service_id = service_id
     )
 
     return executed_routes
@@ -559,18 +570,20 @@ async def get_last_known_locations_controller(
     db: Session,
     user_ids: List[int],
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+    service_id: Optional[int] = None
 ) -> GroupLastKnownLocationsResponseSchema:
     '''
         Controller for retrieving the last recorded location for a list of users.
     '''
     message = f'''Starting controller operation: get last known locations for users {
-            user_ids}'''
+            user_ids} and service ID: {service_id}'''
     logger.info(message)
 
     locations_data = await get_last_known_locations_service(
         db = db,
-        user_ids = user_ids
+        user_ids = user_ids,
+        service_id = service_id
     )
 
     # Mapear los diccionarios a los schemas individuales

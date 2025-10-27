@@ -189,6 +189,10 @@ class ExecutedRouteCreateSchema(BaseModel):
         ...,
         description = 'ID of the user for this executed route.'
     )
+    service_id: int = Field(
+        ...,
+        description = 'ID of the service associated with this executed route.'
+    )
     start_time: datetime = Field(
         ...,
         description = 'Date Time recived from frontend app.'
@@ -270,6 +274,7 @@ class ExecutedRouteComparisonSchema(BaseModel):
     '''
     id: int
     user_id: int
+    service_id: int
     start_time: datetime
     end_time: Optional[datetime]
     points: List[ExecutedPointResponseSchema]
@@ -296,6 +301,10 @@ class AttendanceCreateSchema(BaseModel):
     user_id: int = Field(
         ...,
         description = 'ID of the user making the check-in/check-out.'
+    )
+    service_id: int = Field(
+        ...,
+        description = 'ID of the service associated.'
     )
     planned_point_id: int = Field(
         ...,
@@ -401,6 +410,7 @@ class LastKnownLocationResponseSchema(BaseModel):
         Response schema for the last known location of a single user.
     '''
     user_id: int = Field(..., description = 'ID of the user being tracked.')
+    service_id: int = Field(..., description = 'ID of the service associated.')
     last_latitude: float = Field(..., description = 'The last reported latitude.')
     last_longitude: float = Field(..., description = 'The last reported longitude.')
     last_timestamp: datetime = Field(..., description = 'Timestamp of the last reported location.')
