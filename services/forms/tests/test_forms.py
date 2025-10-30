@@ -1,5 +1,5 @@
 '''
-    services/auth/tests/test_forms.py
+    services/forms/tests/test_forms.py
 '''
 
 def test_placeholder():

@@ -1,5 +1,5 @@
 '''
-    services/auth/tests/test_files.py
+    services/files/tests/test_files.py
 '''
 
 def test_placeholder():

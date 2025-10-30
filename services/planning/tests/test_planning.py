@@ -1,5 +1,5 @@
 '''
-    services/auth/tests/test_planning.py
+    services/planning/tests/test_planning.py
 '''
 
 def test_placeholder():

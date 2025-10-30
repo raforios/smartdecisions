@@ -1,5 +1,5 @@
 '''
-    services/auth/tests/test_ml.py
+    services/ml_functions/tests/test_ml.py
 '''
 
 def test_placeholder():

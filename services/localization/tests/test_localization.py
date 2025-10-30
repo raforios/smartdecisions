@@ -1,5 +1,5 @@
 '''
-    services/auth/tests/test_localization.py
+    services/localization/tests/test_localization.py
 '''
 
 def test_placeholder():
