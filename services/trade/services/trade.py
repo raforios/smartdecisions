@@ -14,13 +14,13 @@ from services.utils import (
     handle_service_errors,
     audit_event
 )
-from models.trade import Product, SKUSequencer, PointOfSale, PointOfSaleInventory 
+from models.trade import Product, SKUSequencer, PointOfSale, PointOfSaleInventory
 from schemas.trade import (
     ProductCreateSchema,
     PointOfSaleCreateSchema
 )
 
-def _get_segment_key(category_1: str, category_2: str, category_3: str, 
+def _get_segment_key(category_1: str, category_2: str, category_3: str,
                       category_4: str) -> str:
     '''
         Constructs the non-sequential segment key (XXX.YYY.ZZZ.WWW)
@@ -35,6 +35,7 @@ def _format_sequence_number(sequence: int) -> str:
     '''
     return f'{sequence:03d}'
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 def _generate_next_sku_sequence(
     db: Session,
     company_id: int,
@@ -56,14 +57,14 @@ def _generate_next_sku_sequence(
     message = (f'Attempting to generate atomic SKU sequence for company {company_id} '
                f'with segment key {segment_key}')
     logger.debug(message)
-    
+
     # 1. Find or create the sequencer record for this segment and company
     # The .with_for_update() ensures an atomic lock on the row.
     sequencer = db.query(SKUSequencer).filter(
         SKUSequencer.company_id == company_id,
         SKUSequencer.segment_key == segment_key
-    ).with_for_update().first() 
-    
+    ).with_for_update().first()
+
     if sequencer:
         # 2. If found, increment the sequence number
         sequencer.last_sequence_number += 1
@@ -78,15 +79,15 @@ def _generate_next_sku_sequence(
             last_sequence_number = next_sequence
         )
         db.add(new_sequencer)
-        
+
     db.flush() # Persist the sequence update/creation before generating the SKU
 
     # 4. Construct the final SKU
     formatted_sec = _format_sequence_number(next_sequence)
     final_sku = f'{segment_key}.{formatted_sec}'
-    
-    logger.info(f'Successfully generated SKU: {final_sku} for segment key: {segment_key}')
-    
+    message = f'Successfully generated SKU: {final_sku} for segment key: {segment_key}'
+    logger.info(message)
+
     return final_sku
 
 @handle_service_errors('TRADE')
@@ -98,8 +99,9 @@ async def create_product_service(
     '''
         Creates a new product record, atomically generating its unique SKU.
     '''
-    
-    message = f'Attempting to create product {product_data.name} for company ID: {product_data.company_id}'
+
+    message = f'Attempting to create product {product_data.name} for company ID: {
+    product_data.company_id}'
     logger.info(message)
 
     # 1. Check for name conflict using explicit query, matching planning service pattern
@@ -107,7 +109,7 @@ async def create_product_service(
         Product.company_id == product_data.company_id,
         Product.name == product_data.name
     ).first()
-    
+
     if existing_product:
         error_msg = f'Product with name {product_data.name} already exists for this company.'
         logger.error(error_msg)
@@ -115,7 +117,7 @@ async def create_product_service(
 
     # 2. Use nested transaction to encapsulate the atomic SKU sequence lock
     with db.begin_nested():
-        # 3. Generate the unique SKU 
+        # 3. Generate the unique SKU
         final_sku = _generate_next_sku_sequence(
             db,
             product_data.company_id,
@@ -124,19 +126,19 @@ async def create_product_service(
             product_data.category_3_code,
             product_data.category_4_code
         )
-        
+
         # 4. Prepare data and create the product record
         product_dict = product_data.model_dump()
         product_dict['sku'] = final_sku
-        
+
         # Matching create_planning_with_details pattern: db_planning = Planning(**planning_dict)
         db_product = Product(**product_dict)
         db.add(db_product)
 
     # 5. Commit and refresh, matching create_planning_with_details flow
-    db.commit() 
+    db.commit()
     db.refresh(db_product)
-    
+
     return db_product
 
 @handle_service_errors('TRADE')
@@ -149,7 +151,8 @@ async def create_pos_with_inventory_service(
         Creates a new Point of Sale (POS) and its nested initial inventory records
         in a transactional block.
     '''
-    message = f'Attempting to create POS with name: {pos_data.name} for company ID: {pos_data.company_id}'
+    message = f'Attempting to create POS with name: {pos_data.name} for company ID: {
+    pos_data.company_id}'
     logger.info(message)
 
     # 1. Check for external_code conflict using explicit query
@@ -158,7 +161,7 @@ async def create_pos_with_inventory_service(
             PointOfSale.company_id == pos_data.company_id,
             PointOfSale.external_code == pos_data.external_code
         ).first()
-        
+
         if existing_pos:
             error_msg = (f"Point of Sale with external code {pos_data.external_code} "
                          f"already exists for company {pos_data.company_id}.")
@@ -166,7 +169,7 @@ async def create_pos_with_inventory_service(
             raise RegisterAlreadyExistsError(detail = error_msg)
 
     # Matching create_planning_with_details pattern:
-    
+
     # 2. Create the main PointOfSale record.
     pos_dict = pos_data.model_dump(exclude = {'initial_inventory'})
     db_pos = PointOfSale(**pos_dict)
@@ -176,7 +179,7 @@ async def create_pos_with_inventory_service(
     # 3. Iterate through initial inventory details and create nested records.
     if pos_data.initial_inventory:
         for inventory_data in pos_data.initial_inventory:
-            
+
             # Use create_record from crud, matching the nested record creation in planning service
             create_record(
                 db,
@@ -187,9 +190,9 @@ async def create_pos_with_inventory_service(
                     'company_id': pos_data.company_id # Propagate company_id for the child record
                 }
             )
-            
+
     # 4. Commit and refresh, matching create_planning_with_details flow
-    db.commit() 
+    db.commit()
     db.refresh(db_pos)
-    
+
     return db_pos

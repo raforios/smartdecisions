@@ -73,8 +73,10 @@ APP_CONFIG = {
     This microservice manages the **Trade Marketing** domain, covering:
     1. **Product Catalog:** Atomic generation of unique SKUs based on classification.
     2. **Point of Sale (POS) Management:** Creation of POS records and their initial inventory.
-    3. **Inventory Control:** Tracking of stock, including batch number, expiration date, and short date indicators.
-    4. **Future extensions:** Support for impulsing, sales, and corresponding reports (as per functional specifications).''',
+    3. **Inventory Control:** Tracking of stock, including batch number, expiration date, 
+    and short date indicators.
+    4. **Future extensions:** Support for impulsing, sales, and corresponding reports 
+    (as per functional specifications).''',
     'version': '1.0.0',
     'contact': {
         'name': 'API Support',

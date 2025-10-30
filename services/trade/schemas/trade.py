@@ -137,7 +137,6 @@ class POSInventoryCreateSchema(POSInventoryBaseSchema):
     '''
         Schema for creating a new POS Inventory detail.
     '''
-    pass # All fields come from the base schema
 
 
 class POSInventoryUpdateSchema(POSInventoryBaseSchema):

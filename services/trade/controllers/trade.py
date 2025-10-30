@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from services.utils import handle_service_errors
 from services.trade import (
-    create_product_service, 
+    create_product_service,
     create_pos_with_inventory_service
 )
 from schemas.trade import (
@@ -29,7 +29,7 @@ async def create_product_controller(
         db = db,
         product_data = product_data
     )
-    
+
     # 2. Return the response model, ensuring data reflects the creation (including generated SKU)
     return ProductResponseSchema.model_validate(db_product, from_attributes = True)
 
@@ -50,6 +50,6 @@ async def create_point_of_sale_controller(
         db = db,
         pos_data = pos_data
     )
-    
+
     # 2. Return the response model, including the nested inventory details
     return PointOfSaleResponseSchema.model_validate(db_pos, from_attributes = True)

@@ -70,4 +70,3 @@ async def create_point_of_sale_endpoint(
         request = request,
         current_user = current_user
     )
-
