@@ -15,6 +15,8 @@ from mangum import Mangum
 import uvicorn
 
 from routes.trade import router as trade_router
+from routes.impulses import router as impulses_router
+from routes.replenishments import router as replenishments_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
@@ -137,6 +139,8 @@ async def custom_swagger_ui():
     )
 
 app.include_router(trade_router, tags = ['Trade'])
+app.include_router(impulses_router, tags = ['Trade - Impulses'])
+app.include_router(replenishments_router, tags = ['Trade - Replenishment'])
 
 # Entry point to run the app
 if __name__ == '__main__':

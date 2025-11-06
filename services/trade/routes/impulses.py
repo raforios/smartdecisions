@@ -1,0 +1,257 @@
+'''
+    Impulses: routes handler
+'''
+from typing import Any, Dict, Optional
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    Query,
+    Request,
+    UploadFile,
+    status
+)
+from sqlalchemy.orm import Session
+from services.db_connection import GET_DB_DEPENDENCY
+from services.security import get_current_user
+from services.logger_config import custom_logger as logger
+from controllers.impulses import (
+    create_impulse_inventory_end_controller,
+    create_impulse_inventory_start_controller,
+    create_impulse_sale_controller,
+    create_promotion_controller,
+    delete_promotion_controller,
+    get_promotion_by_id_controller,
+    get_promotions_list_controller,
+    update_promotion_controller,
+)
+from schemas.impulses import (
+    ImpulseInventoryCreateSchema,
+    ImpulseInventoryListResponseSchema,
+    ImpulseSaleCreateSchema,
+    ImpulseSaleResponseSchema,
+    TradePromotionCreateSchema,
+    TradePromotionFilterSchema,
+    TradePromotionListResponseSchema,
+    TradePromotionResponseSchema,
+    TradePromotionUpdateSchema
+)
+
+router = APIRouter(prefix = '/v1/impulses', tags = ['Trade - Impulses'])
+
+# --- 5. TRADE PROMOTION (BANDEO) ENDPOINTS ---
+
+@router.post(
+    '/promotions',
+    response_model = TradePromotionResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Create Promotion (Bandeo)'
+)
+async def create_promotion_endpoint(
+    promotion_data: TradePromotionCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to create a new Promotion (Bandeo) with its SKUs.
+    '''
+    message = f'User: {current_user}. Received request to create Promotion.'
+    logger.info(message)
+    return await create_promotion_controller(
+        promotion_data = promotion_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+@router.get(
+    '/promotions/{promotion_id}',
+    response_model = TradePromotionResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Get Promotion by ID'
+)
+async def get_promotion_by_id_endpoint(
+    promotion_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to retrieve a single Promotion by its ID.
+    '''
+    message = f'User: {current_user}. Request GET Promotion ID: {promotion_id}.'
+    logger.info(message)
+    return await get_promotion_by_id_controller(
+        promotion_id = promotion_id,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+@router.get(
+    '/promotions',
+    response_model = TradePromotionListResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'List and filter Promotions'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def get_promotions_list_endpoint(
+    request: Request,
+    filters: TradePromotionFilterSchema = Depends(),
+    skip: int = Query(0, ge = 0),
+    limit: int = Query(100, ge = 1),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to retrieve a paginated list of Promotions.
+    '''
+    message = f'User: {current_user}. Request list Promotions.'
+    logger.info(message)
+    return await get_promotions_list_controller(
+        filters = filters,
+        db = db,
+        skip = skip,
+        limit = limit,
+        request = request,
+        current_user = current_user
+    )
+
+@router.put(
+    '/promotions/{promotion_id}',
+    response_model = TradePromotionResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Update Promotion (Header only)'
+)
+async def update_promotion_endpoint(
+    promotion_id: int,
+    update_data: TradePromotionUpdateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to update a Promotion Header (name, dates, status).
+    '''
+    message = f'User: {current_user}. Request UPDATE Promotion ID: {promotion_id}.'
+    logger.info(message)
+    return await update_promotion_controller(
+        promotion_id = promotion_id,
+        update_data = update_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+@router.delete(
+    '/promotions/{promotion_id}',
+    response_model = Dict[str, Any],
+    status_code = status.HTTP_200_OK,
+    summary = 'Delete Promotion'
+)
+async def delete_promotion_endpoint(
+    promotion_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to delete a Promotion.
+    '''
+    message = f'User: {current_user}. Request DELETE Promotion ID: {promotion_id}.'
+    logger.info(message)
+    return await delete_promotion_controller(
+        promotion_id = promotion_id,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+# --- 6. IMPULSE ACTIVITIES ENDPOINTS ---
+# These endpoints are linked to the visit ID (attendance_id) from LOCALIZATION
+
+@router.post(
+    '/impulse/visit/{attendance_id}/inventory-start',
+    response_model = ImpulseInventoryListResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Register Impulse Inventory Start'
+)
+async def create_impulse_inventory_start_endpoint(
+    attendance_id: int,
+    inventory_data: ImpulseInventoryCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to register the initial inventory count for an Impulse visit.
+    '''
+    message = f'User: {current_user}. Request Impulse Inventory Start for attendance ID: {
+            attendance_id}.'
+    logger.info(message)
+    return await create_impulse_inventory_start_controller(
+        attendance_id = attendance_id,
+        inventory_data = inventory_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+@router.post(
+    '/impulse/visit/{attendance_id}/sale',
+    response_model = ImpulseSaleResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Register Impulse Sale'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def create_impulse_sale_endpoint(
+    attendance_id: int,
+    sale_data: ImpulseSaleCreateSchema,
+    request: Request,
+    uploaded_file: Optional[UploadFile] = None,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user),
+    auth_token: str = Header(..., alias = 'Authorization'),
+):
+    '''
+        Endpoint to register a Sale transaction (with details and photo) for an Impulse visit.
+    '''
+    message = f'User: {current_user}. Request Impulse Sale for attendance ID: {attendance_id}.'
+    logger.info(message)
+    return await create_impulse_sale_controller(
+        attendance_id = attendance_id,
+        sale_data = sale_data,
+        uploaded_file = uploaded_file,
+        db = db,
+        request = request,
+        current_user = current_user,
+        auth_token = auth_token
+    )
+
+@router.post(
+    '/impulse/visit/{attendance_id}/inventory-end',
+    response_model = ImpulseInventoryListResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Register Impulse Inventory End'
+)
+async def create_impulse_inventory_end_endpoint(
+    attendance_id: int,
+    inventory_data: ImpulseInventoryCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to register the final inventory count for an Impulse visit.
+    '''
+    message = f'User: {current_user}. Request Impulse Inventory End for attendance ID: {
+            attendance_id}.'
+    logger.info(message)
+    return await create_impulse_inventory_end_controller(
+        attendance_id = attendance_id,
+        inventory_data = inventory_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )

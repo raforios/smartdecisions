@@ -4,15 +4,20 @@
 from sqlalchemy import (
     Column,
     Integer,
+    Numeric,
     String,
     Text,
     ForeignKey,
     DateTime,
-    DECIMAL,
     Boolean,
     UniqueConstraint
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import (
+    relationship,
+    Mapped,
+    mapped_column,
+    declared_attr
+)
 from services.db_connection import Base
 from services.utils import get_current_time_gmt
 
@@ -37,7 +42,6 @@ class SKUSequencer(Base):  # pylint: disable=too-few-public-methods
     __table_args__ = (
         # The combination of segment key and company must be unique
         UniqueConstraint('segment_key', 'company_id', name = 'uc_sku_segment_company'),
-        {'mysql_engine': 'InnoDB'}
     )
 
     # Audit field following the PLANNING model example
@@ -67,9 +71,8 @@ class Product(Base):  # pylint: disable=too-few-public-methods
 
     status = Column(String(20), default = 'ACTIVE')
 
-    # Audit field following the PLANNING model example
+    # Audit fields
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
-
 
 class PointOfSale(Base):  # pylint: disable=too-few-public-methods
     '''
@@ -83,11 +86,12 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
     name = Column(String(255), nullable = False)
     external_code = Column(String(50), unique = True, nullable = True)
     address = Column(String(255), nullable = True)
+    is_active = Column(Boolean, default = True, nullable = False)
 
     # Geolocalization (for integration with LOCALIZATION)
     # DECIMAL(10, 7) for coordinate precision.
-    latitude = Column(DECIMAL(10, 7), nullable = False)
-    longitude = Column(DECIMAL(10, 7), nullable = False)
+    latitude = Column(Numeric(16, 14), nullable = False)
+    longitude = Column(Numeric(16, 14), nullable = False)
 
     # Relationship with local inventory
     inventory = relationship(
@@ -96,14 +100,12 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
         cascade = 'all, delete-orphan'
     )
 
-    # Audit field following the PLANNING model example
+    # Audit fields
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
-
 
 class PointOfSaleInventory(Base):  # pylint: disable=too-few-public-methods
     '''
         Detailed management of Local Inventories at the Point of Sale.
-        Includes fields detailed in the PDF (Location, Batch, Expiration, Short Date).
     '''
     __tablename__ = 't_pos_inventory'
 
@@ -124,7 +126,7 @@ class PointOfSaleInventory(Base):  # pylint: disable=too-few-public-methods
     )
     product = relationship('Product')
 
-    # Detailed inventory fields (based on PDF)
+    # Detailed inventory fields
     location = Column(String(50), nullable = False) # Location: Sala or Almacén
     batch_number = Column(String(50), nullable = False, index = True) # Batch
 
@@ -141,8 +143,116 @@ class PointOfSaleInventory(Base):  # pylint: disable=too-few-public-methods
             'point_of_sale_id', 'product_id', 'batch_number', 'location', 
             name = 'uc_pos_inventory_detail'
         ),
-        {'mysql_engine': 'InnoDB'}
     )
 
     # Audit field following the PLANNING model example
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+
+class SKUEquivalency(Base):  # pylint: disable=too-few-public-methods
+    '''
+        Catalog to store product code equivalencies between the internal
+        SKU and external client systems.
+    '''
+    __tablename__ = 't_trade_sku_equivalencies'
+
+    id = Column(Integer, primary_key = True, index = True)
+    company_id = Column(Integer, nullable = False, index = True)
+
+    # Relationship to the internal Product (SKU)
+    product_id = Column(
+        Integer, ForeignKey('t_products.id', ondelete = 'CASCADE'),
+        nullable = False, index = True
+    )
+    product = relationship('Product')
+
+    # Name of the external system (e.g., "SAP", "ERP_CLIENTE")
+    external_system_name = Column(String(100), nullable = False, index = True)
+
+    # Code of the product in the external system
+    external_product_code = Column(String(50), nullable = False, index = True)
+
+    # Standard status field
+    status = Column(String(20), default = 'ACTIVE', nullable = False)
+
+    # Audit field (Created only)
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+
+    __table_args__ = (
+        # Ensure the external code is unique per external system and company
+        UniqueConstraint(
+            'company_id', 'external_system_name', 'external_product_code',
+            name = 'uc_external_system_code'
+        ),
+    )
+
+class ProductAssignmentPOS(Base):  # pylint: disable=too-few-public-methods
+    '''
+        Maps which Products (SKUs) are assigned to which Points of Sale (POS).
+    '''
+    __tablename__ = 't_trade_product_assignments_pos'
+
+    id = Column(Integer, primary_key = True, index = True)
+    company_id = Column(Integer, nullable = False, index = True)
+
+    # Relationship to the Product
+    product_id = Column(
+        Integer, ForeignKey('t_products.id', ondelete = 'CASCADE'),
+        nullable = False, index = True
+    )
+    product = relationship('Product')
+
+    # Relationship to the Point of Sale
+    point_of_sale_id = Column(
+        Integer, ForeignKey('t_points_of_sale.id', ondelete = 'CASCADE'),
+        nullable = False, index = True
+    )
+    point_of_sale = relationship('PointOfSale')
+
+    # Standard status field
+    status = Column(String(20), default = 'ACTIVE', nullable = False)
+
+    # Audit field (Created only)
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+
+    __table_args__ = (
+        # A product can only be assigned to a POS once per company
+        UniqueConstraint(
+            'company_id', 'product_id', 'point_of_sale_id',
+            name = 'uc_product_pos_assignment'
+        ),
+    )
+
+class AttendanceProductMixin: # pylint: disable=too-few-public-methods
+    '''
+        Mixin (template) for models that link a visit (attendance_id)
+        and a product (product_id).
+    '''
+
+    @declared_attr
+    # pylint: disable=no-self-argument
+    def attendance_id(cls) -> Mapped[int]:
+        '''
+            Foreign Key column for LOCALIZATION.t_attendances (The Visit ID)
+        '''
+        return mapped_column(Integer, nullable = False, index = True)
+
+    @declared_attr
+    # pylint: disable=no-self-argument
+    def product_id(cls) -> Mapped[int]:
+        '''
+            Foreign Key column for t_products.
+        '''
+        return mapped_column(
+            Integer,
+            ForeignKey('t_products.id', ondelete = 'RESTRICT'),
+            nullable = False,
+            index = True
+        )
+
+    @declared_attr
+    # pylint: disable=no-self-argument
+    def product(cls) -> Mapped['Product']:
+        '''
+            Relationship with t_products.
+        '''
+        return relationship('Product')
