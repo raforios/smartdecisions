@@ -81,7 +81,6 @@ class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
     user_id = Column(Integer, nullable = False, index = True)
     service_id = Column(Integer, nullable = False, index = True)
     planned_route_id = Column(Integer, ForeignKey('t_planned_routes.id'), nullable = True)
-    # Using text('now()') and server_default for consistency and Pylint compatibility.
     start_time = Column(DateTime, nullable = False)
     end_time = Column(DateTime, nullable = True)
 
