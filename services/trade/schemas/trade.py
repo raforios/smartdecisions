@@ -442,3 +442,118 @@ class ProductAssignmentPOSListResponseSchema(TradeBaseSchema):
     '''
     items: List[ProductAssignmentPOSResponseSchema]
     total: int
+
+# --- A.3. TRADE PLANNING SCHEMAS ---
+
+class TradePlanningBaseSchema(TradeBaseSchema):
+    '''
+        Base schema for Trade Planning fields.
+    '''
+    company_id: int = Field(
+        ...,
+        description = 'ID of the company that owns this planning record.'
+    )
+    planning_id: int = Field(
+        ...,
+        description = 'ID from the PLANNING microservice.'
+    )
+    user_id: int = Field(
+        ...,
+        description = 'ID of the user assigned to this plan (from frontend).'
+    )
+    point_of_sale_id: int = Field(
+        ...,
+        description = 'ID of the Point of Sale (from t_points_of_sale).'
+    )
+    planned_workload_minutes: int = Field(
+        ...,
+        gt=0,
+        description = 'Planned workload in minutes (Business Rule).'
+    )
+    status: Optional[str] = Field(
+        'PENDING',
+        max_length=20,
+        description = 'Status of this planning entry (e.g., PENDING, COMPLETED).'
+    )
+    comments: Optional[str] = Field(
+        None,
+        description = 'Optional comments for this planning entry.'
+    )
+
+
+class TradePlanningCreateSchema(TradePlanningBaseSchema):# pylint: disable=too-few-public-methods
+    '''
+        Schema for creating a new Trade Planning entry.
+    '''
+    # pass
+
+
+class TradePlanningUpdateSchema(TradeBaseSchema):
+    '''
+        Schema for updating an existing Trade Planning entry.
+    '''
+    # Only status and comments are updatable.
+    # To change core data, delete and recreate.
+    status: Optional[str] = Field(
+        None,
+        max_length=20,
+        description = 'New status for the planning entry.'
+    )
+    comments: Optional[str] = Field(
+        None,
+        description = 'Optional comments for this planning entry.'
+    )
+
+
+class TradePlanningResponseSchema(TradePlanningBaseSchema):
+    '''
+        Response schema for a Trade Planning entry.
+    '''
+    id: int
+    actual_workload_minutes: Optional[int]
+    workload_difference_minutes: Optional[int]
+    created_at: Optional[datetime]
+
+    point_of_sale: Optional[PointOfSaleResponseSchema] = None
+
+
+class TradePlanningFilterSchema(BaseModel):
+    '''
+        Schema to encapsulate filtering parameters for Trade Planning entries.
+    '''
+    company_id: int = Query(..., description = 'Company ID (Mandatory for filtering).')
+    planning_id: Optional[int] = Query(None, description = 'Filter by PLANNING microservice ID.')
+    user_id: Optional[int] = Query(None, description = 'Filter by User ID.')
+    point_of_sale_id: Optional[int] = Query(None, description = 'Filter by Point of Sale ID.')
+    status: Optional[str] = Query(None, description = 'Filter by status (e.g., PENDING).')
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+        Pydantic config.
+        '''
+        arbitrary_types_allowed = True
+
+
+class TradePlanningListResponseSchema(TradeBaseSchema):
+    '''
+        Response schema for a paginated list of Trade Planning entries.
+    '''
+    items: List[TradePlanningResponseSchema]
+    total: int
+
+
+# --- Schema for Workload Calculation Endpoint (PATCH) ---
+
+class TradePlanningWorkloadUpdateSchema(TradeBaseSchema):
+    '''
+        Schema for the PATCH endpoint to calculate and update workload.
+        Frontend provides the check-in and check-out times.
+    '''
+    check_in_time: datetime = Field(
+        ...,
+        description = 'Actual check-in time from LOCALIZATION (t_attendances).'
+    )
+    check_out_time: datetime = Field(
+        ...,
+        description = 'Actual check-out time from LOCALIZATION (t_attendances).'
+    )

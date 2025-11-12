@@ -8,44 +8,33 @@ from fastapi import UploadFile
 from pydantic import BaseModel
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload, DeclarativeBase
+from services.exceptions import InvalidInputError
 from services.crud import (
-    create_record,
-    delete_record,
-    get_record,
-    update_record
+    create_record, delete_record, get_record, update_record
 )
 from services.exceptions import (
-    RegisterAlreadyExistsError,
-    RegisterNotFoundError,
+    RegisterAlreadyExistsError, RegisterNotFoundError,
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
-    _handle_files_service,
-    get_current_time_gmt,
-    handle_service_errors,
-    audit_event,
+    _handle_files_service, get_current_time_gmt,
+    handle_service_errors, audit_event,
     sqlalchemy_object_as_dict
 )
 from models.trade import (
-    PointOfSale,
-    PointOfSaleInventory,
-    Product,
-    ProductAssignmentPOS,
-    SKUEquivalency,
-    SKUSequencer
+    PointOfSale, PointOfSaleInventory,
+    Product, ProductAssignmentPOS, SKUEquivalency,
+    SKUSequencer, TradePlanning
 )
 from schemas.trade import (
-    POSFilterSchema,
-    PointOfSaleUpdateSchema,
-    ProductAssignmentPOSCreateSchema,
-    ProductAssignmentPOSFilterSchema,
-    ProductAssignmentPOSUpdateSchema,
-    ProductCreateSchema,
-    PointOfSaleCreateSchema,
-    ProductFilterSchema,
-    ProductUpdateSchema,
-    SKUEquivalencyCreateSchema,
-    SKUEquivalencyUpdateSchema,
+    POSFilterSchema, PointOfSaleUpdateSchema,
+    ProductAssignmentPOSCreateSchema, ProductAssignmentPOSFilterSchema,
+    ProductAssignmentPOSUpdateSchema, ProductCreateSchema,
+    PointOfSaleCreateSchema, ProductFilterSchema,
+    ProductUpdateSchema, SKUEquivalencyCreateSchema,
+    SKUEquivalencyUpdateSchema, TradePlanningCreateSchema,
+    TradePlanningFilterSchema, TradePlanningUpdateSchema,
+    TradePlanningWorkloadUpdateSchema,
 )
 
 async def _prepare_file_to_upload(
@@ -84,25 +73,20 @@ async def _create_bulk_items_from_skus(
     '''
     created_items = []
     for item in items_list:
-        # 1. Get product_id
         product_id = _get_product_id_by_sku(
             db, company_id, item.product_sku
         )
 
-        # 2. Get all other fields from the item schema
-        # (e.g., quantity, batch_number, expiration_date, comments)
         item_data = item.model_dump(exclude={'product_sku'})
 
-        # 3. Create the model instance
         db_item = model_class(
             attendance_id = attendance_id,
             product_id = product_id,
-            **item_data  # Desempaqueta los campos restantes
+            **item_data
         )
         db.add(db_item)
         created_items.append(db_item)
 
-    # Commit all items at once
     db.commit()
     for item in created_items:
         db.refresh(item)
@@ -119,7 +103,6 @@ def _get_segment_key(
         Constructs the non-sequential segment key (XXX.YYY.ZZZ.WWW)
         for the SKU Sequencer table.
     '''
-    # The key combines the four categories separated by dots.
     return f'{category_1}.{category_2}.{category_3}.{category_4}'
 
 def _format_sequence_number(sequence: int) -> str:
@@ -136,7 +119,6 @@ def _get_product_id_by_sku(
     '''
         Searches for the internal product ID (product_id) using its SKU.
     '''
-    # 'Search for the product'
     product = (
         db.query(Product)
         .filter(
@@ -151,7 +133,6 @@ def _get_product_id_by_sku(
         logger.error(error_msg)
         raise RegisterNotFoundError(detail = error_msg)
 
-    # 'Return the ID'
     return product.id
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -177,20 +158,16 @@ def _generate_next_sku_sequence(
         company_id} with segment key {segment_key}'
     logger.debug(message)
 
-    # 1. Find or create the sequencer record for this segment and company
-    # The .with_for_update() ensures an atomic lock on the row.
     sequencer = db.query(SKUSequencer).filter(
         SKUSequencer.company_id == company_id,
         SKUSequencer.segment_key == segment_key
     ).with_for_update().first()
 
     if sequencer:
-        # 2. If found, increment the sequence number
         sequencer.last_sequence_number += 1
         db.add(sequencer)
         next_sequence = sequencer.last_sequence_number
     else:
-        # 3. If not found, create a new sequencer record starting at 1
         next_sequence = 1
         new_sequencer = SKUSequencer(
             company_id = company_id,
@@ -201,7 +178,6 @@ def _generate_next_sku_sequence(
 
     db.flush()
 
-    # 4. Construct the final SKU
     formatted_sec = _format_sequence_number(next_sequence)
     final_sku = f'{segment_key}.{formatted_sec}'
     message = f'Successfully generated SKU: {final_sku} for segment key: {segment_key}'
@@ -223,7 +199,6 @@ async def create_product_service(
         product_data.company_id}'
     logger.info(message)
 
-    # 1. Check for name conflict using explicit query, matching planning service pattern
     existing_product = db.query(Product).filter(
         Product.company_id == product_data.company_id,
         Product.name == product_data.name
@@ -234,9 +209,7 @@ async def create_product_service(
         logger.error(error_msg)
         raise RegisterAlreadyExistsError(detail = error_msg)
 
-    # 2. Use nested transaction to encapsulate the atomic SKU sequence lock
     with db.begin_nested():
-        # 3. Generate the unique SKU
         final_sku = _generate_next_sku_sequence(
             db,
             product_data.company_id,
@@ -246,15 +219,12 @@ async def create_product_service(
             product_data.category_4_code
         )
 
-        # 4. Prepare data and create the product record
         product_dict = product_data.model_dump()
         product_dict['sku'] = final_sku
 
-        # Matching create_planning_with_details pattern: db_planning = Planning(**planning_dict)
         db_product = Product(**product_dict)
         db.add(db_product)
 
-    # 5. Commit and refresh, matching create_planning_with_details flow
     db.commit()
     db.refresh(db_product)
 
@@ -274,7 +244,6 @@ async def create_pos_with_inventory_service(
         pos_data.company_id}'
     logger.info(message)
 
-    # 1. Check for external_code conflict using explicit query
     if pos_data.external_code:
         existing_pos = db.query(PointOfSale).filter(
             PointOfSale.company_id == pos_data.company_id,
@@ -287,13 +256,11 @@ async def create_pos_with_inventory_service(
             logger.error(error_msg)
             raise RegisterAlreadyExistsError(detail = error_msg)
 
-    # 2. Create the main PointOfSale record.
     pos_dict = pos_data.model_dump(exclude = {'initial_inventory'})
     db_pos = PointOfSale(**pos_dict)
     db.add(db_pos)
     db.flush()
 
-    # 3. Iterate through initial inventory details and create nested records.
     if pos_data.initial_inventory:
         message = f'''Processing initial inventory for POS ID: {db_pos.id} and company
                 ID: {pos_data.company_id}'''
@@ -301,27 +268,19 @@ async def create_pos_with_inventory_service(
 
         for inventory_item in pos_data.initial_inventory:
 
-            # 3a. Convert Pydantic to dictionary
             inventory_data = inventory_item.model_dump()
 
-            # 3b. Extract the SKU and get the ID. pop() removes product_sku
-            # from the dictionary so it doesn't cause an error in the model''s constructor.
             sku = inventory_data.pop('product_sku')
 
-            # Translate SKU to product_id
             product_id = _get_product_id_by_sku(db, pos_data.company_id, sku)
 
-            # 3c. Insert the correct product ID into the dictionary
             inventory_data['product_id'] = product_id
             inventory_data['point_of_sale_id'] = db_pos.id
             inventory_data['company_id'] = pos_data.company_id
 
-            # 3d. Create the inventory record directly using the model constructor
             db_inventory = PointOfSaleInventory(**inventory_data)
             db.add(db_inventory)
 
-
-    # 4. Commit and refresh, matching create_planning_with_details flow
     db.commit()
     db.refresh(db_pos)
 
@@ -382,10 +341,8 @@ async def get_products_list_service(
 
     query = db.query(Product)
 
-    # Mandatory filter
     conditions = [Product.company_id == filters.company_id]
 
-    # Optional filters
     if filters.name:
         conditions.append(Product.name.ilike(f'%{filters.name}%'))
     if filters.sku:
@@ -415,10 +372,8 @@ async def get_pos_list_service(
 
     query = db.query(PointOfSale).options(joinedload(PointOfSale.inventory))
 
-    # Mandatory filter
     conditions = [PointOfSale.company_id == filters.company_id]
 
-    # Optional filters
     if filters.name:
         conditions.append(PointOfSale.name.ilike(f'%{filters.name}%'))
     if filters.external_code:
@@ -449,7 +404,6 @@ async def update_product_service(
     db_product = get_record(db, Product, product_id)
     old_values = sqlalchemy_object_as_dict(db_product)
 
-    # Use the generic crud.update_record function
     db_product = update_record(db, db_product, product_data)
 
     db.commit()
@@ -479,7 +433,6 @@ async def update_pos_service(
     db_pos = get_record(db, PointOfSale, pos_id)
     old_values = sqlalchemy_object_as_dict(db_pos)
 
-    # Use the generic crud.update_record function
     db_pos = update_record(db, db_pos, pos_data)
 
     db.commit()
@@ -507,7 +460,6 @@ async def delete_product_service(
     db_product = get_record(db, Product, product_id)
     old_values = sqlalchemy_object_as_dict(db_product)
 
-    # Use the generic crud.delete_record function
     delete_record(
         db = db,
         model = db_product,
@@ -538,7 +490,6 @@ async def delete_pos_service(
     db_pos = get_record(db, PointOfSale, pos_id)
     old_values = sqlalchemy_object_as_dict(db_pos)
 
-    # Use the generic crud.delete_record function
     delete_record(
         db = db,
         model = db_pos,
@@ -569,18 +520,14 @@ async def create_sku_equivalency_service(
             equivalency_data.external_product_code}'
     logger.info(message)
 
-    # 1. Translate SKU to product_id (reusing existing helper)
     product_id = _get_product_id_by_sku(
         db, equivalency_data.company_id, equivalency_data.product_sku
     )
-
-    # 2. Prepare data for create_record (Pydantic object)
 
     extra_fields = {
         'product_id': product_id
     }
 
-    # We must exclude product_sku as it's not in the ORM model
     exclude_relations = ['product_sku']
 
     db_equivalency = create_record(
@@ -625,18 +572,13 @@ async def update_sku_equivalency_service(
     db_equivalency = get_record(db, SKUEquivalency, equivalency_id)
     old_values = sqlalchemy_object_as_dict(db_equivalency)
 
-    # 'Prepare data dictionary for update'
     update_dict = update_data.model_dump(exclude_unset = True)
 
-    # 'Handle SKU translation if product_sku is included in the update'
     if 'product_sku' in update_dict and update_dict['product_sku']:
         sku = update_dict.pop('product_sku')
-        # 'We need company_id for the lookup'
         company_id = db_equivalency.company_id
         update_dict['product_id'] = _get_product_id_by_sku(db, company_id, sku)
 
-    # 'Update the record manually as update_record expects a schema'
-    # 'This avoids passing a dict to update_record'
     for key, value in update_dict.items():
         setattr(db_equivalency, key, value)
 
@@ -695,20 +637,16 @@ async def create_product_assignment_service(
                f'to POS ID: {assignment_data.point_of_sale_id}')
     logger.info(message)
 
-    # 1. Translate SKU to product_id (reusing existing helper)
     product_id = _get_product_id_by_sku(
         db, assignment_data.company_id, assignment_data.product_sku
     )
 
-    # 2. Verify POS exists (optional but good practice)
     _ = get_record(db, PointOfSale, assignment_data.point_of_sale_id)
 
-    # 3. Prepare data for create_record
     extra_fields = {
         'product_id': product_id
     }
 
-    # Exclude product_sku as it's not in the ORM model
     exclude_relations = ['product_sku']
 
     db_assignment = create_record(
@@ -749,10 +687,8 @@ async def get_product_assignments_list_service(
 
     query = db.query(ProductAssignmentPOS)
 
-    # Mandatory filter
     conditions = [ProductAssignmentPOS.company_id == filters.company_id]
 
-    # Optional filters
     if filters.product_id:
         conditions.append(ProductAssignmentPOS.product_id == filters.product_id)
     if filters.point_of_sale_id:
@@ -783,7 +719,6 @@ async def update_product_assignment_service(
     db_assignment = get_record(db, ProductAssignmentPOS, assignment_id)
     old_values = sqlalchemy_object_as_dict(db_assignment)
 
-    # Use the generic crud.update_record function
     db_assignment = update_record(db, db_assignment, update_data)
 
     db.commit()
@@ -824,3 +759,206 @@ async def delete_product_assignment_service(
     }
 
     return assignment_id, auditable_data
+
+# --- A.3. TRADE PLANNING SERVICES ---
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'TradePlanning', 'CREATE')
+async def create_trade_planning_service(
+    db: Session,
+    planning_data: TradePlanningCreateSchema
+) -> Tuple[TradePlanning, Dict[str, Any]]:
+    '''
+        Creates a new Trade Planning entry.
+    '''
+    message = f'Attempting to create Trade Planning for planning_id: {planning_data.planning_id}'
+    logger.info(message)
+
+    db_planning = create_record(
+        db = db,
+        model = TradePlanning,
+        create_data = planning_data
+    )
+
+    db.commit()
+    db.refresh(db_planning)
+
+    auditable_data = {
+        'new_values': sqlalchemy_object_as_dict(db_planning),
+        'company_id': db_planning.company_id,
+        'user_id': db_planning.user_id
+    }
+
+    return db_planning, auditable_data
+
+@handle_service_errors('TRADE')
+async def get_trade_planning_by_id_service(
+    db: Session,
+    planning_id: int
+) -> TradePlanning:
+    '''
+        Retrieves a specific Trade Planning entry by its ID,
+        eager loading the Point of Sale info.
+    '''
+    message = f'Attempting to retrieve Trade Planning ID: {planning_id}'
+    logger.info(message)
+
+    eager_load_options = [
+        joinedload(TradePlanning.point_of_sale)
+    ]
+
+    db_planning = get_record(
+        db = db,
+        model = TradePlanning,
+        record_id = planning_id,
+        eager_load_options = eager_load_options
+    )
+
+    return db_planning
+
+
+@handle_service_errors('TRADE')
+async def get_trade_planning_list_service(
+    db: Session,
+    filters: TradePlanningFilterSchema,
+    skip: int = 0,
+    limit: int = 100
+) -> Tuple[List[TradePlanning], int]:
+    '''
+        Retrieves a paginated list of Trade Planning entries based on filters.
+    '''
+    message = f'Attempting to retrieve Trade Planning list with filters: {filters}'
+    logger.info(message)
+
+    query = db.query(TradePlanning).options(
+        joinedload(TradePlanning.point_of_sale)
+    )
+
+    query = query.filter(TradePlanning.company_id == filters.company_id)
+
+    if filters.planning_id:
+        query = query.filter(TradePlanning.planning_id == filters.planning_id)
+    if filters.user_id:
+        query = query.filter(TradePlanning.user_id == filters.user_id)
+    if filters.point_of_sale_id:
+        query = query.filter(TradePlanning.point_of_sale_id == filters.point_of_sale_id)
+    if filters.status:
+        query = query.filter(TradePlanning.status == filters.status)
+
+    total_count = query.count()
+    records = query.order_by(TradePlanning.id.desc()).offset(skip).limit(limit).all()
+
+    return records, total_count
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'TradePlanning', 'UPDATE')
+async def update_trade_planning_service(
+    db: Session,
+    planning_id: int,
+    update_data: TradePlanningUpdateSchema
+) -> Tuple[TradePlanning, Dict[str, Any]]:
+    '''
+        Updates a Trade Planning entry (e.g., status or comments).
+    '''
+    message = f'Attempting to update Trade Planning ID: {planning_id}'
+    logger.info(message)
+
+    db_planning = get_record(db, TradePlanning, planning_id)
+    old_values = sqlalchemy_object_as_dict(db_planning)
+
+    db_planning = update_record(db, db_planning, update_data)
+
+    db.commit()
+    db.refresh(db_planning)
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_planning),
+        'company_id': db_planning.company_id,
+        'user_id': db_planning.user_id
+    }
+
+    return db_planning, auditable_data
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'TradePlanning', 'DELETE')
+async def delete_trade_planning_service(
+    db: Session,
+    planning_id: int
+) -> Tuple[int, Dict[str, Any]]:
+    '''
+        Deletes a Trade Planning entry.
+    '''
+    message = f'Attempting to delete Trade Planning ID: {planning_id}'
+    logger.info(message)
+
+    db_planning = get_record(db, TradePlanning, planning_id)
+    old_values = sqlalchemy_object_as_dict(db_planning)
+
+    company_id_audit = db_planning.company_id
+    user_id_audit = db_planning.user_id
+
+    delete_record(
+        db = db,
+        model = db_planning,
+        record_id = planning_id
+    )
+
+    db.commit()
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': None,
+        'company_id': company_id_audit,
+        'user_id': user_id_audit
+    }
+
+    return planning_id, auditable_data
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'TradePlanning', 'WORKLOAD_CALCULATION')
+async def update_trade_planning_workload_service(
+    db: Session,
+    planning_id: int,
+    workload_data: TradePlanningWorkloadUpdateSchema
+) -> Tuple[TradePlanning, Dict[str, Any]]:
+    '''
+        Calculates and updates the actual workload based on check-in/out times.
+    '''
+    message = f'Calculating workload for Trade Planning ID: {planning_id}'
+    logger.info(message)
+
+    if workload_data.check_out_time <= workload_data.check_in_time:
+        raise InvalidInputError(
+            detail='Check-out time must be after check-in time.'
+        )
+
+    db_planning = get_record(db, TradePlanning, planning_id)
+    old_values = sqlalchemy_object_as_dict(db_planning)
+
+    duration_delta = workload_data.check_out_time - workload_data.check_in_time
+    actual_minutes = int(duration_delta.total_seconds() // 60)
+    planned_minutes = db_planning.planned_workload_minutes
+    difference_minutes = actual_minutes - planned_minutes
+
+    db_planning.actual_workload_minutes = actual_minutes
+    db_planning.workload_difference_minutes = difference_minutes
+    db_planning.status = 'COMPLETED'
+
+    db.add(db_planning)
+    db.commit()
+    db.refresh(db_planning)
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_planning),
+        'calculation_input': {
+            'check_in': workload_data.check_in_time.isoformat(),
+            'check_out': workload_data.check_out_time.isoformat()
+        },
+        'company_id': db_planning.company_id,
+        'user_id': db_planning.user_id
+    }
+
+    return db_planning, auditable_data
