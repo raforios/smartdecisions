@@ -11,7 +11,7 @@ from sqlalchemy import (
     UniqueConstraint
 )
 from sqlalchemy.orm import relationship
-from models.trade import AttendanceProductMixin
+from models.products import AttendanceProductMixin
 from services.db_connection import Base
 from services.utils import get_current_time_gmt
 

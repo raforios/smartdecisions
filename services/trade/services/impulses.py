@@ -6,10 +6,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import UploadFile
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload
+from services.products import (
+    create_bulk_items_from_skus,
+    get_product_id_by_sku,
+)
 from services.trade import (
-    _create_bulk_items_from_skus,
-    _get_product_id_by_sku,
-    _prepare_file_to_upload
+    prepare_file_to_upload
 )
 from services.crud import (
     delete_record,
@@ -82,7 +84,7 @@ async def create_promotion_service(
 
     for detail_item in promotion_data.details:
         # 2a. Translate SKU to product_id (reusing helper)
-        product_id = _get_product_id_by_sku(
+        product_id = get_product_id_by_sku(
             db, promotion_data.company_id, detail_item.product_sku
         )
 
@@ -223,7 +225,7 @@ async def create_impulse_inventory_start_service(
             } for the company ID: {inventory_data.company_id}'
     logger.info(message)
 
-    created_items = await _create_bulk_items_from_skus(
+    created_items = await create_bulk_items_from_skus(
         db = db,
         attendance_id = attendance_id,
         company_id = inventory_data.company_id,
@@ -255,7 +257,7 @@ async def create_impulse_sale_service(
     # 1. Handle file upload (Patrón FORMS)
     file_path_1 = None
     if uploaded_file:
-        file_path_1 = await _prepare_file_to_upload(
+        file_path_1 = await prepare_file_to_upload(
             file = uploaded_file,
             dynamic_path = dynamic_path,
             auth_token = auth_token,
@@ -274,7 +276,7 @@ async def create_impulse_sale_service(
 
     # 3. Iterate through details (Lógica sin cambios)
     for detail_item in sale_data.details:
-        product_id = _get_product_id_by_sku(
+        product_id = get_product_id_by_sku(
             db, company_id, detail_item.product_sku
         )
         db_detail = ImpulseSaleDetail(
@@ -306,7 +308,7 @@ async def create_impulse_inventory_end_service(
             } and company {inventory_data.company_id}'
     logger.info(message)
 
-    created_items = await _create_bulk_items_from_skus(
+    created_items = await create_bulk_items_from_skus(
         db = db,
         attendance_id = attendance_id,
         company_id = inventory_data.company_id,

@@ -17,6 +17,8 @@ import uvicorn
 from routes.trade import router as trade_router
 from routes.impulses import router as impulses_router
 from routes.replenishments import router as replenishments_router
+from routes.products import router as products_router
+from routes.pos import router as pos_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
@@ -72,13 +74,20 @@ APP_CONFIG = {
     'root_path': ROOT_PATH_NORMALIZED,
     'title': 'Trade Service',
     'description': '''
-    This microservice manages the **Trade Marketing** domain, covering:
-    1. **Product Catalog:** Atomic generation of unique SKUs based on classification.
-    2. **Point of Sale (POS) Management:** Creation of POS records and their initial inventory.
-    3. **Inventory Control:** Tracking of stock, including batch number, expiration date, 
-    and short date indicators.
-    4. **Future extensions:** Support for impulsing, sales, and corresponding reports 
-    (as per functional specifications).''',
+    This microservice manages the **Trade Marketing** domain, providing end-to-end support for field operations:
+    
+    1. Core Catalog: - Management of Products with Atomic SKU generation.
+       - Point of Sale (POS) management and Assignments.
+       
+    2. Planning & Agenda: - Weekly scheduling linked to the Planning microservice.
+       - Field Agenda management: Ad-Hoc visits, Non-visit justifications, and Workload calculation (Check-in/Check-out).
+       
+    3. Impulse Activities: - Sales registration and Promotion tracking (Bandeo).
+       - Visit Inventory control (Start/End) with expiration and batch tracking.
+       
+    4. Replenishment Activities: - Stock replenishment reports with evidence capture (Photos).
+       - Competitor analysis and Promotional point monitoring.
+    ''',
     'version': '1.0.0',
     'contact': {
         'name': 'API Support',
@@ -138,9 +147,11 @@ async def custom_swagger_ui():
         title = app.title + ' - Docs'
     )
 
+app.include_router(products_router, tags = ['Products'])
+app.include_router(pos_router, tags = ['POS'])
 app.include_router(trade_router, tags = ['Trade'])
-app.include_router(impulses_router, tags = ['Trade - Impulses'])
-app.include_router(replenishments_router, tags = ['Trade - Replenishment'])
+app.include_router(impulses_router, tags = ['Impulses'])
+app.include_router(replenishments_router, tags = ['Replenishment'])
 
 # Entry point to run the app
 if __name__ == '__main__':

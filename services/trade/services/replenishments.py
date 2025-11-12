@@ -5,10 +5,12 @@
 from typing import List, Optional
 from fastapi import UploadFile
 from sqlalchemy.orm import Session, joinedload
+from services.products import (
+    create_bulk_items_from_skus,
+    get_product_id_by_sku,
+)
 from services.trade import (
-    _create_bulk_items_from_skus,
-    _get_product_id_by_sku,
-    _prepare_file_to_upload
+    prepare_file_to_upload
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
@@ -56,7 +58,7 @@ async def create_replenishment_report_service(
     file_paths = []
     for file in files:
         if file:
-            path = await _prepare_file_to_upload(
+            path = await prepare_file_to_upload(
                 file = file,
                 dynamic_path = dynamic_path,
                 auth_token = auth_token,
@@ -96,7 +98,7 @@ async def create_replenishment_inventory_service(
             } for company ID: {inventory_data_rep.company_id}'
     logger.info(message)
 
-    created_items = await _create_bulk_items_from_skus(
+    created_items = await create_bulk_items_from_skus(
         db = db,
         attendance_id = attendance_id,
         company_id = inventory_data_rep.company_id,
@@ -119,7 +121,7 @@ async def create_replenishment_reception_service(
     message = f'Creating Replenishment Reception for attendance ID: {attendance_id}'
     logger.info(message)
 
-    created_items = await _create_bulk_items_from_skus(
+    created_items = await create_bulk_items_from_skus(
         db = db,
         attendance_id = attendance_id,
         company_id = reception_data.company_id,
@@ -152,7 +154,7 @@ async def create_complementary_bandeo_service(
     file_paths = []
     for file in files:
         if file:
-            path = await _prepare_file_to_upload(
+            path = await prepare_file_to_upload(
                 file = file,
                 dynamic_path = dynamic_path,
                 auth_token = auth_token,
@@ -176,7 +178,7 @@ async def create_complementary_bandeo_service(
 
     # 3. Iterate through details (Lógica sin cambios)
     for detail_item in bandeo_data.details:
-        product_id = _get_product_id_by_sku(
+        product_id = get_product_id_by_sku(
             db, bandeo_data.company_id, detail_item.product_sku
         )
         db_detail = ComplementaryBandeoDetail(
@@ -215,7 +217,7 @@ async def create_complementary_promo_point_service(
     file_paths = []
     for file in files:
         if file:
-            path = await _prepare_file_to_upload(
+            path = await prepare_file_to_upload(
                 file = file,
                 dynamic_path = dynamic_path,
                 auth_token = auth_token,
@@ -259,7 +261,7 @@ async def create_complementary_competition_service(
     file_path_1 = None
     if file:
 
-        file_path_1 = await _prepare_file_to_upload(
+        file_path_1 = await prepare_file_to_upload(
             file = file,
             dynamic_path = dynamic_path,
             auth_token = auth_token,
