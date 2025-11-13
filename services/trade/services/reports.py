@@ -2,7 +2,7 @@
     Business logic for Reports.
     Handles complex aggregations and calculations for dashboards.
 '''
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from datetime import datetime, time
 from collections import defaultdict
 import requests
@@ -86,8 +86,86 @@ def _fetch_attendances_from_localization(
         # aunque los campos saldrán vacíos.
         return {}
 
+# --- HELPERS PARA REFACTORIZACIÓN (Sales Report) ---
 
-# --- HELPERS PARA COMPLIANCE (Refactorizado previamente) ---
+def _fetch_sales_context_data(
+    db: Session,
+    raw_records: List[Any],
+    auth_token: str
+) -> Tuple[Dict[int, Dict[str, Any]], Dict[int, str]]:
+    '''
+        Extracts necessary IDs from raw sales records and fetches
+        contextual data (Attendance info and POS Names).
+    '''
+    # 1. Extract Attendance IDs
+    attendance_ids = list({row[0].attendance_id for row in raw_records})
+
+    # 2. Call LOCALIZATION Service
+    attendance_map = _fetch_attendances_from_localization(auth_token, attendance_ids)
+
+    # 3. Extract POS IDs needed for name lookup
+    pos_ids_needed = {
+        att['point_of_sale_id']
+        for att in attendance_map.values()
+        if 'point_of_sale_id' in att
+    }
+
+    # 4. Fetch POS names from local DB
+    pos_map = {}
+    if pos_ids_needed:
+        pos_records = db.query(PointOfSale).filter(PointOfSale.id.in_(pos_ids_needed)).all()
+        pos_map = {pos.id: pos.name for pos in pos_records}
+
+    return attendance_map, pos_map
+
+def _build_sales_report_items(
+    raw_records: List[Any],
+    attendance_map: Dict[int, Dict[str, Any]],
+    pos_map: Dict[int, str],
+    filters: SalesReportFilterSchema
+) -> Tuple[List[SalesDetailItemSchema], int, int]:
+    '''
+        Iterates through raw records, applies in-memory filters,
+        and constructs the final report items.
+    '''
+    items_list: List[SalesDetailItemSchema] = []
+    total_units = 0
+    unique_transactions = set()
+
+    for header, detail, prod in raw_records:
+        # Contexto desde Localization
+        att_data = attendance_map.get(header.attendance_id, {})
+        user_id = att_data.get('user_id', 0)
+        pos_id = att_data.get('point_of_sale_id', 0)
+
+        # Filtros en Memoria (User / POS)
+        if filters.user_id and user_id != filters.user_id:
+            continue
+        if filters.point_of_sale_id and pos_id != filters.point_of_sale_id:
+            continue
+
+        pos_name = pos_map.get(pos_id, 'Unknown POS')
+        qty = detail.quantity
+        total_units += qty
+        unique_transactions.add(header.id)
+
+        items_list.append(SalesDetailItemSchema(
+            sale_id = header.id,
+            sale_date = header.created_at.date(),
+            timestamp = header.created_at,
+            user_id = user_id,
+            point_of_sale_id = pos_id,
+            point_of_sale_name = pos_name,
+            product_id = prod.id,
+            product_name = prod.name,
+            product_sku = prod.sku,
+            category_1 = prod.category_1_code,
+            quantity = qty
+        ))
+
+    return items_list, total_units, len(unique_transactions)
+
+# --- HELPERS PARA COMPLIANCE (Existentes) ---
 
 def _update_record_stats(record: TradePlanning, stats: Dict[str, int]) -> None:
     ''' Helper for Compliance Report logic '''
@@ -174,8 +252,9 @@ async def get_compliance_report_service(
         g_total_planned += user_schema.total_planned
         g_total_executed += user_schema.total_executed
 
-    global_compliance = round((g_total_executed / g_total_planned) * 100, 2) \
-                        if g_total_planned > 0 else 0.0
+    global_compliance = 0.0
+    if g_total_planned > 0:
+        global_compliance = round((g_total_executed / g_total_planned) * 100, 2)
 
     global_stats = ComplianceGlobalStatsSchema(
         total_users = len(details_list),
@@ -270,14 +349,13 @@ async def get_sales_report_service(
     end_dt = datetime.combine(filters.end_date, time.max)
 
     # 1. Query Local Sales (Header + Details + Products)
-    # No unimos con PointOfSale local todavía, porque no tenemos el ID aquí.
     query = db.query(ImpulseSale, ImpulseSaleDetail, Product).join(
         ImpulseSaleDetail, ImpulseSale.id == ImpulseSaleDetail.impulse_sale_id
     ).join(
         Product, ImpulseSaleDetail.product_id == Product.id
     ).filter(
-        ImpulseSaleDetail.product_id == Product.id, # Explicit join check
-        Product.company_id == filters.company_id,   # Filter by product company as proxy
+        ImpulseSaleDetail.product_id == Product.id,
+        Product.company_id == filters.company_id,
         ImpulseSale.created_at >= start_dt,
         ImpulseSale.created_at <= end_dt
     )
@@ -288,75 +366,23 @@ async def get_sales_report_service(
     raw_records = query.order_by(ImpulseSale.created_at.desc()).all()
 
     if not raw_records:
-        # Retorno rápido si no hay ventas
         return SalesReportResponseSchema(
             period_start=filters.start_date, period_end=filters.end_date,
             total_units_sold=0, total_transactions=0, items=[]
         )
 
-    # 2. Extract Attendance IDs to fetch context
-    attendance_ids = list({row[0].attendance_id for row in raw_records})
+    # 2. Get Context Data (External API & Local POS Names)
+    attendance_map, pos_map = _fetch_sales_context_data(db, raw_records, auth_token)
 
-    # 3. Call LOCALIZATION Service (Bulk Fetch)
-    # Devuelve map: { attendance_id: { 'user_id': 1, 'point_of_sale_id': 5, ... } }
-    attendance_map = _fetch_attendances_from_localization(auth_token, attendance_ids)
-
-    # 4. Extract POS IDs needed from TRADE (if we want POS Names)
-    pos_ids_needed = {
-        att['point_of_sale_id']
-        for att in attendance_map.values()
-        if 'point_of_sale_id' in att
-    }
-
-    # Fetch POS names from local DB
-    pos_map = {}
-    if pos_ids_needed:
-        pos_records = db.query(PointOfSale).filter(PointOfSale.id.in_(pos_ids_needed)).all()
-        pos_map = {pos.id: pos.name for pos in pos_records}
-
-    # 5. Build Report Items
-    items_list: List[SalesDetailItemSchema] = []
-    total_units = 0
-    unique_transactions = set()
-
-    for header, detail, prod in raw_records:
-
-        # Contexto desde Localization
-        att_data = attendance_map.get(header.attendance_id, {})
-        user_id = att_data.get('user_id', 0) # 0 or None if missing
-        pos_id = att_data.get('point_of_sale_id', 0)
-
-        # Filtros en Memoria (User / POS)
-        # Como la data viene de otro servicio, filtramos aquí
-        if filters.user_id and user_id != filters.user_id:
-            continue
-        if filters.point_of_sale_id and pos_id != filters.point_of_sale_id:
-            continue
-
-        pos_name = pos_map.get(pos_id, 'Unknown POS')
-
-        qty = detail.quantity
-        total_units += qty
-        unique_transactions.add(header.id)
-
-        items_list.append(SalesDetailItemSchema(
-            sale_id = header.id,
-            sale_date = header.created_at.date(),
-            timestamp = header.created_at,
-            user_id = user_id,
-            point_of_sale_id = pos_id,
-            point_of_sale_name = pos_name,
-            product_id = prod.id,
-            product_name = prod.name,
-            product_sku = prod.sku,
-            category_1 = prod.category_1_code,
-            quantity = qty
-        ))
+    # 3. Build Report Items (Processing Loop)
+    items_list, total_units, total_transactions = _build_sales_report_items(
+        raw_records, attendance_map, pos_map, filters
+    )
 
     return SalesReportResponseSchema(
         period_start = filters.start_date,
         period_end = filters.end_date,
         total_units_sold = total_units,
-        total_transactions = len(unique_transactions),
+        total_transactions = total_transactions,
         items = items_list
     )
