@@ -23,7 +23,7 @@ from schemas.localization import (
 # Geofencing Parameters
 EARTH_RADIUS_KM = 6371
 
-def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     '''
     Calculates the distance between two coordinates in meters using the Haversine formula.
     '''
@@ -44,7 +44,7 @@ def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> f
     # Return distance in meters
     return distance_km * 1000
 
-def _check_geofence_start_point(
+def check_geofence_start_point(
     db: Session,
     planned_route_id: int,
     user_latitude: float,
@@ -66,7 +66,7 @@ def _check_geofence_start_point(
             detail = f'Starting point not found for planned route {planned_route_id}.'
         )
 
-    distance = _calculate_distance(
+    distance = calculate_distance(
         user_latitude, user_longitude, start_point.latitude, start_point.longitude
     )
 
@@ -75,7 +75,7 @@ def _check_geofence_start_point(
             detail = f'Distance: {distance:.2f} meters. Limit: {max_distance:.2f} meters.'
         )
 
-def _process_localization_csv_data(
+def process_localization_csv_data(
     rows: List[Dict[str, Any]],
     bulk_schema: PlannedRouteBulkCreateSchema
 ) -> Dict[str, Any]:
@@ -119,7 +119,7 @@ def _process_localization_csv_data(
     return routes_data
 
 
-async def _perform_atomic_db_insertion_for_localization(
+async def perform_atomic_db_insertion_for_localization(
     db: Session,
     routes_to_create: Dict[str, Any],
     file_name: str,

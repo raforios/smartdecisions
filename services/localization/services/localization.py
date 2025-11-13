@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc, func, select
 from services.localization_utils import(
-    _calculate_distance,
-    _check_geofence_start_point,
-    _perform_atomic_db_insertion_for_localization,
-    _process_localization_csv_data
+    calculate_distance,
+    check_geofence_start_point,
+    perform_atomic_db_insertion_for_localization,
+    process_localization_csv_data
 )
 from services.exceptions import (
     RegisterNotFoundError,
@@ -39,6 +39,7 @@ from models.localization import (
 )
 from schemas.localization import (
     AttendanceCreateSchema,
+    AttendanceSearchRequestSchema,
     ExecutedRouteComparisonSchema,
     PlannedPointUpdateSchema,
     PlannedRouteBulkCreateSchema,
@@ -159,7 +160,7 @@ async def create_executed_route(
                     planned_route.id} is not in ACTIVE status.'''
             )
         # Check if the user is at the starting point of the route
-        _check_geofence_start_point(
+        check_geofence_start_point(
             db,
             planned_route_id = route_data.planned_route_id,
             user_latitude = route_data.start_latitude,
@@ -476,7 +477,7 @@ async def update_executed_route_end_time(
     ).order_by(PlannedPoint.secuencial.desc()).first()
 
     if last_planned_point and update_data.max_distance_end_point is not None:
-        distance = _calculate_distance(
+        distance = calculate_distance(
             lat1 = last_planned_point.latitude,
             lon1 = last_planned_point.longitude,
             lat2 = update_data.end_latitude,
@@ -778,8 +779,8 @@ async def bulk_create_planned_routes(
         file_name = file_name,
         auth_token = auth_token,
         bulk_schema = PlannedRouteBulkCreateSchema,
-        processor_func = _process_localization_csv_data,
-        inserter_func = _perform_atomic_db_insertion_for_localization,
+        processor_func = process_localization_csv_data,
+        inserter_func = perform_atomic_db_insertion_for_localization,
         delimiter = delimiter
     )
 
@@ -918,3 +919,27 @@ async def get_last_known_locations_service(
     message = f'Retrieved {len(locations)} last known locations.'
     logger.info(message)
     return locations
+
+# --- INTEGRATION SERVICES ---
+
+@handle_service_errors('LOCALIZATION')
+async def search_attendances_service(
+    db: Session,
+    search_data: AttendanceSearchRequestSchema
+) -> List[Attendance]:
+    '''
+        Retrieves a list of Attendance records by their IDs.
+        Optimized for bulk fetching from other microservices (e.g., TRADE).
+    '''
+    message = f'Searching for {len(search_data.attendance_ids)} attendance records.'
+    logger.info(message)
+
+    if not search_data.attendance_ids:
+        return []
+
+    # Consulta directa sin Joins (gracias a tu aclaración planned_point_id == pos_id)
+    results = db.query(Attendance).filter(
+        Attendance.id.in_(search_data.attendance_ids)
+    ).all()
+
+    return results

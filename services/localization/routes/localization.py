@@ -24,6 +24,7 @@ from controllers.localization import (
     get_stats_points_visited_controller,
     get_route_comparisons_controller,
     register_attendance_controller,
+    search_attendances_controller,
     update_attendance_checkout_time_controller,
     update_executed_route_end_time_controller,
     update_planned_point_controller,
@@ -32,6 +33,8 @@ from controllers.localization import (
     bulk_upload_planned_routes_controller
 )
 from schemas.localization import (
+    AttendanceSearchItemSchema,
+    AttendanceSearchRequestSchema,
     AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
     GroupLastKnownLocationsResponseSchema,
@@ -579,6 +582,33 @@ async def get_route_comparisons_endpoint(
         db = db,
         planned_route_id = planned_route_id,
         service_id = service_id,
+        request = request,
+        current_user = current_user
+    )
+
+@router.post(
+    '/attendances/search',
+    response_model = List[AttendanceSearchItemSchema],
+    status_code = status.HTTP_200_OK,
+    summary = 'Search attendances by IDs (Batch)',
+    description = '''Internal endpoint used by TRADE to fetch context (User, POS)
+                for a list of visits.'''
+)
+async def search_attendances_endpoint(
+    request: Request,
+    search_data: AttendanceSearchRequestSchema,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to bulk search attendances.
+    '''
+    message = f'User: {current_user}. Request to search attendances batch.'
+    logger.info(message)
+
+    return await search_attendances_controller(
+        search_data = search_data,
+        db = db,
         request = request,
         current_user = current_user
     )

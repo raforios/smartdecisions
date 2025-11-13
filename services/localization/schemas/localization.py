@@ -420,3 +420,24 @@ class GroupLastKnownLocationsResponseSchema(BaseModel):
         Response schema for a list of last known locations for multiple users.
     '''
     locations: List[LastKnownLocationResponseSchema]
+
+# --- ATTENDANCE SEARCH SCHEMAS (Integration with TRADE) ---
+
+class AttendanceSearchRequestSchema(BaseModel):
+    '''
+        Schema for searching multiple attendances by ID.
+        Used by TRADE microservice to fetch context (User/POS).
+    '''
+    attendance_ids: List[int] = Field(..., description='List of Attendance IDs to fetch.')
+
+class AttendanceSearchItemSchema(LocalizationBaseSchema):
+    '''
+        Schema for the search response item.
+        Maps 'planned_point_id' to 'point_of_sale_id' as per business rules.
+    '''
+    id: int
+    user_id: int
+    # Mapeo clave: Exponemos planned_point_id como point_of_sale_id
+    point_of_sale_id: int = Field(..., validation_alias='planned_point_id')
+    check_in_time: Optional[datetime]
+    check_out_time: Optional[datetime]

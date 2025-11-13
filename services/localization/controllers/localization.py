@@ -28,6 +28,7 @@ from services.localization import (
     get_route_comparisons,
     get_statistics_user_points,
     register_attendance,
+    search_attendances_service,
     update_attendance_checkout_time,
     update_executed_route_end_time,
     update_planned_point,
@@ -41,6 +42,8 @@ from services.localization import (
 )
 from models.localization import PlannedRoute
 from schemas.localization import (
+    AttendanceSearchItemSchema,
+    AttendanceSearchRequestSchema,
     AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
     GroupLastKnownLocationsResponseSchema,
@@ -592,3 +595,25 @@ async def get_last_known_locations_controller(
     ]
 
     return GroupLastKnownLocationsResponseSchema(locations = locations)
+
+# --- INTEGRATION CONTROLLERS ---
+
+@handle_service_errors('LOCALIZATION')
+async def search_attendances_controller(
+    search_data: AttendanceSearchRequestSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> List[AttendanceSearchItemSchema]:
+    '''
+        Controller to search attendances by a list of IDs.
+    '''
+    attendances = await search_attendances_service(
+        db = db,
+        search_data = search_data
+    )
+
+    # Pydantic se encarga de mapear planned_point_id -> point_of_sale_id
+    # gracias al 'validation_alias' definido en el Schema.
+    return [AttendanceSearchItemSchema.model_validate(att, from_attributes=True) \
+        for att in attendances]
