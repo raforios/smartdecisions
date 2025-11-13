@@ -94,23 +94,23 @@ Para ejecutar el microservicio localmente, sigue los siguientes pasos:
 
 1.  **Instala las dependencias:**
 
-    ```shell
-    pip install -r requirements.txt
-    ```
+```shell
+pip install -r requirements.txt
+```
 
 2.  **Configura la base de datos:** Asegúrate de que tienes una instancia de **DynamoDB local** en ejecución (por ejemplo, con **Docker**) y que las variables de conexión están correctamente configuradas en el archivo `.env`.
 
 3.  **Ejecuta el servidor de la API:**
 
-    ```shell
-    python main.py
-    ```
+```shell
+python main.py
+```
 
-    O si el entorno lo requiere:
+O si el entorno lo requiere:
 
-    ```shell
-    python3 main.py
-    ```
+```shell
+python3 main.py
+```
 
 -----
 

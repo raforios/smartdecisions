@@ -154,34 +154,34 @@ Para ejecutar el microservicio localmente, sigue los siguientes pasos:
 
 0.  **Configura DynamoDB para manejo de Caché:**
 
-    ```shell
-    # DynamoDB Local con Docker
-    docker run -p 3100:8000 amazon/dynamodb-local
-    ./dynamodb.sh
-    ```
+```shell
+# DynamoDB Local con Docker
+docker run -p 3100:8000 amazon/dynamodb-local
+./dynamodb.sh
+```
 
 1.  **Instala las dependencias:**
 
-    ```shell
-    pip install -r requirements.txt
-    ```
+```shell
+pip install -r requirements.txt
+```
 
 2.  **Configura las bases de datos:**
 
-      * Asegúrate de tener un servidor MySQL en ejecución y que las variables de conexión estén correctamente configuradas en el archivo `.env`.
-      * Asegúrate de tener una instancia local de DynamoDB en ejecución (puedes usar Docker como en el ejemplo del otro microservicio) y que las configuraciones sean correctas.
+* Asegúrate de tener un servidor MySQL en ejecución y que las variables de conexión estén correctamente configuradas en el archivo `.env`.
+* Asegúrate de tener una instancia local de DynamoDB en ejecución (puedes usar Docker como en el ejemplo del otro microservicio) y que las configuraciones sean correctas.
 
 3.  **Ejecuta el servidor de la API:**
 
-    ```shell
-    python main.py
-    ```
+```shell
+python main.py
+```
 
-    O si el entorno lo requiere:
+O si el entorno lo requiere:
 
-    ```shell
-    python3 main.py
-    ```
+```shell
+python3 main.py
+```
 
 -----
 
