@@ -63,6 +63,7 @@ async def get_inventory_alerts_controller(
 @handle_service_errors('REPORTS')
 async def get_sales_report_controller(
     filters: SalesReportFilterSchema,
+    auth_token: str,
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
@@ -72,5 +73,6 @@ async def get_sales_report_controller(
     '''
     return await get_sales_report_service(
         db = db,
-        filters = filters
+        filters = filters,
+        auth_token = auth_token
     )

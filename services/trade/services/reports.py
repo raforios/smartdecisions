@@ -60,7 +60,7 @@ def _fetch_attendances_from_localization(
         return {}
 
     url = f'{LOCALIZATION_SERVICE_URL}/v1/localization/attendances/search'
-    
+
     # Preparamos los headers y body
     headers = {
         'Authorization': auth_token if auth_token.startswith('Bearer ') else f'Bearer {auth_token}',
@@ -72,15 +72,16 @@ def _fetch_attendances_from_localization(
         # NOTA: Asumimos que LOCALIZATION tendrá este endpoint para búsqueda masiva
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
-        
+
         # Esperamos una lista de objetos Attendance
         attendances_list = response.json()
-        
+
         # Convertimos a Diccionario para búsqueda rápida: { attendance_id: {data} }
         return {item['id']: item for item in attendances_list}
 
     except requests.RequestException as e:
-        logger.error(f'Error fetching data from LOCALIZATION: {e}')
+        error_msg = f'Error fetching data from LOCALIZATION: {e}'
+        logger.error(error_msg, exc_info = True)
         # En caso de error, retornamos dict vacío para no romper todo el reporte,
         # aunque los campos saldrán vacíos.
         return {}
@@ -105,7 +106,7 @@ def _update_record_stats(record: TradePlanning, stats: Dict[str, int]) -> None:
 
     if not record.is_adhoc:
         stats['planned_minutes'] += (record.planned_workload_minutes or 0)
-    
+
     stats['actual_minutes'] += (record.actual_workload_minutes or 0)
 
 
@@ -113,7 +114,7 @@ def _calculate_user_kpis(uid: int, stats: Dict[str, int]) -> ComplianceUserStats
     ''' Helper for Compliance Report logic '''
     planned = stats['total_planned']
     executed = stats['total_executed']
-    
+
     compliance_pct = round((executed / planned) * 100, 2) if planned > 0 else 0.0
     workload_gap = stats['actual_minutes'] - stats['planned_minutes']
 
@@ -143,13 +144,10 @@ async def get_compliance_report_service(
     message = f'Generating Compliance Report for Company: {filters.company_id}'
     logger.info(message)
 
-    start_dt = datetime.combine(filters.start_date, time.min)
-    end_dt = datetime.combine(filters.end_date, time.max)
-
     query = db.query(TradePlanning).filter(
         TradePlanning.company_id == filters.company_id,
-        TradePlanning.created_at >= start_dt,
-        TradePlanning.created_at <= end_dt
+        TradePlanning.created_at >= datetime.combine(filters.start_date, time.min),
+        TradePlanning.created_at <= datetime.combine(filters.end_date, time.max)
     )
 
     if filters.user_id:
@@ -176,7 +174,8 @@ async def get_compliance_report_service(
         g_total_planned += user_schema.total_planned
         g_total_executed += user_schema.total_executed
 
-    global_compliance = round((g_total_executed / g_total_planned) * 100, 2) if g_total_planned > 0 else 0.0
+    global_compliance = round((g_total_executed / g_total_planned) * 100, 2) \
+                        if g_total_planned > 0 else 0.0
 
     global_stats = ComplianceGlobalStatsSchema(
         total_users = len(details_list),
@@ -215,9 +214,9 @@ async def get_inventory_alerts_service(
     if filters.point_of_sale_id:
         query = query.filter(PointOfSaleInventory.point_of_sale_id == filters.point_of_sale_id)
 
-    condition_stockout = (PointOfSaleInventory.quantity <= 0)
+    condition_stockout = PointOfSaleInventory.quantity <= 0
     # pylint: disable=singleton-comparison
-    condition_short_date = (PointOfSaleInventory.is_short_date.is_(True))
+    condition_short_date = PointOfSaleInventory.is_short_date.is_(True)
 
     if filters.alert_type == 'STOCKOUT':
         query = query.filter(condition_stockout)
@@ -258,7 +257,7 @@ async def get_inventory_alerts_service(
 async def get_sales_report_service(
     db: Session,
     filters: SalesReportFilterSchema,
-    auth_token: str # Necesario para llamar a LOCALIZATION
+    auth_token: str
 ) -> SalesReportResponseSchema:
     '''
         Generates the detailed Sales Report by fetching local sales data
@@ -282,7 +281,7 @@ async def get_sales_report_service(
         ImpulseSale.created_at >= start_dt,
         ImpulseSale.created_at <= end_dt
     )
-    
+
     if filters.product_id:
         query = query.filter(ImpulseSaleDetail.product_id == filters.product_id)
 
@@ -304,11 +303,11 @@ async def get_sales_report_service(
 
     # 4. Extract POS IDs needed from TRADE (if we want POS Names)
     pos_ids_needed = {
-        att['point_of_sale_id'] 
-        for att in attendance_map.values() 
+        att['point_of_sale_id']
+        for att in attendance_map.values()
         if 'point_of_sale_id' in att
     }
-    
+
     # Fetch POS names from local DB
     pos_map = {}
     if pos_ids_needed:
@@ -321,12 +320,12 @@ async def get_sales_report_service(
     unique_transactions = set()
 
     for header, detail, prod in raw_records:
-        
+
         # Contexto desde Localization
         att_data = attendance_map.get(header.attendance_id, {})
         user_id = att_data.get('user_id', 0) # 0 or None if missing
         pos_id = att_data.get('point_of_sale_id', 0)
-        
+
         # Filtros en Memoria (User / POS)
         # Como la data viene de otro servicio, filtramos aquí
         if filters.user_id and user_id != filters.user_id:

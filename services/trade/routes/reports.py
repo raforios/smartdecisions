@@ -1,7 +1,7 @@
 '''
     Reports: routes handler
 '''
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
@@ -90,6 +90,7 @@ async def get_inventory_alerts_endpoint(
 )
 async def get_sales_report_endpoint(
     request: Request,
+    auth_token: str = Header(..., alias = 'Authorization'),
     filters: SalesReportFilterSchema = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
@@ -104,5 +105,6 @@ async def get_sales_report_endpoint(
         filters = filters,
         db = db,
         request = request,
-        current_user = current_user
+        current_user = current_user,
+        auth_token = auth_token
     )
