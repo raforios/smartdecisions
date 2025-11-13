@@ -1,24 +1,29 @@
-# 🗺️ Localization-Service 🧭
+# 🛒 Trade-Service 📈
 
-Bienvenido al microservicio de localización, un componente esencial dentro de la arquitectura de la API **SMARTBEAR**. Este servicio es el centro de control para la gestión y el análisis de todos los datos geográficos, permitiendo el seguimiento de rutas, el control de asistencia y la obtención de información estadística clave.
+Bienvenido al microservicio de **Trade Marketing**, el corazón transaccional de la arquitectura **SMARTBEAR**. Este servicio gestiona la ejecución en el Punto de Venta (PDV), incluyendo catálogos de productos, control de inventarios, planificación de visitas y el registro detallado de actividades comerciales como ventas, reposiciones e impulsos.
 
 -----
 
 ## 🎯 Propósito Principal
 
-El **Localization-Service** está diseñado para ser la fuente de verdad para la información de ubicación. Su propósito principal es gestionar y analizar datos espaciales, facilitando la toma de decisiones y el control operacional. Sus funcionalidades clave incluyen:
+El **Trade-Service** tiene como objetivo digitalizar y optimizar la ejecución en campo. Su propósito es permitir que el personal de Trade Marketing (supervisores, repositores, impulsadoras) registre información veraz y en tiempo real sobre lo que sucede en cada tienda. Sus funcionalidades clave incluyen:
 
-  * **Gestión de Rutas Planificadas:** Permite la creación, almacenamiento y recuperación de rutas predefinidas por el usuario, estableciendo trayectos con puntos específicos de latitud y longitud. También incluye filtros avanzados para facilitar la búsqueda, así como la actualización y eliminación de registros.
-  * **Creación Dinámica de Rutas:** Registra y genera "rutas ejecutadas" en tiempo real a partir de los datos de localización enviados continuamente desde la aplicación móvil. El inicio de una ruta ejecutada está validado para garantizar que la ruta planificada asociada se encuentre en estado `ACTIVE`.
-  * **Registro de Asistencia:** Procesa los **`check-in`** y **`check-out`** del personal en puntos geográficos asignados, vinculando la asistencia a las rutas planificadas. Este proceso también valida que la ruta planificada se encuentre en estado `ACTIVE`.
-  * **Análisis y Estadísticas:** Proporciona **endpoints** para obtener análisis comparativos detallados entre las rutas planificadas y las ejecutadas, así como estadísticas de puntos visitados por usuario en un rango de fechas.
-  * **Carga Masiva:** Permite la importación de datos de rutas planificadas a gran escala a través de archivos CSV, simplificando la creación de múltiples registros.
+  * **Catálogo Maestro:** Gestión centralizada de **Productos** (con generación atómica de SKUs) y **Puntos de Venta** (PDVs), incluyendo la asignación lógica entre ellos.
+  * **Control de Inventarios:** Manejo de inventarios locales en cada PDV, con soporte para lotes, fechas de vencimiento y alertas de productos con fecha corta (`Short Date`).
+  * **Agenda de Campo (Planning):** Orquesta la planificación de visitas (`Trade Planning`), integrando la asignación de usuarios y PDVs. Soporta visitas planificadas y **Ad-Hoc** (fuera de ruta), así como la justificación de inasistencias.
+  * **Gestión de Impulsos:** Registra actividades de promoción y ventas directas, manejando inventarios iniciales y finales por visita (`Inventory Start/End`), promociones tipo "Bandeo" y ventas con evidencia fotográfica.
+  * **Reposición (Replenishment):** Controla la reposición de productos en góndola, registrando inventarios detallados, recepciones de mercadería y reportes fotográficos de exhibición ("Foto de Éxito").
+  * **Inteligencia de Mercado:** Módulos para registrar precios y actividades de la competencia.
+  * **Reportes Avanzados:** Generación de reportes ejecutivos para la toma de decisiones:
+    * **Cumplimiento:** KPIs de efectividad de visitas (Planificado vs. Ejecutado).
+    * **Alertas de Inventario:** Semáforo de Stockouts y productos por vencer.
+    * **Ventas:** Data detallada enriquecida con contexto de usuario y ubicación (integración con Localization).
 
 -----
 
 ## 🛠️ Tecnologías Utilizadas
 
-Este microservicio ha sido desarrollado con un enfoque en el rendimiento, la robustez y la integración con la nube:
+Este microservicio ha sido desarrollado con un enfoque en el rendimiento, la robustez y la integración con la nube, escalable y orientada a eventos:
 
   * **Lenguaje:** Python 3.13 🐍
   * **Framework Web:** FastAPI ✨
@@ -33,67 +38,91 @@ Este microservicio ha sido desarrollado con un enfoque en el rendimiento, la rob
 
 ## 🚀 Endpoints de la API
 
-A continuación se listan los **endpoints** principales de la API, agrupados por su funcionalidad para una mejor referencia.
+A continuación se listan los principales **endpoints**, organizados por módulos funcionales.
 
-### Rutas Planificadas
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `POST` | `/v1/localization/routes/planned` | Crea una nueva **ruta planificada** con sus puntos asociados. |
-| `GET` | `/v1/localization/routes/planned` | Recupera una lista de todas las **rutas planificadas**. |
-| `GET` | `/v1/localization/routes/planned/filter` | Filtra **rutas planificadas** por código, nombre, estado, o ID de compañía. |
-| `GET` | `/v1/localization/routes/planned/{planned_route_id}` | Recupera una **ruta planificada** específica y sus puntos por su ID. |
-| `PATCH`| `/v1/localization/routes/planned/{planned_route_id}` | Actualiza campos específicos de una **ruta planificada** (ej. nombre, descripción, código). |
-| `PATCH`| `/v1/localization/routes/planned/{planned_route_id}/status` | Actualiza el estado de una **ruta planificada** (`ACTIVE`, `INACTIVE`, `IN CREATION`). |
-| `DELETE`| `/v1/localization/routes/planned/{planned_route_id}` | Elimina una **ruta planificada** y sus puntos. |
-| `POST` | `/v1/localization/routes/planned/{planned_route_id}/points`| Añade un nuevo punto a una **ruta planificada**. |
-| `PATCH`| `/v1/localization/routes/planned/{planned_route_id}/points/{planned_point_id}`| Actualiza campos específicos de un punto planificado. |
-| `DELETE`| `/v1/localization/routes/planned/{planned_route_id}/points/{planned_point_id}`| Elimina un punto específico de una **ruta planificada**. |
-| `POST`| `/v1/localization/routes/planned/bulk-upload` | Carga masivamente rutas planificadas a partir de un archivo CSV. |
-
-### Rutas Ejecutadas
+### 1. Catálogos (Productos y PDVs)
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/localization/routes/executed` | Inicia una nueva **ruta ejecutada**, opcionalmente vinculada a una ruta planificada. |
-| `POST` | `/v1/localization/routes/executed/points` | Registra un nuevo punto de localización para una **ruta ejecutada**. |
-| `PATCH`| `/v1/localization/routes/executed/{executed_route_id}` | Actualiza el tiempo de finalización (`end_time`) de una **ruta ejecutada**. |
-| `GET` | `/v1/localization/routes/executed-points/filter` | Obtiene los IDs de **puntos ejecutados** asociados a una lista de IDs de rutas planificadas. (Usado por Forms-Service). |
-| `GET` | `/v1/localization/routes/executed/by-planned/{planned_route_id}` | **ruta ejecutada** Obtiene todas las rutas ejecutadas de una ruta planificada para verificar su estado (abierta/cerrada). |
+| `POST` | `/v1/trade/products` | Crea un nuevo **Producto** generando automáticamente su SKU atómico. |
+| `GET` | `/v1/trade/products/{product_id}` | Obtiene el detalle de un producto. |
+| `GET` | `/v1/trade/products` | Lista productos con filtros (categoría, nombre). |
+| `POST` | `/v1/trade/pos` | Crea un nuevo **Punto de Venta** con su inventario inicial transaccional. |
+| `GET` | `/v1/trade/pos` | Lista PDVs con filtros y paginación. |
+| `POST` | `/v1/trade/products/pos-assignments` | Asigna un producto a un PDV (Surtido). |
 
-### Asistencia
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `POST` | `/v1/localization/attendances` | Registra un nuevo `check-in` o actualiza un registro de asistencia. |
-| `PATCH`| `/v1/localization/attendances/{attendance_id}` | Actualiza un registro de asistencia con el tiempo de salida (`check-out`). |
-
-### Estadísticas y Análisis
+### 2. Planificación (Agenda)
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `GET` | `/v1/localization/statistics/users/{user_id}/points-visited`| Obtiene estadísticas de puntos visitados para un usuario en un rango de fechas. |
-| `GET` | `/v1/localization/statistics/route-comparisons/{planned_route_id}`| Compara una **ruta planificada** con las **rutas ejecutadas** asociadas para obtener datos estadísticos. |
-| `GET` | `/v1/localization/routes/comparison/{planned_route_id}` | Obtiene una comparación detallada entre una **ruta planificada** y sus **rutas ejecutadas** para visualización, con filtros opcionales de **rango de fecha de ejecución**. |
+| `POST` | `/v1/trade/planning` | Crea una entrada de **Planificación** (Agenda) vinculando Usuario y PDV. |
+| `POST` | `/v1/trade/planning/adhoc` | Registra una visita no planificada (**Ad-Hoc**) con justificación. |
+| `PATCH`| `/v1/trade/planning/{planning_id}/workload` | Actualiza la carga laboral (Check-In/Out) y calcula tiempos efectivos. |
+| `PATCH`| `/v1/trade/planning/{planning_id}/justify` | Justifica la no-visita o cancelación de una agenda. |
+
+### 3. Impulsos (Promociones)
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/v1/impulses/promotions` | Crea una Promoción (**Bandeo**) con lista de SKUs asociados. |
+| `POST` | `/v1/impulses/impulse/visit/{id}/inventory-start` | Registra el inventario inicial al llegar al PDV. |
+| `POST` | `/v1/impulses/impulse/visit/{id}/sale` | Registra una **Venta** con detalle de productos y foto de evidencia. |
+| `POST` | `/v1/impulses/impulse/visit/{id}/inventory-end` | Registra el inventario final al terminar la visita. |
+
+### 4. Reposición (Replenishment)
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/v1/replenishment/visit/{id}/report` | Registra el reporte de visita (Fotos de éxito y comentarios). |
+| `POST` | `/v1/replenishment/visit/{id}/inventory` | Registra el levantamiento de **Inventario en Góndola** (Lotes, Fechas, Stock). |
+| `POST` | `/v1/replenishment/visit/{id}/reception` | Registra la recepción de mercadería en el PDV. |
+| `POST` | `/v1/replenishment/complementary/competition` | Reporta actividades de la **Competencia** (Precios, Exhibiciones). |
+
+### 5. Reportes y Analytics
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/v1/reports/compliance` | Reporte de **Cumplimiento**: Eficiencia de rutas y carga laboral (KPIs). |
+| `GET` | `/v1/reports/inventory-alerts` | Reporte de **Alertas**: Semáforo de Quiebres de Stock y Fechas Cortas. |
+| `GET` | `/v1/reports/sales` | Reporte de **Ventas Detallado**: Tabla plana para BI, enriquecida con datos de Localization. |
 
 -----
 
 ## 🗂️ Estructura del Microservicio
 
 ```txt
-localization/
+trade/
 ├── controllers/
 │   ├── init.py
-│   └── localization.py
+│   ├── impulses.py
+│   ├── pos.py
+│   ├── products.py
+│   ├── replenishments.py
+│   ├── reports.py
+│   └── trade.py
 ├── models/
 │   ├── init.py
-│   └── localization.py
+│   ├── impulses.py
+│   ├── pos.py
+│   ├── products.py
+│   ├── replenishments.py
+│   └── trade.py
 ├── routes/
 │   ├── init.py
-│   └── localization.py
+│   ├── impulses.py
+│   ├── pos.py
+│   ├── products.py
+│   ├── replenishments.py
+│   ├── reports.py
+│   └── trade.py
 ├── schemas/
 │   ├── init.py
-│   └── localization.py
+│   ├── impulses.py
+│   ├── pos.py
+│   ├── products.py
+│   ├── replenishments.py
+│   ├── reports.py
+│   └── trade.py
 ├── services/
 │   ├── init.py
 │   ├── api_exceptions.py
@@ -101,9 +130,14 @@ localization/
 │   ├── db_connection.py
 │   ├── environment.py
 │   ├── exceptions.py
-│   ├── localization.py
+│   ├── impulses.py
 │   ├── logger_config.py
+│   ├── pos.py
+│   ├── products.py
+│   ├── replenishments.py
+│   ├── reports.py
 │   ├── security.py
+│   ├── trade.py
 │   └── utils.py
 ├── .dockerignore
 ├── .env
@@ -119,27 +153,23 @@ localization/
 
 ## 📀 Ejecución Local
 
-Para ejecutar el microservicio localmente, sigue los siguientes pasos:
+Para desplegar el servicio en tu entorno de desarrollo:
 
 1.  **Instala las dependencias:**
 
-    ```shell
-    pip install -r requirements.txt
-    ```
+```shell
+pip install -r requirements.txt
+```
 
-2.  **Configura la base de datos:** Asegúrate de que tienes un servidor MySQL en ejecución y que las variables de conexión están correctamente configuradas en el archivo `.env`.
+2.  **Configura las Variables de Entorno:** Asegúrate de tener el archivo `.env` con las credenciales de base de datos y las URLs de los microservicios externos (`LOCALIZATION_SERVICE_URL`, `FILES_SERVICE_URL`).
 
-3.  **Ejecuta el servidor de la API:**
+3.  **Ejecuta el servidor:**
 
-    ```shell
-    python main.py
-    ```
+```shell
+python main.py
+```
 
-    O si el entorno lo requiere:
-
-    ```shell
-    python3 main.py
-    ```
+*La API estará disponible en `http://localhost:3000/docs`.*
 
 -----
 

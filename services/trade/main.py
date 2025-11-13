@@ -19,6 +19,7 @@ from routes.impulses import router as impulses_router
 from routes.replenishments import router as replenishments_router
 from routes.products import router as products_router
 from routes.pos import router as pos_router
+from routes.reports import router as reports_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
@@ -152,6 +153,7 @@ app.include_router(pos_router, tags = ['POS'])
 app.include_router(trade_router, tags = ['Trade'])
 app.include_router(impulses_router, tags = ['Impulses'])
 app.include_router(replenishments_router, tags = ['Replenishment'])
+app.include_router(reports_router, tags = ['Reports'])
 
 # Entry point to run the app
 if __name__ == '__main__':
