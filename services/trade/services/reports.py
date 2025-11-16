@@ -168,7 +168,9 @@ def _build_sales_report_items(
 # --- HELPERS PARA COMPLIANCE (Existentes) ---
 
 def _update_record_stats(record: TradePlanning, stats: Dict[str, int]) -> None:
-    ''' Helper for Compliance Report logic '''
+    ''' 
+        Helper for Compliance Report logic 
+    '''
     if record.is_adhoc:
         stats['total_adhoc'] += 1
         if record.status == 'COMPLETED':
@@ -189,7 +191,9 @@ def _update_record_stats(record: TradePlanning, stats: Dict[str, int]) -> None:
 
 
 def _calculate_user_kpis(uid: int, stats: Dict[str, int]) -> ComplianceUserStatsSchema:
-    ''' Helper for Compliance Report logic '''
+    '''
+        Helper for Compliance Report logic
+    '''
     planned = stats['total_planned']
     executed = stats['total_executed']
 

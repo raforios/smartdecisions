@@ -32,7 +32,6 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
     is_active = Column(Boolean, default = True, nullable = False)
 
     # Geolocalization (for integration with LOCALIZATION)
-    # DECIMAL(10, 7) for coordinate precision.
     latitude = Column(Numeric(16, 14), nullable = False)
     longitude = Column(Numeric(16, 14), nullable = False)
 

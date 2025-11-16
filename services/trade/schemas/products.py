@@ -56,7 +56,7 @@ class ProductBaseSchema(ProductBaseSchemaConfig):
         description = 'Current status of the product (e.g., ACTIVE, INACTIVE).'
     )
 
-class ProductCreateSchema(ProductBaseSchemaConfig):
+class ProductCreateSchema(ProductBaseSchema):
     '''
         Schema for creating a new product.
     '''
@@ -65,7 +65,7 @@ class ProductCreateSchema(ProductBaseSchemaConfig):
         description = 'ID of the company owning the product catalog.'
     )
 
-class ProductUpdateSchema(ProductBaseSchemaConfig):
+class ProductUpdateSchema(ProductBaseSchema):
     '''
         Schema for updating an existing product. All fields are optional.
     '''
@@ -77,7 +77,7 @@ class ProductUpdateSchema(ProductBaseSchemaConfig):
     category_4_code: Optional[str] = None
     status: Optional[str] = None
 
-class ProductResponseSchema(ProductBaseSchemaConfig):
+class ProductResponseSchema(ProductBaseSchema):
     '''
         Response schema for a product, including generated fields and timestamps.
     '''
@@ -92,10 +92,6 @@ class ProductResponseSchema(ProductBaseSchemaConfig):
     created_at: Optional[datetime] = Field(
         None,
         description = 'Timestamp when the record was created.'
-    )
-    updated_at: Optional[datetime] = Field(
-        None,
-        description = 'Timestamp when the record was last updated.'
     )
 
 class ProductListResponseSchema(ProductBaseSchemaConfig):
@@ -122,7 +118,7 @@ class ProductFilterSchema(BaseModel):
 
 # --- SKU EQUIVALENCY SCHEMAS ---
 
-class SKUEquivalencyBaseSchema(ProductBaseSchemaConfig):
+class SKUEquivalencyBaseSchema(ProductBaseSchema):
     '''
         Base schema for SKU Equivalency fields.
         Uses product_sku for API input, following the POS Inventory pattern.
@@ -156,7 +152,7 @@ class SKUEquivalencyCreateSchema(SKUEquivalencyBaseSchema):
         description = 'ID of the company owning this mapping.'
     )
 
-class SKUEquivalencyUpdateSchema(ProductBaseSchemaConfig):
+class SKUEquivalencyUpdateSchema(ProductBaseSchema):
     '''
         Schema for updating an SKU Equivalency. All fields are optional.
     '''
@@ -214,16 +210,16 @@ class ProductAssignmentPOSUpdateSchema(ProductBaseSchemaConfig):
         description = 'New status for the assignment.'
     )
 
-class ProductAssignmentPOSResponseSchema(ProductAssignmentPOSBaseSchema):
+class ProductAssignmentPOSResponseSchema(ProductBaseSchemaConfig):
     '''
         Response schema for a Product to POS Assignment.
     '''
     id: int
     company_id: int
     product_id: int # Returns the internal ID
+    point_of_sale_id: int
+    status: str
     created_at: Optional[datetime]
-    # updated_at is omitted (handled by EVENTS)
-
 class ProductAssignmentPOSFilterSchema(BaseModel):
     '''
         Schema to encapsulate filtering parameters for Product POS Assignments.

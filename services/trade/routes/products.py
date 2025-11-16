@@ -122,7 +122,7 @@ async def get_products_list_endpoint(
         current_user = current_user
     )
 
-@router.put(
+@router.patch(
     '/{product_id}',
     response_model = ProductResponseSchema,
     status_code = status.HTTP_200_OK,

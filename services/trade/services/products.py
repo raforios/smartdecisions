@@ -27,9 +27,6 @@ from models.products import (
     SKUEquivalency,
     SKUSequencer
 )
-from models.pos import (
-    PointOfSale,
-)
 from schemas.products import (
     ProductAssignmentPOSCreateSchema,
     ProductAssignmentPOSFilterSchema,
@@ -305,7 +302,7 @@ async def delete_product_service(
 
     delete_record(
         db = db,
-        model = db_product,
+        model = Product,
         record_id = product_id
     )
 
@@ -446,33 +443,42 @@ async def create_product_assignment_service(
     '''
         Creates a new Product to POS Assignment.
     '''
-    message = (f'Attempting to assign SKU: {assignment_data.product_sku} '
-               f'to POS ID: {assignment_data.point_of_sale_id}')
+    message = f'Assigning SKU {assignment_data.product_sku} to POS {
+        assignment_data.point_of_sale_id}'
     logger.info(message)
 
+    # 1. Traducir SKU a ID (Esto soluciona el problema de consistencia)
     product_id = get_product_id_by_sku(
-        db, assignment_data.company_id, assignment_data.product_sku
+        db = db,
+        company_id = assignment_data.company_id,
+        sku = assignment_data.product_sku
     )
 
-    _ = get_record(db, PointOfSale, assignment_data.point_of_sale_id)
+    # 2. Verificar si ya existe
+    exists = db.query(ProductAssignmentPOS).filter(
+        ProductAssignmentPOS.company_id == assignment_data.company_id,
+        ProductAssignmentPOS.product_id == product_id,
+        ProductAssignmentPOS.point_of_sale_id == assignment_data.point_of_sale_id
+    ).first()
 
-    extra_fields = {
-        'product_id': product_id
-    }
+    if exists:
+        raise RegisterAlreadyExistsError(
+            detail = f'Product {assignment_data.product_sku} is already assigned to this POS.'
+        )
 
-    exclude_relations = ['product_sku']
-
-    db_assignment = create_record(
-        db,
-        ProductAssignmentPOS,
-        assignment_data,
-        extra_fields = extra_fields,
-        exclude_relations = exclude_relations
+    # 3. Crear
+    db_assign = ProductAssignmentPOS(
+        company_id = assignment_data.company_id,
+        product_id = product_id, # Usamos el ID traducido
+        point_of_sale_id = assignment_data.point_of_sale_id,
+        status = 'ACTIVE'
     )
 
+    db.add(db_assign)
     db.commit()
-    db.refresh(db_assignment)
-    return db_assignment
+    db.refresh(db_assign)
+
+    return db_assign
 
 @handle_service_errors('TRADE')
 async def get_product_assignment_by_id_service(
@@ -561,7 +567,7 @@ async def delete_product_assignment_service(
 
     delete_record(
         db = db,
-        model = db_assignment,
+        model = ProductAssignmentPOS,
         record_id = assignment_id
     )
     db.commit()

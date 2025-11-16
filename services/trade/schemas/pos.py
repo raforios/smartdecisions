@@ -52,16 +52,33 @@ class POSInventoryCreateSchema(POSInventoryBaseSchema):
     '''
         Schema for creating a new POS Inventory detail.
     '''
+    company_id: int = Field(
+        ...,
+        description = 'ID of the company owning this inventory record.'
+    )
 
-class POSInventoryUpdateSchema(POSInventoryBaseSchema):
+class POSInventoryUpdateSchema(PosBaseSchema):
     '''
         Schema for updating a POS Inventory detail.
     '''
-    product_sku: Optional[str] = None
-    location: Optional[str] = None
-    batch_number: Optional[str] = None
-    expiration_date: Optional[str] = None
-    quantity: Optional[int] = None
+    product_sku: Optional[str] = Field(
+        None, description = 'SKU of the product being tracked.'
+    )
+    location: Optional[str] = Field(
+        None, description = 'Location within the POS (e.g., Sala or Almacén).'
+    )
+    batch_number: Optional[str] = Field(
+        None, description = 'Batch or lot number of the product units.'
+    )
+    expiration_date: Optional[str] = Field(
+        None, description = 'Expiration date of the product units (YYYY-MM-DD).'
+    )
+    is_short_date: Optional[bool] = Field(
+        None, description = 'Flag indicating if the product is on short date.'
+    )
+    quantity: Optional[int] = Field(
+        None, description = 'Total quantity of units.'
+    )
 
 class POSInventoryResponseSchema(PosBaseSchema):
     '''
@@ -106,6 +123,13 @@ class POSInventoryResponseSchema(PosBaseSchema):
         None,
         description = 'Timestamp when the record was created.'
     )
+
+class POSInventoryListResponseSchema(PosBaseSchema):
+    '''
+        Response schema for a list of POS Inventory items.
+    '''
+    items: List[POSInventoryResponseSchema]
+    total: int
 
 # --- POINT OF SALE (POS) SCHEMAS ---
 
@@ -154,7 +178,7 @@ class PointOfSaleCreateSchema(PointOfSaleBaseSchema):
         description = 'Initial inventory details to be associated with this POS.'
     )
 
-class PointOfSaleUpdateSchema(PointOfSaleBaseSchema):
+class PointOfSaleUpdateSchema(PosBaseSchema):
     '''
         Schema for updating an existing Point of Sale. All fields are optional.
     '''

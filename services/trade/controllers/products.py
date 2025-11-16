@@ -86,9 +86,16 @@ async def get_products_list_controller(
         Controller for retrieving a paginated list of products based on filters.
     '''
     items, total = await get_products_list_service(
-        db = db, filters = filters, skip = skip, limit = limit
+        db = db,
+        filters = filters,
+        skip = skip,
+        limit = limit
     )
-    return ProductListResponseSchema(items = items, total = total)
+    serialized_items = [
+        ProductResponseSchema.model_validate(item, from_attributes=True) for item in items
+    ]
+
+    return ProductListResponseSchema(items = serialized_items, total = total)
 
 # --- PUT/PATCH Controllers ---
 
@@ -122,10 +129,13 @@ async def delete_product_controller(
     '''
         Controller to delete a product by its ID.
     '''
-    deleted_id, _ = await delete_product_service(
+    result = await delete_product_service(
         db = db,
         product_id = product_id
     )
+
+    deleted_id = result[0] if isinstance(result, tuple) else result
+
     return {
         'message': f'Product with ID {deleted_id} deleted successfully.',
         'id': deleted_id
@@ -260,9 +270,17 @@ async def get_product_assignments_list_controller(
         Controller for retrieving a paginated list of Product POS Assignments.
     '''
     items, total = await get_product_assignments_list_service(
-        db = db, filters = filters, skip = skip, limit = limit
+        db = db,
+        filters = filters,
+        skip = skip,
+        limit = limit
     )
-    return ProductAssignmentPOSListResponseSchema(items = items, total = total)
+    serialized_items = [
+        ProductAssignmentPOSResponseSchema.model_validate(item, from_attributes=True)
+        for item in items
+    ]
+
+    return ProductAssignmentPOSListResponseSchema(items = serialized_items, total = total)
 
 @handle_service_errors('TRADE')
 async def update_product_assignment_controller(
@@ -294,10 +312,13 @@ async def delete_product_assignment_controller(
     '''
         Controller for deleting a Product to POS Assignment.
     '''
-    deleted_id, _ = await delete_product_assignment_service(
+    result = await delete_product_assignment_service(
         db = db,
         assignment_id = assignment_id
     )
+
+    deleted_id = result[0] if isinstance(result, tuple) else result
+
     return {
         'message': f'Product Assignment POS with ID {deleted_id} deleted successfully.',
         'id': deleted_id
