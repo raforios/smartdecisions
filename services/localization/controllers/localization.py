@@ -152,8 +152,8 @@ async def update_planned_route_status_controller(
     '''
         Controller to update the status of a planned route.
     '''
-    message = f'''Starting controller operation: update planned route status for
-            ID {planned_route_id}'''
+    message = f'Starting controller operation: update planned route status for ID {
+        planned_route_id}'
     logger.info(message)
 
     result = await update_planned_route_status(
@@ -245,8 +245,8 @@ async def update_planned_point_controller(
     '''
         Controller to update a scheduled point.
     '''
-    message = f'''Starting controller operation: Update planned point {planned_point_id}
-            on route {planned_route_id}'''
+    message = f'Starting controller operation: Update planned point {planned_point_id
+            } on route {planned_route_id}'
     logger.info(message)
     result = await update_planned_point(
         db = db,
@@ -269,8 +269,8 @@ async def delete_planned_point_controller(
     '''
         Controller to delete a point from a planned route.
     '''
-    message = f'''Starting controller operation: delete planned point {planned_point_id}
-            from route {planned_route_id}'''
+    message = f'Starting controller operation: delete planned point {planned_point_id
+            } from route {planned_route_id}'
     logger.info(message)
     result = await delete_planned_point(
         db = db,
@@ -294,8 +294,8 @@ async def create_executed_route_controller(
     '''
         Controller to create a new executed route instance.
     '''
-    message = f'''Starting controller operation: create a new executed route for user {
-            route_data.user_id}'''
+    message = f'Starting controller operation: create a new executed route for user {
+            route_data.user_id}'
     logger.info(message)
 
     result = await create_executed_route(db = db, route_data = route_data)
@@ -312,8 +312,8 @@ async def register_executed_point_controller(
     '''
         Controller to register a new executed point for a specific executed route.
     '''
-    message = f'''Starting controller operation: register a new executed point for route {
-            point_data.executed_route_id}'''
+    message = f'Starting controller operation: register a new executed point for route {
+            point_data.executed_route_id}'
     logger.info(message)
     result = await register_executed_point(db = db, point_data = point_data)
     return ExecutedPointResponseSchema.model_validate(result, from_attributes = True)
@@ -330,8 +330,8 @@ async def update_executed_route_end_time_controller(
     '''
         Controller to update the end_time for an executed route.
     '''
-    message = f'''Starting controller operation: update executed route end time for
-            ID {executed_route_id}'''
+    message = f'Starting controller operation: update executed route end time for ID {
+        executed_route_id}'
     logger.info(message)
     result = await update_executed_route_end_time(
         db = db,
@@ -353,8 +353,8 @@ async def update_attendance_checkout_time_controller(
     '''
         Controller to update the check-out time of an attendance record.
     '''
-    message = f'''Starting controller operation: update attendance check-out time for
-            ID {attendance_id}'''
+    message = f'Starting controller operation: update attendance check-out time for ID {
+        attendance_id}'
     logger.info(message)
 
     result = await update_attendance_checkout_time(
@@ -404,8 +404,8 @@ async def get_route_comparisons_controller(
     '''
         Controller to compare a planned route with its associated executed routes.
     '''
-    message = f'''Starting controller operation: get route comparisons for planned route {
-            planned_route_id}'''
+    message = f'Starting controller operation: get route comparisons for planned route {
+            planned_route_id}'
     logger.info(message)
 
     result = await get_route_comparisons(
@@ -426,8 +426,8 @@ async def register_attendance_controller(
     '''
         Controller to register or update an attendance record.
     '''
-    message = f'''Starting controller operation: register or update attendance for user {
-            attendance_data.user_id}'''
+    message = f'Starting controller operation: register or update attendance for user {
+            attendance_data.user_id}'
     logger.info(message)
     result = await register_attendance(db = db, attendance_data = attendance_data)
     return AttendanceResponseSchema.model_validate(result, from_attributes = True)
@@ -447,8 +447,8 @@ async def get_full_route_comparison_controller(
     '''
         Controller to get a complete comparison between a planned and executed routes.
     '''
-    message = f'''Starting controller operation: get full route comparison for planned route {
-            planned_route_id} with optional filters: start_date={start_date}, end_date={end_date}'''
+    message = f'Starting controller operation: get full route comparison for planned route {
+            planned_route_id} with optional filters: start_date={start_date}, end_date={end_date}'
     logger.info(message)
 
     start_dt = None
@@ -557,7 +557,7 @@ async def get_executed_routes_by_planned_route_id_controller(
     service_id: Optional[int] = None
 ) -> List[ExecutedRouteResponseSchema]:
     '''
-    Controller for retrieving executed routes based on a planned route ID.
+        Controller for retrieving executed routes based on a planned route ID.
     '''
 
     executed_routes = await get_executed_routes_by_planned_route_id_service(
@@ -579,8 +579,8 @@ async def get_last_known_locations_controller(
     '''
         Controller for retrieving the last recorded location for a list of users.
     '''
-    message = f'''Starting controller operation: get last known locations for users {
-            user_ids} and service ID: {service_id}'''
+    message = f'Starting controller operation: get last known locations for users {
+            user_ids} and service ID: {service_id}'
     logger.info(message)
 
     locations_data = await get_last_known_locations_service(

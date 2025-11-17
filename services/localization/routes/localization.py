@@ -77,8 +77,8 @@ async def create_planned_route_endpoint(
     '''
         Endpoint to create a new planned route.
     '''
-    message = f'''User: {current_user}. Received request to create planned route for company: {
-            route_data.company_id}'''
+    message = f'User: {current_user}. Received request to create planned route for company: {
+            route_data.company_id}'
     logger.info(message)
     return await create_planned_route_controller(
         route_data = route_data,
@@ -127,11 +127,10 @@ async def get_or_filter_planned_routes_endpoint(
     '''
         Endpoint to filter planned routes.
     '''
-    message = f'''User: {current_user
-            }. Received request to filter planned routes
-            with parameters: route_code = {filters.route_code}, route_name = {
-            filters.route_name}, status = {filters.route_status}, company_id = {
-            filters.company_id}'''
+    message = f'User: {current_user
+            }. Received request to filter planned routes with parameters: route_code = {
+            filters.route_code}, route_name = {filters.route_name}, status = {
+            filters.route_status}, company_id = {filters.company_id}'
     logger.info(message)
     return await filter_planned_routes_controller(
         db = db,
@@ -160,8 +159,8 @@ async def get_executed_point_ids_by_planned_routes_endpoint(
     '''
         Endpoint to get executed point IDs from a list of planned route IDs.
     '''
-    message = f'''User: {current_user
-    }. Received request to get executed points for planned routes: {planned_route_ids}'''
+    message = f'User: {current_user
+    }. Received request to get executed points for planned routes: {planned_route_ids}'
     logger.info(message)
 
     executed_points = await get_executed_point_ids_by_planned_routes_controller(
@@ -194,9 +193,9 @@ async def get_last_known_locations_endpoint(
     '''
         Endpoint to get the last known location for a group of users.
     '''
-    message = f'''User: {current_user
+    message = f'User: {current_user
             }. Received request for last known location for user IDs: {
-            user_ids} and service ID: {service_id}.'''
+            user_ids} and service ID: {service_id}.'
     logger.info(message)
     return await get_last_known_locations_controller(
         db = db,
@@ -222,8 +221,8 @@ async def get_planned_route_endpoint(
     '''
         Endpoint to retrieve a specific planned route.
     '''
-    message = f'''User: {current_user}. Received request to get planned route with ID: {
-            planned_route_id}'''
+    message = f'User: {current_user}. Received request to get planned route with ID: {
+            planned_route_id}'
     logger.info(message)
     return await get_planned_route_controller(
         db = db,
@@ -250,8 +249,8 @@ async def update_planned_route_status_endpoint(
     '''
         Endpoint to update the status of a planned route.
     '''
-    message = f'''User: {current_user}. Received request to update status for planned route {
-            planned_route_id} to {status_data.status}'''
+    message = f'User: {current_user}. Received request to update status for planned route {
+            planned_route_id} to {status_data.status}'
     logger.info(message)
     return await update_planned_route_status_controller(
         db = db,
@@ -278,8 +277,8 @@ async def update_planned_route_endpoint(
     '''
         Endpoint to update specific fields of a planned route.
     '''
-    message = f'''User: {current_user}. Received request to update planned route {
-            planned_route_id}.'''
+    message = f'User: {current_user}. Received request to update planned route {
+            planned_route_id}.'
     logger.info(message)
     return await update_planned_route_controller(
         db = db,
@@ -305,8 +304,8 @@ async def delete_planned_route_endpoint(
     '''
         Endpoint to delete a planned route.
     '''
-    message = f'''User: {current_user}. Received request to delete planned route {
-            planned_route_id}.'''
+    message = f'User: {current_user}. Received request to delete planned route {
+            planned_route_id}.'
     logger.info(message)
     return await delete_planned_route_controller(
         db = db,
@@ -333,8 +332,8 @@ async def add_planned_point_endpoint(
     '''
         Endpoint to add a point to a planned route.
     '''
-    message = f'''User: {current_user}. Received request to add a point to planned route {
-            planned_route_id}.'''
+    message = f'User: {current_user}. Received request to add a point to planned route {
+            planned_route_id}.'
     logger.info(message)
     return await add_planned_point_controller(
         db = db,
@@ -365,8 +364,8 @@ async def update_planned_point_endpoint(
     '''
         Endpoint to update a scheduled point.
     '''
-    message = f'''User: {current_user}. Received request to update planned point {
-            planned_point_id} on route {planned_route_id}.'''
+    message = f'User: {current_user}. Received request to update planned point {
+            planned_point_id} on route {planned_route_id}.'
     logger.info(message)
 
     return await update_planned_point_controller(
@@ -395,8 +394,8 @@ async def delete_planned_point_endpoint(
     '''
         Endpoint to delete a point from a planned route.
     '''
-    message = f'''User: {current_user}. Received request to delete point {
-            planned_point_id} from planned route {planned_route_id}.'''
+    message = f'User: {current_user}. Received request to delete point {
+            planned_point_id} from planned route {planned_route_id}.'
     logger.info(message)
     return await delete_planned_point_controller(
         db = db,
@@ -423,8 +422,8 @@ async def create_executed_route_endpoint(
     '''
         Endpoint to create an executed route.
     '''
-    message = f'''User: {current_user}. Received request to create executed route for user: {
-            route_data.user_id}'''
+    message = f'User: {current_user}. Received request to create executed route for user: {
+            route_data.user_id}'
     logger.info(message)
     return await create_executed_route_controller(
         db = db,
@@ -449,8 +448,8 @@ async def register_executed_point_endpoint(
     '''
         Endpoint to register a point for an executed route.
     '''
-    message = f'''User: {current_user}. Received request to register executed point for route: {
-            point_data.executed_route_id}'''
+    message = f'User: {current_user}. Received request to register executed point for route: {
+            point_data.executed_route_id}'
     logger.info(message)
     return await register_executed_point_controller(
         db = db,
@@ -477,8 +476,8 @@ async def update_executed_route_end_time_endpoint(
     '''
         Endpoint to update the end time of an executed route.
     '''
-    message = f'''User: {current_user}. Received request to update end_time for executed route: {
-            executed_route_id}'''
+    message = f'User: {current_user}. Received request to update end_time for executed route: {
+            executed_route_id}'
     logger.info(message)
     return await update_executed_route_end_time_controller(
         db = db,
@@ -544,9 +543,9 @@ async def get_executed_routes_by_planned_route_id_endpoint(
     '''
         Endpoint to retrieve executed routes based on a planned route ID.
     '''
-    message = f'''User: {current_user
+    message = f'User: {current_user
     }. Received request to get executed routes for planned route: {
-        planned_route_id} and service ID: {service_id}'''
+        planned_route_id} and service ID: {service_id}'
     logger.info(message)
     return await get_executed_routes_by_planned_route_id_controller(
         db = db,
@@ -575,8 +574,8 @@ async def get_route_comparisons_endpoint(
     '''
         Endpoint to compare routes.
     '''
-    message = f'''User: {current_user}. Received request to compare routes for planned route {
-            planned_route_id} and service ID: {service_id}.'''
+    message = f'User: {current_user}. Received request to compare routes for planned route {
+            planned_route_id} and service ID: {service_id}.'
     logger.info(message)
     return await get_route_comparisons_controller(
         db = db,
@@ -630,8 +629,8 @@ async def register_attendance_endpoint(
     '''
         Endpoint to register or update attendance.
     '''
-    message = f'''User: {current_user}. Received request to register attendance for user: {
-            attendance_data.user_id}'''
+    message = f'User: {current_user}. Received request to register attendance for user: {
+            attendance_data.user_id}'
     logger.info(message)
     return await register_attendance_controller(
         db = db,
@@ -657,8 +656,8 @@ async def update_attendance_checkout_time_endpoint(
     '''
         Endpoint to update the check-out time of an attendance record.
     '''
-    message = f'''User: {current_user}. Received request to update check-out time for attendance {
-            attendance_id}.'''
+    message = f'User: {current_user}. Received request to update check-out time for attendance {
+            attendance_id}.'
     logger.info(message)
     return await update_attendance_checkout_time_controller(
         db = db,
@@ -695,10 +694,10 @@ async def get_full_route_comparison_endpoint(
     '''
         Endpoint to get a full comparison of planned vs executed routes.
     '''
-    message = f'''User: {current_user
+    message = f'User: {current_user
             }. Received request for full route comparison for planned route ID: {
-            planned_route_id}. Filters: start_date = {start_date}, end_date = {end_date},
-            service_id={service_id}.'''
+            planned_route_id}. Filters: start_date = {start_date}, end_date = {end_date
+            }, service_id={service_id}.'
     logger.info(message)
 
     return await get_full_route_comparison_controller(

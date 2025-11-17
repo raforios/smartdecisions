@@ -156,8 +156,8 @@ async def create_executed_route(
         planned_route = get_record(db, PlannedRoute, route_data.planned_route_id)
         if planned_route.status != PlannedRouteStatusEnum.ACTIVE:
             raise InvalidInputError(
-                detail = f'''Cannot start a route. Planned route with ID {
-                    planned_route.id} is not in ACTIVE status.'''
+                detail = f'Cannot start a route. Planned route with ID {
+                    planned_route.id} is not in ACTIVE status.'
             )
         # Check if the user is at the starting point of the route
         check_geofence_start_point(
@@ -221,8 +221,8 @@ async def update_planned_route_status(
         and new_status != PlannedRouteStatusEnum.ACTIVE
     ):
         raise InvalidInputError(
-            detail = f'''Routes in {PlannedRouteStatusEnum.IN_CREATION
-            } status can only be changed to {PlannedRouteStatusEnum.ACTIVE}.'''
+            detail = f'Routes in {PlannedRouteStatusEnum.IN_CREATION
+            } status can only be changed to {PlannedRouteStatusEnum.ACTIVE}.'
         )
 
     if (
@@ -367,8 +367,8 @@ async def update_planned_point(
     '''
         Updates the fields of an existing planned point.
     '''
-    message = f'''Updating planned point {planned_point_id} on route {
-            planned_route_id}.'''
+    message = f'Updating planned point {planned_point_id} on route {
+            planned_route_id}.'
     logger.debug(message)
 
     db_route = get_record(db, PlannedRoute, planned_route_id)
@@ -397,8 +397,8 @@ async def update_planned_point(
         ).first()
         if existing_point_with_seq:
             raise RegisterAlreadyExistsError(
-                detail = f'''The sequence number {point_data.secuencial
-                } already exists for this route.'''
+                detail = f'The sequence number {point_data.secuencial
+                } already exists for this route.'
             )
 
     updated_point = update_record(db, db_point, point_data)
@@ -567,8 +567,8 @@ async def get_statistics_user_points(
 
     # Simple aggregation for now, more complex logic can be added later
     total_points_visited = len(executed_points) + len(attendance_points)
-    message = f'''User {user_id} visited {total_points_visited
-        } points between {start_date} and {end_date}.'''
+    message = f'User {user_id} visited {total_points_visited
+        } points between {start_date} and {end_date}.'
     logger.info(message)
 
     # Compile a list of details for all visited points
@@ -651,8 +651,8 @@ async def register_attendance(
     '''
         Registers or updates an attendance record based on user and point.
     '''
-    message = f'''Registering attendance for user {attendance_data.user_id
-        } at point {attendance_data.planned_point_id}.'''
+    message = f'Registering attendance for user {attendance_data.user_id
+        } at point {attendance_data.planned_point_id}.'
     logger.debug(message)
 
     planned_point = get_record(db, PlannedPoint, attendance_data.planned_point_id)
@@ -661,8 +661,8 @@ async def register_attendance(
 
     if planned_route.status != PlannedRouteStatusEnum.ACTIVE:
         raise InvalidInputError(
-            detail = f'''Cannot register attendance. The planned route {
-                planned_route.id} is not in ACTIVE status.'''
+            detail = f'Cannot register attendance. The planned route {
+                planned_route.id} is not in ACTIVE status.'
         )
 
     existing_attendance = db.query(Attendance).filter(
@@ -679,8 +679,8 @@ async def register_attendance(
     db_attendance = create_record(db, Attendance, attendance_data)
     db.commit()
     db.refresh(db_attendance)
-    message = f'''Attendance for user {attendance_data.user_id} at point {
-            attendance_data.planned_point_id} created successfully.'''
+    message = f'Attendance for user {attendance_data.user_id} at point {
+            attendance_data.planned_point_id} created successfully.'
     logger.info(message)
     return db_attendance
 

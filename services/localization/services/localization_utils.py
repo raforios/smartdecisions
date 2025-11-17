@@ -25,7 +25,7 @@ EARTH_RADIUS_KM = 6371
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     '''
-    Calculates the distance between two coordinates in meters using the Haversine formula.
+        Calculates the distance between two coordinates in meters using the Haversine formula.
     '''
     # Convert latitude and longitude from degrees to radians
     lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
@@ -150,8 +150,8 @@ async def perform_atomic_db_insertion_for_localization(
                     auth_token = auth_token
                 )
                 raise RegisterAlreadyExistsError(
-                    detail = f'''Planned route with code {route_key[0]
-                        } already exists for company ID {route_key[1]}.'''
+                    detail = f'Planned route with code {route_key[0]
+                        } already exists for company ID {route_key[1]}.'
                 )
 
             planned_route = PlannedRoute(**data['route_data'])
