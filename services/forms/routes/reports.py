@@ -32,8 +32,8 @@ async def get_affiliation_monitor_report(
     current_user: str = Depends(get_current_user)
 ) -> Dict[str, Any]:
     '''
-    Endpoint to get the Affiliation Monitor data.
-    Requires a POST request with the filtering criteria and objective metrics in the body.
+        Endpoint to get the Affiliation Monitor data.
+        Requires a POST request with the filtering criteria and objective metrics in the body.
     '''
     return await get_affiliation_monitor_data(
         db = db,
@@ -59,7 +59,7 @@ async def get_contacts_by_route_report(
     current_user: str = Depends(get_current_user)
 ) -> List[FormResponseDetailResponse]:
     '''
-    Endpoint to get detailed report data of forms by route and contact.
+        Endpoint to get detailed report data of forms by route and contact.
     '''
     return await get_contacts_by_route_report_data(
         db = db,

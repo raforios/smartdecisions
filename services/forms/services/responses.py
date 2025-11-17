@@ -271,9 +271,9 @@ async def update_final_form_response_logic(
     for q_num_str, temp_ans in current_session.answers.items():
         question_db_id = question_id_map.get(int(q_num_str))
         if not question_db_id:
-            message = f'''Question number {q_num_str} from session
-                        {current_session.session_id} not found in form
-                        {current_session.form_id} definitions. Skipping this answer.'''
+            message = f'Question number {q_num_str} from session {
+                current_session.session_id} not found in form {
+                current_session.form_id} definitions. Skipping this answer.'
             logger.warning(message)
             continue
         db_answers.append(FormAnswer(

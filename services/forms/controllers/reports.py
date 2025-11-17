@@ -26,7 +26,7 @@ async def get_affiliation_monitor_data(
     current_user: str # pylint: disable=unused-argument
 ) -> AffiliationMonitorResponseSchema:
     '''
-    Controller to process the request and fetch data for the Affiliation Monitor report.
+        Controller to process the request and fetch data for the Affiliation Monitor report.
     '''
     # The actual business logic is delegated to the service layer.
     report_data = await calculate_affiliation_monitor(db, request_data, auth_token)
@@ -41,7 +41,7 @@ async def get_contacts_by_route_report_data(
     current_user: str # pylint: disable=unused-argument
 ) -> List[FormResponseDetailResponse]:
     '''
-    Controller to process the request and fetch data for the Forms by Points and Contact report.
+        Controller to process the request and fetch data for the Forms by Points and Contact report.
     '''
     # The actual business logic is delegated to the service layer.
     report_data = await generate_contacts_by_route_report(db, request_data, auth_token)

@@ -85,9 +85,9 @@ async def start_form_session_route(
     '''
         Endpoint to start a new form session.
     '''
-    message = f'''User: {current_user
+    message = f'User: {current_user
             }. Requests to start a new form session for form ID: {session_data.form_id
-            }, on behalf of client ID: {session_data.user_id}.'''
+            }, on behalf of client ID: {session_data.user_id}.'
     logger.info(message)
     return await start_form_session(
         db = db,
@@ -136,9 +136,9 @@ async def submit_answer_route(
     '''
         Endpoint to submit an answer and get the next question.
     '''
-    message = f'''User: {current_user
+    message = f'User: {current_user
             }. Submits an answer for session: {answer_data.session_id
-            }, question: {answer_data.question_number}.'''
+            }, question: {answer_data.question_number}.'
     logger.info(message)
     return await submit_answer_and_get_next_question(
         db = db,
@@ -166,8 +166,8 @@ async def get_question_to_modify_route(
     '''
         Endpoint to get a question for modification.
     '''
-    message = f'''User: {current_user}. Requests to modify question {
-        request_data.question_number} in session: {request_data.session_id}.'''
+    message = f'User: {current_user}. Requests to modify question {
+        request_data.question_number} in session: {request_data.session_id}.'
     logger.info(message)
     return await get_question_to_modify(
         db = db,
@@ -193,8 +193,8 @@ async def update_answer_in_session_route(
     '''
         Endpoint to update an answer in a session.
     '''
-    message = f'''User: {current_user}. Updates an answer for question {
-        update_data.question_number} in session: {update_data.session_id}.'''
+    message = f'User: {current_user}. Updates an answer for question {
+        update_data.question_number} in session: {update_data.session_id}.'
     logger.info(message)
     return await update_answer_in_session(
         db = db,
@@ -221,8 +221,8 @@ async def finalize_form_session_route(
     '''
         Endpoint to finalize a form session.
     '''
-    message = f'''User: {current_user
-            }. Requests to finalize form session: {finalize_data.session_id}.'''
+    message = f'User: {current_user
+            }. Requests to finalize form session: {finalize_data.session_id}.'
     logger.info(message)
     return await finalize_form_session(
         db = db,
@@ -250,8 +250,8 @@ async def get_form_response_by_id_route(
     '''
         Endpoint to get a completed form response by ID.
     '''
-    message = f'''User: {current_user
-            }. Requests to get form response by ID: {form_response_id}.'''
+    message = f'User: {current_user
+            }. Requests to get form response by ID: {form_response_id}.'
     logger.info(message)
     return await get_form_response_by_id(
         db = db,
@@ -279,8 +279,8 @@ async def get_all_form_responses_route(
     '''
         Endpoint to get all completed form responses.
     '''
-    message = f'''User: {current_user
-            }. Requests to get all form responses (skip: {skip}, limit: {limit}).'''
+    message = f'User: {current_user
+            }. Requests to get all form responses (skip: {skip}, limit: {limit}).'
     logger.info(message)
     return await get_all_form_responses(
         db = db,
@@ -311,9 +311,9 @@ async def update_form_response_status_route(
     '''
         Endpoint to update the status of a form response.
     '''
-    message = f'''User: {current_user
+    message = f'User: {current_user
             }. Requests to update status for form response {form_response_id
-            } to {status_data.status}.'''
+            } to {status_data.status}.'
     logger.info(message)
     return await update_form_response_status(
         db = db,
@@ -342,8 +342,8 @@ async def update_form_response_route(
     '''
         Endpoint to update a completed form response.
     '''
-    message = f'''User: {current_user
-            }. Requests to update form response {form_response_id}.'''
+    message = f'User: {current_user
+            }. Requests to update form response {form_response_id}.'
     logger.info(message)
     return await update_form_response_data(
         db = db,
@@ -369,8 +369,8 @@ async def get_form_response_status_flow_route(
     '''
         Endpoint to get the status flow for a form response.
     '''
-    message = f'''User: {current_user
-            }. Requests status flow for form response {form_response_id}.'''
+    message = f'User: {current_user
+            }. Requests status flow for form response {form_response_id}.'
     logger.info(message)
     return await get_form_response_status_flow_controller(
         db = db,
@@ -398,8 +398,8 @@ async def create_person_route(
     '''
         Endpoint to create a new person.
     '''
-    message = f'''User: {current_user
-            }. Requests to create a new person record.'''
+    message = f'User: {current_user
+            }. Requests to create a new person record.'
     logger.info(message)
     return await create_person(
         db = db,
@@ -424,8 +424,8 @@ async def get_all_persons_route(
     '''
         Endpoint to get all persons.
     '''
-    message = f'''User: {current_user
-            }. Requests to get all persons (skip: {skip}, limit: {limit}).'''
+    message = f'User: {current_user
+            }. Requests to get all persons (skip: {skip}, limit: {limit}).'
     logger.info(message)
     return await get_all_persons(
         db = db,
@@ -451,7 +451,7 @@ async def search_persons_route(
     current_user: str = Depends(get_current_user)
 ) -> List[PersonResponse]:
     '''
-    Endpoint to search for a person.
+        Endpoint to search for a person.
     '''
     return await search_persons(
         db = db,
@@ -475,8 +475,8 @@ async def get_person_by_id_route(
     '''
         Endpoint to get a person by ID.
     '''
-    message = f'''User: {current_user
-            }. Requests to get person with ID: {person_id}.'''
+    message = f'User: {current_user
+            }. Requests to get person with ID: {person_id}.'
     logger.info(message)
     return await get_person_by_id(
         db = db,
@@ -501,8 +501,8 @@ async def update_person_route(
     '''
         Endpoint to update a person.
     '''
-    message = f'''User: {current_user
-            }. Requests to update person with ID: {person_id}.'''
+    message = f'User: {current_user
+            }. Requests to update person with ID: {person_id}.'
     logger.info(message)
     return await update_person(
         db = db,
@@ -527,8 +527,8 @@ async def delete_person_route(
     '''
         Endpoint to delete a person.
     '''
-    message = f'''User: {current_user
-            }. Requests to delete person with ID: {person_id}.'''
+    message = f'User: {current_user
+            }. Requests to delete person with ID: {person_id}.'
     logger.info(message)
     return await delete_person(
         db = db,

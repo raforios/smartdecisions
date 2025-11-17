@@ -51,8 +51,8 @@ class DynamoDBClient: # pylint: disable=too-few-public-methods
             Initializes the DynamoDB client and table resource.
         '''
         try:
-            message = f'''Initializing DynamoDB client for region: {DYNAMODB_REGION},
-                        table: {DYNAMODB_TABLE_NAME}'''
+            message = f'Initializing DynamoDB client for region: {DYNAMODB_REGION
+                    }, table: {DYNAMODB_TABLE_NAME}'
             logger.info(message)
 
             resource_args = {
@@ -150,22 +150,22 @@ async def save_session(session_data: Dict[str, Any]) -> None:
         message = f'Attempting to save session: {session_data.get('session_id')}'
         logger.debug(message)
         response = table.put_item(Item = processed_session_data)
-        message = f'''Session {session_data.get('session_id')}
-                        saved successfully to DynamoDB.'''
+        message = f'Session {session_data.get('session_id')
+                } saved successfully to DynamoDB.'
         logger.info(message)
         message = f'DynamoDB put_item response: {response}'
         logger.debug(message)
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code')
-        error_msg = f'''DynamoDB ClientError saving session
-                        {session_data.get('session_id')}: {error_code} - {e}'''
+        error_msg = f'DynamoDB ClientError saving session {
+                session_data.get('session_id')}: {error_code} - {e}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = f'DynamoDB error saving session: {e}'
         ) from e
     except Exception as e:
-        error_msg = f'''Unexpected error saving session
-                        {session_data.get('session_id')} to DynamoDB: {e}'''
+        error_msg = f'Unexpected error saving session {
+                session_data.get('session_id')} to DynamoDB: {e}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = f'An unexpected error occurred while saving session: {e}'
@@ -191,15 +191,15 @@ async def get_session_by_id(session_id: str) -> Optional[Dict[str, Any]]:
         return None
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code')
-        error_msg = f'''DynamoDB ClientError retrieving session
-                        {session_id}: {error_code} - {e}'''
+        error_msg = f'DynamoDB ClientError retrieving session {
+                session_id}: {error_code} - {e}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = f'DynamoDB error retrieving session: {e}'
         ) from e
     except Exception as e:
-        error_msg = f'''Unexpected error retrieving session
-                        {session_id} from DynamoDB: {e}'''
+        error_msg = f'Unexpected error retrieving session {
+                    session_id} from DynamoDB: {e}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = f'An unexpected error occurred while retrieving session: {e}'
@@ -220,15 +220,15 @@ async def delete_session_by_id(session_id: str) -> None:
         logger.debug(message)
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code')
-        error_msg = f'''DynamoDB ClientError deleting session
-                        {session_id}: {error_code} - {e}'''
+        error_msg = f'DynamoDB ClientError deleting session {
+            session_id}: {error_code} - {e}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = f'DynamoDB error deleting session: {e}'
         ) from e
     except Exception as e:
-        error_msg = f'''Unexpected error deleting session
-                        {session_id} from DynamoDB: {e}'''
+        error_msg = f'Unexpected error deleting session {
+                    session_id} from DynamoDB: {e}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = f'An unexpected error occurred while deleting session: {e}'

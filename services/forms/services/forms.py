@@ -160,8 +160,8 @@ async def update_form_header(
             FormHeader.id != form_id
         ).first()
         if existing_form_with_code:
-            error_msg = f'''Cannot update form {form_id}: form_code
-                    {form_data.form_code} already in use.'''
+            error_msg = f'Cannot update form {form_id}: form_code {
+                form_data.form_code} already in use.'
             logger.warning(error_msg)
             raise RegisterAlreadyExistsError(
                detail = error_msg
@@ -215,8 +215,8 @@ async def create_question_detail(
         Creates a new question detail for a specific form,
         including its multiple choice options and flow rules.
     '''
-    message = f'''Attempting to create question for form ID: {form_id},
-            question number: {question_data.question_number}'''
+    message = f'Attempting to create question for form ID: {form_id
+            }, question number: {question_data.question_number}'
     logger.info(message)
     _ = get_record(db, FormHeader, form_id)
     db_question = create_record(

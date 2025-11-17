@@ -111,8 +111,8 @@ async def get_all_form_headers_route(
     '''
         Endpoint to get all form headers.
     '''
-    message = f'''User: {current_user}. Received request to get all form headers
-            (skip: {skip}, limit: {limit})'''
+    message = f'User: {current_user}. Received request to get all form headers (skip: {
+            skip}, limit: {limit})'
     logger.info(message)
     return await get_all_form_headers_controller(
         db = db,
@@ -197,8 +197,8 @@ async def create_new_question_detail_route(
     '''
         Endpoint to create a new question detail.
     '''
-    message = f'''User: {current_user}. Received request to create question for form ID: {form_id},
-            question number: {question_data.question_number}'''
+    message = f'User: {current_user}. Received request to create question for form ID: {form_id
+            }, question number: {question_data.question_number}'
     logger.info(message)
     return await create_question_detail_controller(
         db = db,
@@ -224,8 +224,8 @@ async def get_question_detail_by_id_route(
     '''
         Endpoint to get a question detail by ID.
     '''
-    message = f'''User: {current_user}. Received request to get question detail
-            with ID: {question_id}'''
+    message = f'User: {current_user}. Received request to get question detail with ID: {
+        question_id}'
     logger.info(message)
     return await get_question_detail_by_id_controller(
         db = db,
@@ -252,8 +252,8 @@ async def update_existing_question_detail_route(
     '''
         Endpoint to update a question detail.
     '''
-    message = f'''User: {current_user}. Received request to update question detail
-            with ID: {question_id}'''
+    message = f'User: {current_user}. Received request to update question detail with ID: {
+        question_id}'
     logger.info(message)
     return await update_question_detail_controller(
         db = db,
@@ -280,8 +280,8 @@ async def delete_existing_question_detail_route(
     '''
         Endpoint to delete a question detail.
     '''
-    message = f'''User: {current_user}. Received request to delete question detail
-            with ID: {question_id}'''
+    message = f'User: {current_user}. Received request to delete question detail with ID: {
+        question_id}'
     logger.info(message)
     return await delete_question_detail_controller(
         db = db,

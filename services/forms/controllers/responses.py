@@ -268,8 +268,8 @@ async def submit_answer_and_get_next_question(
     submitted_question_detail = questions_map.get(answer_data.question_number)
     if not submitted_question_detail:
         raise RegisterNotFoundError(
-            detail = f'''Question number {answer_data.question_number} not found
-                    in form {current_session.form_id}.'''
+            detail = f'Question number {answer_data.question_number
+            } not found in form {current_session.form_id}.'
         )
     if submitted_question_detail.response_type == 'FILE_UPLOAD':
         if not uploaded_file:
@@ -339,8 +339,8 @@ async def get_question_to_modify(
     target_question = questions_map.get(request_data.question_number)
     if not target_question:
         raise RegisterNotFoundError(
-            detail = f'''Question number {request_data.question_number} not found in
-                    form {current_session.form_id}.'''
+            detail = f'Question number {request_data.question_number
+            } not found in form {current_session.form_id}.'
         )
     current_answer_obj = current_session.answers.get(str(request_data.question_number))
     current_answer_value = current_answer_obj.answer_value if current_answer_obj else None
@@ -376,8 +376,8 @@ async def update_answer_in_session(
     target_question_detail = questions_map.get(update_data.question_number)
     if not target_question_detail:
         raise RegisterNotFoundError(
-            detail = f'''Question number {update_data.question_number} not found
-                in form {current_session.form_id}.'''
+            detail = f'Question number {update_data.question_number
+            } not found in form {current_session.form_id}.'
         )
     temp_answer = TemporaryAnswer(
         question_id = target_question_detail.id,

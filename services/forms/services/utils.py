@@ -160,6 +160,27 @@ async def _process_and_send_usage_log(
         error_msg = f'Error serializing log data: {e}'
         logger.error(error_msg, exc_info = True)
 
+async def _get_request_body_for_logging(request: Request) -> dict | None:
+    '''
+        Helper to safely extract the request body for logging,
+        handling different content types.
+    '''
+    if not request or request.method not in ['POST', 'PUT', 'PATCH']:
+        return None
+
+    content_type = request.headers.get('content-type', '')
+
+    if 'application/json' in content_type:
+        try:
+            return await request.json()
+        except ValueError:
+            return {'detail': 'Invalid JSON in request body'}
+
+    if 'multipart/form-data' in content_type:
+        return {'detail': 'Multipart form data (file upload) not logged.'}
+
+    return {'detail': f'Content-Type {content_type} not logged.'}
+
 def handle_service_errors(microservice_name: str):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
@@ -174,12 +195,7 @@ def handle_service_errors(microservice_name: str):
             response_data = None
             status_code = 500
 
-            request_body = None
-            if request and request.method in ['POST', 'PUT', 'PATCH']:
-                try:
-                    request_body = await request.json()
-                except ValueError:
-                    request_body = {'detail': 'Invalid JSON in request body'}
+            request_body = await _get_request_body_for_logging(request)
 
             try:
                 result = await func(*args, **kwargs)
