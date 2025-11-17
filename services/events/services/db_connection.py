@@ -12,10 +12,10 @@ dynamodb_resource = boto3.resource('dynamodb')
 
 def get_db_resource() -> Callable:
     '''
-    Returns a callable that provides the DynamoDB resource.
-    
-    Returns:
-        Callable: A callable to obtain a DynamoDB resource.
+        Returns a callable that provides the DynamoDB resource.
+        
+        Returns:
+            Callable: A callable to obtain a DynamoDB resource.
     '''
     def _get_db():
         '''
