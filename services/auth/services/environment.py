@@ -38,7 +38,7 @@ def load_and_validate_env_vars(
 
         # Check if the variable is required and missing
         if not value and var_name in env_vars:
-            error_msg = f'Required environment variable "{var_name}" is not configured.'
+            error_msg = f'Required environment variable: {var_name} is not configured.'
             logger.critical(error_msg)
             raise ServiceUnavailableError(detail = error_msg)
 
@@ -46,8 +46,8 @@ def load_and_validate_env_vars(
             try:
                 loaded_values[var_name] = var_type(value)
             except (TypeError, ValueError) as e:
-                error_msg = (f'Environment variable "{var_name}" is not a valid '
-                             f'"{var_type.__name__}".')
+                error_msg = f'Environment variable: {var_name} is not a valid {
+                    var_type.__name__}.'
                 logger.critical(error_msg)
                 raise ServiceUnavailableError(detail = error_msg) from e
         else:

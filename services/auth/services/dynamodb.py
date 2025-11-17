@@ -32,15 +32,15 @@ def get_table():
         return table
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code')
-        error_msg = f'''Error accessing DynamoDB table "{TABLE_NAME}": {error_code}
-            {e.response.get('Error', {}).get('Message')}'''
+        error_msg = f'Error accessing DynamoDB table: {TABLE_NAME}: {error_code
+                } {e.response.get('Error', {}).get('Message')}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = f'Database initialization error: {error_msg}'
         ) from e
     except Exception as e:
-        error_msg = f'''Unexpected error when getting DynamoDB table
-                    {TABLE_NAME}: {e}'''
+        error_msg = f'Unexpected error when getting DynamoDB table {
+            TABLE_NAME}: {e}'
         logger.critical(error_msg, exc_info = True)
         raise ServiceUnavailableError(
             detail = 'Unexpected database initialization error.'
@@ -199,8 +199,8 @@ def scan_all_users() -> List[Dict[str, Any]]:
         while 'LastEvaluatedKey' in response:
             response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
             users.extend(response.get('Items', []))
-            message = f'''Scanned additional {len(response.get('Items', []))} users.
-            Total: {len(users)}'''
+            message = f'Scanned additional {len(response.get('Items', []))
+                } users. Total: {len(users)}'
             logger.info(message)
         return users
     except ClientError as e:
