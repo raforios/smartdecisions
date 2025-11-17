@@ -25,25 +25,25 @@ async def read_data_from_s3(
     delimiter: Optional[str] = None
 ) -> dict:
     '''
-    Loads data from a given S3 bucket and processes it based on file extension.
+        Loads data from a given S3 bucket and processes it based on file extension.
 
-    This function supports CSV and Excel files, returning their content as a
-    list of dictionaries. It also supports reading plain text files, and
-    binary files like images and documents (JPG, PNG, DOC, PDF).
+        This function supports CSV and Excel files, returning their content as a
+        list of dictionaries. It also supports reading plain text files, and
+        binary files like images and documents (JPG, PNG, DOC, PDF).
 
-    Args:
-        bucket_name (str): The name of the S3 bucket.
-        file_key (str): The key of the file to load.
-        current_user (str): The user accessing the file.
+        Args:
+            bucket_name (str): The name of the S3 bucket.
+            file_key (str): The key of the file to load.
+            current_user (str): The user accessing the file.
 
-    Returns:
-        dict: A dictionary containing the filename and the processed data or
-              text/binary content.
+        Returns:
+            dict: A dictionary containing the filename and the processed data or
+                text/binary content.
 
-    Raises:
-        InvalidInputError: If the file extension is not supported or the file
-                           is empty.
-        ServiceUnavailableError: For internal server errors during processing.
+        Raises:
+            InvalidInputError: If the file extension is not supported or the file
+                            is empty.
+            ServiceUnavailableError: For internal server errors during processing.
     '''
     _context = {'bucket_name': bucket_name, 'file_key': file_key}
     response = s3_client.get_object(Bucket = bucket_name, Key = file_key)
@@ -99,7 +99,7 @@ async def upload_s3_file(
     current_user: str
 ) -> dict:
     '''
-    Uploads a file to a specified S3 bucket.
+        Uploads a file to a specified S3 bucket.
     '''
     _context = {'bucket_name': upload_data.bucket_name, 'file_key': upload_data.file_key}
     s3_client.put_object(
@@ -127,12 +127,12 @@ async def delete_s3_file(
     current_user: str
 ) -> dict:
     '''
-    Deletes a file from a given S3 bucket.
+        Deletes a file from a given S3 bucket.
     '''
     _context = {'bucket_name': bucket_name, 'file_key': file_key}
     s3_client.delete_object(Bucket = bucket_name, Key = file_key)
-    message = f'''File {file_key} deleted successfully by user {current_user}
-            from bucket {bucket_name}.'''
+    message = f'File {file_key} deleted successfully by user {current_user
+            } from bucket {bucket_name}.'
     logger.info(message)
     return {'message': f'File {file_key} deleted successfully from {bucket_name}.'}
 
@@ -143,7 +143,7 @@ async def list_s3_files(
     current_user: str
 ) -> List[str]:
     '''
-    Lists files in a given S3 bucket with an optional prefix.
+        Lists files in a given S3 bucket with an optional prefix.
     '''
     _context = {'bucket_name': bucket_name, 'prefix': prefix}
     files = []
@@ -156,8 +156,8 @@ async def list_s3_files(
                 if not obj['Key'].endswith('/'):
                     files.append(obj['Key'])
 
-    message = f'''User {current_user} listed {len(files)} files in bucket {bucket_name}
-            with prefix {prefix}.'''
+    message = f'User {current_user} listed {len(files)} files in bucket {bucket_name
+            } with prefix {prefix}.'
     logger.info(message)
     return files
 
@@ -170,7 +170,7 @@ async def create_presigned_upload_url(
     content_type: str
 ) -> str:
     '''
-    Generates a pre-signed URL for uploading an object to S3.
+        Generates a pre-signed URL for uploading an object to S3.
     '''
     _context = {'bucket_name': bucket_name, 'file_key': file_key}
     response = s3_client.generate_presigned_url(
@@ -182,7 +182,7 @@ async def create_presigned_upload_url(
         },
         ExpiresIn=expiration
     )
-    message = f'''User {current_user} generated a presigned URL for {file_key}
-            in bucket {bucket_name}.'''
+    message = f'User {current_user} generated a presigned URL for {file_key
+            } in bucket {bucket_name}.'
     logger.info(message)
     return response

@@ -52,18 +52,18 @@ async def read_s3_file_route(
     delimiter: Optional[str] = Query(None, description = 'The delimiter used for CSV files.')
 ):
     '''
-    Reads a file from an S3 bucket, processes it, and returns the data.
+        Reads a file from an S3 bucket, processes it, and returns the data.
 
-    Args:
-        bucket_name (str): S3 bucket name.
-        file_key (str): The file key (full path) within the S3 bucket.
-        current_user (str): The authenticated user.
+        Args:
+            bucket_name (str): S3 bucket name.
+            file_key (str): The file key (full path) within the S3 bucket.
+            current_user (str): The authenticated user.
 
-    Returns:
-        Dict[str, Any]: A dictionary containing the processed data from the file.
+        Returns:
+            Dict[str, Any]: A dictionary containing the processed data from the file.
     '''
-    message = f'''User: {current_user} accessing file: {file_key} in bucket: {bucket_name}
-            with delimiter {delimiter}.'''
+    message = f'User: {current_user} accessing file: {file_key} in bucket: {bucket_name
+            } with delimiter {delimiter}.'
     logger.info(message)
     return await read_data_from_s3(
         bucket_name = bucket_name,
@@ -83,24 +83,24 @@ async def upload_file_to_s3_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Uploads a file to a specified S3 bucket.
+        Uploads a file to a specified S3 bucket.
 
-    Args:
-        file (UploadFile): The file to upload.
-        bucket_name (str): The S3 bucket name.
-        file_path (str): The path within the S3 bucket (e.g., 'data/raw/').
-        current_user (str): The authenticated user.
+        Args:
+            file (UploadFile): The file to upload.
+            bucket_name (str): The S3 bucket name.
+            file_path (str): The path within the S3 bucket (e.g., 'data/raw/').
+            current_user (str): The authenticated user.
 
-    Returns:
-        Dict[str, str]: A dictionary containing the S3 URL of the uploaded file.
+        Returns:
+            Dict[str, str]: A dictionary containing the S3 URL of the uploaded file.
     '''
-    message = f'''User: {current_user} attempting to upload file: {file.filename}
-            to bucket: {bucket_name}/{file_path}.'''
+    message = f'User: {current_user} attempting to upload file: {file.filename
+            } to bucket: {bucket_name}/{file_path}.'
     logger.info(message)
 
     if file.content_type not in ALLOWED_CONTENT_TYPES:
-        error_msg = f'''Unsupported file type: '{file.content_type}'.
-                    Allowed file types are: {', '.join(ALLOWED_EXTENSIONS)}.'''
+        error_msg = f'Unsupported file type: {file.content_type
+            }. Allowed file types are: {"," .join(ALLOWED_EXTENSIONS)}.'
         logger.error(error_msg)
         raise InvalidInputError(detail = error_msg)
 
@@ -125,17 +125,17 @@ async def delete_file_from_s3_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Deletes a specified file from an S3 bucket.
+        Deletes a specified file from an S3 bucket.
 
-    Args:
-        request (S3FileRequest): Contains bucket_name, file_path, and file_name.
-        current_user (str): The authenticated user.
+        Args:
+            request (S3FileRequest): Contains bucket_name, file_path, and file_name.
+            current_user (str): The authenticated user.
 
-    Returns:
-        Dict[str, str]: A message indicating success.
+        Returns:
+            Dict[str, str]: A message indicating success.
     '''
-    message = f'''User: {current_user} attempting to delete file:
-            {request.file_key} from bucket: {request.bucket_name}.'''
+    message = f'User: {current_user} attempting to delete file: {
+        request.file_key} from bucket: {request.bucket_name}.'
 
     logger.info(message)
     return await delete_s3_file(request.bucket_name, request.file_key, current_user)
@@ -149,20 +149,20 @@ async def list_files_s3_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Lists files in the predefined ML data S3 bucket with an optional prefix.
+        Lists files in the predefined ML data S3 bucket with an optional prefix.
 
-    Args:
-        request (ListFilesRequest): Contains bucket_name and an optional prefix.
-        current_user (str): The authenticated user.
+        Args:
+            request (ListFilesRequest): Contains bucket_name and an optional prefix.
+            current_user (str): The authenticated user.
 
-    Returns:
-        ListFilesResponse: A dictionary with the list of files.
+        Returns:
+            ListFilesResponse: A dictionary with the list of files.
     '''
     predefined_ml_data_bucket = os.environ.get('ML_DATA_BUCKET_NAME')
     target_bucket = request.bucket_name if request.bucket_name else predefined_ml_data_bucket
 
-    message = f'''User: {current_user} attempting to list files in bucket:
-            {target_bucket} with prefix: {request.prefix}.'''
+    message = f'User: {current_user} attempting to list files in bucket: {
+            target_bucket} with prefix: {request.prefix}.'
 
     logger.info(message)
     files_list = await list_s3_files(target_bucket, request.prefix, current_user)
@@ -178,7 +178,7 @@ def get_content_type_from_filename(
     filename: str
 ) -> str:
     '''
-    Tries to guess the MIME type, if not, uses a generic value.
+        Tries to guess the MIME type, if not, uses a generic value.
     '''
     mime_type, _ = guess_type(filename)
     return mime_type if mime_type else 'application/octet-stream'
@@ -192,15 +192,15 @@ async def get_presigned_upload_url_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Generates an S3 pre-signed URL for direct file upload from the client.
+        Generates an S3 pre-signed URL for direct file upload from the client.
 
-    Args:
-        request (PresignedUrlRequest): Contains bucket_name, file_path, file_name,
-        expiration_seconds.
-        current_user (str): The authenticated user.
+        Args:
+            request (PresignedUrlRequest): Contains bucket_name, file_path, file_name,
+            expiration_seconds.
+            current_user (str): The authenticated user.
 
-    Returns:
-        PresignedUrlResponse: A dictionary containing the pre-signed URL and the full S3 key.
+        Returns:
+            PresignedUrlResponse: A dictionary containing the pre-signed URL and the full S3 key.
     '''
     file_extension = os.path.splitext(request.file_name)[1].lower()
 
@@ -215,8 +215,8 @@ async def get_presigned_upload_url_route(
     if not content_type_for_signature:
         content_type_for_signature = get_content_type_from_filename(request.file_name)
 
-    message = f'''User: {current_user} requesting presigned URL for {request.file_key}
-            in bucket {request.bucket_name} with Content-Type: {content_type_for_signature}.'''
+    message = f'User: {current_user} requesting presigned URL for {request.file_key
+        } in bucket {request.bucket_name} with Content-Type: {content_type_for_signature}.'
     logger.info(message)
 
     presigned_url = await create_presigned_upload_url(
