@@ -206,8 +206,8 @@ async def get_presigned_upload_url_route(
 
     if request.validation:
         if file_extension not in ALLOWED_EXTENSIONS:
-            error_msg = f'''Unsupported file type: {file_extension}.
-                        Allowed file types are: {', '.join(ALLOWED_EXTENSIONS)}.'''
+            error_msg = f'Unsupported file type: {file_extension
+                    }. Allowed file types are: {', '.join(ALLOWED_EXTENSIONS)}.'
 
             raise InvalidInputError(detail = error_msg)
 

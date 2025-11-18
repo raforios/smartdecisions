@@ -60,8 +60,8 @@ async def read_data_from_s3(
                     df = pd.read_excel(BytesIO(file_content))
 
                 processed_data = df.to_dict(orient = 'records')
-                message = f'''Data file {file_key} was accessed and processed by
-                        user {current_user} on bucket {bucket_name}.'''
+                message = f'Data file {file_key} was accessed and processed by user {
+                    current_user} on bucket {bucket_name}.'
                 logger.info(message)
                 return {'filename': file_key, 'data': processed_data}
             except pd.errors.EmptyDataError as e:
@@ -71,16 +71,16 @@ async def read_data_from_s3(
 
         case '.txt':
             file_content = response['Body'].read().decode('utf-8')
-            message = f'''Text file {file_key} was accessed and read by user {current_user}
-                    on bucket {bucket_name}.'''
+            message = f'Text file {file_key} was accessed and read by user {current_user
+                    } on bucket {bucket_name}.'
             logger.info(message)
             return {'filename': file_key, 'content': file_content}
 
         case '.doc' | '.docx' | '.pdf' | '.jpg' | '.jpeg' | '.png':
             file_content_bytes = response['Body'].read()
             encoded_content = base64.b64encode(file_content_bytes).decode('utf-8')
-            message = f'''Binary file {file_key} was accessed and read by user {current_user}
-                    on bucket {bucket_name}.'''
+            message = f'Binary file {file_key} was accessed and read by user {current_user
+                    } on bucket {bucket_name}.'
             logger.info(message)
             return {'filename': file_key, 'content_base64': encoded_content}
 
@@ -88,8 +88,8 @@ async def read_data_from_s3(
             allowed_extensions = [
                 '.csv', '.xls', '.xlsx', '.txt', '.doc', '.docx', '.pdf', '.jpg', '.jpeg', '.png'
             ]
-            error_msg = f'''Unsupported file format for {file_key}.
-                    Allowed file types are: {', '.join(allowed_extensions)}.'''
+            error_msg = f'Unsupported file format for {file_key
+                    }. Allowed file types are: {', '.join(allowed_extensions)}.'
             logger.error(error_msg, exc_info = True)
             raise InvalidInputError(detail = error_msg)
 
@@ -110,8 +110,8 @@ async def upload_s3_file(
     )
 
     file_url = f'https://{upload_data.bucket_name}.s3.amazonaws.com/{upload_data.file_key}'
-    message = f'''File {upload_data.file_name} uploaded successfully by
-            user {current_user} to bucket {upload_data.bucket_name}. URL: {file_url}'''
+    message = f'File {upload_data.file_name} uploaded successfully by user {
+        current_user} to bucket {upload_data.bucket_name}. URL: {file_url}'
     logger.info(message)
 
     return {
