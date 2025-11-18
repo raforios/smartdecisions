@@ -22,8 +22,9 @@ async def normalize_features(
     x_matrix = np.array(request_body.x_matrix)
     x_norm, mu, sigma = zscore_normalize_features(x_matrix)
 
-    message = f'''Z-score normalization completed for a feature matrix of shape {x_matrix.shape}.
-        The calculated mean (mu) is {mu} and the standard deviation (sigma) is {sigma}'''
+    message = f'Z-score normalization completed for a feature matrix of shape {
+        x_matrix.shape}. The calculated mean (mu) is {mu
+        } and the standard deviation (sigma) is {sigma}'
     logger.info(message)
 
     return NormalizeFeaturesResponse(

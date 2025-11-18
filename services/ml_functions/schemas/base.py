@@ -21,7 +21,8 @@ class NumPyValidatorBase(BaseModel):
                 raise ValueError(f'{field_name} must be a 1D or 2D list of floats.')
             return v
         except Exception as e:
+            error_msg = f'Invalid input for {field_name
+            }. Must be a list or list of lists of floats. Error: {e}'
             raise ValueError(
-                f'''Invalid input for {field_name}. Must be a list or list of lists of floats.
-                Error: {e}'''
+                error_msg
             ) from e

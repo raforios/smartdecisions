@@ -35,28 +35,27 @@ async def compute_cost_linear_regression_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Calculates the cost for linear regression based on provided data, weights, and bias.
+        Calculates the cost for linear regression based on provided data, weights, and bias.
 
-    This endpoint takes the feature matrix X, target array y, weight parameters w,
-    and bias b in the request body, and returns the computed linear regression cost.
-    Authentication is required.
+        This endpoint takes the feature matrix X, target array y, weight parameters w,
+        and bias b in the request body, and returns the computed linear regression cost.
+        Authentication is required.
 
-    Args:
-        request (ComputeCostLinearRequest): A Pydantic model containing
-                                                      x_matrix, y, w, and b.
-        current_user (str): The authenticated user's identifier
-                            (dependency-injected).
+        Args:
+            request (ComputeCostLinearRequest): A Pydantic model containing
+                                                        x_matrix, y, w, and b.
+            current_user (str): The authenticated user's identifier
+                                (dependency-injected).
 
-    Returns:
-        ComputeCostLinearResponse: An object containing the calculated
-                                             linear regression cost as a float.
+        Returns:
+            ComputeCostLinearResponse: An object containing the calculated
+                                                linear regression cost as a float.
 
-    Raises:
-        UnauthorizedError: If authentication fails.
-        ServiceUnavailableError: If an internal server error occurs during calculation.
+        Raises:
+            UnauthorizedError: If authentication fails.
+            ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'''User: {current_user} requested linear regression cost
-        calculation.'''
+    message = f'User: {current_user} requested linear regression cost calculation.'
     logger.info(message)
     return await compute_cost_linear_regression(request)
 
@@ -72,28 +71,27 @@ async def compute_gradient_linear_regression_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Calculates the gradient for linear regression based on provided data, weights, and bias.
+        Calculates the gradient for linear regression based on provided data, weights, and bias.
 
-    This endpoint takes the feature matrix X, target array y, weight parameters w,
-    and bias b in the request body, and returns the computed linear regression
-    gradient (dj_db, dj_dw). Authentication is required.
+        This endpoint takes the feature matrix X, target array y, weight parameters w,
+        and bias b in the request body, and returns the computed linear regression
+        gradient (dj_db, dj_dw). Authentication is required.
 
-    Args:
-        request (ComputeGradientLinearRequest): A Pydantic model containing
-                                                          x_matrix, y, w, and b.
-        current_user (str): The authenticated user's identifier
-                            (dependency-injected).
+        Args:
+            request (ComputeGradientLinearRequest): A Pydantic model containing
+                                                            x_matrix, y, w, and b.
+            current_user (str): The authenticated user's identifier
+                                (dependency-injected).
 
-    Returns:
-        ComputeGradientLinearResponse: An object containing dj_db (float)
-                                                 and dj_dw (list of floats).
+        Returns:
+            ComputeGradientLinearResponse: An object containing dj_db (float)
+                                                    and dj_dw (list of floats).
 
-    Raises:
-        UnauthorizedError: If authentication fails.
-        ServiceUnavailableError: If an internal server error occurs during calculation.
+        Raises:
+            UnauthorizedError: If authentication fails.
+            ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'''User: {current_user} requested linear regression gradient
-        calculation.'''
+    message = f'User: {current_user} requested linear regression gradient calculation.'
     logger.info(message)
     return await compute_gradient_linear_regression(request)
 
@@ -109,30 +107,29 @@ async def train_linear_regression_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Performs linear regression gradient descent to find optimal parameters (w, b).
+        Performs linear regression gradient descent to find optimal parameters (w, b).
 
-    This endpoint takes the feature matrix X, target array y, initial weights w_in,
-    initial bias b_in, learning rate alpha, and number of iterations num_iters
-    in the request body. It returns the final weights and bias, and their history.
-    Authentication is required.
+        This endpoint takes the feature matrix X, target array y, initial weights w_in,
+        initial bias b_in, learning rate alpha, and number of iterations num_iters
+        in the request body. It returns the final weights and bias, and their history.
+        Authentication is required.
 
-    Args:
-        request (TrainLinearRegressionRequest): A Pydantic model containing
-                                                x_matrix, y, initial w, initial b,
-                                                alpha, and num_iters.
-        current_user (str): The authenticated user's identifier
-                            (dependency-injected).
+        Args:
+            request (TrainLinearRegressionRequest): A Pydantic model containing
+                                                    x_matrix, y, initial w, initial b,
+                                                    alpha, and num_iters.
+            current_user (str): The authenticated user's identifier
+                                (dependency-injected).
 
-    Returns:
-        TrainLinearRegressionResponse: An object containing the final w, b,
-                                       and the history of cost and parameters.
+        Returns:
+            TrainLinearRegressionResponse: An object containing the final w, b,
+                                        and the history of cost and parameters.
 
-    Raises:
-        UnauthorizedError: If authentication fails.
-        ServiceUnavailableError: If an internal server error occurs during calculation.
+        Raises:
+            UnauthorizedError: If authentication fails.
+            ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'''User: {current_user} requested linear regression training
-        using gradient descent.'''
+    message = f'User: {current_user} requested linear regression training using gradient descent.'
     logger.info(message)
     return await train_linear_regression(request)
 
@@ -148,26 +145,25 @@ async def predict_linear_regression_route(
     current_user: str = Depends(get_current_user)
 ):
     '''
-    Predicts values using learned linear regression parameters (w, b) and new data.
+        Predicts values using learned linear regression parameters (w, b) and new data.
 
-    This endpoint takes a feature matrix X_test, learned weight parameters w,
-    and bias b in the request body, and returns a list of predicted values.
-    Authentication is required.
+        This endpoint takes a feature matrix X_test, learned weight parameters w,
+        and bias b in the request body, and returns a list of predicted values.
+        Authentication is required.
 
-    Args:
-        request (PredictLinearRequest): A Pydantic model containing
-                                                  x_test, w, and b for prediction.
-        current_user (str): The authenticated user's identifier
-                            (dependency-injected).
+        Args:
+            request (PredictLinearRequest): A Pydantic model containing
+                                                    x_test, w, and b for prediction.
+            current_user (str): The authenticated user's identifier
+                                (dependency-injected).
 
-    Returns:
-        PredictLinearResponse: An object containing the list of predicted values.
+        Returns:
+            PredictLinearResponse: An object containing the list of predicted values.
 
-    Raises:
-        UnauthorizedError: If authentication fails.
-        ServiceUnavailableError: If an internal server error occurs during calculation.
+        Raises:
+            UnauthorizedError: If authentication fails.
+            ServiceUnavailableError: If an internal server error occurs during calculation.
     '''
-    message = f'''User: {current_user} requested linear regression prediction
-        for new data.'''
+    message = f'User: {current_user} requested linear regression prediction for new data.'
     logger.info(message)
     return await predict_linear_regression(request)
