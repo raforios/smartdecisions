@@ -8,14 +8,17 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     DateTime,
-    UniqueConstraint
+    UniqueConstraint,
+    and_
 )
 from sqlalchemy.orm import (
     relationship,
+    foreign,
     Mapped,
     mapped_column,
     declared_attr
 )
+from models.common import Photo
 from services.db_connection import Base
 from services.utils import get_current_time_gmt
 
@@ -41,6 +44,17 @@ class Product(Base):  # pylint: disable=too-few-public-methods
     category_4_code = Column(String(10), nullable = True, default = '000')  # WWW
 
     status = Column(String(20), default = 'ACTIVE')
+
+    photos = relationship(
+        'Photo',
+        primaryjoin = lambda: and_(
+            Photo.entity_type == 'PRODUCT',
+            foreign(Photo.entity_id) == Product.id
+        ),
+        lazy = 'joined',
+        cascade = 'all, delete-orphan',
+        overlaps = 'photos'
+    )
 
     # Audit fields
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)

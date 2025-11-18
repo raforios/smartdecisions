@@ -12,9 +12,7 @@ from fastapi import (
     UploadFile,
     status
 )
-from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from services.exceptions import InvalidInputError
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
@@ -75,12 +73,7 @@ async def create_replenishment_report_endpoint(
             attendance_id}.'
     logger.info(message)
 
-    try:
-        report_data = ReplenishmentReportCreateSchema.model_validate_json(data)
-    except ValidationError as e:
-        raise InvalidInputError(
-            detail = f'Invalid JSON data format in data field: {e}'
-        ) from e
+    report_data = ReplenishmentReportCreateSchema.model_validate_json(data)
 
     return await create_replenishment_report_controller(
         attendance_id = attendance_id,
@@ -176,12 +169,7 @@ async def create_complementary_bandeo_endpoint(
             attendance_id}.'
     logger.info(message)
 
-    try:
-        bandeo_data = ComplementaryBandeoCreateSchema.model_validate_json(data)
-    except ValidationError as e:
-        raise InvalidInputError(
-            detail = f'Invalid JSON data format in data field: {e}'
-        ) from e
+    bandeo_data = ComplementaryBandeoCreateSchema.model_validate_json(data)
 
     return await create_complementary_bandeo_controller(
         attendance_id = attendance_id,
@@ -221,12 +209,7 @@ async def create_complementary_promo_point_endpoint(
             attendance_id}.'
     logger.info(message)
 
-    try:
-        promo_point_data = ComplementaryPromoPointCreateSchema.model_validate_json(data)
-    except ValidationError as e:
-        raise InvalidInputError(
-            detail = f'Invalid JSON data format in data field: {e}'
-        ) from e
+    promo_point_data = ComplementaryPromoPointCreateSchema.model_validate_json(data)
 
     return await create_complementary_promo_point_controller(
         attendance_id = attendance_id,
@@ -263,12 +246,7 @@ async def create_complementary_competition_endpoint(
     message = f'User: {current_user}. Request to create Competition Report.'
     logger.info(message)
 
-    try:
-        competition_data = ComplementaryCompetitionCreateSchema.model_validate_json(data)
-    except ValidationError as e:
-        raise InvalidInputError(
-            detail = f'Invalid JSON data format in data field: {e}'
-        ) from e
+    competition_data = ComplementaryCompetitionCreateSchema.model_validate_json(data)
 
     return await create_complementary_competition_controller(
         competition_data = competition_data,

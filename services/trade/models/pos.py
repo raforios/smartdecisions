@@ -9,11 +9,14 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Boolean,
-    UniqueConstraint
+    UniqueConstraint,
+    and_
 )
 from sqlalchemy.orm import (
-    relationship
+    relationship,
+    foreign
 )
+from models.common import Photo
 from services.db_connection import Base
 from services.utils import get_current_time_gmt
 
@@ -42,6 +45,16 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
         cascade = 'all, delete-orphan'
     )
 
+    photos = relationship(
+        'Photo',
+        primaryjoin = lambda: and_(
+            Photo.entity_type == 'POS',
+            foreign(Photo.entity_id) == PointOfSale.id
+        ),
+        lazy = 'joined',
+        cascade = 'all, delete-orphan',
+        overlaps = 'photos'
+    )
     # Audit fields
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 

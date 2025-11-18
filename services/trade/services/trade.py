@@ -1,9 +1,7 @@
 '''
     Business Logic for Trade.
 '''
-import os
-from typing import Any, Dict, List, Optional, Tuple
-from fastapi import UploadFile
+from typing import Any, Dict, List, Tuple
 from sqlalchemy.orm import Session, joinedload
 from services.exceptions import InvalidInputError
 from services.crud import (
@@ -14,8 +12,6 @@ from services.crud import (
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
-    _handle_files_service,
-    get_current_time_gmt,
     handle_service_errors,
     audit_event,
     sqlalchemy_object_as_dict
@@ -31,29 +27,6 @@ from schemas.trade import (
     TradePlanningUpdateSchema,
     TradePlanningWorkloadUpdateSchema,
 )
-
-async def prepare_file_to_upload(
-    file: Optional[UploadFile],
-    dynamic_path: str,
-    auth_token: str,
-    prefix: str
-) -> str:
-    '''
-        Helper to prepare to upload file across FILES microservice
-    '''
-    _, file_extension = os.path.splitext(file.filename)
-    current_time = get_current_time_gmt()
-    timestamp_part = current_time.strftime('%Y%m%d-%H-%M-%S')
-    new_file_name = f'{prefix}_{timestamp_part}{file_extension}'
-    file.filename = new_file_name
-
-    return await _handle_files_service(
-        action = 'create',
-        file_name = '',
-        auth_token = auth_token,
-        uploaded_file = file,
-        dynamic_path = dynamic_path
-    )
 
 # --- A.3. TRADE PLANNING SERVICES ---
 

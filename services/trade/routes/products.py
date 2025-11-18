@@ -2,7 +2,13 @@
     Products: routes handler
 '''
 from typing import Any, Dict
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    Request,
+    status
+)
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
@@ -18,6 +24,7 @@ from controllers.products import (
     get_product_assignments_list_controller,
     get_product_by_id_controller,
     get_products_list_controller,
+    get_sku_equivalencies_list_controller,
     get_sku_equivalency_by_id_controller,
     update_product_assignment_controller,
     update_product_controller,
@@ -35,13 +42,14 @@ from schemas.products import (
     ProductResponseSchema,
     ProductUpdateSchema,
     SKUEquivalencyCreateSchema,
+    SKUEquivalencyListResponseSchema,
     SKUEquivalencyResponseSchema,
     SKUEquivalencyUpdateSchema,
 )
 
 router = APIRouter(prefix = '/v1/products', tags = ['Products'])
 
-# --- 1. PRODUCT ENDPOINTS ---
+# --- 1. STATIC PRODUCT ENDPOINTS ---
 
 @router.post(
     '/',
@@ -64,30 +72,6 @@ async def create_product_endpoint(
     logger.info(message)
     return await create_product_controller(
         product_data = product_data,
-        db = db,
-        request = request,
-        current_user = current_user
-    )
-
-@router.get(
-    '/{product_id}',
-    response_model = ProductResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Retrieve a product by ID'
-)
-async def get_product_by_id_endpoint(
-    product_id: int,
-    request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to retrieve a Product by ID.
-    '''
-    message = f'User: {current_user}. Received request to get product ID: {product_id}.'
-    logger.info(message)
-    return await get_product_by_id_controller(
-        product_id = product_id,
         db = db,
         request = request,
         current_user = current_user
@@ -118,6 +102,139 @@ async def get_products_list_endpoint(
         db = db,
         skip = skip,
         limit = limit,
+        request = request,
+        current_user = current_user
+    )
+
+# --- 2. STATIC SKU EQUIVALENCY ENDPOINTS ---
+
+@router.post(
+    '/sku-equivalencies',
+    response_model = SKUEquivalencyResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Create SKU Equivalency'
+)
+async def create_sku_equivalency_endpoint(
+    equivalency_data: SKUEquivalencyCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to create a new SKU equivalency mapping.
+    '''
+    message = f'User: {current_user}. Received request to create SKU Equivalency.'
+    logger.info(message)
+    return await create_sku_equivalency_controller(
+        equivalency_data = equivalency_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+@router.get(
+    '/sku-equivalencies',
+    response_model = SKUEquivalencyListResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'List SKU Equivalencies'
+)
+# pylint: disable=duplicate-code
+async def get_sku_equivalencies_list_endpoint(
+    request: Request,
+    skip: int = Query(0, ge = 0),
+    limit: int = Query(100, ge = 1),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to list SKU equivalencies.
+    '''
+    message = f'User: {current_user}. Request list SKU Equivalencies.'
+    logger.info(message)
+
+    return await get_sku_equivalencies_list_controller(
+        db = db,
+        skip = skip,
+        limit = limit,
+        request = request,
+        current_user = current_user
+    )
+
+# --- 3. STATIC POS ASSIGNMENTS ENDPOINTS ---
+@router.post(
+    '/pos-assignments',
+    response_model = ProductAssignmentPOSResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Assign Product to POS'
+)
+async def create_product_assignment_endpoint(
+    assignment_data: ProductAssignmentPOSCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to assign a Product to a Point of Sale.
+    '''
+    message = f'User: {current_user}. Received request to create Product POS Assignment.'
+    logger.info(message)
+    return await create_product_assignment_controller(
+        assignment_data = assignment_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+@router.get(
+    '/pos-assignments',
+    response_model = ProductAssignmentPOSListResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'List and filter Product POS Assignments'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+async def get_product_assignments_list_endpoint(
+    request: Request,
+    filters: ProductAssignmentPOSFilterSchema = Depends(),
+    skip: int = Query(0, ge = 0),
+    limit: int = Query(100, ge = 1),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to retrieve a paginated list of Product POS Assignments.
+    '''
+    message = f'User: {current_user}. Request list Product POS Assignments.'
+    logger.info(message)
+    return await get_product_assignments_list_controller(
+        filters = filters,
+        db = db,
+        skip = skip,
+        limit = limit,
+        request = request,
+        current_user = current_user
+    )
+
+# --- 1. DYNAMIC PRODUCT ENDPOINTS ---
+@router.get(
+    '/{product_id}',
+    response_model = ProductResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Retrieve a product by ID'
+)
+async def get_product_by_id_endpoint(
+    product_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to retrieve a Product by ID.
+    '''
+    message = f'User: {current_user}. Received request to get product ID: {product_id}.'
+    logger.info(message)
+    return await get_product_by_id_controller(
+        product_id = product_id,
+        db = db,
         request = request,
         current_user = current_user
     )
@@ -172,31 +289,7 @@ async def delete_product_endpoint(
         current_user = current_user
     )
 
-# --- 2. SKU EQUIVALENCY ENDPOINTS ---
-
-@router.post(
-    '/sku-equivalencies',
-    response_model = SKUEquivalencyResponseSchema,
-    status_code = status.HTTP_201_CREATED,
-    summary = 'Create SKU Equivalency'
-)
-async def create_sku_equivalency_endpoint(
-    equivalency_data: SKUEquivalencyCreateSchema,
-    request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to create a new SKU equivalency mapping.
-    '''
-    message = f'User: {current_user}. Received request to create SKU Equivalency.'
-    logger.info(message)
-    return await create_sku_equivalency_controller(
-        equivalency_data = equivalency_data,
-        db = db,
-        request = request,
-        current_user = current_user
-    )
+# --- 2. DYNAMIC SKU EQUIVALENCY ENDPOINTS ---
 
 @router.get(
     '/sku-equivalencies/{equivalency_id}',
@@ -222,7 +315,7 @@ async def get_sku_equivalency_by_id_endpoint(
         current_user = current_user
     )
 
-@router.put(
+@router.patch(
     '/sku-equivalencies/{equivalency_id}',
     response_model = SKUEquivalencyResponseSchema,
     status_code = status.HTTP_200_OK,
@@ -272,31 +365,7 @@ async def delete_sku_equivalency_endpoint(
         current_user = current_user
     )
 
-# --- 3. PRODUCT ASSIGNMENT POS ENDPOINTS ---
-
-@router.post(
-    '/pos-assignments',
-    response_model = ProductAssignmentPOSResponseSchema,
-    status_code = status.HTTP_201_CREATED,
-    summary = 'Assign Product to POS'
-)
-async def create_product_assignment_endpoint(
-    assignment_data: ProductAssignmentPOSCreateSchema,
-    request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to assign a Product to a Point of Sale.
-    '''
-    message = f'User: {current_user}. Received request to create Product POS Assignment.'
-    logger.info(message)
-    return await create_product_assignment_controller(
-        assignment_data = assignment_data,
-        db = db,
-        request = request,
-        current_user = current_user
-    )
+# --- 3. DYNAMIC PRODUCT ASSIGNMENT POS ENDPOINTS ---
 
 @router.get(
     '/pos-assignments/{assignment_id}',
@@ -318,35 +387,6 @@ async def get_product_assignment_by_id_endpoint(
     return await get_product_assignment_by_id_controller(
         assignment_id = assignment_id,
         db = db,
-        request = request,
-        current_user = current_user
-    )
-
-@router.get(
-    '/pos-assignments',
-    response_model = ProductAssignmentPOSListResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'List and filter Product POS Assignments'
-)
-# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
-async def get_product_assignments_list_endpoint(
-    request: Request,
-    filters: ProductAssignmentPOSFilterSchema = Depends(),
-    skip: int = Query(0, ge = 0),
-    limit: int = Query(100, ge = 1),
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to retrieve a paginated list of Product POS Assignments.
-    '''
-    message = f'User: {current_user}. Request list Product POS Assignments.'
-    logger.info(message)
-    return await get_product_assignments_list_controller(
-        filters = filters,
-        db = db,
-        skip = skip,
-        limit = limit,
         request = request,
         current_user = current_user
     )

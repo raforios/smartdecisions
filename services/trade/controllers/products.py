@@ -16,6 +16,7 @@ from services.products import (
     get_product_assignments_list_service,
     get_product_by_id_service,
     get_products_list_service,
+    get_sku_equivalencies_list_service,
     get_sku_equivalency_by_id_service,
     update_product_assignment_service,
     update_product_service,
@@ -157,6 +158,8 @@ async def create_sku_equivalency_controller(
         db = db,
         equivalency_data = equivalency_data
     )
+    db_equivalency.product_sku = equivalency_data.product_sku
+
     return SKUEquivalencyResponseSchema.model_validate(
         db_equivalency, from_attributes = True
     )
@@ -190,7 +193,7 @@ async def update_sku_equivalency_controller(
     '''
         Controller for updating an SKU Equivalency.
     '''
-    db_equivalency, _ = await update_sku_equivalency_service(
+    db_equivalency = await update_sku_equivalency_service(
         db = db,
         equivalency_id = equivalency_id,
         update_data = update_data
@@ -209,13 +212,40 @@ async def delete_sku_equivalency_controller(
     '''
         Controller for deleting an SKU Equivalency.
     '''
-    deleted_id, _ = await delete_sku_equivalency_service(
+    deleted_id = await delete_sku_equivalency_service(
         db = db,
         equivalency_id = equivalency_id
     )
     return {
         'message': f'SKU Equivalency with ID {deleted_id} deleted successfully.',
         'id': deleted_id
+    }
+
+@handle_service_errors('TRADE')
+async def get_sku_equivalencies_list_controller(
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+    skip: int,
+    limit: int
+) -> Dict[str, Any]:
+    '''
+        Controller for retrieving a paginated list of SKU Equivalencies.
+    '''
+    items, total = await get_sku_equivalencies_list_service(
+        db = db,
+        skip = skip,
+        limit = limit
+    )
+
+    result_items = [
+        SKUEquivalencyResponseSchema.model_validate(item, from_attributes = True)
+        for item in items
+    ]
+
+    return {
+        'items': result_items,
+        'total': total
     }
 
 # --- PRODUCT ASSIGNMENT POS Controllers ---

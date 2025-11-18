@@ -4,19 +4,15 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import Query
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 
-# --- BASE SCHEMAS ---
-class PosBaseSchema(BaseModel):
-    '''
-        Base schema with `from_attributes=True` enabled to handle
-        ORM objects from SQLAlchemy.
-    '''
-    model_config = ConfigDict(from_attributes = True)
-
+from schemas.common import (
+    PhotoResponseSchema,
+    BaseSchema
+)
 
 # --- POINT OF SALE (POS) INVENTORY SCHEMAS ---
-class POSInventoryBaseSchema(PosBaseSchema):
+class POSInventoryBaseSchema(BaseSchema):
     '''
         Base schema for detailed Point of Sale Inventory fields.
     '''
@@ -57,7 +53,7 @@ class POSInventoryCreateSchema(POSInventoryBaseSchema):
         description = 'ID of the company owning this inventory record.'
     )
 
-class POSInventoryUpdateSchema(PosBaseSchema):
+class POSInventoryUpdateSchema(BaseSchema):
     '''
         Schema for updating a POS Inventory detail.
     '''
@@ -80,7 +76,7 @@ class POSInventoryUpdateSchema(PosBaseSchema):
         None, description = 'Total quantity of units.'
     )
 
-class POSInventoryResponseSchema(PosBaseSchema):
+class POSInventoryResponseSchema(BaseSchema):
     '''
         Response schema for a POS Inventory detail, including ID and timestamps.
     '''
@@ -95,6 +91,14 @@ class POSInventoryResponseSchema(PosBaseSchema):
     product_id: int = Field(
         ...,
         description = 'ID of the product being tracked.'
+    )
+    product_sku: str = Field(
+        ...,
+        description = 'SKU of the product being tracked.'
+    )
+    product_name: str = Field(
+        ...,
+        description = 'Name of the product being tracked.'
     )
     location: str = Field(
         ...,
@@ -124,7 +128,7 @@ class POSInventoryResponseSchema(PosBaseSchema):
         description = 'Timestamp when the record was created.'
     )
 
-class POSInventoryListResponseSchema(PosBaseSchema):
+class POSInventoryListResponseSchema(BaseSchema):
     '''
         Response schema for a list of POS Inventory items.
     '''
@@ -133,7 +137,7 @@ class POSInventoryListResponseSchema(PosBaseSchema):
 
 # --- POINT OF SALE (POS) SCHEMAS ---
 
-class PointOfSaleBaseSchema(PosBaseSchema):
+class PointOfSaleBaseSchema(BaseSchema):
     '''
         Base schema for Point of Sale (PDV) data.
     '''
@@ -178,7 +182,7 @@ class PointOfSaleCreateSchema(PointOfSaleBaseSchema):
         description = 'Initial inventory details to be associated with this POS.'
     )
 
-class PointOfSaleUpdateSchema(PosBaseSchema):
+class PointOfSaleUpdateSchema(BaseSchema):
     '''
         Schema for updating an existing Point of Sale. All fields are optional.
     '''
@@ -204,12 +208,16 @@ class PointOfSaleResponseSchema(PointOfSaleBaseSchema):
         [],
         description = 'Detailed local inventory associated with this Point of Sale.'
     )
+    photos: List[PhotoResponseSchema] = Field(
+        default = [], # Devuelve una lista vacía por defecto
+        description = 'Lista de fotos asociadas al Punto de Venta.'
+    )
     created_at: Optional[datetime] = Field(
         None,
         description = 'Timestamp when the record was created.'
     )
 
-class POSListResponseSchema(PosBaseSchema):
+class POSListResponseSchema(BaseSchema):
     '''
         Response schema for a paginated list of Points of Sale.
     '''

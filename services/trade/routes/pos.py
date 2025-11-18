@@ -2,7 +2,13 @@
     POS: routes handler
 '''
 from typing import Any, Dict
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    Request,
+    status
+)
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user

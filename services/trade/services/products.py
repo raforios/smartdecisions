@@ -4,7 +4,7 @@
 from typing import Any, Dict, List, Tuple, Type
 from pydantic import BaseModel
 from sqlalchemy import and_
-from sqlalchemy.orm import Session, DeclarativeBase
+from sqlalchemy.orm import Session, DeclarativeBase, joinedload
 from services.crud import (
     create_record,
     delete_record,
@@ -13,7 +13,7 @@ from services.crud import (
 )
 from services.exceptions import (
     RegisterAlreadyExistsError,
-    RegisterNotFoundError,
+    RegisterNotFoundError
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
@@ -363,7 +363,18 @@ async def get_sku_equivalency_by_id_service(
     message = f'Retrieving SKU Equivalency ID: {equivalency_id}'
     logger.info(message)
 
-    db_equivalency = get_record(db, SKUEquivalency, equivalency_id)
+    db_equivalency = db.query(SKUEquivalency).options(
+        joinedload(SKUEquivalency.product)
+    ).filter(SKUEquivalency.id == equivalency_id).first()
+
+    if not db_equivalency:
+        raise RegisterNotFoundError(
+            detail = f'SKU Equivalency with ID {equivalency_id} not found.'
+        )
+
+    if db_equivalency.product:
+        setattr(db_equivalency, 'product_sku', db_equivalency.product.sku)
+
     return db_equivalency
 
 @handle_service_errors('TRADE')
@@ -379,7 +390,13 @@ async def update_sku_equivalency_service(
     message = f'Attempting to update SKU Equivalency ID: {equivalency_id}'
     logger.info(message)
 
-    db_equivalency = get_record(db, SKUEquivalency, equivalency_id)
+    db_equivalency = db.query(SKUEquivalency).options(
+        joinedload(SKUEquivalency.product)
+    ).filter(SKUEquivalency.id == equivalency_id).first()
+
+    if not db_equivalency:
+        raise RegisterNotFoundError(detail = f'SKU Equivalency with ID {equivalency_id} not found.')
+
     old_values = sqlalchemy_object_as_dict(db_equivalency)
 
     update_dict = update_data.model_dump(exclude_unset = True)
@@ -395,6 +412,9 @@ async def update_sku_equivalency_service(
     db.add(db_equivalency)
     db.commit()
     db.refresh(db_equivalency)
+
+    if db_equivalency.product:
+        setattr(db_equivalency, 'product_sku', db_equivalency.product.sku)
 
     auditable_data = {
         'old_values': old_values,
@@ -420,7 +440,7 @@ async def delete_sku_equivalency_service(
 
     delete_record(
         db = db,
-        model = db_equivalency,
+        model = SKUEquivalency,
         record_id = equivalency_id
     )
     db.commit()
@@ -431,6 +451,36 @@ async def delete_sku_equivalency_service(
     }
 
     return equivalency_id, auditable_data
+
+@handle_service_errors('TRADE')
+async def get_sku_equivalencies_list_service(
+    db: Session,
+    skip: int,
+    limit: int
+) -> Tuple[List[SKUEquivalency], int]:
+    '''
+        Retrieves a paginated list of SKU Equivalencies.
+        Injects 'product_sku' into each record to satisfy the Response Schema
+        without modifying the SQLAlchemy Model.
+    '''
+    message = 'Attempting to retrieve SKU Equivalencies list.'
+    logger.info(message)
+
+    # Use joinedload to fetch the related Product efficiently
+    query = db.query(SKUEquivalency).options(
+        joinedload(SKUEquivalency.product)
+    )
+
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+
+    # Manually inject 'product_sku' into the instances so Pydantic can read it
+    for item in items:
+        if item.product:
+            # We assign the attribute dynamically to the instance
+            setattr(item, 'product_sku', item.product.sku)
+
+    return items, total
 
 # --- PRODUCT ASSIGNMENT POS SERVICES ---
 

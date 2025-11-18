@@ -68,23 +68,15 @@ def _fetch_attendances_from_localization(
     }
     payload = {'attendance_ids': attendance_ids}
 
-    try:
-        # NOTA: Asumimos que LOCALIZATION tendrá este endpoint para búsqueda masiva
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
+    # NOTA: Asumimos que LOCALIZATION tendrá este endpoint para búsqueda masiva
+    response = requests.post(url, json=payload, headers=headers, timeout=10)
+    response.raise_for_status()
 
-        # Esperamos una lista de objetos Attendance
-        attendances_list = response.json()
+    # Esperamos una lista de objetos Attendance
+    attendances_list = response.json()
 
-        # Convertimos a Diccionario para búsqueda rápida: { attendance_id: {data} }
-        return {item['id']: item for item in attendances_list}
-
-    except requests.RequestException as e:
-        error_msg = f'Error fetching data from LOCALIZATION: {e}'
-        logger.error(error_msg, exc_info = True)
-        # En caso de error, retornamos dict vacío para no romper todo el reporte,
-        # aunque los campos saldrán vacíos.
-        return {}
+    # Convertimos a Diccionario para búsqueda rápida: { attendance_id: {data} }
+    return {item['id']: item for item in attendances_list}
 
 # --- HELPERS PARA REFACTORIZACIÓN (Sales Report) ---
 

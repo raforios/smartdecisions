@@ -14,11 +14,12 @@ from mangum import Mangum
 
 import uvicorn
 
+from routes.common import router as common_router
+from routes.products import router as products_router
+from routes.pos import router as pos_router
 from routes.trade import router as trade_router
 from routes.impulses import router as impulses_router
 from routes.replenishments import router as replenishments_router
-from routes.products import router as products_router
-from routes.pos import router as pos_router
 from routes.reports import router as reports_router
 
 from services.api_exceptions import setup_exception_handlers
@@ -148,6 +149,7 @@ async def custom_swagger_ui():
         title = app.title + ' - Docs'
     )
 
+app.include_router(common_router, tags = ['Common'])
 app.include_router(products_router, tags = ['Products'])
 app.include_router(pos_router, tags = ['POS'])
 app.include_router(trade_router, tags = ['Trade'])

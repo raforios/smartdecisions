@@ -11,6 +11,7 @@ from services.crud import (
     update_record
 )
 from services.exceptions import (
+    InvalidInputError,
     RegisterAlreadyExistsError,
 )
 from services.logger_config import custom_logger as logger
@@ -23,6 +24,7 @@ from models.pos import (
     PointOfSale,
     PointOfSaleInventory
 )
+from models.products import ProductAssignmentPOS
 from schemas.pos import (
     POSFilterSchema,
     PointOfSaleUpdateSchema,
@@ -99,7 +101,9 @@ async def get_pos_by_id_service(
     message = f'Attempting to retrieve Point of Sale with ID: {pos_id}'
     logger.info(message)
 
-    eager_load_options = [joinedload(PointOfSale.inventory)]
+    eager_load_options = [
+        joinedload(PointOfSale.inventory).joinedload(PointOfSaleInventory.product)
+    ]
 
     db_pos = get_record(
         db = db,
@@ -217,17 +221,47 @@ async def create_inventory_item_service(
     # 1. Validar que el POS existe
     db_pos = get_record(db, PointOfSale, pos_id)
     company_id = db_pos.company_id
-
-    inventory_dict = inventory_data.model_dump()
-    sku = inventory_dict.pop('product_sku')
+    sku = inventory_data.product_sku
 
     # 2. Traducir SKU
     product_id = get_product_id_by_sku(db, company_id, sku)
 
-    # 3. Preparar datos para el modelo
+    # 3. Validar Asignación
+    assignment = db.query(ProductAssignmentPOS).filter(
+        ProductAssignmentPOS.point_of_sale_id == pos_id,
+        ProductAssignmentPOS.product_id == product_id,
+        ProductAssignmentPOS.status == 'ACTIVE'
+    ).first()
+
+    if not assignment:
+        error_msg = f'Validation failed: Product SKU {sku} (ID: {
+                    product_id}) is not assigned to POS ID: {pos_id}.'
+        logger.warning(error_msg)
+        raise InvalidInputError(
+            detail = f'El producto con SKU {sku} no está asignado (activo) a este Punto de Venta.'
+        )
+
+    # 4. Verificación Preventiva de Duplicados
+    existing_inventory = db.query(PointOfSaleInventory).filter(
+        PointOfSaleInventory.point_of_sale_id == pos_id,
+        PointOfSaleInventory.product_id == product_id,
+        PointOfSaleInventory.batch_number == inventory_data.batch_number,
+        PointOfSaleInventory.location == inventory_data.location
+    ).first()
+
+    if existing_inventory:
+        error_msg = f'An inventory item with this SKU ({sku}), Batch ({
+                inventory_data.batch_number}) and Location ({inventory_data.location
+                }) already exists for this POS.'
+        logger.error(error_msg)
+        raise RegisterAlreadyExistsError(detail = error_msg)
+
+    # 5. Crear el registro
+    inventory_dict = inventory_data.model_dump()
+    inventory_dict.pop('product_sku')
+
     inventory_dict['product_id'] = product_id
     inventory_dict['point_of_sale_id'] = pos_id
-    inventory_dict['company_id'] = company_id
 
     db_inventory = PointOfSaleInventory(**inventory_dict)
     db.add(db_inventory)
@@ -253,6 +287,8 @@ async def get_inventory_for_pos_service(
     # 2. Consultar inventario
     query = db.query(PointOfSaleInventory).filter(
         PointOfSaleInventory.point_of_sale_id == pos_id
+    ).options(
+        joinedload(PointOfSaleInventory.product)
     )
 
     total = query.count()
@@ -313,11 +349,14 @@ async def delete_inventory_item_service(
     logger.info(message)
     db_item = get_record(db, PointOfSaleInventory, inventory_id)
     old_values = sqlalchemy_object_as_dict(db_item)
+
     delete_record(
         db = db,
         model = PointOfSaleInventory,
         record_id = inventory_id
     )
+
+    db.commit()
 
     auditable_data = {
         'old_values': old_values,

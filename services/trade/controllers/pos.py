@@ -28,6 +28,34 @@ from schemas.pos import (
     POSInventoryUpdateSchema
 )
 
+def _map_inventory_item_to_schema(
+    item: Any
+) -> POSInventoryResponseSchema:
+    '''
+        Mapea manualmente el objeto de BD al schema de respuesta Pydantic.
+    '''
+    return POSInventoryResponseSchema(
+        **item.__dict__,
+        product_sku = item.product.sku if item.product else 'N/A',
+        product_name = item.product.name if item.product else 'N/A'
+    )
+
+def _map_pos_to_schema(
+    db_pos: Any
+) -> PointOfSaleResponseSchema:
+    '''
+        Mapea manualmente el objeto POS de BD al schema de respuesta Pydantic,
+        incluyendo su inventario anidado.
+    '''
+    pos_dict = db_pos.__dict__
+
+    pos_dict['inventory'] = [
+        _map_inventory_item_to_schema(item) for item in db_pos.inventory
+    ]
+
+    return PointOfSaleResponseSchema.model_validate(pos_dict, from_attributes = True)
+
+
 # --- POST Controllers ---
 @handle_service_errors('TRADE')
 async def create_point_of_sale_controller(
@@ -43,7 +71,7 @@ async def create_point_of_sale_controller(
         db = db,
         pos_data = pos_data
     )
-    return PointOfSaleResponseSchema.model_validate(db_pos, from_attributes = True)
+    return _map_pos_to_schema(db_pos)
 
 # --- GET Controllers ---
 @handle_service_errors('TRADE')
@@ -60,7 +88,7 @@ async def get_point_of_sale_controller(
         db = db,
         pos_id = pos_id
     )
-    return PointOfSaleResponseSchema.model_validate(db_pos, from_attributes = True)
+    return _map_pos_to_schema(db_pos)
 
 @handle_service_errors('TRADE')
 # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -79,7 +107,7 @@ async def get_pos_list_controller(
         db = db, filters = filters, skip = skip, limit = limit
     )
     serialized_items = [
-        PointOfSaleResponseSchema.model_validate(item, from_attributes=True) for item in items
+        _map_pos_to_schema(item) for item in items
     ]
     return POSListResponseSchema(items = serialized_items, total = total)
 
@@ -101,7 +129,7 @@ async def update_pos_controller(
         pos_id = pos_id,
         pos_data = pos_data
     )
-    return PointOfSaleResponseSchema.model_validate(db_pos, from_attributes = True)
+    return _map_pos_to_schema(db_pos)
 
 # --- DELETE Controllers ---
 @handle_service_errors('TRADE')
@@ -144,7 +172,7 @@ async def create_inventory_item_controller(
         pos_id = pos_id,
         inventory_data = inventory_data
     )
-    return POSInventoryResponseSchema.model_validate(db_item, from_attributes = True)
+    return _map_inventory_item_to_schema(db_item)
 
 @handle_service_errors('TRADE')
 async def get_inventory_for_pos_controller(
@@ -161,7 +189,7 @@ async def get_inventory_for_pos_controller(
         pos_id = pos_id
     )
     serialized_items = [
-        POSInventoryResponseSchema.model_validate(item, from_attributes=True) for item in items
+        _map_inventory_item_to_schema(item) for item in items
     ]
     return POSInventoryListResponseSchema(items = serialized_items, total = total)
 
@@ -181,7 +209,7 @@ async def update_inventory_item_controller(
         inventory_id = inventory_id,
         update_data = update_data
     )
-    return POSInventoryResponseSchema.model_validate(db_item, from_attributes = True)
+    return _map_inventory_item_to_schema(db_item)
 
 @handle_service_errors('TRADE')
 async def delete_inventory_item_controller(

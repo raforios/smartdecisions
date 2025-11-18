@@ -9,9 +9,7 @@ from services.products import (
     create_bulk_items_from_skus,
     get_product_id_by_sku,
 )
-from services.trade import (
-    prepare_file_to_upload
-)
+from services.common import prepare_file_to_upload
 from services.logger_config import custom_logger as logger
 from services.utils import (
     handle_service_errors,
