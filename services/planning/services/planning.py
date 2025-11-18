@@ -110,8 +110,8 @@ async def _perform_atomic_db_insertion_for_planning(
                     auth_token = auth_token
                 )
                 raise RegisterAlreadyExistsError(
-                    detail = f'''Planning with name {planning_key[0]} already exists for company
-                            ID {planning_key[1]}.'''
+                    detail = f'Planning with name {planning_key[0]} already exists for company ID {
+                        planning_key[1]}.'
                 )
 
             planning = Planning(**data['planning_data'])
@@ -301,8 +301,8 @@ async def delete_planning_by_id(
 
     if db_planning.status != PlanningStatus.ACTIVE:
         raise InvalidInputError(
-            detail = f'''Cannot delete planning with status {db_planning.status}.
-                    Only ACTIVE plannings can be deleted.'''
+            detail = f'Cannot delete planning with status {
+                db_planning.status}. Only ACTIVE plannings can be deleted.'
         )
 
     old_values = sqlalchemy_object_as_dict(db_planning)
@@ -346,8 +346,8 @@ async def assign_material_to_planning_detail(
     '''
         Assigns a material to a planning detail.
     '''
-    message = f'''Assigning material {material_data.material_id} to planning detail
-            {planning_detail_id}'''
+    message = f'Assigning material {material_data.material_id} to planning detail {
+        planning_detail_id}'
     logger.info(message)
     db_material = create_record(
         db,

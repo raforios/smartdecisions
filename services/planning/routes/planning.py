@@ -86,9 +86,9 @@ async def get_filtered_plannings_endpoint(
     '''
         Endpoint to search plannings by a single filter.
     '''
-    message = f'''User: {current_user}. Received request to filter plannings.
-            Filters: company_id = {filters.company_id}, team_id = {filters.team_id},
-            service_id = {filters.service_id}, planned_route_id = {filters.planned_route_id}'''
+    message = f'User: {current_user}. Received request to filter plannings. Filters: company_id = {
+        filters.company_id}, team_id = {filters.team_id}, service_id = {
+        filters.service_id}, planned_route_id = {filters.planned_route_id}'
     logger.info(message)
 
     return await get_filtered_plannings_controller(
@@ -115,8 +115,8 @@ async def get_daily_plannings_endpoint(
     '''
         Endpoint to get plannings by date.
     '''
-    message = f'''User: {current_user}. Received request to get planning details
-            for date range from {start_date} to {end_date}.'''
+    message = f'User: {current_user}. Received request to get planning details for date range from {
+            start_date} to {end_date}.'
     logger.info(message)
     return await get_daily_plannings_controller(
         db = db,
@@ -218,8 +218,8 @@ async def get_weekly_plannings_endpoint(
     '''
         Endpoint to get plannings by week number.
     '''
-    message = f'''User: {current_user}. Received request to get weekly plannings
-            for week {week_number}.'''
+    message = f'User: {current_user}. Received request to get weekly plannings for week {
+        week_number}.'
     logger.info(message)
     return await get_weekly_plannings_controller(
         db = db,
@@ -245,8 +245,8 @@ async def create_planning_detail_endpoint(
     '''
         Endpoint to create a new planning detail.
     '''
-    message = f'''User: {current_user}. Received request to create planning
-            detail for planning ID: {planning_id}'''
+    message = f'User: {current_user}. Received request to create planning detail for planning ID: {
+            planning_id}'
     logger.info(message)
 
     detail_with_id = PlanningDetailCreateSchema(
@@ -302,8 +302,8 @@ async def get_materials_endpoint(
     '''
         Endpoint to retrieve materials for a planning detail.
     '''
-    message = f'''User: {current_user}. Received request to get materials for planning
-            detail ID: {planning_detail_id}'''
+    message = f'User: {current_user}. Received request to get materials for planning detail ID: {
+            planning_detail_id}'
     logger.info(message)
     return await get_materials_controller(
         db = db,
@@ -330,8 +330,8 @@ async def assign_material_endpoint(
     '''
         Endpoint to assign a new material.
     '''
-    message = f'''User: {current_user}. Received request to assign material to planning detail
-            ID: {planning_detail_id} and planning ID: {planning_id}'''
+    message = f'User: {current_user}. Received request to assign material to planning detail ID: {
+        planning_detail_id} and planning ID: {planning_id}'
     logger.info(message)
     return await assign_material_controller(
         db = db,
@@ -358,8 +358,8 @@ async def update_material_endpoint(
     '''
         Endpoint to update a material assignment.
     '''
-    message = f'''User: {current_user}. Received request to update material
-            ID: {material_assignment_id}'''
+    message = f'User: {current_user}. Received request to update material ID: {
+        material_assignment_id}'
     logger.info(message)
     return await update_material_controller(
         db = db,
@@ -387,8 +387,8 @@ async def update_planning_detail_endpoint(
     '''
         Endpoint to update a planning detail.
     '''
-    message = f'''User: {current_user}. Received request to update planning detai
-            ID: {planning_detail_id} for planning ID: {planning_id}'''
+    message = f'User: {current_user}. Received request to update planning detai ID: {
+        planning_detail_id} for planning ID: {planning_id}'
     logger.info(message)
 
     return await update_planning_detail_controller(
@@ -414,8 +414,8 @@ async def delete_material_endpoint(
     '''
         Endpoint to delete a material assignment.
     '''
-    message = f'''User: {current_user}. Received request to delete material
-            ID: {material_assignment_id}'''
+    message = f'User: {current_user}. Received request to delete material ID: {
+        material_assignment_id}'
     logger.info(message)
     return await delete_material_controller(
         db = db,
@@ -440,8 +440,8 @@ async def delete_planning_detail_endpoint(
     '''
         Endpoint to delete a planning detail.
     '''
-    message = f'''User: {current_user}. Received request to delete planning detail
-            ID:{planning_detail_id} and ID plan: {planning_id}'''
+    message = f'User: {current_user}. Received request to delete planning detail ID:{
+        planning_detail_id} and ID plan: {planning_id}'
     logger.info(message)
     return await delete_planning_detail_controller(
         db = db,
