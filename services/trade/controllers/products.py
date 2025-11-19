@@ -1,11 +1,17 @@
 '''
     Products Controllers
 '''
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 from fastapi import Request
-from services.utils import handle_service_errors
+from services.logger_config import custom_logger as logger
+from services.utils import (
+    generic_bulk_controller_wrapper,
+    handle_service_errors
+)
 from services.products import (
+    bulk_create_products_service,
+    bulk_create_sku_equivalencies_service,
     create_product_assignment_service,
     create_product_service,
     create_sku_equivalency_service,
@@ -142,6 +148,34 @@ async def delete_product_controller(
         'id': deleted_id
     }
 
+@handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+async def bulk_upload_products_controller(
+    db: Session,
+    request: Request,
+    current_user: str,
+    file_name: str,
+    delimiter: Optional[str] = ',',
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+        Controller to handle the bulk upload of Products from a file.
+    '''
+    message = f'Starting bulk upload for Products from file: {file_name}'
+    logger.info(message)
+
+    return await generic_bulk_controller_wrapper(
+        db = db,
+        request = request,
+        current_user = current_user,
+        file_name = file_name,
+        microservice_name = 'TRADE',
+        entity_name = 'Product',
+        service_func = bulk_create_products_service,
+        delimiter = delimiter,
+        auth_token = auth_token
+    )
+
 # --- SKU EQUIVALENCY Controllers ---
 
 @handle_service_errors('TRADE')
@@ -247,6 +281,35 @@ async def get_sku_equivalencies_list_controller(
         'items': result_items,
         'total': total
     }
+
+@handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+async def bulk_upload_sku_equivalencies_controller(
+    db: Session,
+    request: Request,
+    current_user: str,
+    file_name: str,
+    delimiter: Optional[str] = ',',
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+        Controller to handle the bulk upload of SKU Equivalencies from a file.
+        Uses the localization pattern for manual logging.
+    '''
+    message = f'Starting bulk upload for SKU Equivalencies from file: {file_name}'
+    logger.info(message)
+
+    return await generic_bulk_controller_wrapper(
+        db = db,
+        request = request,
+        current_user = current_user,
+        file_name = file_name,
+        microservice_name = 'TRADE',
+        entity_name = 'SKUEquivalency',
+        service_func = bulk_create_sku_equivalencies_service,
+        delimiter = delimiter,
+        auth_token = auth_token
+    )
 
 # --- PRODUCT ASSIGNMENT POS Controllers ---
 

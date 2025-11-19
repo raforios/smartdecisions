@@ -10,9 +10,9 @@ import json
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Type
 import requests as req
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile, status
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
@@ -491,3 +491,89 @@ async def perform_bulk_upload(
         'message': 'Bulk upload successful.',
         **stats
     }
+
+def generic_bulk_processor(
+    rows: List[Dict[str, Any]],
+    bulk_schema: Type[BaseModel]
+) -> List[BaseModel]:
+    '''
+        Generic processor function to validate raw data against the bulk schema.
+        Validates row-by-row, logging warnings for invalid data, and returns
+        a list of valid Pydantic objects.
+    '''
+    processed_data = []
+    for row in rows:
+        try:
+            # Pydantic validation of the row against the expected schema
+            processed_data.append(bulk_schema.model_validate(row))
+        except ValidationError as e:
+            error_msg = f'Skipping invalid row during bulk processing: {row}. Error: {e}'
+            logger.warning(error_msg)
+            # Continues processing the rest of the list
+            continue
+
+    return processed_data
+
+# pylint: disable=too-many-arguments, too-many-locals
+async def generic_bulk_controller_wrapper(
+    db: Session,
+    request: Request,
+    current_user: str,
+    file_name: str,
+    microservice_name: str,
+    entity_name: str,
+    service_func: Callable,
+    delimiter: Optional[str] = ',',
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+        Generic controller wrapper for bulk upload endpoints.
+        Handles logging, status tracking, audit event generation, and usage logging.
+    '''
+    start_time = time.perf_counter()
+    status_code = status.HTTP_201_CREATED
+    result: Dict[str, Any] = {}
+
+    try:
+        # 1. Call the specific service implementation (e.g., bulk_create_products_service)
+        result = await service_func(
+            db = db,
+            file_name = file_name,
+            delimiter = delimiter,
+            auth_token = auth_token
+        )
+
+        # 2. Audit Event
+        audit_event_data = {
+            'microservice': microservice_name,
+            'entity_name': entity_name,
+            'entity_id': 0, # Cannot assign ID to a bulk operation
+            'action': 'BULK_CREATE',
+            'user_id': current_user,
+            'old_values': None,
+            'new_values': json.dumps(result)
+        }
+        asyncio.create_task(send_audit_event(audit_event_data))
+
+    except HTTPException as e:
+        status_code = e.status_code
+        result = {'detail': str(e.detail)}
+        raise e
+
+    finally:
+        # 3. Usage Log
+        end_time = time.perf_counter()
+        log_data = UsageLogData(
+            microservice = microservice_name,
+            endpoint = request.url.path,
+            method = request.method,
+            status_code = status_code,
+            ip_address = request.client.host,
+            user_app = current_user,
+            request_body = {'file_name': file_name},
+            response_body = result,
+            response_time_ms = int((end_time - start_time) * 1000)
+        )
+        asyncio.create_task(send_usage_log(log_data.model_dump()))
+
+    return result

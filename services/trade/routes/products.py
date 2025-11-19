@@ -1,10 +1,11 @@
 '''
     Products: routes handler
 '''
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     Query,
     Request,
     status
@@ -14,6 +15,8 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
 from controllers.products import (
+    bulk_upload_products_controller,
+    bulk_upload_sku_equivalencies_controller,
     create_product_assignment_controller,
     create_product_controller,
     create_sku_equivalency_controller,
@@ -106,6 +109,41 @@ async def get_products_list_endpoint(
         current_user = current_user
     )
 
+# --- BULK PRODUCT ---
+
+@router.post(
+    '/bulk-upload',
+    response_model = Dict[str, Any],
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Bulk upload Products with atomic SKU generation'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def bulk_upload_products_endpoint(
+    request: Request,
+    file_name: str = Query(...,
+            description = 'Name of the file to process (from FILES microservice).'),
+    delimiter: Optional[str] = Query(
+        ',', description = 'The delimiter used in the file. Defaults to a comma (,).'
+    ),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk upload of Product data from a file, generating SKUs atomically.
+    '''
+    message = f'User: {current_user}. Received request for bulk upload from file: {file_name}'
+    logger.info(message)
+
+    return await bulk_upload_products_controller(
+        db = db,
+        file_name = file_name,
+        delimiter = delimiter,
+        auth_token = auth_token,
+        request = request,
+        current_user = current_user
+    )
+
 # --- 2. STATIC SKU EQUIVALENCY ENDPOINTS ---
 
 @router.post(
@@ -156,6 +194,41 @@ async def get_sku_equivalencies_list_endpoint(
         db = db,
         skip = skip,
         limit = limit,
+        request = request,
+        current_user = current_user
+    )
+
+# --- BULK SKU EQUIVALENCY ---
+
+@router.post(
+    '/sku-equivalencies/bulk-upload',
+    response_model = Dict[str, Any],
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Bulk upload SKU Equivalencies from a file'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def bulk_upload_sku_equivalencies_endpoint(
+    request: Request,
+    file_name: str = Query(...,
+            description = 'Name of the file to process (from FILES microservice).'),
+    delimiter: Optional[str] = Query(
+        ',', description = 'The delimiter used in the file. Defaults to a comma (,).'
+    ),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk upload of SKU Equivalency data from a file.
+    '''
+    message = f'User: {current_user}. Received request for bulk upload from file: {file_name}'
+    logger.info(message)
+
+    return await bulk_upload_sku_equivalencies_controller(
+        db = db,
+        file_name = file_name,
+        delimiter = delimiter,
+        auth_token = auth_token,
         request = request,
         current_user = current_user
     )

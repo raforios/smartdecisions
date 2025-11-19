@@ -238,3 +238,51 @@ class POSFilterSchema(BaseModel):
             'Pydantic config.'
         '''
         arbitrary_types_allowed = True
+
+class PointOfSaleBulkCreateSchema(BaseSchema):
+    '''
+        Schema for a single row in the Point of Sale bulk upload file.
+    '''
+    company_id: int
+    name: str = Field(
+        ...,
+        max_length = 255,
+        description = 'Name of the POS.'
+    )
+    external_code: Optional[str] = Field(
+        None,
+        max_length = 50,
+        description = 'Optional external code for the POS.'
+    )
+    address: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Physical address of the POS.'
+    )
+    is_active: Optional[bool] = Field(
+        True,
+        description = 'Status of the POS.'
+    )
+    latitude: float = Field(
+        ...,
+        description = 'Geographical latitude of the POS.'
+    )
+    longitude: float = Field(
+        ...,
+        description = 'Geographical longitude of the POS.'
+    )
+
+class POSInventoryBulkCreateSchema(POSInventoryBaseSchema):
+    '''
+        Schema for a single row in the POS Inventory bulk upload file.
+        Includes identifiers for the POS and Company.
+    '''
+    company_id: int = Field(
+        ...,
+        description = 'ID of the company that owns the POS and product.'
+    )
+    pos_external_code: str = Field(
+        ...,
+        max_length = 50,
+        description = 'External code of the POS where the inventory is located.'
+    )

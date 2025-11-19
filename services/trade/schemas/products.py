@@ -117,6 +117,44 @@ class ProductFilterSchema(BaseModel):
         '''
         arbitrary_types_allowed = True
 
+class ProductBulkCreateSchema(BaseSchema):
+    '''
+        Schema for a single row in the Product bulk upload file.
+        Contains fields necessary for atomic SKU generation.
+    '''
+    company_id: int
+    name: str = Field(
+        ...,
+        max_length = 255,
+        description = 'Name of the product.'
+    )
+    description: Optional[str] = Field(
+        None,
+        max_length = 500,
+        description = 'Detailed description of the product.'
+    )
+    category_1_code: str = Field(
+        ...,
+        max_length = 10,
+        description = 'First category code (XXX segment, mandatory).'
+    )
+    category_2_code: Optional[str] = Field(
+        '000',
+        max_length = 10,
+        description = 'Second category code (YYY segment, optional).'
+    )
+    category_3_code: Optional[str] = Field(
+        '000',
+        max_length = 10,
+        description = 'Third category code (ZZZ segment, optional).'
+    )
+    category_4_code: Optional[str] = Field(
+        '000',
+        max_length = 10,
+        description = 'Fourth category code (WWW segment, optional).'
+    )
+    status: Optional[str] = Field('ACTIVE', max_length = 20)
+
 # --- SKU EQUIVALENCY SCHEMAS ---
 class SKUEquivalencyBaseSchema(BaseSchema):
     '''
@@ -176,6 +214,27 @@ class SKUEquivalencyListResponseSchema(BaseSchema):
     '''
     items: List[SKUEquivalencyResponseSchema]
     total: int
+
+class SKUEquivalencyBulkItemSchema(BaseSchema):
+    '''
+        Schema for a single row in the SKU Equivalency bulk upload file.
+    '''
+    company_id: int
+    product_sku: str = Field(
+        ...,
+        description = 'Internal SKU code to map.'
+    )
+    external_system_name: str = Field(
+        ...,
+        max_length = 100,
+        description = 'Name of the external system.'
+    )
+    external_product_code: str = Field(
+        ...,
+        max_length = 50,
+        description = 'Code of the product in the external system.'
+    )
+    status: Optional[str] = Field('ACTIVE', max_length = 20)
 
 # --- PRODUCT ASSIGNMENT POS SCHEMAS ---
 

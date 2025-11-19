@@ -1,9 +1,11 @@
 '''
     Business Logic for POS.
 '''
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from services.products import get_product_id_by_sku
 from services.crud import (
     delete_record,
@@ -16,17 +18,21 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
+    generic_bulk_processor,
     handle_service_errors,
     audit_event,
+    perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
 from models.pos import (
     PointOfSale,
     PointOfSaleInventory
 )
-from models.products import ProductAssignmentPOS
+from models.products import Product, ProductAssignmentPOS
 from schemas.pos import (
     POSFilterSchema,
+    POSInventoryBulkCreateSchema,
+    PointOfSaleBulkCreateSchema,
     PointOfSaleUpdateSchema,
     PointOfSaleCreateSchema,
     POSInventoryCreateSchema,
@@ -203,6 +209,90 @@ async def delete_pos_service(
 
     return pos_id, auditable_data
 
+# --- POS BULK HELPERS ---
+
+async def _insert_pos_bulk_data(
+    db: Session,
+    processed_data: List[PointOfSaleBulkCreateSchema],
+    file_name: str, # pylint: disable=unused-argument
+    auth_token: str # pylint: disable=unused-argument
+) -> Dict[str, Any]:
+    '''
+        Handles the insertion of Point of Sale records in bulk.
+        Checks for unique constraints (name/external_code) and inserts valid records.
+    '''
+    pos_created = 0
+    records_to_insert = []
+
+    if not processed_data:
+        return {'message': 'No valid POS data to insert.', 'created_records': 0}
+
+    for item in processed_data:
+        try:
+            # Check for name/external_code conflicts before bulk insert attempt
+            existing_pos_query = db.query(PointOfSale).filter(
+                PointOfSale.company_id == item.company_id,
+                # Check for either name or external_code conflict
+                (PointOfSale.name == item.name) |
+                (PointOfSale.external_code == item.external_code if item.external_code else False)
+            )
+
+            if existing_pos_query.first():
+                error_msg = f'POS conflict detected (name: {item.name}, code: {
+                    item.external_code}) for company {item.company_id}. Skipping record.'
+                logger.warning(error_msg)
+                continue
+
+            # Convert to Model format
+            records_to_insert.append(PointOfSale(**item.model_dump()))
+            pos_created += 1
+
+        except (SQLAlchemyError, InvalidInputError) as e:
+            error_msg = f'Unexpected error during POS bulk insertion for {item.name}: {e}'
+            logger.error(error_msg, exc_info = True)
+            continue
+
+    # Perform bulk insertion
+    if records_to_insert:
+        try:
+            db.add_all(records_to_insert)
+            # IntegrityError will be caught by perform_bulk_upload if we commit here
+        except IntegrityError as e:
+            error_msg = f'Database integrity error during POS bulk insert: {e}'
+            logger.error(error_msg, exc_info = True)
+            # Re-raise to trigger rollback by perform_bulk_upload
+            raise RegisterAlreadyExistsError(
+                detail = 'A unique constraint was violated during bulk insert. Duplicate codes.'
+            ) from e
+
+
+    return {
+        'message': 'Point of Sale bulk insertion completed.',
+        'created_records': pos_created
+    }
+
+@handle_service_errors('TRADE')
+async def bulk_create_points_of_sale_service(
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str,
+) -> Dict[str, Any]:
+    '''
+        Service wrapper function to handle the bulk upload of Points of Sale.
+    '''
+    result = await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = PointOfSaleBulkCreateSchema,
+        processor_func = generic_bulk_processor,
+        inserter_func = _insert_pos_bulk_data,
+        delimiter = delimiter
+    )
+
+    return result
+
 # --- INVENTRORY ---
 
 @handle_service_errors('TRADE')
@@ -364,3 +454,121 @@ async def delete_inventory_item_service(
     }
 
     return inventory_id, auditable_data
+
+# --- INVENTORY BULK HELPERS ---
+
+# pylint: disable=too-many-locals, duplicate-code
+async def _insert_pos_inventory_bulk_data(
+    db: Session,
+    processed_data: List[POSInventoryBulkCreateSchema],
+    file_name: str, # pylint: disable=unused-argument
+    auth_token: str # pylint: disable=unused-argument
+) -> Dict[str, Any]:
+    '''
+        Handles the transactional insertion of POS Inventory records in bulk.
+        Performs dual lookup: POS external code -> POS ID, and Product SKU -> Product ID.
+    '''
+    inventory_created = 0
+    records_to_insert = []
+
+    if not processed_data:
+        return {'message': 'No valid inventory data to insert.', 'created_records': 0}
+
+    company_id = processed_data[0].company_id
+
+    # 1. Pre-fetch and map POS IDs
+    pos_codes = {item.pos_external_code for item in processed_data}
+    pos_to_id_map = {
+        pos.external_code: pos.id
+        for pos in db.query(PointOfSale).filter(
+            PointOfSale.company_id == company_id,
+            PointOfSale.external_code.in_(pos_codes)
+        ).all()
+    }
+
+    # 2. Pre-fetch and map Product IDs
+    skus = {item.product_sku for item in processed_data}
+    sku_to_id_map = {
+        product.sku: product.id
+        for product in db.query(Product).filter(
+            Product.company_id == company_id,
+            Product.sku.in_(skus)
+        ).all()
+    }
+
+    for item in processed_data:
+        pos_id = pos_to_id_map.get(item.pos_external_code)
+        product_id = sku_to_id_map.get(item.product_sku)
+
+        if not pos_id:
+            error_msg = f'POS external code {item.pos_external_code
+                        } not found. Skipping inventory record.'
+            logger.warning(error_msg)
+            continue
+
+        if not product_id:
+            error_msg = f'Product SKU {item.product_sku} not found. Skipping inventory record.'
+            logger.warning(error_msg)
+            continue
+
+        try:
+            # 3. Convert Pydantic to Model format
+            # Excluir campos usados solo para lookup
+            record_dict = item.model_dump(exclude = {'product_sku', 'pos_external_code'})
+
+            # Convertir la fecha de string a objeto datetime
+            record_dict['expiration_date'] = datetime.strptime(
+                record_dict['expiration_date'], '%Y-%m-%d'
+            )
+
+            record_dict['point_of_sale_id'] = pos_id
+            record_dict['product_id'] = product_id
+
+            records_to_insert.append(PointOfSaleInventory(**record_dict))
+            inventory_created += 1
+
+        except ValueError as e:
+            error_msg = f'Date format error for {item.product_sku} on POS {
+                item.pos_external_code}. Expected YYYY-MM-DD. Error: {e}. Skipping record.'
+            logger.error(error_msg)
+            continue
+        except SQLAlchemyError as e:
+            # Captura errores de unicidad/integridad que permiten continuar el loop
+            error_msg = f'DB error during inventory insert for POS {item.pos_external_code}, SKU {
+                item.product_sku}. Error: {e}. Skipping record.'
+            logger.warning(error_msg)
+            continue
+
+    # 4. Perform bulk insertion
+    if records_to_insert:
+        db.add_all(records_to_insert)
+
+    return {
+        'message': 'POS Inventory bulk insertion completed.',
+        'created_records': inventory_created
+    }
+
+@handle_service_errors('TRADE')
+async def bulk_create_pos_inventory_service(
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str,
+) -> Dict[str, Any]:
+    '''
+        Service wrapper function to handle the bulk upload of POS Inventory.
+    '''
+    message = 'Starting POS Inventory bulk upload process.'
+    logger.info(message)
+
+    result = await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = POSInventoryBulkCreateSchema,
+        processor_func = generic_bulk_processor,
+        inserter_func = _insert_pos_inventory_bulk_data,
+        delimiter = delimiter
+    )
+
+    return result

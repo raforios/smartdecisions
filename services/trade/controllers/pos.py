@@ -1,11 +1,17 @@
 '''
     POS Controllers
 '''
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 from fastapi import Request
-from services.utils import handle_service_errors
+from services.logger_config import custom_logger as logger
+from services.utils import (
+    generic_bulk_controller_wrapper,
+    handle_service_errors
+)
 from services.pos import (
+    bulk_create_points_of_sale_service,
+    bulk_create_pos_inventory_service,
     create_pos_with_inventory_service,
     delete_pos_service,
     get_pos_by_id_service,
@@ -154,6 +160,34 @@ async def delete_pos_controller(
         'id': deleted_id
     }
 
+@handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, duplicate-code
+async def bulk_upload_pos_controller(
+    db: Session,
+    request: Request,
+    current_user: str,
+    file_name: str,
+    delimiter: Optional[str] = ',',
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+        Controller to handle the bulk upload of Points of Sale from a file.
+    '''
+    message = f'Starting bulk upload for POS from file: {file_name}'
+    logger.info(message)
+
+    return await generic_bulk_controller_wrapper(
+        db = db,
+        request = request,
+        current_user = current_user,
+        file_name = file_name,
+        microservice_name = 'TRADE',
+        entity_name = 'PointOfSale',
+        service_func = bulk_create_points_of_sale_service,
+        delimiter = delimiter,
+        auth_token = auth_token
+    )
+
 # --- INVENTORY ---
 
 @handle_service_errors('TRADE')
@@ -232,3 +266,29 @@ async def delete_inventory_item_controller(
         'message': f'Inventory item with ID {deleted_id} deleted successfully.',
         'id': deleted_id
     }
+
+@handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+async def bulk_upload_pos_inventory_controller(
+    db: Session,
+    request: Request,
+    current_user: str,
+    file_name: str,
+    delimiter: Optional[str] = ',',
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+        Controller to handle the bulk upload of POS Inventory from a file.
+    '''
+    # Llamada al wrapper genérico
+    return await generic_bulk_controller_wrapper(
+        db = db,
+        request = request,
+        current_user = current_user,
+        file_name = file_name,
+        microservice_name = 'TRADE',
+        entity_name = 'POSInventory',
+        service_func = bulk_create_pos_inventory_service,
+        delimiter = delimiter,
+        auth_token = auth_token
+    )

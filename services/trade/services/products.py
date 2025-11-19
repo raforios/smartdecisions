@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple, Type
 from pydantic import BaseModel
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, DeclarativeBase, joinedload
+from sqlalchemy.exc import SQLAlchemyError
 from services.crud import (
     create_record,
     delete_record,
@@ -13,12 +14,15 @@ from services.crud import (
 )
 from services.exceptions import (
     RegisterAlreadyExistsError,
-    RegisterNotFoundError
+    RegisterNotFoundError,
+    InvalidInputError
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
+    generic_bulk_processor,
     handle_service_errors,
     audit_event,
+    perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
 from models.products import (
@@ -31,11 +35,13 @@ from schemas.products import (
     ProductAssignmentPOSCreateSchema,
     ProductAssignmentPOSFilterSchema,
     ProductAssignmentPOSUpdateSchema,
+    ProductBulkCreateSchema,
     ProductCreateSchema,
     ProductFilterSchema,
     ProductUpdateSchema,
     SKUEquivalencyCreateSchema,
-    SKUEquivalencyUpdateSchema
+    SKUEquivalencyUpdateSchema,
+    SKUEquivalencyBulkItemSchema
 )
 
 async def create_bulk_items_from_skus(
@@ -315,6 +321,94 @@ async def delete_product_service(
 
     return product_id, auditable_data
 
+# --- PRODUCT BULK HELPERS ---
+
+async def _insert_product_bulk_data(
+    db: Session,
+    processed_data: List[ProductBulkCreateSchema],
+    file_name: str, # pylint: disable=unused-argument
+    auth_token: str # pylint: disable=unused-argument
+) -> Dict[str, Any]:
+    '''
+        Handles the transactional insertion of Product records, performing
+        atomic SKU generation for each record.
+    '''
+    products_created = 0
+
+    if not processed_data:
+        return {'message': 'No valid product data to insert.', 'created_records': 0}
+
+    # Use a nested transaction for atomic SKU generation per product
+    for item in processed_data:
+        try:
+            # Check for name conflict before transaction
+            if db.query(Product).filter(
+                Product.company_id == item.company_id,
+                Product.name == item.name
+            ).first():
+                error_msg = f'Product with name {item.name} already exists for company {
+                    item.company_id}. Skipping record.'
+                logger.warning(error_msg)
+                continue
+
+            with db.begin_nested():
+                # 1. Generate atomic SKU (must be inside nested transaction)
+                final_sku = _generate_next_sku_sequence(
+                    db,
+                    item.company_id,
+                    item.category_1_code,
+                    item.category_2_code,
+                    item.category_3_code,
+                    item.category_4_code
+                )
+
+                # 2. Create the Product record
+                product_dict = item.model_dump()
+                product_dict['sku'] = final_sku
+
+                db_product = Product(**product_dict)
+                db.add(db_product)
+
+                # Flush to ensure SKU Sequencer and Product are committed together
+                db.flush()
+                products_created += 1
+
+        except RegisterAlreadyExistsError as e:
+            error_msg = f'Product creation failed (Integrity): {e.detail}'
+            logger.warning(error_msg)
+            continue
+        except (SQLAlchemyError, InvalidInputError) as e:
+            error_msg = f'Unexpected error during Product bulk insertion for {item.name}: {e}'
+            logger.error(error_msg, exc_info = True)
+            continue
+
+    return {
+        'message': 'Product bulk insertion completed.',
+        'created_records': products_created
+    }
+
+@handle_service_errors('TRADE')
+async def bulk_create_products_service(
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str,
+) -> Dict[str, Any]:
+    '''
+        Service wrapper function to handle the bulk upload of Products.
+    '''
+    result = await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = ProductBulkCreateSchema,
+        processor_func = generic_bulk_processor,
+        inserter_func = _insert_product_bulk_data,
+        delimiter = delimiter
+    )
+
+    return result
+
 # --- SKU EQUIVALENCY SERVICES ---
 
 @handle_service_errors('TRADE')
@@ -481,6 +575,88 @@ async def get_sku_equivalencies_list_service(
             setattr(item, 'product_sku', item.product.sku)
 
     return items, total
+
+# --- SKU EQUIVALENCY BULK HELPERS ---
+
+async def _insert_sku_equivalency_bulk_data(
+    db: Session,
+    processed_data: List[SKUEquivalencyBulkItemSchema],
+    file_name: str, # pylint: disable=unused-argument
+    auth_token: str # pylint: disable=unused-argument
+) -> Dict[str, Any]:
+    '''
+        Handles the transactional insertion of SKU equivalency records.
+        Translates product_sku to product_id and inserts in bulk.
+    '''
+    inserted_count = 0
+    records_to_insert = []
+
+    if not processed_data:
+        return {'message': 'No valid data to insert.', 'created_records': 0}
+
+    # 1. Pre-fetch all necessary Product IDs for optimization
+    company_id = processed_data[0].company_id
+    skus = {item.product_sku for item in processed_data}
+
+    # Map from SKU string to Product ID integer
+    sku_to_id_map = {
+        product.sku: product.id
+        for product in db.query(Product).filter(
+            Product.company_id == company_id,
+            Product.sku.in_(skus)
+        ).all()
+    }
+
+    for item in processed_data:
+        product_id = sku_to_id_map.get(item.product_sku)
+
+        if not product_id:
+            error_msg = f'SKU {item.product_sku} not found for company {company_id
+                    }. Skipping record.'
+            logger.warning(error_msg)
+            continue
+
+        # 2. Convert to Model format
+        record_dict = item.model_dump(exclude = {'product_sku'})
+        record_dict['product_id'] = product_id
+
+        records_to_insert.append(SKUEquivalency(**record_dict))
+        inserted_count += 1
+
+    # 3. Perform bulk insert (using SQLAlchemy's session.add_all)
+    if records_to_insert:
+        db.add_all(records_to_insert)
+
+    return {
+        'message': 'SKU Equivalency insertion completed.',
+        'created_records': inserted_count
+    }
+
+@handle_service_errors('TRADE')
+async def bulk_create_sku_equivalencies_service(
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str,
+) -> Dict[str, Any]:
+    '''
+        Service wrapper function to handle the bulk upload of SKU equivalencies.
+        It uses the generic utility to process the file and insert data.
+    '''
+    message = 'Starting SKU Equivalencies bulk upload process.'
+    logger.info(message)
+
+    result = await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = SKUEquivalencyBulkItemSchema,
+        processor_func = generic_bulk_processor,
+        inserter_func = _insert_sku_equivalency_bulk_data,
+        delimiter = delimiter
+    )
+
+    return result
 
 # --- PRODUCT ASSIGNMENT POS SERVICES ---
 

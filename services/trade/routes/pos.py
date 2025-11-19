@@ -1,10 +1,11 @@
 '''
     POS: routes handler
 '''
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     Query,
     Request,
     status
@@ -14,6 +15,8 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
 from controllers.pos import (
+    bulk_upload_pos_controller,
+    bulk_upload_pos_inventory_controller,
     create_point_of_sale_controller,
     delete_pos_controller,
     get_point_of_sale_controller,
@@ -169,6 +172,41 @@ async def delete_pos_endpoint(
         current_user = current_user
     )
 
+# --- BULK POS ---
+
+@router.post(
+    '/bulk-upload',
+    response_model = Dict[str, Any],
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Bulk upload Points of Sale from a file'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+async def bulk_upload_pos_endpoint(
+    request: Request,
+    file_name: str = Query(...,
+            description = 'Name of the file to process (from FILES microservice).'),
+    delimiter: Optional[str] = Query(
+        ',', description = 'The delimiter used in the file. Defaults to a comma (,).'
+    ),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk upload of Point of Sale data from a file.
+    '''
+    message = f'User: {current_user}. Received request for POS bulk upload from file: {file_name}'
+    logger.info(message)
+
+    return await bulk_upload_pos_controller(
+        db = db,
+        file_name = file_name,
+        delimiter = delimiter,
+        auth_token = auth_token,
+        request = request,
+        current_user = current_user
+    )
+
 # --- 2. POS INVENTORY ENDPOINTS ---
 
 @router.post(
@@ -270,6 +308,42 @@ async def delete_inventory_item_endpoint(
     return await delete_inventory_item_controller(
         inventory_id = inventory_id,
         db = db,
+        request = request,
+        current_user = current_user
+    )
+
+# --- BULK INVENTORY ---
+
+@router.post(
+    '/inventory/bulk-upload',
+    response_model = Dict[str, Any],
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Bulk upload POS Inventory items'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+async def bulk_upload_pos_inventory_endpoint(
+    request: Request,
+    file_name: str = Query(...,
+            description = 'Name of the file to process (from FILES microservice).'),
+    delimiter: Optional[str] = Query(
+        ',', description = 'The delimiter used in the file. Defaults to a comma (,).'
+    ),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk upload of detailed POS Inventory data from a file.
+    '''
+    message = f'User: {current_user}. Received request for POS Inventory bulk upload from file: {
+        file_name}'
+    logger.info(message)
+
+    return await bulk_upload_pos_inventory_controller(
+        db = db,
+        file_name = file_name,
+        delimiter = delimiter,
+        auth_token = auth_token,
         request = request,
         current_user = current_user
     )
