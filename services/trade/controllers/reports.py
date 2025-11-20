@@ -8,6 +8,8 @@ from services.utils import handle_service_errors
 from services.reports import (
     get_compliance_report_service,
     get_inventory_alerts_service,
+    get_merchandising_report_service,
+    get_photographic_report_service,
     get_sales_report_service
 )
 from schemas.reports import (
@@ -15,6 +17,10 @@ from schemas.reports import (
     ComplianceReportResponseSchema,
     InventoryAlertFilterSchema,
     InventoryAlertResponseSchema,
+    MerchandisingFilterSchema,
+    MerchandisingReportResponseSchema,
+    PhotoFilterSchema,
+    PhotographicReportResponseSchema,
     SalesReportFilterSchema,
     SalesReportResponseSchema
 )
@@ -75,4 +81,32 @@ async def get_sales_report_controller(
         db = db,
         filters = filters,
         auth_token = auth_token
+    )
+
+# --- MERCHANDISING REPORT CONTROLLER (NUEVO) ---
+@handle_service_errors('REPORTS')
+async def get_merchandising_report_controller(
+    filters: MerchandisingFilterSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> MerchandisingReportResponseSchema:
+    ''' Retrieve Merchandising activities (Bandeo, Comp, Promo). '''
+    return await get_merchandising_report_service(
+        db = db,
+        filters = filters
+    )
+
+# --- PHOTOGRAPHIC REPORT CONTROLLER (NUEVO) ---
+@handle_service_errors('REPORTS')
+async def get_photographic_report_controller(
+    filters: PhotoFilterSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> PhotographicReportResponseSchema:
+    ''' Retrieve consolidated Photo Gallery. '''
+    return await get_photographic_report_service(
+        db = db,
+        filters = filters
     )

@@ -10,17 +10,21 @@ import requests
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from services.utils import handle_service_errors
-from services.logger_config import custom_logger as logger
-from services.environment import load_and_validate_env_vars
-
-# Imports de Modelos
+from models.replenishments import (
+    ComplementaryBandeo,
+    ComplementaryCompetition,
+    ComplementaryPromoPoint,
+    ReplenishmentReport
+)
 from models.trade import TradePlanning
 from models.pos import PointOfSale, PointOfSaleInventory
 from models.products import Product
 from models.impulses import ImpulseSale, ImpulseSaleDetail
 
-# Imports de Schemas
+from services.utils import handle_service_errors
+from services.logger_config import custom_logger as logger
+from services.environment import load_and_validate_env_vars
+
 from schemas.reports import (
     ComplianceFilterSchema,
     ComplianceReportResponseSchema,
@@ -29,6 +33,11 @@ from schemas.reports import (
     InventoryAlertFilterSchema,
     InventoryAlertResponseSchema,
     InventoryAlertItemSchema,
+    MerchandisingFilterSchema,
+    MerchandisingItemSchema,
+    MerchandisingReportResponseSchema,
+    PhotoItemSchema,
+    PhotographicReportResponseSchema,
     SalesReportFilterSchema,
     SalesReportResponseSchema,
     SalesDetailItemSchema
@@ -382,3 +391,104 @@ async def get_sales_report_service(
         total_transactions = total_transactions,
         items = items_list
     )
+
+@handle_service_errors('REPORTS')
+async def get_merchandising_report_service(
+    db: Session,
+    filters: MerchandisingFilterSchema
+) -> MerchandisingReportResponseSchema:
+    '''
+        Aggregates Bandeo, Competition, and Promo Points into a single report.
+    '''
+    items = []
+    start_dt = datetime.combine(filters.start_date, time.min)
+    end_dt = datetime.combine(filters.end_date, time.max)
+
+    # 1. Bandeo
+    q_bandeo = db.query(ComplementaryBandeo).filter(
+        ComplementaryBandeo.company_id == filters.company_id,
+        ComplementaryBandeo.created_at.between(start_dt, end_dt)
+    )
+    for b in q_bandeo.all():
+        items.append(MerchandisingItemSchema(
+            activity_type = 'BANDEO',
+            date = b.created_at,
+            user_id = b.attendance_id,
+            details = f'Comments: {b.comments or 'N/A'}',
+            photo_url = b.file_path_1
+        ))
+
+    # 2. Competition
+    q_comp = db.query(ComplementaryCompetition).filter(
+        ComplementaryCompetition.company_id == filters.company_id,
+        ComplementaryCompetition.created_at.between(start_dt, end_dt)
+    )
+    for c in q_comp.all():
+        items.append(MerchandisingItemSchema(
+            activity_type = 'COMPETITION',
+            date = c.created_at,
+            user_id = c.user_id,
+            details = f'Competitor: {c.competitor_name}. Type: {c.activity_type}',
+            photo_url = c.file_path_1
+        ))
+
+    # 3. Promo Points
+    q_promo = db.query(ComplementaryPromoPoint).filter(
+        ComplementaryPromoPoint.company_id == filters.company_id,
+        ComplementaryPromoPoint.created_at.between(start_dt, end_dt)
+    )
+    for p in q_promo.all():
+        items.append(MerchandisingItemSchema(
+            activity_type = 'PROMO_POINT',
+            date = p.created_at,
+            user_id = p.attendance_id,
+            details = f'Comments: {p.comments or 'N/A'}',
+            photo_url = p.file_path_1
+        ))
+
+    return MerchandisingReportResponseSchema(items = items, total_activities = len(items))
+
+@handle_service_errors('REPORTS')
+async def get_photographic_report_service(
+    db: Session,
+    filters: SalesReportFilterSchema # Usamos este filtro que ya tiene fechas y company
+) -> PhotographicReportResponseSchema:
+    '''
+        Aggregates all photos from Sales, Replenishment, and Merchandising.
+    '''
+    items = []
+    start_dt = datetime.combine(filters.start_date, time.min)
+    end_dt = datetime.combine(filters.end_date, time.max)
+
+    # 1. Sales Photos
+    sales = db.query(ImpulseSale).filter(
+        ImpulseSale.company_id == filters.company_id,
+        ImpulseSale.created_at.between(start_dt, end_dt)
+    ).all()
+    for s in sales:
+        if s.file_path:
+            items.append(PhotoItemSchema(
+                date=s.created_at,
+                category = 'IMPULSE_SALE',
+                user_id = s.attendance_id,
+                photo_url = s.file_path,
+                comments = 'Venta Impulso'
+            ))
+
+    # 2. Replenishment Photos
+    reps = db.query(ReplenishmentReport).filter(
+        ReplenishmentReport.company_id == filters.company_id,
+        ReplenishmentReport.created_at.between(start_dt, end_dt)
+    ).all()
+    for r in reps:
+        if r.file_path_1:
+            items.append(PhotoItemSchema(
+                date = r.created_at,
+                category = 'REPLENISHMENT',
+                user_id = r.attendance_id,
+                photo_url = r.file_path_1,
+                comments = r.comments
+            ))
+
+    # 3. Bandeo/Promo Photos
+    return PhotographicReportResponseSchema(items = items, total_photos = len(items))

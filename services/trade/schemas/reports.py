@@ -41,7 +41,7 @@ class ComplianceFilterSchema(BaseModel):
 
     class Config: # pylint: disable=too-few-public-methods
         '''
-        Allow arbitrary types if needed for query params
+            Allow arbitrary types if needed for query params
         '''
         arbitrary_types_allowed = True
 
@@ -148,9 +148,10 @@ class SalesReportFilterSchema(BaseModel):
     product_id: Optional[int] = Query(None, description = 'Filter by Product.')
 
     class Config: # pylint: disable=too-few-public-methods
-        ''' Pydantic config '''
+        ''' 
+            Pydantic config
+        '''
         arbitrary_types_allowed = True
-
 
 class SalesDetailItemSchema(ReportBaseSchema):
     '''
@@ -176,7 +177,7 @@ class SalesReportResponseSchema(ReportBaseSchema):
     '''
         Response wrapper for the Sales Report.
     '''
-    generated_at: datetime = Field(default_factory=get_current_time_gmt)
+    generated_at: datetime = Field(default_factory = get_current_time_gmt)
     period_start: date
     period_end: date
 
@@ -184,3 +185,82 @@ class SalesReportResponseSchema(ReportBaseSchema):
     total_transactions: int = Field(..., description = 'Number of sale headers.')
 
     items: List[SalesDetailItemSchema]
+
+# --- 4. MERCHANDISING REPORT ---
+class MerchandisingFilterSchema(BaseModel):
+    '''
+        Request MerchandisingFilterSchema.
+    '''
+    company_id: int = Query(...)
+    start_date: date = Query(...)
+    end_date: date = Query(...)
+
+class MerchandisingItemSchema(ReportBaseSchema):
+    '''
+        Response MerchandisingItemSchema.
+    '''
+    activity_type: str = Field(...,
+                        description='BANDEO, COMPETITION, PROMO_POINT')
+    date: datetime
+    user_id: int
+    details: str
+    photo_url: Optional[str]
+
+class MerchandisingReportResponseSchema(ReportBaseSchema):
+    '''
+        Response MerchandisingReportResponseSchema.
+    '''
+    items: List[MerchandisingItemSchema]
+    total_activities: int
+
+# --- 5. PHOTOGRAPHIC REPORT ---
+class PhotoFilterSchema(BaseModel):
+    '''
+        Filters for the Photographic Gallery Report.
+    '''
+    company_id: int = Query(
+        ...,
+        description = 'Company ID to filter photos.'
+    )
+    start_date: date = Query(
+        ...,
+        description = 'Start date (YYYY-MM-DD).'
+    )
+    end_date: date = Query(
+        ...,
+        description = 'End date (YYYY-MM-DD).'
+    )
+    user_id: Optional[int] = Query(
+        None,
+        description = 'Optional: Filter by User ID.'
+    )
+    point_of_sale_id: Optional[int] = Query(
+        None,
+        description = 'Optional: Filter by Point of Sale ID.'
+    )
+    category: Optional[str] = Query(
+        None,
+        pattern = '^(IMPULSE_SALE|REPLENISHMENT|BANDEO|COMPETITION|PROMO_POINT)$',
+        description = 'Optional: Filter by specific category.'
+    )
+
+    class Config: # pylint: disable=too-few-public-methods
+        ''' Pydantic config '''
+        arbitrary_types_allowed = True
+
+class PhotoItemSchema(ReportBaseSchema):
+    '''
+        Request PhotoItemSchema.
+    '''
+    date: datetime
+    category: str # SALE, REPLENISHMENT, BANDEO, etc.
+    user_id: int
+    photo_url: str
+    comments: Optional[str]
+
+class PhotographicReportResponseSchema(ReportBaseSchema):
+    '''
+        Response PhotographicReportResponseSchema.
+    '''
+    items: List[PhotoItemSchema]
+    total_photos: int

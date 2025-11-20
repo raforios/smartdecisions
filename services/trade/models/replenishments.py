@@ -25,6 +25,8 @@ class ReplenishmentReport(Base):  # pylint: disable=too-few-public-methods
 
     id = Column(Integer, primary_key = True, index = True)
 
+    company_id = Column(Integer, nullable = False, index = True)
+
     # Foreign Key to LOCALIZATION.t_attendances (The Visit ID)
     attendance_id = Column(Integer, nullable = False, index = True)
 
@@ -89,6 +91,8 @@ class ComplementaryBandeo(Base):  # pylint: disable=too-few-public-methods
 
     id = Column(Integer, primary_key = True, index = True)
 
+    company_id = Column(Integer, nullable = False, index = True)
+
     # Foreign Key to LOCALIZATION.t_attendances (The Visit ID)
     # A visit can only have one bandeo report.
     attendance_id = Column(Integer, nullable = False, unique = True, index = True)
@@ -148,6 +152,8 @@ class ComplementaryPromoPoint(Base):  # pylint: disable=too-few-public-methods
     __tablename__ = 't_trade_complementary_promo_point'
 
     id = Column(Integer, primary_key = True, index = True)
+
+    company_id = Column(Integer, nullable = False, index = True)
 
     # Foreign Key to LOCALIZATION.t_attendances (The Visit ID)
     attendance_id = Column(Integer, nullable = False, index = True)

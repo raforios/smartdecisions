@@ -9,6 +9,8 @@ from services.logger_config import custom_logger as logger
 from controllers.reports import (
     get_compliance_report_controller,
     get_inventory_alerts_controller,
+    get_merchandising_report_controller,
+    get_photographic_report_controller,
     get_sales_report_controller
 )
 from schemas.reports import (
@@ -16,6 +18,9 @@ from schemas.reports import (
     ComplianceReportResponseSchema,
     InventoryAlertFilterSchema,
     InventoryAlertResponseSchema,
+    MerchandisingFilterSchema,
+    MerchandisingReportResponseSchema,
+    PhotographicReportResponseSchema,
     SalesReportFilterSchema,
     SalesReportResponseSchema
 )
@@ -107,4 +112,52 @@ async def get_sales_report_endpoint(
         request = request,
         current_user = current_user,
         auth_token = auth_token
+    )
+
+# --- MERCHANDISING REPORT ---
+@router.get(
+    '/merchandising',
+    response_model = MerchandisingReportResponseSchema
+)
+async def get_merchandising_report_endpoint(
+    request: Request,
+    filters: MerchandisingFilterSchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to retrieve the Merchandising Report (Bandeo, Competition, Promo Points).
+        Consolidates complementary activities into a single list.
+    '''
+    message = f'User: {current_user}. Request Merchandising Report.'
+    logger.info(message)
+    return await get_merchandising_report_controller(
+        filters = filters,
+        db = db,
+        request = request,
+        current_user = current_user,
+    )
+
+# --- PHOTOGRAPHIC REPORT ---
+@router.get(
+    '/photographic',
+    response_model = PhotographicReportResponseSchema
+)
+async def get_photographic_report_endpoint(
+    request: Request,
+    filters: SalesReportFilterSchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to retrieve the consolidated Photographic Evidence Gallery.
+        Aggregates photos from Sales, Replenishment, and Merchandising.
+    '''
+    message = f'User: {current_user}. Request Photo Report.'
+    logger.info(message)
+    return await get_photographic_report_controller(
+        filters = filters,
+        db = db,
+        request = request,
+        current_user = current_user,
     )

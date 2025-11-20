@@ -62,8 +62,6 @@ async def create_replenishment_report_service(
                 auth_token = auth_token,
                 prefix = 'replenishment'
             )
-
-            # FIX: Extraemos la URL del diccionario.
             if isinstance(path, dict):
                 file_paths.append(path.get('url'))
             else:
@@ -72,7 +70,7 @@ async def create_replenishment_report_service(
             file_paths.append(None)
 
     # 2. Create the record
-    report_dict = report_data.model_dump(exclude={'company_id'})
+    report_dict = report_data.model_dump()
     db_report = ReplenishmentReport(
         attendance_id = attendance_id,
         file_path_1 = file_paths[0] if len(file_paths) > 0 else None,
@@ -162,8 +160,6 @@ async def create_complementary_bandeo_service(
                 auth_token = auth_token,
                 prefix = 'bandeo'
             )
-
-            # FIX: Extraemos la URL del diccionario.
             if isinstance(path, dict):
                 file_paths.append(path.get('url'))
             else:
@@ -172,7 +168,7 @@ async def create_complementary_bandeo_service(
             file_paths.append(None)
 
     # 2. Create the Bandeo Header
-    header_data = bandeo_data.model_dump(exclude = {'details', 'company_id'})
+    header_data = bandeo_data.model_dump(exclude = {'details'})
     db_bandeo_header = ComplementaryBandeo(
         attendance_id = attendance_id,
         file_path_1 = file_paths[0] if len(file_paths) > 0 else None,
@@ -229,8 +225,6 @@ async def create_complementary_promo_point_service(
                 auth_token = auth_token,
                 prefix = 'promo_point'
             )
-
-            # FIX: Extraemos la URL del diccionario.
             if isinstance(path, dict):
                 file_paths.append(path.get('url'))
             else:
@@ -239,7 +233,7 @@ async def create_complementary_promo_point_service(
             file_paths.append(None)
 
     # 2. Create the record
-    report_dict = promo_point_data.model_dump(exclude={'company_id'})
+    report_dict = promo_point_data.model_dump()
     db_report = ComplementaryPromoPoint(
         attendance_id = attendance_id,
         file_path_1 = file_paths[0] if len(file_paths) > 0 else None,
@@ -277,8 +271,6 @@ async def create_complementary_competition_service(
             auth_token = auth_token,
             prefix = 'competition'
         )
-
-        # FIX: Extraemos la URL del diccionario.
         if isinstance(upload_result, dict):
             file_path = upload_result.get('url')
         else:
