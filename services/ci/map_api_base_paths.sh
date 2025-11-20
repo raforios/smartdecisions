@@ -21,6 +21,7 @@ API_MAPPINGS=(
     "yvivgga9i8:localization" # binaria-localization-handler-service
     "9bdyb0z3ol:planning"    # binaria-planning-handler-service
     "v65w34fghh:auth"       # binaria-auth-handler-service
+    "z4utb6z4le:trade"       # binaria-trade-handler-service
 )
 
 log_section() {

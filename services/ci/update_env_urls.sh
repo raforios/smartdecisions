@@ -20,6 +20,7 @@ get_api_url() {
         "binaria-forms-handler-service") echo "${CUSTOM_DOMAIN_BASE}/forms" ;;
         "binaria-localization-handler-service") echo "${CUSTOM_DOMAIN_BASE}/localization" ;;
         "binaria-planning-handler-service") echo "${CUSTOM_DOMAIN_BASE}/planning" ;;
+        "binaria-trade-handler-service") echo "${CUSTOM_DOMAIN_BASE}/trade" ;;
         *) echo "" ;; # URL no encontrada
     esac
 }
@@ -29,6 +30,7 @@ get_dependencies_string() {
     case "$1" in
         "binaria-localization-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service" ;;
         "binaria-forms-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,PLANNING_SERVICE_URL:binaria-planning-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service" ;;
+        "binaria-trade-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service" ;;
         "binaria-planning-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service" ;;
         *) echo "" ;; # Sin dependencias
     esac
@@ -99,7 +101,7 @@ update_lambda_env() {
 # --- LÓGICA PRINCIPAL ---
 
 # Lista de servicios a actualizar (los que tienen dependencias)
-SERVICE_LIST_TO_UPDATE="binaria-localization-handler-service binaria-forms-handler-service binaria-planning-handler-service"
+SERVICE_LIST_TO_UPDATE="binaria-localization-handler-service binaria-forms-handler-service binaria-planning-handler-service binaria-trade-handler-service"
 
 log_section "INICIANDO PROCESO DE ACTUALIZACIÓN DE URLS"
 
