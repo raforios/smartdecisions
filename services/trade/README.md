@@ -1,6 +1,6 @@
 # 🛒 Trade-Service 📈
 
-Bienvenido al microservicio de **Trade Marketing**, el corazón transaccional de la arquitectura **SMARTBEAR**. Este servicio gestiona la ejecución en el Punto de Venta (PDV), incluyendo catálogos de productos, control de inventarios, planificación de visitas y el registro detallado de actividades comerciales como ventas, reposiciones e impulsos.
+Bienvenido al microservicio de **Trade Marketing**, el corazón transaccional de la arquitectura **SMARTBEAR**. Este servicio gestiona la ejecución en el Punto de Venta (PDV), incluyendo catálogos de productos, control de inventarios, planificación de visitas y el registro detallado de actividades comerciales como ventas, reposiciones, merchandising y evidencia fotográfica.
 
 -----
 
@@ -8,16 +8,17 @@ Bienvenido al microservicio de **Trade Marketing**, el corazón transaccional de
 
 El **Trade-Service** tiene como objetivo digitalizar y optimizar la ejecución en campo. Su propósito es permitir que el personal de Trade Marketing (supervisores, repositores, impulsadoras) registre información veraz y en tiempo real sobre lo que sucede en cada tienda. Sus funcionalidades clave incluyen:
 
-  * **Catálogo Maestro:** Gestión centralizada de **Productos** (con generación atómica de SKUs) y **Puntos de Venta** (PDVs), incluyendo la asignación lógica entre ellos.
-  * **Control de Inventarios:** Manejo de inventarios locales en cada PDV, con soporte para lotes, fechas de vencimiento y alertas de productos con fecha corta (`Short Date`).
-  * **Agenda de Campo (Planning):** Orquesta la planificación de visitas (`Trade Planning`), integrando la asignación de usuarios y PDVs. Soporta visitas planificadas y **Ad-Hoc** (fuera de ruta), así como la justificación de inasistencias.
-  * **Gestión de Impulsos:** Registra actividades de promoción y ventas directas, manejando inventarios iniciales y finales por visita (`Inventory Start/End`), promociones tipo "Bandeo" y ventas con evidencia fotográfica.
-  * **Reposición (Replenishment):** Controla la reposición de productos en góndola, registrando inventarios detallados, recepciones de mercadería y reportes fotográficos de exhibición ("Foto de Éxito").
-  * **Inteligencia de Mercado:** Módulos para registrar precios y actividades de la competencia.
-  * **Reportes Avanzados:** Generación de reportes ejecutivos para la toma de decisiones:
+* **Catálogo Maestro:** Gestión centralizada de **Productos** (con generación atómica de SKUs) y **Puntos de Venta** (PDVs), incluyendo la asignación lógica entre ellos.
+* **Control de Inventarios:** Manejo de inventarios locales en cada PDV, con soporte para lotes, fechas de vencimiento y alertas de productos con fecha corta (`Short Date`).
+* **Agenda de Campo (Planning):** Orquesta la planificación de visitas (`Trade Planning`), integrando la asignación de usuarios y PDVs. Soporta visitas planificadas y **Ad-Hoc** (fuera de ruta), así como la justificación de inasistencias.
+* **Gestión de Impulsos:** Registra actividades de promoción y ventas directas, manejando inventarios iniciales y finales por visita (`Inventory Start/End`) y ventas con evidencia fotográfica.
+* **Reposición y Merchandising:** Controla la reposición de productos en góndola, registrando inventarios, recepciones y "Fotos de Éxito". Además, gestiona actividades complementarias como **Bandeos**, **Puntos Promocionales** y **Reportes de Competencia**.
+* **Reportes Avanzados:** Generación de reportes ejecutivos para la toma de decisiones:
     * **Cumplimiento:** KPIs de efectividad de visitas (Planificado vs. Ejecutado).
     * **Alertas de Inventario:** Semáforo de Stockouts y productos por vencer.
     * **Ventas:** Data detallada enriquecida con contexto de usuario y ubicación (integración con Localization).
+    * **Merchandising:** Consolidado de actividades de visibilidad y competencia.
+    * **Galería Fotográfica:** Repositorio centralizado de toda la evidencia visual capturada en campo.
 
 -----
 
@@ -57,25 +58,27 @@ A continuación se listan los principales **endpoints**, organizados por módulo
 | :--- | :--- | :--- |
 | `POST` | `/v1/trade/planning` | Crea una entrada de **Planificación** (Agenda) vinculando Usuario y PDV. |
 | `POST` | `/v1/trade/planning/adhoc` | Registra una visita no planificada (**Ad-Hoc**) con justificación. |
-| `PATCH`| `/v1/trade/planning/{planning_id}/workload` | Actualiza la carga laboral (Check-In/Out) y calcula tiempos efectivos. |
-| `PATCH`| `/v1/trade/planning/{planning_id}/justify` | Justifica la no-visita o cancelación de una agenda. |
+| `PATCH` | `/v1/trade/planning/{planning_id}/workload` | Actualiza la carga laboral (Check-In/Out) y calcula tiempos efectivos. |
+| `PATCH` | `/v1/trade/planning/{planning_id}/justify` | Justifica la no-visita o cancelación de una agenda. |
 
-### 3. Impulsos (Promociones)
+### 3. Impulsos (Ventas)
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/impulses/promotions` | Crea una Promoción (**Bandeo**) con lista de SKUs asociados. |
+| `POST` | `/v1/impulses/promotions` | Crea una definición de Promoción/Bandeo (Catálogo). |
 | `POST` | `/v1/impulses/impulse/visit/{id}/inventory-start` | Registra el inventario inicial al llegar al PDV. |
 | `POST` | `/v1/impulses/impulse/visit/{id}/sale` | Registra una **Venta** con detalle de productos y foto de evidencia. |
 | `POST` | `/v1/impulses/impulse/visit/{id}/inventory-end` | Registra el inventario final al terminar la visita. |
 
-### 4. Reposición (Replenishment)
+### 4. Reposición y Complementarios
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
 | `POST` | `/v1/replenishment/visit/{id}/report` | Registra el reporte de visita (Fotos de éxito y comentarios). |
 | `POST` | `/v1/replenishment/visit/{id}/inventory` | Registra el levantamiento de **Inventario en Góndola** (Lotes, Fechas, Stock). |
 | `POST` | `/v1/replenishment/visit/{id}/reception` | Registra la recepción de mercadería en el PDV. |
+| `POST` | `/v1/replenishment/complementary/visit/{id}/bandeo` | Registra un **Bandeo** (Devoluciones) realizado en visita. |
+| `POST` | `/v1/replenishment/complementary/visit/{id}/promo-point` | Registra la implementación de un **Punto Promocional**. |
 | `POST` | `/v1/replenishment/complementary/competition` | Reporta actividades de la **Competencia** (Precios, Exhibiciones). |
 
 ### 5. Reportes y Analytics
@@ -85,6 +88,8 @@ A continuación se listan los principales **endpoints**, organizados por módulo
 | `GET` | `/v1/reports/compliance` | Reporte de **Cumplimiento**: Eficiencia de rutas y carga laboral (KPIs). |
 | `GET` | `/v1/reports/inventory-alerts` | Reporte de **Alertas**: Semáforo de Quiebres de Stock y Fechas Cortas. |
 | `GET` | `/v1/reports/sales` | Reporte de **Ventas Detallado**: Tabla plana para BI, enriquecida con datos de Localization. |
+| `GET` | `/v1/reports/merchandising` | Reporte consolidado de Bandeos, Competencia y Puntos Promocionales. |
+| `GET` | `/v1/reports/photographic` | **Galería de Evidencias**: Acceso centralizado a todas las fotos capturadas. |
 
 -----
 
@@ -94,6 +99,7 @@ A continuación se listan los principales **endpoints**, organizados por módulo
 trade/
 ├── controllers/
 │   ├── init.py
+│   ├── common.py
 │   ├── impulses.py
 │   ├── pos.py
 │   ├── products.py
@@ -102,6 +108,7 @@ trade/
 │   └── trade.py
 ├── models/
 │   ├── init.py
+│   ├── common.py
 │   ├── impulses.py
 │   ├── pos.py
 │   ├── products.py
@@ -109,6 +116,7 @@ trade/
 │   └── trade.py
 ├── routes/
 │   ├── init.py
+│   ├── common.py
 │   ├── impulses.py
 │   ├── pos.py
 │   ├── products.py
@@ -117,6 +125,7 @@ trade/
 │   └── trade.py
 ├── schemas/
 │   ├── init.py
+│   ├── common.py
 │   ├── impulses.py
 │   ├── pos.py
 │   ├── products.py
@@ -126,6 +135,7 @@ trade/
 ├── services/
 │   ├── init.py
 │   ├── api_exceptions.py
+│   ├── common.py
 │   ├── crud.py
 │   ├── db_connection.py
 │   ├── environment.py
