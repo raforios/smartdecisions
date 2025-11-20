@@ -106,7 +106,7 @@ class ReplenishmentReceptionItemSchema(BaseSchema):
     )
     quantity_received: int = Field(
         ...,
-        gt = 0, # Received quantity must be greater than 0
+        ge = 0, # Received quantity must be greater than 0
         description = 'Quantity received for this SKU.'
     )
     comments: Optional[str] = Field(

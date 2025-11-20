@@ -60,10 +60,14 @@ async def create_replenishment_report_service(
                 file = file,
                 dynamic_path = dynamic_path,
                 auth_token = auth_token,
-                prefix = report_data.company_id
+                prefix = 'replenishment'
             )
 
-            file_paths.append(path)
+            # FIX: Extraemos la URL del diccionario.
+            if isinstance(path, dict):
+                file_paths.append(path.get('url'))
+            else:
+                file_paths.append(str(path))
         else:
             file_paths.append(None)
 
@@ -156,10 +160,14 @@ async def create_complementary_bandeo_service(
                 file = file,
                 dynamic_path = dynamic_path,
                 auth_token = auth_token,
-                prefix = bandeo_data.company_id
+                prefix = 'bandeo'
             )
 
-            file_paths.append(path)
+            # FIX: Extraemos la URL del diccionario.
+            if isinstance(path, dict):
+                file_paths.append(path.get('url'))
+            else:
+                file_paths.append(str(path))
         else:
             file_paths.append(None)
 
@@ -219,10 +227,14 @@ async def create_complementary_promo_point_service(
                 file = file,
                 dynamic_path = dynamic_path,
                 auth_token = auth_token,
-                prefix = promo_point_data.company_id
+                prefix = 'promo_point'
             )
 
-            file_paths.append(path)
+            # FIX: Extraemos la URL del diccionario.
+            if isinstance(path, dict):
+                file_paths.append(path.get('url'))
+            else:
+                file_paths.append(str(path))
         else:
             file_paths.append(None)
 
@@ -242,10 +254,11 @@ async def create_complementary_promo_point_service(
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ComplementaryCompetition', 'CREATE')
+# pylint: disable=duplicate-code
 async def create_complementary_competition_service(
     db: Session,
     competition_data: ComplementaryCompetitionCreateSchema,
-    file: Optional[UploadFile],
+    uploaded_file: Optional[UploadFile],
     dynamic_path: str,
     auth_token: str
 ) -> ComplementaryCompetition:
@@ -256,22 +269,27 @@ async def create_complementary_competition_service(
     logger.info(message)
 
     # 1. Handle file upload
-    file_path_1 = None
-    if file:
-
-        file_path_1 = await prepare_file_to_upload(
-            file = file,
+    file_path = None
+    if uploaded_file:
+        upload_result = await prepare_file_to_upload(
+            file = uploaded_file,
             dynamic_path = dynamic_path,
             auth_token = auth_token,
-            prefix = competition_data.company_id
+            prefix = 'competition'
         )
+
+        # FIX: Extraemos la URL del diccionario.
+        if isinstance(upload_result, dict):
+            file_path = upload_result.get('url')
+        else:
+            file_path = str(upload_result)
 
     # 2. Prepare data
     report_dict = competition_data.model_dump()
 
     # 3. Create the record
     db_report = ComplementaryCompetition(
-        file_path_1 = file_path_1, # Guardamos el path
+        file_path_1 = file_path,
         **report_dict
     )
 

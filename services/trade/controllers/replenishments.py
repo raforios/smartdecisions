@@ -44,7 +44,7 @@ async def create_replenishment_report_controller(
     '''
         Controller for creating a Replenishment Report (Success Photos).
     '''
-    dynamic_path = f'{report_data.company_id}'
+    dynamic_path = f'trade/{report_data.company_id}/replenishment'
 
     db_report = await create_replenishment_report_service(
         db = db,
@@ -118,7 +118,7 @@ async def create_complementary_bandeo_controller(
     '''
         Controller for creating a Complementary Bandeo Report (Returns/Photos).
     '''
-    dynamic_path = f'{bandeo_data.company_id}'
+    dynamic_path = f'trade/{bandeo_data.company_id}/replenishment'
 
     db_bandeo = await create_complementary_bandeo_service(
         db = db,
@@ -146,7 +146,7 @@ async def create_complementary_promo_point_controller(
     '''
         Controller for creating a Complementary Promotional Point Report (Photos).
     '''
-    dynamic_path = f'{promo_point_data.company_id}'
+    dynamic_path = f'trade/{promo_point_data.company_id}/replenishment'
 
     db_report = await create_complementary_promo_point_service(
         db = db,
@@ -173,12 +173,12 @@ async def create_complementary_competition_controller(
     '''
         Controller for creating a general Competition Report.
     '''
-    dynamic_path = f'{competition_data.company_id}'
+    dynamic_path = f'trade/{competition_data.company_id}/replenishment'
 
     db_report = await create_complementary_competition_service(
         db = db,
         competition_data = competition_data,
-        file = file,
+        uploaded_file = file,
         dynamic_path = dynamic_path,
         auth_token = auth_token
     )

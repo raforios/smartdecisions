@@ -12,7 +12,9 @@ from fastapi import (
     UploadFile,
     status
 )
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from services.exceptions import InvalidInputError
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
@@ -45,7 +47,7 @@ router = APIRouter(prefix = '/v1/replenishment', tags = ['Replenishment'])
 # These endpoints are linked to the visit ID (attendance_id) from LOCALIZATION
 
 @router.post(
-    '/replenishment/visit/{attendance_id}/report',
+    '/visit/{attendance_id}/report',
     response_model = ReplenishmentReportResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Register Replenishment Report'
@@ -53,18 +55,14 @@ router = APIRouter(prefix = '/v1/replenishment', tags = ['Replenishment'])
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_replenishment_report_endpoint(
     attendance_id: int,
-    report_data: ReplenishmentReportCreateSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user),
     auth_token: str = Header(..., alias = 'Authorization'),
-    data: str = Form(
-        ...,
-        description = 'JSON string of the report data (ReplenishmentReportCreateSchema).'
-    ),
-    file_1: Optional[UploadFile] = File(None, description = 'First success photo.'),
-    file_2: Optional[UploadFile] = File(None, description = 'Second success photo.'),
-    file_3: Optional[UploadFile] = File(None, description = 'Third success photo.')
+    data: str = Form(..., description = 'JSON string of ReplenishmentReportCreateSchema'),
+    file_1: Optional[UploadFile] = File(None),
+    file_2: Optional[UploadFile] = File(None),
+    file_3: Optional[UploadFile] = File(None)
 ):
     '''
         Endpoint to register a Replenishment Report (Success Photos/Comments).
@@ -73,7 +71,10 @@ async def create_replenishment_report_endpoint(
             attendance_id}.'
     logger.info(message)
 
-    report_data = ReplenishmentReportCreateSchema.model_validate_json(data)
+    try:
+        report_data = ReplenishmentReportCreateSchema.model_validate_json(data)
+    except ValidationError as e:
+        raise InvalidInputError(f'Invalid JSON format in data: {e}') from e
 
     return await create_replenishment_report_controller(
         attendance_id = attendance_id,
@@ -86,7 +87,7 @@ async def create_replenishment_report_endpoint(
     )
 
 @router.post(
-    '/replenishment/visit/{attendance_id}/inventory',
+    '/visit/{attendance_id}/inventory',
     response_model = ReplenishmentInventoryListResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Register Replenishment Inventory'
@@ -113,7 +114,7 @@ async def create_replenishment_inventory_endpoint(
     )
 
 @router.post(
-    '/replenishment/visit/{attendance_id}/reception',
+    '/visit/{attendance_id}/reception',
     response_model = ReplenishmentReceptionListResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Register Supplier Reception'
@@ -126,7 +127,7 @@ async def create_replenishment_reception_endpoint(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Endpoint to register a product reception from a supplier at the POS.
+        Endpoint to register a product reception from a supplier.
     '''
     message = f'User: {current_user}. Request Replenishment Reception for attendance ID: {
             attendance_id}.'
@@ -150,26 +151,25 @@ async def create_replenishment_reception_endpoint(
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_bandeo_endpoint(
     attendance_id: int,
-    bandeo_data: ComplementaryBandeoCreateSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user),
     auth_token: str = Header(..., alias = 'Authorization'),
-    data: str = Form(
-        ...,
-        description = 'JSON string of the bandeo data (ComplementaryBandeoCreateSchema).'
-    ),
-    file_1: Optional[UploadFile] = File(None, description = 'First bandeo photo.'),
-    file_2: Optional[UploadFile] = File(None, description = 'Second bandeo photo.')
+    data: str = Form(..., description = 'JSON string of ComplementaryBandeoCreateSchema'),
+    file_1: Optional[UploadFile] = File(None),
+    file_2: Optional[UploadFile] = File(None)
 ):
     '''
-        Endpoint to register a Bandeo Report (Returns and Photos) for a visit.
+        Endpoint to register a Bandeo Report.
     '''
     message = f'User: {current_user}. Request Complementary Bandeo for attendance ID: {
             attendance_id}.'
     logger.info(message)
 
-    bandeo_data = ComplementaryBandeoCreateSchema.model_validate_json(data)
+    try:
+        bandeo_data = ComplementaryBandeoCreateSchema.model_validate_json(data)
+    except ValidationError as e:
+        raise InvalidInputError(f'Invalid JSON format in data: {e}') from e
 
     return await create_complementary_bandeo_controller(
         attendance_id = attendance_id,
@@ -190,26 +190,25 @@ async def create_complementary_bandeo_endpoint(
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_promo_point_endpoint(
     attendance_id: int,
-    promo_point_data: ComplementaryPromoPointCreateSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user),
     auth_token: str = Header(..., alias = 'Authorization'),
-    data: str = Form(
-        ...,
-        description = 'JSON string of the promo point data (ComplementaryPromoPointCreateSchema).'
-    ),
-    file_1: Optional[UploadFile] = File(None, description = 'First promo point photo.'),
-    file_2: Optional[UploadFile] = File(None, description = 'Second promo point photo.')
+    data: str = Form(..., description = 'JSON string of ComplementaryPromoPointCreateSchema'),
+    file_1: Optional[UploadFile] = File(None),
+    file_2: Optional[UploadFile] = File(None)
 ):
     '''
-        Endpoint to register a Promotional Point Report (Photos) for a visit.
+        Endpoint to register a Promotional Point Report.
     '''
     message = f'User: {current_user}. Request Complementary Promo Point for attendance ID: {
             attendance_id}.'
     logger.info(message)
 
-    promo_point_data = ComplementaryPromoPointCreateSchema.model_validate_json(data)
+    try:
+        promo_point_data = ComplementaryPromoPointCreateSchema.model_validate_json(data)
+    except ValidationError as e:
+        raise InvalidInputError(f'Invalid JSON format in data: {e}') from e
 
     return await create_complementary_promo_point_controller(
         attendance_id = attendance_id,
@@ -229,24 +228,23 @@ async def create_complementary_promo_point_endpoint(
 )
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_competition_endpoint(
-    competition_data: ComplementaryCompetitionCreateSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user),
     auth_token: str = Header(..., alias = 'Authorization'),
-    data: str = Form(
-        ...,
-        description = 'JSON string of the competition data (ComplementaryCompetitionCreateSchema).'
-    ),
-    file: Optional[UploadFile] = File(None, description = 'Optional competitor photo.')
+    data: str = Form(..., description = 'JSON string of ComplementaryCompetitionCreateSchema'),
+    file: Optional[UploadFile] = File(None)
 ):
     '''
-        Endpoint to register a general Competition Report (not tied to a visit).
+        Endpoint to register a general Competition Report.
     '''
     message = f'User: {current_user}. Request to create Competition Report.'
     logger.info(message)
 
-    competition_data = ComplementaryCompetitionCreateSchema.model_validate_json(data)
+    try:
+        competition_data = ComplementaryCompetitionCreateSchema.model_validate_json(data)
+    except ValidationError as e:
+        raise InvalidInputError(f'Invalid JSON format in data: {e}') from e
 
     return await create_complementary_competition_controller(
         competition_data = competition_data,
