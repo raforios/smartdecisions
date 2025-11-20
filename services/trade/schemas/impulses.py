@@ -39,11 +39,11 @@ class TradePromotionBaseSchema(BaseSchema):
         None,
         description = 'Detailed description of the promotion.'
     )
-    start_date: str = Field(
+    start_date: datetime = Field(
         ...,
         description = 'Promotion start date (YYYY-MM-DD).'
     )
-    end_date: str = Field(
+    end_date: datetime = Field(
         ...,
         description = 'Promotion end date (YYYY-MM-DD).'
     )
@@ -72,8 +72,8 @@ class TradePromotionUpdateSchema(BaseSchema):
     '''
     name: Optional[str] = None
     description: Optional[str] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     status: Optional[str] = None
     # Note: Updating details (SKUs) should be handled by separate endpoints.
 

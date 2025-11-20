@@ -117,6 +117,8 @@ class ImpulseSale(Base):  # pylint: disable=too-few-public-methods
     # Foreign Key to LOCALIZATION.t_attendances (The Visit ID)
     attendance_id = Column(Integer, nullable = False, index = True)
 
+    company_id = Column(Integer, nullable = False, index = True)
+
     # Path/URL of the verification photo, provided by FILES microservice
     file_path = Column(String(500), nullable = True)
 

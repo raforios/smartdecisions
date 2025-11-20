@@ -196,7 +196,7 @@ async def delete_promotion_service(
 
     delete_record(
         db = db,
-        model = db_promotion,
+        model = TradePromotion,
         record_id = promotion_id)
     db.commit()
 
@@ -245,38 +245,43 @@ async def create_impulse_sale_service(
     auth_token: str
 ) -> ImpulseSale:
     '''
-        Creates a new Impulse Sale record and its nested details.
+        Creates a new Impulse Sale transaction (Header + Details + Photo).
     '''
-    message = f'Attempting to create Impulse Sale for attendance ID: {attendance_id}'
+    message = f'Creating Impulse Sale for attendance ID: {attendance_id}'
     logger.info(message)
 
-    company_id = sale_data.company_id
-
-    # 1. Handle file upload (Patrón FORMS)
-    file_path_1 = None
+    # 1. Handle file upload
+    file_path = None
     if uploaded_file:
-        file_path_1 = await prepare_file_to_upload(
+        upload_result = await prepare_file_to_upload(
             file = uploaded_file,
             dynamic_path = dynamic_path,
             auth_token = auth_token,
-            prefix = company_id
+            prefix = f'sale_{attendance_id}'
         )
 
-    # 2. Create the Sale Header
-    header_data = sale_data.model_dump(exclude = {'details', 'company_id'})
+        # FIX: Extraemos la URL del diccionario.
+        if isinstance(upload_result, dict):
+            file_path = upload_result.get('url')
+        else:
+            file_path = str(upload_result)
+
+    # 2. Create the Header (ImpulseSale)
     db_sale_header = ImpulseSale(
         attendance_id = attendance_id,
-        file_path = file_path_1, # Guardamos el path retornado por FILES
-        **header_data
+        company_id = sale_data.company_id,
+        file_path = file_path
     )
     db.add(db_sale_header)
     db.flush()
 
-    # 3. Iterate through details (Lógica sin cambios)
+    # 3. Iterate through details and create child records
     for detail_item in sale_data.details:
+
         product_id = get_product_id_by_sku(
-            db, company_id, detail_item.product_sku
+            db, sale_data.company_id, detail_item.product_sku
         )
+
         db_detail = ImpulseSaleDetail(
             impulse_sale_id = db_sale_header.id,
             product_id = product_id,
@@ -286,6 +291,7 @@ async def create_impulse_sale_service(
 
     # 4. Commit and refresh
     db.commit()
+
     db_sale_header = db.query(ImpulseSale).options(
         joinedload(ImpulseSale.details)
     ).filter(ImpulseSale.id == db_sale_header.id).one()

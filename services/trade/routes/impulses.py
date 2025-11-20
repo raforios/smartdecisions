@@ -5,13 +5,16 @@ from typing import Any, Dict, Optional
 from fastapi import (
     APIRouter,
     Depends,
+    Form,
     Header,
     Query,
     Request,
     UploadFile,
     status
 )
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from services.exceptions import InvalidInputError
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
@@ -207,21 +210,29 @@ async def create_impulse_inventory_start_endpoint(
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_impulse_sale_endpoint(
     attendance_id: int,
-    sale_data: ImpulseSaleCreateSchema,
     request: Request,
-    uploaded_file: Optional[UploadFile] = None,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user),
     auth_token: str = Header(..., alias = 'Authorization'),
+    sale_data: str = Form(..., description = 'JSON string of the sale data'),
+    uploaded_file: Optional[UploadFile] = None,
 ):
     '''
         Endpoint to register a Sale transaction (with details and photo) for an Impulse visit.
     '''
     message = f'User: {current_user}. Request Impulse Sale for attendance ID: {attendance_id}.'
     logger.info(message)
+
+    try:
+        parsed_sale_data = ImpulseSaleCreateSchema.model_validate_json(sale_data)
+    except ValidationError as e:
+        raise InvalidInputError(
+            detail = f'Invalid JSON data format in data field: {e}'
+        ) from e
+
     return await create_impulse_sale_controller(
         attendance_id = attendance_id,
-        sale_data = sale_data,
+        sale_data = parsed_sale_data,
         uploaded_file = uploaded_file,
         db = db,
         request = request,

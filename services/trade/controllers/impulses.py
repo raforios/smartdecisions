@@ -94,7 +94,7 @@ async def update_promotion_controller(
     '''
         Controller for updating a Promotion Header.
     '''
-    db_promotion, _ = await update_promotion_service(
+    db_promotion = await update_promotion_service(
         db = db,
         promotion_id = promotion_id,
         update_data = update_data
@@ -113,7 +113,7 @@ async def delete_promotion_controller(
     '''
         Controller for deleting a Promotion.
     '''
-    deleted_id, _ = await delete_promotion_service(
+    deleted_id = await delete_promotion_service(
         db = db,
         promotion_id = promotion_id
     )
@@ -160,7 +160,7 @@ async def create_impulse_sale_controller(
     '''
         Controller for creating a new Impulse Sale transaction.
     '''
-    dynamic_path = f'{sale_data.company_id}'
+    dynamic_path = f'trade/{sale_data.company_id}/impulses'
 
     db_sale = await create_impulse_sale_service(
         db = db,
@@ -173,6 +173,7 @@ async def create_impulse_sale_controller(
     return ImpulseSaleResponseSchema.model_validate(
         db_sale, from_attributes = True
     )
+
 @handle_service_errors('TRADE')
 async def create_impulse_inventory_end_controller(
     attendance_id: int,

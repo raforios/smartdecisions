@@ -205,7 +205,7 @@ async def update_trade_planning_workload_service(
 
     db_planning = get_record(db, TradePlanning, planning_id)
     old_values = sqlalchemy_object_as_dict(db_planning)
-    
+
     for key, value in old_values.items():
         if isinstance(value, datetime) and value.tzinfo is not None:
             # Limpieza: Hacemos la fecha naive para que el validador remoto la acepte.
@@ -238,14 +238,14 @@ async def update_trade_planning_workload_service(
     for key, value in new_values_final.items():
         if isinstance(value, datetime) and value.tzinfo is not None:
             new_values_final[key] = value.replace(tzinfo=None).isoformat()
-            
+
     # Incrustar el campo extra 'calculation_input' dentro de new_values_final
     new_values_final['calculation_input'] = {
         # Limpiamos las fechas de entrada por seguridad.
         'check_in': workload_data.check_in_time.replace(tzinfo=None).isoformat(),
         'check_out': workload_data.check_out_time.replace(tzinfo=None).isoformat()
     }
-    
+
     # 4. Devolver el diccionario completo. El decorador usará new_values_final
     # como new_values, ya que sobrescribe el new_values ORM con la clave del auditable_data
     # si está presente.
