@@ -1,6 +1,7 @@
 '''
     Business Logic for Trade.
 '''
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 from sqlalchemy.orm import Session, joinedload
 from services.exceptions import InvalidInputError
@@ -169,7 +170,7 @@ async def delete_trade_planning_service(
 
     delete_record(
         db = db,
-        model = db_planning,
+        model = TradePlanning,
         record_id = planning_id
     )
 
@@ -204,6 +205,13 @@ async def update_trade_planning_workload_service(
 
     db_planning = get_record(db, TradePlanning, planning_id)
     old_values = sqlalchemy_object_as_dict(db_planning)
+    
+    for key, value in old_values.items():
+        if isinstance(value, datetime) and value.tzinfo is not None:
+            # Limpieza: Hacemos la fecha naive para que el validador remoto la acepte.
+            old_values[key] = value.replace(tzinfo = None).isoformat()
+        elif key == 'point_of_sale':
+            del old_values[key] # Eliminamos la relación si fue cargada
 
     duration_delta = workload_data.check_out_time - workload_data.check_in_time
     actual_minutes = int(duration_delta.total_seconds() // 60)
@@ -218,13 +226,32 @@ async def update_trade_planning_workload_service(
     db.commit()
     db.refresh(db_planning)
 
+    if hasattr(db_planning, 'point_of_sale'):
+        delattr(db_planning, 'point_of_sale')
+
+    # 3. Generar NEW_VALUES (para incrustar el cálculo)
+    # El decorador leerá db_planning (limpio) para generar el new_values base.
+    # Aquí creamos el diccionario final que queremos que sea el new_values.
+    new_values_final = sqlalchemy_object_as_dict(db_planning)
+
+    # Limpieza NEW_VALUES: Fechas
+    for key, value in new_values_final.items():
+        if isinstance(value, datetime) and value.tzinfo is not None:
+            new_values_final[key] = value.replace(tzinfo=None).isoformat()
+            
+    # Incrustar el campo extra 'calculation_input' dentro de new_values_final
+    new_values_final['calculation_input'] = {
+        # Limpiamos las fechas de entrada por seguridad.
+        'check_in': workload_data.check_in_time.replace(tzinfo=None).isoformat(),
+        'check_out': workload_data.check_out_time.replace(tzinfo=None).isoformat()
+    }
+    
+    # 4. Devolver el diccionario completo. El decorador usará new_values_final
+    # como new_values, ya que sobrescribe el new_values ORM con la clave del auditable_data
+    # si está presente.
     auditable_data = {
         'old_values': old_values,
-        'new_values': sqlalchemy_object_as_dict(db_planning),
-        'calculation_input': {
-            'check_in': workload_data.check_in_time.isoformat(),
-            'check_out': workload_data.check_out_time.isoformat()
-        },
+        'new_values': new_values_final, 
         'company_id': db_planning.company_id,
         'user_id': db_planning.user_id
     }
@@ -232,7 +259,6 @@ async def update_trade_planning_workload_service(
     return db_planning, auditable_data
 
 # --- A.4. AGENDA DE CAMPO SERVICES ---
-
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'TradePlanning', 'CREATE_ADHOC')
 async def create_adhoc_planning_service(
@@ -248,8 +274,6 @@ async def create_adhoc_planning_service(
 
     # 1. Verificar si ya tiene una visita PENDIENTE o COMPLETADA hoy para este PDV
     # (Regla de negocio: Evitar duplicados el mismo día aunque sea Ad-Hoc)
-    # NOTA: Aquí podrías filtrar por fecha si tuvieras un campo 'scheduled_date',
-    # por ahora asumimos gestión activa por status.
 
     existing_plan = db.query(TradePlanning).filter(
         TradePlanning.point_of_sale_id == adhoc_data.point_of_sale_id,
@@ -265,10 +289,10 @@ async def create_adhoc_planning_service(
     # 2. Crear el registro
     db_planning = TradePlanning(
         company_id = adhoc_data.company_id,
-        planning_id = None, # Es Ad-Hoc
+        planning_id = None,
         user_id = adhoc_data.user_id,
         point_of_sale_id = adhoc_data.point_of_sale_id,
-        planned_workload_minutes = 0, # No planificado
+        planned_workload_minutes = 0,
         is_adhoc = True,
         status = 'PENDING',
         comments = adhoc_data.comments

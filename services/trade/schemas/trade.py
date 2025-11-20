@@ -4,20 +4,13 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import Query
-from pydantic import BaseModel, Field, ConfigDict
-from schemas.pos import PointOfSaleResponseSchema
-
-# --- BASE SCHEMAS ---
-class TradeBaseSchema(BaseModel):
-    '''
-        Base schema with `from_attributes=True` enabled to handle
-        ORM objects from SQLAlchemy.
-    '''
-    model_config = ConfigDict(from_attributes = True)
+from pydantic import BaseModel, Field
+from schemas.common import BaseSchema
+from schemas.pos import PointOfSaleNestedResponseSchema
 
 # --- A.3. TRADE PLANNING SCHEMAS ---
 
-class TradePlanningBaseSchema(TradeBaseSchema):
+class TradePlanningBaseSchema(BaseSchema):
     '''
         Base schema for Trade Planning fields.
     '''
@@ -39,12 +32,12 @@ class TradePlanningBaseSchema(TradeBaseSchema):
     )
     planned_workload_minutes: int = Field(
         ...,
-        gt=0,
+        ge = 0,
         description = 'Planned workload in minutes (Business Rule).'
     )
     status: Optional[str] = Field(
         'PENDING',
-        max_length=20,
+        max_length = 20,
         description = 'Status of this planning entry (e.g., PENDING, COMPLETED).'
     )
     comments: Optional[str] = Field(
@@ -52,15 +45,13 @@ class TradePlanningBaseSchema(TradeBaseSchema):
         description = 'Optional comments for this planning entry.'
     )
 
-
 class TradePlanningCreateSchema(TradePlanningBaseSchema):# pylint: disable=too-few-public-methods
     '''
         Schema for creating a new Trade Planning entry.
     '''
     # pass
 
-
-class TradePlanningUpdateSchema(TradeBaseSchema):
+class TradePlanningUpdateSchema(BaseSchema):
     '''
         Schema for updating an existing Trade Planning entry.
     '''
@@ -68,14 +59,18 @@ class TradePlanningUpdateSchema(TradeBaseSchema):
     # To change core data, delete and recreate.
     status: Optional[str] = Field(
         None,
-        max_length=20,
+        max_length = 20,
         description = 'New status for the planning entry.'
     )
     comments: Optional[str] = Field(
         None,
         description = 'Optional comments for this planning entry.'
     )
-
+    planned_workload_minutes: Optional[int] = Field(
+        None,
+        ge = 0,
+        description = 'Planned workload in minutes (Business Rule).'
+    )
 
 class TradePlanningResponseSchema(TradePlanningBaseSchema):
     '''
@@ -90,8 +85,7 @@ class TradePlanningResponseSchema(TradePlanningBaseSchema):
     workload_difference_minutes: Optional[int]
     created_at: Optional[datetime]
 
-    point_of_sale: Optional[PointOfSaleResponseSchema] = None
-
+    point_of_sale: Optional[PointOfSaleNestedResponseSchema] = None
 
 class TradePlanningFilterSchema(BaseModel):
     '''
@@ -109,18 +103,15 @@ class TradePlanningFilterSchema(BaseModel):
         '''
         arbitrary_types_allowed = True
 
-
-class TradePlanningListResponseSchema(TradeBaseSchema):
+class TradePlanningListResponseSchema(BaseSchema):
     '''
         Response schema for a paginated list of Trade Planning entries.
     '''
     items: List[TradePlanningResponseSchema]
     total: int
 
-
 # --- Schema for Workload Calculation Endpoint (PATCH) ---
-
-class TradePlanningWorkloadUpdateSchema(TradeBaseSchema):
+class TradePlanningWorkloadUpdateSchema(BaseSchema):
     '''
         Schema for the PATCH endpoint to calculate and update workload.
         Frontend provides the check-in and check-out times.
@@ -135,23 +126,21 @@ class TradePlanningWorkloadUpdateSchema(TradeBaseSchema):
     )
 
 # --- A.4. AGENDA DE CAMPO SCHEMAS ---
-
-class TradePlanningAdHocCreateSchema(TradeBaseSchema):
+class TradePlanningAdHocCreateSchema(BaseSchema):
     '''
     Schema to create an Ad-Hoc visit (User decides to visit a POS not in the plan).
     '''
-    company_id: int = Field(..., description='Company ID.')
-    point_of_sale_id: int = Field(..., description='POS ID to visit.')
-    user_id: int = Field(..., description='User creating the visit.')
-    comments: Optional[str] = Field(None, description='Reason for the Ad-Hoc visit.')
+    company_id: int = Field(..., description = 'Company ID.')
+    point_of_sale_id: int = Field(..., description = 'POS ID to visit.')
+    user_id: int = Field(..., description = 'User creating the visit.')
+    comments: Optional[str] = Field(None, description = 'Reason for the Ad-Hoc visit.')
 
-
-class TradePlanningJustificationSchema(TradeBaseSchema):
+class TradePlanningJustificationSchema(BaseSchema):
     '''
     Schema to justify why a planned visit was not performed or completed.
     '''
     justification: str = Field(
         ...,
-        min_length=5,
-        description='Reason for not visiting (e.g., "Store Closed").'
+        min_length = 5,
+        description = 'Reason for not visiting (e.g., "Store Closed").'
     )

@@ -27,7 +27,6 @@ from schemas.trade import (
 )
 
 # --- A.3. TRADE PLANNING CONTROLLERS ---
-
 @handle_service_errors('TRADE')
 async def create_trade_planning_controller(
     planning_data: TradePlanningCreateSchema,
@@ -40,7 +39,7 @@ async def create_trade_planning_controller(
     '''
     # 1. Call the service
     # El servicio devuelve (db_planning, auditable_data)
-    db_planning, _ = await create_trade_planning_service(
+    db_planning = await create_trade_planning_service(
         db = db,
         planning_data = planning_data
     )
@@ -49,7 +48,6 @@ async def create_trade_planning_controller(
     return TradePlanningResponseSchema.model_validate(
         db_planning, from_attributes = True
     )
-
 
 @handle_service_errors('TRADE')
 async def get_trade_planning_by_id_controller(
@@ -69,7 +67,6 @@ async def get_trade_planning_by_id_controller(
         db_planning, from_attributes = True
     )
 
-
 @handle_service_errors('TRADE')
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_trade_planning_list_controller(
@@ -88,7 +85,6 @@ async def get_trade_planning_list_controller(
     )
     return TradePlanningListResponseSchema(items = items, total = total)
 
-
 @handle_service_errors('TRADE')
 async def update_trade_planning_controller(
     planning_id: int,
@@ -100,7 +96,7 @@ async def update_trade_planning_controller(
     '''
         Controller for updating a Trade Planning entry (status or comments).
     '''
-    db_planning, _ = await update_trade_planning_service(
+    db_planning = await update_trade_planning_service(
         db = db,
         planning_id = planning_id,
         update_data = update_data
@@ -108,7 +104,6 @@ async def update_trade_planning_controller(
     return TradePlanningResponseSchema.model_validate(
         db_planning, from_attributes = True
     )
-
 
 @handle_service_errors('TRADE')
 async def delete_trade_planning_controller(
@@ -120,14 +115,13 @@ async def delete_trade_planning_controller(
     '''
         Controller for deleting a Trade Planning entry.
     '''
-    deleted_id, _ = await delete_trade_planning_service(
+    deleted_id = await delete_trade_planning_service(
         db = db,
         planning_id = planning_id
     )
     return {
         'message': f'Trade Planning with ID {deleted_id} deleted successfully.'
     }
-
 
 @handle_service_errors('TRADE')
 async def update_trade_planning_workload_controller(
@@ -140,7 +134,7 @@ async def update_trade_planning_workload_controller(
     '''
         Controller for the PATCH endpoint to calculate and update workload.
     '''
-    db_planning, _ = await update_trade_planning_workload_service(
+    db_planning = await update_trade_planning_workload_service(
         db = db,
         planning_id = planning_id,
         workload_data = workload_data
@@ -150,7 +144,6 @@ async def update_trade_planning_workload_controller(
     )
 
 # --- A.4. AGENDA DE CAMPO CONTROLLERS ---
-
 @handle_service_errors('TRADE')
 async def create_adhoc_planning_controller(
     adhoc_data: TradePlanningAdHocCreateSchema,
@@ -161,14 +154,13 @@ async def create_adhoc_planning_controller(
     '''
         Controller for creating an Ad-Hoc visit.
     '''
-    db_planning, _ = await create_adhoc_planning_service(
+    db_planning = await create_adhoc_planning_service(
         db = db,
         adhoc_data = adhoc_data
     )
     return TradePlanningResponseSchema.model_validate(
         db_planning, from_attributes = True
     )
-
 
 @handle_service_errors('TRADE')
 async def justify_planning_absence_controller(
@@ -181,7 +173,7 @@ async def justify_planning_absence_controller(
     '''
         Controller for justifying a non-visit.
     '''
-    db_planning, _ = await justify_planning_absence_service(
+    db_planning = await justify_planning_absence_service(
         db = db,
         planning_id = planning_id,
         justification_data = justification_data

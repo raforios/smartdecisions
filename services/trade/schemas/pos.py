@@ -286,3 +286,22 @@ class POSInventoryBulkCreateSchema(POSInventoryBaseSchema):
         max_length = 50,
         description = 'External code of the POS where the inventory is located.'
     )
+
+class PointOfSaleNestedResponseSchema(PointOfSaleBaseSchema):
+    '''
+        Simplified response schema for Point of Sale when nested inside other entities
+        like TradePlanning. Excludes the heavy 'inventory' relationship.
+    '''
+    id: int = Field(
+        ...,
+        description = 'Unique identifier for the POS record.'
+    )
+    company_id: int = Field(
+        ...,
+        description = 'ID of the company that owns the POS record.'
+    )
+    created_at: Optional[datetime] = Field(
+        None,
+        description = 'Timestamp when the record was created.'
+    )
+    # NOTE: 'inventory: List[POSInventoryResponseSchema]' is deliberately omitted here.

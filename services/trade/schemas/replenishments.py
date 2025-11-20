@@ -4,13 +4,13 @@
 from typing import List, Optional
 from datetime import datetime
 from pydantic import Field
-from schemas.trade import TradeBaseSchema
+from schemas.common import BaseSchema
 
 # --- B.2. REPLENISHMENT ACTIVITIES SCHEMAS ---
 
 # --- Schemas for Replenishment Report ---
 
-class ReplenishmentReportCreateSchema(TradeBaseSchema):
+class ReplenishmentReportCreateSchema(BaseSchema):
     '''
         Schema for creating a Replenishment Report (Success Photos).
         The attendance_id will be passed in the URL path.
@@ -24,7 +24,7 @@ class ReplenishmentReportCreateSchema(TradeBaseSchema):
         description = 'Optional comments from the user.'
     )
 
-class ReplenishmentReportResponseSchema(TradeBaseSchema):
+class ReplenishmentReportResponseSchema(BaseSchema):
     '''
         Response schema for a created Replenishment Report.
     '''
@@ -38,7 +38,7 @@ class ReplenishmentReportResponseSchema(TradeBaseSchema):
 
 # --- Schemas for Replenishment Inventory ---
 
-class ReplenishmentInventoryItemSchema(TradeBaseSchema):
+class ReplenishmentInventoryItemSchema(BaseSchema):
     '''
         Base schema for a single item in a Replenishment Inventory report.
     '''
@@ -61,7 +61,7 @@ class ReplenishmentInventoryItemSchema(TradeBaseSchema):
         description = 'Quantity counted for this SKU/Batch/Expiration.'
     )
 
-class ReplenishmentInventoryCreateSchema(TradeBaseSchema):
+class ReplenishmentInventoryCreateSchema(BaseSchema):
     '''
         Schema for creating a list of detailed inventory items (Replenishment).
     '''
@@ -75,7 +75,7 @@ class ReplenishmentInventoryCreateSchema(TradeBaseSchema):
         description = 'List of SKUs and their quantities/batches/expirations.'
     )
 
-class ReplenishmentInventoryResponseItemSchema(TradeBaseSchema):
+class ReplenishmentInventoryResponseItemSchema(BaseSchema):
     '''
         Response schema for a single created replenishment inventory item.
     '''
@@ -87,7 +87,7 @@ class ReplenishmentInventoryResponseItemSchema(TradeBaseSchema):
     quantity: int
     created_at: Optional[datetime]
 
-class ReplenishmentInventoryListResponseSchema(TradeBaseSchema):
+class ReplenishmentInventoryListResponseSchema(BaseSchema):
     '''
         Response schema for a bulk creation of replenishment inventory items.
     '''
@@ -96,7 +96,7 @@ class ReplenishmentInventoryListResponseSchema(TradeBaseSchema):
 
 # --- Schemas for Replenishment Reception ---
 
-class ReplenishmentReceptionItemSchema(TradeBaseSchema):
+class ReplenishmentReceptionItemSchema(BaseSchema):
     '''
         Base schema for a single item received from a supplier.
     '''
@@ -114,7 +114,7 @@ class ReplenishmentReceptionItemSchema(TradeBaseSchema):
         description = 'Optional comments for this specific item.'
     )
 
-class ReplenishmentReceptionCreateSchema(TradeBaseSchema):
+class ReplenishmentReceptionCreateSchema(BaseSchema):
     '''
         Schema for creating a list of received items (Supplier Reception).
     '''
@@ -128,7 +128,7 @@ class ReplenishmentReceptionCreateSchema(TradeBaseSchema):
         description = 'List of SKUs and quantities received.'
     )
 
-class ReplenishmentReceptionResponseItemSchema(TradeBaseSchema):
+class ReplenishmentReceptionResponseItemSchema(BaseSchema):
     '''
         Response schema for a single created reception item.
     '''
@@ -139,7 +139,7 @@ class ReplenishmentReceptionResponseItemSchema(TradeBaseSchema):
     comments: Optional[str]
     created_at: Optional[datetime]
 
-class ReplenishmentReceptionListResponseSchema(TradeBaseSchema):
+class ReplenishmentReceptionListResponseSchema(BaseSchema):
     '''
         Response schema for a bulk creation of reception items.
     '''
@@ -150,7 +150,7 @@ class ReplenishmentReceptionListResponseSchema(TradeBaseSchema):
 
 # --- Schemas for Bandeo Report ---
 
-class ComplementaryBandeoDetailCreateSchema(TradeBaseSchema):
+class ComplementaryBandeoDetailCreateSchema(BaseSchema):
     '''
         Base schema for a single item (SKU) returned in a Bandeo report.
     '''
@@ -164,7 +164,7 @@ class ComplementaryBandeoDetailCreateSchema(TradeBaseSchema):
         description = 'Quantity returned for this SKU.'
     )
 
-class ComplementaryBandeoCreateSchema(TradeBaseSchema):
+class ComplementaryBandeoCreateSchema(BaseSchema):
     '''
         Schema for creating a new Bandeo Report (Returns and Photos).
         The attendance_id will be passed in the URL path.
@@ -183,7 +183,7 @@ class ComplementaryBandeoCreateSchema(TradeBaseSchema):
         description = 'List of SKUs and quantities returned.'
     )
 
-class ComplementaryBandeoDetailResponseSchema(TradeBaseSchema):
+class ComplementaryBandeoDetailResponseSchema(BaseSchema):
     '''
         Response schema for a created Bandeo detail (returned item).
     '''
@@ -192,7 +192,7 @@ class ComplementaryBandeoDetailResponseSchema(TradeBaseSchema):
     product_id: int
     quantity_returned: int
 
-class ComplementaryBandeoResponseSchema(TradeBaseSchema):
+class ComplementaryBandeoResponseSchema(BaseSchema):
     '''
         Response schema for a created Bandeo Header, including its details.
     '''
@@ -206,7 +206,7 @@ class ComplementaryBandeoResponseSchema(TradeBaseSchema):
 
 # --- Schemas for Promotional Point Report ---
 
-class ComplementaryPromoPointCreateSchema(TradeBaseSchema):
+class ComplementaryPromoPointCreateSchema(BaseSchema):
     '''
         Schema for creating a Promotional Point Report (Photos).
         The attendance_id will be passed in the URL path.
@@ -220,7 +220,7 @@ class ComplementaryPromoPointCreateSchema(TradeBaseSchema):
         description = 'Optional comments from the user.'
     )
 
-class ComplementaryPromoPointResponseSchema(TradeBaseSchema):
+class ComplementaryPromoPointResponseSchema(BaseSchema):
     '''
         Response schema for a created Promotional Point Report.
     '''
@@ -233,7 +233,7 @@ class ComplementaryPromoPointResponseSchema(TradeBaseSchema):
 
 # --- Schemas for Competition Report ---
 
-class ComplementaryCompetitionCreateSchema(TradeBaseSchema):
+class ComplementaryCompetitionCreateSchema(BaseSchema):
     '''
         Schema for creating a general Competition Report.
         This is not tied to a specific attendance_id.
@@ -270,7 +270,7 @@ class ComplementaryCompetitionCreateSchema(TradeBaseSchema):
         description = 'General comments or details about the activity.'
     )
 
-class ComplementaryCompetitionResponseSchema(TradeBaseSchema):
+class ComplementaryCompetitionResponseSchema(BaseSchema):
     '''
         Response schema for a created Competition Report.
     '''

@@ -5,11 +5,11 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import Query
 from pydantic import BaseModel, Field
-from schemas.trade import TradeBaseSchema
+from schemas.common import BaseSchema
 
 # --- TRADE PROMOTION (BANDEO) SCHEMAS ---
 
-class TradePromotionDetailBaseSchema(TradeBaseSchema):
+class TradePromotionDetailBaseSchema(BaseSchema):
     '''
         Base schema for Promotion Detail (SKU list).
     '''
@@ -18,7 +18,7 @@ class TradePromotionDetailBaseSchema(TradeBaseSchema):
         description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) included in the promotion.'
     )
 
-class TradePromotionDetailResponseSchema(TradeBaseSchema):
+class TradePromotionDetailResponseSchema(BaseSchema):
     '''
         Response schema for a Promotion Detail.
     '''
@@ -26,7 +26,7 @@ class TradePromotionDetailResponseSchema(TradeBaseSchema):
     promotion_id: int
     product_id: int # Returns the internal ID
 
-class TradePromotionBaseSchema(TradeBaseSchema):
+class TradePromotionBaseSchema(BaseSchema):
     '''
         Base schema for Trade Promotion (Bandeo) fields.
     '''
@@ -66,7 +66,7 @@ class TradePromotionCreateSchema(TradePromotionBaseSchema):
         description = 'List of SKUs included in this promotion.'
     )
 
-class TradePromotionUpdateSchema(TradeBaseSchema):
+class TradePromotionUpdateSchema(BaseSchema):
     '''
         Schema for updating an existing Promotion (Header only).
     '''
@@ -104,7 +104,7 @@ class TradePromotionFilterSchema(BaseModel):
         '''
         arbitrary_types_allowed = True
 
-class TradePromotionListResponseSchema(TradeBaseSchema):
+class TradePromotionListResponseSchema(BaseSchema):
     '''
         Response schema for a paginated list of Promotions.
     '''
@@ -115,7 +115,7 @@ class TradePromotionListResponseSchema(TradeBaseSchema):
 
 # --- Schemas for Inventory Start and End ---
 
-class ImpulseInventoryItemSchema(TradeBaseSchema):
+class ImpulseInventoryItemSchema(BaseSchema):
     '''
         Base schema for a single item in an inventory report (Start or End).
     '''
@@ -129,7 +129,7 @@ class ImpulseInventoryItemSchema(TradeBaseSchema):
         description = 'Quantity counted for this SKU.'
     )
 
-class ImpulseInventoryCreateSchema(TradeBaseSchema):
+class ImpulseInventoryCreateSchema(BaseSchema):
     '''
         Schema for creating a list of inventory items (Start or End).
         The attendance_id will be passed in the URL path.
@@ -144,7 +144,7 @@ class ImpulseInventoryCreateSchema(TradeBaseSchema):
         description = 'List of SKUs and their quantities.'
     )
 
-class ImpulseInventoryResponseItemSchema(TradeBaseSchema):
+class ImpulseInventoryResponseItemSchema(BaseSchema):
     '''
         Response schema for a single created inventory item.
     '''
@@ -154,7 +154,7 @@ class ImpulseInventoryResponseItemSchema(TradeBaseSchema):
     quantity: int
     created_at: Optional[datetime]
 
-class ImpulseInventoryListResponseSchema(TradeBaseSchema):
+class ImpulseInventoryListResponseSchema(BaseSchema):
     '''
         Response schema for a bulk creation of inventory items.
     '''
@@ -163,7 +163,7 @@ class ImpulseInventoryListResponseSchema(TradeBaseSchema):
 
 # --- Schemas for Sale ---
 
-class ImpulseSaleDetailCreateSchema(TradeBaseSchema):
+class ImpulseSaleDetailCreateSchema(BaseSchema):
     '''
         Base schema for a single item (SKU) in a Sale transaction.
     '''
@@ -177,7 +177,7 @@ class ImpulseSaleDetailCreateSchema(TradeBaseSchema):
         description = 'Quantity sold for this SKU.'
     )
 
-class ImpulseSaleCreateSchema(TradeBaseSchema):
+class ImpulseSaleCreateSchema(BaseSchema):
     '''
         Schema for creating a new Sale transaction.
         The attendance_id will be passed in the URL path.
@@ -192,7 +192,7 @@ class ImpulseSaleCreateSchema(TradeBaseSchema):
         description = 'List of SKUs and quantities sold in this transaction.'
     )
 
-class ImpulseSaleDetailResponseSchema(TradeBaseSchema):
+class ImpulseSaleDetailResponseSchema(BaseSchema):
     '''
         Response schema for a created Sale detail.
     '''
@@ -201,7 +201,7 @@ class ImpulseSaleDetailResponseSchema(TradeBaseSchema):
     product_id: int
     quantity: int
 
-class ImpulseSaleResponseSchema(TradeBaseSchema):
+class ImpulseSaleResponseSchema(BaseSchema):
     '''
         Response schema for a created Sale Header, including its details.
     '''

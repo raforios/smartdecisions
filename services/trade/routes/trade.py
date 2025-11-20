@@ -31,7 +31,6 @@ from schemas.trade import (
 router = APIRouter(prefix = '/v1/trade', tags = ['Trade'])
 
 # --- A.3. TRADE PLANNING ENDPOINTS ---
-
 @router.post(
     '/planning',
     response_model = TradePlanningResponseSchema,
@@ -57,7 +56,6 @@ async def create_trade_planning_endpoint(
         current_user = current_user
     )
 
-
 @router.get(
     '/planning/{planning_id}',
     response_model = TradePlanningResponseSchema,
@@ -79,7 +77,6 @@ async def get_trade_planning_by_id_endpoint(
         request = request,
         current_user = current_user
     )
-
 
 @router.get(
     '/planning',
@@ -134,7 +131,6 @@ async def update_trade_planning_endpoint(
         current_user = current_user
     )
 
-
 @router.delete(
     '/planning/{planning_id}',
     response_model = Dict[str, Any],
@@ -158,7 +154,6 @@ async def delete_trade_planning_endpoint(
         request = request,
         current_user = current_user
     )
-
 
 @router.patch(
     '/planning/{planning_id}/workload',
@@ -188,7 +183,6 @@ async def update_trade_planning_workload_endpoint(
     )
 
 # --- A.4. AGENDA DE CAMPO ENDPOINTS ---
-
 @router.post(
     '/planning/adhoc',
     response_model = TradePlanningResponseSchema,
@@ -213,7 +207,6 @@ async def create_adhoc_planning_endpoint(
         request = request,
         current_user = current_user
     )
-
 
 @router.patch(
     '/planning/{planning_id}/justify',
