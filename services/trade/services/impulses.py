@@ -7,7 +7,6 @@ from fastapi import UploadFile
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload
 from services.products import (
-    create_bulk_items_from_skus,
     get_product_id_by_sku,
 )
 from services.common import prepare_file_to_upload
@@ -56,10 +55,8 @@ async def create_promotion_service(
     message = f'Attempting to create promotion: {promotion_data.name}'
     logger.info(message)
 
-    # 1. Prepare data for the Header (TradePromotion)
     header_data = promotion_data.model_dump(exclude = {'details'})
 
-    # Check for existing name (using logic from create_product_service)
     existing_promo = db.query(TradePromotion).filter(
         TradePromotion.company_id == promotion_data.company_id,
         TradePromotion.name == promotion_data.name
@@ -72,28 +69,24 @@ async def create_promotion_service(
 
     db_promotion = TradePromotion(**header_data)
     db.add(db_promotion)
-    db.flush() # Flush to get the db_promotion.id
+    db.flush()
 
-    # 2. Iterate through details and create nested records
     if not promotion_data.details:
         error_msg = 'Cannot create a promotion with an empty SKU list (details).'
         logger.error(error_msg)
         raise InvalidInputError(detail = error_msg)
 
     for detail_item in promotion_data.details:
-        # 2a. Translate SKU to product_id (reusing helper)
         product_id = get_product_id_by_sku(
             db, promotion_data.company_id, detail_item.product_sku
         )
 
-        # 2b. Create the detail record
         db_detail = TradePromotionDetail(
             promotion_id = db_promotion.id,
             product_id = product_id
         )
         db.add(db_detail)
 
-    # 3. Commit and refresh
     db.commit()
     db.refresh(db_promotion)
     return db_promotion
@@ -109,7 +102,6 @@ async def get_promotion_by_id_service(
     message = f'Retrieving Promotion ID: {promotion_id}'
     logger.info(message)
 
-    # Use eager_load_options to load the 'details' relationship
     eager_load_options = [joinedload(TradePromotion.details)]
 
     db_promotion = get_record(
@@ -130,13 +122,10 @@ async def get_promotions_list_service(
     message = f'Attempting to retrieve Promotion list for company {filters.company_id}'
     logger.info(message)
 
-    # Eager load details for the list view
     query = db.query(TradePromotion).options(joinedload(TradePromotion.details))
 
-    # Mandatory filter
     conditions = [TradePromotion.company_id == filters.company_id]
 
-    # Optional filters
     if filters.name:
         conditions.append(TradePromotion.name.ilike(f'%{filters.name}%'))
     if filters.status:
@@ -166,7 +155,6 @@ async def update_promotion_service(
     db_promotion = get_record(db, TradePromotion, promotion_id)
     old_values = sqlalchemy_object_as_dict(db_promotion)
 
-    # Use the generic crud.update_record function
     db_promotion = update_record(db, db_promotion, update_data)
 
     db.commit()
@@ -211,6 +199,7 @@ async def delete_promotion_service(
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ImpulseInventoryStart', 'CREATE')
+# pylint: disable=duplicate-code
 async def create_impulse_inventory_start_service(
     db: Session,
     attendance_id: int,
@@ -223,13 +212,38 @@ async def create_impulse_inventory_start_service(
             } for the company ID: {inventory_data.company_id}'
     logger.info(message)
 
-    created_items = await create_bulk_items_from_skus(
-        db = db,
-        attendance_id = attendance_id,
-        company_id = inventory_data.company_id,
-        items_list = inventory_data.items,
-        model_class = ImpulseInventoryStart
-    )
+    created_items = []
+
+    for item in inventory_data.items:
+
+        product_id = get_product_id_by_sku(
+            db, inventory_data.company_id, item.product_sku
+        )
+
+        existing_record = db.query(ImpulseInventoryStart).filter(
+            ImpulseInventoryStart.attendance_id == attendance_id,
+            ImpulseInventoryStart.product_id == product_id
+        ).first()
+
+        if existing_record:
+            error_msg = f'Inventory Start for SKU {item.product_sku
+                        } already exists for this visit.'
+            logger.error(error_msg)
+            raise RegisterAlreadyExistsError(detail = error_msg)
+
+        db_item = ImpulseInventoryStart(
+            attendance_id = attendance_id,
+            company_id = inventory_data.company_id,
+            product_id = product_id,
+            quantity = item.quantity
+        )
+        db.add(db_item)
+        created_items.append(db_item)
+
+    db.commit()
+
+    for item in created_items:
+        db.refresh(item)
 
     return created_items
 
@@ -250,7 +264,6 @@ async def create_impulse_sale_service(
     message = f'Creating Impulse Sale for attendance ID: {attendance_id}'
     logger.info(message)
 
-    # 1. Handle file upload
     file_path = None
     if uploaded_file:
         upload_result = await prepare_file_to_upload(
@@ -260,13 +273,11 @@ async def create_impulse_sale_service(
             prefix = f'sale_{attendance_id}'
         )
 
-        # FIX: Extraemos la URL del diccionario.
         if isinstance(upload_result, dict):
             file_path = upload_result.get('url')
         else:
             file_path = str(upload_result)
 
-    # 2. Create the Header (ImpulseSale)
     db_sale_header = ImpulseSale(
         attendance_id = attendance_id,
         company_id = sale_data.company_id,
@@ -275,12 +286,22 @@ async def create_impulse_sale_service(
     db.add(db_sale_header)
     db.flush()
 
-    # 3. Iterate through details and create child records
     for detail_item in sale_data.details:
-
         product_id = get_product_id_by_sku(
             db, sale_data.company_id, detail_item.product_sku
         )
+
+        existing_detail = db.query(ImpulseSaleDetail).filter(
+            ImpulseSaleDetail.impulse_sale_id == db_sale_header.id,
+            ImpulseSaleDetail.product_id == product_id
+        ).first()
+
+        if existing_detail:
+            error_msg = f'Duplicate SKU {detail_item.product_sku} in sale payload.'
+            logger.warning(error_msg)
+            raise RegisterAlreadyExistsError(
+                detail = f'Duplicate product {detail_item.product_sku} in the sale list.'
+            )
 
         db_detail = ImpulseSaleDetail(
             impulse_sale_id = db_sale_header.id,
@@ -289,7 +310,6 @@ async def create_impulse_sale_service(
         )
         db.add(db_detail)
 
-    # 4. Commit and refresh
     db.commit()
 
     db_sale_header = db.query(ImpulseSale).options(
@@ -300,6 +320,7 @@ async def create_impulse_sale_service(
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ImpulseInventoryEnd', 'CREATE')
+# pylint: disable=duplicate-code
 async def create_impulse_inventory_end_service(
     db: Session,
     attendance_id: int,
@@ -312,12 +333,36 @@ async def create_impulse_inventory_end_service(
             } and company {inventory_data.company_id}'
     logger.info(message)
 
-    created_items = await create_bulk_items_from_skus(
-        db = db,
-        attendance_id = attendance_id,
-        company_id = inventory_data.company_id,
-        items_list = inventory_data.items,
-        model_class = ImpulseInventoryEnd
-    )
+    created_items = []
+
+    for item in inventory_data.items:
+
+        product_id = get_product_id_by_sku(
+            db, inventory_data.company_id, item.product_sku
+        )
+
+        existing_record = db.query(ImpulseInventoryEnd).filter(
+            ImpulseInventoryEnd.attendance_id == attendance_id,
+            ImpulseInventoryEnd.product_id == product_id
+        ).first()
+
+        if existing_record:
+            error_msg = f'Inventory End for SKU {item.product_sku
+                        } already exists for this visit.'
+            logger.error(error_msg)
+            raise RegisterAlreadyExistsError(detail = error_msg)
+
+        db_item = ImpulseInventoryEnd(
+            attendance_id = attendance_id,
+            product_id = product_id,
+            quantity = item.quantity
+        )
+        db.add(db_item)
+        created_items.append(db_item)
+
+    db.commit()
+
+    for item in created_items:
+        db.refresh(item)
 
     return created_items

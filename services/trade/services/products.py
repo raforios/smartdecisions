@@ -338,10 +338,8 @@ async def _insert_product_bulk_data(
     if not processed_data:
         return {'message': 'No valid product data to insert.', 'created_records': 0}
 
-    # Use a nested transaction for atomic SKU generation per product
     for item in processed_data:
         try:
-            # Check for name conflict before transaction
             if db.query(Product).filter(
                 Product.company_id == item.company_id,
                 Product.name == item.name
@@ -352,7 +350,6 @@ async def _insert_product_bulk_data(
                 continue
 
             with db.begin_nested():
-                # 1. Generate atomic SKU (must be inside nested transaction)
                 final_sku = _generate_next_sku_sequence(
                     db,
                     item.company_id,
@@ -362,14 +359,12 @@ async def _insert_product_bulk_data(
                     item.category_4_code
                 )
 
-                # 2. Create the Product record
                 product_dict = item.model_dump()
                 product_dict['sku'] = final_sku
 
                 db_product = Product(**product_dict)
                 db.add(db_product)
 
-                # Flush to ensure SKU Sequencer and Product are committed together
                 db.flush()
                 products_created += 1
 
@@ -423,6 +418,18 @@ async def create_sku_equivalency_service(
     message = f'Attempting to create SKU equivalency for external code: {
             equivalency_data.external_product_code}'
     logger.info(message)
+
+    existing_equiv = db.query(SKUEquivalency).filter(
+        SKUEquivalency.company_id == equivalency_data.company_id,
+        SKUEquivalency.external_system_name == equivalency_data.external_system_name,
+        SKUEquivalency.external_product_code == equivalency_data.external_product_code
+    ).first()
+
+    if existing_equiv:
+        error_msg = f'Equivalency for system {equivalency_data.external_system_name
+                } and code {equivalency_data.external_product_code} already exists.'
+        logger.error(error_msg, exc_info = True)
+        raise RegisterAlreadyExistsError(detail = error_msg)
 
     product_id = get_product_id_by_sku(
         db, equivalency_data.company_id, equivalency_data.product_sku
@@ -489,7 +496,9 @@ async def update_sku_equivalency_service(
     ).filter(SKUEquivalency.id == equivalency_id).first()
 
     if not db_equivalency:
-        raise RegisterNotFoundError(detail = f'SKU Equivalency with ID {equivalency_id} not found.')
+        raise RegisterNotFoundError(
+            detail = f'SKU Equivalency with ID {equivalency_id} not found.'
+        )
 
     old_values = sqlalchemy_object_as_dict(db_equivalency)
 
@@ -560,7 +569,6 @@ async def get_sku_equivalencies_list_service(
     message = 'Attempting to retrieve SKU Equivalencies list.'
     logger.info(message)
 
-    # Use joinedload to fetch the related Product efficiently
     query = db.query(SKUEquivalency).options(
         joinedload(SKUEquivalency.product)
     )
@@ -568,68 +576,67 @@ async def get_sku_equivalencies_list_service(
     total = query.count()
     items = query.offset(skip).limit(limit).all()
 
-    # Manually inject 'product_sku' into the instances so Pydantic can read it
     for item in items:
         if item.product:
-            # We assign the attribute dynamically to the instance
             setattr(item, 'product_sku', item.product.sku)
 
     return items, total
 
 # --- SKU EQUIVALENCY BULK HELPERS ---
-
 async def _insert_sku_equivalency_bulk_data(
     db: Session,
-    processed_data: List[SKUEquivalencyBulkItemSchema],
+    processed_data: List[SKUEquivalencyCreateSchema],
     file_name: str, # pylint: disable=unused-argument
     auth_token: str # pylint: disable=unused-argument
 ) -> Dict[str, Any]:
     '''
-        Handles the transactional insertion of SKU equivalency records.
-        Translates product_sku to product_id and inserts in bulk.
+        Handles the transactional insertion of SKU Equivalency records.
+        Checks for duplicates before insertion and skips invalid SKUs.
     '''
-    inserted_count = 0
-    records_to_insert = []
+    records_created = 0
 
     if not processed_data:
-        return {'message': 'No valid data to insert.', 'created_records': 0}
-
-    # 1. Pre-fetch all necessary Product IDs for optimization
-    company_id = processed_data[0].company_id
-    skus = {item.product_sku for item in processed_data}
-
-    # Map from SKU string to Product ID integer
-    sku_to_id_map = {
-        product.sku: product.id
-        for product in db.query(Product).filter(
-            Product.company_id == company_id,
-            Product.sku.in_(skus)
-        ).all()
-    }
+        return {'message': 'No valid equivalency data to insert.', 'created_records': 0}
 
     for item in processed_data:
-        product_id = sku_to_id_map.get(item.product_sku)
+        try:
+            if db.query(SKUEquivalency).filter(
+                SKUEquivalency.company_id == item.company_id,
+                SKUEquivalency.external_system_name == item.external_system_name,
+                SKUEquivalency.external_product_code == item.external_product_code
+            ).first():
+                error_msg = (f"Equivalency for system '{item.external_system_name}' "
+                             f"and code '{item.external_product_code}' already exists. Skipping.")
+                logger.warning(error_msg)
+                continue
 
-        if not product_id:
-            error_msg = f'SKU {item.product_sku} not found for company {company_id
-                    }. Skipping record.'
+            with db.begin_nested():
+                product_id = get_product_id_by_sku(
+                    db, item.company_id, item.product_sku
+                )
+
+                equiv_dict = item.model_dump(exclude={'product_sku'})
+                equiv_dict['product_id'] = product_id
+
+                db_equiv = SKUEquivalency(**equiv_dict)
+                db.add(db_equiv)
+                db.flush()
+                records_created += 1
+
+        except RegisterNotFoundError:
+            error_msg = (f"Skipping record in bulk upload: Internal SKU '{item.product_sku}' "
+                         f"not found for company {item.company_id}.")
             logger.warning(error_msg)
             continue
-
-        # 2. Convert to Model format
-        record_dict = item.model_dump(exclude = {'product_sku'})
-        record_dict['product_id'] = product_id
-
-        records_to_insert.append(SKUEquivalency(**record_dict))
-        inserted_count += 1
-
-    # 3. Perform bulk insert (using SQLAlchemy's session.add_all)
-    if records_to_insert:
-        db.add_all(records_to_insert)
+        except (SQLAlchemyError, InvalidInputError) as e:
+            error_msg = (f"Unexpected error during SKU Equivalency bulk insertion "
+                         f"for code {item.external_product_code}: {e}")
+            logger.error(error_msg, exc_info=True)
+            continue
 
     return {
         'message': 'SKU Equivalency insertion completed.',
-        'created_records': inserted_count
+        'created_records': records_created
     }
 
 @handle_service_errors('TRADE')
@@ -673,14 +680,12 @@ async def create_product_assignment_service(
         assignment_data.point_of_sale_id}'
     logger.info(message)
 
-    # 1. Traducir SKU a ID (Esto soluciona el problema de consistencia)
     product_id = get_product_id_by_sku(
         db = db,
         company_id = assignment_data.company_id,
         sku = assignment_data.product_sku
     )
 
-    # 2. Verificar si ya existe
     exists = db.query(ProductAssignmentPOS).filter(
         ProductAssignmentPOS.company_id == assignment_data.company_id,
         ProductAssignmentPOS.product_id == product_id,
@@ -692,10 +697,9 @@ async def create_product_assignment_service(
             detail = f'Product {assignment_data.product_sku} is already assigned to this POS.'
         )
 
-    # 3. Crear
     db_assign = ProductAssignmentPOS(
         company_id = assignment_data.company_id,
-        product_id = product_id, # Usamos el ID traducido
+        product_id = product_id,
         point_of_sale_id = assignment_data.point_of_sale_id,
         status = 'ACTIVE'
     )

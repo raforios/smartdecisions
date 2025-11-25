@@ -175,7 +175,7 @@ async def delete_promotion_endpoint(
 # These endpoints are linked to the visit ID (attendance_id) from LOCALIZATION
 
 @router.post(
-    '/impulse/visit/{attendance_id}/inventory-start',
+    '/visit/{attendance_id}/inventory-start',
     response_model = ImpulseInventoryListResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Register Impulse Inventory Start'
@@ -202,7 +202,7 @@ async def create_impulse_inventory_start_endpoint(
     )
 
 @router.post(
-    '/impulse/visit/{attendance_id}/sale',
+    '/visit/{attendance_id}/sale',
     response_model = ImpulseSaleResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Register Impulse Sale'
@@ -241,7 +241,7 @@ async def create_impulse_sale_endpoint(
     )
 
 @router.post(
-    '/impulse/visit/{attendance_id}/inventory-end',
+    '/visit/{attendance_id}/inventory-end',
     response_model = ImpulseInventoryListResponseSchema,
     status_code = status.HTTP_201_CREATED,
     summary = 'Register Impulse Inventory End'

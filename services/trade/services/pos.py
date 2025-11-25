@@ -219,20 +219,17 @@ async def _insert_pos_bulk_data(
 ) -> Dict[str, Any]:
     '''
         Handles the insertion of Point of Sale records in bulk.
-        Checks for unique constraints (name/external_code) and inserts valid records.
+        Uses row-level transactions to skip duplicates and process valid records.
     '''
     pos_created = 0
-    records_to_insert = []
 
     if not processed_data:
         return {'message': 'No valid POS data to insert.', 'created_records': 0}
 
     for item in processed_data:
         try:
-            # Check for name/external_code conflicts before bulk insert attempt
             existing_pos_query = db.query(PointOfSale).filter(
                 PointOfSale.company_id == item.company_id,
-                # Check for either name or external_code conflict
                 (PointOfSale.name == item.name) |
                 (PointOfSale.external_code == item.external_code if item.external_code else False)
             )
@@ -243,28 +240,20 @@ async def _insert_pos_bulk_data(
                 logger.warning(error_msg)
                 continue
 
-            # Convert to Model format
-            records_to_insert.append(PointOfSale(**item.model_dump()))
-            pos_created += 1
+            with db.begin_nested():
+                new_pos = PointOfSale(**item.model_dump())
+                db.add(new_pos)
+                db.flush()
+                pos_created += 1
 
+        except IntegrityError as e:
+            error_msg = f'POS creation failed (Integrity): {e}'
+            logger.warning(error_msg)
+            continue
         except (SQLAlchemyError, InvalidInputError) as e:
             error_msg = f'Unexpected error during POS bulk insertion for {item.name}: {e}'
             logger.error(error_msg, exc_info = True)
             continue
-
-    # Perform bulk insertion
-    if records_to_insert:
-        try:
-            db.add_all(records_to_insert)
-            # IntegrityError will be caught by perform_bulk_upload if we commit here
-        except IntegrityError as e:
-            error_msg = f'Database integrity error during POS bulk insert: {e}'
-            logger.error(error_msg, exc_info = True)
-            # Re-raise to trigger rollback by perform_bulk_upload
-            raise RegisterAlreadyExistsError(
-                detail = 'A unique constraint was violated during bulk insert. Duplicate codes.'
-            ) from e
-
 
     return {
         'message': 'Point of Sale bulk insertion completed.',
@@ -293,7 +282,7 @@ async def bulk_create_points_of_sale_service(
 
     return result
 
-# --- INVENTRORY ---
+# --- INVENTORY ---
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'PointOfSaleInventory', 'CREATE')
@@ -308,15 +297,12 @@ async def create_inventory_item_service(
     message = f'Attempting to add inventory to POS ID: {pos_id}'
     logger.info(message)
 
-    # 1. Validar que el POS existe
     db_pos = get_record(db, PointOfSale, pos_id)
     company_id = db_pos.company_id
     sku = inventory_data.product_sku
 
-    # 2. Traducir SKU
     product_id = get_product_id_by_sku(db, company_id, sku)
 
-    # 3. Validar Asignación
     assignment = db.query(ProductAssignmentPOS).filter(
         ProductAssignmentPOS.point_of_sale_id == pos_id,
         ProductAssignmentPOS.product_id == product_id,
@@ -331,7 +317,6 @@ async def create_inventory_item_service(
             detail = f'El producto con SKU {sku} no está asignado (activo) a este Punto de Venta.'
         )
 
-    # 4. Verificación Preventiva de Duplicados
     existing_inventory = db.query(PointOfSaleInventory).filter(
         PointOfSaleInventory.point_of_sale_id == pos_id,
         PointOfSaleInventory.product_id == product_id,
@@ -466,10 +451,9 @@ async def _insert_pos_inventory_bulk_data(
 ) -> Dict[str, Any]:
     '''
         Handles the transactional insertion of POS Inventory records in bulk.
-        Performs dual lookup: POS external code -> POS ID, and Product SKU -> Product ID.
+        Includes Pre-Check to avoid duplicate entries.
     '''
     inventory_created = 0
-    records_to_insert = []
 
     if not processed_data:
         return {'message': 'No valid inventory data to insert.', 'created_records': 0}
@@ -501,47 +485,52 @@ async def _insert_pos_inventory_bulk_data(
         product_id = sku_to_id_map.get(item.product_sku)
 
         if not pos_id:
-            error_msg = f'POS external code {item.pos_external_code
-                        } not found. Skipping inventory record.'
+            error_msg = f'POS external code {item.pos_external_code} not found. Skipping.'
             logger.warning(error_msg)
             continue
 
         if not product_id:
-            error_msg = f'Product SKU {item.product_sku} not found. Skipping inventory record.'
+            error_msg = f'Product SKU {item.product_sku} not found. Skipping.'
             logger.warning(error_msg)
             continue
 
         try:
-            # 3. Convert Pydantic to Model format
-            # Excluir campos usados solo para lookup
-            record_dict = item.model_dump(exclude = {'product_sku', 'pos_external_code'})
+            existing_inv = db.query(PointOfSaleInventory).filter(
+                PointOfSaleInventory.point_of_sale_id == pos_id,
+                PointOfSaleInventory.product_id == product_id,
+                PointOfSaleInventory.batch_number == item.batch_number,
+                PointOfSaleInventory.location == item.location
+            ).first()
 
-            # Convertir la fecha de string a objeto datetime
-            record_dict['expiration_date'] = datetime.strptime(
-                record_dict['expiration_date'], '%Y-%m-%d'
-            )
+            if existing_inv:
+                error_msg = f'Inventory conflict: SKU {item.product_sku}, Batch {item.batch_number
+                        } already exists at POS {item.pos_external_code}. Skipping.'
+                logger.warning(error_msg)
+                continue
 
-            record_dict['point_of_sale_id'] = pos_id
-            record_dict['product_id'] = product_id
+            with db.begin_nested():
+                record_dict = item.model_dump(exclude = {'product_sku', 'pos_external_code'})
 
-            records_to_insert.append(PointOfSaleInventory(**record_dict))
-            inventory_created += 1
+                record_dict['expiration_date'] = datetime.strptime(
+                    record_dict['expiration_date'], '%Y-%m-%d'
+                )
+
+                record_dict['point_of_sale_id'] = pos_id
+                record_dict['product_id'] = product_id
+
+                new_inv = PointOfSaleInventory(**record_dict)
+                db.add(new_inv)
+                db.flush()
+                inventory_created += 1
 
         except ValueError as e:
-            error_msg = f'Date format error for {item.product_sku} on POS {
-                item.pos_external_code}. Expected YYYY-MM-DD. Error: {e}. Skipping record.'
-            logger.error(error_msg)
+            error_msg = f'Date format error for {item.product_sku}. Error: {e}. Skipping.'
+            logger.error(error_msg, exc_info = True)
             continue
-        except SQLAlchemyError as e:
-            # Captura errores de unicidad/integridad que permiten continuar el loop
-            error_msg = f'DB error during inventory insert for POS {item.pos_external_code}, SKU {
-                item.product_sku}. Error: {e}. Skipping record.'
-            logger.warning(error_msg)
+        except (SQLAlchemyError, InvalidInputError) as e:
+            error_msg = f'Unexpected error inserting inventory: {e}'
+            logger.error(error_msg, exc_info = True)
             continue
-
-    # 4. Perform bulk insertion
-    if records_to_insert:
-        db.add_all(records_to_insert)
 
     return {
         'message': 'POS Inventory bulk insertion completed.',

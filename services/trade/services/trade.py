@@ -4,7 +4,10 @@
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 from sqlalchemy.orm import Session, joinedload
-from services.exceptions import InvalidInputError
+from services.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError
+)
 from services.crud import (
     create_record,
     delete_record,
@@ -42,6 +45,19 @@ async def create_trade_planning_service(
     '''
     message = f'Attempting to create Trade Planning for planning_id: {planning_data.planning_id}'
     logger.info(message)
+
+    existing_plan = db.query(TradePlanning).filter(
+        TradePlanning.company_id == planning_data.company_id,
+        TradePlanning.planning_id == planning_data.planning_id,
+        TradePlanning.point_of_sale_id == planning_data.point_of_sale_id,
+        TradePlanning.user_id == planning_data.user_id
+    ).first()
+
+    if existing_plan:
+        error_msg = (f'Planning entry {planning_data.planning_id} for User {planning_data.user_id} '
+                     f'at POS {planning_data.point_of_sale_id} already exists.')
+        logger.error(error_msg)
+        raise RegisterAlreadyExistsError(detail = error_msg)
 
     db_planning = create_record(
         db = db,
@@ -208,10 +224,9 @@ async def update_trade_planning_workload_service(
 
     for key, value in old_values.items():
         if isinstance(value, datetime) and value.tzinfo is not None:
-            # Limpieza: Hacemos la fecha naive para que el validador remoto la acepte.
             old_values[key] = value.replace(tzinfo = None).isoformat()
         elif key == 'point_of_sale':
-            del old_values[key] # Eliminamos la relación si fue cargada
+            del old_values[key]
 
     duration_delta = workload_data.check_out_time - workload_data.check_in_time
     actual_minutes = int(duration_delta.total_seconds() // 60)
@@ -229,26 +244,17 @@ async def update_trade_planning_workload_service(
     if hasattr(db_planning, 'point_of_sale'):
         delattr(db_planning, 'point_of_sale')
 
-    # 3. Generar NEW_VALUES (para incrustar el cálculo)
-    # El decorador leerá db_planning (limpio) para generar el new_values base.
-    # Aquí creamos el diccionario final que queremos que sea el new_values.
     new_values_final = sqlalchemy_object_as_dict(db_planning)
 
-    # Limpieza NEW_VALUES: Fechas
     for key, value in new_values_final.items():
         if isinstance(value, datetime) and value.tzinfo is not None:
             new_values_final[key] = value.replace(tzinfo=None).isoformat()
 
-    # Incrustar el campo extra 'calculation_input' dentro de new_values_final
     new_values_final['calculation_input'] = {
-        # Limpiamos las fechas de entrada por seguridad.
         'check_in': workload_data.check_in_time.replace(tzinfo=None).isoformat(),
         'check_out': workload_data.check_out_time.replace(tzinfo=None).isoformat()
     }
 
-    # 4. Devolver el diccionario completo. El decorador usará new_values_final
-    # como new_values, ya que sobrescribe el new_values ORM con la clave del auditable_data
-    # si está presente.
     auditable_data = {
         'old_values': old_values,
         'new_values': new_values_final, 
@@ -272,9 +278,6 @@ async def create_adhoc_planning_service(
         adhoc_data.point_of_sale_id}'
     logger.info(message)
 
-    # 1. Verificar si ya tiene una visita PENDIENTE o COMPLETADA hoy para este PDV
-    # (Regla de negocio: Evitar duplicados el mismo día aunque sea Ad-Hoc)
-
     existing_plan = db.query(TradePlanning).filter(
         TradePlanning.point_of_sale_id == adhoc_data.point_of_sale_id,
         TradePlanning.user_id == adhoc_data.user_id,
@@ -282,11 +285,10 @@ async def create_adhoc_planning_service(
     ).first()
 
     if existing_plan:
-        raise InvalidInputError(
-            detail=f'User already has an active visit for POS {adhoc_data.point_of_sale_id}.'
-        )
+        error_msg = f'User already has an active visit for POS {adhoc_data.point_of_sale_id}.'
+        logger.warning(error_msg)
+        raise RegisterAlreadyExistsError(detail = error_msg)
 
-    # 2. Crear el registro
     db_planning = TradePlanning(
         company_id = adhoc_data.company_id,
         planning_id = None,
@@ -310,7 +312,6 @@ async def create_adhoc_planning_service(
 
     return db_planning, auditable_data
 
-
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'TradePlanning', 'JUSTIFY')
 async def justify_planning_absence_service(
@@ -330,8 +331,7 @@ async def justify_planning_absence_service(
     if db_planning.status == 'COMPLETED':
         raise InvalidInputError('Cannot justify a completed visit.')
 
-    # Actualizar estado y justificación
-    db_planning.status = 'NO_VISIT' # O 'CANCELLED' según tu enumerador
+    db_planning.status = 'NO_VISIT'
     db_planning.justification = justification_data.justification
 
     db.add(db_planning)
