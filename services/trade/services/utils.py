@@ -278,16 +278,32 @@ def audit_event(
                 }
 
             entity_id = None
-            if isinstance(final_result, (BaseModel, int)):
-                entity_id = final_result.id if isinstance(final_result, BaseModel) else final_result
-            elif hasattr(final_result, 'id'):
-                entity_id = final_result.id
-
             new_values = None
-            if final_result and isinstance(final_result, BaseModel):
-                new_values = final_result.model_dump()
-            elif final_result and hasattr(final_result, '__dict__'):
-                new_values = sqlalchemy_object_as_dict(final_result)
+
+            # --- MANEJO DE LISTAS (Bulk Operations) ---
+            if isinstance(final_result, list):
+                # Si el resultado es una lista, serializamos cada ítem
+                new_values = []
+                for item in final_result:
+                    if isinstance(item, BaseModel):
+                        new_values.append(item.model_dump())
+                    elif hasattr(item, '__dict__'):
+                        new_values.append(sqlalchemy_object_as_dict(item))
+                # En operaciones masivas, no asignamos un entity_id único
+                entity_id = None
+            
+            # --- MANEJO DE OBJETO ÚNICO (Standard CRUD) ---
+            else:
+                if isinstance(final_result, (BaseModel, int)):
+                    entity_id = final_result.id if isinstance(final_result, BaseModel) \
+                        else final_result
+                elif hasattr(final_result, 'id'):
+                    entity_id = final_result.id
+
+                if final_result and isinstance(final_result, BaseModel):
+                    new_values = final_result.model_dump()
+                elif final_result and hasattr(final_result, '__dict__'):
+                    new_values = sqlalchemy_object_as_dict(final_result)
 
             audit_event_data = {
                 'microservice': microservice_name,
