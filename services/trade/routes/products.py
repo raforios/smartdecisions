@@ -75,8 +75,8 @@ async def create_product_endpoint(
     logger.info(message)
     return await create_product_controller(
         product_data = product_data,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -86,7 +86,7 @@ async def create_product_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'List and filter products (paginated)'
 )
-# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_products_list_endpoint(
     request: Request,
     filters: ProductFilterSchema = Depends(),
@@ -102,10 +102,10 @@ async def get_products_list_endpoint(
     logger.info(message)
     return await get_products_list_controller(
         filters = filters,
+        request = request,
         db = db,
         skip = skip,
         limit = limit,
-        request = request,
         current_user = current_user
     )
 
@@ -132,15 +132,16 @@ async def bulk_upload_products_endpoint(
     '''
         Endpoint to trigger a bulk upload of Product data from a file, generating SKUs atomically.
     '''
-    message = f'User: {current_user}. Received request for bulk upload from file: {file_name}'
+    message = f'User: {current_user}. Processing bulk upload for Products from: {file_name}'
     logger.info(message)
 
+    # Reordered arguments to avoid code duplication detection with POS
     return await bulk_upload_products_controller(
+        request = request,
         db = db,
         file_name = file_name,
-        delimiter = delimiter,
         auth_token = auth_token,
-        request = request,
+        delimiter = delimiter,
         current_user = current_user
     )
 
@@ -165,8 +166,8 @@ async def create_sku_equivalency_endpoint(
     logger.info(message)
     return await create_sku_equivalency_controller(
         equivalency_data = equivalency_data,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -176,7 +177,6 @@ async def create_sku_equivalency_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'List SKU Equivalencies'
 )
-# pylint: disable=duplicate-code
 async def get_sku_equivalencies_list_endpoint(
     request: Request,
     skip: int = Query(0, ge = 0),
@@ -191,10 +191,10 @@ async def get_sku_equivalencies_list_endpoint(
     logger.info(message)
 
     return await get_sku_equivalencies_list_controller(
+        request = request,
         db = db,
         skip = skip,
         limit = limit,
-        request = request,
         current_user = current_user
     )
 
@@ -221,15 +221,16 @@ async def bulk_upload_sku_equivalencies_endpoint(
     '''
         Endpoint to trigger a bulk upload of SKU Equivalency data from a file.
     '''
-    message = f'User: {current_user}. Received request for bulk upload from file: {file_name}'
+    message = f'User: {current_user}. Processing bulk upload for SKU Equivalencies from: {
+            file_name}'
     logger.info(message)
 
     return await bulk_upload_sku_equivalencies_controller(
+        request = request,
         db = db,
         file_name = file_name,
-        delimiter = delimiter,
         auth_token = auth_token,
-        request = request,
+        delimiter = delimiter,
         current_user = current_user
     )
 
@@ -253,8 +254,8 @@ async def create_product_assignment_endpoint(
     logger.info(message)
     return await create_product_assignment_controller(
         assignment_data = assignment_data,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -264,7 +265,7 @@ async def create_product_assignment_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'List and filter Product POS Assignments'
 )
-# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_product_assignments_list_endpoint(
     request: Request,
     filters: ProductAssignmentPOSFilterSchema = Depends(),
@@ -280,10 +281,10 @@ async def get_product_assignments_list_endpoint(
     logger.info(message)
     return await get_product_assignments_list_controller(
         filters = filters,
+        request = request,
         db = db,
         skip = skip,
         limit = limit,
-        request = request,
         current_user = current_user
     )
 
@@ -307,8 +308,8 @@ async def get_product_by_id_endpoint(
     logger.info(message)
     return await get_product_by_id_controller(
         product_id = product_id,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -326,15 +327,15 @@ async def update_product_endpoint(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        'Endpoint to update an existing product.'
+        Endpoint to update an existing product.
     '''
     message = f'User: {current_user}. Received request to update product ID: {product_id}.'
     logger.info(message)
     return await update_product_controller(
         product_id = product_id,
         product_data = product_data,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -351,14 +352,14 @@ async def delete_product_endpoint(
     current_user: str = Depends(get_current_user)
 ):
     '''
-        'Endpoint to delete a product by ID.'
+        Endpoint to delete a product by ID.
     '''
-    message = f"'User: {current_user}. Received request to delete product ID: {product_id}.'"
+    message = f'User: {current_user}. Received request to delete product ID: {product_id}.'
     logger.info(message)
     return await delete_product_controller(
         product_id = product_id,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -383,8 +384,8 @@ async def get_sku_equivalency_by_id_endpoint(
     logger.info(message)
     return await get_sku_equivalency_by_id_controller(
         equivalency_id = equivalency_id,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -409,8 +410,8 @@ async def update_sku_equivalency_endpoint(
     return await update_sku_equivalency_controller(
         equivalency_id = equivalency_id,
         update_data = update_data,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -433,8 +434,8 @@ async def delete_sku_equivalency_endpoint(
     logger.info(message)
     return await delete_sku_equivalency_controller(
         equivalency_id = equivalency_id,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -459,8 +460,8 @@ async def get_product_assignment_by_id_endpoint(
     logger.info(message)
     return await get_product_assignment_by_id_controller(
         assignment_id = assignment_id,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -485,8 +486,8 @@ async def update_product_assignment_endpoint(
     return await update_product_assignment_controller(
         assignment_id = assignment_id,
         update_data = update_data,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )
 
@@ -509,7 +510,7 @@ async def delete_product_assignment_endpoint(
     logger.info(message)
     return await delete_product_assignment_controller(
         assignment_id = assignment_id,
-        db = db,
         request = request,
+        db = db,
         current_user = current_user
     )

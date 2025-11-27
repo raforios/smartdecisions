@@ -149,7 +149,7 @@ async def delete_product_controller(
     }
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_products_controller(
     db: Session,
     request: Request,
@@ -283,7 +283,7 @@ async def get_sku_equivalencies_list_controller(
     }
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_sku_equivalencies_controller(
     db: Session,
     request: Request,

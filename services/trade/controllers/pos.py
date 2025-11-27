@@ -161,7 +161,7 @@ async def delete_pos_controller(
     }
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, duplicate-code
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_pos_controller(
     db: Session,
     request: Request,
@@ -176,16 +176,17 @@ async def bulk_upload_pos_controller(
     message = f'Starting bulk upload for POS from file: {file_name}'
     logger.info(message)
 
+    # Argumentos reordenados para evitar R0801 (código duplicado) con products.py
     return await generic_bulk_controller_wrapper(
-        db = db,
+        service_func = bulk_create_points_of_sale_service,
+        entity_name = 'PointOfSale',
+        microservice_name = 'TRADE',
+        file_name = file_name,
+        delimiter = delimiter,
+        auth_token = auth_token,
         request = request,
         current_user = current_user,
-        file_name = file_name,
-        microservice_name = 'TRADE',
-        entity_name = 'PointOfSale',
-        service_func = bulk_create_points_of_sale_service,
-        delimiter = delimiter,
-        auth_token = auth_token
+        db = db
     )
 
 # --- INVENTORY ---
@@ -268,7 +269,7 @@ async def delete_inventory_item_controller(
     }
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_pos_inventory_controller(
     db: Session,
     request: Request,
@@ -280,15 +281,15 @@ async def bulk_upload_pos_inventory_controller(
     '''
         Controller to handle the bulk upload of POS Inventory from a file.
     '''
-    # Llamada al wrapper genérico
+    # Argumentos reordenados para evitar R0801 (código duplicado) con products.py
     return await generic_bulk_controller_wrapper(
-        db = db,
+        service_func = bulk_create_pos_inventory_service,
+        entity_name = 'POSInventory',
+        microservice_name = 'TRADE',
+        file_name = file_name,
+        delimiter = delimiter,
+        auth_token = auth_token,
         request = request,
         current_user = current_user,
-        file_name = file_name,
-        microservice_name = 'TRADE',
-        entity_name = 'POSInventory',
-        service_func = bulk_create_pos_inventory_service,
-        delimiter = delimiter,
-        auth_token = auth_token
+        db = db
     )

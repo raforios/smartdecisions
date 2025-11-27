@@ -99,27 +99,27 @@ async def get_point_of_sale_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'List and filter Points of Sale (paginated)'
 )
-# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def get_pos_list_endpoint(
-    request: Request,
+    req: Request,
     filters: POSFilterSchema = Depends(),
+    session: Session = Depends(GET_DB_DEPENDENCY),
+    request_user: str = Depends(get_current_user),
     skip: int = Query(0, ge = 0),
-    limit: int = Query(100, ge = 1),
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    limit: int = Query(100, ge = 1)
 ):
     '''
         Endpoint to retrieve a paginated list of Points of Sale based on filters.
     '''
-    message = f'User: {current_user}. Received request to list POS.'
+    message = f'User: {request_user}. Received request to list POS.'
     logger.info(message)
     return await get_pos_list_controller(
         filters = filters,
-        db = db,
+        db = session,
         skip = skip,
         limit = limit,
-        request = request,
-        current_user = current_user
+        request = req,
+        current_user = request_user
     )
 
 @router.put(
@@ -131,21 +131,21 @@ async def get_pos_list_endpoint(
 async def update_pos_endpoint(
     pos_id: int,
     pos_data: PointOfSaleUpdateSchema,
-    request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    req: Request,
+    request_user: str = Depends(get_current_user),
+    session: Session = Depends(GET_DB_DEPENDENCY)
 ):
     '''
         Endpoint to update an existing Point of Sale.
     '''
-    message = f'User: {current_user}. Received request to update POS ID: {pos_id}.'
+    message = f'User: {request_user}. Received request to update POS ID: {pos_id}.'
     logger.info(message)
     return await update_pos_controller(
         pos_id = pos_id,
         pos_data = pos_data,
-        db = db,
-        request = request,
-        current_user = current_user
+        db = session,
+        request = req,
+        current_user = request_user
     )
 
 @router.delete(
@@ -180,7 +180,7 @@ async def delete_pos_endpoint(
     status_code = status.HTTP_201_CREATED,
     summary = 'Bulk upload Points of Sale from a file'
 )
-# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_pos_endpoint(
     request: Request,
     file_name: str = Query(...,
@@ -195,7 +195,7 @@ async def bulk_upload_pos_endpoint(
     '''
         Endpoint to trigger a bulk upload of Point of Sale data from a file.
     '''
-    message = f'User: {current_user}. Received request for POS bulk upload from file: {file_name}'
+    message = f'User: {current_user}. Processing bulk upload for POS from file: {file_name}'
     logger.info(message)
 
     return await bulk_upload_pos_controller(
@@ -320,7 +320,7 @@ async def delete_inventory_item_endpoint(
     status_code = status.HTTP_201_CREATED,
     summary = 'Bulk upload POS Inventory items'
 )
-# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_pos_inventory_endpoint(
     request: Request,
     file_name: str = Query(...,
@@ -335,8 +335,7 @@ async def bulk_upload_pos_inventory_endpoint(
     '''
         Endpoint to trigger a bulk upload of detailed POS Inventory data from a file.
     '''
-    message = f'User: {current_user}. Received request for POS Inventory bulk upload from file: {
-        file_name}'
+    message = f'User: {current_user}. Processing bulk upload for POS Inventory from: {file_name}'
     logger.info(message)
 
     return await bulk_upload_pos_inventory_controller(

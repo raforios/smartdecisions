@@ -10,7 +10,7 @@ import json
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Tuple
 import requests as req
 from fastapi import HTTPException, Request, UploadFile, status
 
@@ -61,7 +61,7 @@ if FILES_SERVICE_URL:
 def get_current_time_gmt() -> datetime:
     '''
         Returns the current datetime object aware of the target timezone.
-        This function should be used as the default value for all SQLAlchemy 
+        This function should be used as the default value for all SQLAlchemy
         DateTime columns to ensure database consistency.
     '''
     tz = ZoneInfo(TARGET_TIMEZONE)
@@ -158,7 +158,7 @@ async def _process_and_send_usage_log(
     '''
     try:
         if isinstance(log_data.response_body, int):
-            log_data.response_body =  {
+            log_data.response_body = {
                 'message': f'Register with ID: {log_data.response_body} deleted successfully.'
             }
 
@@ -190,6 +190,45 @@ async def _get_request_body_for_logging(request: Request) -> dict | None:
 
     return {'detail': f'Content-Type {content_type} not logged.'}
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def _finalize_and_log(
+    request: Request,
+    microservice_name: str,
+    status_code: int,
+    response_data: Any,
+    start_time: float,
+    current_user: Optional[str]
+):
+    '''
+        Helper function to handle final logging operations to reduce complexity
+        in the main decorator.
+    '''
+    if request and EVENTS_LOG_URL:
+        end_time = time.perf_counter()
+        user_app = current_user if current_user else 'anonymous'
+        request_body = await _get_request_body_for_logging(request)
+
+        log_data = UsageLogData(
+            microservice = microservice_name,
+            endpoint = request.url.path,
+            method = request.method,
+            status_code = status_code,
+            ip_address = request.client.host,
+            user_app = user_app,
+            request_body = request_body,
+            response_time_ms = int((end_time - start_time) * 1000)
+        )
+
+        if isinstance(response_data, list) and all(isinstance(item,
+                                            BaseModel) for item in response_data):
+            log_data.response_body = [item.model_dump() for item in response_data]
+        elif isinstance(response_data, BaseModel):
+            log_data.response_body = response_data.model_dump()
+        else:
+            log_data.response_body = response_data
+
+        await _process_and_send_usage_log(log_data)
+
 def handle_service_errors(microservice_name: str):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
@@ -203,8 +242,6 @@ def handle_service_errors(microservice_name: str):
             start_time = time.perf_counter()
             response_data = None
             status_code = 500
-
-            request_body = await _get_request_body_for_logging(request)
 
             try:
                 result = await func(*args, **kwargs)
@@ -233,35 +270,49 @@ def handle_service_errors(microservice_name: str):
                     detail = json.loads(e.json())
                 ) from e
             finally:
-                if request and EVENTS_LOG_URL:
-                    end_time = time.perf_counter()
-                    user_app = kwargs.get('current_user') if 'current_user' in kwargs \
-                        else 'anonymous'
-
-                    log_data = UsageLogData(
-                        microservice = microservice_name,
-                        endpoint = request.url.path,
-                        method = request.method,
-                        status_code = status_code,
-                        ip_address = request.client.host,
-                        user_app = user_app,
-                        request_body = request_body,
-                        response_time_ms = int((end_time - start_time) * 1000)
-                    )
-
-                    if isinstance(response_data, list) and all(isinstance(item,
-                                                        BaseModel) for item in response_data):
-                        log_data.response_body = [item.model_dump() for item in response_data]
-                    elif isinstance(response_data, BaseModel):
-                        log_data.response_body = response_data.model_dump()
-                    else:
-                        log_data.response_body = response_data
-
-                    await _process_and_send_usage_log(log_data)
+                current_user = kwargs.get('current_user')
+                await _finalize_and_log(
+                    request, microservice_name, status_code,
+                    response_data, start_time, current_user
+                )
 
         return wrapper
     return decorator
 
+
+def _resolve_audit_data(final_result: Any, new_values: Any) -> Tuple[Any, Any]:
+    '''
+        Helper to resolve entity_id and new_values for the audit decorator,
+        reducing cyclomatic complexity.
+    '''
+    entity_id = None
+
+    # Resolve new_values if not provided
+    if new_values is None:
+        if isinstance(final_result, list):
+            calculated_new_values = []
+            for item in final_result:
+                if isinstance(item, BaseModel):
+                    calculated_new_values.append(item.model_dump())
+                elif hasattr(item, '__dict__'):
+                    calculated_new_values.append(sqlalchemy_object_as_dict(item))
+            new_values = calculated_new_values
+
+        elif final_result:
+            if isinstance(final_result, BaseModel):
+                new_values = final_result.model_dump()
+            elif hasattr(final_result, '__dict__'):
+                new_values = sqlalchemy_object_as_dict(final_result)
+
+    # Resolve entity_id
+    if not isinstance(final_result, list):
+        if isinstance(final_result, (BaseModel, int)):
+            entity_id = final_result.id if isinstance(final_result, BaseModel) \
+            else final_result
+        elif hasattr(final_result, 'id'):
+            entity_id = final_result.id
+
+    return entity_id, new_values
 
 def audit_event(
     microservice_name: str,
@@ -288,32 +339,9 @@ def audit_event(
 
             old_values = auditable_data.get('old_values')
             new_values = auditable_data.get('new_values')
-            entity_id = None
 
-            if new_values is None:
-                if isinstance(final_result, list):
-                    calculated_new_values = []
-                    for item in final_result:
-                        if isinstance(item, BaseModel):
-                            calculated_new_values.append(item.model_dump())
-                        elif hasattr(item, '__dict__'):
-                            calculated_new_values.append(sqlalchemy_object_as_dict(item))
-                    new_values = calculated_new_values
-                    entity_id = None
-
-                elif final_result:
-                    if isinstance(final_result, BaseModel):
-                        new_values = final_result.model_dump()
-                    elif hasattr(final_result, '__dict__'):
-                        new_values = sqlalchemy_object_as_dict(final_result)
-
-            if not isinstance(final_result, list):
-                if isinstance(final_result, (BaseModel, int)):
-                    entity_id = final_result.id if isinstance(final_result, BaseModel) \
-                    else final_result
-                elif hasattr(final_result, 'id'):
-                    entity_id = final_result.id
-
+            # Use helper to determine IDs and values to avoid branching here
+            entity_id, new_values = _resolve_audit_data(final_result, new_values)
 
             audit_event_data = {
                 'microservice': microservice_name,
@@ -363,18 +391,93 @@ async def send_usage_log(log_data: dict):
     message = f'Usage log sent successfully. Status: {response.status_code}'
     logger.info(message)
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments
-async def _handle_files_service(
-    action: str,
+
+# --- Helper functions for file actions ---
+
+async def _execute_file_read(
     file_name: str,
     auth_token: str,
-    delimiter: Optional[str] = None,
-    uploaded_file: Optional[UploadFile] = None,
-    dynamic_path: Optional[str] = None
+    delimiter: Optional[str]
+) -> str:
+    query_string = f'?delimiter={delimiter}' if delimiter else ''
+    url = f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_name}{query_string}'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'
+    }
+    response = await _perform_request('GET', url, headers)
+    response.raise_for_status()
+    return response.text
+
+async def _execute_file_create(
+    uploaded_file: UploadFile,
+    auth_token: str,
+    dynamic_path: Optional[str]
+) -> dict:
+    upload_endpoint = f'{FILES_SERVICE_URL}/v1/s3/upload'
+
+    mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
+    if not mime_type:
+        mime_type = 'application/octet-stream'
+
+    file_content_bytes = await uploaded_file.read()
+
+    headers = {
+        'Authorization': f'{auth_token}'
+    }
+
+    path_to_use = dynamic_path or BUCKET_PATH
+
+    if path_to_use and not path_to_use.endswith('/'):
+        path_to_use += '/'
+
+    response = await _perform_request(
+        method = 'POST',
+        url = upload_endpoint,
+        headers = headers,
+        payload = {
+            'bucket_name': BUCKET_NAME,
+            'file_path': path_to_use if path_to_use else BUCKET_PATH
+        },
+        files = {
+            'file': (uploaded_file.filename, file_content_bytes, mime_type)
+        }
+    )
+
+    response.raise_for_status()
+    return response.json()
+
+async def _execute_file_delete(
+    file_name: str,
+    auth_token: str
+) -> None:
+    url = f'{FILES_SERVICE_URL}/v1/s3/delete'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        'bucket_name': BUCKET_NAME,
+        'file_name': file_name,
+        'file_path': BUCKET_PATH
+    }
+    response = await _perform_request('DELETE', url, headers, payload)
+    response.raise_for_status()
+    message = f'File {file_name} successfully deleted from FILES service.'
+    logger.info(message)
+
+
+async def _handle_files_service(
+    action: str,
+    **kwargs
 ) -> Optional[str]:
     '''
-        Handles communication with the FILES microservice for reading and deleting files.
-        This function standardizes file service interactions.
+        Handles communication with the FILES microservice using kwargs to avoid
+        too many positional arguments.
+        Expected kwargs per action:
+        - read: file_name, auth_token, delimiter
+        - create: uploaded_file, auth_token, dynamic_path
+        - delete: file_name, auth_token
     '''
     try:
         if not FILES_SERVICE_URL or not BUCKET_NAME:
@@ -382,71 +485,31 @@ async def _handle_files_service(
                 detail = 'FILES_SERVICE_URL or BUCKET_NAME environment variables are not set.'
             )
 
-        headers = {
-            'Authorization': f'{auth_token}',
-            'Content-Type': 'application/json'
-        }
-
         if action == 'read':
-            query_string = f'?delimiter={delimiter}' if delimiter else ''
-            url = f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_name}{query_string}'
-            response = await _perform_request('GET', url, headers)
-            response.raise_for_status()
-            return response.text
-
-        if action == 'create':
-            upload_endpoint = f'{FILES_SERVICE_URL}/v1/s3/upload'
-
-            mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
-            if not mime_type:
-                mime_type = 'application/octet-stream'
-
-            file_content_bytes = await uploaded_file.read()
-
-            headers = {
-                'Authorization': f'{auth_token}'
-            }
-
-            path_to_use = dynamic_path or BUCKET_PATH
-
-            if path_to_use and not path_to_use.endswith('/'):
-                path_to_use += '/'
-
-            response = await _perform_request(
-                method = 'POST',
-                url = upload_endpoint,
-                headers = headers,
-                payload = {
-                    'bucket_name': BUCKET_NAME,
-                    'file_path': path_to_use if path_to_use else BUCKET_PATH
-                },
-                files = {
-                    'file': (uploaded_file.filename, file_content_bytes, mime_type)
-                }
+            return await _execute_file_read(
+                kwargs.get('file_name'),
+                kwargs.get('auth_token'),
+                kwargs.get('delimiter')
             )
 
-            response.raise_for_status()
-
-            return response.json()
+        if action == 'create':
+            return await _execute_file_create(
+                kwargs.get('uploaded_file'),
+                kwargs.get('auth_token'),
+                kwargs.get('dynamic_path')
+            )
 
         if action == 'delete':
-            url = f'{FILES_SERVICE_URL}/v1/s3/delete'
-            payload = {
-                'bucket_name': BUCKET_NAME,
-                'file_name': file_name,
-                'file_path': BUCKET_PATH
-            }
-            response = await _perform_request('DELETE', url, headers, payload)
-            response.raise_for_status()
-            message = f'File {file_name} successfully deleted from FILES service.'
-            logger.info(message)
-            return None
+            return await _execute_file_delete(
+                kwargs.get('file_name'),
+                kwargs.get('auth_token')
+            )
 
         raise ValueError(f'Invalid action: {action}')
     except req.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             raise ResourceNotFoundError(
-                detail = f'File \'{file_name}\' not found in FILES microservice.'
+                detail = f'File \'{kwargs.get("file_name", "unknown")}\' not found.'
             ) from e
         raise ServiceUnavailableError(
             detail = f'Failed to communicate with FILES microservice: {e}'
@@ -510,7 +573,11 @@ async def perform_bulk_upload(
 
     db.commit()
 
-    await _handle_files_service('delete', file_name, auth_token)
+    await _handle_files_service(
+        action = 'delete',
+        file_name = file_name,
+        auth_token = auth_token
+    )
 
     return {
         'message': 'Bulk upload successful.',
@@ -539,6 +606,46 @@ def generic_bulk_processor(
 
     return processed_data
 
+def _trigger_bulk_audit(
+    microservice: str,
+    entity: str,
+    user: str,
+    result: dict
+):
+    ''' Helper to trigger async audit for bulk ops '''
+    audit_data = {
+        'microservice': microservice,
+        'entity_name': entity,
+        'entity_id': 0,
+        'action': 'BULK_CREATE',
+        'user_id': user,
+        'old_values': None,
+        'new_values': json.dumps(result)
+    }
+    asyncio.create_task(send_audit_event(audit_data))
+
+async def _execute_bulk_logic( # pylint: disable=too-many-arguments
+    service_func: Callable,
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str
+):
+    '''
+        Helper to execute the service call and catch specific exceptions,
+        returning result and status code to avoid branching in main wrapper.
+    '''
+    try:
+        res = await service_func(
+            db = db,
+            file_name = file_name,
+            delimiter = delimiter,
+            auth_token = auth_token
+        )
+        return res, status.HTTP_201_CREATED
+    except HTTPException as e:
+        return {'detail': str(e.detail)}, e.status_code
+
 # pylint: disable=too-many-arguments, too-many-locals
 async def generic_bulk_controller_wrapper(
     db: Session,
@@ -556,49 +663,23 @@ async def generic_bulk_controller_wrapper(
         Handles logging, status tracking, audit event generation, and usage logging.
     '''
     start_time = time.perf_counter()
-    status_code = status.HTTP_201_CREATED
-    result: Dict[str, Any] = {}
 
-    try:
-        # 1. Call the specific service implementation (e.g., bulk_create_products_service)
-        result = await service_func(
-            db = db,
-            file_name = file_name,
-            delimiter = delimiter,
-            auth_token = auth_token
-        )
+    # 1. Execute logic securely via helper
+    result, status_code = await _execute_bulk_logic(
+        service_func, db, file_name, delimiter, auth_token
+    )
 
-        # 2. Audit Event
-        audit_event_data = {
-            'microservice': microservice_name,
-            'entity_name': entity_name,
-            'entity_id': 0, # Cannot assign ID to a bulk operation
-            'action': 'BULK_CREATE',
-            'user_id': current_user,
-            'old_values': None,
-            'new_values': json.dumps(result)
-        }
-        asyncio.create_task(send_audit_event(audit_event_data))
+    # 2. Audit (only on success)
+    if status_code < 400:
+        _trigger_bulk_audit(microservice_name, entity_name, current_user, result)
 
-    except HTTPException as e:
-        status_code = e.status_code
-        result = {'detail': str(e.detail)}
-        raise e
+    # 3. Usage Log
+    await _finalize_and_log(
+        request, microservice_name, status_code, result, start_time, current_user
+    )
 
-    finally:
-        # 3. Usage Log
-        end_time = time.perf_counter()
-        log_data = UsageLogData(
-            microservice = microservice_name,
-            endpoint = request.url.path,
-            method = request.method,
-            status_code = status_code,
-            ip_address = request.client.host,
-            user_app = current_user,
-            request_body = {'file_name': file_name},
-            response_body = result,
-            response_time_ms = int((end_time - start_time) * 1000)
-        )
-        asyncio.create_task(send_usage_log(log_data.model_dump()))
+    # 4. Return result or raise error
+    if status_code >= 400:
+        raise HTTPException(status_code = status_code, detail = result['detail'])
 
     return result
