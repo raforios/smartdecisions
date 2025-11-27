@@ -10,7 +10,7 @@ import json
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 import requests as req
 from fastapi import HTTPException, Request, UploadFile, status
 
@@ -69,12 +69,21 @@ def get_current_time_gmt() -> datetime:
 
 def sqlalchemy_object_as_dict(obj):
     '''
-        Helper function to serialize a SQLAlchemy object to a dictionary.
+        Helper function to serialize a SQLAlchemy object to a dictionary,
+        converting complex types like datetime and Decimal to simple types.
     '''
-    return {
-        c.key: getattr(obj, c.key)
-        for c in sa_inspect(obj).mapper.column_attrs
-    }
+    data = {}
+    for c in sa_inspect(obj).mapper.column_attrs:
+        value = getattr(obj, c.key)
+
+        if isinstance(value, (date, datetime)):
+            data[c.key] = value.isoformat()
+        elif isinstance(value, decimal.Decimal):
+            data[c.key] = float(value)
+        else:
+            data[c.key] = value
+
+    return data
 
 async def _perform_request(
     method: str,
@@ -277,33 +286,34 @@ def audit_event(
                     'new_values': None
                 }
 
+            old_values = auditable_data.get('old_values')
+            new_values = auditable_data.get('new_values')
             entity_id = None
-            new_values = None
 
-            # --- MANEJO DE LISTAS (Bulk Operations) ---
-            if isinstance(final_result, list):
-                # Si el resultado es una lista, serializamos cada ítem
-                new_values = []
-                for item in final_result:
-                    if isinstance(item, BaseModel):
-                        new_values.append(item.model_dump())
-                    elif hasattr(item, '__dict__'):
-                        new_values.append(sqlalchemy_object_as_dict(item))
-                # En operaciones masivas, no asignamos un entity_id único
-                entity_id = None
-            
-            # --- MANEJO DE OBJETO ÚNICO (Standard CRUD) ---
-            else:
+            if new_values is None:
+                if isinstance(final_result, list):
+                    calculated_new_values = []
+                    for item in final_result:
+                        if isinstance(item, BaseModel):
+                            calculated_new_values.append(item.model_dump())
+                        elif hasattr(item, '__dict__'):
+                            calculated_new_values.append(sqlalchemy_object_as_dict(item))
+                    new_values = calculated_new_values
+                    entity_id = None
+
+                elif final_result:
+                    if isinstance(final_result, BaseModel):
+                        new_values = final_result.model_dump()
+                    elif hasattr(final_result, '__dict__'):
+                        new_values = sqlalchemy_object_as_dict(final_result)
+
+            if not isinstance(final_result, list):
                 if isinstance(final_result, (BaseModel, int)):
                     entity_id = final_result.id if isinstance(final_result, BaseModel) \
-                        else final_result
+                    else final_result
                 elif hasattr(final_result, 'id'):
                     entity_id = final_result.id
 
-                if final_result and isinstance(final_result, BaseModel):
-                    new_values = final_result.model_dump()
-                elif final_result and hasattr(final_result, '__dict__'):
-                    new_values = sqlalchemy_object_as_dict(final_result)
 
             audit_event_data = {
                 'microservice': microservice_name,
@@ -311,7 +321,7 @@ def audit_event(
                 'entity_id': entity_id,
                 'action': action,
                 'user_id': user_id,
-                'old_values': auditable_data.get('old_values'),
+                'old_values': old_values,
                 'new_values': new_values
             }
             try:
@@ -321,7 +331,6 @@ def audit_event(
                 error_msg = f'Error serializing audit data: {e}'
                 logger.error(error_msg, exc_info = True)
 
-            # Retornar el resultado final para que el controlador lo use.
             return final_result
         return wrapper
     return decorator
@@ -354,7 +363,7 @@ async def send_usage_log(log_data: dict):
     message = f'Usage log sent successfully. Status: {response.status_code}'
     logger.info(message)
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def _handle_files_service(
     action: str,
     file_name: str,
