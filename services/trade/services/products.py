@@ -31,7 +31,9 @@ from models.products import (
     SKUEquivalency,
     SKUSequencer
 )
+from models.pos import PointOfSale
 from schemas.products import (
+    ProductAssignmentPOSBulkItemSchema,
     ProductAssignmentPOSCreateSchema,
     ProductAssignmentPOSFilterSchema,
     ProductAssignmentPOSUpdateSchema,
@@ -808,3 +810,111 @@ async def delete_product_assignment_service(
     }
 
     return assignment_id, auditable_data
+
+async def _insert_assignment_bulk_data(
+    db: Session,
+    processed_data: List[ProductAssignmentPOSBulkItemSchema],
+    file_name: str, # pylint: disable=unused-argument
+    auth_token: str # pylint: disable=unused-argument
+) -> Dict[str, Any]:
+    '''
+        Handles the transactional insertion of Product Assignments.
+        Resolves POS IDs from external codes if necessary.
+    '''
+    records_created = 0
+    if not processed_data:
+        return {'message': 'No valid data.', 'created_records': 0}
+
+    for item in processed_data:
+        try:
+            # 1. Resolve Product ID
+            product_id = get_product_id_by_sku(db, item.company_id, item.product_sku)
+
+            # 2. Resolve POS ID
+            pos_id = item.point_of_sale_id
+            if not pos_id and item.pos_external_code:
+                pos = db.query(PointOfSale).filter(
+                    PointOfSale.company_id == item.company_id,
+                    PointOfSale.external_code == item.pos_external_code
+                ).first()
+                if pos:
+                    pos_id = pos.id
+            
+            if not pos_id:
+                logger.warning(f'Skipping assignment: POS not found for row {item}')
+                continue
+
+            # 3. Check for duplicates
+            exists = db.query(ProductAssignmentPOS).filter(
+                ProductAssignmentPOS.company_id == item.company_id,
+                ProductAssignmentPOS.product_id == product_id,
+                ProductAssignmentPOS.point_of_sale_id == pos_id
+            ).first()
+
+            if exists:
+                continue
+
+            # 4. Create
+            db_assign = ProductAssignmentPOS(
+                company_id = item.company_id,
+                product_id = product_id,
+                point_of_sale_id = pos_id,
+                status = item.status
+            )
+            db.add(db_assign)
+            records_created += 1
+            
+            # Flush every 100 records to manage memory
+            if records_created % 100 == 0:
+                db.flush()
+
+        except Exception as e:
+            logger.error(f'Error processing bulk assignment row: {e}')
+            continue
+
+    return {
+        'message': 'Product Assignment bulk upload completed.',
+        'created_records': records_created
+    }
+
+@handle_service_errors('TRADE')
+async def bulk_create_product_assignments_service(
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str,
+) -> Dict[str, Any]:
+    '''
+        Service wrapper for bulk assignments.
+    '''
+    return await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = ProductAssignmentPOSBulkItemSchema,
+        processor_func = generic_bulk_processor,
+        inserter_func = _insert_assignment_bulk_data,
+        delimiter = delimiter
+    )
+
+def validate_product_assigned_to_pos(
+    db: Session,
+    company_id: int,
+    pos_id: int,
+    product_id: int
+) -> None:
+    '''
+        Validates if a product is actively assigned to a POS.
+        Raises InvalidInputError if not assigned.
+    '''
+    assignment = db.query(ProductAssignmentPOS).filter(
+        ProductAssignmentPOS.company_id == company_id,
+        ProductAssignmentPOS.point_of_sale_id == pos_id,
+        ProductAssignmentPOS.product_id == product_id,
+        ProductAssignmentPOS.status == 'ACTIVE'
+    ).first()
+
+    if not assignment:
+        raise InvalidInputError(
+            detail = f'Product ID {product_id} is not assigned to POS ID {pos_id}.'
+        )
