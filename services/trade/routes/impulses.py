@@ -1,20 +1,15 @@
 '''
     Impulses: routes handler
 '''
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from fastapi import (
     APIRouter,
     Depends,
-    Form,
-    Header,
     Query,
     Request,
-    UploadFile,
     status
 )
-from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from services.exceptions import InvalidInputError
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
@@ -40,7 +35,7 @@ from schemas.impulses import (
     TradePromotionUpdateSchema
 )
 
-router = APIRouter(prefix = '/v1/impulses', tags = ['Impulses'])
+router = APIRouter(prefix = '/v1/impulses', tags = ['Trade - Impulses'])
 
 # --- 5. TRADE PROMOTION (BANDEO) ENDPOINTS ---
 
@@ -207,37 +202,26 @@ async def create_impulse_inventory_start_endpoint(
     status_code = status.HTTP_201_CREATED,
     summary = 'Register Impulse Sale'
 )
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_impulse_sale_endpoint(
     attendance_id: int,
+    sale_data: ImpulseSaleCreateSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user),
-    auth_token: str = Header(..., alias = 'Authorization'),
-    sale_data: str = Form(..., description = 'JSON string of the sale data'),
-    uploaded_file: Optional[UploadFile] = None,
+    current_user: str = Depends(get_current_user)
 ):
     '''
-        Endpoint to register a Sale transaction (with details and photo) for an Impulse visit.
+        Endpoint to register a Sale transaction (Impulse).
+        Expects a clean JSON body with POS ID and sale details (including optional promotion_id).
     '''
     message = f'User: {current_user}. Request Impulse Sale for attendance ID: {attendance_id}.'
     logger.info(message)
 
-    try:
-        parsed_sale_data = ImpulseSaleCreateSchema.model_validate_json(sale_data)
-    except ValidationError as e:
-        raise InvalidInputError(
-            detail = f'Invalid JSON data format in data field: {e}'
-        ) from e
-
     return await create_impulse_sale_controller(
         attendance_id = attendance_id,
-        sale_data = parsed_sale_data,
-        uploaded_file = uploaded_file,
+        sale_data = sale_data,
         db = db,
         request = request,
-        current_user = current_user,
-        auth_token = auth_token
+        current_user = current_user
     )
 
 @router.post(

@@ -4,7 +4,7 @@
 from typing import List, Optional
 from datetime import datetime
 from pydantic import Field
-from schemas.common import BaseSchema
+from schemas.common import BaseSchema, PhotoResponseSchema
 
 # --- B.2. REPLENISHMENT ACTIVITIES SCHEMAS ---
 
@@ -30,10 +30,8 @@ class ReplenishmentReportResponseSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
-    file_path_1: Optional[str]
-    file_path_2: Optional[str]
-    file_path_3: Optional[str]
     comments: Optional[str]
+    photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]
 
 # --- Schemas for Replenishment Inventory ---
@@ -64,10 +62,15 @@ class ReplenishmentInventoryItemSchema(BaseSchema):
 class ReplenishmentInventoryCreateSchema(BaseSchema):
     '''
         Schema for creating a list of detailed inventory items (Replenishment).
+        Includes pos_id for Assortment Validation.
     '''
     company_id: int = Field(
         ...,
         description = 'ID of the company (needed for SKU lookup).'
+    )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the POS (sent by frontend) to validate assortment.'
     )
     items: List[ReplenishmentInventoryItemSchema] = Field(
         ...,
@@ -117,10 +120,15 @@ class ReplenishmentReceptionItemSchema(BaseSchema):
 class ReplenishmentReceptionCreateSchema(BaseSchema):
     '''
         Schema for creating a list of received items (Supplier Reception).
+        Includes pos_id for Assortment Validation.
     '''
     company_id: int = Field(
         ...,
         description = 'ID of the company (needed for SKU lookup).'
+    )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the POS (sent by frontend) to validate assortment.'
     )
     items: List[ReplenishmentReceptionItemSchema] = Field(
         ...,
@@ -173,6 +181,10 @@ class ComplementaryBandeoCreateSchema(BaseSchema):
         ...,
         description = 'ID of the company (needed for SKU lookup).'
     )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the POS (sent by frontend) to validate assortment.'
+    )
     comments: Optional[str] = Field(
         None,
         description = 'Optional comments for the bandeo report.'
@@ -198,10 +210,9 @@ class ComplementaryBandeoResponseSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
-    file_path_1: Optional[str]
-    file_path_2: Optional[str]
     comments: Optional[str]
     created_at: Optional[datetime]
+    photos: List[PhotoResponseSchema] = []
     details: List[ComplementaryBandeoDetailResponseSchema]
 
 # --- Schemas for Promotional Point Report ---
@@ -226,9 +237,8 @@ class ComplementaryPromoPointResponseSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
-    file_path_1: Optional[str]
-    file_path_2: Optional[str]
     comments: Optional[str]
+    photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]
 
 # --- Schemas for Competition Report ---
@@ -246,7 +256,7 @@ class ComplementaryCompetitionCreateSchema(BaseSchema):
         ...,
         description = 'ID of the user creating the report (from frontend session).'
     )
-    point_of_sale_id: Optional[int] = Field(
+    pos_id: Optional[int] = Field(
         None,
         description = 'Optional: ID of the POS where the activity was observed.'
     )
@@ -277,10 +287,10 @@ class ComplementaryCompetitionResponseSchema(BaseSchema):
     id: int
     user_id: int
     company_id: int
-    point_of_sale_id: Optional[int]
+    pos_id: Optional[int]
     competitor_name: str
     activity_type: Optional[str]
     product_name: Optional[str]
     details: Optional[str]
-    file_path_1: Optional[str]
+    photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]

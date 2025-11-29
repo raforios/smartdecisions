@@ -1,9 +1,9 @@
 '''
     Impulses Controllers
 '''
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from sqlalchemy.orm import Session
-from fastapi import Request, UploadFile
+from fastapi import Request
 from services.utils import handle_service_errors
 from services.impulses import (
     create_impulse_inventory_end_service,
@@ -147,28 +147,21 @@ async def create_impulse_inventory_start_controller(
     )
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_impulse_sale_controller(
     attendance_id: int,
     sale_data: ImpulseSaleCreateSchema,
     db: Session,
     request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    auth_token: str,
-    uploaded_file: Optional[UploadFile] = None
+    current_user: str # pylint: disable=unused-argument
 ) -> ImpulseSaleResponseSchema:
     '''
         Controller for creating a new Impulse Sale transaction.
+        (Cleaned: No file uploads, no auth_token needed here).
     '''
-    dynamic_path = f'trade/{sale_data.company_id}/impulses'
-
     db_sale = await create_impulse_sale_service(
         db = db,
         attendance_id = attendance_id,
-        sale_data = sale_data,
-        uploaded_file = uploaded_file,
-        dynamic_path = dynamic_path,
-        auth_token = auth_token
+        sale_data = sale_data
     )
     return ImpulseSaleResponseSchema.model_validate(
         db_sale, from_attributes = True

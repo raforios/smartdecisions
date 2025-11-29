@@ -8,7 +8,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     DateTime,
-    UniqueConstraint
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from models.products import AttendanceProductMixin
@@ -50,7 +50,6 @@ class TradePromotion(Base):  # pylint: disable=too-few-public-methods
 class TradePromotionDetail(Base):  # pylint: disable=too-few-public-methods
     '''
         Promotion Detail model.
-        Links a Promotion Header to a specific Product (SKU).
     '''
     __tablename__ = 't_trade_promotion_details'
 
@@ -85,7 +84,6 @@ class TradePromotionDetail(Base):  # pylint: disable=too-few-public-methods
 class ImpulseInventoryStart(Base, AttendanceProductMixin):  # pylint: disable=too-few-public-methods
     '''
         Records the initial inventory count at the start of an Impulse visit.
-        Links to the visit via LOCALIZATION.t_attendances.
     '''
     __tablename__ = 't_trade_impulse_inventory_start'
 
@@ -107,8 +105,7 @@ class ImpulseInventoryStart(Base, AttendanceProductMixin):  # pylint: disable=to
 
 class ImpulseSale(Base):  # pylint: disable=too-few-public-methods
     '''
-        Header record for a single Sale transaction during an Impulse visit.
-        Links to the visit via LOCALIZATION.t_attendances.
+        Header record for a single Sale transaction.
     '''
     __tablename__ = 't_trade_impulse_sales'
 
@@ -118,11 +115,6 @@ class ImpulseSale(Base):  # pylint: disable=too-few-public-methods
     attendance_id = Column(Integer, nullable = False, index = True)
 
     company_id = Column(Integer, nullable = False, index = True)
-
-    # Path/URL of the verification photo, provided by FILES microservice
-    file_path = Column(String(500), nullable = True)
-
-    # Audit field (Created only)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     # Relationship to the Sale Details (SKUs sold)
@@ -132,9 +124,18 @@ class ImpulseSale(Base):  # pylint: disable=too-few-public-methods
         cascade = 'all, delete-orphan'
     )
 
+    # Relationship to Photos
+    photos = relationship(
+        'Photo',
+        primaryjoin = "and_(foreign(Photo.entity_id)==ImpulseSale.id, "
+                    "Photo.entity_type=='IMPULSE_SALE')",
+        uselist = True,
+        viewonly = True
+    )
+
 class ImpulseSaleDetail(Base):  # pylint: disable=too-few-public-methods
     '''
-        Detail record for a Sale transaction (the SKUs and quantities sold).
+        Detail record for a Sale transaction.
     '''
     __tablename__ = 't_trade_impulse_sale_details'
 
@@ -147,6 +148,7 @@ class ImpulseSaleDetail(Base):  # pylint: disable=too-few-public-methods
     )
     sale_header = relationship('ImpulseSale', back_populates = 'details')
 
+    promotion_id = Column(Integer, nullable = True)
     # Relationship to the Product
     product_id = Column(
         Integer, ForeignKey('t_products.id', ondelete = 'RESTRICT'),
@@ -167,8 +169,7 @@ class ImpulseSaleDetail(Base):  # pylint: disable=too-few-public-methods
 
 class ImpulseInventoryEnd(Base, AttendanceProductMixin):  # pylint: disable=too-few-public-methods
     '''
-        Records the final inventory count at the end of an Impulse visit.
-        Links to the visit via LOCALIZATION.t_attendances.
+        Records the final inventory count.
     '''
     __tablename__ = 't_trade_impulse_inventory_end'
     id = Column(Integer, primary_key = True, index = True)

@@ -15,6 +15,7 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
 from controllers.products import (
+    bulk_upload_product_assignments_controller,
     bulk_upload_products_controller,
     bulk_upload_sku_equivalencies_controller,
     create_product_assignment_controller,
@@ -256,6 +257,40 @@ async def create_product_assignment_endpoint(
         assignment_data = assignment_data,
         request = request,
         db = db,
+        current_user = current_user
+    )
+
+@router.post(
+    '/pos-assignments/bulk-upload',
+    response_model = Dict[str, Any],
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Bulk upload Product Assignments from a file'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def bulk_upload_product_assignments_endpoint(
+    request: Request,
+    file_name: str = Query(...,
+            description = 'Name of the file to process (from FILES microservice).'),
+    delimiter: Optional[str] = Query(
+        ',', description = 'The delimiter used in the file. Defaults to a comma (,).'
+    ),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk upload of Product Assignments.
+        Accepts CSV with 'product_sku' and either 'point_of_sale_id' or 'pos_external_code'.
+    '''
+    message = f'User: {current_user}. Processing bulk upload for Product Assignments.'
+    logger.info(message)
+
+    return await bulk_upload_product_assignments_controller(
+        request = request,
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        delimiter = delimiter,
         current_user = current_user
     )
 

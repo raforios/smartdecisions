@@ -4,8 +4,8 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import Query
-from pydantic import BaseModel, Field
-from schemas.common import BaseSchema
+from pydantic import Field, BaseModel
+from schemas.common import BaseSchema, PhotoResponseSchema
 
 # --- TRADE PROMOTION (BANDEO) SCHEMAS ---
 
@@ -75,7 +75,6 @@ class TradePromotionUpdateSchema(BaseSchema):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: Optional[str] = None
-    # Note: Updating details (SKUs) should be handled by separate endpoints.
 
 class TradePromotionResponseSchema(TradePromotionBaseSchema):
     '''
@@ -88,7 +87,6 @@ class TradePromotionResponseSchema(TradePromotionBaseSchema):
         description = 'List of SKU details included in this promotion.'
     )
     created_at: Optional[datetime]
-    # updated_at is omitted (handled by EVENTS)
 
 class TradePromotionFilterSchema(BaseModel):
     '''
@@ -98,7 +96,7 @@ class TradePromotionFilterSchema(BaseModel):
     name: Optional[str] = Query(None, description = 'Filter by promotion name (partial match).')
     status: Optional[str] = Query(None, description = 'Filter by status (e.g., ACTIVE).')
 
-    class Config:# pylint: disable=too-few-public-methods
+    class Config: # pylint: disable=too-few-public-methods
         '''
             Pydantic config.
         '''
@@ -132,15 +130,19 @@ class ImpulseInventoryItemSchema(BaseSchema):
 class ImpulseInventoryCreateSchema(BaseSchema):
     '''
         Schema for creating a list of inventory items (Start or End).
-        The attendance_id will be passed in the URL path.
+        UPDATED: Includes pos_id for validation.
     '''
     company_id: int = Field(
         ...,
         description = 'ID of the company for this transaction (needed for SKU lookup).'
     )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the Point of Sale (sent by frontend) to validate assortment.'
+    )
     items: List[ImpulseInventoryItemSchema] = Field(
         ...,
-        min_length = 1, # 'min_items' is deprecated, use 'min_length'
+        min_length = 1,
         description = 'List of SKUs and their quantities.'
     )
 
@@ -176,15 +178,23 @@ class ImpulseSaleDetailCreateSchema(BaseSchema):
         gt = 0, # Sale quantity must be greater than 0
         description = 'Quantity sold for this SKU.'
     )
+    promotion_id: Optional[int] = Field(
+        None,
+        description = 'Optional: ID of the Promotion (Bandeo) if this item is part of a pack.'
+    )
 
 class ImpulseSaleCreateSchema(BaseSchema):
     '''
         Schema for creating a new Sale transaction.
-        The attendance_id will be passed in the URL path.
+        UPDATED: Includes pos_id for validation.
     '''
     company_id: int = Field(
         ...,
         description = 'ID of the company for this transaction (needed for SKU lookup).'
+    )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the Point of Sale (sent by frontend) to validate assortment.'
     )
     details: List[ImpulseSaleDetailCreateSchema] = Field(
         ...,
@@ -200,6 +210,7 @@ class ImpulseSaleDetailResponseSchema(BaseSchema):
     impulse_sale_id: int
     product_id: int
     quantity: int
+    promotion_id: Optional[int]
 
 class ImpulseSaleResponseSchema(BaseSchema):
     '''
@@ -207,6 +218,7 @@ class ImpulseSaleResponseSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
-    file_path: Optional[str]
+    # photos removed (handled by common schema/endpoint structure generally)
+    photos: List[PhotoResponseSchema] = [] 
     created_at: Optional[datetime]
     details: List[ImpulseSaleDetailResponseSchema]

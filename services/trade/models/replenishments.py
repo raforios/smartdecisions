@@ -8,7 +8,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     DateTime,
-    UniqueConstraint
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from models.products import AttendanceProductMixin
@@ -29,18 +29,19 @@ class ReplenishmentReport(Base):  # pylint: disable=too-few-public-methods
 
     # Foreign Key to LOCALIZATION.t_attendances (The Visit ID)
     attendance_id = Column(Integer, nullable = False, index = True)
-
-    # Path/URL of the success photo, provided by FILES microservice
-    file_path_1 = Column(String(500), nullable = True)
-    file_path_2 = Column(String(500), nullable = True)
-    file_path_3 = Column(String(500), nullable = True)
-
-    # Optional comments from the user
     comments = Column(Text, nullable = True)
 
     # Audit field (Created only)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
+    # Relationship to Photos (Polymorphic)
+    photos = relationship(
+        'Photo',
+        primaryjoin = "and_(foreign(Photo.entity_id)==ReplenishmentReport.id, "
+                    "Photo.entity_type=='REPLENISHMENT_REPORT')",
+        uselist = True,
+        viewonly = True
+    )
 
 class ReplenishmentInventory(Base, AttendanceProductMixin):  # pylint: disable=too-few-public-methods
     '''
@@ -85,7 +86,6 @@ class ReplenishmentReception(Base, AttendanceProductMixin):  # pylint: disable=t
 class ComplementaryBandeo(Base):  # pylint: disable=too-few-public-methods
     '''
         Header record for a Complementary Bandeo Report.
-        Links to the visit via LOCALIZATION.t_attendances.
     '''
     __tablename__ = 't_trade_complementary_bandeo_header'
 
@@ -96,11 +96,6 @@ class ComplementaryBandeo(Base):  # pylint: disable=too-few-public-methods
     # Foreign Key to LOCALIZATION.t_attendances (The Visit ID)
     # A visit can only have one bandeo report.
     attendance_id = Column(Integer, nullable = False, unique = True, index = True)
-
-    # Photos of the bandeo activity
-    file_path_1 = Column(String(500), nullable = True)
-    file_path_2 = Column(String(500), nullable = True)
-
     comments = Column(Text, nullable = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
@@ -111,9 +106,17 @@ class ComplementaryBandeo(Base):  # pylint: disable=too-few-public-methods
         cascade = 'all, delete-orphan'
     )
 
+    photos = relationship(
+        'Photo',
+        primaryjoin = "and_(foreign(Photo.entity_id)==ComplementaryBandeo.id, "
+                    "Photo.entity_type=='BANDEO')",
+        uselist = True,
+        viewonly = True
+    )
+
 class ComplementaryBandeoDetail(Base):  # pylint: disable=too-few-public-methods
     '''
-        Detail record for a Bandeo Report (the SKUs and quantities returned).
+        Detail record for a Bandeo Report.
     '''
     __tablename__ = 't_trade_complementary_bandeo_detail'
 
@@ -146,8 +149,7 @@ class ComplementaryBandeoDetail(Base):  # pylint: disable=too-few-public-methods
 
 class ComplementaryPromoPoint(Base):  # pylint: disable=too-few-public-methods
     '''
-        Records a Complementary Promotional Point Report (Photos).
-        Links to the visit via LOCALIZATION.t_attendances.
+        Records a Complementary Promotional Point Report.
     '''
     __tablename__ = 't_trade_complementary_promo_point'
 
@@ -157,18 +159,20 @@ class ComplementaryPromoPoint(Base):  # pylint: disable=too-few-public-methods
 
     # Foreign Key to LOCALIZATION.t_attendances (The Visit ID)
     attendance_id = Column(Integer, nullable = False, index = True)
-
-    # Photos of the promotional point
-    file_path_1 = Column(String(500), nullable = True)
-    file_path_2 = Column(String(500), nullable = True)
-
     comments = Column(Text, nullable = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+
+    photos = relationship(
+        'Photo',
+        primaryjoin = "and_(foreign(Photo.entity_id)==ComplementaryPromoPoint.id, "
+                    "Photo.entity_type=='PROMO_POINT')",
+        uselist = True,
+        viewonly = True
+    )
 
 class ComplementaryCompetition(Base):  # pylint: disable=too-few-public-methods
     '''
         Records a general report on Competitor Activity.
-        This is not linked to a specific visit (attendance_id).
     '''
     __tablename__ = 't_trade_complementary_competition'
 
@@ -186,11 +190,15 @@ class ComplementaryCompetition(Base):  # pylint: disable=too-few-public-methods
     point_of_sale = relationship('PointOfSale')
 
     competitor_name = Column(String(255), nullable = False)
-    activity_type = Column(String(255), nullable = True) # E.g., "New Product", "Discount"
-    product_name = Column(String(255), nullable = True) # Competitor's product
-    details = Column(Text, nullable = True) # General comments
-
-    # Photo of the competitor activity
-    file_path_1 = Column(String(500), nullable = True)
-
+    activity_type = Column(String(255), nullable = True)
+    product_name = Column(String(255), nullable = True)
+    details = Column(Text, nullable = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+
+    photos = relationship(
+        'Photo',
+        primaryjoin = "and_(foreign(Photo.entity_id)==ComplementaryCompetition.id, "
+                    "Photo.entity_type=='COMPETITION')",
+        uselist = True,
+        viewonly = True
+    )

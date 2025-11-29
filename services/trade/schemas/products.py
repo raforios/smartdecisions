@@ -307,3 +307,34 @@ class ProductAssignmentPOSListResponseSchema(BaseSchema):
     '''
     items: List[ProductAssignmentPOSResponseSchema]
     total: int
+
+class ProductAssignmentPOSListResponseSchema(BaseSchema):
+    '''
+        Response schema for a paginated list of Product POS Assignments.
+    '''
+    items: List[ProductAssignmentPOSResponseSchema]
+    total: int
+
+# --- BULK ASSIGNMENT SCHEMAS ---
+
+class ProductAssignmentPOSBulkItemSchema(BaseSchema):
+    '''
+        Schema for a single row in the Product Assignment bulk upload file.
+        Users typically work with Codes (SKU, POS External Code) rather than IDs.
+    '''
+    company_id: int
+    product_sku: str = Field(
+        ...,
+        description = 'Internal SKU of the product to assign.'
+    )
+    # Opción A: Usar ID del POS (más seguro si el sistema lo conoce)
+    point_of_sale_id: Optional[int] = Field(
+        None,
+        description = 'Internal ID of the POS.'
+    )
+    # Opción B: Usar código externo del POS (común en cargas masivas)
+    pos_external_code: Optional[str] = Field(
+        None,
+        description = 'External code of the POS (alternative to ID).'
+    )
+    status: Optional[str] = Field('ACTIVE', max_length = 20)

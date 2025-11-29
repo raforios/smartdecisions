@@ -2,17 +2,17 @@
     Business logic services for the Trade Microservice
     Replenishments
 '''
-from typing import List, Optional
-from fastapi import UploadFile
+from typing import List
 from sqlalchemy.orm import Session
 from services.products import (
     get_product_id_by_sku,
-    create_bulk_items_from_skus
+    create_bulk_items_from_skus,
+    validate_product_assigned_to_pos
 )
-from services.common import prepare_file_to_upload
 from services.logger_config import custom_logger as logger
 from services.exceptions import RegisterAlreadyExistsError
 from services.utils import handle_service_errors, audit_event
+
 from models.replenishments import (
     ComplementaryBandeo,
     ComplementaryBandeoDetail,
@@ -31,64 +31,30 @@ from schemas.replenishments import (
     ComplementaryPromoPointCreateSchema
 )
 
-# --- Helper interno para archivos ---
-async def _process_multiple_files(
-    files: List[Optional[UploadFile]],
-    dynamic_path: str,
-    auth_token: str,
-    prefix: str
-) -> List[Optional[str]]:
-    '''
-        Helper to upload a list of files and return paths.
-    '''
-    paths = []
-    for file in files:
-        if file:
-            res = await prepare_file_to_upload(
-                file = file,
-                dynamic_path = dynamic_path,
-                auth_token = auth_token,
-                prefix = prefix
-            )
-            paths.append(res.get('url') if isinstance(res, dict) else str(res))
-        else:
-            paths.append(None)
-    return paths
-
 # --- B.2. REPLENISHMENT ACTIVITIES SERVICES ---
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ReplenishmentReport', 'CREATE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_replenishment_report_service(
     db: Session,
     attendance_id: int,
-    report_data: ReplenishmentReportCreateSchema,
-    files: List[Optional[UploadFile]],
-    dynamic_path: str,
-    auth_token: str
+    report_data: ReplenishmentReportCreateSchema
 ) -> ReplenishmentReport:
     '''
-        Creates a new Replenishment Report (Success Photos).
+        Creates a new Replenishment Report metadata.
     '''
-    message = f'Creating Replenishment Report for attendance ID: {attendance_id}'
+    message = f'Creating Replenishment Report meta for attendance ID: {attendance_id}'
     logger.info(message)
-
-    paths = await _process_multiple_files(files, dynamic_path, auth_token, 'replenishment')
-
-    # Ensure list has enough elements to avoid index errors
-    paths += [None] * (3 - len(paths))
 
     db_report = ReplenishmentReport(
         attendance_id = attendance_id,
-        file_path_1 = paths[0],
-        file_path_2 = paths[1],
-        file_path_3 = paths[2],
-        **report_data.model_dump()
+        company_id = report_data.company_id,
+        comments = report_data.comments
     )
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
+    
     return db_report
 
 @handle_service_errors('TRADE')
@@ -100,11 +66,28 @@ async def create_replenishment_inventory_service(
 ) -> List[ReplenishmentInventory]:
     '''
         Creates multiple ReplenishmentInventory records.
+        OPTIMIZATION: Uses 'pos_id' provided by Frontend to validate assortment.
     '''
     message = f'Creating Replenishment Inventory for attendance ID: {attendance_id}'
     logger.info(message)
 
-    # REFACTOR: Usage of shared bulk creation logic
+    # Validar Surtido usando el ID que nos manda el frontend
+    pos_id = inventory_data_rep.pos_id
+
+    for item in inventory_data_rep.items:
+        product_id = get_product_id_by_sku(
+            db, inventory_data_rep.company_id, item.product_sku
+        )
+        
+        # Validación de Negocio (Punto 9)
+        validate_product_assigned_to_pos(
+            db = db,
+            company_id = inventory_data_rep.company_id,
+            pos_id = pos_id,
+            product_id = product_id
+        )
+
+    # Insertar
     return await create_bulk_items_from_skus(
         db = db,
         attendance_id = attendance_id,
@@ -126,7 +109,17 @@ async def create_replenishment_reception_service(
     message = f'Creating Replenishment Reception for attendance ID: {attendance_id}'
     logger.info(message)
 
-    # REFACTOR: Usage of shared bulk creation logic
+    # Validar Surtido
+    pos_id = reception_data.pos_id
+
+    for item in reception_data.items:
+        product_id = get_product_id_by_sku(
+            db, reception_data.company_id, item.product_sku
+        )
+        validate_product_assigned_to_pos(
+            db, reception_data.company_id, pos_id, product_id
+        )
+
     return await create_bulk_items_from_skus(
         db = db,
         attendance_id = attendance_id,
@@ -139,17 +132,13 @@ async def create_replenishment_reception_service(
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ComplementaryBandeo', 'CREATE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_bandeo_service(
     db: Session,
     attendance_id: int,
-    bandeo_data: ComplementaryBandeoCreateSchema,
-    files: List[Optional[UploadFile]],
-    dynamic_path: str,
-    auth_token: str
+    bandeo_data: ComplementaryBandeoCreateSchema
 ) -> ComplementaryBandeo:
     '''
-        Creates a new Complementary Bandeo report.
+        Creates a new Complementary Bandeo report metadata.
     '''
     message = f'Creating Bandeo for attendance ID: {attendance_id}'
     logger.info(message)
@@ -159,21 +148,25 @@ async def create_complementary_bandeo_service(
             detail = f'Bandeo exists for visit {attendance_id}'
         )
 
-    paths = await _process_multiple_files(files, dynamic_path, auth_token, 'bandeo')
-    paths += [None] * (2 - len(paths))
-
+    # 1. Create Header
     db_header = ComplementaryBandeo(
         attendance_id = attendance_id,
-        file_path_1 = paths[0],
-        file_path_2 = paths[1],
-        **bandeo_data.model_dump(exclude = {'details'})
+        company_id = bandeo_data.company_id,
+        comments = bandeo_data.comments
     )
     db.add(db_header)
     db.flush()
 
-    # Manual loop needed because Model uses bandeo_header_id, not attendance_id
+    # 2. Save Details & Validate (Punto 8)
+    pos_id = bandeo_data.pos_id
+
     for item in bandeo_data.details:
         product_id = get_product_id_by_sku(db, bandeo_data.company_id, item.product_sku)
+        
+        validate_product_assigned_to_pos(
+            db, bandeo_data.company_id, pos_id, product_id
+        )
+
         db.add(ComplementaryBandeoDetail(
             bandeo_header_id = db_header.id,
             product_id = product_id,
@@ -186,29 +179,21 @@ async def create_complementary_bandeo_service(
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ComplementaryPromoPoint', 'CREATE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_promo_point_service(
     db: Session,
     attendance_id: int,
-    promo_point_data: ComplementaryPromoPointCreateSchema,
-    files: List[Optional[UploadFile]],
-    dynamic_path: str,
-    auth_token: str
+    promo_point_data: ComplementaryPromoPointCreateSchema
 ) -> ComplementaryPromoPoint:
     '''
-        Creates a new Complementary Promotional Point report.
+        Creates a new Complementary Promotional Point report metadata.
     '''
     message = f'Creating Promo Point for attendance ID: {attendance_id}'
     logger.info(message)
 
-    paths = await _process_multiple_files(files, dynamic_path, auth_token, 'promo_point')
-    paths += [None] * (2 - len(paths))
-
     db_report = ComplementaryPromoPoint(
         attendance_id = attendance_id,
-        file_path_1 = paths[0],
-        file_path_2 = paths[1],
-        **promo_point_data.model_dump()
+        company_id = promo_point_data.company_id,
+        comments = promo_point_data.comments
     )
     db.add(db_report)
     db.commit()
@@ -219,28 +204,14 @@ async def create_complementary_promo_point_service(
 @audit_event('TRADE', 'ComplementaryCompetition', 'CREATE')
 async def create_complementary_competition_service(
     db: Session,
-    competition_data: ComplementaryCompetitionCreateSchema,
-    uploaded_file: Optional[UploadFile],
-    dynamic_path: str,
-    auth_token: str
+    competition_data: ComplementaryCompetitionCreateSchema
 ) -> ComplementaryCompetition:
     '''
-        Creates a new general Competition Report.
+        Creates a new general Competition Report metadata.
     '''
     logger.info('Creating Competition Report')
 
-    file_path = None
-    if uploaded_file:
-        res = await prepare_file_to_upload(
-            file = uploaded_file,
-            dynamic_path = dynamic_path,
-            auth_token = auth_token,
-            prefix = 'competition'
-        )
-        file_path = res.get('url') if isinstance(res, dict) else str(res)
-
     db_report = ComplementaryCompetition(
-        file_path_1 = file_path,
         **competition_data.model_dump()
     )
     db.add(db_report)

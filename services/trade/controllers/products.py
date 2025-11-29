@@ -10,6 +10,7 @@ from services.utils import (
     handle_service_errors
 )
 from services.products import (
+    bulk_create_product_assignments_service,
     bulk_create_products_service,
     bulk_create_sku_equivalencies_service,
     create_product_assignment_service,
@@ -416,3 +417,32 @@ async def delete_product_assignment_controller(
         'message': f'Product Assignment POS with ID {deleted_id} deleted successfully.',
         'id': deleted_id
     }
+
+@handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def bulk_upload_product_assignments_controller(
+    db: Session,
+    request: Request,
+    current_user: str,
+    file_name: str,
+    delimiter: Optional[str] = ',',
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+        Controller to handle the bulk upload of Product Assignments from a file.
+        Uses the service that handles both POS ID and External Code.
+    '''
+    message = f'Starting bulk upload for Product Assignments from file: {file_name}'
+    logger.info(message)
+
+    return await generic_bulk_controller_wrapper(
+        db = db,
+        request = request,
+        current_user = current_user,
+        file_name = file_name,
+        microservice_name = 'TRADE',
+        entity_name = 'ProductAssignmentPOS',
+        service_func = bulk_create_product_assignments_service,
+        delimiter = delimiter,
+        auth_token = auth_token
+    )

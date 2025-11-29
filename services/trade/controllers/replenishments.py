@@ -1,9 +1,8 @@
 '''
     Replenishments Controllers
 '''
-from typing import List, Optional
 from sqlalchemy.orm import Session
-from fastapi import Request, UploadFile
+from fastapi import Request
 from services.utils import handle_service_errors
 from services.replenishments import (
     create_complementary_bandeo_service,
@@ -31,28 +30,21 @@ from schemas.replenishments import (
 # --- B.2. REPLENISHMENT ACTIVITIES Controllers ---
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_replenishment_report_controller(
     attendance_id: int,
     report_data: ReplenishmentReportCreateSchema,
-    files: List[Optional[UploadFile]],
     db: Session,
     request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    auth_token: str
+    current_user: str # pylint: disable=unused-argument
 ) -> ReplenishmentReportResponseSchema:
     '''
         Controller for creating a Replenishment Report (Success Photos).
+        Photos are handled separately.
     '''
-    dynamic_path = f'trade/{report_data.company_id}/replenishment'
-
     db_report = await create_replenishment_report_service(
         db = db,
         attendance_id = attendance_id,
-        report_data = report_data,
-        files = files,
-        dynamic_path = dynamic_path,
-        auth_token = auth_token
+        report_data = report_data
     )
     return ReplenishmentReportResponseSchema.model_validate(
         db_report, from_attributes = True
@@ -105,82 +97,58 @@ async def create_replenishment_reception_controller(
 # --- B.3. COMPLEMENTARY ACTIVITIES Controllers ---
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_bandeo_controller(
     attendance_id: int,
     bandeo_data: ComplementaryBandeoCreateSchema,
-    files: List[Optional[UploadFile]],
     db: Session,
     request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    auth_token: str
+    current_user: str # pylint: disable=unused-argument
 ) -> ComplementaryBandeoResponseSchema:
     '''
         Controller for creating a Complementary Bandeo Report (Returns/Photos).
     '''
-    dynamic_path = f'trade/{bandeo_data.company_id}/replenishment'
-
     db_bandeo = await create_complementary_bandeo_service(
         db = db,
         attendance_id = attendance_id,
-        bandeo_data = bandeo_data,
-        files = files,
-        dynamic_path = dynamic_path,
-        auth_token = auth_token
+        bandeo_data = bandeo_data
     )
     return ComplementaryBandeoResponseSchema.model_validate(
         db_bandeo, from_attributes = True
     )
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_promo_point_controller(
     attendance_id: int,
     promo_point_data: ComplementaryPromoPointCreateSchema,
-    files: List[Optional[UploadFile]],
     db: Session,
     request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    auth_token: str
+    current_user: str # pylint: disable=unused-argument
 ) -> ComplementaryPromoPointResponseSchema:
     '''
         Controller for creating a Complementary Promotional Point Report (Photos).
     '''
-    dynamic_path = f'trade/{promo_point_data.company_id}/replenishment'
-
     db_report = await create_complementary_promo_point_service(
         db = db,
         attendance_id = attendance_id,
-        promo_point_data = promo_point_data,
-        files = files,
-        dynamic_path = dynamic_path,
-        auth_token = auth_token
+        promo_point_data = promo_point_data
     )
     return ComplementaryPromoPointResponseSchema.model_validate(
         db_report, from_attributes = True
     )
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_complementary_competition_controller(
     competition_data: ComplementaryCompetitionCreateSchema,
-    file: Optional[UploadFile],
     db: Session,
     request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    auth_token: str
+    current_user: str # pylint: disable=unused-argument
 ) -> ComplementaryCompetitionResponseSchema:
     '''
         Controller for creating a general Competition Report.
     '''
-    dynamic_path = f'trade/{competition_data.company_id}/replenishment'
-
     db_report = await create_complementary_competition_service(
         db = db,
-        competition_data = competition_data,
-        uploaded_file = file,
-        dynamic_path = dynamic_path,
-        auth_token = auth_token
+        competition_data = competition_data
     )
     return ComplementaryCompetitionResponseSchema.model_validate(
         db_report, from_attributes = True
