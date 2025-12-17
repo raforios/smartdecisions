@@ -444,8 +444,8 @@ async def _get_planned_route_ids_from_request(
     '''
     final_planned_route_ids = None
 
-    if request_data.planned_route_id:
-        final_planned_route_ids = {request_data.planned_route_id}
+    if request_data.planned_route_ids:
+        final_planned_route_ids = set(request_data.planned_route_ids)
     elif request_data.team_id or request_data.service_id:
         ids_from_planning = await _fetch_planned_routes_from_planning(
             db = db,
@@ -478,7 +478,7 @@ async def _get_executed_point_ids(
     '''
     final_executed_point_ids = []
 
-    if request_data.user_id and not request_data.planned_route_id:
+    if request_data.user_id and not request_data.planned_route_ids:
         # Jerarquía 2: user_id es el filtro principal si no hay planned_route_id.
         executed_point_ids_from_user = db.query(Contact.executed_route_point_id)\
             .join(FormResponse, FormResponse.contact_id == Contact.id)\
@@ -517,9 +517,9 @@ async def generate_contacts_by_route_report(
     company_id = request_data.company_id
 
     # 1. Obtener la company_id si planned_route_id está presente y company_id no
-    if request_data.planned_route_id and not company_id:
+    if request_data.planned_route_ids and not company_id:
         company_id = await _get_company_id_from_localization(
-            planned_route_id = request_data.planned_route_id,
+            planned_route_id = request_data.planned_route_ids[0],
             auth_token = auth_token
         )
         if not company_id:
@@ -534,6 +534,23 @@ async def generate_contacts_by_route_report(
 
     if not final_executed_point_ids:
         return []
+
+    # Obtener los planned_route_ids relevantes para construir el mapeo
+    relevant_planned_route_ids = await _get_planned_route_ids_from_request(
+        db = db,
+        request_data = request_data,
+        auth_token = auth_token
+    )
+
+    executed_point_to_planned_route_map = {}
+    if relevant_planned_route_ids:
+        for planned_id in relevant_planned_route_ids:
+            executed_ids_for_planned_route = await _fetch_executed_points_from_localization(
+                planned_route_id = planned_id,
+                auth_token = auth_token
+            )
+            for executed_id in executed_ids_for_planned_route:
+                executed_point_to_planned_route_map[executed_id] = planned_id
 
     # 3. Construir la consulta a la base de datos con los filtros
     query = db.query(FormResponse).join(
@@ -562,12 +579,21 @@ async def generate_contacts_by_route_report(
     if request_data.service_id:
         conditions.append(FormResponse.service_id == request_data.service_id)
 
-    if request_data.user_id and not request_data.planned_route_id:
+    if request_data.user_id and not request_data.planned_route_ids:
         conditions.append(FormResponse.user_id == request_data.user_id)
 
     query = query.filter(and_(*conditions))
 
     results = query.all()
+
+    # Asignar planned_route_id a cada FormResponse
+    for form_response in results:
+        executed_point_id = form_response.contact.executed_route_point_id
+        if executed_point_id in executed_point_to_planned_route_map:
+            # Dynamically add the attribute to the ORM object instance
+            form_response.planned_route_id = executed_point_to_planned_route_map[executed_point_id]
+        else:
+            form_response.planned_route_id = None # Ensure it's explicitly None if not found
 
     # 4. Retornar las respuestas. El service_id ya está en el modelo FormResponse
     # y será mapeado automáticamente por FormResponseDetailResponse.

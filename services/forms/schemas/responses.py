@@ -251,6 +251,8 @@ class FormResponseDetailResponse(FormResponseBase):
     '''
     id: int
     person_id: int = Field(..., description = 'ID of the person associated with this response.')
+    planned_route_id: Optional[int] = Field(None,
+        description = 'ID of the planned route associated with this response.')
     submission_date: datetime = Field(...,
         description = 'Timestamp when the form response was submitted.')
     answers: List[FormAnswerResponse] = []

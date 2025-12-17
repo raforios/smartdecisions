@@ -137,8 +137,8 @@ class ContactsByRouteReportRequestSchema(BaseModel):
             description = 'User ID (affiliator) to include.')
     city_id: Optional[int] = Field(None,
             description = 'City ID to include.')
-    planned_route_id: Optional[int] = Field(None,
-            description = 'Planned route ID to include.')
+    planned_route_ids: Optional[List[int]] = Field(None,
+            description = 'Planned route IDs to include.', min_length=1)
 
     class Config: # pylint: disable=too-few-public-methods
         '''
