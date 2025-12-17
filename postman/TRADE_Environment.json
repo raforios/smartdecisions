@@ -1,0 +1,73 @@
+{
+	"id": "45c1d30f-b2a1-4d1a-9f89-80a5e2f7c9e0",
+	"name": "TRADE Environment",
+	"values": [
+		{
+			"key": "BASE_URL",
+			"value": "http://localhost:3000/v1",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "AUTH_URL",
+			"value": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "secret",
+			"enabled": true
+		},
+		{
+			"key": "company_id",
+			"value": "1",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "user_id",
+			"value": "10",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "product_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "product_sku",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "pos_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "planning_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "attendance_id",
+			"value": "100",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "promotion_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		}
+	],
+	"_postman_variable_scope": "environment"
+}

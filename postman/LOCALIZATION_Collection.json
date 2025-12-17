@@ -1,0 +1,732 @@
+{
+	"info": {
+		"_postman_id": "223ac9d4-c8a0-46e2-90b3-89672439b85e",
+		"name": "LOCALIZATION Service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "1116629"
+	},
+	"item": [
+		{
+			"name": "Login",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"let jsonData = pm.response.json();",
+							"pm.environment.set(\"auth_token\", jsonData.access_token);",
+							"console.log(\"Auth Token: \" + pm.environment.get(\"auth_token\"));"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\" : \"raforios@gmail.com\",\n    \"password\" : \"MotoPassword\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{AUTH_URL}}/login"
+			},
+			"response": []
+		},
+		{
+			"name": "Create Planned Route",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"let jsonData = pm.response.json();",
+							"pm.environment.set(\"planned_route_id\", jsonData.id);",
+							"console.log(\"Planned Route ID: \" + pm.environment.get(\"planned_route_id\"));",
+							"pm.environment.set(\"planned_point_id\", jsonData.points[0].id);"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"route_code\": \"LPZ-800\",\n  \"route_name\": \"Ruta La Paz Sur 800\",\n  \"company_id\": 1,\n  \"app_id\": 1,\n  \"city_id\": 1,\n  \"points\": [\n    {\n      \"latitude\": -16.544655304472514,\n      \"longitude\": -68.0912254042115,\n      \"point_name\": \"Shoping Sur\",\n      \"secuencial\": 1\n    },\n    {\n      \"latitude\": -16.541281912554332,\n      \"longitude\": -68.08586098623691,\n      \"point_name\": \"Hotel Renova\",\n      \"secuencial\": 2\n    },\n    {\n      \"latitude\": -16.539842032187085,\n      \"longitude\": -68.08264233545216,\n      \"point_name\": \"Casa Grande Hotel\",\n      \"secuencial\": 3\n    }\n  ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/planned"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Planned Route By ID",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": "{{BASE_URL}}/routes/planned/{{planned_route_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Last Knowledge Location (LKL)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "{{BASE_URL}}/routes/executed/last-location?user_ids=2&user_ids=5&user_ids=8",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"routes",
+						"executed",
+						"last-location"
+					],
+					"query": [
+						{
+							"key": "user_ids",
+							"value": "2"
+						},
+						{
+							"key": "user_ids",
+							"value": "5"
+						},
+						{
+							"key": "user_ids",
+							"value": "8"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get All Planned Routes",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": "{{BASE_URL}}/routes/planned"
+			},
+			"response": []
+		},
+		{
+			"name": "Filter Planned Routes",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "{{BASE_URL}}/routes/planned/filter?company_id=1&route_code=LPZ-100",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"routes",
+						"planned",
+						"filter"
+					],
+					"query": [
+						{
+							"key": "company_id",
+							"value": "1"
+						},
+						{
+							"key": "route_code",
+							"value": "LPZ-100"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Update Planned Route Status",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"ACTIVE\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/planned/{{planned_route_id}}/status"
+			},
+			"response": []
+		},
+		{
+			"name": "Update Planned Route",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"route_name\": \"Ruta Zona Sur\",\n  \"route_code\": \"LPZ-SUR-011\",\n  \"description\": \"Ruta para el llenado de encuestas en la zona sur.\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/planned/{{planned_route_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Add Planned Point",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"let jsonData = pm.response.json();",
+							"pm.environment.set(\"planned_point_id\", jsonData.id);",
+							"console.log(\"New Planned Point ID: \" + pm.environment.get(\"planned_point_id\"));"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"latitude\": -16.54149306552527,\n  \"longitude\": -68.07739968414144,\n  \"point_name\": \"Calle 25\",\n  \"secuencial\": 6\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/planned/{{planned_route_id}}/points"
+			},
+			"response": []
+		},
+		{
+			"name": "Update Planned Point",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"secuencial\": 6,\n    \"point_name\": \"Pankara\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/planned/{{planned_route_id}}/points/{{planned_point_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Planned Point",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": "{{BASE_URL}}/routes/planned/{{planned_route_id}}/points/{{planned_point_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Planned Route",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": "{{BASE_URL}}/routes/planned/{{planned_route_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Create Executed Route",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"let jsonData = pm.response.json();",
+							"pm.environment.set(\"executed_route_id\", jsonData.id);",
+							"console.log(\"Executed Route ID: \" + pm.environment.get(\"executed_route_id\"));"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_id\": 2,\n    \"service_id\": 1,\n    \"planned_route_id\": \"{{planned_route_id}}\",\n    \"start_time\": \"2025-10-20T13:38:00\",\n    \"start_latitude\": -16.544655304472514,\n    \"start_longitude\": -68.0912254042115,\n    \"max_distance_start_point\": 60\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/executed"
+			},
+			"response": []
+		},
+		{
+			"name": "Register Executed Point",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"executed_route_id\": \"{{executed_route_id}}\",\n  \"latitude\": -16.540932216007622,\n  \"longitude\": -68.08905822280276,\n  \"timestamp\": \"2025-10-24T18:32:00\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/executed/points"
+			},
+			"response": []
+		},
+		{
+			"name": "Update Executed Route End Time",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"end_time\": \"2025-09-08T16:10:00\",\n    \"end_latitude\": -16.540396133320943,\n    \"end_longitude\": -68.08267099694427,\n    \"max_distance_end_point\": 70\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/executed/{{executed_route_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Register or Update Attendance (Check-in)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"let jsonData = pm.response.json();",
+							"pm.environment.set(\"attendance_id\", jsonData.id);",
+							"console.log(\"Attendance ID: \" + pm.environment.get(\"attendance_id\"));"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"user_id\": {{user_id}},\n  \"planned_point_id\": {{planned_point_id}},\n  \"check_in_time\": \"2025-09-09T15:30:00\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/attendances"
+			},
+			"response": []
+		},
+		{
+			"name": "Update Attendance Check-out Time",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"check_out_time\": \"2025-09-09T19:32:00\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "{{BASE_URL}}/attendances/{{attendance_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Points Visited Statistics",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "{{BASE_URL}}/statistics/users/{{user_id}}/points-visited?start_date=2025-10-01T00:00:00&end_date=2025-10-28T23:59:59",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"statistics",
+						"users",
+						"{{user_id}}",
+						"points-visited"
+					],
+					"query": [
+						{
+							"key": "start_date",
+							"value": "2025-10-01T00:00:00"
+						},
+						{
+							"key": "end_date",
+							"value": "2025-10-28T23:59:59"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Compare Planned vs. Executed Routes",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": "{{BASE_URL}}/statistics/route-comparisons/{{planned_route_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Executed Routes By Planned ID",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "default"
+					}
+				],
+				"url": "{{BASE_URL}}/routes/executed/by-planned/{{planned_route_id}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Comparison Routes Planed vs. Executed (Filter by Date)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{BASE_URL}}/routes/comparison/{{planned_route_id}}?start_date=2025-10-01&end_date=2025-10-28",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"routes",
+						"comparison",
+						"{{planned_route_id}}"
+					],
+					"query": [
+						{
+							"key": "start_date",
+							"value": "2025-10-01",
+							"description": "Optional: Start date (YYYY-MM-DD) to filter executed routes by start_time."
+						},
+						{
+							"key": "end_date",
+							"value": "2025-10-28",
+							"description": "Optional: End date (YYYY-MM-DD) to filter executed routes by start_time."
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Upload Files Step 1",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData && jsonData.presigned_url) {",
+							"    pm.environment.set(\"presigned_url\", jsonData.presigned_url);",
+							"    console.log(\"presigned_url set to: \" + jsonData.presigned_url);",
+							"} else if (jsonData && jsonData.is_form_complete) {",
+							"    console.log(\"File presigned.\");",
+							"    pm.environment.unset(\"presigned_url\");",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"bucket_name\": \"{{bucket_name}}\",\n    \"file_path\": \"\",\n    \"file_name\": \"localization.csv\",\n    \"expiration_seconds\": 3600,\n    \"validation\": true,\n    \"content_type\": \"text/csv\"\n}\n"
+				},
+				"url": "{{FILES_URL}}/upload-presigned"
+			},
+			"response": []
+		},
+		{
+			"name": "Upload Files Step 2",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "text/csv",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "file",
+					"file": {
+						"src": "/Users/rafael/Work/projects/back/SmartBear/data/localization.csv"
+					}
+				},
+				"url": "{{presigned_url}}"
+			},
+			"response": []
+		},
+		{
+			"name": "Bulk Create Planned Routes",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{BASE_URL}}/routes/planned/bulk-upload?file_name=localization.csv&delimiter=;",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"routes",
+						"planned",
+						"bulk-upload"
+					],
+					"query": [
+						{
+							"key": "file_name",
+							"value": "localization.csv"
+						},
+						{
+							"key": "delimiter",
+							"value": ";"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

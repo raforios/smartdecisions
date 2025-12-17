@@ -1,0 +1,81 @@
+{
+	"id": "36cdf29b-78e0-4290-90de-66ee770db0b2",
+	"name": "PLANNING Environment",
+	"values": [
+		{
+			"key": "BASE_URL",
+			"value": "http://localhost:3000/v1/plannings",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "AUTH_URL",
+			"value": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "secret",
+			"enabled": true
+		},
+		{
+			"key": "planning_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "planning_detail_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "material_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "company_id",
+			"value": "1",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "week_number",
+			"value": "34",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "planning_date",
+			"value": "2025-08-20",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "FILES_URL",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "bucket_name",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "presigned_url",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		}
+	],
+	"_postman_variable_scope": "environment",
+	"_postman_exported_at": "2025-10-02T21:23:47.162Z",
+	"_postman_exported_using": "Postman/11.65.2"
+}

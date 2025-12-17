@@ -1,0 +1,87 @@
+{
+	"id": "f09628b8-b62d-4c3a-b78e-787d4268cec4",
+	"name": "LOCALIZATION Environment PROD",
+	"values": [
+		{
+			"key": "BASE_URL",
+			"value": "http://localhost:3000/v1/localizatio",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "AUTH_URL",
+			"value": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "secret",
+			"enabled": true
+		},
+		{
+			"key": "user_id",
+			"value": "1",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "planned_route_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "executed_route_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "planned_point_id",
+			"value": "3",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "attendance_id",
+			"value": "1",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "route_code",
+			"value": "LPZ-001",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "route_status",
+			"value": "ACTIVE",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "FILES_URL",
+			"value": "https://ek2xktuyr4.execute-api.us-east-1.amazonaws.com/v1/s3",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "bucket_name",
+			"value": "ml-data-file-handler",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "presigned_url",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		}
+	],
+	"_postman_variable_scope": "environment",
+	"_postman_exported_at": "2025-10-15T00:56:28.906Z",
+	"_postman_exported_using": "Postman/11.67.0"
+}

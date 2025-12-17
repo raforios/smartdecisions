@@ -1,0 +1,69 @@
+{
+	"id": "9ff1d1f1-c704-442f-bd3a-48de8ac8e486",
+	"name": "TRADE Environment PROD",
+	"values": [
+		{
+			"key": "BASE_URL",
+			"value": "http://localhost:3000/v1",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "AUTH_URL",
+			"value": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "secret",
+			"enabled": true
+		},
+		{
+			"key": "company_id",
+			"value": "1",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "user_id",
+			"value": "10",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "product_sku",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "pos_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "promotion_id",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "current_attendance_id",
+			"value": "100",
+			"type": "default",
+			"enabled": true,
+			"description": "Simulated Visit ID from Localization"
+		},
+		{
+			"key": "last_entity_id",
+			"value": "",
+			"type": "default",
+			"enabled": true,
+			"description": "ID of the last created record (Sale, Report, etc.) to attach photos"
+		}
+	],
+	"_postman_variable_scope": "environment"
+}
