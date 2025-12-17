@@ -45,7 +45,7 @@ from schemas.localization import (
     PlannedRouteBulkCreateSchema,
     PlannedRouteComparisonSchema,
     PlannedRouteCreateSchema,
-    PlannedRouteFilterSchema,
+    PlannedRouteFilterRequestSchema,
     PlannedRouteStatusEnum,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
@@ -111,7 +111,7 @@ async def get_all_planned_routes(
 @handle_service_errors('LOCALIZATION')
 async def filter_planned_routes(
     db: Session,
-    filter_params: PlannedRouteFilterSchema
+    filter_params: PlannedRouteFilterRequestSchema
 ) -> List[PlannedRoute]:
     '''
         Filters planned routes based on various optional parameters using a Pydantic schema.
@@ -137,6 +137,9 @@ async def filter_planned_routes(
 
     if filter_params.route_name:
         query = query.filter(PlannedRoute.route_name.ilike(f'%{filter_params.route_name}%'))
+
+    if filter_params.planned_route_ids:
+        query = query.filter(PlannedRoute.id.in_(filter_params.planned_route_ids))
 
     return query.all()
 

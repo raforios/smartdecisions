@@ -52,7 +52,7 @@ from schemas.localization import (
     PlannedPointResponseSchema,
     PlannedPointUpdateSchema,
     PlannedRouteCreateSchema,
-    PlannedRouteFilterSchema,
+    PlannedRouteFilterRequestSchema,
     PlannedRouteListResponseSchema,
     PlannedRouteResponseSchema,
     ExecutedRouteCreateSchema,
@@ -130,7 +130,7 @@ async def filter_planned_routes_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str, # pylint: disable=unused-argument
-    filters: PlannedRouteFilterSchema = Depends()
+    filters: PlannedRouteFilterRequestSchema
 ) -> List[PlannedRouteListResponseSchema]:
     '''
         Controller to filter planned routes by various parameters.

@@ -4,7 +4,6 @@
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
-from fastapi import Query
 from pydantic import BaseModel, Field, ConfigDict
 
 class PlannedRouteStatusEnum(str, Enum):
@@ -361,24 +360,20 @@ class RouteComparisonsResponseSchema(LocalizationBaseSchema):
     '''
     comparisons: List[RouteComparisonSchema]
 
-class PlannedRouteFilterSchema(BaseModel):
+class PlannedRouteFilterRequestSchema(BaseModel):
     '''
-        Schema to filter planned routes based on various criteria.
+        Schema to filter planned routes via a POST request body.
     '''
-    route_code: Optional[str] = Query(None, description = 'Unique code of the planned route.')
-    route_name: Optional[str] = Query(None, description = 'Name of the planned route.')
-    route_status: Optional[PlannedRouteStatusEnum] = Query(None,
-                            description = 'Status of the planned route.')
-    company_id: Optional[int] = Query(None, description = 'ID of the company who owns the route.')
-    city_id: Optional[int] = Query(None,
-                            description = 'ID of the city associated with the planned route.')
+    planned_route_ids: Optional[List[int]] = Field(None,
+                                description='List of planned route IDs to filter.')
+    route_code: Optional[str] = Field(None, description='Unique code of the planned route.')
+    route_name: Optional[str] = Field(None, description='Name of the planned route.')
+    route_status: Optional[PlannedRouteStatusEnum] = Field(None,
+                            description='Status of the planned route.')
+    company_id: Optional[int] = Field(None, description='ID of the company who owns the route.')
+    city_id: Optional[int] = Field(None,
+                            description='ID of the city associated with the planned route.')
 
-    class Config:# pylint: disable=too-few-public-methods
-        '''
-            This setting allows the class to be instantiated without arguments in
-            the @router.get() decorator.
-        '''
-        arbitrary_types_allowed = True
 
 class PlannedRouteBulkCreateSchema(BaseModel):
     '''
@@ -428,7 +423,7 @@ class AttendanceSearchRequestSchema(BaseModel):
         Schema for searching multiple attendances by ID.
         Used by TRADE microservice to fetch context (User/POS).
     '''
-    attendance_ids: List[int] = Field(..., description='List of Attendance IDs to fetch.')
+    attendance_ids: List[int] = Field(..., description = 'List of Attendance IDs to fetch.')
 
 class AttendanceSearchItemSchema(LocalizationBaseSchema):
     '''
@@ -438,6 +433,6 @@ class AttendanceSearchItemSchema(LocalizationBaseSchema):
     id: int
     user_id: int
     # Mapeo clave: Exponemos planned_point_id como point_of_sale_id
-    point_of_sale_id: int = Field(..., validation_alias='planned_point_id')
+    point_of_sale_id: int = Field(..., validation_alias = 'planned_point_id')
     check_in_time: Optional[datetime]
     check_out_time: Optional[datetime]

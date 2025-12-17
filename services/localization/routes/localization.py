@@ -42,7 +42,7 @@ from schemas.localization import (
     PlannedPointResponseSchema,
     PlannedPointUpdateSchema,
     PlannedRouteCreateSchema,
-    PlannedRouteFilterSchema,
+    PlannedRouteFilterRequestSchema,
     PlannedRouteListResponseSchema,
     PlannedRouteResponseSchema,
     ExecutedRouteCreateSchema,
@@ -110,17 +110,17 @@ async def get_all_planned_routes_endpoint(
         current_user = current_user
     )
 
-@router.get(
+@router.post(
     '/routes/planned/filter',
     response_model = List[PlannedRouteListResponseSchema],
     status_code = status.HTTP_200_OK,
     summary = 'Filter planned routes',
     description = '''Retrieves a list of planned routes filtered by route_code,
-                name, status, or user ID.'''
+                name, status, or a list of IDs.'''
 )
 async def get_or_filter_planned_routes_endpoint(
     request: Request,
-    filters: PlannedRouteFilterSchema = Depends(),
+    filters: PlannedRouteFilterRequestSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ) -> List[PlannedRouteListResponseSchema]:
@@ -128,7 +128,8 @@ async def get_or_filter_planned_routes_endpoint(
         Endpoint to filter planned routes.
     '''
     message = f'User: {current_user
-            }. Received request to filter planned routes with parameters: route_code = {
+            }. Received request to filter planned routes with parameters: planned_route_ids = {
+            filters.planned_route_ids}, route_code = {
             filters.route_code}, route_name = {filters.route_name}, status = {
             filters.route_status}, company_id = {filters.company_id}'
     logger.info(message)
