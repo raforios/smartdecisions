@@ -6,13 +6,17 @@ Bienvenido al microservicio de gestión de formularios, un componente clave dent
 
 ## 🎯 Propósito Principal
 
-El **Forms-Service** está diseñado para ser la interfaz principal para toda la gestión de formularios dinámicos y sus respuestas. Su propósito es facilitar la creación de formularios complejos con flujos lógicos y un sistema de revisión integrado. Sus funcionalidades clave incluyen:
+El **Forms-Service** está diseñado para ser la interfaz principal para toda la gestión de formularios dinámicos y sus respuestas. Además, ahora integra las funcionalidades de planificación operativa, incluyendo la asignación de rutas y equipos. Su propósito es facilitar la creación de formularios complejos con flujos lógicos y un sistema de revisión integrado, junto con la gestión integral de planificaciones operativas. Sus funcionalidades clave incluyen:
 
   * **Definición de Formularios Paramétricos:** Permite crear formularios con preguntas, opciones de respuesta y reglas de flujo complejas, todo gestionado desde la base de datos.
   * **Gestión del Ciclo de Vida del Formulario:** Proporciona un proceso de revisión que permite actualizar el estado de los formularios completados (ej. `Revisado`, `Aprobado`).
   * **Registro Temporal de Respuestas:** Almacena las respuestas de los usuarios de manera temporal en **DynamoDB**, procesando las preguntas una por una y solo persistiendo los datos de manera definitiva en **MySQL** cuando el formulario se finaliza.
   * **Gestión de Flujos Lógicos:** Permite la navegación controlada a través de las preguntas del formulario, respetando saltos condicionales basados en las respuestas del usuario.
-  * **Generación de Reportes Transversales:** Produce reportes complejos como el **Monitor de Afiliación** y **Contactos por Ruta**, orquestando datos de los microservicios de **Planning** y **Localization** con los datos de formularios locales.
+  * **Generación de Reportes Transversales:** Produce reportes complejos como el **Monitor de Afiliación** y **Contactos por Ruta**, orquestando datos de los microservicios de **Localization** con los datos de formularios locales y ahora con los datos de planificación integrados.
+  * **Gestión de Planificaciones Operativas:** Permite la creación, actualización, eliminación y recuperación de planes operativos, incluyendo fechas de inicio y fin, asignación de rutas y equipos.
+  * **Gestión de Detalles de Planificación:** Facilita la creación, actualización y eliminación de los detalles específicos de cada planificación.
+  * **Consulta de Planificaciones:** Proporciona endpoints para consultar planificaciones por número de semana, por una fecha específica o a través de filtros detallados.
+  * **Carga Masiva de Planificaciones:** Permite la importación de datos de planificación a gran escala a través de archivos CSV.
 
 -----
 
@@ -89,6 +93,24 @@ A continuación se listan los endpoints principales de la API, que facilitan la 
 
 -----
 
+### Gestión de Planificaciones Operativas
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/v1/plannings/` | Crea una nueva planificación. |
+| `GET` | `/v1/plannings/filter` | Filtra planificaciones por ID de compañía, equipo, servicio o ruta planificada. |
+| `GET` | `/v1/plannings/{planning_id}` | Recupera una planificación específica por su ID, incluyendo sus detalles. |
+| `PUT` | `/v1/plannings/{planning_id}` | Actualiza los datos de una planificación existente. |
+| `DELETE`| `/v1/plannings/{planning_id}` | Elimina una planificación y sus detalles, solo si está en estado `ACTIVE`. |
+| `GET` | `/v1/plannings/weekly/{week_number}` | Recupera todas las planificaciones para un número de semana específico. |
+| `GET` | `/v1/plannings/daily` | Recupera todas las planificaciones activas en un rango de fechas. |
+| `POST`| `/v1/plannings/bulk-upload` | Carga masivamente planificaciones a partir de un archivo CSV. |
+| `POST` | `/v1/plannings/{planning_id}/details` | Crea un nuevo detalle para una planificación existente. |
+| `PATCH`| `/v1/plannings/{planning_id}/details/{planning_detail_id}` | Actualiza un detalle de planificación con datos parciales. |
+| `DELETE`| `/v1/plannings/{planning_id}/details/{planning_detail_id}` | Elimina un detalle de planificación. |
+
+-----
+
 ### Reportes (Transversales)
 
 | Método | Endpoint | Descripción |
@@ -105,20 +127,24 @@ forms/
 ├── controllers/
 │   ├── __init__.py
 │   ├── forms.py
+│   ├── planning.py
 │   ├── reports.py
 │   └── responses.py
 ├── models/
 │   ├── __init__.py
 │   ├── forms.py
+│   ├── planning.py
 │   └── responses.py
 ├── routes/
 │   ├── __init__.py
 │   ├── forms.py
+│   ├── planning.py
 │   ├── reports.py
 │   └── responses.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── forms.py
+│   ├── planning.py
 │   ├── reports.py
 │   └── responses.py
 ├── services/
@@ -131,6 +157,7 @@ forms/
 │   ├── exceptions.py
 │   ├── forms.py
 │   ├── logger_config.py
+│   ├── planning.py
 │   ├── reports.py
 │   ├── responses.py
 │   ├── security.py

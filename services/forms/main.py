@@ -18,6 +18,7 @@ from routes.forms import router as form_router
 from routes.responses import router as response_router
 from routes.responses import persons_router as person_router
 from routes.reports import router as report_router
+from routes.planning import router as planning_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
@@ -74,7 +75,10 @@ APP_CONFIG = {
     'root_path': ROOT_PATH_NORMALIZED,
     'title': 'Forms Service',
     'description': '''This service manages the creation, storage, and retrieval of forms,
-    including their headers, questions, multiple choice options, and flow logic.''',
+    including their headers, questions, multiple choice options, and flow logic.
+    It also integrates operational planning functionalities, managing the creation,
+    retrieval, update, and deletion of planning records and their details, such as
+    route assignments and team allocations.''',
     'version': '1.0.0',
     'contact': {
         'name': 'API Support',
@@ -138,6 +142,7 @@ app.include_router(form_router, tags = ['Forms'])
 app.include_router(response_router, tags = ['Form Responses'])
 app.include_router(person_router, tags = ['Persons'])
 app.include_router(report_router, tags = ['Reports'])
+app.include_router(planning_router, tags = ['Planning'])
 
 # Entry point to run the app
 if __name__ == '__main__':
