@@ -34,7 +34,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"email\" : \"raforios@gmail.com\",\n    \"password\" : \"MotoPassword\"\n}",
+					"raw": "{\n    \"email\" : \"psoto@binariaconsultores.com\",\n    \"password\" : \"P4ssw0rd$P1R3st\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -162,7 +162,7 @@
 		{
 			"name": "Filter Planned Routes",
 			"request": {
-				"method": "GET",
+				"method": "POST",
 				"header": [
 					{
 						"key": "Authorization",
@@ -170,27 +170,16 @@
 						"type": "default"
 					}
 				],
-				"url": {
-					"raw": "{{BASE_URL}}/routes/planned/filter?company_id=1&route_code=LPZ-100",
-					"host": [
-						"{{BASE_URL}}"
-					],
-					"path": [
-						"routes",
-						"planned",
-						"filter"
-					],
-					"query": [
-						{
-							"key": "company_id",
-							"value": "1"
-						},
-						{
-							"key": "route_code",
-							"value": "LPZ-100"
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"company_id\": 1,\n    \"city_id\": 1,\n    \"planned_route_ids\": [1]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
 						}
-					]
-				}
+					}
+				},
+				"url": "{{BASE_URL}}/routes/planned/filter"
 			},
 			"response": []
 		},
@@ -438,7 +427,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"end_time\": \"2025-09-08T16:10:00\",\n    \"end_latitude\": -16.540396133320943,\n    \"end_longitude\": -68.08267099694427,\n    \"max_distance_end_point\": 70\n}",
+					"raw": "{\n    \"end_time\": \"2025-10-27T12:18:00\",\n    \"end_latitude\": -16.540396133320943,\n    \"end_longitude\": -68.08267099694427,\n    \"max_distance_end_point\": 70\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -598,7 +587,7 @@
 					}
 				],
 				"url": {
-					"raw": "{{BASE_URL}}/routes/comparison/{{planned_route_id}}?start_date=2025-10-01&end_date=2025-10-28",
+					"raw": "{{BASE_URL}}/routes/comparison/{{planned_route_id}}?start_date=2025-12-11&end_date=2025-12-12",
 					"host": [
 						"{{BASE_URL}}"
 					],
@@ -610,12 +599,12 @@
 					"query": [
 						{
 							"key": "start_date",
-							"value": "2025-10-01",
+							"value": "2025-12-11",
 							"description": "Optional: Start date (YYYY-MM-DD) to filter executed routes by start_time."
 						},
 						{
 							"key": "end_date",
-							"value": "2025-10-28",
+							"value": "2025-12-12",
 							"description": "Optional: End date (YYYY-MM-DD) to filter executed routes by start_time."
 						}
 					]

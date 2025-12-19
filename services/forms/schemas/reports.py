@@ -131,14 +131,20 @@ class ContactsByRouteReportRequestSchema(BaseModel):
             description = 'End date for the form submission date range.')
 
     # --- Optional Filtering Variables ---
+    affiliation_number_start: Optional[int] = Field(None,
+            description = 'Start of the affiliation number range.')
+    affiliation_number_end: Optional[int] = Field(None,
+            description = 'End of the affiliation number range.')
     team_id: Optional[int] = Field(None,
             description = 'Team ID to include.')
-    user_id: Optional[int] = Field(None,
-            description = 'User ID (affiliator) to include.')
+    user_ids: Optional[List[int]] = Field(None,
+            description = 'List of user IDs (affiliator) to include.')
     city_id: Optional[int] = Field(None,
             description = 'City ID to include.')
     planned_route_ids: Optional[List[int]] = Field(None,
             description = 'Planned route IDs to include.', min_length=1)
+    status: Optional[List[str]] = Field(None,
+            description = 'List of form statuses to include.')
 
     class Config: # pylint: disable=too-few-public-methods
         '''

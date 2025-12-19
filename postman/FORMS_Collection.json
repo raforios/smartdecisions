@@ -849,7 +849,7 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/v1/form-responses/?skip=0&limit=50&submission_date_start=2025-10-01&submission_date_end=2025-10-27&service_id=1",
+							"raw": "{{base_url}}/v1/form-responses/?skip=0&limit=50&submission_date_start=2025-12-10&submission_date_end=2025-12-12&service_id=1",
 							"host": [
 								"{{base_url}}"
 							],
@@ -869,11 +869,11 @@
 								},
 								{
 									"key": "submission_date_start",
-									"value": "2025-10-01"
+									"value": "2025-12-10"
 								},
 								{
 									"key": "submission_date_end",
-									"value": "2025-10-27"
+									"value": "2025-12-12"
 								},
 								{
 									"key": "service_id",
@@ -1126,7 +1126,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"submission_date_from\": \"2025-10-01\",\n    \"submission_date_to\": \"2025-10-27\",\n    \"user_id\": 1,\n    \"planned_route_id\": 2,\n    \"service_id\": 1\n}"
+							"raw": "{\n    \"submission_date_from\": \"2025-12-05\",\n    \"submission_date_to\": \"2025-12-10\",\n    \"user_id\": 1,\n    \"planned_route_id\": 2,\n    \"service_id\": 1\n}"
 						},
 						"url": "{{base_url}}/v1/reports/contacts-by-route",
 						"description": "Genera un reporte detallado de formularios, personas y contactos. Los filtros son obligatorios para la fecha y la compañía/servicio, y opcionales para equipos, usuarios, ciudades y rutas planificadas. Este reporte hace llamadas a los microservicios de Planning y Localization."
@@ -1171,7 +1171,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"email\" : \"raforios@gmail.com\",\n    \"password\" : \"MotoPassword\"\n}",
+					"raw": "{\n    \"email\" : \"psoto@binariaconsultores.com\",\n    \"password\" : \"P4ssw0rd$P1R3st\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
