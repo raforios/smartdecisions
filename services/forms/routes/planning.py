@@ -35,7 +35,7 @@ from schemas.planning import (
     PlanningUpdateSchema
 )
 
-router = APIRouter(prefix = '/v1/plannings', tags = ['Planning'])
+router = APIRouter(prefix = '/v1/planning', tags = ['Planning'])
 
 @router.post(
     '/',

@@ -67,16 +67,16 @@ Todos los servicios siguen esta estructura de carpetas estricta:
 
 ### 🗺️ LOCALIZATION (Localization-Service)
 - **Función:** Gestión de rutas (Planificadas vs Ejecutadas) y Asistencia (Check-in/out).
-- **Relación:** Provee datos geográficos a `PLANNING` y `FORMS`.
+- **Relación:** Provee datos geográficos a `FORMS`.
 
 ### 📝 FORMS (Forms-Service)
 - **Función:** Formularios dinámicos/paramétricos.
 - **Flujo:** Las respuestas temporales van a DynamoDB (sesión); al finalizar se guardan en MySQL.
-- **Reportes:** Cruza datos con `PLANNING` y `LOCALIZATION`.
+- **Reportes:** Cruza datos con `LOCALIZATION`.
 
 ### 📅 PLANNING (Planning-Service)
 - **Función:** Asignación operativa (Rutas, Equipos, Materiales).
-- **Relación:** Define qué debe ejecutarse, base para `LOCALIZATION` y `TRADE`.
+- **Relación:** Define qué debe ejecutarse, base para `TRADE`.
 
 ### 🛒 TRADE (Trade-Service) - *En Desarrollo*
 - **Función:** Ejecución en Punto de Venta (Inventarios, Ventas, Fotos, Merchandising).

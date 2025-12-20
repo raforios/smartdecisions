@@ -30,7 +30,6 @@ from services.utils import (
 from services.logger_config import custom_logger as logger
 from models.planning import (
     Planning,
-    PlanningDetail
 )
 from schemas.planning import (
     PlanningCreateSchema,
