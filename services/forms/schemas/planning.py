@@ -219,12 +219,12 @@ class PlanningMonitorFilterSchema(BaseModel):
     '''
         Schema to encapsulate filtering parameters for the Affiliation Monitor.
     '''
-    company_id: Optional[int] = Query(None, description = 'Company ID.')
-    service_id: Optional[int] = Query(None, description = 'Service ID.')
-    year: Optional[int] = Query(None, description = 'Year to filter.')
-    period: Optional[str] = Query(None, description = 'Period to filter (e.g., Q1, January, 1).')
-    team_ids: Optional[List[int]] = Query(None, description = 'List of team IDs.')
-    user_ids: Optional[List[int]] = Query(None, description = 'List of user IDs.')
+    company_id: Optional[int] = Field(None, description = 'Company ID.')
+    service_id: Optional[int] = Field(None, description = 'Service ID.')
+    year: Optional[int] = Field(None, description = 'Year to filter.')
+    period: Optional[str] = Field(None, description = 'Period to filter (e.g., Q1, January, 1).')
+    team_ids: Optional[List[int]] = Field(None, description = 'List of team IDs.')
+    user_ids: Optional[List[int]] = Field(None, description = 'List of user IDs.')
 
     class Config: # pylint: disable=too-few-public-methods
         '''

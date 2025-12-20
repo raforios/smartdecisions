@@ -30,9 +30,9 @@ async def get_affiliation_monitor_data(
     '''
     # The actual business logic is delegated to the service layer.
     report_data = await calculate_affiliation_monitor(db, request_data, auth_token)
-    return AffiliationMonitorResponseSchema(**report_data)
+    return report_data
 
-@handle_service_errors('FORMS-REPORTS')
+@handle_service_errors('FORMS-REPORTS', with_log = False)
 async def get_contacts_by_route_report_data(
     db: Session,
     auth_token: str,

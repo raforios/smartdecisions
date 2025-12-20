@@ -490,7 +490,7 @@ def _get_months_from_period(period: str) -> List[int]:
 
     return result
 
-@handle_service_errors('PLANNING-SERVICE')
+@handle_service_errors('PLANNING')
 async def get_planned_route_ids_for_monitor_service(
     db: Session,
     filters: PlanningMonitorFilterSchema

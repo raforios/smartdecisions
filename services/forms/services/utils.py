@@ -181,7 +181,7 @@ async def _get_request_body_for_logging(request: Request) -> dict | None:
 
     return {'detail': f'Content-Type {content_type} not logged.'}
 
-def handle_service_errors(microservice_name: str):
+def handle_service_errors(microservice_name: str, with_log: bool = True):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
     '''
@@ -240,13 +240,16 @@ def handle_service_errors(microservice_name: str):
                         response_time_ms = int((end_time - start_time) * 1000)
                     )
 
-                    if isinstance(response_data, list) and all(isinstance(item,
-                                                        BaseModel) for item in response_data):
-                        log_data.response_body = [item.model_dump() for item in response_data]
-                    elif isinstance(response_data, BaseModel):
-                        log_data.response_body = response_data.model_dump()
+                    if with_log :
+                        if isinstance(response_data, list) and all(isinstance(item,
+                                                            BaseModel) for item in response_data):
+                            log_data.response_body = [item.model_dump() for item in response_data]
+                        elif isinstance(response_data, BaseModel):
+                            log_data.response_body = response_data.model_dump()
+                        else:
+                            log_data.response_body = response_data
                     else:
-                        log_data.response_body = response_data
+                        log_data.response_body = None
 
                     await _process_and_send_usage_log(log_data)
 

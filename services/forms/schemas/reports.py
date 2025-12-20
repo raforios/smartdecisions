@@ -38,8 +38,6 @@ class AffiliationMonitorRequestSchema(BaseModel):
             description = 'List of work team IDs to include.')
     user_ids: Optional[List[int]] = Field(None,
             description = 'List of affiliate user IDs to include.')
-    city_ids: Optional[List[int]] = Field(None,
-            description = 'List of city IDs to include.')
 
     # --- Objective Metrics (from other client applications) ---
     target_status: str = Field(...,
@@ -104,15 +102,13 @@ class IndicatorsSummary(BaseModel):
 class AffiliationMonitorResponseSchema(BaseModel):
     '''
         Main response schema for the Affiliation Monitor report.
-        Groups the results into logical sub-objects for frontend consumption.
     '''
     records: RecordsSummary = Field(...,
-            description = 'Report data for the "Records" section.')
+                        description = 'Report data for the "Records" section.')
     objectives: ObjectivesSummary = Field(...,
-            description = 'Report data for the "Objectives" section.')
+                        description = 'Report data for the "Objectives" section.')
     indicators: IndicatorsSummary = Field(...,
-            description = 'Report data for the "Indicators" section.')
-
+                        description = 'Report data for the "Indicators" section.')
 class ContactsByRouteReportRequestSchema(BaseModel):
     '''
         Schema to handle the request payload for the "Forms by Points and Contact" report.
@@ -139,8 +135,6 @@ class ContactsByRouteReportRequestSchema(BaseModel):
             description = 'Team ID to include.')
     user_ids: Optional[List[int]] = Field(None,
             description = 'List of user IDs (affiliator) to include.')
-    city_id: Optional[int] = Field(None,
-            description = 'City ID to include.')
     planned_route_ids: Optional[List[int]] = Field(None,
             description = 'Planned route IDs to include.', min_length=1)
     status: Optional[List[str]] = Field(None,
