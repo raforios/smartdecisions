@@ -9,11 +9,32 @@ Evalúa si el cambio solicitado es técnicamente factible según la arquitectura
 Si es factible, genera el código necesario para incluir el valor solicitado en el microservicio correspondiente.
 
 
-CONTEXTO: El proyecto sigue las reglas estrictas de @GEMINI.md   
+@GEMINI.md @requirements.md @forms @project_structure.txt
 
-TAREA: implmenta todo lo que está descrito el archivo @requirements.md 
+ACTIVACIÓN:
+Vas a trabajar EXCLUSIVAMENTE en el microservicio "FORMS" que acabo de adjuntar.
 
-Genera el código y la documentación necesarias para incluir los requermientos solicitados en el microservicio correspondiente.
+CONTEXTO FÍSICO (IMPORTANTE): El archivo adjunto project_structure.txt contiene el LISTADO REAL de archivos del proyecto.
+
+NO inventes nombres de archivos. Antes de sugerir un cambio, verifica en esa lista si el archivo existe.
+
+Si necesitas modificar algo, búscalo en esa lista primero.
+
+TAREA:
+Analiza el "Requerimiento 1" de @requirements.md.
+Necesito refactorizar el endpoint `/reports/contacts-by-route`.
+
+PASO 1:
+Identifica en los archivos adjuntos (dentro de `controllers`, `services` y `models` de FORMS) dónde está el código que hace la llamada externa a PLANNING.
+
+PASO 2:
+Genera el código modificado para:
+1. Eliminar la llamada HTTP externa a PLANNING.
+2. Reemplazarla con una consulta SQL directa a las tablas locales `t_planning` y `t_planning_details` usando SQLAlchemy.
+
+Solo genera el código de los archivos modificados.
+
+
 
 
 @GEMINI.md @[MICROSERVICIO_A_TRABAJAR]
