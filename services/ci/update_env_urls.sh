@@ -29,7 +29,7 @@ get_api_url() {
 get_dependencies_string() {
     case "$1" in
         "binaria-localization-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service" ;;
-        "binaria-forms-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,PLANNING_SERVICE_URL:binaria-planning-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service" ;;
+        "binaria-forms-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service" ;;
         "binaria-trade-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service" ;;
         "binaria-planning-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service" ;;
         *) echo "" ;; # Sin dependencias
