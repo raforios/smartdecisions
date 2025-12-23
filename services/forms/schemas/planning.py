@@ -25,6 +25,10 @@ class PlanningDetailBaseSchema(BaseModel):
     '''
         Base schema for planning details.
     '''
+    id: int = Field(
+        ...,
+        description = 'ID of the detail record.'
+    )
     team_id: int = Field(
         ...,
         description = 'ID of the assigned team or group.'
