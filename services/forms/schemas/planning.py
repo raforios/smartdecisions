@@ -25,10 +25,6 @@ class PlanningDetailBaseSchema(BaseModel):
     '''
         Base schema for planning details.
     '''
-    id: int = Field(
-        ...,
-        description = 'ID of the detail record.'
-    )
     team_id: int = Field(
         ...,
         description = 'ID of the assigned team or group.'
@@ -77,6 +73,19 @@ class PlanningDetailUpdateSchema(PlanningDetailBaseSchema):
         description = 'Date assigned for the detail.'
     )
 
+class PlanningDetailResponseSchema(PlanningBaseSchema, PlanningDetailBaseSchema):
+    '''
+        Response schema for planning details, including its database ID and creation timestamp.
+    '''
+    id: int = Field(
+        ...,
+        description = 'Unique identifier for the planning detail record.'
+    )
+    created_at: datetime = Field(
+        ...,
+        description = 'Timestamp when the detail was created.'
+    )
+
 class PlanningCreateSchema(BaseModel):
     '''
         Schema for creating a new planning record.
@@ -113,7 +122,7 @@ class PlanningCreateSchema(BaseModel):
         PlanningStatus.ACTIVE,
         description = 'Current status of the planning.'
     )
-    details: List[PlanningDetailBaseSchema] = Field(
+    details: List[PlanningDetailResponseSchema] = Field(
         default_factory = list,
         description = 'List of details for the planning.'
     )
@@ -158,19 +167,6 @@ class PlanningResponseSchema(PlanningBaseSchema, PlanningCreateSchema):
     created_at: datetime = Field(
         ...,
         description = 'Timestamp when the planning was created.'
-    )
-
-class PlanningDetailResponseSchema(PlanningBaseSchema, PlanningDetailBaseSchema):
-    '''
-        Response schema for planning details, including its database ID and creation timestamp.
-    '''
-    id: int = Field(
-        ...,
-        description = 'Unique identifier for the planning detail record.'
-    )
-    created_at: datetime = Field(
-        ...,
-        description = 'Timestamp when the detail was created.'
     )
 
 class PlanningFilterSchema(BaseModel):
