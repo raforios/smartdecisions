@@ -5,7 +5,6 @@ import traceback
 from functools import wraps
 from typing import Callable, Type, Optional, Any
 from fastapi import HTTPException, status
-from botocore.exceptions import ClientError as AWSClientError
 from services.logger_config import custom_logger as logger
 
 def handle_operation(
@@ -43,16 +42,14 @@ def handle_operation(
                 logger.error(error_msg, exc_info=True)
                 logger.error(traceback.format_exc())
 
-                if isinstance(exc, AWSClientError):
-                    http_status = status.HTTP_503_SERVICE_UNAVAILABLE
-                elif isinstance(exc, (ValueError, TypeError)):
+                if isinstance(exc, (ValueError, TypeError)):
                     http_status = status.HTTP_400_BAD_REQUEST
                 else:
                     http_status = status.HTTP_503_SERVICE_UNAVAILABLE
 
                 raise HTTPException(
-                    status_code=http_status,
-                    detail=error_msg
+                    status_code = http_status,
+                    detail = error_msg
                 ) from exc
         return wrapper
     return decorator
