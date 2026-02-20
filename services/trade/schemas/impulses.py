@@ -219,6 +219,6 @@ class ImpulseSaleResponseSchema(BaseSchema):
     id: int
     attendance_id: int
     # photos removed (handled by common schema/endpoint structure generally)
-    photos: List[PhotoResponseSchema] = [] 
+    photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]
     details: List[ImpulseSaleDetailResponseSchema]

@@ -54,7 +54,7 @@ async def create_replenishment_report_service(
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
-    
+
     return db_report
 
 @handle_service_errors('TRADE')
@@ -78,7 +78,7 @@ async def create_replenishment_inventory_service(
         product_id = get_product_id_by_sku(
             db, inventory_data_rep.company_id, item.product_sku
         )
-        
+
         # Validación de Negocio (Punto 9)
         validate_product_assigned_to_pos(
             db = db,
@@ -162,7 +162,7 @@ async def create_complementary_bandeo_service(
 
     for item in bandeo_data.details:
         product_id = get_product_id_by_sku(db, bandeo_data.company_id, item.product_sku)
-        
+
         validate_product_assigned_to_pos(
             db, bandeo_data.company_id, pos_id, product_id
         )

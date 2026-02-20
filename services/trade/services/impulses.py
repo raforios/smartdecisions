@@ -251,9 +251,9 @@ async def create_impulse_sale_service(
         #     impulse_sale_id = db_sale.id,
         #     product_id = product_id,
         #     quantity = detail.quantity,
-        #     promotion_id = detail.promotion_id 
+        #     promotion_id = detail.promotion_id
         # )
-        
+
         # Standard implementation
         db_detail = ImpulseSaleDetail(
             impulse_sale_id = db_sale.id,
@@ -264,7 +264,7 @@ async def create_impulse_sale_service(
         # If the model is not yet updated, we skip saving promotion_id for now,
         # but the logic allows it.
         if hasattr(ImpulseSaleDetail, 'promotion_id'):
-             db_detail.promotion_id = detail.promotion_id
+            db_detail.promotion_id = detail.promotion_id
 
         db.add(db_detail)
 

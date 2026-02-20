@@ -839,9 +839,10 @@ async def _insert_assignment_bulk_data(
                 ).first()
                 if pos:
                     pos_id = pos.id
-            
+
             if not pos_id:
-                logger.warning(f'Skipping assignment: POS not found for row {item}')
+                error_msg = f'Skipping assignment: POS not found for row {item}'
+                logger.warning(error_msg)
                 continue
 
             # 3. Check for duplicates
@@ -863,13 +864,19 @@ async def _insert_assignment_bulk_data(
             )
             db.add(db_assign)
             records_created += 1
-            
+
             # Flush every 100 records to manage memory
             if records_created % 100 == 0:
                 db.flush()
 
-        except Exception as e:
-            logger.error(f'Error processing bulk assignment row: {e}')
+        except RegisterAlreadyExistsError as e:
+            error_msg = f'Product creation failed (Integrity): {e.detail}'
+            logger.warning(error_msg)
+            continue
+        except (SQLAlchemyError, InvalidInputError) as e:
+            error_msg = f'Unexpected error during Product bulk insertion for {item.pos_external_code
+                        }: {e}'
+            logger.error(error_msg, exc_info = True)
             continue
 
     return {

@@ -308,13 +308,6 @@ class ProductAssignmentPOSListResponseSchema(BaseSchema):
     items: List[ProductAssignmentPOSResponseSchema]
     total: int
 
-class ProductAssignmentPOSListResponseSchema(BaseSchema):
-    '''
-        Response schema for a paginated list of Product POS Assignments.
-    '''
-    items: List[ProductAssignmentPOSResponseSchema]
-    total: int
-
 # --- BULK ASSIGNMENT SCHEMAS ---
 
 class ProductAssignmentPOSBulkItemSchema(BaseSchema):
