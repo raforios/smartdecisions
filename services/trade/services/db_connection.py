@@ -42,9 +42,9 @@ DB_PARAMETERS: DatabaseConfig = {
 REQUIRED_DB_KEYS = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DATABASE', 'DB_PORT', 'DB_DIALECT']
 for key in REQUIRED_DB_KEYS:
     if DB_PARAMETERS.get(key) is None or DB_PARAMETERS.get(key) == '':
-        ERRROR_MESSAGE = f'Missing or empty required database environment variable: {key
-        }.Ensure it\'s set in os.environ or in your .env file.'
-        raise EnvironmentError(ERRROR_MESSAGE)
+        error_msg = f'Missing or empty required database environment variable: {key
+        }. Ensure it\'s set in os.environ or in your .env file.'
+        raise EnvironmentError(error_msg)
 
 Base: DeclarativeMeta = declarative_base()
 
@@ -111,4 +111,4 @@ def get_db_session(engine: Engine) -> Callable:
 
 DATABASE_DIALECT: str = DB_PARAMETERS['DB_DIALECT']
 ENGINE: Engine = get_database_engine(DATABASE_DIALECT)
-GET_DB_DEPENDENCY: Callable = get_db_session(ENGINE)
+GET_DB_DEPENDENCY: Callable = get_db_session(ENGINE)  # pylint: disable=invalid-name

@@ -3,6 +3,7 @@
 '''
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 from fastapi import Query
 from pydantic import BaseModel, Field
 
@@ -11,89 +12,123 @@ from schemas.common import (
     BaseSchema
 )
 
-# --- PRODUCT SCHEMAS ---
+# --- PRODUCT CATEGORY SCHEMAS (NEW) ---
+
+class ProductCategoryBaseSchema(BaseSchema):
+    '''
+        Base schema for a product's category code.
+    '''
+    category_name: str = Field(..., max_length = 100,
+                        description = 'Identifier for the category, e.g., BRAND, FLAVOR.')
+    category_code: str = Field(..., max_length = 50,
+                        description = 'The actual code from the external system.')
+
+class ProductCategoryCreateSchema(ProductCategoryBaseSchema):
+    '''
+        Schema for providing category codes when creating a product.
+    '''
+
+class ProductCategoryResponseSchema(ProductCategoryBaseSchema):
+    '''
+        Response schema for a product's category.
+    '''
+    id: int
+    product_id: int
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            Pydantic config.
+        '''
+        orm_mode = True
+
+# --- PRODUCT SCHEMAS (UPDATED) ---
 
 class ProductBaseSchema(BaseSchema):
     '''
-        Base schema for product data fields.
+        Base schema for product data fields, updated for flexible categories.
     '''
-    name: str = Field(
-        ...,
-        max_length = 255,
-        description = 'Name of the product in the catalog.'
-    )
-    description: Optional[str] = Field(
-        None,
-        max_length = 500,
-        description = 'Detailed description of the product.'
-    )
-    category_1_code: str = Field(
-        ...,
-        max_length = 10,
-        description = 'First category code (XXX segment, mandatory).'
-    )
-    category_2_code: Optional[str] = Field(
-        '000',
-        max_length = 10,
-        description = 'Second category code (YYY segment, optional).'
-    )
-    category_3_code: Optional[str] = Field(
-        '000',
-        max_length = 10,
-        description = 'Third category code (ZZZ segment, optional).'
-    )
-    category_4_code: Optional[str] = Field(
-        '000',
-        max_length = 10,
-        description = 'Fourth category code (WWW segment, optional).'
-    )
-    status: Optional[str] = Field(
-        'ACTIVE',
-        max_length = 20,
-        description = 'Current status of the product (e.g., ACTIVE, INACTIVE).'
-    )
+    name: str = Field(..., max_length = 255)
+    description: Optional[str] = Field(None)
+
+    # --- Fields from section 5.3 ---
+    product_type: str = Field(..., max_length = 50) # Venta / Promocional
+
+    # Units of Measure
+    stock_unit: str = Field(..., max_length = 10)
+    replenishment_unit: str = Field(..., max_length = 10)
+    purchase_unit: Optional[str] = Field(None, max_length = 10)
+    sale_unit: Optional[str] = Field(None, max_length = 10)
+
+    # Stock Control
+    near_expiration_days: int
+    minimum_stock: int
+
+    # Pricing
+    stock_value: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
+    purchase_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
+    sale_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
+    currency: Optional[str] = Field(None, max_length = 10)
+
+    # Other Data
+    manufacturer: Optional[str] = Field(None, max_length = 255)
+    country_of_origin: Optional[str] = Field(None, max_length = 10)
+    handling_instructions: Optional[str] = None
+    storage_conditions: Optional[str] = None
+    special_precautions: Optional[str] = None
+
+    status: Optional[str] = Field('ACTIVE', max_length = 20)
 
 class ProductCreateSchema(ProductBaseSchema):
     '''
-        Schema for creating a new product.
+        Schema for creating a new product with its category codes.
     '''
-    company_id: int = Field(
-        ...,
-        description = 'ID of the company owning the product catalog.'
-    )
+    company_id: int
+    categories: List[ProductCategoryCreateSchema] = Field(...,
+                min_items = 4, description = 'List of category names and codes for this product.')
 
-class ProductUpdateSchema(ProductBaseSchema):
+class ProductUpdateSchema(BaseSchema):
     '''
         Schema for updating an existing product. All fields are optional.
     '''
-    name: Optional[str] = None
+    name: Optional[str] = Field(None, max_length = 255)
     description: Optional[str] = None
-    category_1_code: Optional[str] = None
-    category_2_code: Optional[str] = None
-    category_3_code: Optional[str] = None
-    category_4_code: Optional[str] = None
-    status: Optional[str] = None
+    product_type: Optional[str] = Field(None, max_length = 50)
+    stock_unit: Optional[str] = Field(None, max_length = 10)
+    replenishment_unit: Optional[str] = Field(None, max_length = 10)
+    purchase_unit: Optional[str] = Field(None, max_length = 10)
+    sale_unit: Optional[str] = Field(None, max_length = 10)
+    near_expiration_days: Optional[int] = None
+    minimum_stock: Optional[int] = None
+    stock_value: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
+    purchase_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
+    sale_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
+    currency: Optional[str] = Field(None, max_length = 10)
+    manufacturer: Optional[str] = Field(None, max_length = 255)
+    country_of_origin: Optional[str] = Field(None, max_length = 10)
+    handling_instructions: Optional[str] = None
+    storage_conditions: Optional[str] = None
+    special_precautions: Optional[str] = None
+    status: Optional[str] = Field(None, max_length = 20)
+    # Categories are managed separately via their own endpoints after creation.
 
 class ProductResponseSchema(ProductBaseSchema):
     '''
-        Response schema for a product, including generated fields and timestamps.
+        Response schema for a product, including generated fields and relationships.
     '''
-    id: int = Field(
-        ...,
-        description = 'Unique identifier for the product record.'
-    )
-    sku: str = Field(
-        ...,
-        description = 'Stock Keeping Unit (XXX.YYY.ZZZ.WWW.SEC) generated by the system.'
-    )
-    photos: List[PhotoResponseSchema] = Field(
-        default = [], # Devuelve una lista vacía por defecto
-        description = 'Lista de fotos asociadas al producto.'
-    )
-    created_at: Optional[datetime] = Field(
-        None,
-        description = 'Timestamp when the record was created.'
-    )
+    id: int
+    sku: str = Field(..., description = 'System-generated Stock Keeping Unit.')
+
+    categories: List[ProductCategoryResponseSchema] = []
+
+    photos: List[PhotoResponseSchema] = Field(default = [],
+                                    description = 'List of associated photos.')
+    created_at: Optional[datetime]
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            Pydantic config.
+        '''
+        orm_mode = True
 
 class ProductListResponseSchema(BaseSchema):
     '''
@@ -120,46 +155,42 @@ class ProductFilterSchema(BaseModel):
 class ProductBulkCreateSchema(BaseSchema):
     '''
         Schema for a single row in the Product bulk upload file.
-        Contains fields necessary for atomic SKU generation.
+        Matches the new flat CSV structure with multiple category columns.
     '''
     company_id: int
-    name: str = Field(
-        ...,
-        max_length = 255,
-        description = 'Name of the product.'
-    )
-    description: Optional[str] = Field(
-        None,
-        max_length = 500,
-        description = 'Detailed description of the product.'
-    )
-    category_1_code: str = Field(
-        ...,
-        max_length = 10,
-        description = 'First category code (XXX segment, mandatory).'
-    )
-    category_2_code: Optional[str] = Field(
-        '000',
-        max_length = 10,
-        description = 'Second category code (YYY segment, optional).'
-    )
-    category_3_code: Optional[str] = Field(
-        '000',
-        max_length = 10,
-        description = 'Third category code (ZZZ segment, optional).'
-    )
-    category_4_code: Optional[str] = Field(
-        '000',
-        max_length = 10,
-        description = 'Fourth category code (WWW segment, optional).'
-    )
-    status: Optional[str] = Field('ACTIVE', max_length = 20)
+    name: str
+    description: Optional[str] = None
+    product_type: str
+    stock_unit: str
+    replenishment_unit: str
+    purchase_unit: Optional[str] = None
+    sale_unit: Optional[str] = None
+    near_expiration_days: int
+    minimum_stock: int
+    stock_value: Optional[Decimal] = None
+    purchase_price: Optional[Decimal] = None
+    sale_price: Optional[Decimal] = None
+    currency: Optional[str] = None
+    manufacturer: Optional[str] = None
+    country_of_origin: Optional[str] = None
+    handling_instructions: Optional[str] = None
+    storage_conditions: Optional[str] = None
+    special_precautions: Optional[str] = None
+    status: Optional[str] = 'ACTIVE'
+    category_1_name: str
+    category_1_code: str
+    category_2_name: Optional[str] = None
+    category_2_code: Optional[str] = None
+    category_3_name: Optional[str] = None
+    category_3_code: Optional[str] = None
+    category_4_name: Optional[str] = None
+    category_4_code: Optional[str] = None
+
 
 # --- SKU EQUIVALENCY SCHEMAS ---
 class SKUEquivalencyBaseSchema(BaseSchema):
     '''
         Base schema for SKU Equivalency fields.
-        Uses product_sku for API input, following the POS Inventory pattern.
     '''
     product_sku: str = Field(
         ...,
@@ -168,7 +199,7 @@ class SKUEquivalencyBaseSchema(BaseSchema):
     external_system_name: str = Field(
         ...,
         max_length = 100,
-        description = 'Name of the external system (e.g., "SAP", "CLIENT_ERP").'
+        description = 'Name of the external system (e.g., SAP, CLIENT_ERP).'
     )
     external_product_code: str = Field(
         ...,
@@ -207,6 +238,12 @@ class SKUEquivalencyResponseSchema(SKUEquivalencyBaseSchema):
     company_id: int
     product_id: int
     created_at: Optional[datetime]
+
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            Pydantic config.
+        '''
+        orm_mode = True
 
 class SKUEquivalencyListResponseSchema(BaseSchema):
     '''
@@ -286,6 +323,12 @@ class ProductAssignmentPOSResponseSchema(BaseSchema):
     point_of_sale_id: int
     status: str
     created_at: Optional[datetime]
+    class Config:# pylint: disable=too-few-public-methods
+        '''
+            Pydantic config.
+        '''
+        orm_mode = True
+
 class ProductAssignmentPOSFilterSchema(BaseModel):
     '''
         Schema to encapsulate filtering parameters for Product POS Assignments.

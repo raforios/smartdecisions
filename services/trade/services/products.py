@@ -27,6 +27,7 @@ from services.utils import (
 )
 from models.products import (
     Product,
+    ProductCategory,
     ProductAssignmentPOS,
     SKUEquivalency,
     SKUSequencer
@@ -43,7 +44,8 @@ from schemas.products import (
     ProductUpdateSchema,
     SKUEquivalencyCreateSchema,
     SKUEquivalencyUpdateSchema,
-    SKUEquivalencyBulkItemSchema
+    SKUEquivalencyBulkItemSchema,
+    ProductCategoryCreateSchema
 )
 
 async def create_bulk_items_from_skus(
@@ -79,17 +81,24 @@ async def create_bulk_items_from_skus(
 
     return created_items
 
-def _get_segment_key(
-    category_1: str,
-    category_2: str,
-    category_3: str,
-    category_4: str
-) -> str:
+def _get_segment_key_from_list(categories: List[ProductCategoryCreateSchema]) -> str:
     '''
-        Constructs the non-sequential segment key (XXX.YYY.ZZZ.WWW)
-        for the SKU Sequencer table.
+        Constructs the non-sequential segment key for the SKU from a list of categories.
+        It sorts categories by name and takes the first 4, padding if necessary,
+        to ensure a consistent SKU structure as per requirements.
     '''
-    return f'{category_1}.{category_2}.{category_3}.{category_4}'
+    # Sort by category name to ensure a consistent order for the SKU segment.
+    sorted_cats = sorted(categories, key=lambda c: c.category_name)
+
+    # Per requirements doc, SKU is composed of up to 4 categories.
+    sku_cats = sorted_cats[:4]
+    codes = [c.category_code for c in sku_cats]
+
+    # Pad with '000' if fewer than 4 categories are provided for the SKU.
+    while len(codes) < 4:
+        codes.append('000')
+
+    return '.'.join(codes)
 
 def _format_sequence_number(sequence: int) -> str:
     '''
@@ -121,25 +130,17 @@ def get_product_id_by_sku(
 
     return product.id
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments
 def _generate_next_sku_sequence(
     db: Session,
     company_id: int,
-    category_1_code: str,
-    category_2_code: str,
-    category_3_code: str,
-    category_4_code: str
+    segment_key: str
 ) -> str:
     '''
-        Atomically gets the next sequence number (SEC) for the given category combination
+        Atomically gets the next sequence number (SEC) for a given segment key
         and constructs the full SKU.
 
-        NOTE: This function MUST be called within an active transactional context 
-        (e.g., inside a db.begin_nested() block in the caller).
+        NOTE: This function MUST be called within an active transactional context.
     '''
-    segment_key = _get_segment_key(
-        category_1_code, category_2_code, category_3_code, category_4_code
-    )
     message = f'Attempting to generate atomic SKU sequence for company {
         company_id} with segment key {segment_key}'
     logger.debug(message)
@@ -178,9 +179,8 @@ async def create_product_service(
     product_data: ProductCreateSchema
 ) -> Product:
     '''
-        Creates a new product record, atomically generating its unique SKU.
+        Creates a new product, its associated categories, and atomically generates its unique SKU.
     '''
-
     message = f'Attempting to create product {product_data.name} for company ID: {
         product_data.company_id}'
     logger.info(message)
@@ -195,20 +195,25 @@ async def create_product_service(
         logger.error(error_msg)
         raise RegisterAlreadyExistsError(detail = error_msg)
 
+    product_info = product_data.model_dump(exclude={'categories'})
+    category_info = product_data.categories
+
     with db.begin_nested():
+        segment_key = _get_segment_key_from_list(category_info)
         final_sku = _generate_next_sku_sequence(
             db,
             product_data.company_id,
-            product_data.category_1_code,
-            product_data.category_2_code,
-            product_data.category_3_code,
-            product_data.category_4_code
+            segment_key
         )
 
-        product_dict = product_data.model_dump()
+        product_dict = product_info
         product_dict['sku'] = final_sku
 
         db_product = Product(**product_dict)
+
+        for cat_data in category_info:
+            db_product.categories.append(ProductCategory(**cat_data.model_dump()))
+
         db.add(db_product)
 
     db.commit()
@@ -222,16 +227,18 @@ async def get_product_by_id_service(
     product_id: int
 ) -> Product:
     '''
-        Retrieves a Product record by its unique ID.
+        Retrieves a Product record by its unique ID, including its categories.
     '''
     message = f'Attempting to retrieve product with ID: {product_id}'
     logger.info(message)
 
-    db_product = get_record(
-        db = db,
-        model = Product,
-        record_id = product_id
-    )
+    db_product = db.query(Product).options(
+        joinedload(Product.categories)
+    ).filter(Product.id == product_id).first()
+
+    if not db_product:
+        raise RegisterNotFoundError(f'Product with ID {product_id} not found.')
+
     return db_product
 
 @handle_service_errors('TRADE')
@@ -247,7 +254,7 @@ async def get_products_list_service(
     message = f'Attempting to retrieve product list for company {filters.company_id}'
     logger.info(message)
 
-    query = db.query(Product)
+    query = db.query(Product).options(joinedload(Product.categories))
 
     conditions = [Product.company_id == filters.company_id]
 
@@ -273,7 +280,7 @@ async def update_product_service(
     product_data: ProductUpdateSchema
 ) -> Tuple[Product, Dict[str, Any]]:
     '''
-        Updates an existing Product record.
+        Updates an existing Product record. Categories are not updated here.
     '''
     message = f'Attempting to update product ID: {product_id}'
     logger.info(message)
@@ -300,7 +307,7 @@ async def delete_product_service(
     product_id: int
 ) -> Tuple[int, Dict[str, Any]]:
     '''
-        Deletes a product record.
+        Deletes a product record and its associated categories via cascading.
     '''
     message = f'Attempting to delete product ID: {product_id}'
     logger.info(message)
@@ -332,51 +339,60 @@ async def _insert_product_bulk_data(
     auth_token: str # pylint: disable=unused-argument
 ) -> Dict[str, Any]:
     '''
-        Handles the transactional insertion of Product records, performing
-        atomic SKU generation for each record.
+        Handles the transactional insertion of Product records from bulk uploads,
+        adapting the flat schema to the relational model.
     '''
     products_created = 0
-
     if not processed_data:
         return {'message': 'No valid product data to insert.', 'created_records': 0}
 
     for item in processed_data:
         try:
             if db.query(Product).filter(
-                Product.company_id == item.company_id,
-                Product.name == item.name
+                Product.company_id == item.company_id, Product.name == item.name
             ).first():
-                error_msg = f'Product with name {item.name} already exists for company {
-                    item.company_id}. Skipping record.'
+                error_msg = f'Product "{item.name}" already exists. Skipping.'
+                logger.warning(error_msg)
+                continue
+
+            # Dynamically build category list from flat schema
+            category_info = [
+                ProductCategoryCreateSchema(category_name = getattr(item,
+                    f'category_{i}_name'),
+                    category_code = getattr(item, f'category_{i}_code')
+                )
+                for i in range(1, 5)
+                if getattr(item, f'category_{i}_name') and getattr(item, f'category_{i}_code')
+            ]
+
+            if not category_info:
+                error_msg = f'Skipping product {item.name} as it has no categories.'
                 logger.warning(error_msg)
                 continue
 
             with db.begin_nested():
-                final_sku = _generate_next_sku_sequence(
-                    db,
-                    item.company_id,
-                    item.category_1_code,
-                    item.category_2_code,
-                    item.category_3_code,
-                    item.category_4_code
-                )
+                # Prepare product data, excluding category fields
+                product_dict = item.model_dump(exclude={
+                    f'category_{i}_name' for i in range(1, 5)
+                } | {
+                    f'category_{i}_code' for i in range(1, 5)
+                })
 
-                product_dict = item.model_dump()
-                product_dict['sku'] = final_sku
+                # Generate SKU
+                segment_key = _get_segment_key_from_list(category_info)
+                product_dict['sku'] = _generate_next_sku_sequence(db, item.company_id, segment_key)
 
+                # Create Product and associate categories
                 db_product = Product(**product_dict)
-                db.add(db_product)
+                db_product.categories = [ProductCategory(**c.model_dump()) for c in category_info]
 
+                db.add(db_product)
                 db.flush()
                 products_created += 1
 
-        except RegisterAlreadyExistsError as e:
-            error_msg = f'Product creation failed (Integrity): {e.detail}'
-            logger.warning(error_msg)
-            continue
         except (SQLAlchemyError, InvalidInputError) as e:
-            error_msg = f'Unexpected error during Product bulk insertion for {item.name}: {e}'
-            logger.error(error_msg, exc_info = True)
+            error_msg = f'Unexpected error for product {item.name}: {e}'
+            logger.error(error_msg, exc_info=True)
             continue
 
     return {
@@ -565,8 +581,6 @@ async def get_sku_equivalencies_list_service(
 ) -> Tuple[List[SKUEquivalency], int]:
     '''
         Retrieves a paginated list of SKU Equivalencies.
-        Injects 'product_sku' into each record to satisfy the Response Schema
-        without modifying the SQLAlchemy Model.
     '''
     message = 'Attempting to retrieve SKU Equivalencies list.'
     logger.info(message)
@@ -593,7 +607,6 @@ async def _insert_sku_equivalency_bulk_data(
 ) -> Dict[str, Any]:
     '''
         Handles the transactional insertion of SKU Equivalency records.
-        Checks for duplicates before insertion and skips invalid SKUs.
     '''
     records_created = 0
 
@@ -650,7 +663,6 @@ async def bulk_create_sku_equivalencies_service(
 ) -> Dict[str, Any]:
     '''
         Service wrapper function to handle the bulk upload of SKU equivalencies.
-        It uses the generic utility to process the file and insert data.
     '''
     message = 'Starting SKU Equivalencies bulk upload process.'
     logger.info(message)

@@ -47,12 +47,9 @@ FILES_SERVICE_URL = ENV_VARS['FILES_SERVICE_URL']
 TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
 BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 BUCKET_PATH = ENV_VARS['BUCKET_PATH']
-EVENTS_AUDIT_URL = None
-EVENTS_LOG_URL = None
+EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL else None
+EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
 
-if EVENTS_SERVICE_URL:
-    EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit'
-    EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log'
 
 if FILES_SERVICE_URL:
     UPLOAD_ENDPOINT = f'{FILES_SERVICE_URL}/v1/s3/upload'
@@ -197,7 +194,8 @@ async def _finalize_and_log(
     status_code: int,
     response_data: Any,
     start_time: float,
-    current_user: Optional[str]
+    current_user: Optional[str],
+    with_log: bool = True
 ):
     '''
         Helper function to handle final logging operations to reduce complexity
@@ -219,15 +217,60 @@ async def _finalize_and_log(
             response_time_ms = int((end_time - start_time) * 1000)
         )
 
-        if isinstance(response_data, list) and all(isinstance(item,
-                                            BaseModel) for item in response_data):
-            log_data.response_body = [item.model_dump() for item in response_data]
-        elif isinstance(response_data, BaseModel):
-            log_data.response_body = response_data.model_dump()
+        if with_log:
+            if isinstance(response_data, list) and all(isinstance(item,
+                                                BaseModel) for item in response_data):
+                log_data.response_body = [item.model_dump() for item in response_data]
+            elif isinstance(response_data, BaseModel):
+                log_data.response_body = response_data.model_dump()
+            elif isinstance(response_data, dict) and 'detail' in response_data:
+                # If response_data is already a dict with 'detail', use it as is
+                log_data.response_body = response_data
+            else:
+                log_data.response_body = response_data
         else:
-            log_data.response_body = response_data
+            log_data.response_body = None
 
         await _process_and_send_usage_log(log_data)
+
+def _handle_exception(
+    e: Exception,
+    db: Optional[Session] = None,
+    func_name: str = 'unknown_function'
+) -> Tuple[int, Any]:
+    '''
+        Helper to handle various exceptions, log them, and return appropriate status code
+        and detail for HTTPException.
+    '''
+    status_code: int
+    detail: Any
+
+    if isinstance(e, SQLAlchemyError):
+        if db:
+            db.rollback()
+        error_msg = f'Database error in {func_name}: {e}'
+        logger.error(error_msg, exc_info=True)
+        status_code = 500
+        detail = str(e)
+    elif isinstance(e, RegisterNotFoundError):
+        status_code = 404
+        detail = str(e)
+    elif isinstance(e, (InvalidInputError, RegisterAlreadyExistsError)):
+        status_code = 400
+        detail = str(e)
+    elif isinstance(e, HTTPException):
+        status_code = e.status_code
+        detail = e.detail
+    elif isinstance(e, ValidationError):
+        status_code = 422
+        detail = json.loads(e.json())
+    else:
+        error_msg = f'Unexpected error in {func_name}: {e}'
+        logger.error(error_msg, exc_info=True)
+        status_code = 500
+        detail = f'Internal Server Error: {e}'
+
+    return status_code, detail
 
 def handle_service_errors(microservice_name: str, with_log: bool = True):
     '''
@@ -238,68 +281,36 @@ def handle_service_errors(microservice_name: str, with_log: bool = True):
         async def wrapper(*args, **kwargs):
             db: Session = kwargs.get('db')
             request: Request = kwargs.get('request')
+            current_user: Optional[str] = kwargs.get('current_user')
 
             start_time = time.perf_counter()
             response_data = None
             status_code = 500
-
-            request_body = await _get_request_body_for_logging(request)
 
             try:
                 result = await func(*args, **kwargs)
                 response_data = result
                 status_code = 200
                 return result
-            except SQLAlchemyError as e:
-                if db:
-                    db.rollback()
-                error_msg = f'Database error in {func.__name__}: {e}'
-                logger.error(error_msg, exc_info = True)
-                status_code = 500
-                response_data = {'detail': str(e)}
-                raise HTTPException(status_code = status_code, detail = str(e)) from e
-            except (InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError) as e:
-                status_code = 400
-                response_data = {'detail': str(e)}
-                raise HTTPException(status_code = status_code, detail = str(e)) from e
-            except HTTPException as e:
-                status_code = e.status_code
-                response_data = {'detail': e.detail}
-                raise e
-            except ValidationError as e:
-                raise HTTPException(
-                    status_code = 422,
-                    detail = json.loads(e.json())
-                ) from e
+            except Exception as e:
+                # Use the helper to determine status code and detail
+                status_code, detail = _handle_exception(e, db, func.__name__)
+                response_data = {'detail': detail} # Standardize response_data for errors
+                raise HTTPException(status_code = status_code, detail = detail) from e
             finally:
-                if request and EVENTS_LOG_URL:
-                    end_time = time.perf_counter()
-                    user_app = kwargs.get('current_user') if 'current_user' in kwargs \
-                        else 'anonymous'
-
-                    log_data = UsageLogData(
-                        microservice = microservice_name,
-                        endpoint = request.url.path,
-                        method = request.method,
-                        status_code = status_code,
-                        ip_address = request.client.host,
-                        user_app = user_app,
-                        request_body = request_body,
-                        response_time_ms = int((end_time - start_time) * 1000)
-                    )
-
-                    if with_log :
-                        if isinstance(response_data, list) and all(isinstance(item,
-                                                            BaseModel) for item in response_data):
-                            log_data.response_body = [item.model_dump() for item in response_data]
-                        elif isinstance(response_data, BaseModel):
-                            log_data.response_body = response_data.model_dump()
-                        else:
-                            log_data.response_body = response_data
-                    else:
-                        log_data.response_body = None
-
-                    await _process_and_send_usage_log(log_data)
+                # Always log, regardless of success or failure
+                # Make sure response_data is properly formatted before sending to _finalize_and_log
+                # If an exception was raised, response_data will be {'detail': detail}
+                # If successful, response_data will be the actual result
+                await _finalize_and_log(
+                    request = request,
+                    microservice_name = microservice_name,
+                    status_code = status_code,
+                    response_data = response_data,
+                    start_time = start_time,
+                    current_user = current_user,
+                    with_log = with_log
+                )
 
         return wrapper
     return decorator
@@ -533,7 +544,7 @@ async def _handle_files_service(
     except req.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             raise ResourceNotFoundError(
-                detail = f'File \'{kwargs.get("file_name", "unknown")}\' not found.'
+                detail = f'File \'{kwargs.get('file_name', 'unknown')}\' not found.'
             ) from e
         raise ServiceUnavailableError(
             detail = f'Failed to communicate with FILES microservice: {e}'
