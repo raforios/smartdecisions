@@ -9,7 +9,8 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     UniqueConstraint,
-    and_
+    and_,
+    Numeric
 )
 from sqlalchemy.orm import (
     relationship,
@@ -22,26 +23,77 @@ from models.common import Photo
 from services.db_connection import Base
 from services.utils import get_current_time_gmt
 
+# pylint: disable=too-few-public-methods
+class ProductCategory(Base):
+    '''
+        Stores the externally provided category codes for a product.
+        This allows for a flexible number of categories (4 to 7+).
+    '''
+    __tablename__ = 't_product_categories'
+
+    id = Column(Integer, primary_key = True, index = True)
+    product_id = Column(Integer, ForeignKey('t_products.id', ondelete = 'CASCADE'),
+                        nullable = False, index = True)
+
+    # Identifier for the category, e.g., 'BRAND', 'FLAVOR', 'SIZE'
+    # This corresponds to the old 'category_1', 'category_2' concept.
+    category_name = Column(String(100), nullable = False)
+
+    # The actual code from the external system, e.g., 'COKE', 'CHERRY', '12OZ'
+    category_code = Column(String(50), nullable = False)
+
+    __table_args__ = (
+        UniqueConstraint('product_id', 'category_name', name='uc_product_category_name'),
+    )
+
 class Product(Base):  # pylint: disable=too-few-public-methods
     '''
-        Product Catalog. Stores the complete SKU and classification categories.
+        Product Catalog. Stores the complete SKU and related data.
+        Category information is now in a separate table.
     '''
     __tablename__ = 't_products'
 
     id = Column(Integer, primary_key = True, index = True)
     company_id = Column(Integer, nullable = False, index = True)
 
-    # Complete SKU: XXX.YYY.ZZZ.WWW.SEC
+    # Complete SKU: XXX.YYY.ZZZ.WWW.SEC (logic will now read from ProductCategory)
     sku = Column(String(50), unique = True, nullable = False, index = True)
 
     name = Column(String(255), nullable = False)
     description = Column(Text, nullable = True)
 
-    # The 4 classification categories
-    category_1_code = Column(String(10), nullable = False) # XXX_(Mandatory)
-    category_2_code = Column(String(10), nullable = True, default = '000')  # YYY
-    category_3_code = Column(String(10), nullable = True, default = '000')  # ZZZ
-    category_4_code = Column(String(10), nullable = True, default = '000')  # WWW
+    # --- Relationship to flexible categories ---
+    categories = relationship(
+        'ProductCategory',
+        cascade='all, delete-orphan',
+        backref='product'
+    )
+
+    # --- Fields from section 5.3 ---
+    product_type = Column(String(50), nullable = False) # Venta / Promocional
+
+    # Units of Measure
+    stock_unit = Column(String(10), nullable = False)
+    replenishment_unit = Column(String(10), nullable = False)
+    purchase_unit = Column(String(10), nullable = True)
+    sale_unit = Column(String(10), nullable = True)
+
+    # Stock Control
+    near_expiration_days = Column(Integer, nullable = False)
+    minimum_stock = Column(Integer, nullable = False)
+
+    # Pricing
+    stock_value = Column(Numeric(10, 2), nullable = True)
+    purchase_price = Column(Numeric(10, 2), nullable = True)
+    sale_price = Column(Numeric(10, 2), nullable = True)
+    currency = Column(String(10), nullable = True)
+
+    # Other Product Data
+    manufacturer = Column(String(255), nullable = True)
+    country_of_origin = Column(String(10), nullable = True)
+    handling_instructions = Column(Text, nullable = True)
+    storage_conditions = Column(Text, nullable = True)
+    special_precautions = Column(Text, nullable = True)
 
     status = Column(String(20), default = 'ACTIVE')
 
@@ -52,8 +104,7 @@ class Product(Base):  # pylint: disable=too-few-public-methods
             foreign(Photo.entity_id) == Product.id
         ),
         lazy = 'joined',
-        cascade = 'all, delete-orphan',
-        overlaps = 'photos'
+        cascade = 'all, delete-orphan'
     )
 
     # Audit fields
@@ -101,7 +152,7 @@ class SKUEquivalency(Base):  # pylint: disable=too-few-public-methods
         Integer, ForeignKey('t_products.id', ondelete = 'CASCADE'),
         nullable = False, index = True
     )
-    product = relationship('Product')
+    product = relationship('Product', overlaps = 'product')
 
     # Name of the external system (e.g., 'SAP', 'ERP_CLIENTE')
     external_system_name = Column(String(100), nullable = False, index = True)
@@ -156,7 +207,7 @@ class AttendanceProductMixin: # pylint: disable=too-few-public-methods
         '''
             Relationship with t_products.
         '''
-        return relationship('Product')
+        return relationship('Product', overlaps = 'product')
 
 class ProductAssignmentPOS(Base):  # pylint: disable=too-few-public-methods
     '''
@@ -172,7 +223,7 @@ class ProductAssignmentPOS(Base):  # pylint: disable=too-few-public-methods
         Integer, ForeignKey('t_products.id', ondelete = 'CASCADE'),
         nullable = False, index = True
     )
-    product = relationship('Product')
+    product = relationship('Product', overlaps = 'product')
 
     # Relationship to the Point of Sale
     point_of_sale_id = Column(
