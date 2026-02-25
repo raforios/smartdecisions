@@ -10,6 +10,7 @@ from schemas.common import (
     PhotoResponseSchema,
     BaseSchema
 )
+from models.pos import PointOfSaleStatus # Import the Enum
 
 # --- POINT OF SALE (POS) INVENTORY SCHEMAS ---
 class POSInventoryBaseSchema(BaseSchema):
@@ -139,39 +140,106 @@ class POSInventoryListResponseSchema(BaseSchema):
 
 class PointOfSaleBaseSchema(BaseSchema):
     '''
-        Base schema for Point of Sale (PDV) data.
+        Base schema for Point of Sale (POS) data, including core identification and
+        location details.
     '''
+    # Identification and Location (Mandatory)
+    code: str = Field(
+        ...,
+        max_length = 50,
+        description = 'Unique code for the Point of Sale.'
+    )
     name: str = Field(
         ...,
         max_length = 255,
         description = 'Commercial name of the Point of Sale.'
+    )
+    country_id: int = Field(
+        ...,
+        description = 'ID of the country where the POS is located.'
+    )
+    city_id: int = Field(
+        ...,
+        description = 'ID of the city where the POS is located.'
+    )
+    zone_id: int = Field(
+        ...,
+        description = 'ID of the geographical zone where the POS is located.'
+    )
+    address: str = Field(
+        ...,
+        max_length = 255,
+        description = 'Physical address of the Point of Sale.'
+    )
+    latitude: float = Field(
+        ...,
+        description = 'Geographical latitude of the POS (Decimal 10,8 precision).'
+    )
+    longitude: float = Field(
+        ...,
+        description = 'Geographical longitude of the POS (Decimal 10,8 precision).'
+    )
+    max_checkin_distance: int = Field(
+        0,
+        ge = 0,
+        description = 'Maximum allowed distance in meters for check-in/out registration.'
+    )
+
+    # Operation and Classification
+    operating_hours: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Operating hours of the POS (e.g., "09:00-18:00").'
+    )
+    pos_type_id: int = Field(
+        ...,
+        description = 'ID of the Point of Sale type.'
+    )
+    channel_id: int = Field(
+        ...,
+        description = 'ID of the sales channel associated with the POS.'
+    )
+    status: PointOfSaleStatus = Field(
+        PointOfSaleStatus.IN_CREATION,
+        description = 'Current operational status of the POS.'
+    )
+
+    # Complementary Information (Optional)
+    description: Optional[str] = Field(
+        None,
+        max_length = 500,
+        description = 'Additional description for the POS.'
+    )
+    reference: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Reference details for arrival at the POS.'
+    )
+    contact_person: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Name of the contact person at the POS.'
+    )
+    contact_phone: Optional[str] = Field(
+        None,
+        max_length = 50,
+        description = 'Contact phone number for the person at the POS.'
+    )
+    contact_role: Optional[str] = Field(
+        None,
+        max_length = 100,
+        description = 'Role of the contact person at the POS.'
     )
     external_code: Optional[str] = Field(
         None,
         max_length = 50,
         description = 'External code used by the client for this POS.'
     )
-    address: Optional[str] = Field(
-        None,
-        max_length = 255,
-        description = 'Physical address of the POS.'
-    )
-    is_active: Optional[bool] = Field(
-        True,
-        description = 'Status of the POS.'
-    )
-    latitude: float = Field(
-        ...,
-        description = 'Geographical latitude of the POS.'
-    )
-    longitude: float = Field(
-        ...,
-        description = 'Geographical longitude of the POS.'
-    )
 
 class PointOfSaleCreateSchema(PointOfSaleBaseSchema):
     '''
-        Schema for creating a new Point of Sale.
+        Schema for creating a new Point of Sale, including mandatory company ID
+        and optional initial inventory.
     '''
     company_id: int = Field(
         ...,
@@ -179,18 +247,105 @@ class PointOfSaleCreateSchema(PointOfSaleBaseSchema):
     )
     initial_inventory: Optional[List[POSInventoryBaseSchema]] = Field(
         None,
-        description = 'Initial inventory details to be associated with this POS.'
+        description = 'Optional list of initial inventory items to be associated with this POS.'
     )
 
 class PointOfSaleUpdateSchema(BaseSchema):
     '''
         Schema for updating an existing Point of Sale. All fields are optional.
     '''
-    # Override fields from base to make them optional for updates
-    name: Optional[str] = None
-    is_active: Optional[bool] = None
-    address: Optional[str] = None
-    external_code: Optional[str] = None
+    # Identification and Location
+    code: Optional[str] = Field(
+        None,
+        max_length = 50,
+        description = 'Unique code for the Point of Sale.'
+    )
+    name: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Commercial name of the Point of Sale.'
+    )
+    country_id: Optional[int] = Field(
+        None,
+        description = 'ID of the country where the POS is located.'
+    )
+    city_id: Optional[int] = Field(
+        None,
+        description = 'ID of the city where the POS is located.'
+    )
+    zone_id: Optional[int] = Field(
+        None,
+        description = 'ID of the geographical zone where the POS is located.'
+    )
+    address: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Physical address of the Point of Sale.'
+    )
+    latitude: Optional[float] = Field(
+        None,
+        description = 'Geographical latitude of the POS (Decimal 10,8 precision).'
+    )
+    longitude: Optional[float] = Field(
+        None,
+        description = 'Geographical longitude of the POS (Decimal 10,8 precision).'
+    )
+    max_checkin_distance: Optional[int] = Field(
+        None,
+        ge = 0,
+        description = 'Maximum allowed distance in meters for check-in/out registration.'
+    )
+
+    # Operation and Classification
+    operating_hours: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Operating hours of the POS (e.g., "09:00-18:00").'
+    )
+    pos_type_id: Optional[int] = Field(
+        None,
+        description = 'ID of the Point of Sale type.'
+    )
+    channel_id: Optional[int] = Field(
+        None,
+        description = 'ID of the sales channel associated with the POS.'
+    )
+    status: Optional[PointOfSaleStatus] = Field(
+        None,
+        description = 'Current operational status of the POS.'
+    )
+
+    # Complementary Information
+    description: Optional[str] = Field(
+        None,
+        max_length = 500,
+        description = 'Additional description for the POS.'
+    )
+    reference: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Reference details for arrival at the POS.'
+    )
+    contact_person: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Name of the contact person at the POS.'
+    )
+    contact_phone: Optional[str] = Field(
+        None,
+        max_length = 50,
+        description = 'Contact phone number for the person at the POS.'
+    )
+    contact_role: Optional[str] = Field(
+        None,
+        max_length = 100,
+        description = 'Role of the contact person at the POS.'
+    )
+    external_code: Optional[str] = Field(
+        None,
+        max_length = 50,
+        description = 'External code used by the client for this POS.'
+    )
 
 class PointOfSaleResponseSchema(PointOfSaleBaseSchema):
     '''
@@ -209,8 +364,8 @@ class PointOfSaleResponseSchema(PointOfSaleBaseSchema):
         description = 'Detailed local inventory associated with this Point of Sale.'
     )
     photos: List[PhotoResponseSchema] = Field(
-        default = [], # Devuelve una lista vacía por defecto
-        description = 'Lista de fotos asociadas al Punto de Venta.'
+        default = [],
+        description = 'List of photos associated with the Point of Sale.'
     )
     created_at: Optional[datetime] = Field(
         None,
@@ -229,9 +384,17 @@ class POSFilterSchema(BaseModel):
         Schema to encapsulate filtering parameters for Points of Sale.
     '''
     company_id: int = Query(..., description = 'Company ID (Mandatory for filtering).')
+
+    code: Optional[str] = Query(None, description = 'Filter by unique POS code.')
     name: Optional[str] = Query(None, description = 'Filter by POS name (partial match).')
     external_code: Optional[str] = Query(None, description = 'Filter by exact external code.')
-    is_active: Optional[bool] = Query(None, description = 'Filter by status (True/False).')
+    country_id: Optional[int] = Query(None, description = 'Filter by country ID.')
+    city_id: Optional[int] = Query(None, description = 'Filter by city ID.')
+    zone_id: Optional[int] = Query(None, description = 'Filter by geographical zone ID.')
+    pos_type_id: Optional[int] = Query(None, description = 'Filter by Point of Sale type ID.')
+    channel_id: Optional[int] = Query(None, description = 'Filter by sales channel ID.')
+    status: Optional[PointOfSaleStatus] = Query(None,
+                                        description = 'Filter by operational status of the POS.')
 
     class Config:# pylint: disable=too-few-public-methods
         '''
@@ -243,33 +406,101 @@ class PointOfSaleBulkCreateSchema(BaseSchema):
     '''
         Schema for a single row in the Point of Sale bulk upload file.
     '''
-    company_id: int
+    company_id: int = Field(
+        ...,
+        description = 'ID of the company that owns the POS record.'
+    )
+    # Identification and Location (Mandatory)
+    code: str = Field(
+        ...,
+        max_length = 50,
+        description = 'Unique code for the Point of Sale.'
+    )
     name: str = Field(
         ...,
         max_length = 255,
-        description = 'Name of the POS.'
+        description = 'Commercial name of the Point of Sale.'
+    )
+    country_id: int = Field(
+        ...,
+        description = 'ID of the country where the POS is located.'
+    )
+    city_id: int = Field(
+        ...,
+        description = 'ID of the city where the POS is located.'
+    )
+    zone_id: int = Field(
+        ...,
+        description = 'ID of the geographical zone where the POS is located.'
+    )
+    address: str = Field(
+        ...,
+        max_length = 255,
+        description = 'Physical address of the Point of Sale.'
+    )
+    latitude: float = Field(
+        ...,
+        description = 'Geographical latitude of the POS (Decimal 10,8 precision).'
+    )
+    longitude: float = Field(
+        ...,
+        description = 'Geographical longitude of the POS (Decimal 10,8 precision).'
+    )
+    max_checkin_distance: int = Field(
+        0,
+        ge = 0,
+        description = 'Maximum allowed distance in meters for check-in/out registration.'
+    )
+
+    # Operation and Classification
+    operating_hours: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Operating hours of the POS (e.g., "09:00-18:00").'
+    )
+    pos_type_id: int = Field(
+        ...,
+        description = 'ID of the Point of Sale type.'
+    )
+    channel_id: int = Field(
+        ...,
+        description = 'ID of the sales channel associated with the POS.'
+    )
+    status: PointOfSaleStatus = Field(
+        PointOfSaleStatus.IN_CREATION, # Default for bulk creation
+        description = 'Current operational status of the POS.'
+    )
+
+    # Complementary Information (Optional)
+    description: Optional[str] = Field(
+        None,
+        max_length = 500,
+        description = 'Additional description for the POS.'
+    )
+    reference: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Reference details for arrival at the POS.'
+    )
+    contact_person: Optional[str] = Field(
+        None,
+        max_length = 255,
+        description = 'Name of the contact person at the POS.'
+    )
+    contact_phone: Optional[str] = Field(
+        None,
+        max_length = 50,
+        description = 'Contact phone number for the person at the POS.'
+    )
+    contact_role: Optional[str] = Field(
+        None,
+        max_length = 100,
+        description = 'Role of the contact person at the POS.'
     )
     external_code: Optional[str] = Field(
         None,
         max_length = 50,
-        description = 'Optional external code for the POS.'
-    )
-    address: Optional[str] = Field(
-        None,
-        max_length = 255,
-        description = 'Physical address of the POS.'
-    )
-    is_active: Optional[bool] = Field(
-        True,
-        description = 'Status of the POS.'
-    )
-    latitude: float = Field(
-        ...,
-        description = 'Geographical latitude of the POS.'
-    )
-    longitude: float = Field(
-        ...,
-        description = 'Geographical longitude of the POS.'
+        description = 'External code used by the client for this POS.'
     )
 
 class POSInventoryBulkCreateSchema(POSInventoryBaseSchema):
@@ -290,7 +521,8 @@ class POSInventoryBulkCreateSchema(POSInventoryBaseSchema):
 class PointOfSaleNestedResponseSchema(PointOfSaleBaseSchema):
     '''
         Simplified response schema for Point of Sale when nested inside other entities
-        like TradePlanning. Excludes the heavy 'inventory' relationship.
+        like TradePlanning. Includes core POS details but excludes the detailed 'inventory'
+        relationship.
     '''
     id: int = Field(
         ...,

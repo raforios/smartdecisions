@@ -14,6 +14,8 @@ from typing import Any, Callable, Dict, List, Optional, Type, Tuple
 import requests as req
 from fastapi import HTTPException, Request, UploadFile, status
 
+import enum
+
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -122,7 +124,7 @@ async def _perform_request(
 
 class CustomJSONEncoder(json.JSONEncoder):
     '''
-        JSON encoder to handle date and datetime objects.
+        JSON encoder to handle date and datetime objects, Pydantic models, and custom Enums.
     '''
     def default(self, o):
         if isinstance(o, (date, datetime)):
@@ -131,6 +133,8 @@ class CustomJSONEncoder(json.JSONEncoder):
             return o.model_dump()
         if isinstance(o, decimal.Decimal):
             return float(o)
+        if isinstance(o, enum.Enum): # New condition for Enums
+            return o.value
         return super().default(o)
 
 class UsageLogData(BaseModel):
@@ -625,16 +629,23 @@ def generic_bulk_processor(
 ) -> List[BaseModel]:
     '''
         Generic processor function to validate raw data against the bulk schema.
+        Pre-processes specific fields to ensure correct string typing before validation.
         Validates row-by-row, logging warnings for invalid data, and returns
         a list of valid Pydantic objects.
     '''
     processed_data = []
     for row in rows:
+        # Pre-process row to ensure problematic fields are strings
+        processed_row = row.copy() # Work on a copy to not modify original row during iteration
+        for key in ['code', 'external_code', 'contact_phone']:
+            if key in processed_row and not isinstance(processed_row[key], str):
+                processed_row[key] = str(processed_row[key])
         try:
-            # Pydantic validation of the row against the expected schema
-            processed_data.append(bulk_schema.model_validate(row))
+            # Pydantic validation of the processed_row against the expected schema
+            processed_data.append(bulk_schema.model_validate(processed_row))
+
         except ValidationError as e:
-            error_msg = f'Skipping invalid row during bulk processing: {row}. Error: {e}'
+            error_msg = f'Skipping invalid row during bulk processing: {processed_row}. Error: {e}'
             logger.warning(error_msg)
             # Continues processing the rest of the list
             continue

@@ -1,6 +1,7 @@
 '''
     POS Models
 '''
+import enum
 from sqlalchemy import (
     Column,
     Integer,
@@ -21,12 +22,13 @@ from models.common import Photo
 from services.db_connection import Base
 from services.utils import get_current_time_gmt
 
-import enum
-
 class PointOfSaleStatus(enum.Enum):
-    EN_CREACION = "EN_CREACION"
-    ACTIVO = "ACTIVO"
-    INACTIVO = "INACTIVO"
+    '''
+        Represents the possible operational statuses for a Point of Sale.
+    '''
+    IN_CREATION = 'IN_CREATION'
+    ACTIVE = 'ACTIVE'
+    INACTIVE = 'INACTIVE'
 
 class PointOfSale(Base):  # pylint: disable=too-few-public-methods
     '''
@@ -35,14 +37,14 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
     __tablename__ = 't_points_of_sale'
 
     id = Column(Integer, primary_key = True, index = True)
-    company_id = Column(Integer, ForeignKey('t_companies.id'), nullable = False, index = True)
+    company_id = Column(Integer, nullable = False, index = True)
 
     # Identification and Location (Mandatory)
     code = Column(String(50), nullable = False, index = True)
     name = Column(String(255), nullable = False)
-    country_id = Column(Integer, ForeignKey('t_countries.id'), nullable = False)
-    city_id = Column(Integer, ForeignKey('t_cities.id'), nullable = False)
-    zone_id = Column(Integer, ForeignKey('t_zones.id'), nullable = False)
+    country_id = Column(Integer, nullable = False)
+    city_id = Column(Integer, nullable = False)
+    zone_id = Column(Integer, nullable = False)
     address = Column(String(255), nullable = False)
     latitude = Column(Numeric(10, 8), nullable = False)
     longitude = Column(Numeric(10, 8), nullable = False)
@@ -50,12 +52,13 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
 
     # Operation and Classification
     operating_hours = Column(String(255), nullable = True)
-    pdv_type_id = Column(Integer, ForeignKey('t_pdv_types.id'), nullable = False)
-    channel_id = Column(Integer, ForeignKey('t_channels.id'), nullable = False)
+    pos_type_id = Column(Integer, nullable = False)
+    channel_id = Column(Integer, nullable = False)
     status = Column(MySQLEnum(PointOfSaleStatus), nullable = False,
-                    default = PointOfSaleStatus.EN_CREACION)
+                    default = PointOfSaleStatus.IN_CREATION)
 
     # Complementary Information (Optional)
+    external_code = Column(String(50), unique = True, nullable = True)
     description = Column(String(500), nullable = True)
     reference = Column(String(255), nullable = True)
     contact_person = Column(String(255), nullable = True)

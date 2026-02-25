@@ -60,7 +60,8 @@ async def create_point_of_sale_endpoint(
     '''
         Endpoint to create a new Point of Sale (POS).
     '''
-    message = f'User: {current_user}. Received request to create POS: {pos_data.name}.'
+    message = f'User: {current_user}. Received request to create POS Code: {
+        pos_data.code}, Name: {pos_data.name}.'
     logger.info(message)
     return await create_point_of_sale_controller(
         pos_data = pos_data,
