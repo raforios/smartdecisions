@@ -38,7 +38,7 @@ def _map_inventory_item_to_schema(
     item: Any
 ) -> POSInventoryResponseSchema:
     '''
-        Mapea manualmente el objeto de BD al schema de respuesta Pydantic.
+        Manually maps the DB object to the Pydantic response schema.
     '''
     return POSInventoryResponseSchema(
         **item.__dict__,
@@ -50,16 +50,19 @@ def _map_pos_to_schema(
     db_pos: Any
 ) -> PointOfSaleResponseSchema:
     '''
-        Mapea manualmente el objeto POS de BD al schema de respuesta Pydantic,
-        incluyendo su inventario anidado.
+        Manually maps the SQLAlchemy POS object to the Pydantic response schema,
+        including its nested inventory.
     '''
-    pos_dict = db_pos.__dict__
+    # First, validate the main POS object against the schema
+    # Pydantic's from_attributes=True handles direct attribute mapping including Enums
+    pos_response = PointOfSaleResponseSchema.model_validate(db_pos, from_attributes = True)
 
-    pos_dict['inventory'] = [
+    # Then, map the nested inventory relationship
+    pos_response.inventory = [
         _map_inventory_item_to_schema(item) for item in db_pos.inventory
     ]
 
-    return PointOfSaleResponseSchema.model_validate(pos_dict, from_attributes = True)
+    return pos_response
 
 
 # --- POST Controllers ---
@@ -176,7 +179,7 @@ async def bulk_upload_pos_controller(
     message = f'Starting bulk upload for POS from file: {file_name}'
     logger.info(message)
 
-    # Argumentos reordenados para evitar R0801 (código duplicado) con products.py
+    # Arguments reordered to avoid R0801 (duplicate code) with products.py
     return await generic_bulk_controller_wrapper(
         service_func = bulk_create_points_of_sale_service,
         entity_name = 'PointOfSale',
@@ -281,7 +284,7 @@ async def bulk_upload_pos_inventory_controller(
     '''
         Controller to handle the bulk upload of POS Inventory from a file.
     '''
-    # Argumentos reordenados para evitar R0801 (código duplicado) con products.py
+    # Arguments reordered to avoid R0801 (duplicate code) with products.py
     return await generic_bulk_controller_wrapper(
         service_func = bulk_create_pos_inventory_service,
         entity_name = 'POSInventory',
