@@ -61,13 +61,6 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | `GET` | `/v1/localization/routes/executed-points/filter` | Obtiene los IDs de **puntos ejecutados** asociados a una lista de IDs de rutas planificadas. (Usado por Forms-Service). |
 | `GET` | `/v1/localization/routes/executed/by-planned/{planned_route_id}` | **ruta ejecutada** Obtiene todas las rutas ejecutadas de una ruta planificada para verificar su estado (abierta/cerrada). |
 
-### Asistencia
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `POST` | `/v1/localization/attendances` | Registra un nuevo `check-in` o actualiza un registro de asistencia. |
-| `PATCH`| `/v1/localization/attendances/{attendance_id}` | Actualiza un registro de asistencia con el tiempo de salida (`check-out`). |
-
 ### Estadísticas y Análisis
 
 | Método | Endpoint | Descripción |
@@ -83,24 +76,25 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 ```txt
 localization/
 ├── controllers/
-│   ├── init.py
+│   ├── __init__.py
 │   └── localization.py
 ├── models/
-│   ├── init.py
+│   ├── __init__.py
 │   └── localization.py
 ├── routes/
-│   ├── init.py
+│   ├── __init__.py
 │   └── localization.py
 ├── schemas/
-│   ├── init.py
+│   ├── __init__.py
 │   └── localization.py
 ├── services/
-│   ├── init.py
+│   ├── __init__.py
 │   ├── api_exceptions.py
 │   ├── crud.py
 │   ├── db_connection.py
 │   ├── environment.py
 │   ├── exceptions.py
+│   ├── localization_utils.py
 │   ├── localization.py
 │   ├── logger_config.py
 │   ├── security.py
