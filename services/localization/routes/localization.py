@@ -1,7 +1,7 @@
 '''
     Localization: routes handler
 '''
-from typing import Any, List, Optional
+from typing import List, Optional
 from fastapi import APIRouter, Body, Depends, Header, Path, Request, status, Query
 from sqlalchemy.orm import Session
 from services.db_connection import GET_DB_DEPENDENCY
@@ -23,9 +23,6 @@ from controllers.localization import (
     register_executed_point_controller,
     get_stats_points_visited_controller,
     get_route_comparisons_controller,
-    register_attendance_controller,
-    search_attendances_controller,
-    update_attendance_checkout_time_controller,
     update_executed_route_end_time_controller,
     update_planned_point_controller,
     update_planned_route_controller,
@@ -33,9 +30,6 @@ from controllers.localization import (
     bulk_upload_planned_routes_controller
 )
 from schemas.localization import (
-    AttendanceSearchItemSchema,
-    AttendanceSearchRequestSchema,
-    AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
     GroupLastKnownLocationsResponseSchema,
     PlannedPointCreateSchema,
@@ -49,8 +43,6 @@ from schemas.localization import (
     ExecutedRouteResponseSchema,
     ExecutedPointCreateSchema,
     ExecutedPointResponseSchema,
-    AttendanceCreateSchema,
-    AttendanceResponseSchema,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
     PointsVisitedResponseSchema,
@@ -274,7 +266,7 @@ async def update_planned_route_endpoint(
     route_data: PlannedRouteUpdateSchema,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-) -> Any:
+):
     '''
         Endpoint to update specific fields of a planned route.
     '''
@@ -582,88 +574,6 @@ async def get_route_comparisons_endpoint(
         db = db,
         planned_route_id = planned_route_id,
         service_id = service_id,
-        request = request,
-        current_user = current_user
-    )
-
-@router.post(
-    '/attendances/search',
-    response_model = List[AttendanceSearchItemSchema],
-    status_code = status.HTTP_200_OK,
-    summary = 'Search attendances by IDs (Batch)',
-    description = '''Internal endpoint used by TRADE to fetch context (User, POS)
-                for a list of visits.'''
-)
-async def search_attendances_endpoint(
-    request: Request,
-    search_data: AttendanceSearchRequestSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to bulk search attendances.
-    '''
-    message = f'User: {current_user}. Request to search attendances batch.'
-    logger.info(message)
-
-    return await search_attendances_controller(
-        search_data = search_data,
-        db = db,
-        request = request,
-        current_user = current_user
-    )
-
-@router.post(
-    '/attendances',
-    response_model = AttendanceResponseSchema,
-    status_code = status.HTTP_201_CREATED,
-    summary = 'Register or update attendance',
-    description = '''Registers a new attendance (check-in) or updates an existing one
-                with a check-out time.'''
-)
-async def register_attendance_endpoint(
-    request: Request,
-    attendance_data: AttendanceCreateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to register or update attendance.
-    '''
-    message = f'User: {current_user}. Received request to register attendance for user: {
-            attendance_data.user_id}'
-    logger.info(message)
-    return await register_attendance_controller(
-        db = db,
-        attendance_data = attendance_data,
-        request = request,
-        current_user = current_user
-    )
-
-@router.patch(
-    '/attendances/{attendance_id}',
-    response_model = AttendanceResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Update check-out time for an attendance record',
-    description = '''Updates an existing attendance record with a check-out time.'''
-)
-async def update_attendance_checkout_time_endpoint(
-    request: Request,
-    update_data: AttendanceUpdateSchema,
-    attendance_id: int = Path(..., description='ID of the attendance record to update.'),
-    current_user: str = Depends(get_current_user),
-    db: Session = Depends(GET_DB_DEPENDENCY),
-):
-    '''
-        Endpoint to update the check-out time of an attendance record.
-    '''
-    message = f'User: {current_user}. Received request to update check-out time for attendance {
-            attendance_id}.'
-    logger.info(message)
-    return await update_attendance_checkout_time_controller(
-        db = db,
-        attendance_id = attendance_id,
-        update_data = update_data,
         request = request,
         current_user = current_user
     )
