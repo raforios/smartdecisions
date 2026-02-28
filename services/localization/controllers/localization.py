@@ -27,9 +27,6 @@ from services.localization import (
     get_last_known_locations_service,
     get_route_comparisons,
     get_statistics_user_points,
-    register_attendance,
-    search_attendances_service,
-    update_attendance_checkout_time,
     update_executed_route_end_time,
     update_planned_point,
     update_planned_route_service,
@@ -42,9 +39,6 @@ from services.localization import (
 )
 from models.localization import PlannedRoute
 from schemas.localization import (
-    AttendanceSearchItemSchema,
-    AttendanceSearchRequestSchema,
-    AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
     GroupLastKnownLocationsResponseSchema,
     LastKnownLocationResponseSchema,
@@ -59,8 +53,6 @@ from schemas.localization import (
     ExecutedRouteResponseSchema,
     ExecutedPointCreateSchema,
     ExecutedPointResponseSchema,
-    AttendanceCreateSchema,
-    AttendanceResponseSchema,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
     PointsVisitedResponseSchema,
@@ -343,30 +335,6 @@ async def update_executed_route_end_time_controller(
 
 
 @handle_service_errors('LOCALIZATION')
-async def update_attendance_checkout_time_controller(
-    db: Session,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    attendance_id: int = Path(..., description = 'ID of the attendance record to update.'),
-    update_data: AttendanceUpdateSchema = Depends()
-) -> AttendanceResponseSchema:
-    '''
-        Controller to update the check-out time of an attendance record.
-    '''
-    message = f'Starting controller operation: update attendance check-out time for ID {
-        attendance_id}'
-    logger.info(message)
-
-    result = await update_attendance_checkout_time(
-        db = db,
-        attendance_id=attendance_id,
-        update_data = update_data
-    )
-
-    return AttendanceResponseSchema.model_validate(result, from_attributes = True)
-
-
-@handle_service_errors('LOCALIZATION')
 async def get_stats_points_visited_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
@@ -414,23 +382,6 @@ async def get_route_comparisons_controller(
         service_id = service_id
     )
     return RouteComparisonsResponseSchema.model_validate(result, from_attributes = True)
-
-
-@handle_service_errors('LOCALIZATION')
-async def register_attendance_controller(
-    db: Session,
-    attendance_data: AttendanceCreateSchema,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
-) -> AttendanceResponseSchema:
-    '''
-        Controller to register or update an attendance record.
-    '''
-    message = f'Starting controller operation: register or update attendance for user {
-            attendance_data.user_id}'
-    logger.info(message)
-    result = await register_attendance(db = db, attendance_data = attendance_data)
-    return AttendanceResponseSchema.model_validate(result, from_attributes = True)
 
 
 @handle_service_errors('LOCALIZATION')
@@ -595,25 +546,3 @@ async def get_last_known_locations_controller(
     ]
 
     return GroupLastKnownLocationsResponseSchema(locations = locations)
-
-# --- INTEGRATION CONTROLLERS ---
-
-@handle_service_errors('LOCALIZATION')
-async def search_attendances_controller(
-    search_data: AttendanceSearchRequestSchema,
-    db: Session,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
-) -> List[AttendanceSearchItemSchema]:
-    '''
-        Controller to search attendances by a list of IDs.
-    '''
-    attendances = await search_attendances_service(
-        db = db,
-        search_data = search_data
-    )
-
-    # Pydantic se encarga de mapear planned_point_id -> point_of_sale_id
-    # gracias al 'validation_alias' definido en el Schema.
-    return [AttendanceSearchItemSchema.model_validate(att, from_attributes=True) \
-        for att in attendances]

@@ -64,11 +64,6 @@ class PlannedPoint(Base):# pylint: disable=too-few-public-methods
     created_at = Column(DateTime, default = get_current_time_gmt)
 
     planned_route = relationship('PlannedRoute', back_populates = 'points')
-    t_attendances = relationship(
-        'Attendance',
-        back_populates = 'planned_point',
-        cascade = 'all, delete-orphan'
-    )
     __table_args__ = (UniqueConstraint('planned_route_id', 'secuencial'),)
 
 class ExecutedRoute(Base):# pylint: disable=too-few-public-methods
@@ -112,17 +107,3 @@ class ExecutedPoint(Base):# pylint: disable=too-few-public-methods
     timestamp = Column(DateTime, nullable = False, index = True)
 
     executed_route = relationship('ExecutedRoute', back_populates = 'points')
-
-class Attendance(Base):# pylint: disable=too-few-public-methods
-    '''
-        SQLAlchemy model for attendance records at a planned point.
-    '''
-    __tablename__ = 't_attendances'
-
-    id = Column(Integer, primary_key = True, index = True)
-    user_id = Column(Integer, nullable = False, index = True)
-    planned_point_id = Column(Integer, ForeignKey('t_planned_points.id'), nullable = False)
-    check_in_time = Column(DateTime, nullable = True)
-    check_out_time = Column(DateTime, nullable = True)
-
-    planned_point = relationship('PlannedPoint', back_populates = 't_attendances')

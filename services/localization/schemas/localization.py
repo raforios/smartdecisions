@@ -293,46 +293,6 @@ class RouteComparisonFullResponseSchema(BaseModel):
     planned_route: PlannedRouteComparisonSchema
     executed_routes: List[ExecutedRouteComparisonSchema]
 
-class AttendanceCreateSchema(BaseModel):
-    '''
-        Schema for creating an attendance record.
-    '''
-    user_id: int = Field(
-        ...,
-        description = 'ID of the user making the check-in/check-out.'
-    )
-    service_id: int = Field(
-        ...,
-        description = 'ID of the service associated.'
-    )
-    planned_point_id: int = Field(
-        ...,
-        description = 'ID of the planned point where attendance is being logged.'
-    )
-    check_in_time: Optional[datetime] = Field(
-        None,
-        description = 'Timestamp for the check-in time.'
-    )
-    check_out_time: Optional[datetime] = Field(
-        None,
-        description = 'Timestamp for the check-out time.'
-    )
-
-class AttendanceResponseSchema(AttendanceCreateSchema, LocalizationBaseSchema):
-    '''
-        Response schema for an attendance record, including the database ID.
-    '''
-    id: int
-
-class AttendanceUpdateSchema(BaseModel):
-    '''
-        Schema for updating an attendance record with a check-out time.
-    '''
-    check_out_time: datetime = Field(
-        ...,
-        description = 'Timestamp for the check-out time.'
-    )
-
 class PointsVisitedResponseSchema(BaseModel):
     '''
         Response schema for the points visited statistics endpoint.
@@ -417,22 +377,3 @@ class GroupLastKnownLocationsResponseSchema(BaseModel):
     locations: List[LastKnownLocationResponseSchema]
 
 # --- ATTENDANCE SEARCH SCHEMAS (Integration with TRADE) ---
-
-class AttendanceSearchRequestSchema(BaseModel):
-    '''
-        Schema for searching multiple attendances by ID.
-        Used by TRADE microservice to fetch context (User/POS).
-    '''
-    attendance_ids: List[int] = Field(..., description = 'List of Attendance IDs to fetch.')
-
-class AttendanceSearchItemSchema(LocalizationBaseSchema):
-    '''
-        Schema for the search response item.
-        Maps 'planned_point_id' to 'point_of_sale_id' as per business rules.
-    '''
-    id: int
-    user_id: int
-    # Mapeo clave: Exponemos planned_point_id como point_of_sale_id
-    point_of_sale_id: int = Field(..., validation_alias = 'planned_point_id')
-    check_in_time: Optional[datetime]
-    check_out_time: Optional[datetime]

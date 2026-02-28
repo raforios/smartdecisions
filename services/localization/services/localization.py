@@ -33,13 +33,10 @@ from services.utils import (
 from models.localization import (
     PlannedRoute,
     PlannedPoint,
-    Attendance,
     ExecutedRoute,
     ExecutedPoint
 )
 from schemas.localization import (
-    AttendanceCreateSchema,
-    AttendanceSearchRequestSchema,
     ExecutedRouteComparisonSchema,
     PlannedPointUpdateSchema,
     PlannedRouteBulkCreateSchema,
@@ -49,7 +46,6 @@ from schemas.localization import (
     PlannedRouteStatusEnum,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
-    AttendanceUpdateSchema,
     ExecutedRouteUpdateSchema,
     ExecutedRouteCreateSchema,
     ExecutedPointCreateSchema,
@@ -265,6 +261,15 @@ async def update_planned_route_service(
     db_planned_route = get_record(db, PlannedRoute, planned_route_id)
     old_values = sqlalchemy_object_as_dict(db_planned_route)
     update_data: Dict[str, Any] = route_data.model_dump(exclude_unset = True)
+
+    # Check for sequential number existence
+    existing_point = db.query(PlannedRoute).filter(
+        PlannedRoute.route_code == route_data.route_code
+    ).first()
+    if existing_point:
+        raise RegisterAlreadyExistsError(
+            detail = f'Code Route {route_data.route_code} already exists in database.'
+        )
 
     if not update_data:
         return db_planned_route, old_values
@@ -507,33 +512,6 @@ async def update_executed_route_end_time(
     return updated_record, auditable_data
 
 @handle_service_errors('LOCALIZATION')
-@audit_event('LOCALIZATION', 'Attendance', 'UPDATE')
-async def update_attendance_checkout_time(
-    db: Session,
-    attendance_id: int,
-    update_data: AttendanceUpdateSchema
-) -> Tuple[Attendance, Dict]:
-    '''
-        Updates the check-out time of an attendance record.
-    '''
-    message = f'Updating check-out time for attendance {attendance_id}.'
-    logger.debug(message)
-    db_record = get_record(db, Attendance, attendance_id)
-    old_values = sqlalchemy_object_as_dict(db_record)
-    updated_record = update_record(db, db_record, update_data)
-    db.commit()
-    db.refresh(updated_record)
-    message = f'Check-out time for attendance {attendance_id} updated.'
-    logger.info(message)
-
-    auditable_data = {
-        'old_values': old_values,
-        'new_values': sqlalchemy_object_as_dict(updated_record)
-    }
-
-    return updated_record, auditable_data
-
-@handle_service_errors('LOCALIZATION')
 async def get_statistics_user_points(
     db: Session,
     user_id: int,
@@ -560,16 +538,8 @@ async def get_statistics_user_points(
 
     executed_points = executed_points_query.all()
 
-    # Get attendance points within the date range
-    attendance_points = (
-        db.query(Attendance)
-        .filter(Attendance.user_id == user_id)
-        .filter(Attendance.check_in_time.between(start_date, end_date))
-        .all()
-    )
-
     # Simple aggregation for now, more complex logic can be added later
-    total_points_visited = len(executed_points) + len(attendance_points)
+    total_points_visited = len(executed_points)
     message = f'User {user_id} visited {total_points_visited
         } points between {start_date} and {end_date}.'
     logger.info(message)
@@ -584,20 +554,11 @@ async def get_statistics_user_points(
             'latitude': p.latitude,
             'longitude': p.longitude
         })
-    for a in attendance_points:
-        points_details.append({
-            'id': a.id,
-            'type': 'attendance',
-            'check_in_time': a.check_in_time,
-            'check_out_time': a.check_out_time,
-            'planned_point_id': a.planned_point_id
-        })
 
     return {
         'user_id': user_id,
         'total_points_visited': total_points_visited,
         'executed_points_count': len(executed_points),
-        'attendance_points_count': len(attendance_points),
         'points_details': points_details
     }
 
@@ -644,48 +605,6 @@ async def get_route_comparisons(
     return {
         'comparisons': comparisons_list
     }
-
-@handle_service_errors('LOCALIZATION')
-@audit_event('LOCALIZATION', 'Attendance', 'CREATE')
-async def register_attendance(
-    db: Session,
-    attendance_data: AttendanceCreateSchema
-) -> Attendance:
-    '''
-        Registers or updates an attendance record based on user and point.
-    '''
-    message = f'Registering attendance for user {attendance_data.user_id
-        } at point {attendance_data.planned_point_id}.'
-    logger.debug(message)
-
-    planned_point = get_record(db, PlannedPoint, attendance_data.planned_point_id)
-
-    planned_route = get_record(db, PlannedRoute, planned_point.planned_route_id)
-
-    if planned_route.status != PlannedRouteStatusEnum.ACTIVE:
-        raise InvalidInputError(
-            detail = f'Cannot register attendance. The planned route {
-                planned_route.id} is not in ACTIVE status.'
-        )
-
-    existing_attendance = db.query(Attendance).filter(
-        Attendance.planned_point_id == attendance_data.planned_point_id,
-        Attendance.user_id == attendance_data.user_id,
-        Attendance.check_out_time.is_(None)
-    ).first()
-
-    if existing_attendance:
-        raise InvalidInputError(
-            detail = 'An open attendance record already exists for this point.'
-        )
-
-    db_attendance = create_record(db, Attendance, attendance_data)
-    db.commit()
-    db.refresh(db_attendance)
-    message = f'Attendance for user {attendance_data.user_id} at point {
-            attendance_data.planned_point_id} created successfully.'
-    logger.info(message)
-    return db_attendance
 
 @handle_service_errors('LOCALIZATION')
 async def get_full_route_comparison(
@@ -922,27 +841,3 @@ async def get_last_known_locations_service(
     message = f'Retrieved {len(locations)} last known locations.'
     logger.info(message)
     return locations
-
-# --- INTEGRATION SERVICES ---
-
-@handle_service_errors('LOCALIZATION')
-async def search_attendances_service(
-    db: Session,
-    search_data: AttendanceSearchRequestSchema
-) -> List[Attendance]:
-    '''
-        Retrieves a list of Attendance records by their IDs.
-        Optimized for bulk fetching from other microservices (e.g., TRADE).
-    '''
-    message = f'Searching for {len(search_data.attendance_ids)} attendance records.'
-    logger.info(message)
-
-    if not search_data.attendance_ids:
-        return []
-
-    # Consulta directa sin Joins (gracias a tu aclaración planned_point_id == pos_id)
-    results = db.query(Attendance).filter(
-        Attendance.id.in_(search_data.attendance_ids)
-    ).all()
-
-    return results
