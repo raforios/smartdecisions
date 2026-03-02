@@ -39,57 +39,86 @@ Este microservicio ha sido desarrollado con un enfoque en el rendimiento, la rob
 
 ## 🚀 Endpoints de la API
 
-A continuación se listan los principales **endpoints**, organizados por módulos funcionales.
+A continuación se listan los **endpoints** vigentes, organizados por módulos funcionales y prefijos reales de la API.
 
-### 1. Catálogos (Productos y PDVs)
-
+### 1. Catálogo Productos (`/v1/products`)
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/trade/products` | Crea un nuevo **Producto** generando automáticamente su SKU atómico. |
-| `GET` | `/v1/trade/products/{product_id}` | Obtiene el detalle de un producto. |
-| `GET` | `/v1/trade/products` | Lista productos con filtros (categoría, nombre). |
-| `POST` | `/v1/trade/pos` | Crea un nuevo **Punto de Venta** con su inventario inicial transaccional. |
-| `GET` | `/v1/trade/pos` | Lista PDVs con filtros y paginación. |
-| `POST` | `/v1/trade/products/pos-assignments` | Asigna un producto a un PDV (Surtido). |
+| `POST` | `/v1/products` | Crea un **Producto** con generación atómica de SKU (alimenta `t_products` y `t_sku_sequencer`). |
+| `GET` | `/v1/products` | Lista productos con filtros y paginación. |
+| `GET` | `/v1/products/{id}` | Obtiene detalle de un producto. |
+| `PATCH` | `/v1/products/{id}` | Actualiza información de un producto. |
+| `DELETE` | `/v1/products/{id}` | Elimina un producto. |
+| `POST` | `/v1/products/bulk-upload` | Carga masiva de productos desde CSV. |
+| `POST` | `/v1/products/sku-equivalencies` | Crea mapeo de equivalencia con sistemas externos (`t_sku_equivalencies`). |
+| `GET` | `/v1/products/sku-equivalencies` | Lista equivalencias de SKU. |
+| `POST` | `/v1/products/sku-equivalencies/bulk-upload` | Carga masiva de equivalencias. |
+| `POST` | `/v1/products/pos-assignments` | Asigna un producto a un POS - Surtido (`t_trade_product_assignments_pos`). |
+| `GET` | `/v1/products/pos-assignments` | Lista asignaciones de productos a POS. |
+| `POST` | `/v1/products/pos-assignments/bulk-upload` | Carga masiva de asignaciones. |
 
-### 2. Planificación (Agenda)
-
+### 2. Catálogo POS (`/v1/pos`)
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/trade/planning` | Crea una entrada de **Planificación** (Agenda) vinculando Usuario y PDV. |
-| `POST` | `/v1/trade/planning/adhoc` | Registra una visita no planificada (**Ad-Hoc**) con justificación. |
-| `PATCH` | `/v1/trade/planning/{planning_id}/workload` | Actualiza la carga laboral (Check-In/Out) y calcula tiempos efectivos. |
-| `PATCH` | `/v1/trade/planning/{planning_id}/justify` | Justifica la no-visita o cancelación de una agenda. |
+| `POST` | `/v1/pos` | Crea un **POS** con inventario inicial (`t_points_of_sale`). |
+| `GET` | `/v1/pos` | Lista POS con filtros y paginación. |
+| `GET` | `/v1/pos/{id}` | Obtiene detalle de un POS. |
+| `PUT` | `/v1/pos/{id}` | Actualiza información de un POS. |
+| `DELETE` | `/v1/pos/{id}` | Elimina un POS. |
+| `POST` | `/v1/pos/bulk-upload` | Carga masiva de POS desde CSV. |
+| `POST` | `/v1/pos/{id}/inventory` | Agrega un ítem de inventario local (`t_pos_inventory`). |
+| `GET` | `/v1/pos/{id}/inventory` | Lista el inventario actual de un POS. |
+| `PATCH` | `/v1/pos/inventory/{id}` | Actualiza un ítem de inventario (Stock/Lote). |
+| `DELETE` | `/v1/pos/inventory/{id}` | Elimina un ítem de inventario. |
+| `POST` | `/v1/pos/inventory/bulk-upload` | Carga masiva de inventario (CSV). |
 
-### 3. Impulsos (Ventas)
-
+### 3. Common Utils (`/v1/common`)
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/impulses/promotions` | Crea una definición de Promoción/Bandeo (Catálogo). |
-| `POST` | `/v1/impulses/impulse/visit/{id}/inventory-start` | Registra el inventario inicial al llegar al PDV. |
-| `POST` | `/v1/impulses/impulse/visit/{id}/sale` | Registra una **Venta** con detalle de productos y foto de evidencia. |
-| `POST` | `/v1/impulses/impulse/visit/{id}/inventory-end` | Registra el inventario final al terminar la visita. |
+| `POST` | `/v1/common/photos/upload` | Sube una foto asociada a cualquier entidad (`t_trade_photos`). |
+| `DELETE` | `/v1/common/photos/{id}` | Elimina una foto por ID. |
 
-### 4. Reposición y Complementarios
-
+### 4. Planificación y Agenda (`/v1/trade`)
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/replenishment/visit/{id}/report` | Registra el reporte de visita (Fotos de éxito y comentarios). |
-| `POST` | `/v1/replenishment/visit/{id}/inventory` | Registra el levantamiento de **Inventario en Góndola** (Lotes, Fechas, Stock). |
-| `POST` | `/v1/replenishment/visit/{id}/reception` | Registra la recepción de mercadería en el PDV. |
-| `POST` | `/v1/replenishment/complementary/visit/{id}/bandeo` | Registra un **Bandeo** (Devoluciones) realizado en visita. |
-| `POST` | `/v1/replenishment/complementary/visit/{id}/promo-point` | Registra la implementación de un **Punto Promocional**. |
-| `POST` | `/v1/replenishment/complementary/competition` | Reporta actividades de la **Competencia** (Precios, Exhibiciones). |
+| `POST` | `/v1/trade/planning` | Crea una entrada de planificación vinculada a POS (`t_trade_planning`). |
+| `GET` | `/v1/trade/planning` | Lista planificaciones con filtros. |
+| `GET` | `/v1/trade/planning/{id}` | Obtiene detalle de una planificación. |
+| `PUT` | `/v1/trade/planning/{id}` | Actualiza información de planificación. |
+| `DELETE` | `/v1/trade/planning/{id}` | Elimina una planificación. |
+| `POST` | `/v1/trade/planning/adhoc` | Registra una visita fuera de ruta (Ad-Hoc). |
+| `PATCH` | `/v1/trade/planning/{id}/justify` | Justifica la no-asistencia o cancelación. |
+| `POST` | `/v1/trade/attendances/check-in` | Registro de entrada (Check-In) al POS (`t_trade_attendances`). |
+| `PATCH` | `/v1/trade/attendances/{id}/check-out` | Registro de salida (Check-Out) y cálculo de duración. |
 
-### 5. Reportes y Analytics
-
+### 5. Impulsos y Ventas (`/v1/impulses`)
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `GET` | `/v1/reports/compliance` | Reporte de **Cumplimiento**: Eficiencia de rutas y carga laboral (KPIs). |
-| `GET` | `/v1/reports/inventory-alerts` | Reporte de **Alertas**: Semáforo de Quiebres de Stock y Fechas Cortas. |
-| `GET` | `/v1/reports/sales` | Reporte de **Ventas Detallado**: Tabla plana para BI, enriquecida con datos de Localization. |
-| `GET` | `/v1/reports/merchandising` | Reporte consolidado de Bandeos, Competencia y Puntos Promocionales. |
-| `GET` | `/v1/reports/photographic` | **Galería de Evidencias**: Acceso centralizado a todas las fotos capturadas. |
+| `POST` | `/v1/impulses/promotions` | Crea una promoción/bandeo - Catálogo (`t_trade_promotions`). |
+| `GET` | `/v1/impulses/promotions` | Lista promociones registradas. |
+| `POST` | `/v1/impulses/visit/{attendance_id}/inventory-start` | Inventario inicial de visita (`t_trade_impulse_inventory_start`). |
+| `POST` | `/v1/impulses/visit/{attendance_id}/sale` | Registro de venta con evidencia (`t_trade_impulse_sales`). |
+| `POST` | `/v1/impulses/visit/{attendance_id}/inventory-end` | Inventario final de visita (`t_trade_impulse_inventory_end`). |
+
+### 6. Reposición y Complementarios (`/v1/replenishment`)
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/v1/replenishment/visit/{id}/report` | Reporte de éxito de reposición (`t_trade_replenishment_reports`). |
+| `POST` | `/v1/replenishment/visit/{id}/inventory` | Inventario detallado en góndola (`t_trade_replenishment_inventory`). |
+| `POST` | `/v1/replenishment/visit/{id}/reception` | Registro de recepción de mercadería (`t_trade_replenishment_receptions`). |
+| `POST` | `/v1/replenishment/complementary/visit/{id}/bandeo` | Reporte de Bandeos (`t_trade_complementary_bandeo_header`). |
+| `POST` | `/v1/replenishment/complementary/visit/{id}/promo-point` | Implementación de Punto Promocional (`t_trade_complementary_promo_point`). |
+| `POST` | `/v1/replenishment/complementary/competition` | Reporte general de competencia (`t_trade_complementary_competition`). |
+
+### 7. Reportes y Analytics (`/v1/reports`)
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/v1/reports/compliance` | KPI de cumplimiento (Planificado vs Ejecutado). |
+| `GET` | `/v1/reports/inventory-alerts` | Alertas de stock (Quiebres y Fechas Cortas). |
+| `GET` | `/v1/reports/sales` | Data plana de ventas enriquecida para BI. |
+| `GET` | `/v1/reports/merchandising` | Consolidado de Bandeos, Competencia y Puntos Promocionales. |
+| `GET` | `/v1/reports/photographic` | Galería centralizada de evidencias fotográficas. |
+| `GET` | `/v1/reports/attendance` | Reporte de asistencia, duración y geofencing. |
 
 -----
 
