@@ -11,7 +11,8 @@ from controllers.reports import (
     get_inventory_alerts_controller,
     get_merchandising_report_controller,
     get_photographic_report_controller,
-    get_sales_report_controller
+    get_sales_report_controller,
+    get_attendance_report_controller
 )
 from schemas.reports import (
     ComplianceFilterSchema,
@@ -22,7 +23,9 @@ from schemas.reports import (
     MerchandisingReportResponseSchema,
     PhotographicReportResponseSchema,
     SalesReportFilterSchema,
-    SalesReportResponseSchema
+    SalesReportResponseSchema,
+    AttendanceReportFilterSchema,
+    AttendanceReportResponseSchema
 )
 
 router = APIRouter(prefix = '/v1/reports', tags = ['Reports'])
@@ -156,6 +159,30 @@ async def get_photographic_report_endpoint(
     message = f'User: {current_user}. Request Photo Report.'
     logger.info(message)
     return await get_photographic_report_controller(
+        filters = filters,
+        db = db,
+        request = request,
+        current_user = current_user,
+    )
+
+# --- ATTENDANCE REPORT ---
+@router.get(
+    '/attendance',
+    response_model = AttendanceReportResponseSchema
+)
+async def get_attendance_report_endpoint(
+    request: Request,
+    filters: AttendanceReportFilterSchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to retrieve the Attendance & Geofencing Report.
+        Analyzes visit execution, duration, and geofencing accuracy.
+    '''
+    message = f'User: {current_user}. Request Attendance Report.'
+    logger.info(message)
+    return await get_attendance_report_controller(
         filters = filters,
         db = db,
         request = request,

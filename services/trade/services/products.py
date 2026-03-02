@@ -25,6 +25,17 @@ from services.utils import (
     perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
+from models.impulses import (
+    ImpulseInventoryStart,
+    ImpulseInventoryEnd,
+    ImpulseSaleDetail,
+    TradePromotionDetail
+)
+from models.replenishments import (
+    ReplenishmentInventory,
+    ReplenishmentReception,
+    ComplementaryBandeoDetail
+)
 from models.products import (
     Product,
     ProductCategory,
@@ -315,6 +326,29 @@ async def delete_product_service(
     db_product = get_record(db, Product, product_id)
     old_values = sqlalchemy_object_as_dict(db_product)
 
+    # 1. Cleanup Dependencies
+    db.query(ProductAssignmentPOS).filter(ProductAssignmentPOS.product_id == product_id).delete()
+
+    # We also need to cleanup Impulse tables that might reference this product
+    db.query(ImpulseInventoryStart).filter(ImpulseInventoryStart.product_id == product_id).delete()
+    db.query(ImpulseInventoryEnd).filter(ImpulseInventoryEnd.product_id == product_id).delete()
+    db.query(ImpulseSaleDetail).filter(ImpulseSaleDetail.product_id == product_id).delete()
+    db.query(TradePromotionDetail).filter(TradePromotionDetail.product_id == product_id).delete()
+
+    # Replenishment tables
+    db.query(ReplenishmentInventory).filter(
+        ReplenishmentInventory.product_id == product_id
+    ).delete()
+    db.query(ReplenishmentReception).filter(
+        ReplenishmentReception.product_id == product_id
+    ).delete()
+    db.query(ComplementaryBandeoDetail).filter(
+        ComplementaryBandeoDetail.product_id == product_id
+    ).delete()
+
+    db.flush()
+
+    # 2. Delete Product
     delete_record(
         db = db,
         model = Product,

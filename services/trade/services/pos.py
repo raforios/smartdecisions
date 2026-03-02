@@ -29,6 +29,7 @@ from models.pos import (
     PointOfSaleInventory,
     PointOfSaleStatus
 )
+from models.trade import TradePlanning
 from models.products import Product, ProductAssignmentPOS
 from schemas.pos import (
     POSFilterSchema,
@@ -243,6 +244,12 @@ async def delete_pos_service(
     '''
     db_pos = get_record(db, PointOfSale, pos_id)
     old_values = sqlalchemy_object_as_dict(db_pos)
+
+    # 1. Cleanup Dependencies (TradePlanning has RESTRICT on POS)
+    db.query(TradePlanning).filter(TradePlanning.point_of_sale_id == pos_id).delete()
+    db.flush()
+
+    # 2. Delete POS
     delete_record(
         db = db,
         model = PointOfSale,

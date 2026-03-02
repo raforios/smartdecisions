@@ -15,7 +15,9 @@ from controllers.trade import (
     get_trade_planning_list_controller,
     justify_planning_absence_controller,
     update_trade_planning_controller,
-    update_trade_planning_workload_controller
+    update_trade_planning_workload_controller,
+    register_attendance_check_in_controller,
+    register_attendance_check_out_controller
 )
 from schemas.trade import (
     TradePlanningAdHocCreateSchema,
@@ -26,6 +28,9 @@ from schemas.trade import (
     TradePlanningResponseSchema,
     TradePlanningUpdateSchema,
     TradePlanningWorkloadUpdateSchema,
+    AttendanceCreateSchema,
+    AttendanceCheckOutSchema,
+    AttendanceResponseSchema
 )
 
 router = APIRouter(prefix = '/v1/trade', tags = ['Trade'])
@@ -159,7 +164,7 @@ async def delete_trade_planning_endpoint(
     '/planning/{planning_id}/workload',
     response_model = TradePlanningResponseSchema,
     status_code = status.HTTP_200_OK,
-    summary = 'Calculate Workload (Check-out)'
+    summary = 'Calculate Workload (Legacy PATCH)'
 )
 async def update_trade_planning_workload_endpoint(
     planning_id: int,
@@ -170,7 +175,7 @@ async def update_trade_planning_workload_endpoint(
 ):
     '''
         Endpoint to calculate actual workload based on Check-in/Check-out times.
-        Usually called by Frontend after the user finishes the visit.
+        DEPRECATED: Use /v1/trade/attendances/ for new implementation.
     '''
     message = f'User: {current_user}. Request Workload Calculation for ID: {planning_id}.'
     logger.info(message)
@@ -229,6 +234,61 @@ async def justify_planning_absence_endpoint(
     return await justify_planning_absence_controller(
         planning_id = planning_id,
         justification_data = justification_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+# --- A.5. ATTENDANCE (CHECK-IN / CHECK-OUT) ENDPOINTS ---
+
+@router.post(
+    '/attendances/check-in',
+    response_model = AttendanceResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Register Check-In',
+    description = 'Registers a new visit start, validating Geofencing and POS status.'
+)
+async def register_attendance_check_in_endpoint(
+    check_in_data: AttendanceCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to register a POS Check-In.
+    '''
+    message = f'User: {current_user}. Request Check-In for Planning: {
+        check_in_data.trade_planning_id}'
+    logger.info(message)
+    return await register_attendance_check_in_controller(
+        check_in_data = check_in_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+@router.patch(
+    '/attendances/{attendance_id}/check-out',
+    response_model = AttendanceResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Register Check-Out',
+    description = 'Registers the end of a visit and calculates duration.'
+)
+async def register_attendance_check_out_endpoint(
+    attendance_id: int,
+    check_out_data: AttendanceCheckOutSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to register a POS Check-Out.
+    '''
+    message = f'User: {current_user}. Request Check-Out for Attendance: {attendance_id}'
+    logger.info(message)
+    return await register_attendance_check_out_controller(
+        attendance_id = attendance_id,
+        check_out_data = check_out_data,
         db = db,
         request = request,
         current_user = current_user

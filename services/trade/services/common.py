@@ -111,6 +111,8 @@ async def add_photo_service(
         entity_path = 'products'
     elif service_data.entity_type == 'POS':
         entity_path = 'pos'
+    elif service_data.entity_type == 'ATTENDANCE':
+        entity_path = 'attendances'
     else:
         # Validar para futuras entidades
         raise InvalidInputError(detail = f'Invalid service_data.entity_type: {

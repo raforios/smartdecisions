@@ -10,7 +10,8 @@ from services.reports import (
     get_inventory_alerts_service,
     get_merchandising_report_service,
     get_photographic_report_service,
-    get_sales_report_service
+    get_sales_report_service,
+    get_attendance_report_service
 )
 from schemas.reports import (
     ComplianceFilterSchema,
@@ -22,7 +23,9 @@ from schemas.reports import (
     PhotoFilterSchema,
     PhotographicReportResponseSchema,
     SalesReportFilterSchema,
-    SalesReportResponseSchema
+    SalesReportResponseSchema,
+    AttendanceReportFilterSchema,
+    AttendanceReportResponseSchema
 )
 
 # --- COMPLIANCE REPORT CONTROLLER ---
@@ -107,6 +110,23 @@ async def get_photographic_report_controller(
 ) -> PhotographicReportResponseSchema:
     ''' Retrieve consolidated Photo Gallery. '''
     return await get_photographic_report_service(
+        db = db,
+        filters = filters
+    )
+
+# --- ATTENDANCE REPORT CONTROLLER ---
+
+@handle_service_errors('REPORTS')
+async def get_attendance_report_controller(
+    filters: AttendanceReportFilterSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> AttendanceReportResponseSchema:
+    '''
+        Controller to retrieve the Attendance & Geofencing Report.
+    '''
+    return await get_attendance_report_service(
         db = db,
         filters = filters
     )

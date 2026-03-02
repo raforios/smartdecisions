@@ -41,6 +41,7 @@ from schemas.impulses import (
     TradePromotionFilterSchema,
     TradePromotionUpdateSchema,
 )
+from .trade_utils import validate_active_attendance
 
 # --- TRADE PROMOTION (BANDEO) SERVICES ---
 
@@ -173,6 +174,14 @@ async def create_impulse_inventory_start_service(
     message = f'Creating Impulse Inventory Start for attendance ID: {attendance_id}'
     logger.info(message)
 
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = inventory_data.company_id,
+        pos_id = inventory_data.pos_id
+    )
+
     # Validate Assortment
     pos_id = inventory_data.pos_id
     for item in inventory_data.items:
@@ -204,6 +213,14 @@ async def create_impulse_sale_service(
     '''
     message = f'Creating Impulse Sale for attendance ID: {attendance_id}'
     logger.info(message)
+
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = sale_data.company_id,
+        pos_id = sale_data.pos_id
+    )
 
     # 1. Create Header
     db_sale = ImpulseSale(
@@ -286,6 +303,14 @@ async def create_impulse_inventory_end_service(
     '''
     message = f'Creating Impulse Inventory End for attendance ID: {attendance_id}'
     logger.info(message)
+
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = inventory_data.company_id,
+        pos_id = inventory_data.pos_id
+    )
 
     # Validate Assortment
     pos_id = inventory_data.pos_id

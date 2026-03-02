@@ -86,6 +86,7 @@ class TradePlanningResponseSchema(TradePlanningBaseSchema):
     created_at: Optional[datetime]
 
     point_of_sale: Optional[PointOfSaleNestedResponseSchema] = None
+    attendances: List[AttendanceResponseSchema] = []
 
 class TradePlanningFilterSchema(BaseModel):
     '''
@@ -144,3 +145,47 @@ class TradePlanningJustificationSchema(BaseSchema):
         min_length = 5,
         description = 'Reason for not visiting (e.g., "Store Closed").'
     )
+
+# --- A.5. ATTENDANCE SCHEMAS ---
+
+class AttendanceBaseSchema(BaseSchema):
+    '''
+        Base schema for Attendance fields.
+    '''
+    company_id: int = Field(..., description = 'Company ID.')
+    user_id: int = Field(..., description = 'User ID performing the visit.')
+    trade_planning_id: int = Field(..., description = 'ID of the associated planning entry.')
+
+class AttendanceCreateSchema(AttendanceBaseSchema):
+    '''
+        Schema for registering a new Check-In.
+    '''
+    check_in_latitude: float = Field(..., ge = -90.0, le = 90.0)
+    check_in_longitude: float = Field(..., ge = -180.0, le = 180.0)
+    check_in_time: Optional[datetime] = Field(None, description = 'Optional timestamp.')
+
+class AttendanceCheckOutSchema(BaseSchema):
+    '''
+        Schema for updating an attendance with Check-Out data.
+    '''
+    check_out_latitude: float = Field(..., ge = -90.0, le = 90.0)
+    check_out_longitude: float = Field(..., ge = -180.0, le = 180.0)
+    check_out_time: Optional[datetime] = Field(None, description = 'Optional timestamp.')
+
+class AttendanceResponseSchema(AttendanceBaseSchema):
+    '''
+        Response schema for an Attendance record.
+    '''
+    id: int
+    check_in_time: Optional[datetime]
+    check_in_latitude: Optional[float]
+    check_in_longitude: Optional[float]
+    check_in_distance_error: Optional[float]
+
+    check_out_time: Optional[datetime]
+    check_out_latitude: Optional[float]
+    check_out_longitude: Optional[float]
+    check_out_distance_error: Optional[float]
+
+    duration_minutes: Optional[int]
+    created_at: Optional[datetime]

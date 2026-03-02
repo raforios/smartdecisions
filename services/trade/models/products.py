@@ -142,7 +142,7 @@ class SKUEquivalency(Base):  # pylint: disable=too-few-public-methods
         Catalog to store product code equivalencies between the internal
         SKU and external client systems.
     '''
-    __tablename__ = 't_trade_sku_equivalencies'
+    __tablename__ = 't_sku_equivalencies'
 
     id = Column(Integer, primary_key = True, index = True)
     company_id = Column(Integer, nullable = False, index = True)

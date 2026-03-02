@@ -30,6 +30,7 @@ from schemas.replenishments import (
     ComplementaryCompetitionCreateSchema,
     ComplementaryPromoPointCreateSchema
 )
+from .trade_utils import validate_active_attendance
 
 # --- B.2. REPLENISHMENT ACTIVITIES SERVICES ---
 
@@ -45,6 +46,14 @@ async def create_replenishment_report_service(
     '''
     message = f'Creating Replenishment Report meta for attendance ID: {attendance_id}'
     logger.info(message)
+
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = report_data.company_id,
+        pos_id = report_data.pos_id
+    )
 
     db_report = ReplenishmentReport(
         attendance_id = attendance_id,
@@ -70,6 +79,14 @@ async def create_replenishment_inventory_service(
     '''
     message = f'Creating Replenishment Inventory for attendance ID: {attendance_id}'
     logger.info(message)
+
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = inventory_data_rep.company_id,
+        pos_id = inventory_data_rep.pos_id
+    )
 
     # Validar Surtido usando el ID que nos manda el frontend
     pos_id = inventory_data_rep.pos_id
@@ -109,6 +126,14 @@ async def create_replenishment_reception_service(
     message = f'Creating Replenishment Reception for attendance ID: {attendance_id}'
     logger.info(message)
 
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = reception_data.company_id,
+        pos_id = reception_data.pos_id
+    )
+
     # Validar Surtido
     pos_id = reception_data.pos_id
 
@@ -142,6 +167,14 @@ async def create_complementary_bandeo_service(
     '''
     message = f'Creating Bandeo for attendance ID: {attendance_id}'
     logger.info(message)
+
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = bandeo_data.company_id,
+        pos_id = bandeo_data.pos_id
+    )
 
     if db.query(ComplementaryBandeo).filter_by(attendance_id = attendance_id).first():
         raise RegisterAlreadyExistsError(
@@ -190,6 +223,14 @@ async def create_complementary_promo_point_service(
     message = f'Creating Promo Point for attendance ID: {attendance_id}'
     logger.info(message)
 
+    # 0. Validate Active Attendance
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = promo_point_data.company_id,
+        pos_id = promo_point_data.pos_id
+    )
+
     db_report = ComplementaryPromoPoint(
         attendance_id = attendance_id,
         company_id = promo_point_data.company_id,
@@ -211,8 +252,12 @@ async def create_complementary_competition_service(
     '''
     logger.info('Creating Competition Report')
 
+    data = competition_data.model_dump()
+    if 'pos_id' in data:
+        data['point_of_sale_id'] = data.pop('pos_id')
+
     db_report = ComplementaryCompetition(
-        **competition_data.model_dump()
+        **data
     )
     db.add(db_report)
     db.commit()

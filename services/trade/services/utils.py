@@ -7,6 +7,7 @@ import time
 import decimal
 import asyncio
 import json
+import enum
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
@@ -14,7 +15,6 @@ from typing import Any, Callable, Dict, List, Optional, Type, Tuple
 import requests as req
 from fastapi import HTTPException, Request, UploadFile, status
 
-import enum
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
@@ -364,7 +364,10 @@ def audit_event(
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            user_id = kwargs.get('user_id', 'usr_test')
+            # The current_user/user_id is often an email or a string identifier.
+            # Do not force conversion to int to avoid errors in the audit service.
+            user_id = kwargs.get('current_user') or kwargs.get('user_id', '1001')
+
             result = await func(*args, **kwargs)
 
             if isinstance(result, tuple) and len(result) == 2:
@@ -382,14 +385,25 @@ def audit_event(
             # Use helper to determine IDs and values to avoid branching here
             entity_id, new_values = _resolve_audit_data(final_result, new_values)
 
+            # Ensure entity_id is a string to satisfy the audit service schema.
+            # If entity_id is None, use "0" as a safe default.
+            str_entity_id = str(entity_id) if entity_id is not None else "0"
+
+            # Ensure old_values and new_values are strings (JSON) if they are not None
+            # to comply with the audit service's expected format.
+            formatted_old = json.dumps(old_values, cls = CustomJSONEncoder
+                            ) if old_values is not None else None
+            formatted_new = json.dumps(new_values, cls = CustomJSONEncoder
+                            ) if new_values is not None else None
+
             audit_event_data = {
                 'microservice': microservice_name,
                 'entity_name': entity_name,
-                'entity_id': entity_id,
+                'entity_id': str_entity_id,
                 'action': action,
-                'user_id': user_id,
-                'old_values': old_values,
-                'new_values': new_values
+                'user_id': str(user_id),
+                'old_values': formatted_old,
+                'new_values': formatted_new
             }
             try:
                 data_to_send = json.loads(json.dumps(audit_event_data, cls = CustomJSONEncoder))
@@ -429,7 +443,6 @@ async def send_usage_log(log_data: dict):
     response.raise_for_status()
     message = f'Usage log sent successfully. Status: {response.status_code}'
     logger.info(message)
-
 
 # --- Helper functions for file actions ---
 

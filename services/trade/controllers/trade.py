@@ -13,7 +13,9 @@ from services.trade import (
     get_trade_planning_list_service,
     justify_planning_absence_service,
     update_trade_planning_service,
-    update_trade_planning_workload_service
+    update_trade_planning_workload_service,
+    register_attendance_check_in,
+    register_attendance_check_out
 )
 from schemas.trade import (
     TradePlanningAdHocCreateSchema,
@@ -24,6 +26,9 @@ from schemas.trade import (
     TradePlanningResponseSchema,
     TradePlanningUpdateSchema,
     TradePlanningWorkloadUpdateSchema,
+    AttendanceCreateSchema,
+    AttendanceCheckOutSchema,
+    AttendanceResponseSchema
 )
 
 # --- A.3. TRADE PLANNING CONTROLLERS ---
@@ -38,7 +43,6 @@ async def create_trade_planning_controller(
         Controller to handle the creation of a new Trade Planning entry.
     '''
     # 1. Call the service
-    # El servicio devuelve (db_planning, auditable_data)
     db_planning = await create_trade_planning_service(
         db = db,
         planning_data = planning_data
@@ -180,4 +184,44 @@ async def justify_planning_absence_controller(
     )
     return TradePlanningResponseSchema.model_validate(
         db_planning, from_attributes = True
+    )
+
+# --- A.5. ATTENDANCE (CHECK-IN / CHECK-OUT) CONTROLLERS ---
+
+@handle_service_errors('TRADE')
+async def register_attendance_check_in_controller(
+    check_in_data: AttendanceCreateSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> AttendanceResponseSchema:
+    '''
+        Controller to handle POS Check-In.
+    '''
+    db_attendance = await register_attendance_check_in(
+        db = db,
+        check_in_data = check_in_data
+    )
+    return AttendanceResponseSchema.model_validate(
+        db_attendance, from_attributes = True
+    )
+
+@handle_service_errors('TRADE')
+async def register_attendance_check_out_controller(
+    attendance_id: int,
+    check_out_data: AttendanceCheckOutSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> AttendanceResponseSchema:
+    '''
+        Controller to handle POS Check-Out.
+    '''
+    db_attendance = await register_attendance_check_out(
+        db = db,
+        attendance_id = attendance_id,
+        check_out_data = check_out_data
+    )
+    return AttendanceResponseSchema.model_validate(
+        db_attendance, from_attributes = True
     )

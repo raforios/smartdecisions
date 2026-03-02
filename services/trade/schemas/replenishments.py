@@ -19,6 +19,10 @@ class ReplenishmentReportCreateSchema(BaseSchema):
         ...,
         description = 'ID of the company for this transaction.'
     )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the POS (sent by frontend) to validate assortment and attendance.'
+    )
     comments: Optional[str] = Field(
         None,
         description = 'Optional comments from the user.'
@@ -225,6 +229,10 @@ class ComplementaryPromoPointCreateSchema(BaseSchema):
     company_id: int = Field(
         ...,
         description = 'ID of the company for this transaction.'
+    )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the POS (sent by frontend) to validate assortment and attendance.'
     )
     comments: Optional[str] = Field(
         None,

@@ -21,8 +21,10 @@ from services.utils import (
     sqlalchemy_object_as_dict
 )
 from models.trade import (
-    TradePlanning
+    TradePlanning,
+    Attendance
 )
+from models.pos import PointOfSale, PointOfSaleStatus
 from schemas.trade import (
     TradePlanningAdHocCreateSchema,
     TradePlanningCreateSchema,
@@ -30,7 +32,10 @@ from schemas.trade import (
     TradePlanningJustificationSchema,
     TradePlanningUpdateSchema,
     TradePlanningWorkloadUpdateSchema,
+    AttendanceCreateSchema,
+    AttendanceCheckOutSchema,
 )
+from .trade_utils import validate_geofence
 
 # --- A.3. TRADE PLANNING SERVICES ---
 
@@ -347,3 +352,127 @@ async def justify_planning_absence_service(
     }
 
     return db_planning, auditable_data
+
+# --- A.5. ATTENDANCE (CHECK-IN / CHECK-OUT) SERVICES ---
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'Attendance', 'CHECK_IN')
+async def register_attendance_check_in(
+    db: Session,
+    check_in_data: AttendanceCreateSchema
+) -> Tuple[Attendance, Dict[str, Any]]:
+    '''
+        Registers a Check-In for a planned visit.
+        Validates POS status and Geofencing.
+    '''
+    message = f'User {check_in_data.user_id} attempting Check-In for Planning ID: {
+        check_in_data.trade_planning_id}'
+    logger.info(message)
+
+    # 1. Fetch Planning and POS
+    db_planning = get_record(db, TradePlanning, check_in_data.trade_planning_id)
+    db_pos = get_record(db, PointOfSale, db_planning.point_of_sale_id)
+
+    # 2. Business Rule: Only ACTIVE POS can be visited
+    if db_pos.status != PointOfSaleStatus.ACTIVE:
+        error_msg = f'Cannot Check-In. Point of Sale {db_pos.code} is in {
+                    db_pos.status.value} status.'
+        logger.warning(error_msg)
+        raise InvalidInputError(
+            detail = error_msg
+        )
+
+    # 3. Geofencing Validation
+    distance_error = validate_geofence(
+        check_in_data.check_in_latitude,
+        check_in_data.check_in_longitude,
+        db_pos,
+        'Check-In'
+    )
+
+    # 4. Check for existing open attendance
+    existing_open = db.query(Attendance).filter(
+        Attendance.trade_planning_id == db_planning.id,
+        Attendance.user_id == check_in_data.user_id,
+        Attendance.check_out_time.is_(None)
+    ).first()
+
+    if existing_open:
+        raise InvalidInputError(detail = 'User already has an open attendance for this visit.')
+
+    # 5. Create Attendance record
+    attendance_dict = check_in_data.model_dump()
+    if not attendance_dict.get('check_in_time'):
+        attendance_dict['check_in_time'] = datetime.now()
+
+    attendance_dict['check_in_distance_error'] = distance_error
+
+    db_attendance = Attendance(**attendance_dict)
+    db.add(db_attendance)
+
+    # 6. Update Planning Status
+    db_planning.status = 'IN_PROGRESS'
+    db.add(db_planning)
+
+    db.commit()
+    db.refresh(db_attendance)
+
+    return db_attendance, {'new_values': sqlalchemy_object_as_dict(db_attendance)}
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'Attendance', 'CHECK_OUT')
+async def register_attendance_check_out(
+    db: Session,
+    attendance_id: int,
+    check_out_data: AttendanceCheckOutSchema
+) -> Tuple[Attendance, Dict[str, Any]]:
+    '''
+        Registers a Check-Out for a visit.
+        Validates Geofencing and calculates effective time.
+    '''
+    message = f'Registering Check-Out for Attendance ID: {attendance_id}'
+    logger.info(message)
+
+    # 1. Fetch Records
+    db_attendance = get_record(db, Attendance, attendance_id)
+    db_planning = get_record(db, TradePlanning, db_attendance.trade_planning_id)
+    db_pos = get_record(db, PointOfSale, db_planning.point_of_sale_id)
+
+    if db_attendance.check_out_time:
+        raise InvalidInputError(detail = 'Attendance already has a Check-Out registered.')
+
+    # 2. Geofencing Validation
+    distance_error = validate_geofence(
+        check_out_data.check_out_latitude,
+        check_out_data.check_out_longitude,
+        db_pos,
+        'Check-Out'
+    )
+
+    # 3. Update Attendance
+    db_attendance.check_out_time = check_out_data.check_out_time or datetime.now()
+    db_attendance.check_out_latitude = check_out_data.check_out_latitude
+    db_attendance.check_out_longitude = check_out_data.check_out_longitude
+    db_attendance.check_out_distance_error = distance_error
+
+    # 4. Calculate Duration (Minutes)
+    duration_delta = db_attendance.check_out_time - db_attendance.check_in_time
+    duration_minutes = max(0, int(duration_delta.total_seconds() // 60))
+    db_attendance.duration_minutes = duration_minutes
+
+    # 5. Sync Workload to Planning
+    db_planning.actual_workload_minutes = duration_minutes
+    db_planning.workload_difference_minutes = max(-db_planning.planned_workload_minutes,
+                            duration_minutes - db_planning.planned_workload_minutes)
+    db_planning.status = 'COMPLETED'
+
+    db.add(db_attendance)
+    db.add(db_planning)
+    db.commit()
+    db.refresh(db_attendance)
+
+    return db_attendance, {
+        'old_values': sqlalchemy_object_as_dict(db_attendance), 
+        'new_values': sqlalchemy_object_as_dict(db_attendance)
+    }

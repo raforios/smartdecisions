@@ -264,3 +264,51 @@ class PhotographicReportResponseSchema(ReportBaseSchema):
     '''
     items: List[PhotoItemSchema]
     total_photos: int
+
+# --- 6. ATTENDANCE & GEOFENCING REPORT ---
+
+class AttendanceReportFilterSchema(BaseModel):
+    '''
+        Input filters for the Attendance & Geofencing Report.
+    '''
+    company_id: int = Query(..., description = 'Company ID.')
+    start_date: date = Query(..., description = 'Start date (YYYY-MM-DD).')
+    end_date: date = Query(..., description = 'End date (YYYY-MM-DD).')
+    user_id: Optional[int] = Query(None, description = 'Filter by User.')
+    point_of_sale_id: Optional[int] = Query(None, description = 'Filter by POS.')
+
+    class Config: # pylint: disable=too-few-public-methods
+        ''' Pydantic config '''
+        arbitrary_types_allowed = True
+
+class AttendanceReportItemSchema(ReportBaseSchema):
+    '''
+        Row details: Represents a single visit with execution data.
+    '''
+    attendance_id: int
+    user_id: int
+    point_of_sale_id: int
+    point_of_sale_name: str
+    point_of_sale_code: str
+
+    check_in_time: Optional[datetime]
+    check_in_distance_error: Optional[float] = Field(...,
+                            description = 'Distance from POS at Check-In (meters).')
+
+    check_out_time: Optional[datetime]
+    check_out_distance_error: Optional[float] = Field(...,
+                            description = 'Distance from POS at Check-Out (meters).')
+
+    duration_minutes: Optional[int] = Field(..., description = 'Total time spent at POS.')
+    status: str = Field(..., description = 'Status of the visit (COMPLETED, IN_PROGRESS).')
+
+class AttendanceReportResponseSchema(ReportBaseSchema):
+    '''
+        Response wrapper for the Attendance Report.
+    '''
+    generated_at: datetime = Field(default_factory = get_current_time_gmt)
+    period_start: date
+    period_end: date
+    total_visits: int
+    average_duration_minutes: float
+    items: List[AttendanceReportItemSchema]

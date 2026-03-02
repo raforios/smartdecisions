@@ -1,6 +1,7 @@
 '''
     Replenishments Models
 '''
+from typing import Optional
 from sqlalchemy import (
     Column,
     Integer,
@@ -194,6 +195,11 @@ class ComplementaryCompetition(Base):  # pylint: disable=too-few-public-methods
     product_name = Column(String(255), nullable = True)
     details = Column(Text, nullable = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+
+    @property
+    def pos_id(self) -> Optional[int]:
+        '''Alias for point_of_sale_id for schema compatibility.'''
+        return self.point_of_sale_id
 
     photos = relationship(
         'Photo',
