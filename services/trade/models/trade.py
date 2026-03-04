@@ -105,14 +105,14 @@ class Attendance(Base): # pylint: disable=too-few-public-methods
 
     # --- Check-In Data ---
     check_in_time = Column(DateTime, nullable = True)
-    check_in_latitude = Column(Numeric(10, 8), nullable = True)
-    check_in_longitude = Column(Numeric(10, 8), nullable = True)
+    check_in_latitude = Column(Numeric(16, 14), nullable = True)
+    check_in_longitude = Column(Numeric(16, 14), nullable = True)
     check_in_distance_error = Column(Numeric(10, 2), nullable = True) # Distance from POS in meters
 
     # --- Check-Out Data ---
     check_out_time = Column(DateTime, nullable = True)
-    check_out_latitude = Column(Numeric(10, 8), nullable = True)
-    check_out_longitude = Column(Numeric(10, 8), nullable = True)
+    check_out_latitude = Column(Numeric(16, 14), nullable = True)
+    check_out_longitude = Column(Numeric(16, 14), nullable = True)
     check_out_distance_error = Column(Numeric(10, 2), nullable = True)
 
     # Effective duration in minutes

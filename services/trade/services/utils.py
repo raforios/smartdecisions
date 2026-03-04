@@ -353,6 +353,7 @@ def _resolve_audit_data(final_result: Any, new_values: Any) -> Tuple[Any, Any]:
 
     return entity_id, new_values
 
+# pylint: disable=too-many-locals
 def audit_event(
     microservice_name: str,
     entity_name: str,
@@ -361,6 +362,7 @@ def audit_event(
     '''
         Decorator factory to send an audit event after a service function call.
     '''
+    # pylint: disable=too-many-locals
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):

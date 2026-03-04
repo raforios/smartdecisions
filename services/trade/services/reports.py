@@ -40,6 +40,7 @@ from services.utils import handle_service_errors
 # --- COMPLIANCE REPORT SERVICE ---
 
 @handle_service_errors('REPORTS')
+# pylint: disable=too-many-locals
 async def get_compliance_report_service(
     db: Session,
     filters: ComplianceFilterSchema
