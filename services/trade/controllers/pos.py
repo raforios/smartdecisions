@@ -249,7 +249,7 @@ async def update_inventory_item_controller(
         inventory_id = inventory_id,
         update_data = update_data
     )
-    
+
     db_item = result[0] if isinstance(result, tuple) else result
     return _map_inventory_item_to_schema(db_item)
 

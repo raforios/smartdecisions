@@ -1,7 +1,7 @@
 '''
     Common Schemas (Request/Response)
 '''
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 from fastapi import File, Form, UploadFile
 from pydantic import BaseModel, Field, ConfigDict
@@ -29,6 +29,15 @@ class PhotoResponseSchema(BaseSchema):
     description: Optional[str] = Field(
         None,
         description = 'Photo description (or alt_text).'
+    )
+    entity_type: str = Field (
+        ...,
+        description = 'This is the type of element to which the photo corresponds \
+        (e.g., PRODUCT, POS, BANDING).'
+    )
+    entity_id: int = Field(
+        ...,
+        description = 'Unique ID of the entity to which the photo corresponds.'
     )
     created_at: Optional[datetime] = Field(
         None,
@@ -64,3 +73,10 @@ class PhotoUploadData(BaseSchema):
     entity_id: int
     description: Optional[str]
     file: UploadFile
+
+class PhotoListResponseSchema(BaseSchema):
+    '''
+        Response schema for a paginated list of Photos.
+    '''
+    items: List[PhotoResponseSchema]
+    total: int

@@ -35,7 +35,7 @@ from schemas.impulses import (
     TradePromotionUpdateSchema
 )
 
-router = APIRouter(prefix = '/v1/impulses', tags = ['Trade - Impulses'])
+router = APIRouter(prefix = '/v1/impulses', tags = ['Impulses'])
 
 # --- 5. TRADE PROMOTION (BANDEO) ENDPOINTS ---
 

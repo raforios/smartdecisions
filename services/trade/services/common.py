@@ -2,7 +2,7 @@
     COmmon Business Logic
 '''
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 from models.common import Photo
@@ -156,3 +156,44 @@ async def add_photo_service(
     }
 
     return db_photo, auditable_data
+
+@handle_service_errors('TRADE')
+async def get_photos_list_service(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100
+) -> Tuple[List[Photo], int]:
+    '''
+        Retrieve a paginated list of all photos.
+    '''
+    total = db.query(Photo).count()
+    items = db.query(Photo).offset(skip).limit(limit).all()
+
+    return items, total
+
+@handle_service_errors('TRADE')
+async def get_photos_by_entity_service(
+    db: Session,
+    entity_type: str,
+    entity_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100
+) -> Tuple[List[Photo], int]:
+    '''
+        Retrieve a paginated list of photos filtered by entity type.
+        Optionally filters by entity_id if provided.
+    '''
+    # 1. Iniciamos la consulta base con el filtro obligatorio
+    query = db.query(Photo).filter(
+        Photo.entity_type == entity_type.upper()
+    )
+
+    # 2. Si enviaron un ID, agregamos la condición AND dinámicamente
+    if entity_id is not None:
+        query = query.filter(Photo.entity_id == entity_id)
+
+    # 3. Ejecutamos el conteo y la paginación
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+
+    return items, total

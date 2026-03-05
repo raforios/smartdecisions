@@ -34,7 +34,7 @@ from schemas.replenishments import (
     ReplenishmentReportResponseSchema,
 )
 
-router = APIRouter(prefix = '/v1/replenishment', tags = ['Trade - Replenishment'])
+router = APIRouter(prefix = '/v1/replenishment', tags = ['Replenishment'])
 
 # --- 7. REPLENISHMENT ACTIVITIES ENDPOINTS ---
 # These endpoints are linked to the visit ID (attendance_id) from LOCALIZATION

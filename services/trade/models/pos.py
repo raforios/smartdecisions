@@ -46,8 +46,8 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
     city_id = Column(Integer, nullable = False)
     zone_id = Column(Integer, nullable = False)
     address = Column(String(255), nullable = False)
-    latitude = Column(Numeric(10, 8), nullable = False)
-    longitude = Column(Numeric(10, 8), nullable = False)
+    latitude = Column(Numeric(16, 14), nullable = False)
+    longitude = Column(Numeric(16, 14), nullable = False)
     max_checkin_distance = Column(Integer, nullable = False, default = 0)
 
     # Operation and Classification
