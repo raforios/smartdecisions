@@ -38,13 +38,11 @@ def _map_inventory_item_to_schema(
     item: Any
 ) -> POSInventoryResponseSchema:
     '''
-        Manually maps the DB object to the Pydantic response schema.
+        Maps the DB object to the Pydantic response schema.
+        Fields product_sku and product_name are pre-populated in the Service.
     '''
-    return POSInventoryResponseSchema(
-        **item.__dict__,
-        product_sku = item.product.sku if item.product else 'N/A',
-        product_name = item.product.name if item.product else 'N/A'
-    )
+    # We use model_validate to handle the pre-populated attributes seamlessly
+    return POSInventoryResponseSchema.model_validate(item, from_attributes = True)
 
 def _map_pos_to_schema(
     db_pos: Any
@@ -205,11 +203,14 @@ async def create_inventory_item_controller(
     '''
         Controller to add a new inventory item to a POS.
     '''
-    db_item = await create_inventory_item_service(
+    # The service returns a Tuple[PointOfSaleInventory, Dict[str, Any]]
+    result = await create_inventory_item_service(
         db = db,
         pos_id = pos_id,
         inventory_data = inventory_data
     )
+
+    db_item = result[0] if isinstance(result, tuple) else result
     return _map_inventory_item_to_schema(db_item)
 
 @handle_service_errors('TRADE')
@@ -242,11 +243,14 @@ async def update_inventory_item_controller(
     '''
         Controller to update a specific inventory item.
     '''
-    db_item = await update_inventory_item_service(
+    # The service returns a Tuple[PointOfSaleInventory, Dict[str, Any]]
+    result = await update_inventory_item_service(
         db = db,
         inventory_id = inventory_id,
         update_data = update_data
     )
+    
+    db_item = result[0] if isinstance(result, tuple) else result
     return _map_inventory_item_to_schema(db_item)
 
 @handle_service_errors('TRADE')

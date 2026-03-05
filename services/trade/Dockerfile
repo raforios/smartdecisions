@@ -1,9 +1,10 @@
 # Dockerfile
 
 # Etapa 1: Construcción de dependencias
-ARG VARIANT=3.13
-ARG BUILDPLATFORM=linux/amd64
-FROM --platform=${BUILDPLATFORM} python:${VARIANT}-slim
+ARG VARIANT=3.14
+# ARG BUILDPLATFORM=linux/amd64
+# FROM --platform=${BUILDPLATFORM} python:${VARIANT}-slim
+FROM python:${VARIANT}-slim
 
 
 # Instalar dependencias básicas del sistema
@@ -18,22 +19,31 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Instala dependencias con compatibilidad para Lambda (manylinux2014)
-# RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+# RUN pip install --platform manylinux2014_x86_64 \
+#     --implementation cp \
+#     --python-version 3.14 \
+#     --only-binary=:all: \
+#     --target python \
+#     -r requirements.txt
 
-RUN pip install --platform manylinux2014_x86_64 \
-    --implementation cp \
-    --python-version 3.13 \
-    --only-binary=:all: \
-    --target python \
-    -r requirements.txt
+# Copia el resto de la app
+# COPY . .
+
+# Incluye todos los archivos en la carpeta python
+# RUN cp -r main.py controllers models routes schemas services python/
+
+# Crea el ZIP final
+# WORKDIR /app/python
+# RUN zip -r9 /app/lambda_function.zip .
+
+
+# Instala dependencias con compatibilidad para Lambda (manylinux2014)
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 # Copia el resto de la app
 COPY . .
 
-# Incluye todos los archivos en la carpeta python
-RUN cp -r main.py controllers models routes schemas services python/
+EXPOSE 3003
 
-# Crea el ZIP final
-WORKDIR /app/python
-RUN zip -r9 /app/lambda_function.zip .
+CMD ["python", "main.py"]
 
