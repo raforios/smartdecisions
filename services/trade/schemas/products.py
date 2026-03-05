@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 from fastapi import Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.common import (
     PhotoResponseSchema,
@@ -39,7 +39,7 @@ class ProductCategoryResponseSchema(ProductCategoryBaseSchema):
         '''
             Pydantic config.
         '''
-        orm_mode = True
+        model_config = ConfigDict(arbitrary_types_allowed=True)
 
 # --- PRODUCT SCHEMAS (UPDATED) ---
 
@@ -128,7 +128,7 @@ class ProductResponseSchema(ProductBaseSchema):
         '''
             Pydantic config.
         '''
-        orm_mode = True
+        model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class ProductListResponseSchema(BaseSchema):
     '''
@@ -243,7 +243,7 @@ class SKUEquivalencyResponseSchema(SKUEquivalencyBaseSchema):
         '''
             Pydantic config.
         '''
-        orm_mode = True
+        model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class SKUEquivalencyListResponseSchema(BaseSchema):
     '''
@@ -327,7 +327,7 @@ class ProductAssignmentPOSResponseSchema(BaseSchema):
         '''
             Pydantic config.
         '''
-        orm_mode = True
+        model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class ProductAssignmentPOSFilterSchema(BaseModel):
     '''

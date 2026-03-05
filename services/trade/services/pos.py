@@ -141,12 +141,20 @@ async def get_pos_by_id_service(
     '''
         Retrieves a PointOfSale record by ID with inventory.
     '''
-    return get_record(
+    db_pos = get_record(
         db, PointOfSale, pos_id,
         eager_load_options = [
             joinedload(PointOfSale.inventory).joinedload(PointOfSaleInventory.product)
         ]
     )
+
+    # Populate dynamic fields for Pydantic schema
+    for item in db_pos.inventory:
+        if item.product:
+            setattr(item, 'product_sku', item.product.sku)
+            setattr(item, 'product_name', item.product.name)
+
+    return db_pos
 
 @handle_service_errors('TRADE')
 async def get_pos_list_service(
@@ -180,7 +188,17 @@ async def get_pos_list_service(
         conditions.append(PointOfSale.status == filters.status) # Filter by Enum value
 
     query = query.filter(and_(*conditions))
-    return query.offset(skip).limit(limit).all(), query.count()
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+
+    # Populate dynamic fields for Pydantic schema in each POS inventory
+    for pos in items:
+        for item in pos.inventory:
+            if item.product:
+                setattr(item, 'product_sku', item.product.sku)
+                setattr(item, 'product_name', item.product.name)
+
+    return items, total
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'PointOfSale', 'UPDATE')
@@ -372,6 +390,12 @@ async def create_inventory_item_service(
     db.add(db_inv)
     db.commit()
     db.refresh(db_inv)
+
+    # Populate dynamic fields for schema
+    if db_inv.product:
+        setattr(db_inv, 'product_sku', db_inv.product.sku)
+        setattr(db_inv, 'product_name', db_inv.product.name)
+
     return db_inv, {'new_values': sqlalchemy_object_as_dict(db_inv)}
 
 @handle_service_errors('TRADE')
@@ -384,7 +408,14 @@ async def get_inventory_for_pos_service(
     get_record(db, PointOfSale, pos_id) # Validates POS existence
     query = db.query(PointOfSaleInventory).filter_by(point_of_sale_id=pos_id)\
         .options(joinedload(PointOfSaleInventory.product))
-    return query.all(), query.count()
+    items = query.all()
+
+    for item in items:
+        if item.product:
+            setattr(item, 'product_sku', item.product.sku)
+            setattr(item, 'product_name', item.product.name)
+
+    return items, query.count()
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'PointOfSaleInventory', 'UPDATE')
@@ -407,6 +438,12 @@ async def update_inventory_item_service(
 
     db.commit()
     db.refresh(db_item)
+
+    # Populate dynamic fields for schema
+    if db_item.product:
+        setattr(db_item, 'product_sku', db_item.product.sku)
+        setattr(db_item, 'product_name', db_item.product.name)
+
     return db_item, {
         'old_values': old_values,
         'new_values': sqlalchemy_object_as_dict(db_item)

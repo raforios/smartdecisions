@@ -4,7 +4,7 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from schemas.common import (
     PhotoResponseSchema,
@@ -128,6 +128,8 @@ class POSInventoryResponseSchema(BaseSchema):
         None,
         description = 'Timestamp when the record was created.'
     )
+
+    model_config = ConfigDict(from_attributes=True)
 
 class POSInventoryListResponseSchema(BaseSchema):
     '''
@@ -372,6 +374,8 @@ class PointOfSaleResponseSchema(PointOfSaleBaseSchema):
         description = 'Timestamp when the record was created.'
     )
 
+    model_config = ConfigDict(from_attributes=True)
+
 class POSListResponseSchema(BaseSchema):
     '''
         Response schema for a paginated list of Points of Sale.
@@ -396,11 +400,7 @@ class POSFilterSchema(BaseModel):
     status: Optional[PointOfSaleStatus] = Query(None,
                                         description = 'Filter by operational status of the POS.')
 
-    class Config:# pylint: disable=too-few-public-methods
-        '''
-            'Pydantic config.'
-        '''
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class PointOfSaleBulkCreateSchema(BaseSchema):
     '''
@@ -537,3 +537,5 @@ class PointOfSaleNestedResponseSchema(PointOfSaleBaseSchema):
         description = 'Timestamp when the record was created.'
     )
     # NOTE: 'inventory: List[POSInventoryResponseSchema]' is deliberately omitted here.
+
+    model_config = ConfigDict(from_attributes=True)

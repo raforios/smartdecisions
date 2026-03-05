@@ -728,12 +728,25 @@ async def create_product_assignment_service(
         assignment_data.point_of_sale_id}'
     logger.info(message)
 
+    # 1. Validate POS Existence
+    pos = db.query(PointOfSale).filter(
+        PointOfSale.id == assignment_data.point_of_sale_id,
+        PointOfSale.company_id == assignment_data.company_id
+    ).first()
+
+    if not pos:
+        error_msg = f'POS with ID {assignment_data.point_of_sale_id} not found for this company.'
+        logger.error(error_msg)
+        raise RegisterNotFoundError(detail = error_msg)
+
+    # 2. Resolve Product ID
     product_id = get_product_id_by_sku(
         db = db,
         company_id = assignment_data.company_id,
         sku = assignment_data.product_sku
     )
 
+    # 3. Check for duplicates
     exists = db.query(ProductAssignmentPOS).filter(
         ProductAssignmentPOS.company_id == assignment_data.company_id,
         ProductAssignmentPOS.product_id == product_id,
