@@ -38,22 +38,44 @@ async def process_mining_etl_service(
     file_content: bytes,
     delimiter: str = ','
 ) -> Dict[str, Any]:
-    ''' Optimized ETL logic using Pandas with duplicate tracking. '''
+    ''' Optimized ETL logic using Pandas with duplicate tracking and column sanitization. '''
     try:
+        # Cargamos el dataframe
         df = pd.read_csv(io.BytesIO(file_content), sep=delimiter)
-        df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True).dt.date
+
+        # 1. SANITIZACIÓN DE CABECERAS: Elimina espacios y saltos de línea ocultos (\n, \r)
+        df.columns = df.columns.str.strip()
+
+        # 2. VALIDACIÓN TEMPRANA: Asegurar que las columnas existan tras limpiar o
+        # si falló el delimitador
+        required_columns = ['Fecha', 'Mineral', 'Unidad', 'Baja', 'Alta']
+        missing_cols = [col for col in required_columns if col not in df.columns]
+
+        if missing_cols:
+            raise ValueError(
+                f'Faltan columnas o delimitador "{delimiter}" incorrecto. No se halló: {
+                missing_cols}'
+            )
+
+        # Limpieza y normalización de tipos
+        df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst = True).dt.date
         df['Baja'] = df['Baja'].apply(clean_currency_pro)
         df['Alta'] = df['Alta'].apply(clean_currency_pro)
 
+    except ValueError as ve:
+        error_msg = f'Validation Error processing CSV: {ve}'
+        logger.error(error_msg, exc_info = True)
+        raise InvalidInputError(detail=str(ve)) from ve
     except Exception as e:
         error_msg = f'Error processing CSV: {e}'
-        logger.error(error_msg, exc_info=True)
-        # <-- CORRECCIÓN: Lanzar excepción en lugar de retornar un diccionario
-        raise InvalidInputError(detail='Formato de archivo CSV inválido o corrupto.') from e
+        logger.error(error_msg, exc_info = True)
+        raise InvalidInputError(
+            detail = 'Formato de archivo CSV inválido o corrupto.'
+        ) from e
 
     processed, skipped = 0, 0
 
-    # <-- CORRECCIÓN: Uso de transacciones anidadas para operaciones en bloque
+    # Uso de transacciones anidadas para operaciones en bloque
     with db.begin_nested():
         for _, row in df.iterrows():
             mineral = db.query(Mineral).filter(Mineral.name == row['Mineral']).first()
