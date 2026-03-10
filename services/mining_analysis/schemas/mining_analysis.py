@@ -1,8 +1,8 @@
 '''
     Mining Analysis Schemas (Request/Response)
 '''
-from typing import Optional
 from datetime import datetime, date
+from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 class MiningAnalysisBaseSchema(BaseModel):
@@ -13,8 +13,8 @@ class MiningAnalysisBaseSchema(BaseModel):
 
 class MineralBase(BaseModel):
     ''' Base schema for a mineral. '''
-    name: str = Field(..., max_length=100, description="Nombre del mineral.")
-    unit: str = Field(..., max_length=20, description="Unidad de medida (ej. LF, OT).")
+    name: str = Field(..., max_length=100, description='Nombre del mineral.')
+    unit: str = Field(..., max_length=20, description='Unidad de medida (ej. LF, OT).')
 
 class MineralResponseSchema(MineralBase, MiningAnalysisBaseSchema):
     ''' Response schema for a mineral including ID. '''
@@ -40,5 +40,19 @@ class BulkUploadMiningResponseSchema(BaseModel):
     ''' Response schema for the ETL process. '''
     message: str
     processed_records: int
-    status: str = "success"
+    status: str = 'success'
     skipped_records: int = 0
+
+class RoyaltySummaryItem(BaseModel):
+    ''' Item schema for royalty summary. '''
+    year: int
+    department: str
+    total_recaudado: float
+    subtotal: float
+    gov_dept: float
+    gov_muni: float
+
+class RoyaltySummaryResponse(BaseModel):
+    ''' Response schema for royalty summary. '''
+    status: str
+    data: List[RoyaltySummaryItem]
