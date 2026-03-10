@@ -70,26 +70,26 @@ def _load_facts(db: Session, df_facts: pd.DataFrame) -> Tuple[int, int]:
         db.flush()
     return processed, skipped
 
-async def process_royalties_excel_service(db: Session, file_content: bytes) -> Dict[str, Any]:
-    ''' Extracts, transforms and loads multi-sheet Excel data into the Star Schema. '''
+async def process_royalties_excel_service(
+    db: Session,
+    file_content: bytes
+) -> Dict[str, Any]:
+    ''' Extracts, transforms and loads multi-sheet Excel data directly from bytes. '''
     try:
         excel_data = pd.ExcelFile(io.BytesIO(file_content), engine='openpyxl')
         df_deptos = pd.read_excel(excel_data, sheet_name='Detalle_Dptos')
         df_munis = pd.read_excel(excel_data, sheet_name='Detalle_Div-Pol')
         df_facts = pd.read_excel(excel_data, sheet_name='Coparticipación_Bs')
     except Exception as e:
-        error_msg = f'Error al procesar el archivo Excel: {str(e)}'
-        logger.error(error_msg, exc_info=True)
-        # Boilerplate: Lanzamos excepción personalizada en lugar de devolver dict
-        raise InvalidInputError(
-            detail = 'El archivo no es válido o faltan hojas requeridas.'
-        ) from e
+        error_msg = f'Error al procesar el Excel: {str(e)}'
+        logger.error(error_msg, exc_info = True)
+        raise InvalidInputError(detail='El archivo no es válido o está corrupto.') from e
 
-    # Refactorización: Dividido en helpers para evitar "Too many locals" (R0914)
+    # (Llamadas a tus funciones auxiliares _load_dimensions y _load_facts)
     _load_dimensions(db, df_deptos, df_munis)
     processed, skipped = _load_facts(db, df_facts)
 
-    db.commit() # Commit final de toda la transacción
+    db.commit()
 
     message = f'ETL de Regalías finalizado. Procesados: {processed}. Omitidos: {skipped}.'
     logger.info(message)

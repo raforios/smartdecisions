@@ -440,6 +440,11 @@ async def send_usage_log(log_data: dict):
         logger.warning('EVENTS_SERVICE_URL is not set. Cannot send usage log.')
         return
 
+    if log_data.get('response_body'):
+        body_str = str(log_data['response_body'])
+        log_data['response_body'] = body_str[:2000] + '... [TRUNCATED]' \
+            if len(body_str) > 2000 else body_str
+
     url = EVENTS_LOG_URL
     response = await _perform_request('POST', url, headers = {}, payload = log_data)
     response.raise_for_status()

@@ -117,14 +117,16 @@ async def get_all_prices_service(db: Session) -> List[MiningPrice]:
 
 async def get_royalties_summary_service(db: Session) -> List[Dict[str, Any]]:
     '''
-        Service to aggregate royalty facts by Year and Department from the database.
-        Encapsulates all SQL logic to keep the controller clean.
+        Service to aggregate royalty facts by Year, Month, Department, and Municipality.
     '''
     year_column = extract('year', RoyaltyPayment.period_date).label('year')
+    month_column = extract('month', RoyaltyPayment.period_date).label('month')
 
     results = db.query(
         year_column,
+        month_column,
         Department.name.label('department'),
+        Municipality.name.label('municipality'),
         func.sum(RoyaltyPayment.total_collected).label('total_recaudado'),
         func.sum(RoyaltyPayment.subtotal).label('subtotal'),
         func.sum(RoyaltyPayment.gov_dept).label('gov_dept'),
@@ -135,13 +137,17 @@ async def get_royalties_summary_service(db: Session) -> List[Dict[str, Any]]:
         Department, Municipality.department_id == Department.id
     ).group_by(
         year_column,
-        Department.name
+        month_column,
+        Department.name,
+        Municipality.name
     ).all()
 
     return [
         {
             'year': int(r.year),
+            'month': int(r.month),
             'department': r.department,
+            'municipality': r.municipality,
             'total_recaudado': float(r.total_recaudado),
             'subtotal': float(r.subtotal),
             'gov_dept': float(r.gov_dept),

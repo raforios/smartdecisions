@@ -46,7 +46,9 @@ class BulkUploadMiningResponseSchema(BaseModel):
 class RoyaltySummaryItem(BaseModel):
     ''' Item schema for royalty summary. '''
     year: int
+    month: int
     department: str
+    municipality: str
     total_recaudado: float
     subtotal: float
     gov_dept: float

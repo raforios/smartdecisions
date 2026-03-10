@@ -88,18 +88,19 @@ async def upload_royalties_excel(
     db: Session = Depends(get_db_dependency),
     current_user: str = Depends(get_current_user)
 ):
-    ''' Endpoint to trigger the Excel ETL process. '''
-    message = f'User: {current_user}. Uploaded royalties Excel file: {file.filename}.'
+    ''' Endpoint to trigger the Excel ETL process directly in memory. '''
+    message = f'User: {current_user}. Uploading file: {file.filename}'
     logger.info(message)
 
+    # Extraemos los bytes físicos en la capa de rutas
     content = await file.read()
 
     return await upload_royalties_controller(
         db = db,
-        file_content = content,
-        file_name = file.filename,
         request = request,
-        current_user = current_user
+        current_user = current_user,
+        file_name = file.filename,
+        file_content = content # Pasamos los bytes
     )
 
 @router.get('/royalties/summary', response_model = RoyaltySummaryResponse)
