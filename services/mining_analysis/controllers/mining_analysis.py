@@ -1,6 +1,7 @@
 '''
     Mining Analysis Controllers
 '''
+from decimal import Decimal
 from typing import Any, Dict, List
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -64,22 +65,23 @@ async def get_mineral_prices_controller(
 async def get_royalties_summary_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
-    current_user: str
+    current_user: str,
+    year: int = None,
+    quarter: int = None
 ) -> RoyaltySummaryResponse:
     '''
-        Controller to orchestrate the retrieval of royalty summaries.
-        Strictly handles telemetry and response formatting, delegating DB
-        logic to the service layer.
+        Orchestrates the retrieval of royalty summaries with analytics.
     '''
-
-    message = f'User: {current_user}. Executing get_royalties_summary_controller.'
+    message = f'User: {current_user} requesting analytics for Year: {year}'
     logger.info(message)
 
-    # --- DELEGACIÓN ESTRICTA A LA CAPA DE SERVICIOS ---
-    data = await get_royalties_summary_service(db)
+    result = await get_royalties_summary_service(
+        db,
+        year = year,
+        quarter = quarter
+    )
 
-    return RoyaltySummaryResponse(status = 'success', data = data)
-
+    return RoyaltySummaryResponse(**result)
 
 @handle_service_errors('MINING_ANALYSIS')
 async def upload_royalties_controller(
@@ -87,18 +89,18 @@ async def upload_royalties_controller(
     request: Request, # pylint: disable=unused-argument
     current_user: str,
     file_name: str,
-    file_content: bytes
+    file_content: bytes,
+    exchange_rate: Decimal = Decimal('6.96')
 ) -> Dict[str, Any]:
     '''
-        Controller to handle in-memory bulk upload of Royalties.
+        Controller to handle in-memory bulk upload of Royalties with currency conversion.
     '''
-    message = f'Starting in-memory ETL for file: {file_name}'
+    message = f'Starting in-memory ETL for file: {file_name} with rate: {exchange_rate}'
     logger.info(message)
 
-    # 1. Procesamiento directo en la capa de servicios
-    result = await process_royalties_excel_service(db, file_content)
+    # Procesamiento con tipo de cambio
+    result = await process_royalties_excel_service(db, file_content, exchange_rate)
 
-    # 2. Auditoría Manual Segura (Evita el Error 500 del decorador tratando de leer bytes)
     _trigger_bulk_audit(
         microservice = 'MINING_ANALYSIS',
         entity = 'RoyaltyPayment',

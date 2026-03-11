@@ -2,7 +2,7 @@
     Mining Analysis Schemas (Request/Response)
 '''
 from datetime import datetime, date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 class MiningAnalysisBaseSchema(BaseModel):
@@ -44,17 +44,43 @@ class BulkUploadMiningResponseSchema(BaseModel):
     skipped_records: int = 0
 
 class RoyaltySummaryItem(BaseModel):
-    ''' Item schema for royalty summary. '''
+    ''' Item schema for royalty summary extracting all BOB and USD metrics. '''
     year: int
     month: int
     department: str
     municipality: str
-    total_recaudado: float
-    subtotal: float
-    gov_dept: float
-    gov_muni: float
+
+    # Métricas BOB
+    total_recaudado_bob: float
+    comision_bob: float
+    subtotal_bob: float
+    distribucion_dept_bob: float
+    distribucion_muni_bob: float
+
+    # Métricas USD
+    total_recaudado_usd: float
+    comision_usd: float
+    subtotal_usd: float
+    distribucion_dept_usd: float
+    distribucion_muni_usd: float
+
+    # KPIs analíticos
+    variacion_monto_bob: Optional[float] = 0.0
+    variacion_porcentaje: Optional[float] = 0.0
+
+class MiningAnalyticsKPIs(BaseModel):
+    ''' Schema for summary strategic insights. '''
+    total_recaudado_periodo: float = 0.0
+    municipios_destacados: List[Dict[str, Any]] = []
+    alerta_caida_critica: List[Dict[str, Any]] = []
+
+class RoyaltySummaryData(BaseModel):
+    ''' Internal data structure for the response. '''
+    detailed_records: List[RoyaltySummaryItem]
+    summary_kpis: MiningAnalyticsKPIs
 
 class RoyaltySummaryResponse(BaseModel):
-    ''' Response schema for royalty summary. '''
+    ''' Main response schema for ministerial reporting. '''
     status: str
-    data: List[RoyaltySummaryItem]
+    message: str
+    data: RoyaltySummaryData

@@ -78,19 +78,27 @@ class Municipality(Base):# pylint: disable=too-few-public-methods
 class RoyaltyPayment(Base):# pylint: disable=too-few-public-methods
     '''
         Royalty payment fact table for the Star Schema.
+        Stores both BOB and calculated USD metrics in a single record.
     '''
     __tablename__ = 't_royalties'
 
     id = Column(Integer, primary_key = True, index = True)
     municipality_id = Column(Integer, ForeignKey('t_municipalities.id'), nullable = False)
-    period_date = Column(Date, index = True, nullable = False) # Primer día del mes evaluado
+    period_date = Column(Date, index = True, nullable = False)
 
     # Métricas Financieras (Bs.)
-    total_collected = Column(Numeric(18, 4), default = 0)
-    commission = Column(Numeric(18, 4), default = 0)
-    subtotal = Column(Numeric(18, 4), default = 0)
-    gov_dept = Column(Numeric(18, 4), default = 0)
-    gov_muni = Column(Numeric(18, 4), default = 0)
+    total_collected_bob = Column(Numeric(18, 4), default = 0)
+    commission_bob = Column(Numeric(18, 4), default = 0)
+    subtotal_bob = Column(Numeric(18, 4), default = 0)
+    gov_dept_bob = Column(Numeric(18, 4), default = 0)
+    gov_muni_bob = Column(Numeric(18, 4), default = 0)
+
+    # Métricas Financieras (USD)
+    total_collected_usd = Column(Numeric(18, 4), default = 0)
+    commission_usd = Column(Numeric(18, 4), default = 0)
+    subtotal_usd = Column(Numeric(18, 4), default = 0)
+    gov_dept_usd = Column(Numeric(18, 4), default = 0)
+    gov_muni_usd = Column(Numeric(18, 4), default = 0)
 
     # Restricción: Un solo registro por municipio y mes
     __table_args__ = (

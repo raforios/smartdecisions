@@ -1,7 +1,7 @@
 '''
     Mining Analysis: routes handler
 '''
-from typing import List
+from typing import List, Optional
 from fastapi import (
     APIRouter,
     Depends,
@@ -44,7 +44,8 @@ async def upload_mining_data_endpoint(
     '''
         Endpoint to trigger the mining data ETL process from a CSV file.
     '''
-    message = f'User: {current_user}. Uploaded file: {file.filename} with delimiter "{delimiter}".'
+    message = f'User: {current_user}. Uploaded file: {file.filename} with delimiter "{
+        delimiter}".'
 
     logger.info(message)
 
@@ -106,6 +107,7 @@ async def upload_royalties_excel(
 @router.get('/royalties/summary', response_model = RoyaltySummaryResponse)
 async def get_royalties_summary(
     request: Request,
+    year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
     db: Session = Depends(get_db_dependency),
     current_user: str = Depends(get_current_user)
 ):
@@ -116,5 +118,6 @@ async def get_royalties_summary(
     return await get_royalties_summary_controller(
         db = db,
         request = request,
-        current_user = current_user
+        current_user = current_user,
+        year = year
     )
