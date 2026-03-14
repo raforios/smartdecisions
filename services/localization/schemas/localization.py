@@ -375,5 +375,3 @@ class GroupLastKnownLocationsResponseSchema(BaseModel):
         Response schema for a list of last known locations for multiple users.
     '''
     locations: List[LastKnownLocationResponseSchema]
-
-# --- ATTENDANCE SEARCH SCHEMAS (Integration with TRADE) ---

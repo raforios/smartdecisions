@@ -26,6 +26,7 @@ from services.crud import (
 )
 from services.utils import (
     audit_event,
+    get_current_time_gmt,
     handle_service_errors,
     perform_bulk_upload,
     sqlalchemy_object_as_dict
@@ -841,3 +842,62 @@ async def get_last_known_locations_service(
     message = f'Retrieved {len(locations)} last known locations.'
     logger.info(message)
     return locations
+
+@handle_service_errors('LOCALIZATION')
+@audit_event('LOCALIZATION', 'ExecutedRoute', 'REOPEN')
+async def reopen_executed_route(
+    db: Session,
+    executed_route_id: int
+) -> tuple[ExecutedRoute, dict]:
+    '''
+        Reopens a closed executed route by clearing its end-related fields.
+        Validates that the reopening happens on the same day as the start_time
+        and that the associated planned route is ACTIVE.
+    '''
+    message = f'Attempting to reopen executed route {executed_route_id}.'
+    logger.debug(message)
+
+    # 1. Obtener registro y valores antiguos para auditoría
+    db_record = get_record(db, ExecutedRoute, executed_route_id)
+    old_values = sqlalchemy_object_as_dict(db_record)
+
+    # 2. Validación de Idempotencia: ¿Ya está abierta?
+    if db_record.end_time is None:
+        error_msg = f'Executed route {executed_route_id} is already open.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = error_msg)
+
+    # 3. Validación de "Mismo Día"
+    current_time = get_current_time_gmt()
+    if db_record.start_time.date() != current_time.date():
+        error_msg = 'Cannot reopen route: The operation must be performed on \
+            the same day it was started.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = error_msg)
+
+    # 4. Validación de Estado de Ruta Planificada (Solo si está vinculada)
+    if db_record.planned_route_id:
+        if db_record.planned_route.status != PlannedRouteStatusEnum.ACTIVE:
+            error_msg = f'Cannot reopen: Associated planned route is in status {
+                db_record.planned_route.status}.'
+            logger.warning(error_msg)
+            raise InvalidInputError(detail = error_msg)
+
+    # 5. Ejecutar Reapertura (Limpieza de campos)
+    db_record.end_time = None
+    db_record.end_latitude = None
+    db_record.end_longitude = None
+    db_record.max_distance_end_point = None
+
+    db.commit()
+    db.refresh(db_record)
+
+    message = f'Executed route {executed_route_id} successfully reopened.'
+    logger.info(message)
+
+    auditable_data = {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_record)
+    }
+
+    return db_record, auditable_data

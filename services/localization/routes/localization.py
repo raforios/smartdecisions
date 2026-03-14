@@ -23,6 +23,7 @@ from controllers.localization import (
     register_executed_point_controller,
     get_stats_points_visited_controller,
     get_route_comparisons_controller,
+    reopen_executed_route_controller,
     update_executed_route_end_time_controller,
     update_planned_point_controller,
     update_planned_route_controller,
@@ -477,6 +478,31 @@ async def update_executed_route_end_time_endpoint(
         executed_route_id = executed_route_id,
         update_data = update_data,
         request = request,
+        current_user = current_user
+    )
+
+@router.patch(
+    '/routes/executed/{executed_route_id}/reopen',
+    response_model = ExecutedRouteResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Reopen a closed executed route',
+    description = '''Clears the end_time and end location data for an executed route,
+                allowing it to be continued if it is the same day.'''
+)
+async def reopen_executed_route_endpoint(
+    executed_route_id: int = Path(..., description = 'ID of the executed route to reopen.'),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to reopen an executed route.
+    '''
+    message = f'User: {current_user}. Request to reopen executed route: {executed_route_id}'
+    logger.info(message)
+
+    return await reopen_executed_route_controller(
+        db = db,
+        executed_route_id = executed_route_id,
         current_user = current_user
     )
 

@@ -27,6 +27,7 @@ from services.localization import (
     get_last_known_locations_service,
     get_route_comparisons,
     get_statistics_user_points,
+    reopen_executed_route,
     update_executed_route_end_time,
     update_planned_point,
     update_planned_route_service,
@@ -546,3 +547,22 @@ async def get_last_known_locations_controller(
     ]
 
     return GroupLastKnownLocationsResponseSchema(locations = locations)
+
+@handle_service_errors('LOCALIZATION')
+async def reopen_executed_route_controller(
+    db: Session,
+    executed_route_id: int,
+    current_user: str # pylint: disable=unused-argument
+) -> ExecutedRouteResponseSchema:
+    '''
+        Controller to handle the reopening of an executed route.
+    '''
+    message = f'Starting controller operation: reopen executed route for ID {executed_route_id}'
+    logger.info(message)
+
+    result = await reopen_executed_route(
+        db = db,
+        executed_route_id = executed_route_id
+    )
+
+    return ExecutedRouteResponseSchema.model_validate(result, from_attributes = True)

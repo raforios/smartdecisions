@@ -17,20 +17,20 @@ SECRET_KEY = os.environ.get('SECRET_KEY') or \
                       _LOCAL_ENV_PARAMS.get('SECRET_KEY')
 
 if not SECRET_KEY:
-    ERROR_MSG = 'SECRET_KEY is not configured in environment or .env.'
-    logger.critical(ERROR_MSG)
+    error_msg = 'SECRET_KEY is not configured in environment or .env.'
+    logger.critical(error_msg)
     raise ServiceUnavailableError(
-        detail = ERROR_MSG
+        detail = error_msg
     )
 
 ALGORITHM = os.environ.get('ALGORITHM') or \
                       _LOCAL_ENV_PARAMS.get('ALGORITHM')
 
 if not ALGORITHM:
-    ERROR_MSG = 'ALGORITHM for JWT is not configured in environment or .env.'
-    logger.critical(ERROR_MSG)
+    error_msg = 'ALGORITHM for JWT is not configured in environment or .env.'
+    logger.critical(error_msg)
     raise ServiceUnavailableError(
-        detail = ERROR_MSG
+        detail = error_msg
     )
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
