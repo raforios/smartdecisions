@@ -2,6 +2,7 @@
     Business logic services for the Forms microservice.
 '''
 from typing import Dict, Any, List, Optional, Tuple
+from pydantic import BaseModel
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +15,7 @@ from models.responses import (
     FormAnswer
 )
 from schemas.responses import (
+    FormResponseBulkUpdateSchema,
     FormResponseFilters,
     FormResponseFlowCreate,
     FormResponseUpdate,
@@ -36,9 +38,11 @@ from services.crud import (
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
+    _handle_files_service,
     get_current_time_gmt,
     handle_service_errors,
     audit_event,
+    perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
 
@@ -541,3 +545,115 @@ async def delete_person_logic(
     }
 
     return person_id, auditable_data
+
+# Añadir en services/responses.py (importar FormResponseBulkUpdateSchema)
+
+def _process_affiliation_csv_data(
+    rows: List[Dict[str, Any]],
+    bulk_schema: BaseModel
+) -> List[Dict[str, Any]]:
+    '''
+        Processes CSV data for affiliations, validating each row against the schema.
+    '''
+    processed_data = []
+    for row in rows:
+        try:
+            # Handle empty strings from CSV as None for optional fields
+            cleaned_row = {
+                k: (v if v != '' else None) for k, v in row.items()
+            }
+            row_data = bulk_schema(**cleaned_row)
+            processed_data.append(row_data.model_dump())
+        except (ValueError, TypeError) as e:
+            raise InvalidInputError(
+                detail = f'Invalid data format in row: {row}. Error: {e}'
+            ) from e
+    return processed_data
+
+async def _perform_atomic_db_update_for_affiliations(
+    db: Session,
+    processed_data: List[Dict[str, Any]],
+    file_name: str,
+    auth_token: str
+) -> Dict[str, int]:
+    '''
+        Performs atomic database updates for form responses and their flow history.
+        Cleans up the uploaded file from S3 if a validation error occurs.
+    '''
+    records_updated = 0
+    with db.begin_nested():
+        for data in processed_data:
+            form_response = db.query(FormResponse).filter(
+                FormResponse.service_id == data['service_id'],
+                FormResponse.affiliation_number == data['affiliation_number']
+            ).first()
+
+            if not form_response:
+                # Limpieza en S3 antes de abortar la transacción
+                await _handle_files_service(
+                    action = 'delete',
+                    file_name = file_name,
+                    auth_token = auth_token
+                )
+                error_msg = f'FormResponse not found for service {data["service_id"]
+                            } and affiliation {data["affiliation_number"]}.'
+                logger.error(error_msg)
+                raise RegisterNotFoundError(detail = error_msg)
+
+            initial_status = form_response.status
+            next_status = data['status']
+
+            if next_status == 'REJECTED' and not data.get('rejection_reason'):
+                # Limpieza en S3 antes de abortar la transacción
+                await _handle_files_service(
+                    action = 'delete',
+                    file_name = file_name,
+                    auth_token = auth_token
+                )
+                raise InvalidInputError(
+                    detail = f'Rejection reason is required for REJECTED status in affiliation {
+                        data["affiliation_number"]}.'
+                )
+
+            form_response.status = next_status
+            form_response.user_id = data['user_id']
+            if data.get('rejection_reason'):
+                form_response.rejection_reason = data['rejection_reason']
+
+            flow_record = FormResponseFlow(
+                form_response_id = form_response.id,
+                user_id = data['user_id'],
+                initial_status = initial_status,
+                next_status = next_status,
+                observations = data.get('observations')
+            )
+            db.add(flow_record)
+
+            records_updated += 1
+
+    return {'records_updated': records_updated}
+
+async def bulk_update_affiliations_service(
+    db: Session,
+    file_name: str,
+    auth_token: str,
+    delimiter: str
+) -> Dict[str, Any]:
+    '''
+        Service function to handle the bulk update of affiliation data.
+        Reuses the perform_bulk_upload utility.
+    '''
+    message = 'Starting bulk update process for affiliations...'
+    logger.info(message)
+
+    result = await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = FormResponseBulkUpdateSchema,
+        processor_func = _process_affiliation_csv_data,
+        inserter_func = _perform_atomic_db_update_for_affiliations,
+        delimiter = delimiter
+    )
+
+    return result

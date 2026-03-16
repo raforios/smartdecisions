@@ -7,12 +7,14 @@ import time
 import decimal
 import asyncio
 import json
+import enum
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Type, Tuple
 import requests as req
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile, status
+
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
@@ -47,12 +49,9 @@ FILES_SERVICE_URL = ENV_VARS['FILES_SERVICE_URL']
 TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
 BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 BUCKET_PATH = ENV_VARS['BUCKET_PATH']
-EVENTS_AUDIT_URL = None
-EVENTS_LOG_URL = None
+EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL else None
+EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
 
-if EVENTS_SERVICE_URL:
-    EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit'
-    EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log'
 
 if FILES_SERVICE_URL:
     UPLOAD_ENDPOINT = f'{FILES_SERVICE_URL}/v1/s3/upload'
@@ -61,7 +60,7 @@ if FILES_SERVICE_URL:
 def get_current_time_gmt() -> datetime:
     '''
         Returns the current datetime object aware of the target timezone.
-        This function should be used as the default value for all SQLAlchemy 
+        This function should be used as the default value for all SQLAlchemy
         DateTime columns to ensure database consistency.
     '''
     tz = ZoneInfo(TARGET_TIMEZONE)
@@ -69,12 +68,21 @@ def get_current_time_gmt() -> datetime:
 
 def sqlalchemy_object_as_dict(obj):
     '''
-        Helper function to serialize a SQLAlchemy object to a dictionary.
+        Helper function to serialize a SQLAlchemy object to a dictionary,
+        converting complex types like datetime and Decimal to simple types.
     '''
-    return {
-        c.key: getattr(obj, c.key)
-        for c in sa_inspect(obj).mapper.column_attrs
-    }
+    data = {}
+    for c in sa_inspect(obj).mapper.column_attrs:
+        value = getattr(obj, c.key)
+
+        if isinstance(value, (date, datetime)):
+            data[c.key] = value.isoformat()
+        elif isinstance(value, decimal.Decimal):
+            data[c.key] = float(value)
+        else:
+            data[c.key] = value
+
+    return data
 
 async def _perform_request(
     method: str,
@@ -116,7 +124,7 @@ async def _perform_request(
 
 class CustomJSONEncoder(json.JSONEncoder):
     '''
-        JSON encoder to handle date and datetime objects.
+        JSON encoder to handle date and datetime objects, Pydantic models, and custom Enums.
     '''
     def default(self, o):
         if isinstance(o, (date, datetime)):
@@ -125,6 +133,8 @@ class CustomJSONEncoder(json.JSONEncoder):
             return o.model_dump()
         if isinstance(o, decimal.Decimal):
             return float(o)
+        if isinstance(o, enum.Enum): # New condition for Enums
+            return o.value
         return super().default(o)
 
 class UsageLogData(BaseModel):
@@ -149,7 +159,7 @@ async def _process_and_send_usage_log(
     '''
     try:
         if isinstance(log_data.response_body, int):
-            log_data.response_body =  {
+            log_data.response_body = {
                 'message': f'Register with ID: {log_data.response_body} deleted successfully.'
             }
 
@@ -181,6 +191,91 @@ async def _get_request_body_for_logging(request: Request) -> dict | None:
 
     return {'detail': f'Content-Type {content_type} not logged.'}
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def _finalize_and_log(
+    request: Request,
+    microservice_name: str,
+    status_code: int,
+    response_data: Any,
+    start_time: float,
+    current_user: Optional[str],
+    with_log: bool = True
+):
+    '''
+        Helper function to handle final logging operations to reduce complexity
+        in the main decorator.
+    '''
+    if request and EVENTS_LOG_URL:
+        end_time = time.perf_counter()
+        user_app = current_user if current_user else 'anonymous'
+        request_body = await _get_request_body_for_logging(request)
+
+        log_data = UsageLogData(
+            microservice = microservice_name,
+            endpoint = request.url.path,
+            method = request.method,
+            status_code = status_code,
+            ip_address = request.client.host,
+            user_app = user_app,
+            request_body = request_body,
+            response_time_ms = int((end_time - start_time) * 1000)
+        )
+
+        if with_log:
+            if isinstance(response_data, list) and all(isinstance(item,
+                                                BaseModel) for item in response_data):
+                log_data.response_body = [item.model_dump() for item in response_data]
+            elif isinstance(response_data, BaseModel):
+                log_data.response_body = response_data.model_dump()
+            elif isinstance(response_data, dict) and 'detail' in response_data:
+                # If response_data is already a dict with 'detail', use it as is
+                log_data.response_body = response_data
+            else:
+                log_data.response_body = response_data
+        else:
+            log_data.response_body = None
+
+        await _process_and_send_usage_log(log_data)
+
+def _handle_exception(
+    e: Exception,
+    db: Optional[Session] = None,
+    func_name: str = 'unknown_function'
+) -> Tuple[int, Any]:
+    '''
+        Helper to handle various exceptions, log them, and return appropriate status code
+        and detail for HTTPException.
+    '''
+    status_code: int
+    detail: Any
+
+    if isinstance(e, SQLAlchemyError):
+        if db:
+            db.rollback()
+        error_msg = f'Database error in {func_name}: {e}'
+        logger.error(error_msg, exc_info=True)
+        status_code = 500
+        detail = str(e)
+    elif isinstance(e, RegisterNotFoundError):
+        status_code = 404
+        detail = str(e)
+    elif isinstance(e, (InvalidInputError, RegisterAlreadyExistsError)):
+        status_code = 400
+        detail = str(e)
+    elif isinstance(e, HTTPException):
+        status_code = e.status_code
+        detail = e.detail
+    elif isinstance(e, ValidationError):
+        status_code = 422
+        detail = json.loads(e.json())
+    else:
+        error_msg = f'Unexpected error in {func_name}: {e}'
+        logger.error(error_msg, exc_info=True)
+        status_code = 500
+        detail = f'Internal Server Error: {e}'
+
+    return status_code, detail
+
 def handle_service_errors(microservice_name: str, with_log: bool = True):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
@@ -190,73 +285,75 @@ def handle_service_errors(microservice_name: str, with_log: bool = True):
         async def wrapper(*args, **kwargs):
             db: Session = kwargs.get('db')
             request: Request = kwargs.get('request')
+            current_user: Optional[str] = kwargs.get('current_user')
 
             start_time = time.perf_counter()
             response_data = None
             status_code = 500
-
-            request_body = await _get_request_body_for_logging(request)
 
             try:
                 result = await func(*args, **kwargs)
                 response_data = result
                 status_code = 200
                 return result
-            except SQLAlchemyError as e:
-                if db:
-                    db.rollback()
-                error_msg = f'Database error in {func.__name__}: {e}'
-                logger.error(error_msg, exc_info = True)
-                status_code = 500
-                response_data = {'detail': str(e)}
-                raise HTTPException(status_code = status_code, detail = str(e)) from e
-            except (InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError) as e:
-                status_code = 400
-                response_data = {'detail': str(e)}
-                raise HTTPException(status_code = status_code, detail = str(e)) from e
-            except HTTPException as e:
-                status_code = e.status_code
-                response_data = {'detail': e.detail}
-                raise e
-            except ValidationError as e:
-                raise HTTPException(
-                    status_code = 422,
-                    detail = json.loads(e.json())
-                ) from e
+            except Exception as e:
+                # Use the helper to determine status code and detail
+                status_code, detail = _handle_exception(e, db, func.__name__)
+                response_data = {'detail': detail} # Standardize response_data for errors
+                raise HTTPException(status_code = status_code, detail = detail) from e
             finally:
-                if request and EVENTS_LOG_URL:
-                    end_time = time.perf_counter()
-                    user_app = kwargs.get('current_user') if 'current_user' in kwargs \
-                        else 'anonymous'
-
-                    log_data = UsageLogData(
-                        microservice = microservice_name,
-                        endpoint = request.url.path,
-                        method = request.method,
-                        status_code = status_code,
-                        ip_address = request.client.host,
-                        user_app = user_app,
-                        request_body = request_body,
-                        response_time_ms = int((end_time - start_time) * 1000)
-                    )
-
-                    if with_log :
-                        if isinstance(response_data, list) and all(isinstance(item,
-                                                            BaseModel) for item in response_data):
-                            log_data.response_body = [item.model_dump() for item in response_data]
-                        elif isinstance(response_data, BaseModel):
-                            log_data.response_body = response_data.model_dump()
-                        else:
-                            log_data.response_body = response_data
-                    else:
-                        log_data.response_body = None
-
-                    await _process_and_send_usage_log(log_data)
+                # Always log, regardless of success or failure
+                # Make sure response_data is properly formatted before sending to _finalize_and_log
+                # If an exception was raised, response_data will be {'detail': detail}
+                # If successful, response_data will be the actual result
+                await _finalize_and_log(
+                    request = request,
+                    microservice_name = microservice_name,
+                    status_code = status_code,
+                    response_data = response_data,
+                    start_time = start_time,
+                    current_user = current_user,
+                    with_log = with_log
+                )
 
         return wrapper
     return decorator
 
+def _resolve_audit_data(final_result: Any, new_values: Any) -> Tuple[Any, Any]:
+    '''
+        Helper to resolve entity_id and new_values for the audit decorator,
+        reducing cyclomatic complexity.
+    '''
+    entity_id = None
 
+    # Resolve new_values if not provided
+    if new_values is None:
+        if isinstance(final_result, list):
+            calculated_new_values = []
+            for item in final_result:
+                if isinstance(item, BaseModel):
+                    calculated_new_values.append(item.model_dump())
+                elif hasattr(item, '__dict__'):
+                    calculated_new_values.append(sqlalchemy_object_as_dict(item))
+            new_values = calculated_new_values
+
+        elif final_result:
+            if isinstance(final_result, BaseModel):
+                new_values = final_result.model_dump()
+            elif hasattr(final_result, '__dict__'):
+                new_values = sqlalchemy_object_as_dict(final_result)
+
+    # Resolve entity_id
+    if not isinstance(final_result, list):
+        if isinstance(final_result, (BaseModel, int)):
+            entity_id = final_result.id if isinstance(final_result, BaseModel) \
+            else final_result
+        elif hasattr(final_result, 'id'):
+            entity_id = final_result.id
+
+    return entity_id, new_values
+
+# pylint: disable=too-many-locals
 def audit_event(
     microservice_name: str,
     entity_name: str,
@@ -265,10 +362,14 @@ def audit_event(
     '''
         Decorator factory to send an audit event after a service function call.
     '''
+    # pylint: disable=too-many-locals
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            user_id = kwargs.get('user_id', 'usr_test')
+            # The current_user/user_id is often an email or a string identifier.
+            # Do not force conversion to int to avoid errors in the audit service.
+            user_id = kwargs.get('current_user') or kwargs.get('user_id', '1001')
+
             result = await func(*args, **kwargs)
 
             if isinstance(result, tuple) and len(result) == 2:
@@ -280,26 +381,31 @@ def audit_event(
                     'new_values': None
                 }
 
-            entity_id = None
-            if isinstance(final_result, (BaseModel, int)):
-                entity_id = final_result.id if isinstance(final_result, BaseModel) else final_result
-            elif hasattr(final_result, 'id'):
-                entity_id = final_result.id
+            old_values = auditable_data.get('old_values')
+            new_values = auditable_data.get('new_values')
 
-            new_values = None
-            if final_result and isinstance(final_result, BaseModel):
-                new_values = final_result.model_dump()
-            elif final_result and hasattr(final_result, '__dict__'):
-                new_values = sqlalchemy_object_as_dict(final_result)
+            # Use helper to determine IDs and values to avoid branching here
+            entity_id, new_values = _resolve_audit_data(final_result, new_values)
+
+            # Ensure entity_id is a string to satisfy the audit service schema.
+            # If entity_id is None, use "0" as a safe default.
+            str_entity_id = str(entity_id) if entity_id is not None else "0"
+
+            # Ensure old_values and new_values are strings (JSON) if they are not None
+            # to comply with the audit service's expected format.
+            formatted_old = json.dumps(old_values, cls = CustomJSONEncoder
+                            ) if old_values is not None else None
+            formatted_new = json.dumps(new_values, cls = CustomJSONEncoder
+                            ) if new_values is not None else None
 
             audit_event_data = {
                 'microservice': microservice_name,
                 'entity_name': entity_name,
-                'entity_id': entity_id,
+                'entity_id': str_entity_id,
                 'action': action,
-                'user_id': user_id,
-                'old_values': auditable_data.get('old_values'),
-                'new_values': new_values
+                'user_id': str(user_id),
+                'old_values': formatted_old,
+                'new_values': formatted_new
             }
             try:
                 data_to_send = json.loads(json.dumps(audit_event_data, cls = CustomJSONEncoder))
@@ -308,7 +414,6 @@ def audit_event(
                 error_msg = f'Error serializing audit data: {e}'
                 logger.error(error_msg, exc_info = True)
 
-            # Retornar el resultado final para que el controlador lo use.
             return final_result
         return wrapper
     return decorator
@@ -341,18 +446,92 @@ async def send_usage_log(log_data: dict):
     message = f'Usage log sent successfully. Status: {response.status_code}'
     logger.info(message)
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-async def _handle_files_service(
-    action: str,
+# --- Helper functions for file actions ---
+
+async def _execute_file_read(
     file_name: str,
     auth_token: str,
-    delimiter: Optional[str] = None,
-    uploaded_file: Optional[UploadFile] = None,
-    dynamic_path: Optional[str] = None
+    delimiter: Optional[str]
+) -> str:
+    query_string = f'?delimiter={delimiter}' if delimiter else ''
+    url = f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_name}{query_string}'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'
+    }
+    response = await _perform_request('GET', url, headers)
+    response.raise_for_status()
+    return response.text
+
+async def _execute_file_create(
+    uploaded_file: UploadFile,
+    auth_token: str,
+    dynamic_path: Optional[str]
+) -> dict:
+    upload_endpoint = f'{FILES_SERVICE_URL}/v1/s3/upload'
+
+    mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
+    if not mime_type:
+        mime_type = 'application/octet-stream'
+
+    file_content_bytes = await uploaded_file.read()
+
+    headers = {
+        'Authorization': f'{auth_token}'
+    }
+
+    path_to_use = dynamic_path or BUCKET_PATH
+
+    if path_to_use and not path_to_use.endswith('/'):
+        path_to_use += '/'
+
+    response = await _perform_request(
+        method = 'POST',
+        url = upload_endpoint,
+        headers = headers,
+        payload = {
+            'bucket_name': BUCKET_NAME,
+            'file_path': path_to_use if path_to_use else BUCKET_PATH
+        },
+        files = {
+            'file': (uploaded_file.filename, file_content_bytes, mime_type)
+        }
+    )
+
+    response.raise_for_status()
+    return response.json()
+
+async def _execute_file_delete(
+    file_name: str,
+    auth_token: str
+) -> None:
+    url = f'{FILES_SERVICE_URL}/v1/s3/delete'
+    headers = {
+        'Authorization': f'{auth_token}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        'bucket_name': BUCKET_NAME,
+        'file_name': file_name,
+        'file_path': BUCKET_PATH
+    }
+    response = await _perform_request('DELETE', url, headers, payload)
+    response.raise_for_status()
+    message = f'File {file_name} successfully deleted from FILES service.'
+    logger.info(message)
+
+
+async def _handle_files_service(
+    action: str,
+    **kwargs
 ) -> Optional[str]:
     '''
-        Handles communication with the FILES microservice for reading and deleting files.
-        This function standardizes file service interactions.
+        Handles communication with the FILES microservice using kwargs to avoid
+        too many positional arguments.
+        Expected kwargs per action:
+        - read: file_name, auth_token, delimiter
+        - create: uploaded_file, auth_token, dynamic_path
+        - delete: file_name, auth_token
     '''
     try:
         if not FILES_SERVICE_URL or not BUCKET_NAME:
@@ -360,71 +539,31 @@ async def _handle_files_service(
                 detail = 'FILES_SERVICE_URL or BUCKET_NAME environment variables are not set.'
             )
 
-        headers = {
-            'Authorization': f'{auth_token}',
-            'Content-Type': 'application/json'
-        }
-
         if action == 'read':
-            query_string = f'?delimiter={delimiter}' if delimiter else ''
-            url = f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_name}{query_string}'
-            response = await _perform_request('GET', url, headers)
-            response.raise_for_status()
-            return response.text
-
-        if action == 'create':
-            upload_endpoint = f'{FILES_SERVICE_URL}/v1/s3/upload'
-
-            mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
-            if not mime_type:
-                mime_type = 'application/octet-stream'
-
-            file_content_bytes = await uploaded_file.read()
-
-            headers = {
-                'Authorization': f'{auth_token}'
-            }
-
-            path_to_use = dynamic_path or BUCKET_PATH
-
-            if path_to_use and not path_to_use.endswith('/'):
-                path_to_use += '/'
-
-            response = await _perform_request(
-                method = 'POST',
-                url = upload_endpoint,
-                headers = headers,
-                payload = {
-                    'bucket_name': BUCKET_NAME,
-                    'file_path': path_to_use if path_to_use else BUCKET_PATH
-                },
-                files = {
-                    'file': (uploaded_file.filename, file_content_bytes, mime_type)
-                }
+            return await _execute_file_read(
+                kwargs.get('file_name'),
+                kwargs.get('auth_token'),
+                kwargs.get('delimiter')
             )
 
-            response.raise_for_status()
-
-            return response.json()
+        if action == 'create':
+            return await _execute_file_create(
+                kwargs.get('uploaded_file'),
+                kwargs.get('auth_token'),
+                kwargs.get('dynamic_path')
+            )
 
         if action == 'delete':
-            url = f'{FILES_SERVICE_URL}/v1/s3/delete'
-            payload = {
-                'bucket_name': BUCKET_NAME,
-                'file_name': file_name,
-                'file_path': BUCKET_PATH
-            }
-            response = await _perform_request('DELETE', url, headers, payload)
-            response.raise_for_status()
-            message = f'File {file_name} successfully deleted from FILES service.'
-            logger.info(message)
-            return None
+            return await _execute_file_delete(
+                kwargs.get('file_name'),
+                kwargs.get('auth_token')
+            )
 
         raise ValueError(f'Invalid action: {action}')
     except req.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             raise ResourceNotFoundError(
-                detail = f'File \'{file_name}\' not found in FILES microservice.'
+                detail = f'File \'{kwargs.get('file_name', 'unknown')}\' not found.'
             ) from e
         raise ServiceUnavailableError(
             detail = f'Failed to communicate with FILES microservice: {e}'
@@ -488,9 +627,120 @@ async def perform_bulk_upload(
 
     db.commit()
 
-    await _handle_files_service('delete', file_name, auth_token)
+    await _handle_files_service(
+        action = 'delete',
+        file_name = file_name,
+        auth_token = auth_token
+    )
 
     return {
         'message': 'Bulk upload successful.',
         **stats
     }
+
+def generic_bulk_processor(
+    rows: List[Dict[str, Any]],
+    bulk_schema: Type[BaseModel]
+) -> List[BaseModel]:
+    '''
+        Generic processor function to validate raw data against the bulk schema.
+        Pre-processes specific fields to ensure correct string typing before validation.
+        Validates row-by-row, logging warnings for invalid data, and returns
+        a list of valid Pydantic objects.
+    '''
+    processed_data = []
+    for row in rows:
+        # Pre-process row to ensure problematic fields are strings
+        processed_row = row.copy() # Work on a copy to not modify original row during iteration
+        for key in ['code', 'external_code', 'contact_phone']:
+            if key in processed_row and not isinstance(processed_row[key], str):
+                processed_row[key] = str(processed_row[key])
+        try:
+            # Pydantic validation of the processed_row against the expected schema
+            processed_data.append(bulk_schema.model_validate(processed_row))
+
+        except ValidationError as e:
+            error_msg = f'Skipping invalid row during bulk processing: {processed_row}. Error: {e}'
+            logger.warning(error_msg)
+            # Continues processing the rest of the list
+            continue
+
+    return processed_data
+
+def _trigger_bulk_audit(
+    microservice: str,
+    entity: str,
+    user: str,
+    result: dict
+):
+    ''' Helper to trigger async audit for bulk ops '''
+    audit_data = {
+        'microservice': microservice,
+        'entity_name': entity,
+        'entity_id': 0,
+        'action': 'BULK_CREATE',
+        'user_id': user,
+        'old_values': None,
+        'new_values': json.dumps(result)
+    }
+    asyncio.create_task(send_audit_event(audit_data))
+
+async def _execute_bulk_logic( # pylint: disable=too-many-arguments
+    service_func: Callable,
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str
+):
+    '''
+        Helper to execute the service call and catch specific exceptions,
+        returning result and status code to avoid branching in main wrapper.
+    '''
+    try:
+        res = await service_func(
+            db = db,
+            file_name = file_name,
+            delimiter = delimiter,
+            auth_token = auth_token
+        )
+        return res, status.HTTP_201_CREATED
+    except HTTPException as e:
+        return {'detail': str(e.detail)}, e.status_code
+
+# pylint: disable=too-many-arguments, too-many-locals
+async def generic_bulk_controller_wrapper(
+    db: Session,
+    request: Request,
+    current_user: str,
+    file_name: str,
+    microservice_name: str,
+    entity_name: str,
+    service_func: Callable,
+    delimiter: Optional[str] = ',',
+    auth_token: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+        Generic controller wrapper for bulk upload endpoints.
+        Handles logging, status tracking, audit event generation, and usage logging.
+    '''
+    start_time = time.perf_counter()
+
+    # 1. Execute logic securely via helper
+    result, status_code = await _execute_bulk_logic(
+        service_func, db, file_name, delimiter, auth_token
+    )
+
+    # 2. Audit (only on success)
+    if status_code < 400:
+        _trigger_bulk_audit(microservice_name, entity_name, current_user, result)
+
+    # 3. Usage Log
+    await _finalize_and_log(
+        request, microservice_name, status_code, result, start_time, current_user
+    )
+
+    # 4. Return result or raise error
+    if status_code >= 400:
+        raise HTTPException(status_code = status_code, detail = result['detail'])
+
+    return result

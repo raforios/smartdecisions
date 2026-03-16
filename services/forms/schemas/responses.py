@@ -530,3 +530,29 @@ class FormResponseFilters(BaseModel):
         '''
         arbitrary_types_allowed = True
         from_attributes = True
+
+class FormResponseBulkUpdateSchema(BaseModel):
+    '''
+        Schema representing a single row in the CSV for bulk updating affiliations.
+    '''
+    service_id: int = Field(..., description = 'ID of the service.')
+    affiliation_number: int = Field(..., description = 'Affiliation number of the response.')
+    user_id: int = Field(..., description = 'ID of the user performing the update.')
+    status: str = Field(..., description = 'New status for the form response.')
+    observations: Optional[str] = Field(None, description = 'Observations for the status flow.')
+    rejection_reason: Optional[str] = Field(None, description = 'Reason if status is REJECTED.')
+
+class BulkUpdateFileParamsSchema(BaseModel):
+    '''
+        Schema to group file parameters for the bulk update request, 
+        keeping function signatures clean.
+    '''
+    file_name: str
+    delimiter: str
+
+class BulkUpdateResponseSchema(BaseModel):
+    '''
+        Response schema for the affiliations bulk update endpoint.
+    '''
+    message: str
+    records_updated: int

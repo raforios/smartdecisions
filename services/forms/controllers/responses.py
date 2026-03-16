@@ -22,6 +22,7 @@ from models.forms import FormHeader
 
 # Import schemas
 from schemas.responses import (
+    BulkUpdateFileParamsSchema,
     FormResponseFilters,
     FormResponseStatusFlow,
     PersonCreate,
@@ -44,6 +45,7 @@ from schemas.responses import (
     FormResponseSummaryResponse,
     FormResponseUpdate
 )
+from services.logger_config import custom_logger as logger
 # Import custom exceptions
 from services.exceptions import (
     RegisterNotFoundError,
@@ -61,9 +63,15 @@ from services.dynamodb import (
     delete_session_by_id
 )
 # Utility for handling service layer errors
-from services.utils import _handle_files_service, get_current_time_gmt, handle_service_errors
+from services.utils import(
+    _handle_files_service,
+    generic_bulk_controller_wrapper,
+    get_current_time_gmt,
+    handle_service_errors,
+)
 # Import auxiliary functions from the new service layer
 from services.responses import (
+    bulk_update_affiliations_service,
     create_person_logic,
     delete_person_logic,
     find_form_responses_by_filters,
@@ -641,3 +649,30 @@ async def delete_person(
         'message': f'Person with ID: {person_id} deleted successfully.',
         'id': result
     }
+
+async def bulk_update_affiliations_controller(
+    db: Session,
+    request: Request,
+    file_params: BulkUpdateFileParamsSchema,
+    auth_token: str,
+    current_user: str
+) -> Dict[str, Any]:
+    '''
+        Controller to handle the bulk update of affiliations from a CSV file.
+    '''
+    message = f'Starting bulk update for file: {file_params.file_name}'
+    logger.info(message)
+
+    # pylint: disable=duplicate-code
+    return await generic_bulk_controller_wrapper(
+        db = db,
+        request = request,
+        current_user = current_user,
+        file_name = file_params.file_name,
+        microservice_name = 'FORMS',
+        entity_name = 'FormResponse',
+        service_func = bulk_update_affiliations_service,
+        delimiter = file_params.delimiter,
+        auth_token = auth_token
+    )
+    # pylint: enable=duplicate-code

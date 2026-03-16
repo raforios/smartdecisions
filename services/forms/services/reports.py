@@ -29,10 +29,8 @@ ENV_VARS = load_and_validate_env_vars({
 })
 
 LOCALIZATION_SERVICE_URL = ENV_VARS['LOCALIZATION_SERVICE_URL']
-LOCALIZATION_ENDPOINT = None
-
-if LOCALIZATION_SERVICE_URL:
-    LOCALIZATION_ENDPOINT = f'{LOCALIZATION_SERVICE_URL}/v1/localization'
+LOCALIZATION_ENDPOINT = f'{LOCALIZATION_SERVICE_URL}/v1/localization' if LOCALIZATION_SERVICE_URL \
+                        else None
 
 @handle_service_errors('LOCALIZATION')
 async def _fetch_executed_point_ids_from_localization(

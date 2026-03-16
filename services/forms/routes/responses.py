@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 
 # Import schemas for form responses
 from schemas.responses import (
+    BulkUpdateFileParamsSchema,
+    BulkUpdateResponseSchema,
     FormResponseFilters,
     FormResponseStatusFlow,
     PersonCreate,
@@ -40,6 +42,7 @@ from schemas.responses import (
 
 # Import controllers for form responses
 from controllers.responses import (
+    bulk_update_affiliations_controller,
     create_person,
     delete_person,
     get_all_persons,
@@ -534,5 +537,44 @@ async def delete_person_route(
         db = db,
         person_id = person_id,
         request = request,
+        current_user = current_user
+    )
+
+@router.patch(
+    '/bulk-update',
+    response_model = BulkUpdateResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Bulk update affiliations from a CSV file',
+    description = '''Processes a CSV file from the FILES microservice to bulk update
+                 affiliation statuses and log their flow history in a single atomic operation.'''
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def bulk_update_affiliations_endpoint(
+    request: Request,
+    file_name: str = Query(..., description = 'Name of the CSV file to process.'),
+    delimiter: str = Query(',', description = 'The delimiter used in the CSV file.'),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    auth_token: str = Header(..., alias = 'Authorization'),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to trigger a bulk update of affiliation data from a CSV file.
+    '''
+    current_user = 'usr_test'
+    message = f'User: {current_user}. Received request for affiliations bulk update. File: {
+            file_name}'
+    logger.info(message)
+
+    # Agrupamos los parámetros en el modelo Pydantic
+    file_params = BulkUpdateFileParamsSchema(
+        file_name = file_name,
+        delimiter = delimiter
+    )
+
+    return await bulk_update_affiliations_controller(
+        db = db,
+        request = request,
+        file_params = file_params,
+        auth_token = auth_token,
         current_user = current_user
     )

@@ -1,13 +1,10 @@
 '''
     Planning controllers.
 '''
-import asyncio
-import json
-import time
 from typing import Any, Dict, List, Optional, Union
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
-from fastapi import HTTPException, Request
+from fastapi import Request
 from services.crud import get_record
 from services.planning import (
     bulk_create_planning,
@@ -23,9 +20,8 @@ from services.planning import (
     update_planning_with_details
 )
 from services.utils import (
-    UsageLogData,
+    generic_bulk_controller_wrapper,
     handle_service_errors,
-    send_audit_event, send_usage_log
 )
 from services.logger_config import custom_logger as logger
 from models.planning import (
@@ -225,49 +221,19 @@ async def bulk_upload_planning_controller(
     message = f'Starting bulk upload for file: {file_name}'
     logger.info(message)
 
-    start_time = time.perf_counter()
-    status_code = 201
-
-    try:
-        result = await bulk_create_planning(
-            db = db,
-            file_name = file_name,
-            delimiter = delimiter,
-            auth_token = auth_token
-        )
-
-        audit_event_data = {
-            'microservice': 'PLANNING',
-            'entity_name': 'Planning',
-            'entity_id': 0,
-            'action': 'BULK_CREATE',
-            'user_id': 'usr_test',
-            'old_values': None,
-            'new_values': json.dumps(result)
-        }
-        asyncio.create_task(send_audit_event(audit_event_data))
-
-    except HTTPException as e:
-        status_code = e.status_code
-        result = {'detail': str(e.detail)}
-        raise e
-
-    finally:
-        end_time = time.perf_counter()
-        log_data = UsageLogData(
-            microservice = 'PLANNING',
-            endpoint = request.url.path,
-            method = request.method,
-            status_code = status_code,
-            ip_address = request.client.host,
-            user_app = current_user,
-            request_body = {'file_name': file_name},
-            response_body = result,
-            response_time_ms = int((end_time - start_time) * 1000)
-        )
-        asyncio.create_task(send_usage_log(log_data.model_dump()))
-
-    return result
+    # pylint: disable=duplicate-code
+    return await generic_bulk_controller_wrapper(
+        db = db,
+        request = request,
+        current_user = current_user,
+        file_name = file_name,
+        microservice_name = 'PLANNING',
+        entity_name = 'Planning',
+        service_func = bulk_create_planning,
+        delimiter = delimiter,
+        auth_token = auth_token
+    )
+    # pylint: enable=duplicate-code
 
 async def get_monitor_data_controller(
     db: Session,
