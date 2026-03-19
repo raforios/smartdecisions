@@ -205,7 +205,7 @@ class PlanningBulkCreateSchema(BaseModel):
     team_id: int
     service_id: int
     planned_route_id: int
-    date_of_day: date
+    date_of_day: datetime
 
 class BulkUploadResponseSchema(BaseModel):
     '''
