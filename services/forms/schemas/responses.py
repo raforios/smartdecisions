@@ -538,9 +538,9 @@ class FormResponseBulkUpdateSchema(BaseModel):
     service_id: int = Field(..., description = 'ID of the service.')
     affiliation_number: int = Field(..., description = 'Affiliation number of the response.')
     user_id: int = Field(..., description = 'ID of the user performing the update.')
-    status: str = Field(..., description = 'New status for the form response.')
+    status: int = Field(..., description = 'New status for the form response.')
     observations: Optional[str] = Field(None, description = 'Observations for the status flow.')
-    rejection_reason: Optional[str] = Field(None, description = 'Reason if status is REJECTED.')
+    rejection_reason: Optional[int] = Field(None, description = 'Reason if status is REJECTED.')
 
 class BulkUpdateFileParamsSchema(BaseModel):
     '''
