@@ -616,7 +616,6 @@ async def _perform_atomic_db_update_for_affiliations(
                 )
 
             form_response.status = next_status
-            form_response.user_id = data['user_id']
             if data.get('rejection_reason'):
                 form_response.rejection_reason = data['rejection_reason']
 
