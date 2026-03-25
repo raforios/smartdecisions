@@ -9,7 +9,7 @@ set -o pipefail # Terminar si algún comando en un pipeline falla
 
 # --- Configuración del Despliegue ---
 HANDLER="main.handler"
-RUNTIME="python3.13"
+RUNTIME="python3.14"
 POLICIES=(
     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" 
     "arn:aws:iam::aws:policy/AmazonS3FullAccess" 
@@ -248,7 +248,7 @@ build_lambda_package() {
         echo "La imagen '$DOCKER_IMAGE_NAME' ya existe."
     else
         echo "Construyendo la imagen Docker '$DOCKER_IMAGE_NAME' desde '$DOCKERFILE_PATH'..."
-        docker build -t "$DOCKER_IMAGE_NAME" . || { echo "Error: Falló la construcción de la imagen Docker '$DOCKER_IMAGE_NAME'."; exit 1; }
+        docker build --platform linux/amd64 -t "$DOCKER_IMAGE_NAME" . || { echo "Error: Falló la construcción de la imagen Docker '$DOCKER_IMAGE_NAME'."; exit 1; }
     fi
     echo ""
 
