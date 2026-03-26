@@ -204,11 +204,11 @@ class FormResponseUpdate(BaseModel):
     '''
     user_id: Optional[int] = Field(None,
         description = 'User ID from the Frontend who submitted the form.')
-    status: Optional[str] = Field(None,
+    status: Optional[int] = Field(None,
         description = 'New status for the form response (e.g., reviewed, approved).')
     observations: Optional[str] = Field(None,
         description = 'Notes or observations on the status change.')
-    rejection_reason: Optional[str] = Field(None,
+    rejection_reason: Optional[int] = Field(None,
         description = 'Reason for rejection, only required if status is REJECTED.')
     affiliation_number: Optional[int] = Field(None,
         description = 'Number of affiliation from 1 to N.')
@@ -220,8 +220,8 @@ class FormResponseFlowBase(BaseModel):
         Base schema for a record in the form response status flow.
     '''
     user_id: int
-    initial_status: str
-    next_status: str
+    initial_status: int
+    next_status: int
     observations: Optional[str] = None
 
 class FormResponseFlowCreate(FormResponseFlowBase):

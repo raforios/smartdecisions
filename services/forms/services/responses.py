@@ -349,11 +349,20 @@ async def update_form_response_status_logic(
             detail = 'Rejection reason is required for REJECTED status.'
         )
 
+    # 1. Rescatamos el ID del administrador/usuario que ejecuta el cambio de estado
+    admin_user_id = status_data.user_id
+
+    # 2. Enmascaramos el payload devolviéndole el user_id original. 
+    # Así, cuando 'update_record' actúe, simplemente reescribirá el mismo valor sin alterarlo.
+    status_data.user_id = db_form_response.user_id
+
+    # 3. Ejecutamos la función genérica intacta
     updated_response = update_record(db, db_form_response, status_data)
 
+    # 4. Registramos el flujo usando el admin_user_id rescatado en el paso 1
     flow_record_data = FormResponseFlowCreate(
         form_response_id = form_response_id,
-        user_id = status_data.user_id,
+        user_id = admin_user_id,
         initial_status = initial_status,
         next_status = status_data.status,
         observations = status_data.observations
