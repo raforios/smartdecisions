@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentación | Minería y Metalurgia Bolivia</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <header class="hero" style="height: 40vh;">
+        <canvas id="hero-canvas"></canvas>
+        <div class="hero-content">
+            <h1 class="hero-title" style="font-size: 2.2rem;">Centro Documental</h1>
+            <p>Repositorio oficial de publicaciones, normativas y planeación estratégica.</p>
+            <div class="hero-divider"></div>
+        </div>
+    </header>
+
+    <main class="container section">
+        <div class="tabs-container">
+            <div class="tabs-menu">
+                <button class="tab-btn active" data-target="boletines"><i class="fa-solid fa-file-invoice"></i> Boletines</button>
+                <button class="tab-btn" data-target="revistas"><i class="fa-solid fa-book"></i> Revistas</button>
+                <button class="tab-btn" data-target="poa"><i class="fa-solid fa-chart-gantt"></i> POA</button>
+            </div>
+            <div class="tabs-content">
+                <div id="boletines" class="tab-pane active">
+                    <h2 class="section-title">Boletines Estadísticos</h2>
+                    <p>Reportes trimestrales sobre volúmenes de exportación y cotizaciones bursátiles.</p>
+                </div>
+                <div id="revistas" class="tab-pane">
+                    <h2 class="section-title">Revistas Institucionales</h2>
+                    <p>Publicaciones sobre avances tecnológicos en la industria metalúrgica.</p>
+                </div>
+                <div id="poa" class="tab-pane">
+                    <h2 class="section-title">Plan Operativo Anual (POA)</h2>
+                    <p>Instrumento de planificación estratégica para la consecución de objetivos corporativos.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="footer-container"></div>
+    <script src="js/script.js"></script>
+</body>
+</html>

@@ -13,13 +13,15 @@ from services.logger_config import custom_logger as logger
 from services.royalties_etl import process_royalties_excel_service
 from services.mining_analysis import (
     get_royalties_summary_service,
+    get_transactions_summary_service,
     process_mining_etl_service,
     get_all_prices_service
 )
 from schemas.mining_analysis import (
     MiningPriceResponseSchema,
     BulkUploadMiningResponseSchema,
-    RoyaltySummaryResponse
+    RoyaltySummaryResponse,
+    TransactionSummaryResponse
 )
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -109,3 +111,23 @@ async def upload_royalties_controller(
     )
 
     return result
+
+@handle_service_errors('MINING_ANALYSIS')
+async def get_transactions_summary_controller(
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str,
+    year: int = None
+) -> TransactionSummaryResponse:
+    '''
+    Orchestrates the retrieval of transactions summary.
+    '''
+    message = f'User: {current_user} requesting transactions for Year: {year}'
+    logger.info(message)
+
+    result = await get_transactions_summary_service(
+        db,
+        year = year
+    )
+
+    return TransactionSummaryResponse(**result)

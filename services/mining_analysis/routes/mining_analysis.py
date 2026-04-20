@@ -19,12 +19,14 @@ from controllers.mining_analysis import (
     bulk_upload_mining_controller,
     get_mineral_prices_controller,
     get_royalties_summary_controller,
+    get_transactions_summary_controller,
     upload_royalties_controller
 )
 from schemas.mining_analysis import (
     MiningPriceResponseSchema,
     BulkUploadMiningResponseSchema,
-    RoyaltySummaryResponse
+    RoyaltySummaryResponse,
+    TransactionSummaryResponse
 )
 
 router = APIRouter(prefix = '/v1/mining-analysis', tags = ['Mining Analysis'])
@@ -116,6 +118,27 @@ async def get_royalties_summary(
     logger.info(message)
 
     return await get_royalties_summary_controller(
+        db = db,
+        request = request,
+        current_user = current_user,
+        year = year
+    )
+
+@router.get(
+    '/royalties/transactions',
+    response_model = TransactionSummaryResponse
+)
+async def get_royalties_transactions(
+    request: Request,
+    year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
+    db: Session = Depends(get_db_dependency),
+    current_user: str = Depends(get_current_user)
+):
+    ''' Retrieves aggregated transactions data by company. '''
+    message = f'User: {current_user}. Requested transactions summary.'
+    logger.info(message)
+
+    return await get_transactions_summary_controller(
         db = db,
         request = request,
         current_user = current_user,

@@ -11,3 +11,7 @@ sqlalchemy
 pymysql
 python-dotenv
 requests
+xlrd
+openpyxl
+xlsxwriter
+kaleido

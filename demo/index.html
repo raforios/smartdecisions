@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ministerio de Minería y Metalurgia | Bolivia</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <header id="inicio" class="hero">
+        <canvas id="hero-canvas"></canvas>
+        <div class="hero-content">
+            <h1 class="hero-title">Atrayendo Inversión y Tecnología</h1>
+            <p>Integrando a Bolivia en el mercado global de minerales con seguridad jurídica y competitividad.</p>
+            <div class="hero-divider"></div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="comunicacion" class="section container">
+            <h2 class="section-title">Centro de Comunicación</h2>
+            <div class="comunicacion-layout">
+                <div class="prensa-grid">
+                    <div class="prensa-item">
+                        <h3 style="color: var(--oro);"><i class="fa-solid fa-newspaper"></i> Notas de Prensa</h3>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">Ministerio expone portafolio de inversiones en la convención minera internacional...</p>
+                        <a href="#" style="font-size: 0.8rem; font-weight: bold; color: var(--negro);">Leer más ➔</a>
+                    </div>
+                    <div class="prensa-item">
+                        <h3 style="color: var(--oro);"><i class="fa-solid fa-bullhorn"></i> Comunicados</h3>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">Actualización de normativas de exportación para optimización aduanera.</p>
+                        <a href="#" style="font-size: 0.8rem; font-weight: bold; color: var(--negro);">Ver archivo ➔</a>
+                    </div>
+                    <div class="prensa-item">
+                        <h3 style="color: var(--oro);"><i class="fa-solid fa-camera"></i> Fotografías</h3>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">Galería oficial de inspecciones técnicas y reuniones bilaterales.</p>
+                    </div>
+                    <div class="prensa-item">
+                        <h3 style="color: var(--oro);"><i class="fa-solid fa-file-lines"></i> Artículos Técnicos</h3>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">El rol del Zinc boliviano en la cadena de suministros global.</p>
+                    </div>
+                </div>
+
+                <div class="social-feeds-sidebar">
+                    <div class="feed-card" style="margin-bottom: 1rem; min-height: 200px;">
+                        <h3 style="font-size: 1.1rem;"><i class="fa-brands fa-youtube" style="color: red;"></i> Canal Oficial</h3>
+                        <div id="yt-content"></div>
+                    </div>
+                    <div class="feed-card" style="min-height: 200px;">
+                        <h3 style="font-size: 1.1rem;"><i class="fa-brands fa-facebook" style="color: #1877F2;"></i> Facebook</h3>
+                        <div id="fb-content"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slider-section">
+            <div class="slider-container">
+                <div class="slide active">
+                    <img src="img/mineral1.jpg" alt="Cristales de sales de litio">
+                    <div class="slide-caption"><strong>LITIO Y EVAPORÍTICOS:</strong> El epicentro de la transición energética global.</div>
+                </div>
+                <div class="slide">
+                    <img src="img/mineral2.jpg" alt="Veta de oro en cuarzo">
+                    <div class="slide-caption"><strong>ORO Y PLATA:</strong> Potencial geológico inexplorado con tecnología metalúrgica de punta.</div>
+                </div>
+                <div class="slide">
+                    <img src="img/mineral3.jpg" alt="Mineral de zinc y estaño">
+                    <div class="slide-caption"><strong>ESTAÑO Y ZINC:</strong> Fortaleciendo la cadena de suministros industriales con minerales de alta pureza.</div>
+                </div>
+                <div class="slide">
+                    <img src="img/mineral4.jpg" alt="Roca de hierro magnetita">
+                    <div class="slide-caption"><strong>HIERRO Y SIDERURGIA:</strong> Impulsando la gran industria metalúrgica para el mercado internacional.</div>
+                </div>
+                <button id="prevSlide" class="slide-nav">❮</button>
+                <button id="nextSlide" class="slide-nav">❯</button>
+            </div>
+        </section>
+
+        <section id="normativas" class="section">
+            <h2 class="section-title">Reglamentaciones y Documentos</h2>
+            <div id="docs-container" class="grid-docs"><p class="loading">Conectando con el repositorio...</p></div>
+        </section>
+
+        <section id="entidades" class="section">
+            <h2 class="section-title">Entidades Bajo Tuición</h2>
+            <div class="grid-entidades">
+                <a href="https://vinto.gob.bo/" target="_blank" class="entidad-card">VINTO <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                <a href="https://www.comibol.gob.bo/" target="_blank" class="entidad-card">COMIBOL <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                <a href="https://www.autoridadminera.gob.bo/" target="_blank" class="entidad-card">AJAM <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                <a href="https://esm.gob.bo/" target="_blank" class="entidad-card">ESM <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                <a href="https://www.sergeomin.gob.bo/" target="_blank" class="entidad-card">SERGEOMIN <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                <a href="https://www.senarecom.gob.bo/" target="_blank" class="entidad-card">SENARECOM <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                <a href="https://www.fofim.gob.bo/" target="_blank" class="entidad-card">FOFIM <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            </div>
+        </section>
+
+        <section id="contacto" class="section contacto-section">
+            <div class="contacto-info">
+                <h2 class="section-title">Contacto</h2>
+                <div class="contact-item">
+                    <i class="fa-solid fa-building"></i>
+                    <div>
+                        <strong>Oficina Central - MMM</strong><br>
+                        Av. Mariscal Santa Cruz, Edificio Centro de Comunicaciones Piso 14.
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <i class="fa-solid fa-building"></i>
+                    <div>
+                        <strong>Oficina Piso 2 - MMM</strong><br>
+                        Av. Mariscal Santa Cruz, Edificio Centro de Comunicaciones Piso 2.
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <div>
+                        <strong>Oficina Av. Arce - MMM</strong><br>
+                        Av. Arce, Pasaje Pinilla.
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <i class="fa-solid fa-phone"></i>
+                    <div>
+                        <strong>Teléfono:</strong> 2312784
+                    </div>
+                </div>
+            </div>
+            <div class="contacto-mapa">
+                <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3825.437152016335!2d-68.13624382512613!3d-16.49692488424564!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x915f207038bb1dd1%3A0x673dbb608882b544!2sEdificio%20Centro%20de%20Comunicaciones%20La%20Paz!5e0!3m2!1ses!2sbo!4v1709900000000!5m2!1ses!2sbo" width="100%" height="300" style="border:0; border-radius: 8px;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                <a href="https://maps.google.com" target="_blank" class="map-link">Ver todas las ubicaciones en Google Maps <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="footer-container"></div>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
