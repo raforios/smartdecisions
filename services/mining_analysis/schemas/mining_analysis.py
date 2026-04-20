@@ -84,3 +84,19 @@ class RoyaltySummaryResponse(BaseModel):
     status: str
     message: str
     data: RoyaltySummaryData
+
+class CompanyTransactionItem(BaseModel):
+    ''' Item schema for company transaction summary. '''
+    company_name: str
+    nit: str
+    amount_paid_bob: float
+    amount_paid_usd: float
+    month: int
+    year: int
+    municipality: str
+
+class TransactionSummaryResponse(BaseModel):
+    ''' Main response schema for transactions. '''
+    status: str
+    message: str
+    data: List[CompanyTransactionItem]

@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Base de Datos
+  mining-db:
+    image: mysql:8.0
+    container_name: mining-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: smartbear_mining
+    ports:
+      - "3306:3306"
+    networks:
+      - mining-network
+
+  # Backend API
+  mining-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: mining-api
+    depends_on:
+      - mining-db
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3020
+      - DATABASE_URL=mysql+pymysql://root:root_password@mining-db/smartbear_mining
+      - APP_ENV=development
+    ports:
+      - "3020:3020"
+    networks:
+      - mining-network
+
+  # Frontend Dashboard
+  mining-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: mining-dashboard
+    depends_on:
+      - mining-api
+    environment:
+      - BACKEND_URL=http://mining-api:3020/v1/mining-analysis
+    ports:
+      - "8501:8501"
+    networks:
+      - mining-network
+
+networks:
+  mining-network:
+    driver: bridge

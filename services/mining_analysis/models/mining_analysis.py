@@ -74,17 +74,71 @@ class Municipality(Base):# pylint: disable=too-few-public-methods
     # Relaciones
     department = relationship('Department', back_populates = 'municipalities')
     royalties = relationship('RoyaltyPayment', back_populates = 'municipality')
+    transactions = relationship('RoyaltyTransaction', back_populates = 'municipality')
+
+
+# --- NUEVOS MODELOS PARA DETALLE DE PAGOS Y EMPRESAS ---
+
+class Company(Base):# pylint: disable=too-few-public-methods
+    '''
+        Company model to track mining operators.
+    '''
+    __tablename__ = 't_companies'
+
+    id = Column(Integer, primary_key = True, index = True)
+    nit = Column(String(50), unique = True, index = True, nullable = False)
+    name = Column(String(250), nullable = False)
+
+    # Relación con las transacciones de pago
+    transactions = relationship('RoyaltyTransaction', back_populates = 'company')
+
+class RoyaltyTransaction(Base):# pylint: disable=too-few-public-methods
+    '''
+        Granular fact table for individual royalty payments.
+        Origin: "DETALLE DE PAGOS" sheet.
+    '''
+    __tablename__ = 't_royalty_transactions'
+
+    id = Column(Integer, primary_key = True, index = True)
+    company_id = Column(Integer, ForeignKey('t_companies.id'), nullable = False)
+    municipality_id = Column(Integer, ForeignKey('t_municipalities.id'), nullable = False)
+
+    # Referencias del pago
+    order_number = Column(String(100), index = True, nullable = False)
+    form_code = Column(String(50))
+    bank_code = Column(String(50))
+
+    # Temporalidad (Fecha de documento y particiones)
+    payment_date = Column(Date, index = True, nullable = False)
+    year = Column(Integer, index = True, nullable = False)
+    month = Column(Integer, index = True, nullable = False)
+
+    # Métricas Financieras
+    amount_paid_bob = Column(Numeric(18, 4), default = 0)
+    amount_paid_usd = Column(Numeric(18, 4), default = 0)
+
+    # Relaciones
+    company = relationship('Company', back_populates = 'transactions')
+    municipality = relationship('Municipality', back_populates = 'transactions')
+
+
+# --- MODELO ORIGINAL DE COPARTICIPACIÓN MANTENIDO ---
 
 class RoyaltyPayment(Base):# pylint: disable=too-few-public-methods
     '''
-        Royalty payment fact table for the Star Schema.
-        Stores both BOB and calculated USD metrics in a single record.
+        Royalty payment summary table.
+        Origin: "COPARTICIPACIÓN" sheet.
     '''
     __tablename__ = 't_royalties'
 
     id = Column(Integer, primary_key = True, index = True)
     municipality_id = Column(Integer, ForeignKey('t_municipalities.id'), nullable = False)
+
+    # Fecha completa y particiones temporales
     period_date = Column(Date, index = True, nullable = False)
+    year = Column(Integer, index = True, nullable = False)
+    month = Column(Integer, index = True, nullable = False)
+    day = Column(Integer, index = True, nullable = False)
 
     # Métricas Financieras (Bs.)
     total_collected_bob = Column(Numeric(18, 4), default = 0)
@@ -93,14 +147,14 @@ class RoyaltyPayment(Base):# pylint: disable=too-few-public-methods
     gov_dept_bob = Column(Numeric(18, 4), default = 0)
     gov_muni_bob = Column(Numeric(18, 4), default = 0)
 
-    # Métricas Financieras (USD)
+    # Métricas Financieras (USD) calculadas dinámicamente en el ETL
     total_collected_usd = Column(Numeric(18, 4), default = 0)
     commission_usd = Column(Numeric(18, 4), default = 0)
     subtotal_usd = Column(Numeric(18, 4), default = 0)
     gov_dept_usd = Column(Numeric(18, 4), default = 0)
     gov_muni_usd = Column(Numeric(18, 4), default = 0)
 
-    # Restricción: Un solo registro por municipio y mes
+    # Restricción: Un solo registro por municipio y mes en el resumen
     __table_args__ = (
         UniqueConstraint('municipality_id', 'period_date', name = 'uq_municipality_period'),
     )

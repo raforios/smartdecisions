@@ -1,24 +1,26 @@
 '''
     Mining Analysis Business Logic Services
 '''
-from decimal import ROUND_HALF_UP, Decimal
+from collections import defaultdict
 import io
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict, Any, List
 from fastapi import Request
 import pandas as pd
-from sqlalchemy import extract, func
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from models.mining_analysis import (
+    Company,
     Mineral,
     MiningPrice,
     Department,
     Municipality,
-    RoyaltyPayment
+    RoyaltyPayment,
+    RoyaltyTransaction
 )
 from services.utils import handle_service_errors
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
-
 
 def clean_currency_pro(value: Any) -> float:
     ''' Handles mixed currency formats (26.500,00 and 218,632) and nulls. '''
@@ -43,24 +45,18 @@ async def process_mining_etl_service(
 ) -> Dict[str, Any]:
     ''' Optimized ETL logic using Pandas with duplicate tracking and column sanitization. '''
     try:
-        # Cargamos el dataframe
-        df = pd.read_csv(io.BytesIO(file_content), sep=delimiter)
-
-        # 1. SANITIZACIÓN DE CABECERAS: Elimina espacios y saltos de línea ocultos (\n, \r)
+        df = pd.read_csv(io.BytesIO(file_content), sep = delimiter)
         df.columns = df.columns.str.strip()
 
-        # 2. VALIDACIÓN TEMPRANA: Asegurar que las columnas existan tras limpiar o
-        # si falló el delimitador
         required_columns = ['Fecha', 'Mineral', 'Unidad', 'Baja', 'Alta']
         missing_cols = [col for col in required_columns if col not in df.columns]
 
         if missing_cols:
             raise ValueError(
                 f'Faltan columnas o delimitador "{delimiter}" incorrecto. No se halló: {
-                missing_cols}'
+                    missing_cols}'
             )
 
-        # Limpieza y normalización de tipos
         df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst = True).dt.date
         df['Baja'] = df['Baja'].apply(clean_currency_pro)
         df['Alta'] = df['Alta'].apply(clean_currency_pro)
@@ -68,7 +64,7 @@ async def process_mining_etl_service(
     except ValueError as ve:
         error_msg = f'Validation Error processing CSV: {ve}'
         logger.error(error_msg, exc_info = True)
-        raise InvalidInputError(detail=str(ve)) from ve
+        raise InvalidInputError(detail = str(ve)) from ve
     except Exception as e:
         error_msg = f'Error processing CSV: {e}'
         logger.error(error_msg, exc_info = True)
@@ -78,14 +74,13 @@ async def process_mining_etl_service(
 
     processed, skipped = 0, 0
 
-    # Uso de transacciones anidadas para operaciones en bloque
     with db.begin_nested():
         for _, row in df.iterrows():
             mineral = db.query(Mineral).filter(Mineral.name == row['Mineral']).first()
             if not mineral:
-                mineral = Mineral(name=row['Mineral'], unit=row['Unidad'])
+                mineral = Mineral(name = row['Mineral'], unit = row['Unidad'])
                 db.add(mineral)
-                db.flush() # Flush en lugar de commit para mantener la transacción abierta
+                db.flush()
 
             existing = db.query(MiningPrice).filter(
                 MiningPrice.mineral_id == mineral.id,
@@ -117,52 +112,77 @@ async def get_all_prices_service(db: Session) -> List[MiningPrice]:
     ''' Retrieves all mineral prices with their associated mineral metadata. '''
     return db.query(MiningPrice).options(joinedload(MiningPrice.mineral)).all()
 
-
 def _calculate_advanced_kpis(
     data: List[Dict[str, Any]],
     prev_data: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     '''
-        Internal helper to calculate YoY variations and strategic insights.
+    Calculates YoY variations by mapping exactly Month, Department, and Municipality.
+    Aggregates annual performance to prevent single-month anomalies in Top 5 KPIs.
+
+    Args:
+        data (List[Dict[str, Any]]): Current period data to be evaluated.
+        prev_data (List[Dict[str, Any]]): Previous period data for baseline comparison.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the detailed records and aggregated KPIs.
     '''
     comparison_map = {
-        (d['department'], d['municipality']): d
-        for d in prev_data
+        (d['month'], d['department'], d['municipality']): d for d in prev_data
     }
 
-    total_periodo_bob = Decimal('0')
+    total_period = Decimal('0')
+    muni_agg = defaultdict(lambda: {'actual': Decimal('0'), 'pasado': Decimal('0')})
 
-    for record in data:
-        key = (record['department'], record['municipality'])
-        prev = comparison_map.get(key)
+    for row in data:
+        actual = Decimal(str(row['total_recaudado_bob']))
+        total_period += actual
 
-        actual_val = Decimal(str(record['total_recaudado_bob']))
-        total_periodo_bob += actual_val
+        row['variacion_monto_bob'] = 0.0
+        row['variacion_porcentaje'] = 0.0
 
-        record['variacion_monto_bob'] = 0.0
-        record['variacion_porcentaje'] = 0.0
+        m_key = (row['department'], row['municipality'])
+        muni_agg[m_key]['actual'] += actual
 
+        prev = comparison_map.get((row['month'], row['department'], row['municipality']))
         if prev and Decimal(str(prev['total_recaudado_bob'])) > 0:
-            pasado_val = Decimal(str(prev['total_recaudado_bob']))
-            diff = actual_val - pasado_val
-            record['variacion_monto_bob'] = float(diff)
-            porc = (diff / pasado_val) * Decimal('100')
-            record['variacion_porcentaje'] = float(porc.quantize(Decimal('1.00'),
-                                            rounding = ROUND_HALF_UP))
+            pasado = Decimal(str(prev['total_recaudado_bob']))
+            muni_agg[m_key]['pasado'] += pasado
 
-    # KPI Sugerido: Top 5 de crecimiento porcentual
-    top_crecimiento = sorted(
-        [d for d in data if d['variacion_porcentaje'] > 0],
-        key = lambda x: x['variacion_porcentaje'],
-        reverse = True
-    )[:5]
+            row['variacion_monto_bob'] = float(actual - pasado)
+            porc = ((actual - pasado) / pasado) * Decimal('100')
+
+            porc = max(Decimal('-999.99'), min(porc, Decimal('999.99')))
+            row['variacion_porcentaje'] = float(porc.quantize(Decimal('1.00'),
+                                        rounding = ROUND_HALF_UP))
+
+    annual_kpis = []
+    for (dept, muni), vals in muni_agg.items():
+        # Significance filter: Ignore if previous baseline was < 5000 Bs (statistical noise)
+        if vals['pasado'] > Decimal('5000'):
+            porc = ((vals['actual'] - vals['pasado']) / vals['pasado']) * Decimal('100')
+            porc = max(Decimal('-999.99'), min(porc, Decimal('999.99')))
+
+            annual_kpis.append({
+                'department': dept,
+                'municipality': muni,
+                'variacion_porcentaje': float(porc.quantize(Decimal('1.00'),
+                                        rounding = ROUND_HALF_UP))
+            })
 
     return {
         'detailed_records': data,
         'summary_kpis': {
-            'total_recaudado_periodo': float(total_periodo_bob),
-            'municipios_destacados': top_crecimiento,
-            'alerta_caida_critica': [d for d in data if d['variacion_porcentaje'] < -20]
+            'total_recaudado_periodo': float(total_period),
+            'municipios_destacados': sorted(
+                [d for d in annual_kpis if d['variacion_porcentaje'] > 0],
+                key = lambda x: x['variacion_porcentaje'],
+                reverse = True
+            )[:5],
+            'alerta_caida_critica': sorted(
+                [d for d in annual_kpis if d['variacion_porcentaje'] < -20],
+                key = lambda x: x['variacion_porcentaje']
+            )[:5]
         }
     }
 
@@ -170,26 +190,26 @@ def _calculate_advanced_kpis(
 async def get_royalties_summary_service(
     db: Session,
     year: int = None,
-    quarter: int = None,
+    quarter: int = None, # pylint: disable=unused-argument
     request: Request = None, # pylint: disable=unused-argument
     current_user: str = None # pylint: disable=unused-argument
 ) -> Dict[str, Any]:
     '''
-    Aggregates all financial metrics (BOB and USD) directly from the database model.
+        Aggregates financial metrics.
+        Returns data for the target year AND the previous year to allow
+        dynamic YoY calculation in frontend.
     '''
     def fetch_data(target_year: int):
         query = db.query(
-            extract('year', RoyaltyPayment.period_date).label('year'),
-            extract('month', RoyaltyPayment.period_date).label('month'),
+            RoyaltyPayment.year.label('year'),
+            RoyaltyPayment.month.label('month'),
             Department.name.label('department'),
             Municipality.name.label('municipality'),
-            # Extraemos BOB
             func.sum(RoyaltyPayment.total_collected_bob).label('total_bob'),
             func.sum(RoyaltyPayment.commission_bob).label('comision_bob'),
             func.sum(RoyaltyPayment.subtotal_bob).label('subtotal_bob'),
             func.sum(RoyaltyPayment.gov_dept_bob).label('dept_bob'),
             func.sum(RoyaltyPayment.gov_muni_bob).label('muni_bob'),
-            # Extraemos USD nativos de la DB
             func.sum(RoyaltyPayment.total_collected_usd).label('total_usd'),
             func.sum(RoyaltyPayment.commission_usd).label('comision_usd'),
             func.sum(RoyaltyPayment.subtotal_usd).label('subtotal_usd'),
@@ -202,11 +222,11 @@ async def get_royalties_summary_service(
         )
 
         if target_year:
-            query = query.filter(extract('year', RoyaltyPayment.period_date) == target_year)
+            query = query.filter(RoyaltyPayment.year.in_([target_year, target_year - 1]))
 
         return query.group_by(
-            extract('year', RoyaltyPayment.period_date),
-            extract('month', RoyaltyPayment.period_date),
+            RoyaltyPayment.year,
+            RoyaltyPayment.month,
             Department.name,
             Municipality.name
         ).all()
@@ -234,29 +254,76 @@ async def get_royalties_summary_service(
         } for r in results
     ]
 
-    final_response = {
+    total_periodo = sum(d['total_recaudado_bob'] for d in formatted_data if d['year'] == year) \
+                    if year else 0
+
+    return {
         'status': 'success',
         'message': 'Data retrieved successfully',
         'data': {
             'detailed_records': formatted_data,
             'summary_kpis': {
-                'total_recaudado_periodo': sum(d['total_recaudado_bob'] for d in formatted_data),
+                'total_recaudado_periodo': total_periodo,
                 'municipios_destacados': [],
                 'alerta_caida_critica': []
             }
         }
     }
 
-    if year and not quarter:
-        prev_results_raw = fetch_data(year - 1)
-        prev_records = [
-            {
-                'department': r.department,
-                'municipality': r.municipality,
-                'total_recaudado_bob': float(r.total_bob)
-            } for r in prev_results_raw
-        ]
-        if prev_records:
-            final_response['data'] = _calculate_advanced_kpis(formatted_data, prev_records)
+@handle_service_errors('MINING_ANALYSIS')
+async def get_transactions_summary_service(
+    db: Session,
+    year: int = None
+) -> Dict[str, Any]:
+    '''
+    Retrieves aggregated transactions data joined with companies.
+    
+    Args:
+        db (Session): Database session.
+        year (int, optional): Fiscal year to filter by.
+        
+    Returns:
+        Dict[str, Any]: Dictionary containing status, message, and formatted transaction data.
+    '''
+    query = db.query(
+        Company.name.label('company_name'),
+        Company.nit.label('nit'),
+        RoyaltyTransaction.year.label('year'),
+        RoyaltyTransaction.month.label('month'),
+        Municipality.name.label('municipality'),
+        func.sum(RoyaltyTransaction.amount_paid_bob).label('amount_paid_bob'),
+        func.sum(RoyaltyTransaction.amount_paid_usd).label('amount_paid_usd')
+    ).join(
+        Company, RoyaltyTransaction.company_id == Company.id
+    ).join(
+        Municipality, RoyaltyTransaction.municipality_id == Municipality.id
+    )
 
-    return final_response
+    if year:
+        query = query.filter(RoyaltyTransaction.year == year)
+
+    results = query.group_by(
+        Company.name,
+        Company.nit,
+        RoyaltyTransaction.year,
+        RoyaltyTransaction.month,
+        Municipality.name
+    ).all()
+
+    formatted_data = [
+        {
+            'company_name': r.company_name,
+            'nit': r.nit,
+            'year': int(r.year),
+            'month': int(r.month),
+            'municipality': r.municipality,
+            'amount_paid_bob': float(r.amount_paid_bob),
+            'amount_paid_usd': float(r.amount_paid_usd)
+        } for r in results
+    ]
+
+    return {
+        'status': 'success',
+        'message': 'Transactions retrieved successfully',
+        'data': formatted_data
+    }

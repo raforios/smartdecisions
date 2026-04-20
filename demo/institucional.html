@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ministerio | Minería y Metalurgia Bolivia</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <header class="hero" style="height: 35vh; min-height: 250px;">
+        <canvas id="hero-canvas"></canvas>
+        <div class="hero-content">
+            <h1 class="hero-title" style="font-size: 2.2rem;">Nuestro Ministerio</h1>
+            <p>Seguridad jurídica, eficiencia institucional y competitividad global.</p>
+            <div class="hero-divider"></div>
+        </div>
+    </header>
+
+    <main class="container section">
+        <div class="tabs-container">
+            
+            <div class="tabs-menu">
+                <button class="tab-btn active" data-target="mision-vision"><i class="fa-solid fa-bullseye"></i> Misión y Visión</button>
+                <button class="tab-btn" data-target="autoridades"><i class="fa-solid fa-users"></i> Autoridades</button>
+                <button class="tab-btn" data-target="talento-humano"><i class="fa-solid fa-id-badge"></i> Talento Humano</button>
+                <button class="tab-btn" data-target="auditoria"><i class="fa-solid fa-magnifying-glass-chart"></i> Auditoría</button>
+                <button class="tab-btn" data-target="transparencia"><i class="fa-solid fa-scale-balanced"></i> Transparencia</button>
+            </div>
+
+            <div class="tabs-content">
+                
+                <div id="mision-vision" class="tab-pane active">
+                    <h2 class="section-title">Dirección Estratégica</h2>
+                    <div class="inst-card">
+                        <h3 style="color: var(--oro);"><i class="fa-solid fa-flag"></i> Misión</h3>
+                        <p>Formular y dirigir políticas minero-metalúrgicas enfocadas en la eficiencia, la atracción de inversión extranjera directa y la integración de Bolivia en los mercados globales, garantizando estándares internacionales de sostenibilidad y competitividad corporativa.</p>
+                    </div>
+                    <div class="inst-card" style="margin-top: 1.5rem;">
+                        <h3 style="color: var(--oro);"><i class="fa-solid fa-eye"></i> Visión</h3>
+                        <p>Ser una institución moderna y altamente competitiva que garantice la seguridad jurídica, optimice la cadena productiva y posicione al país como líder estratégico en la provisión de minerales para la industria tecnológica mundial.</p>
+                    </div>
+                </div>
+
+                <div id="autoridades" class="tab-pane">
+                    <h2 class="section-title">Alta Gerencia y Autoridades</h2>
+                    <p>Equipo ejecutivo a cargo de la gestión estratégica del sector.</p>
+                </div>
+
+                <div id="talento-humano" class="tab-pane">
+                    <h2 class="section-title">Nuestro Capital Humano</h2>
+                    <p>Profesionales altamente capacitados orientados a la gestión por resultados.</p>
+                    <div class="grid-credenciales">
+                        <div class="credencial-card">
+                            <img src="https://ui-avatars.com/api/?name=Carlos+Mendoza&background=C9A751&color=fff" class="credencial-img">
+                            <h4>Ing. Carlos Mendoza</h4>
+                            <p style="font-size: 0.8rem; font-weight: bold; color: var(--oro);">Dir. Operaciones Internacionales</p>
+                        </div>
+                        <div class="credencial-card">
+                            <img src="https://ui-avatars.com/api/?name=Andrea+Valdes&background=C9A751&color=fff" class="credencial-img">
+                            <h4>Lic. Andrea Valdés</h4>
+                            <p style="font-size: 0.8rem; font-weight: bold; color: var(--oro);">Jefa de Atracción de Inversiones</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="auditoria" class="tab-pane">
+                    <h2 class="section-title">Auditoría Interna y Control</h2>
+                    <p>Implementamos rigurosos controles financieros bajo normativas internacionales (ISO) para asegurar la rentabilidad corporativa.</p>
+                </div>
+
+                <div id="transparencia" class="tab-pane">
+                    <h2 class="section-title">Transparencia Corporativa</h2>
+                    <p>Información de libre acceso para inversores y stakeholders corporativos.</p>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <div id="footer-container"></div>
+    <script src="js/script.js"></script>
+</body>
+</html>
