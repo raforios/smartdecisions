@@ -32,7 +32,8 @@ def create_usage_log(
     return create_item(
         dynamodb_resource = dynamodb_resource,
         table_name = USAGE_LOG_TABLE_NAME,
-        item_data = log_data
+        item_data = log_data,
+        unique_key_attribute = 'id'
     )
 
 @handle_service_errors

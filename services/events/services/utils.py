@@ -59,8 +59,11 @@ def process_query_params(
 ) -> Dict[str, Any]:
     '''
         Processes query parameters from a Pydantic model or dictionary
-        into a dictionary for DynamoDB queries.
+        into a dictionary for DynamoDB queries. Prefers Pydantic V2's
+        model_dump() and falls back to V1's dict() for backwards compatibility.
     '''
+    if hasattr(query_params, 'model_dump'):
+        return query_params.model_dump(exclude_none = True)
     if hasattr(query_params, 'dict'):
-        return query_params.dict(exclude_none=True)
+        return query_params.dict(exclude_none = True)
     return query_params

@@ -31,7 +31,8 @@ def create_audit_record(
     return create_item(
         dynamodb_resource = dynamodb_resource,
         table_name = AUDIT_TABLE_NAME,
-        item_data = record_data
+        item_data = record_data,
+        unique_key_attribute = 'id'
     )
 
 @handle_service_errors
