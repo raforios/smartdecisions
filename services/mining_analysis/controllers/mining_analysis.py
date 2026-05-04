@@ -29,7 +29,7 @@ from schemas.mining_analysis import (
 async def bulk_upload_mining_controller(
     db: Session,
     file_content: bytes,
-    file_name: str, # pylint: disable=unused-argument
+    file_name: str,
     request: Request, # pylint: disable=unused-argument
     current_user: str, # pylint: disable=unused-argument
     delimiter: str = ','
@@ -39,11 +39,10 @@ async def bulk_upload_mining_controller(
         Orchestrates service logic, audit events, and usage logging.
     '''
 
-    result = {}
-
     result = await process_mining_etl_service(
         db = db,
         file_content = file_content,
+        file_name = file_name,
         delimiter = delimiter
     )
 

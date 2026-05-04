@@ -13,8 +13,15 @@ class MiningAnalysisBaseSchema(BaseModel):
 
 class MineralBase(BaseModel):
     ''' Base schema for a mineral. '''
-    name: str = Field(..., max_length=100, description='Nombre del mineral.')
-    unit: str = Field(..., max_length=20, description='Unidad de medida (ej. LF, OT).')
+    name: str = Field(..., max_length = 100, description = 'Mineral name.')
+    unit: str = Field(..., max_length = 20, description = 'Measurement unit (e.g., LF, OT).')
+
+    # New metadata fields
+    chemical_symbol: Optional[str] = Field(None, max_length = 10,
+                                    description = 'Chemical symbol (e.g., Sn, Pb).')
+    quoted_in: Optional[str] = Field(None, max_length = 50,
+                                    description = 'Reference market (e.g., LME, AM).')
+    method: Optional[str] = Field(None, max_length = 255, description = 'Calculation method.')
 
 class MineralResponseSchema(MineralBase, MiningAnalysisBaseSchema):
     ''' Response schema for a mineral including ID. '''

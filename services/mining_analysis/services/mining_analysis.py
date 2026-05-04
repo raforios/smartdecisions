@@ -38,63 +38,129 @@ def clean_currency_pro(value: Any) -> float:
     except ValueError:
         return 0.0
 
+def _parse_mining_file(file_content: bytes, file_name: str, delimiter: str) -> pd.DataFrame:
+    ''' Parses the uploaded file and validates required columns. '''
+    file_extension = file_name.split('.')[-1].lower()
+
+    if file_extension == 'csv':
+        df = pd.read_csv(io.BytesIO(file_content), sep=delimiter)
+    elif file_extension in ['xls', 'xlsx']:
+        df = pd.read_excel(io.BytesIO(file_content))
+    else:
+        raise ValueError('Unsupported file format. Please upload a .csv or .xlsx file.')
+
+    # Standardize column names to lowercase and strip spaces for safe matching
+    df.columns = df.columns.str.strip().str.lower()
+
+    required_columns = ['fecha', 'mineral', 'simbolo', 'unidad', 'referencia']
+    missing_cols = [col for col in required_columns if col not in df.columns]
+
+    if missing_cols:
+        raise ValueError(f'Missing required columns in file: {missing_cols}')
+
+    df['fecha'] = pd.to_datetime(df['fecha'], dayfirst=True).dt.date
+    return df
+
+def _extract_prices(row: pd.Series) -> tuple:
+    ''' Extracts the min and max prices based on the market reference. '''
+    reference = str(row.get('referencia', '')).strip().upper()
+
+    if reference == 'LME':
+        target_cols = ['cash bid', 'cash offer', 'month bid', 'month offer']
+    elif reference in ['AM']:
+        target_cols = ['low', 'high']
+    elif reference in ['LFIX']:
+        target_cols = ['low']
+    else:
+        return 0.0, 0.0
+
+    # Clean and collect valid numeric values
+    vals = [
+        clean_currency_pro(row.get(c)) for c in target_cols
+        if c in row and pd.notna(row.get(c))
+    ]
+    valid_vals = [v for v in vals if v > 0]
+
+    if not valid_vals:
+        return 0.0, 0.0
+
+    return min(valid_vals), max(valid_vals)
+
+def _process_single_mineral_row(db: Session, row: pd.Series) -> bool:
+    ''' 
+        Handles the upsert logic for a single mineral and its price.
+        Returns True if a new price was processed, False if it was skipped.
+    '''
+    mineral_name = str(row['mineral']).strip()
+    mineral = db.query(Mineral).filter(Mineral.name == mineral_name).first()
+
+    # Create or update the mineral record
+    if not mineral:
+        mineral = Mineral(
+            name = mineral_name,
+            unit = str(row.get('unidad', '')).strip(),
+            chemical_symbol = str(row.get('simbolo', '')).strip(),
+            quoted_in = str(row.get('referencia', '')).strip().upper(),
+            method = str(row.get('method', '')).strip()
+        )
+        db.add(mineral)
+        db.flush()
+    else:
+        # Update existing metadata in case it changed or was empty
+        mineral.chemical_symbol = str(row.get('simbolo', '')).strip()
+        mineral.quoted_in = str(row.get('referencia', '')).strip().upper()
+        mineral.method = str(row.get('method', '')).strip()
+
+    # Calculate price_low and price_high dynamically using helper
+    price_low, price_high = _extract_prices(row)
+
+    existing = db.query(MiningPrice).filter(
+        MiningPrice.mineral_id == mineral.id,
+        MiningPrice.date == row['fecha']
+    ).first()
+
+    if not existing:
+        new_price = MiningPrice(
+            mineral_id = mineral.id,
+            date = row['fecha'],
+            price_low = price_low,
+            price_high = price_high
+        )
+        db.add(new_price)
+        return True
+
+    return False
+
+
 async def process_mining_etl_service(
     db: Session,
     file_content: bytes,
+    file_name: str,
     delimiter: str = ','
 ) -> Dict[str, Any]:
-    ''' Optimized ETL logic using Pandas with duplicate tracking and column sanitization. '''
+    ''' 
+        Optimized ETL logic using Pandas for both CSV and Excel parsing with
+        dynamic reference mapping.
+    '''
     try:
-        df = pd.read_csv(io.BytesIO(file_content), sep = delimiter)
-        df.columns = df.columns.str.strip()
-
-        required_columns = ['Fecha', 'Mineral', 'Unidad', 'Baja', 'Alta']
-        missing_cols = [col for col in required_columns if col not in df.columns]
-
-        if missing_cols:
-            raise ValueError(
-                f'Faltan columnas o delimitador "{delimiter}" incorrecto. No se halló: {
-                    missing_cols}'
-            )
-
-        df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst = True).dt.date
-        df['Baja'] = df['Baja'].apply(clean_currency_pro)
-        df['Alta'] = df['Alta'].apply(clean_currency_pro)
-
+        df = _parse_mining_file(file_content, file_name, delimiter)
     except ValueError as ve:
-        error_msg = f'Validation Error processing CSV: {ve}'
+        error_msg = f'Validation Error processing file: {ve}'
         logger.error(error_msg, exc_info = True)
         raise InvalidInputError(detail = str(ve)) from ve
     except Exception as e:
-        error_msg = f'Error processing CSV: {e}'
+        error_msg = f'Error processing file: {e}'
         logger.error(error_msg, exc_info = True)
         raise InvalidInputError(
-            detail = 'Formato de archivo CSV inválido o corrupto.'
+            detail = 'Invalid/corrupt file format. Please ensure it is a valid CSV or Excel file.'
         ) from e
 
     processed, skipped = 0, 0
 
     with db.begin_nested():
         for _, row in df.iterrows():
-            mineral = db.query(Mineral).filter(Mineral.name == row['Mineral']).first()
-            if not mineral:
-                mineral = Mineral(name = row['Mineral'], unit = row['Unidad'])
-                db.add(mineral)
-                db.flush()
-
-            existing = db.query(MiningPrice).filter(
-                MiningPrice.mineral_id == mineral.id,
-                MiningPrice.date == row['Fecha']
-            ).first()
-
-            if not existing:
-                new_price = MiningPrice(
-                    mineral_id = mineral.id,
-                    date = row['Fecha'],
-                    price_low = row['Baja'],
-                    price_high = row['Alta']
-                )
-                db.add(new_price)
+            # Orchestrate the row processing cleanly
+            if _process_single_mineral_row(db, row):
                 processed += 1
             else:
                 skipped += 1

@@ -24,6 +24,12 @@ class Mineral(Base): # pylint: disable=too-few-public-methods
     id = Column(Integer, primary_key = True, index = True)
     name = Column(String(100), unique = True, nullable = False, index = True)
     unit = Column(String(20), nullable = False)
+
+    # New metadata columns
+    chemical_symbol = Column(String(10), nullable = True)
+    quoted_in = Column(String(50), nullable = True) # E.g., LME, AM, LFIX
+    method = Column(String(255), nullable = True)
+
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     prices = relationship(

@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+pydantic-core
+pydantic[email]
+python-multipart
+boto3
+mangum
+python-jose[cryptography]
+python-dotenv
+pytest
