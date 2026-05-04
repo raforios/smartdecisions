@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Centro documental - Repositorio de publicaciones, normativas y documentos del Ministerio de Minería">
+  <title>Documentación | Minería y Metalurgia Bolivia</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <div id="site-header"
+       data-component="header"
+       data-config="config/navigation.json"
+       class="site-header-wrapper">
+  </div>
+
+  <div data-component="price-ticker"
+       data-source="json"
+       data-json-fallback="config/minerals.json"
+       class="ticker-wrapper">
+  </div>
+
+  <header data-component="hero"
+          data-config="config/documentacion-content.json"
+          data-height="38vh"
+          class="hero hero--compact">
+  </header>
+
+  <main id="main-content" class="container section">
+
+    <div class="tabs-container">
+
+      <nav class="tabs-menu" role="tablist" aria-label="Categorías documentales">
+        <button class="tab-btn active" role="tab" aria-selected="true"
+                aria-controls="panel-boletines" data-target="boletines">
+          <i class="fa-solid fa-file-invoice" aria-hidden="true"></i> Boletines
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false"
+                aria-controls="panel-revistas" data-target="revistas">
+          <i class="fa-solid fa-book" aria-hidden="true"></i> Revistas
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false"
+                aria-controls="panel-poa" data-target="poa">
+          <i class="fa-solid fa-chart-gantt" aria-hidden="true"></i> POA
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false"
+                aria-controls="panel-normas" data-target="normas">
+          <i class="fa-solid fa-scale-balanced" aria-hidden="true"></i> Normativas
+        </button>
+      </nav>
+
+      <div class="tabs-content">
+
+        <div id="panel-boletines" class="tab-pane active"
+             role="tabpanel" aria-labelledby="tab-boletines">
+          <h2 class="section-title">Boletines Estadísticos</h2>
+          <div data-component="documents"
+               data-source="json"
+               data-json="config/documents.json">
+          </div>
+        </div>
+
+        <div id="panel-revistas" class="tab-pane"
+             role="tabpanel" aria-labelledby="tab-revistas">
+          <h2 class="section-title">Revistas Institucionales</h2>
+          <p>Publicaciones sobre avances tecnológicos en la industria metalúrgica.</p>
+        </div>
+
+        <div id="panel-poa" class="tab-pane"
+             role="tabpanel" aria-labelledby="tab-poa">
+          <h2 class="section-title">Plan Operativo Anual (POA)</h2>
+          <p>Instrumento de planificación estratégica para la consecución de objetivos corporativos.</p>
+        </div>
+
+        <div id="panel-normas" class="tab-pane"
+             role="tabpanel" aria-labelledby="tab-normas">
+          <h2 class="section-title">Marco Normativo</h2>
+          <p>Leyes, decretos y resoluciones que rigen la actividad minero-metalúrgica nacional.</p>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <div data-component="footer"
+       data-config="config/social.json">
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+  <script type="module">
+    import { eventBus } from './js/core/EventBus.js';
+
+    eventBus.on('app:ready', () => {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.target;
+
+          document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+          });
+          document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+          btn.classList.add('active');
+          btn.setAttribute('aria-selected', 'true');
+          document.getElementById(`panel-${target}`)?.classList.add('active');
+        });
+      });
+    });
+  </script>
+
+</body>
+</html>

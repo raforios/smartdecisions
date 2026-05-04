@@ -48,7 +48,7 @@ with col_r:
 # --- TABS (Restaurado el esquema de 4 pestañas o 3 sin el Histórico) ---
 tab_cot, tab_boletin, tab_companies = st.tabs([
     '📈 Cotizaciones Internacionales', 
-    '📑 Boletín Oficial (Transaccional)',
+    '📑 Boletín Oficial',
     '🏢 Empresas Mineras'
 ])
 

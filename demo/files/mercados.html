@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Mercados Internacionales - Cotizaciones London Metal Exchange">
+  <title>Mercados Globales | Minería Bolivia</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/components.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <div id="site-header"
+       data-component="header"
+       data-config="config/navigation.json"
+       class="site-header-wrapper">
+  </div>
+
+  <div data-component="price-ticker"
+       data-source="json"
+       data-json-fallback="config/minerals.json"
+       class="ticker-wrapper">
+  </div>
+
+  <header data-component="hero"
+          data-config="config/mercados-content.json"
+          data-height="35vh"
+          class="hero hero--compact">
+  </header>
+
+  <main id="main-content" class="container section">
+
+    <h2 class="section-title">Variación Semanal de Cotizaciones</h2>
+
+    <!-- Tabla de precios en tiempo real -->
+    <div class="mercados-grid" id="prices-table-container">
+      <div class="loading-skeleton" aria-busy="true" aria-label="Cargando cotizaciones...">
+        <p>Cargando cotizaciones...</p>
+      </div>
+    </div>
+
+    <!-- Gráfico LME -->
+    <div class="chart-card">
+      <h3 class="chart-card__title">
+        <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
+        Tendencia Semanal — London Metal Exchange
+      </h3>
+      <canvas id="lme-chart" role="img" aria-label="Gráfico de cotizaciones LME"></canvas>
+    </div>
+
+  </main>
+
+  <div data-component="footer"
+       data-config="config/social.json">
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+  <script type="module">
+    import { eventBus }   from './js/core/EventBus.js';
+    import { DataService } from './js/services/DataService.js';
+
+    eventBus.on('app:ready', async () => {
+      const ds = new DataService({ fallbackToJson: true });
+      const data = await ds.loadJson('config/minerals.json');
+      const minerals = data.minerals ?? [];
+
+      renderPricesTable(minerals);
+      renderChart(minerals);
+    });
+
+    function renderPricesTable(minerals) {
+      const container = document.getElementById('prices-table-container');
+      if (!container) return;
+
+      container.innerHTML = `
+        <table class="prices-table" role="table" aria-label="Cotizaciones de minerales">
+          <caption class="sr-only">Cotizaciones actuales de minerales en el mercado internacional</caption>
+          <thead>
+            <tr>
+              <th scope="col">Mineral</th>
+              <th scope="col">Precio</th>
+              <th scope="col">Unidad</th>
+              <th scope="col">Variación</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${minerals.map(m => `
+              <tr>
+                <td><strong>${m.name}</strong></td>
+                <td class="prices-table__price">$${m.price}</td>
+                <td class="prices-table__unit">${m.unit}</td>
+                <td class="${m.up ? 'trend-up' : 'trend-down'}" aria-label="${m.up ? 'Alza' : 'Baja'} de ${m.trend}">
+                  ${m.up ? '▲' : '▼'} ${m.trend}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderChart(minerals) {
+      const ctx = document.getElementById('lme-chart');
+      if (!ctx || !window.Chart) return;
+
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const textColor = isDark ? '#e0e0e0' : '#242732';
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+          datasets: minerals.slice(0, 5).map((m, i) => ({
+            label: m.name,
+            data: Array.from({ length: 5 }, () =>
+              parseFloat(m.price.replace(/,/g, '')) * (0.97 + Math.random() * 0.06)
+            ),
+            borderColor: getColor(i),
+            backgroundColor: `${getColor(i)}22`,
+            tension: 0.3,
+          })),
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { labels: { color: textColor } },
+          },
+          scales: {
+            y: { ticks: { color: textColor } },
+            x: { ticks: { color: textColor } },
+          },
+        },
+      });
+    }
+
+    function getColor(i) {
+      const palette = [
+        '#C9A751', '#4A6984', '#2E4034', '#8B0000', '#15592F', '#1A2A3A'
+      ];
+      return palette[i % palette.length];
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Ministerio de Minería y Metalurgia - Estado Plurinacional de Bolivia">
+  <title>Ministerio de Minería y Metalurgia | Bolivia</title>
+
+  <!-- Preconnect para fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Estilos globales -->
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <!-- ═══════════════ NAVBAR ═══════════════ -->
+  <div id="site-header"
+       data-component="header"
+       data-config="config/navigation.json"
+       class="site-header-wrapper">
+  </div>
+
+  <!-- ═══════════════ PRICE TICKER ═══════════════ -->
+  <div data-component="price-ticker"
+       data-source="json"
+       data-json-fallback="config/minerals.json"
+       class="ticker-wrapper">
+  </div>
+
+  <!-- ═══════════════ HERO ═══════════════ -->
+  <header id="inicio"
+          data-component="hero"
+          data-config="config/home-content.json"
+          data-height="75vh"
+          class="hero">
+  </header>
+
+  <main id="main-content">
+
+    <!-- ═══════════════ COMUNICACIÓN ═══════════════ -->
+    <div data-component="content-section"
+         data-section="comunicacion"
+         data-config="config/home-content.json">
+    </div>
+
+    <!-- ═══════════════ SLIDER ═══════════════ -->
+    <section aria-label="Galería de minerales estratégicos">
+      <div data-component="slider"
+           data-config="config/home-content.json"
+           data-interval="5000"
+           class="container">
+      </div>
+    </section>
+
+    <!-- ═══════════════ NORMATIVAS ═══════════════ -->
+    <section id="normativas" class="section container">
+      <h2 class="section-title">Reglamentaciones y Documentos</h2>
+      <div data-component="documents"
+           data-source="json"
+           data-json="config/documents.json">
+      </div>
+    </section>
+
+    <!-- ═══════════════ ENTIDADES ═══════════════ -->
+    <div class="container"
+         data-component="content-section"
+         data-section="entidades"
+         data-config="config/home-content.json">
+    </div>
+
+    <!-- ═══════════════ CONTACTO ═══════════════ -->
+    <div class="container"
+         data-component="content-section"
+         data-section="contacto"
+         data-config="config/home-content.json">
+    </div>
+
+  </main>
+
+  <!-- ═══════════════ FOOTER ═══════════════ -->
+  <div data-component="footer"
+       data-config="config/social.json">
+  </div>
+
+  <!-- Bootstrap — ES Modules -->
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>

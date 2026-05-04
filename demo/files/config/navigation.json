@@ -1,0 +1,64 @@
+{
+  "brand": {
+    "logo": "img/cropped-escudo.png",
+    "logoAlt": "Escudo de Bolivia",
+    "line1": "MINISTERIO DE",
+    "line2": "MINERÍA Y METALURGIA"
+  },
+  "items": [
+    {
+      "id": "inicio",
+      "label": "Inicio",
+      "href": "index.html",
+      "icon": null
+    },
+    {
+      "id": "ministerio",
+      "label": "Ministerio",
+      "href": "institucional.html",
+      "icon": null,
+      "children": [
+        { "label": "Misión y Visión",    "href": "institucional.html#mision-vision" },
+        { "label": "Autoridades",        "href": "institucional.html#autoridades" },
+        { "label": "Talento Humano",     "href": "institucional.html#talento-humano" }
+      ]
+    },
+    {
+      "id": "documentacion",
+      "label": "Documentación",
+      "href": "documentacion.html",
+      "icon": null,
+      "children": [
+        { "label": "Boletines",   "href": "documentacion.html#boletines" },
+        { "label": "Revistas",    "href": "documentacion.html#revistas" },
+        { "label": "POA",         "href": "documentacion.html#poa" }
+      ]
+    },
+    {
+      "id": "mercados",
+      "label": "Mercados",
+      "href": "mercados.html",
+      "icon": null
+    },
+    {
+      "id": "entidades",
+      "label": "Entidades",
+      "href": "index.html#entidades",
+      "icon": null
+    },
+    {
+      "id": "portal-bi",
+      "label": "Portal BI",
+      "href": "#",
+      "icon": null,
+      "highlight": true
+    }
+  ],
+  "actions": [
+    {
+      "id": "theme-toggle",
+      "type": "theme",
+      "icon": "🌙"
+    }
+  ]
+}

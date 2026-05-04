@@ -1,0 +1,62 @@
+{
+  "institucion": {
+    "nombreCorto": "MINISTERIO DE",
+    "nombreLargo": "MINERÍA Y METALURGIA",
+    "logo": "img/cropped-escudo.png"
+  },
+  "menuPrincipal": [
+    { "titulo": "Inicio", "url": "index.html" },
+    { "titulo": "Ministerio", "url": "institucional.html" },
+    { "titulo": "Documentación", "url": "documentacion.html" }
+  ],
+  "tickerPrecios": [
+    { "name": "ORO", "price": "2,150.40", "trend": "+1.2%", "status": "up" },
+    { "name": "PLATA", "price": "24.30", "trend": "-0.5%", "status": "down" },
+    { "name": "ESTAÑO", "price": "27,450.00", "trend": "+0.8%", "status": "up" },
+    { "name": "ZINC", "price": "2,540.00", "trend": "+2.1%", "status": "up" },
+    { "name": "LITIO (LCE)", "price": "13,500.00", "trend": "-1.4%", "status": "down" },
+    { "name": "HIERRO", "price": "915.00", "trend": "+0.5%", "status": "up" }
+  ],
+  "redesSociales": [
+    { "nombre": "LinkedIn", "icono": "fa-brands fa-linkedin", "url": "https://www.linkedin.com/company/ministerio-de-minería-y-metalurgia-de-bolivia" },
+    { "nombre": "YouTube", "icono": "fa-brands fa-youtube", "url": "https://www.youtube.com/channel/UC3avDHxuYOiv56hspVueXrg" },
+    { "nombre": "Instagram", "icono": "fa-brands fa-instagram", "url": "https://www.instagram.com/ministeriodemineriabolivia/" },
+    { "nombre": "TikTok", "icono": "fa-brands fa-tiktok", "url": "https://www.tiktok.com/@ministeriodemineria" },
+    { "nombre": "X", "svg": true, "url": "https://x.com/minmineriabo" },
+    { "nombre": "Facebook", "icono": "fa-brands fa-facebook", "url": "https://www.facebook.com/minmineriabol" }
+  ],
+  "contacto": {
+    "oficinaCentral": "Av. Mariscal Santa Cruz, Edificio Centro de Comunicaciones Piso 14.",
+    "oficinaPiso2": "Av. Mariscal Santa Cruz, Edificio Centro de Comunicaciones Piso 2.",
+    "oficinaArce": "Av. Arce, Pasaje Pinilla.",
+    "telefono": "2312784",
+    "mapaEmbed": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3825.437152016335!2d-68.13624382512613!3d-16.49692488424564!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x915f207038bb1dd1%3A0x673dbb608882b544!2sEdificio%20Centro%20de%20Comunicaciones%20La%20Paz!5e0!3m2!1ses!2sbo!4v1709900000000!5m2!1ses!2sbo",
+    "mapaLink": "https://maps.google.com"
+  },
+  "noticias": [
+    { "tipo": "Notas de Prensa", "icono": "fa-solid fa-newspaper", "extracto": "Ministerio expone portafolio de inversiones...", "accion": "Leer más" },
+    { "tipo": "Comunicados", "icono": "fa-solid fa-bullhorn", "extracto": "Actualización de normativas de exportación...", "accion": "Ver archivo" },
+    { "tipo": "Fotografías", "icono": "fa-solid fa-camera", "extracto": "Galería oficial de inspecciones técnicas...", "accion": "Ver galería" },
+    { "tipo": "Artículos", "icono": "fa-solid fa-file-lines", "extracto": "El rol del Zinc boliviano en la cadena global.", "accion": "Descargar" }
+  ],
+  "slider": [
+    { "img": "img/mineral1.jpg", "title": "LITIO Y EVAPORÍTICOS", "desc": "El epicentro de la transición energética global." },
+    { "img": "img/mineral2.jpg", "title": "ORO Y PLATA", "desc": "Potencial geológico con tecnología metalúrgica de punta." },
+    { "img": "img/mineral3.jpg", "title": "ESTAÑO Y ZINC", "desc": "Fortaleciendo la cadena de suministros industriales." },
+    { "img": "img/mineral4.jpg", "title": "HIERRO Y SIDERURGIA", "desc": "Impulsando la industria metalúrgica internacional." }
+  ],
+  "documentos": [
+    { "titulo": "Reglamento General de Minería 2026", "tipo": "PDF", "fecha": "10/03/2026" },
+    { "titulo": "Manual de Exportación de Concentrados", "tipo": "DOC", "fecha": "05/03/2026" },
+    { "titulo": "Ley de Fomento Metalúrgico", "tipo": "LEY", "fecha": "20/02/2026" }
+  ],
+  "entidades": [
+    { "nombre": "VINTO", "url": "https://vinto.gob.bo/" },
+    { "nombre": "COMIBOL", "url": "https://www.comibol.gob.bo/" },
+    { "nombre": "AJAM", "url": "https://www.autoridadminera.gob.bo/" },
+    { "nombre": "ESM", "url": "https://esm.gob.bo/" },
+    { "nombre": "SERGEOMIN", "url": "https://www.sergeomin.gob.bo/" },
+    { "nombre": "SENARECOM", "url": "https://www.senarecom.gob.bo/" },
+    { "nombre": "FOFIM", "url": "https://www.fofim.gob.bo/" }
+  ]
+}

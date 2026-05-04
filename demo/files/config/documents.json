@@ -1,0 +1,59 @@
+{
+  "categories": ["Todos", "PDF", "Ley", "Documento", "Resolución"],
+  "items": [
+    {
+      "id": 1,
+      "title": "Reglamento General de Minería 2026",
+      "type": "PDF",
+      "date": "10/03/2026",
+      "href": "#",
+      "description": "Marco regulatorio actualizado para operaciones mineras en el territorio nacional.",
+      "featured": true
+    },
+    {
+      "id": 2,
+      "title": "Manual de Exportación de Concentrados",
+      "type": "Documento",
+      "date": "05/03/2026",
+      "href": "#",
+      "description": "Procedimientos y requisitos para la exportación de concentrados minerales.",
+      "featured": false
+    },
+    {
+      "id": 3,
+      "title": "Ley de Fomento Metalúrgico",
+      "type": "Ley",
+      "date": "20/02/2026",
+      "href": "#",
+      "description": "Ley que establece incentivos para el desarrollo de la industria metalúrgica nacional.",
+      "featured": false
+    },
+    {
+      "id": 4,
+      "title": "Resolución Ministerial Nro. 042/2026",
+      "type": "Resolución",
+      "date": "15/02/2026",
+      "href": "#",
+      "description": "Aprobación de nuevos estándares ambientales para operaciones de concentración.",
+      "featured": false
+    },
+    {
+      "id": 5,
+      "title": "Boletín Estadístico Trimestral Q1 2026",
+      "type": "PDF",
+      "date": "01/04/2026",
+      "href": "#",
+      "description": "Estadísticas de producción y exportación del primer trimestre de 2026.",
+      "featured": true
+    },
+    {
+      "id": 6,
+      "title": "Decreto Supremo Nro. 5210",
+      "type": "Ley",
+      "date": "28/01/2026",
+      "href": "#",
+      "description": "Regulación de regalías mineras para pequeña y mediana minería.",
+      "featured": false
+    }
+  ]
+}

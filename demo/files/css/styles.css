@@ -1,0 +1,461 @@
+:root {
+    --oro: #C9A751;
+    --negro: #242732;
+    --gris: #363534;
+    --blanco: #ffffff;
+    --bg-body: #f8f9fa;
+    --text-main: #242732;
+    --card-bg: #ffffff;
+    --shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] {
+    --bg-body: #1a1c23;
+    --text-main: #e0e0e0;
+    --card-bg: #242732;
+    --shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Montserrat', sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    line-height: 1.6;
+    transition: background 0.4s ease;
+}
+
+/* Navbar */
+.navbar {
+    background: var(--negro);
+    color: white;
+    padding: 0.5rem 5%;
+    position: relative; /* Ya no es fixed, el padre lo controla */
+    width: 100%;
+}
+
+.nav-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#navbar-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+
+.brand { display: flex; align-items: center; gap: 15px; }
+.escudo-img { height: 85px; width: auto; }
+.logo-text { display: flex; flex-direction: column; }
+.logo-min { font-size: 0.7rem; color: var(--oro); }
+.logo-main { font-family: 'Cinzel', serif; font-weight: bold; font-size: 1.1rem; }
+
+.nav-links { display: flex; list-style: none; align-items: center; }
+.nav-links li { margin-left: 1.5rem; }
+.nav-links a { color: white; text-decoration: none; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; }
+
+.btn-bi {
+    background: var(--oro);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    color: var(--negro) !important;
+}
+
+.theme-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; color: white; }
+
+/* Hero Section Abstracto */
+.hero {
+    height: 45vh; /* Reducido del 80vh/75vh anterior */
+    min-height: 350px;
+    background-color: var(--negro);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: white;
+    margin-top: 130px; /* Espacio exacto para el navbar + ticker */
+    position: relative;
+    overflow: hidden;
+}
+
+/* El canvas ahora se restringe al header */
+#hero-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+.hero-content { position: relative; z-index: 2; padding: 0 20px; }
+.hero-title { font-family: 'Cinzel', serif; font-size: 2.5rem; color: var(--oro); }
+.hero-divider { width: 80px; height: 3px; background: var(--oro); margin: 20px auto; }
+
+/* Slider Section */
+.container { padding: 0 5% 4rem 5%; }
+.slider-container {
+    position: relative;
+    height: 450px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: -60px; /* Solapado con el hero */
+    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+.slide { position: absolute; width: 100%; height: 100%; opacity: 0; transition: 0.8s; }
+.slide.active { opacity: 1; }
+.slide img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.7); }
+.slide-caption {
+    position: absolute; bottom: 30px; left: 30px;
+    background: rgba(36, 39, 50, 0.9); color: var(--oro);
+    padding: 15px 25px; border-left: 5px solid var(--oro);
+}
+
+.slide-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: white; border: none; padding: 1rem; cursor: pointer; z-index: 11; }
+#nextSlide { right: 0; } #prevSlide { left: 0; }
+
+/* Grid Documentos */
+.section { padding: 4rem 0; }
+.section-title { font-family: 'Cinzel', serif; margin-bottom: 2rem; border-left: 5px solid var(--oro); padding-left: 1rem; }
+.grid-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+.doc-item { background: var(--card-bg); padding: 1.5rem; border-radius: 8px; box-shadow: var(--shadow); border-top: 4px solid var(--oro); transition: 0.3s; }
+.doc-item:hover { transform: translateY(-5px); }
+.tag { font-size: 0.7rem; font-weight: bold; background: #eee; padding: 2px 8px; border-radius: 4px; color: #333; }
+
+/* Social */
+.social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem; }
+.feed-card { background: var(--card-bg); border-radius: 12px; padding: 1.5rem; min-height: 300px; box-shadow: var(--shadow); }
+
+.footer { background: var(--negro); color: white; text-align: center; padding: 2rem; margin-top: 4rem; }
+
+@media (max-width: 768px) {
+    .social-grid { grid-template-columns: 1fr; }
+    .hero-title { font-size: 1.8rem; }
+}
+
+/* Ticker de Precios */
+/* --- TICKER FIJO BAJO EL MENÚ --- */
+.ticker-wrap {
+    width: 100%;
+    overflow: hidden;
+    background: var(--negro);
+    color: var(--oro);
+    height: 40px;
+    display: flex;
+    align-items: center;
+    position: relative; /* Ya no es fixed, el padre lo controla */
+    border-top: 1px solid var(--gris);
+    border-bottom: 2px solid var(--oro);
+    font-size: 0.85rem;
+}
+
+.mercados-btn {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    background: var(--oro);
+    color: var(--negro);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    font-weight: bold;
+    z-index: 10;
+    box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+}
+
+.mercados-btn:hover { background: var(--blanco); }
+
+.ticker {
+    display: flex;
+    white-space: nowrap;
+    padding-right: 100%;
+    animation: ticker 30s linear infinite;
+}
+
+.ticker-item {
+    padding: 0 2rem;
+    display: flex;
+    gap: 10px;
+}
+
+.up { color: #00ff00; }
+.down { color: #ff4444; }
+
+@keyframes ticker {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-100%, 0, 0); }
+}
+
+/* --- NUEVOS ESTILOS: Entidades, Contacto y Footer --- */
+
+/* Entidades Bajo Tuición */
+.grid-entidades {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.entidad-card {
+    background: var(--card-bg);
+    color: var(--text-main);
+    padding: 1rem;
+    text-align: center;
+    text-decoration: none;
+    font-weight: 600;
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(201, 167, 81, 0.3);
+    transition: all 0.3s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.entidad-card:hover {
+    background: var(--oro);
+    color: var(--negro);
+    transform: translateY(-3px);
+}
+
+/* Sección Contacto */
+.contacto-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    background: var(--card-bg);
+    padding: 3rem;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    margin-bottom: 3rem;
+}
+
+.contact-item {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 1.5rem;
+    align-items: flex-start;
+}
+
+.contact-item i {
+    color: var(--oro);
+    font-size: 1.2rem;
+    margin-top: 4px;
+}
+
+.map-link {
+    display: block;
+    margin-top: 10px;
+    color: var(--oro);
+    text-decoration: none;
+    font-weight: 600;
+    text-align: right;
+}
+
+.map-link:hover { text-decoration: underline; }
+
+/* Línea Tricolor Boliviana */
+.tricolor-line {
+    display: block;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(to right, 
+        #B82227 0%, #B82227 33.33%, 
+        #FFCC18 33.33%, #FFCC18 66.66%, 
+        #15592F 66.66%, #15592F 100%);
+    margin: 0; /* Elimina espacios */
+    padding: 0;
+}
+
+/* Footer y Redes Sociales */
+.footer {
+    background: var(--negro);
+    color: white;
+    text-align: center;
+    padding: 2rem;
+    margin-top: 0; /* Esto quitó el espacio en blanco */
+}
+
+.social-footer {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.social-icons {
+    display: flex;
+    gap: 15px;
+}
+
+.social-icons a {
+    color: white;
+    font-size: 1.5rem;
+    transition: color 0.3s ease;
+}
+
+.social-icons a svg {
+    vertical-align: middle;
+    transition: color 0.3s;
+}
+
+.social-icons a:hover {
+    color: var(--oro);
+}
+
+@media (max-width: 768px) {
+    .contacto-section { grid-template-columns: 1fr; }
+}
+
+/* --- ESTILOS PARA LA PÁGINA INSTITUCIONAL (TABS) --- */
+
+.tabs-container {
+    display: flex;
+    gap: 3rem;
+    margin-top: 2rem;
+    background: var(--card-bg);
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+}
+
+.tabs-menu {
+    flex: 0 0 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-right: 2px solid rgba(201, 167, 81, 0.2);
+    padding-right: 20px;
+}
+
+.tab-btn {
+    background: transparent;
+    color: var(--text-main);
+    border: none;
+    text-align: left;
+    padding: 12px 15px;
+    font-size: 1rem;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tab-btn i { color: var(--oro); width: 20px; text-align: center; }
+
+.tab-btn:hover { background: rgba(201, 167, 81, 0.1); }
+
+/* Estado Activo del Botón */
+.tab-btn.active {
+    background: var(--oro);
+    color: var(--negro);
+}
+.tab-btn.active i { color: var(--negro); }
+
+/* Contenedor de Texto */
+.tabs-content { flex: 1; }
+
+.tab-pane {
+    display: none; /* Oculto por defecto */
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.tab-pane.active {
+    display: block; /* Solo se muestra el activo */
+}
+
+.inst-card {
+    background: var(--bg-body);
+    padding: 1.5rem;
+    border-left: 4px solid var(--oro);
+    border-radius: 0 8px 8px 0;
+}
+
+.autoridad-card {
+    display: flex;
+    gap: 20px;
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: var(--bg-body);
+    border-radius: 8px;
+    align-items: center;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsivo para las Tabs */
+@media (max-width: 768px) {
+    .tabs-container { flex-direction: column; gap: 1.5rem; }
+    .tabs-menu { flex: auto; border-right: none; border-bottom: 2px solid rgba(201, 167, 81, 0.2); padding-right: 0; padding-bottom: 20px; }
+}
+
+/* --- CREDENCIALES (Talento Humano) --- */
+.grid-credenciales {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 2rem;
+    margin-top: 1.5rem;
+}
+
+.credencial-card {
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+    text-align: center;
+    border-top: 4px solid var(--oro);
+}
+
+.credencial-img {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 1rem;
+    border: 3px solid var(--bg-body);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* --- ÁREA DE COMUNICACIÓN (Index) --- */
+.comunicacion-layout {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+}
+
+.prensa-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.prensa-item {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+
+@media (max-width: 768px) {
+    .comunicacion-layout { grid-template-columns: 1fr; }
+    .prensa-grid { grid-template-columns: 1fr; }
+}

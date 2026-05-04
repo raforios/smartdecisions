@@ -459,3 +459,97 @@ body {
     .comunicacion-layout { grid-template-columns: 1fr; }
     .prensa-grid { grid-template-columns: 1fr; }
 }
+
+/* --- CONFIGURACIÓN DEL NAVBAR Y RESPONSIVIDAD --- */
+#navbar-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.navbar {
+    background: var(--negro);
+    color: white;
+    padding: 0.8rem 5%;
+    width: 100%;
+}
+
+.ticker-wrap {
+    width: 100%;
+    overflow: hidden;
+    background: var(--negro);
+    color: var(--oro);
+    height: 40px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--gris);
+    border-bottom: 2px solid var(--oro);
+    font-size: 0.85rem;
+    position: relative; 
+}
+
+.hero {
+    height: 50vh;
+    min-height: 400px;
+    background-color: var(--negro);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: white;
+    margin-top: 130px; 
+    position: relative;
+    overflow: hidden;
+}
+
+#hero-canvas {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+}
+
+.escudo-img { height: 85px; width: auto; }
+
+/* MENÚ HAMBURGUESA MÓVIL */
+.hamburger {
+    display: none;
+    cursor: pointer;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 1001;
+}
+
+.hamburger span {
+    width: 30px;
+    height: 3px;
+    background-color: var(--oro);
+    transition: all 0.3s ease;
+    border-radius: 2px;
+}
+
+@media (max-width: 900px) {
+    .hamburger { display: flex; }
+    
+    .nav-links {
+        position: absolute;
+        top: 100%;
+        right: -100%;
+        width: 100%;
+        height: 100vh;
+        background-color: var(--negro);
+        flex-direction: column;
+        justify-content: flex-start;
+        padding-top: 2rem;
+        transition: right 0.4s ease;
+    }
+
+    .nav-links.active { right: 0; }
+    .nav-links li { margin: 1.5rem 0; text-align: center; }
+    .contacto-section { grid-template-columns: 1fr; }
+}
+
+.hamburger.active span:nth-child(1) { transform: translateY(9px) rotate(45deg); }
+.hamburger.active span:nth-child(2) { opacity: 0; }
+.hamburger.active span:nth-child(3) { transform: translateY(-9px) rotate(-45deg); }
