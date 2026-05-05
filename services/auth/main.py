@@ -6,6 +6,7 @@ from datetime import datetime, date
 from typing import Dict, Any
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 
@@ -28,7 +29,8 @@ ENV_VARS = load_and_validate_env_vars(
     },
     optional_env_vars = {
         'APP_ENV': str,
-        'ROOT_PATH': str
+        'ROOT_PATH': str,
+        'CORS_ALLOWED_ORIGINS': str
     }
 )
 
@@ -39,6 +41,15 @@ APP_ENV = ENV_VARS['APP_ENV']
 ROOT_PATH_VALUE = ENV_VARS.get('ROOT_PATH', '').strip('/')
 ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED else '/openapi.json'
+
+CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
+DEFAULT_CORS_ORIGINS = [
+    'http://127.0.0.1:5500',
+    'http://localhost:5500'
+]
+ORIGINS = [
+    origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
+] or DEFAULT_CORS_ORIGINS
 
 
 APP_CONFIG = {
@@ -61,6 +72,14 @@ APP_CONFIG = {
 app = FastAPI(**APP_CONFIG)
 
 setup_exception_handlers(app)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins = ORIGINS,
+    allow_credentials = True,
+    allow_methods = ['*'],
+    allow_headers = ['*'],
+)
 
 @app.get('/favicon.ico', include_in_schema = False)
 async def favicon():

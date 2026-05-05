@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Cumbre Minera | Acceso de Operador</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="login-page">
+
+    <aside class="login-hero">
+        <img id="hero-logo" src="" alt="Logo">
+        <h1 id="hero-title">LA CUMBRE</h1>
+        <h2 id="hero-subtitle">MINERA</h2>
+        <p id="hero-tagline">Sistema interno de registro de participantes y control de asistencia del evento.</p>
+    </aside>
+
+    <main class="login-form-wrap">
+        <div class="login-card">
+            <h3>Acceso de Operador</h3>
+            <p class="helper" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                Ingresa tus credenciales corporativas para registrar participantes y consultar reportes.
+            </p>
+            <form id="login-form" autocomplete="off">
+                <div class="form-field" style="margin-bottom: 1rem;">
+                    <label for="email">Correo electrónico <span class="req">*</span></label>
+                    <input id="email" name="email" type="email" required autofocus>
+                </div>
+                <div class="form-field" style="margin-bottom: 1.5rem;">
+                    <label for="password">Contraseña <span class="req">*</span></label>
+                    <input id="password" name="password" type="password" required>
+                </div>
+                <div class="form-actions" style="margin-top: 0;">
+                    <button id="login-btn" class="btn btn-primary" type="submit" style="width: 100%; justify-content: center;">
+                        <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión
+                    </button>
+                </div>
+            </form>
+            <p style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                <span id="footer-organizer">Ministerio de Minería y Metalurgia</span>
+            </p>
+        </div>
+    </main>
+
+    <script type="module" src="js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+{
+  "event": {
+    "shortName": "LA CUMBRE",
+    "longName": "MINERA",
+    "fullName": "La Cumbre Minera",
+    "subtitle": "Registro de Asistencia y Estadísticas del Evento",
+    "year": 2026,
+    "logo": "../img/cropped-escudo.png",
+    "organizer": "Ministerio de Minería y Metalurgia | Estado Plurinacional de Bolivia"
+  },
+  "endpoints": {
+    "auth": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+    "miningSummit": "https://dlhnaicgf2.execute-api.us-east-1.amazonaws.com"
+  },
+  "auth": {
+    "tokenKey": "cumbre_minera_token",
+    "userKey": "cumbre_minera_user",
+    "loginPath": "login.html",
+    "appPath": "app.html",
+    "loginEndpoint": "/login"
+  },
+  "miningSummit": {
+    "participantsPath": "/v1/mining-summit/participants",
+    "attendancesPath": "/v1/mining-summit/attendances",
+    "statsPath": "/v1/mining-summit/reports/stats"
+  },
+  "menu": [
+    { "id": "registro",     "label": "Registro",     "icon": "fa-solid fa-user-plus",     "module": "registro" },
+    { "id": "asistencia",   "label": "Asistencia",   "icon": "fa-solid fa-clipboard-check","module": "asistencia" },
+    { "id": "reportes",     "label": "Participantes","icon": "fa-solid fa-users",         "module": "reportes" },
+    { "id": "asistencias",  "label": "Asistencias",  "icon": "fa-solid fa-calendar-check","module": "asistencias" },
+    { "id": "estadisticas", "label": "Estadísticas", "icon": "fa-solid fa-chart-pie",     "module": "estadisticas" }
+  ],
+  "departments": [
+    "La Paz",
+    "Cochabamba",
+    "Santa Cruz",
+    "Oruro",
+    "Potosí",
+    "Chuquisaca",
+    "Tarija",
+    "Beni",
+    "Pando"
+  ],
+  "ui": {
+    "pageSize": 25,
+    "toastTimeoutMs": 4000,
+    "chartColors": ["#C9A751", "#242732", "#B82227", "#15592F", "#FFCC18", "#363534", "#8B6914", "#1f4d28", "#7a1318"]
+  }
+}
