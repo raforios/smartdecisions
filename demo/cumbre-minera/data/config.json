@@ -5,7 +5,7 @@
     "fullName": "La Cumbre Minera",
     "subtitle": "Registro de Asistencia y Estadísticas del Evento",
     "year": 2026,
-    "logo": "../img/cropped-escudo.png",
+    "logo": "img/cropped-escudo.png",
     "organizer": "Ministerio de Minería y Metalurgia | Estado Plurinacional de Bolivia"
   },
   "endpoints": {

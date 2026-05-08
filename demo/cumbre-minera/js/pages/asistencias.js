@@ -1,6 +1,10 @@
 /**
  * Reporte de asistencias por CI y/o rango de fechas.
  * GET /v1/mining-summit/attendances  (filtros opcionales: ci, date_from, date_to)
+ *
+ * El endpoint solo devuelve {ci, attendance_date, attendance_at, marked_by}.
+ * Para mostrar el nombre completo del asistente hacemos un join client-side
+ * cargando el directorio de participantes una sola vez por render de página.
  */
 import { Toast } from '../components/Toast.js';
 
@@ -42,13 +46,14 @@ export const AsistenciasPage = {
                     <thead>
                         <tr>
                             <th>CI</th>
+                            <th>Participante</th>
                             <th>Fecha</th>
                             <th>Hora</th>
-                            <th>Marcada por</th>
+                            <th>Usuario activo</th>
                         </tr>
                     </thead>
                     <tbody id="attendances-tbody">
-                        <tr><td colspan="4"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>
+                        <tr><td colspan="5"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>
                     </tbody>
                 </table>
                 <div class="pagination">
@@ -61,6 +66,28 @@ export const AsistenciasPage = {
         const statGrid = container.querySelector('#stat-grid');
         const pageInfo = container.querySelector('#page-info');
 
+        // Cache del directorio CI -> "Nombre Apellido". Se carga la primera vez
+        // que se necesita y se reutiliza en sucesivas búsquedas dentro de la misma
+        // visita a la sección.
+        let participantsByCi = null;
+
+        async function ensureParticipantsLoaded() {
+            if (participantsByCi) return participantsByCi;
+            participantsByCi = new Map();
+            let lastKey = null;
+            do {
+                const params = { limit: 100 };
+                if (lastKey) params.last_evaluated_key = lastKey;
+                const data = await api.get(config.miningSummit.participantsPath, params);
+                for (const p of (data.items || [])) {
+                    const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+                    participantsByCi.set(p.ci, fullName);
+                }
+                lastKey = data.last_evaluated_key;
+            } while (lastKey);
+            return participantsByCi;
+        }
+
         async function loadAttendances() {
             const queryParams = {
                 ci:        container.querySelector('#filter-ci').value.trim() || undefined,
@@ -68,15 +95,18 @@ export const AsistenciasPage = {
                 date_to:   container.querySelector('#date-to').value || undefined,
                 limit:     config.ui.pageSize || 25
             };
-            tbody.innerHTML = `<tr><td colspan="4"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
             try {
-                const data = await api.get(config.miningSummit.attendancesPath, queryParams);
-                const items = data.items || [];
-                renderRows(tbody, items);
+                const [attendancesData, participantsMap] = await Promise.all([
+                    api.get(config.miningSummit.attendancesPath, queryParams),
+                    ensureParticipantsLoaded()
+                ]);
+                const items = attendancesData.items || [];
+                renderRows(tbody, items, participantsMap);
                 renderStats(statGrid, items);
                 pageInfo.textContent = `${items.length} asistencias`;
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state">
+                tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     <p>${error.message}</p></div></td></tr>`;
                 Toast.danger(`No se pudo cargar: ${error.message}`);
@@ -95,21 +125,25 @@ export const AsistenciasPage = {
     }
 };
 
-function renderRows(tbody, items) {
+function renderRows(tbody, items, participantsByCi) {
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state">
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
             <i class="fa-solid fa-calendar-xmark"></i>
             <p>Sin asistencias para los filtros aplicados.</p></div></td></tr>`;
         return;
     }
-    tbody.innerHTML = items.map(a => `
-        <tr>
-            <td><strong>${escapeHtml(a.ci)}</strong></td>
-            <td>${escapeHtml(a.attendance_date || '—')}</td>
-            <td>${formatTime(a.attendance_at)}</td>
-            <td>${escapeHtml(a.marked_by || '—')}</td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = items.map(a => {
+        const fullName = participantsByCi.get(a.ci) || '—';
+        return `
+            <tr>
+                <td><strong>${escapeHtml(a.ci)}</strong></td>
+                <td>${escapeHtml(fullName)}</td>
+                <td>${escapeHtml(a.attendance_date || '—')}</td>
+                <td>${formatTime(a.attendance_at)}</td>
+                <td>${escapeHtml(a.marked_by || '—')}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function renderStats(container, items) {
