@@ -51,7 +51,10 @@ class PointOfSale(Base):  # pylint: disable=too-few-public-methods
     max_checkin_distance = Column(Integer, nullable = False, default = 0)
 
     # Operation and Classification
-    operating_hours = Column(String(255), nullable = True)
+    # opening_time / closing_time are stored as 'HH:MM' strings (5 chars) so the
+    # frontend can serialize/deserialize them without timezone conversions.
+    opening_time = Column(String(5), nullable = True)
+    closing_time = Column(String(5), nullable = True)
     pos_type_id = Column(Integer, nullable = False)
     channel_id = Column(Integer, nullable = False)
     status = Column(MySQLEnum(PointOfSaleStatus), nullable = False,

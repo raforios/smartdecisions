@@ -1,12 +1,34 @@
 '''
-    Business Logic for Trade.
+    Business Logic for Trade — Planned Routes, Planned Points, Trade Planning,
+    Planning Detail, and Attendances.
 '''
-from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from datetime import date
+from typing import Any, Dict, List, Optional, Tuple
+
 from sqlalchemy.orm import Session, joinedload
-from services.exceptions import (
-    InvalidInputError,
-    RegisterAlreadyExistsError
+
+from models.pos import PointOfSale, PointOfSaleStatus
+from models.trade import (
+    Attendance,
+    PlannedPoint,
+    PlannedRoute,
+    TradePlanning,
+    TradePlanningDetail
+)
+from schemas.trade import (
+    AttendanceCheckInSchema,
+    AttendanceCheckOutSchema,
+    PlannedPointCreateSchema,
+    PlannedPointUpdateSchema,
+    PlannedRouteBulkItemSchema,
+    PlannedRouteCreateSchema,
+    PlannedRouteFilterSchema,
+    PlannedRouteUpdateSchema,
+    TradePlanningBulkItemSchema,
+    TradePlanningCreateSchema,
+    TradePlanningDetailCreateSchema,
+    TradePlanningFilterSchema,
+    TradePlanningUpdateSchema
 )
 from services.crud import (
     create_record,
@@ -14,30 +36,253 @@ from services.crud import (
     get_record,
     update_record
 )
+from services.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    RegisterNotFoundError
+)
 from services.logger_config import custom_logger as logger
 from services.utils import (
-    handle_service_errors,
     audit_event,
+    generic_bulk_processor,
+    get_current_time_gmt,
+    handle_service_errors,
+    perform_bulk_upload,
     sqlalchemy_object_as_dict
 )
-from models.trade import (
-    TradePlanning,
-    Attendance
-)
-from models.pos import PointOfSale, PointOfSaleStatus
-from schemas.trade import (
-    TradePlanningAdHocCreateSchema,
-    TradePlanningCreateSchema,
-    TradePlanningFilterSchema,
-    TradePlanningJustificationSchema,
-    TradePlanningUpdateSchema,
-    TradePlanningWorkloadUpdateSchema,
-    AttendanceCreateSchema,
-    AttendanceCheckOutSchema,
-)
+
 from .trade_utils import validate_geofence
 
-# --- A.3. TRADE PLANNING SERVICES ---
+
+# ====================================================================
+# PLANNED ROUTE
+# ====================================================================
+def _validate_pos_for_company(
+    db: Session, pos_id: int, company_id: int
+) -> None:
+    '''
+        Ensures a POS exists for the given company before letting MySQL hit
+        a FK violation. Translates the boundary error into a 404.
+    '''
+    exists = db.query(PointOfSale.id).filter(
+        PointOfSale.id == pos_id,
+        PointOfSale.company_id == company_id
+    ).first()
+    if not exists:
+        raise RegisterNotFoundError(
+            detail = (
+                f'Point of sale {pos_id} does not exist for company {company_id}.'
+            )
+        )
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'PlannedRoute', 'CREATE')
+async def create_planned_route_service(
+    db: Session,
+    route_data: PlannedRouteCreateSchema
+) -> Tuple[PlannedRoute, Dict[str, Any]]:
+    '''
+        Creates a planned route along with its inline points (if any).
+
+        Args:
+            db (Session): The database session.
+            route_data (PlannedRouteCreateSchema): The route + inline points.
+
+        Returns:
+            Tuple[PlannedRoute, Dict[str, Any]]: The persisted route and audit data.
+    '''
+    if db.query(PlannedRoute).filter_by(
+        company_id = route_data.company_id, route_code = route_data.route_code
+    ).first():
+        raise RegisterAlreadyExistsError(
+            detail = (
+                f'Planned route with code {route_data.route_code} '
+                f'already exists for company {route_data.company_id}.'
+            )
+        )
+
+    # Validate every inline point's POS up-front so we surface a 404 instead
+    # of a generic 500 from a FK violation at flush time.
+    for point in route_data.points:
+        _validate_pos_for_company(db, point.point_of_sale_id, route_data.company_id)
+
+    db_route = PlannedRoute(
+        company_id = route_data.company_id,
+        route_name = route_data.route_name,
+        route_code = route_data.route_code,
+        description = route_data.description
+    )
+    db_route.points = [
+        PlannedPoint(**point.model_dump()) for point in route_data.points
+    ]
+    db.add(db_route)
+    db.commit()
+    db.refresh(db_route)
+    return db_route, {'old_values': None, 'new_values': sqlalchemy_object_as_dict(db_route)}
+
+
+@handle_service_errors('TRADE')
+async def get_planned_route_by_id_service(
+    db: Session,
+    route_id: int
+) -> PlannedRoute:
+    '''
+        Retrieves a planned route by ID with its points eager-loaded.
+    '''
+    return get_record(
+        db, PlannedRoute, route_id,
+        eager_load_options = ['points']
+    )
+
+
+@handle_service_errors('TRADE')
+async def get_planned_routes_list_service(
+    db: Session,
+    filters: PlannedRouteFilterSchema,
+    skip: int,
+    limit: int
+) -> Tuple[List[PlannedRoute], int]:
+    '''
+        Lists planned routes with pagination and optional filters.
+    '''
+    query = db.query(PlannedRoute).filter(PlannedRoute.company_id == filters.company_id)
+    if filters.route_code:
+        query = query.filter(PlannedRoute.route_code == filters.route_code)
+    if filters.route_name:
+        query = query.filter(PlannedRoute.route_name.ilike(f'%{filters.route_name}%'))
+    total = query.count()
+    items = query.options(joinedload(PlannedRoute.points)).offset(skip).limit(limit).all()
+    return items, total
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'PlannedRoute', 'UPDATE')
+async def update_planned_route_service(
+    db: Session,
+    route_id: int,
+    update_data: PlannedRouteUpdateSchema
+) -> Tuple[PlannedRoute, Dict[str, Any]]:
+    '''
+        Updates planned route master fields. Points are managed separately.
+    '''
+    db_route = get_record(db, PlannedRoute, route_id)
+    old_values = sqlalchemy_object_as_dict(db_route)
+    db_route = update_record(db, db_route, update_data)
+    db.commit()
+    db.refresh(db_route)
+    return db_route, {'old_values': old_values, 'new_values': sqlalchemy_object_as_dict(db_route)}
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'PlannedRoute', 'DELETE')
+async def delete_planned_route_service(
+    db: Session,
+    route_id: int
+) -> Tuple[int, Dict[str, Any]]:
+    '''
+        Deletes a planned route (cascades to its points).
+    '''
+    db_route = get_record(db, PlannedRoute, route_id)
+    old_values = sqlalchemy_object_as_dict(db_route)
+    delete_record(db, PlannedRoute, route_id)
+    db.commit()
+    return route_id, {'old_values': old_values, 'new_values': None}
+
+
+# ====================================================================
+# PLANNED POINT (subresource of a route)
+# ====================================================================
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'PlannedPoint', 'CREATE')
+async def create_planned_point_service(
+    db: Session,
+    route_id: int,
+    point_data: PlannedPointCreateSchema
+) -> Tuple[PlannedPoint, Dict[str, Any]]:
+    '''
+        Adds a planned point (visit) to an existing planned route.
+    '''
+    # Ensure parent route exists. Use it to scope the POS validation to the
+    # same company, since planned points cannot reference POS from a different
+    # company than their owning route.
+    db_route = get_record(db, PlannedRoute, route_id)
+    _validate_pos_for_company(db, point_data.point_of_sale_id, db_route.company_id)
+
+    if db.query(PlannedPoint).filter_by(
+        planned_route_id = route_id, sequence = point_data.sequence
+    ).first():
+        raise RegisterAlreadyExistsError(
+            detail = (
+                f'Sequence {point_data.sequence} is already taken on route {route_id}.'
+            )
+        )
+
+    db_point = PlannedPoint(
+        planned_route_id = route_id,
+        **point_data.model_dump()
+    )
+    db.add(db_point)
+    db.commit()
+    db.refresh(db_point)
+    return db_point, {'old_values': None, 'new_values': sqlalchemy_object_as_dict(db_point)}
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'PlannedPoint', 'UPDATE')
+async def update_planned_point_service(
+    db: Session,
+    point_id: int,
+    update_data: PlannedPointUpdateSchema
+) -> Tuple[PlannedPoint, Dict[str, Any]]:
+    '''
+        Updates a planned point.
+    '''
+    db_point = get_record(db, PlannedPoint, point_id)
+    old_values = sqlalchemy_object_as_dict(db_point)
+    db_point = update_record(db, db_point, update_data)
+    db.commit()
+    db.refresh(db_point)
+    return db_point, {'old_values': old_values, 'new_values': sqlalchemy_object_as_dict(db_point)}
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'PlannedPoint', 'DELETE')
+async def delete_planned_point_service(
+    db: Session,
+    point_id: int
+) -> Tuple[int, Dict[str, Any]]:
+    '''
+        Deletes a planned point.
+    '''
+    db_point = get_record(db, PlannedPoint, point_id)
+    old_values = sqlalchemy_object_as_dict(db_point)
+    delete_record(db, PlannedPoint, point_id)
+    db.commit()
+    return point_id, {'old_values': old_values, 'new_values': None}
+
+
+# ====================================================================
+# TRADE PLANNING (campaign master + detail)
+# ====================================================================
+def _validate_planning_dates(start_date: date, end_date: date) -> None:
+    if start_date > end_date:
+        raise InvalidInputError(
+            detail = 'Planning start_date must be earlier than or equal to end_date.'
+        )
+
+
+def _validate_detail_in_range(
+    detail_date: date, start_date: date, end_date: date
+) -> None:
+    if not start_date <= detail_date <= end_date:
+        raise InvalidInputError(
+            detail = (
+                f'Detail date {detail_date} is outside the planning '
+                f'window [{start_date} .. {end_date}].'
+            )
+        )
+
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'TradePlanning', 'CREATE')
@@ -46,40 +291,46 @@ async def create_trade_planning_service(
     planning_data: TradePlanningCreateSchema
 ) -> Tuple[TradePlanning, Dict[str, Any]]:
     '''
-        Creates a new Trade Planning entry.
+        Creates a planning campaign with optional inline detail rows.
     '''
-    message = f'Attempting to create Trade Planning for planning_id: {planning_data.planning_id}'
-    logger.info(message)
+    _validate_planning_dates(planning_data.start_date, planning_data.end_date)
 
-    existing_plan = db.query(TradePlanning).filter(
-        TradePlanning.company_id == planning_data.company_id,
-        TradePlanning.planning_id == planning_data.planning_id,
-        TradePlanning.point_of_sale_id == planning_data.point_of_sale_id,
-        TradePlanning.user_id == planning_data.user_id
-    ).first()
-
-    if existing_plan:
-        error_msg = (f'Planning entry {planning_data.planning_id} for User {planning_data.user_id} '
-                     f'at POS {planning_data.point_of_sale_id} already exists.')
-        logger.error(error_msg)
-        raise RegisterAlreadyExistsError(detail = error_msg)
-
-    db_planning = create_record(
-        db = db,
-        model = TradePlanning,
-        create_data = planning_data
+    db_planning = TradePlanning(
+        company_id = planning_data.company_id,
+        planning_name = planning_data.planning_name,
+        description = planning_data.description,
+        team_id = planning_data.team_id,
+        start_date = planning_data.start_date,
+        end_date = planning_data.end_date,
+        status = planning_data.status or 'DRAFT'
     )
 
+    for detail in planning_data.details:
+        _validate_detail_in_range(
+            detail.date_of_day, planning_data.start_date, planning_data.end_date
+        )
+        # Confirm the route exists for this company.
+        route = db.query(PlannedRoute).filter(
+            PlannedRoute.id == detail.planned_route_id,
+            PlannedRoute.company_id == planning_data.company_id
+        ).first()
+        if not route:
+            raise RegisterNotFoundError(
+                detail = (
+                    f'Planned route {detail.planned_route_id} not found for '
+                    f'company {planning_data.company_id}.'
+                )
+            )
+        db_planning.details.append(TradePlanningDetail(**detail.model_dump()))
+
+    db.add(db_planning)
     db.commit()
     db.refresh(db_planning)
-
-    auditable_data = {
-        'new_values': sqlalchemy_object_as_dict(db_planning),
-        'company_id': db_planning.company_id,
-        'user_id': db_planning.user_id
+    return db_planning, {
+        'old_values': None,
+        'new_values': sqlalchemy_object_as_dict(db_planning)
     }
 
-    return db_planning, auditable_data
 
 @handle_service_errors('TRADE')
 async def get_trade_planning_by_id_service(
@@ -87,58 +338,35 @@ async def get_trade_planning_by_id_service(
     planning_id: int
 ) -> TradePlanning:
     '''
-        Retrieves a specific Trade Planning entry by its ID,
-        eager loading the Point of Sale info.
+        Retrieves a planning campaign with its details eager-loaded.
     '''
-    message = f'Attempting to retrieve Trade Planning ID: {planning_id}'
-    logger.info(message)
-
-    eager_load_options = [
-        joinedload(TradePlanning.point_of_sale)
-    ]
-
-    db_planning = get_record(
-        db = db,
-        model = TradePlanning,
-        record_id = planning_id,
-        eager_load_options = eager_load_options
+    return get_record(
+        db, TradePlanning, planning_id, eager_load_options = ['details']
     )
-
-    return db_planning
 
 
 @handle_service_errors('TRADE')
 async def get_trade_planning_list_service(
     db: Session,
     filters: TradePlanningFilterSchema,
-    skip: int = 0,
-    limit: int = 100
+    skip: int,
+    limit: int
 ) -> Tuple[List[TradePlanning], int]:
     '''
-        Retrieves a paginated list of Trade Planning entries based on filters.
+        Lists planning campaigns with pagination and optional filters.
     '''
-    message = f'Attempting to retrieve Trade Planning list with filters: {filters}'
-    logger.info(message)
-
-    query = db.query(TradePlanning).options(
-        joinedload(TradePlanning.point_of_sale)
-    )
-
-    query = query.filter(TradePlanning.company_id == filters.company_id)
-
-    if filters.planning_id:
-        query = query.filter(TradePlanning.planning_id == filters.planning_id)
-    if filters.user_id:
-        query = query.filter(TradePlanning.user_id == filters.user_id)
-    if filters.point_of_sale_id:
-        query = query.filter(TradePlanning.point_of_sale_id == filters.point_of_sale_id)
+    query = db.query(TradePlanning).filter(TradePlanning.company_id == filters.company_id)
+    if filters.team_id is not None:
+        query = query.filter(TradePlanning.team_id == filters.team_id)
     if filters.status:
         query = query.filter(TradePlanning.status == filters.status)
-
-    total_count = query.count()
-    records = query.order_by(TradePlanning.id.desc()).offset(skip).limit(limit).all()
-
-    return records, total_count
+    if filters.date_from:
+        query = query.filter(TradePlanning.end_date >= filters.date_from)
+    if filters.date_to:
+        query = query.filter(TradePlanning.start_date <= filters.date_to)
+    total = query.count()
+    items = query.options(joinedload(TradePlanning.details)).offset(skip).limit(limit).all()
+    return items, total
 
 
 @handle_service_errors('TRADE')
@@ -149,27 +377,23 @@ async def update_trade_planning_service(
     update_data: TradePlanningUpdateSchema
 ) -> Tuple[TradePlanning, Dict[str, Any]]:
     '''
-        Updates a Trade Planning entry (e.g., status or comments).
+        Updates planning master fields.
     '''
-    message = f'Attempting to update Trade Planning ID: {planning_id}'
-    logger.info(message)
-
     db_planning = get_record(db, TradePlanning, planning_id)
     old_values = sqlalchemy_object_as_dict(db_planning)
 
-    db_planning = update_record(db, db_planning, update_data)
+    new_start = update_data.start_date or db_planning.start_date
+    new_end = update_data.end_date or db_planning.end_date
+    _validate_planning_dates(new_start, new_end)
 
+    db_planning = update_record(db, db_planning, update_data)
     db.commit()
     db.refresh(db_planning)
-
-    auditable_data = {
+    return db_planning, {
         'old_values': old_values,
-        'new_values': sqlalchemy_object_as_dict(db_planning),
-        'company_id': db_planning.company_id,
-        'user_id': db_planning.user_id
+        'new_values': sqlalchemy_object_as_dict(db_planning)
     }
 
-    return db_planning, auditable_data
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'TradePlanning', 'DELETE')
@@ -178,301 +402,379 @@ async def delete_trade_planning_service(
     planning_id: int
 ) -> Tuple[int, Dict[str, Any]]:
     '''
-        Deletes a Trade Planning entry.
+        Deletes a planning campaign and cascades to its details.
     '''
-    message = f'Attempting to delete Trade Planning ID: {planning_id}'
-    logger.info(message)
-
     db_planning = get_record(db, TradePlanning, planning_id)
     old_values = sqlalchemy_object_as_dict(db_planning)
-
-    company_id_audit = db_planning.company_id
-    user_id_audit = db_planning.user_id
-
-    delete_record(
-        db = db,
-        model = TradePlanning,
-        record_id = planning_id
-    )
-
+    delete_record(db, TradePlanning, planning_id)
     db.commit()
+    return planning_id, {'old_values': old_values, 'new_values': None}
 
-    auditable_data = {
-        'old_values': old_values,
-        'new_values': None,
-        'company_id': company_id_audit,
-        'user_id': user_id_audit
-    }
 
-    return planning_id, auditable_data
-
+# ====================================================================
+# TRADE PLANNING DETAIL (subresource)
+# ====================================================================
 @handle_service_errors('TRADE')
-@audit_event('TRADE', 'TradePlanning', 'WORKLOAD_CALCULATION')
-async def update_trade_planning_workload_service(
+@audit_event('TRADE', 'TradePlanningDetail', 'CREATE')
+async def create_planning_detail_service(
     db: Session,
     planning_id: int,
-    workload_data: TradePlanningWorkloadUpdateSchema
-) -> Tuple[TradePlanning, Dict[str, Any]]:
+    detail_data: TradePlanningDetailCreateSchema
+) -> Tuple[TradePlanningDetail, Dict[str, Any]]:
     '''
-        Calculates and updates the actual workload based on check-in/out times.
+        Adds a detail row (route + day) to an existing planning campaign.
     '''
-    message = f'Calculating workload for Trade Planning ID: {planning_id}'
-    logger.info(message)
-
-    if workload_data.check_out_time <= workload_data.check_in_time:
-        raise InvalidInputError(
-            detail='Check-out time must be after check-in time.'
+    db_planning = get_record(db, TradePlanning, planning_id)
+    _validate_detail_in_range(
+        detail_data.date_of_day, db_planning.start_date, db_planning.end_date
+    )
+    if db.query(TradePlanningDetail).filter_by(
+        planning_id = planning_id,
+        planned_route_id = detail_data.planned_route_id,
+        date_of_day = detail_data.date_of_day
+    ).first():
+        raise RegisterAlreadyExistsError(
+            detail = (
+                f'Detail already exists for planning {planning_id} '
+                f'with route {detail_data.planned_route_id} on {detail_data.date_of_day}.'
+            )
         )
 
-    db_planning = get_record(db, TradePlanning, planning_id)
-    old_values = sqlalchemy_object_as_dict(db_planning)
-
-    for key, value in old_values.items():
-        if isinstance(value, datetime) and value.tzinfo is not None:
-            old_values[key] = value.replace(tzinfo = None).isoformat()
-        elif key == 'point_of_sale':
-            del old_values[key]
-
-    duration_delta = workload_data.check_out_time - workload_data.check_in_time
-    actual_minutes = int(duration_delta.total_seconds() // 60)
-    planned_minutes = db_planning.planned_workload_minutes
-    difference_minutes = actual_minutes - planned_minutes
-
-    db_planning.actual_workload_minutes = actual_minutes
-    db_planning.workload_difference_minutes = difference_minutes
-    db_planning.status = 'COMPLETED'
-
-    db.add(db_planning)
+    db_detail = TradePlanningDetail(
+        planning_id = planning_id,
+        **detail_data.model_dump()
+    )
+    db.add(db_detail)
     db.commit()
-    db.refresh(db_planning)
+    db.refresh(db_detail)
+    return db_detail, {'old_values': None, 'new_values': sqlalchemy_object_as_dict(db_detail)}
 
-    if hasattr(db_planning, 'point_of_sale'):
-        delattr(db_planning, 'point_of_sale')
 
-    new_values_final = sqlalchemy_object_as_dict(db_planning)
-
-    for key, value in new_values_final.items():
-        if isinstance(value, datetime) and value.tzinfo is not None:
-            new_values_final[key] = value.replace(tzinfo=None).isoformat()
-
-    new_values_final['calculation_input'] = {
-        'check_in': workload_data.check_in_time.replace(tzinfo=None).isoformat(),
-        'check_out': workload_data.check_out_time.replace(tzinfo=None).isoformat()
-    }
-
-    auditable_data = {
-        'old_values': old_values,
-        'new_values': new_values_final, 
-        'company_id': db_planning.company_id,
-        'user_id': db_planning.user_id
-    }
-
-    return db_planning, auditable_data
-
-# --- A.4. AGENDA DE CAMPO SERVICES ---
 @handle_service_errors('TRADE')
-@audit_event('TRADE', 'TradePlanning', 'CREATE_ADHOC')
-async def create_adhoc_planning_service(
+@audit_event('TRADE', 'TradePlanningDetail', 'DELETE')
+async def delete_planning_detail_service(
     db: Session,
-    adhoc_data: TradePlanningAdHocCreateSchema
-) -> Tuple[TradePlanning, Dict[str, Any]]:
+    detail_id: int
+) -> Tuple[int, Dict[str, Any]]:
     '''
-        Creates an Ad-Hoc planning entry (Fuera de Ruta).
+        Removes a detail row from a planning campaign.
     '''
-    message = f'Creating Ad-Hoc visit for User: {adhoc_data.user_id} at POS: {
-        adhoc_data.point_of_sale_id}'
-    logger.info(message)
+    db_detail = get_record(db, TradePlanningDetail, detail_id)
+    old_values = sqlalchemy_object_as_dict(db_detail)
+    delete_record(db, TradePlanningDetail, detail_id)
+    db.commit()
+    return detail_id, {'old_values': old_values, 'new_values': None}
 
-    existing_plan = db.query(TradePlanning).filter(
-        TradePlanning.point_of_sale_id == adhoc_data.point_of_sale_id,
-        TradePlanning.user_id == adhoc_data.user_id,
-        TradePlanning.status.in_(['PENDING', 'IN_PROGRESS'])
+
+# ====================================================================
+# BULK SERVICES
+# ====================================================================
+def _bulk_route_target(
+    db: Session,
+    cache: Dict[Tuple[int, str], PlannedRoute],
+    item: PlannedRouteBulkItemSchema
+) -> PlannedRoute:
+    '''
+        Returns (or creates) the PlannedRoute that owns the bulk row.
+        Caches results per (company_id, route_code) to avoid duplicate
+        SELECTs across rows in the same batch.
+    '''
+    cache_key = (item.company_id, item.route_code)
+    if cache_key in cache:
+        return cache[cache_key]
+
+    route = db.query(PlannedRoute).filter_by(
+        company_id = item.company_id, route_code = item.route_code
     ).first()
+    if not route:
+        route = PlannedRoute(
+            company_id = item.company_id,
+            route_code = item.route_code,
+            route_name = item.route_name,
+            description = item.route_description
+        )
+        db.add(route)
+        db.flush()
+    cache[cache_key] = route
+    return route
 
-    if existing_plan:
-        error_msg = f'User already has an active visit for POS {adhoc_data.point_of_sale_id}.'
-        logger.warning(error_msg)
-        raise RegisterAlreadyExistsError(detail = error_msg)
 
-    db_planning = TradePlanning(
-        company_id = adhoc_data.company_id,
-        planning_id = None,
-        user_id = adhoc_data.user_id,
-        point_of_sale_id = adhoc_data.point_of_sale_id,
-        planned_workload_minutes = 0,
-        is_adhoc = True,
-        status = 'PENDING',
-        comments = adhoc_data.comments
+async def _insert_planned_routes_bulk_data(
+    db: Session,
+    processed_data: List[PlannedRouteBulkItemSchema],
+    file_name: str,  # pylint: disable=unused-argument
+    auth_token: str  # pylint: disable=unused-argument
+) -> Dict[str, Any]:
+    '''
+        Inserter step for the planned-routes bulk pipeline. Receives already
+        validated rows and persists them in a single transaction.
+    '''
+    routes_seen: Dict[Tuple[int, str], PlannedRoute] = {}
+    points_created = 0
+    routes_created = 0
+
+    for item in processed_data:
+        route = _bulk_route_target(db, routes_seen, item)
+        if route.id is None:
+            routes_created += 1
+        # Skip if the same sequence already exists for the route.
+        existing = db.query(PlannedPoint).filter_by(
+            planned_route_id = route.id,
+            sequence = item.sequence
+        ).first()
+        if existing:
+            error_msg = (
+                f'Skipping bulk row: sequence {item.sequence} already exists '
+                f'on route {item.route_code} (company {item.company_id}).'
+            )
+            logger.warning(error_msg)
+            continue
+
+        db.add(PlannedPoint(
+            planned_route_id = route.id,
+            sequence = item.sequence,
+            point_of_sale_id = item.point_of_sale_id,
+            planned_workload_minutes = item.planned_workload_minutes,
+            is_adhoc = item.is_adhoc,
+            justification = item.justification,
+            status = item.point_status or 'PENDING',
+            comments = item.point_comments
+        ))
+        points_created += 1
+
+    db.flush()
+    return {
+        'created_records': points_created,
+        'routes_created': routes_created,
+        'routes_touched': len(routes_seen)
+    }
+
+
+async def _insert_trade_planning_bulk_data(
+    db: Session,
+    processed_data: List[TradePlanningBulkItemSchema],
+    file_name: str,  # pylint: disable=unused-argument
+    auth_token: str  # pylint: disable=unused-argument
+) -> Dict[str, Any]:
+    '''
+        Inserter step for the trade-planning bulk pipeline. Routes are
+        referenced by their human-friendly route_code.
+    '''
+    plannings_seen: Dict[Tuple[int, str, int], TradePlanning] = {}
+    routes_seen: Dict[Tuple[int, str], Optional[PlannedRoute]] = {}
+    details_created = 0
+    plannings_created = 0
+
+    for item in processed_data:
+        planning_key = (item.company_id, item.planning_name, item.team_id)
+        planning = plannings_seen.get(planning_key)
+        if planning is None:
+            planning = db.query(TradePlanning).filter_by(
+                company_id = item.company_id,
+                planning_name = item.planning_name,
+                team_id = item.team_id
+            ).first()
+        if planning is None:
+            _validate_planning_dates(item.start_date, item.end_date)
+            planning = TradePlanning(
+                company_id = item.company_id,
+                planning_name = item.planning_name,
+                description = item.description,
+                team_id = item.team_id,
+                start_date = item.start_date,
+                end_date = item.end_date,
+                status = item.status or 'DRAFT'
+            )
+            db.add(planning)
+            db.flush()
+            plannings_created += 1
+        plannings_seen[planning_key] = planning
+
+        route_key = (item.company_id, item.planned_route_code)
+        route = routes_seen.get(route_key)
+        if route is None:
+            route = db.query(PlannedRoute).filter_by(
+                company_id = item.company_id, route_code = item.planned_route_code
+            ).first()
+            routes_seen[route_key] = route
+        if route is None:
+            error_msg = (
+                f'Skipping planning bulk row: route_code {item.planned_route_code} '
+                f'not found for company {item.company_id}.'
+            )
+            logger.warning(error_msg)
+            continue
+
+        _validate_detail_in_range(item.date_of_day, planning.start_date, planning.end_date)
+        if db.query(TradePlanningDetail).filter_by(
+            planning_id = planning.id,
+            planned_route_id = route.id,
+            date_of_day = item.date_of_day
+        ).first():
+            continue
+        db.add(TradePlanningDetail(
+            planning_id = planning.id,
+            planned_route_id = route.id,
+            date_of_day = item.date_of_day
+        ))
+        details_created += 1
+
+    db.flush()
+    return {
+        'created_records': details_created,
+        'plannings_created': plannings_created,
+        'plannings_touched': len(plannings_seen)
+    }
+
+
+@handle_service_errors('TRADE')
+async def bulk_create_planned_routes_service(
+    db: Session,
+    file_name: str,
+    delimiter: str,
+    auth_token: str
+) -> Dict[str, Any]:
+    '''
+        Top-level bulk service registered with the FORMS-style bulk pipeline.
+        Reads the CSV from FILES, validates rows against
+        `PlannedRouteBulkItemSchema` and delegates persistence to the inserter.
+    '''
+    return await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = PlannedRouteBulkItemSchema,
+        processor_func = generic_bulk_processor,
+        inserter_func = _insert_planned_routes_bulk_data,
+        delimiter = delimiter
     )
 
-    db.add(db_planning)
-    db.commit()
-    db.refresh(db_planning)
-
-    auditable_data = {
-        'new_values': sqlalchemy_object_as_dict(db_planning),
-        'company_id': db_planning.company_id,
-        'user_id': db_planning.user_id
-    }
-
-    return db_planning, auditable_data
 
 @handle_service_errors('TRADE')
-@audit_event('TRADE', 'TradePlanning', 'JUSTIFY')
-async def justify_planning_absence_service(
+async def bulk_create_trade_planning_service(
     db: Session,
-    planning_id: int,
-    justification_data: TradePlanningJustificationSchema
-) -> Tuple[TradePlanning, Dict[str, Any]]:
+    file_name: str,
+    delimiter: str,
+    auth_token: str
+) -> Dict[str, Any]:
     '''
-        Cancels/Closes a planned visit with a justification.
+        Top-level bulk service for planning campaigns. Reads + validates the
+        CSV and delegates persistence to `_insert_trade_planning_bulk_data`.
     '''
-    message = f'Justifying absence for Planning ID: {planning_id}'
-    logger.info(message)
+    return await perform_bulk_upload(
+        db = db,
+        file_name = file_name,
+        auth_token = auth_token,
+        bulk_schema = TradePlanningBulkItemSchema,
+        processor_func = generic_bulk_processor,
+        inserter_func = _insert_trade_planning_bulk_data,
+        delimiter = delimiter
+    )
 
-    db_planning = get_record(db, TradePlanning, planning_id)
-    old_values = sqlalchemy_object_as_dict(db_planning)
 
-    if db_planning.status == 'COMPLETED':
-        raise InvalidInputError('Cannot justify a completed visit.')
+# ====================================================================
+# ATTENDANCE — Check-In / Check-Out against a Planned Point
+# ====================================================================
+def _resolve_pos_for_point(db: Session, planned_point: PlannedPoint) -> PointOfSale:
+    pos = db.query(PointOfSale).filter(
+        PointOfSale.id == planned_point.point_of_sale_id
+    ).first()
+    if not pos:
+        raise RegisterNotFoundError(
+            detail = f'POS {planned_point.point_of_sale_id} not found.'
+        )
+    if pos.status != PointOfSaleStatus.ACTIVE:
+        raise InvalidInputError(
+            detail = (
+                f'POS {pos.code} is not ACTIVE. Current status: {pos.status.value}'
+            )
+        )
+    return pos
 
-    db_planning.status = 'NO_VISIT'
-    db_planning.justification = justification_data.justification
-
-    db.add(db_planning)
-    db.commit()
-    db.refresh(db_planning)
-
-    auditable_data = {
-        'old_values': old_values,
-        'new_values': sqlalchemy_object_as_dict(db_planning),
-        'justification': justification_data.justification,
-        'company_id': db_planning.company_id,
-        'user_id': db_planning.user_id
-    }
-
-    return db_planning, auditable_data
-
-# --- A.5. ATTENDANCE (CHECK-IN / CHECK-OUT) SERVICES ---
 
 @handle_service_errors('TRADE')
-@audit_event('TRADE', 'Attendance', 'CHECK_IN')
+@audit_event('TRADE', 'Attendance', 'CREATE')
 async def register_attendance_check_in(
     db: Session,
-    check_in_data: AttendanceCreateSchema
+    payload: AttendanceCheckInSchema
 ) -> Tuple[Attendance, Dict[str, Any]]:
     '''
-        Registers a Check-In for a planned visit.
-        Validates POS status and Geofencing.
+        Registers a check-in event against a planned point.
     '''
-    message = f'User {check_in_data.user_id} attempting Check-In for Planning ID: {
-        check_in_data.trade_planning_id}'
-    logger.info(message)
+    planned_point = get_record(db, PlannedPoint, payload.trade_planned_point_id)
+    pos = _resolve_pos_for_point(db, planned_point)
 
-    # 1. Fetch Planning and POS
-    db_planning = get_record(db, TradePlanning, check_in_data.trade_planning_id)
-    db_pos = get_record(db, PointOfSale, db_planning.point_of_sale_id)
-
-    # 2. Business Rule: Only ACTIVE POS can be visited
-    if db_pos.status != PointOfSaleStatus.ACTIVE:
-        error_msg = f'Cannot Check-In. Point of Sale {db_pos.code} is in {
-                    db_pos.status.value} status.'
-        logger.warning(error_msg)
-        raise InvalidInputError(
-            detail = error_msg
-        )
-
-    # 3. Geofencing Validation
-    distance_error = validate_geofence(
-        check_in_data.check_in_latitude,
-        check_in_data.check_in_longitude,
-        db_pos,
-        'Check-In'
+    distance = validate_geofence(
+        payload.check_in_latitude, payload.check_in_longitude, pos, action_name = 'Check-In'
     )
 
-    # 4. Check for existing open attendance
-    existing_open = db.query(Attendance).filter(
-        Attendance.trade_planning_id == db_planning.id,
-        Attendance.user_id == check_in_data.user_id,
-        Attendance.check_out_time.is_(None)
-    ).first()
-
-    if existing_open:
-        raise InvalidInputError(detail = 'User already has an open attendance for this visit.')
-
-    # 5. Create Attendance record
-    attendance_dict = check_in_data.model_dump()
-    if not attendance_dict.get('check_in_time'):
-        attendance_dict['check_in_time'] = datetime.now()
-
-    attendance_dict['check_in_distance_error'] = distance_error
-
-    db_attendance = Attendance(**attendance_dict)
+    db_attendance = Attendance(
+        company_id = payload.company_id,
+        user_id = payload.user_id,
+        trade_planned_point_id = planned_point.id,
+        check_in_time = get_current_time_gmt(),
+        check_in_latitude = payload.check_in_latitude,
+        check_in_longitude = payload.check_in_longitude,
+        check_in_distance_error = distance
+    )
     db.add(db_attendance)
-
-    # 6. Update Planning Status
-    db_planning.status = 'IN_PROGRESS'
-    db.add(db_planning)
-
+    db.flush()
+    planned_point.status = 'IN_PROGRESS'
+    db.add(planned_point)
     db.commit()
     db.refresh(db_attendance)
-
-    return db_attendance, {'new_values': sqlalchemy_object_as_dict(db_attendance)}
+    return db_attendance, {
+        'old_values': None,
+        'new_values': sqlalchemy_object_as_dict(db_attendance)
+    }
 
 
 @handle_service_errors('TRADE')
-@audit_event('TRADE', 'Attendance', 'CHECK_OUT')
+@audit_event('TRADE', 'Attendance', 'UPDATE')
 async def register_attendance_check_out(
     db: Session,
     attendance_id: int,
-    check_out_data: AttendanceCheckOutSchema
+    payload: AttendanceCheckOutSchema
 ) -> Tuple[Attendance, Dict[str, Any]]:
     '''
-        Registers a Check-Out for a visit.
-        Validates Geofencing and calculates effective time.
+        Registers a check-out event and computes duration + workload delta.
     '''
-    message = f'Registering Check-Out for Attendance ID: {attendance_id}'
-    logger.info(message)
-
-    # 1. Fetch Records
     db_attendance = get_record(db, Attendance, attendance_id)
-    db_planning = get_record(db, TradePlanning, db_attendance.trade_planning_id)
-    db_pos = get_record(db, PointOfSale, db_planning.point_of_sale_id)
-
     if db_attendance.check_out_time:
-        raise InvalidInputError(detail = 'Attendance already has a Check-Out registered.')
+        raise InvalidInputError(
+            detail = f'Attendance {attendance_id} is already closed.'
+        )
 
-    # 2. Geofencing Validation
-    distance_error = validate_geofence(
-        check_out_data.check_out_latitude,
-        check_out_data.check_out_longitude,
-        db_pos,
-        'Check-Out'
+    planned_point = get_record(db, PlannedPoint, db_attendance.trade_planned_point_id)
+    pos = _resolve_pos_for_point(db, planned_point)
+    distance = validate_geofence(
+        payload.check_out_latitude, payload.check_out_longitude, pos, action_name = 'Check-Out'
     )
 
-    # 3. Update Attendance
-    db_attendance.check_out_time = check_out_data.check_out_time or datetime.now()
-    db_attendance.check_out_latitude = check_out_data.check_out_latitude
-    db_attendance.check_out_longitude = check_out_data.check_out_longitude
-    db_attendance.check_out_distance_error = distance_error
+    old_values = sqlalchemy_object_as_dict(db_attendance)
+    now = get_current_time_gmt()
+    delta_seconds = (now - db_attendance.check_in_time).total_seconds()
+    duration_minutes = max(0, int(delta_seconds // 60))
 
-    # 4. Calculate Duration (Minutes)
-    duration_delta = db_attendance.check_out_time - db_attendance.check_in_time
-    duration_minutes = max(0, int(duration_delta.total_seconds() // 60))
+    db_attendance.check_out_time = now
+    db_attendance.check_out_latitude = payload.check_out_latitude
+    db_attendance.check_out_longitude = payload.check_out_longitude
+    db_attendance.check_out_distance_error = distance
     db_attendance.duration_minutes = duration_minutes
 
-    # 5. Sync Workload to Planning
-    db_planning.actual_workload_minutes = duration_minutes
-    db_planning.workload_difference_minutes = max(-db_planning.planned_workload_minutes,
-                            duration_minutes - db_planning.planned_workload_minutes)
-    db_planning.status = 'COMPLETED'
+    planned_point.actual_workload_minutes = duration_minutes
+    planned_point.workload_difference_minutes = (
+        duration_minutes - planned_point.planned_workload_minutes
+    )
+    planned_point.status = 'DONE'
+    if payload.comments is not None:
+        planned_point.comments = payload.comments
 
     db.add(db_attendance)
-    db.add(db_planning)
+    db.add(planned_point)
     db.commit()
     db.refresh(db_attendance)
-
     return db_attendance, {
-        'old_values': sqlalchemy_object_as_dict(db_attendance), 
+        'old_values': old_values,
         'new_values': sqlalchemy_object_as_dict(db_attendance)
     }

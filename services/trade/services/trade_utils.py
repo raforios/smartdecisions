@@ -4,7 +4,7 @@
 import math
 from sqlalchemy.orm import Session
 from models.pos import PointOfSale, PointOfSaleStatus
-from models.trade import Attendance, TradePlanning
+from models.trade import Attendance, PlannedPoint
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
 
@@ -75,15 +75,16 @@ def validate_active_attendance(
         raise InvalidInputError(detail = f'Attendance {attendance_id
                             } is already closed (Check-Out performed).')
 
-    planning = db.query(TradePlanning).filter(TradePlanning.id == attendance.trade_planning_id
-                                            ).first()
+    planned_point = db.query(PlannedPoint).filter(
+        PlannedPoint.id == attendance.trade_planned_point_id
+    ).first()
 
-    if pos_id and planning.point_of_sale_id != pos_id:
+    if pos_id and planned_point.point_of_sale_id != pos_id:
         raise InvalidInputError(detail = f'Attendance {attendance_id
                             } does not belong to POS {pos_id}.')
 
-    # Also validate POS status through planning
-    pos = db.query(PointOfSale).filter(PointOfSale.id == planning.point_of_sale_id).first()
+    # Validate POS status through the planned point's POS reference.
+    pos = db.query(PointOfSale).filter(PointOfSale.id == planned_point.point_of_sale_id).first()
     if pos.status != PointOfSaleStatus.ACTIVE:
         error_msg = f"Point of Sale {pos.code} is not ACTIVE. Current status: {pos.status.value}"
         logger.warning(error_msg)

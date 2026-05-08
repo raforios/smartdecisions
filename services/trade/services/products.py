@@ -95,11 +95,11 @@ async def create_bulk_items_from_skus(
 def _get_segment_key_from_list(categories: List[ProductCategoryCreateSchema]) -> str:
     '''
         Constructs the non-sequential segment key for the SKU from a list of categories.
-        It sorts categories by name and takes the first 4, padding if necessary,
-        to ensure a consistent SKU structure as per requirements.
+        Sorts categories by their numeric category_id and takes the first 4, padding
+        if necessary, to ensure a consistent SKU structure as per requirements.
     '''
-    # Sort by category name to ensure a consistent order for the SKU segment.
-    sorted_cats = sorted(categories, key=lambda c: c.category_name)
+    # Sort by numeric category_id to keep a deterministic order for the SKU segment.
+    sorted_cats = sorted(categories, key=lambda c: c.category_id)
 
     # Per requirements doc, SKU is composed of up to 4 categories.
     sku_cats = sorted_cats[:4]
@@ -391,12 +391,12 @@ async def _insert_product_bulk_data(
 
             # Dynamically build category list from flat schema
             category_info = [
-                ProductCategoryCreateSchema(category_name = getattr(item,
-                    f'category_{i}_name'),
+                ProductCategoryCreateSchema(
+                    category_id = getattr(item, f'category_{i}_id'),
                     category_code = getattr(item, f'category_{i}_code')
                 )
                 for i in range(1, 5)
-                if getattr(item, f'category_{i}_name') and getattr(item, f'category_{i}_code')
+                if getattr(item, f'category_{i}_id') and getattr(item, f'category_{i}_code')
             ]
 
             if not category_info:
@@ -407,7 +407,7 @@ async def _insert_product_bulk_data(
             with db.begin_nested():
                 # Prepare product data, excluding category fields
                 product_dict = item.model_dump(exclude={
-                    f'category_{i}_name' for i in range(1, 5)
+                    f'category_{i}_id' for i in range(1, 5)
                 } | {
                     f'category_{i}_code' for i in range(1, 5)
                 })
@@ -762,7 +762,9 @@ async def create_product_assignment_service(
         company_id = assignment_data.company_id,
         product_id = product_id,
         point_of_sale_id = assignment_data.point_of_sale_id,
-        status = 'ACTIVE'
+        near_expiration_days = assignment_data.near_expiration_days,
+        minimum_stock = assignment_data.minimum_stock,
+        status = assignment_data.status or 'ACTIVE'
     )
 
     db.add(db_assign)
@@ -919,6 +921,8 @@ async def _insert_assignment_bulk_data(
                 company_id = item.company_id,
                 product_id = product_id,
                 point_of_sale_id = pos_id,
+                near_expiration_days = item.near_expiration_days,
+                minimum_stock = item.minimum_stock,
                 status = item.status
             )
             db.add(db_assign)

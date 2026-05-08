@@ -35,15 +35,16 @@ class ProductCategory(Base):
     product_id = Column(Integer, ForeignKey('t_products.id', ondelete = 'CASCADE'),
                         nullable = False, index = True)
 
-    # Identifier for the category, e.g., 'BRAND', 'FLAVOR', 'SIZE'
-    # This corresponds to the old 'category_1', 'category_2' concept.
-    category_name = Column(String(100), nullable = False)
+    # Numeric identifier for the category provided by the frontend / source system.
+    # Replaces the old free-form 'category_name' string.
+    category_id = Column(Integer, nullable = False, index = True)
 
-    # The actual code from the external system, e.g., 'COKE', 'CHERRY', '12OZ'
+    # The actual code from the external system, e.g., 'COKE', 'CHERRY', '12OZ'.
+    # This is what feeds the SKU segment.
     category_code = Column(String(50), nullable = False)
 
     __table_args__ = (
-        UniqueConstraint('product_id', 'category_name', name='uc_product_category_name'),
+        UniqueConstraint('product_id', 'category_id', name='uc_product_category_id'),
     )
 
 class Product(Base):  # pylint: disable=too-few-public-methods
@@ -78,15 +79,14 @@ class Product(Base):  # pylint: disable=too-few-public-methods
     purchase_unit = Column(String(10), nullable = True)
     sale_unit = Column(String(10), nullable = True)
 
-    # Stock Control
-    near_expiration_days = Column(Integer, nullable = False)
-    minimum_stock = Column(Integer, nullable = False)
+    # Stock Control fields are managed at the assignment level (ProductAssignmentPOS)
+    # so each Point of Sale can have its own thresholds for the same product.
 
     # Pricing
     stock_value = Column(Numeric(10, 2), nullable = True)
     purchase_price = Column(Numeric(10, 2), nullable = True)
     sale_price = Column(Numeric(10, 2), nullable = True)
-    currency = Column(String(10), nullable = True)
+    currency = Column(Integer, nullable = True)
 
     # Other Product Data
     manufacturer = Column(String(255), nullable = True)
@@ -231,6 +231,10 @@ class ProductAssignmentPOS(Base):  # pylint: disable=too-few-public-methods
         nullable = False, index = True
     )
     point_of_sale = relationship('PointOfSale')
+
+    # Stock Control thresholds (per assignment, since each POS may need different limits)
+    near_expiration_days = Column(Integer, nullable = False)
+    minimum_stock = Column(Integer, nullable = False)
 
     # Standard status field
     status = Column(String(20), default = 'ACTIVE', nullable = False)

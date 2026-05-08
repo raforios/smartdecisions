@@ -179,6 +179,17 @@ async def bulk_upload_products_controller(
 
 # --- SKU EQUIVALENCY Controllers ---
 
+def _attach_product_sku(db_equivalency) -> None:
+    '''
+        Mutates an SKUEquivalency ORM instance so it exposes `product_sku`
+        derived from the related Product. The response schema requires this
+        attribute even though it is not a column of `t_sku_equivalencies`.
+    '''
+    if getattr(db_equivalency, 'product_sku', None) is None:
+        related = getattr(db_equivalency, 'product', None)
+        db_equivalency.product_sku = related.sku if related is not None else None
+
+
 @handle_service_errors('TRADE')
 async def create_sku_equivalency_controller(
     equivalency_data: SKUEquivalencyCreateSchema,
@@ -213,6 +224,7 @@ async def get_sku_equivalency_by_id_controller(
         db = db,
         equivalency_id = equivalency_id
     )
+    _attach_product_sku(db_equivalency)
     return SKUEquivalencyResponseSchema.model_validate(
         db_equivalency, from_attributes = True
     )
@@ -233,6 +245,7 @@ async def update_sku_equivalency_controller(
         equivalency_id = equivalency_id,
         update_data = update_data
     )
+    _attach_product_sku(db_equivalency)
     return SKUEquivalencyResponseSchema.model_validate(
         db_equivalency, from_attributes = True
     )
@@ -273,6 +286,8 @@ async def get_sku_equivalencies_list_controller(
         limit = limit
     )
 
+    for item in items:
+        _attach_product_sku(item)
     result_items = [
         SKUEquivalencyResponseSchema.model_validate(item, from_attributes = True)
         for item in items
@@ -387,7 +402,7 @@ async def update_product_assignment_controller(
     '''
         Controller for updating a Product to POS Assignment.
     '''
-    db_assignment, _ = await update_product_assignment_service(
+    db_assignment = await update_product_assignment_service(
         db = db,
         assignment_id = assignment_id,
         update_data = update_data

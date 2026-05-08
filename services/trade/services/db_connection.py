@@ -42,8 +42,8 @@ DB_PARAMETERS: DatabaseConfig = {
 REQUIRED_DB_KEYS = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DATABASE', 'DB_PORT', 'DB_DIALECT']
 for key in REQUIRED_DB_KEYS:
     if DB_PARAMETERS.get(key) is None or DB_PARAMETERS.get(key) == '':
-        error_msg = f'Missing or empty required database environment variable: {key
-        }. Ensure it\'s set in os.environ or in your .env file.'
+        error_msg = f'Missing or empty required database environment variable:\
+        {key}. Ensure it\'s set in os.environ or in your .env file.'
         raise EnvironmentError(error_msg)
 
 Base: DeclarativeMeta = declarative_base()

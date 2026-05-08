@@ -29,7 +29,7 @@ from models.pos import (
     PointOfSaleInventory,
     PointOfSaleStatus
 )
-from models.trade import TradePlanning
+from models.trade import PlannedPoint
 from models.products import Product, ProductAssignmentPOS
 from schemas.pos import (
     POSFilterSchema,
@@ -263,8 +263,13 @@ async def delete_pos_service(
     db_pos = get_record(db, PointOfSale, pos_id)
     old_values = sqlalchemy_object_as_dict(db_pos)
 
-    # 1. Cleanup Dependencies (TradePlanning has RESTRICT on POS)
-    db.query(TradePlanning).filter(TradePlanning.point_of_sale_id == pos_id).delete()
+    # 1. Cleanup Dependencies. After the planning refactor it is the planned
+    # points (route stops) that hold the FK to POS with ON DELETE RESTRICT,
+    # so we have to remove them first. Their cascade chain wipes any
+    # attendances pointing to those points.
+    db.query(PlannedPoint).filter(PlannedPoint.point_of_sale_id == pos_id).delete(
+        synchronize_session = False
+    )
     db.flush()
 
     # 2. Delete POS

@@ -18,10 +18,10 @@ class ProductCategoryBaseSchema(BaseSchema):
     '''
         Base schema for a product's category code.
     '''
-    category_name: str = Field(..., max_length = 100,
-                        description = 'Identifier for the category, e.g., BRAND, FLAVOR.')
+    category_id: int = Field(..., gt = 0,
+                        description = 'Numeric identifier of the category from the source system.')
     category_code: str = Field(..., max_length = 50,
-                        description = 'The actual code from the external system.')
+                        description = 'The actual code from the external system. Feeds the SKU.')
 
 class ProductCategoryCreateSchema(ProductCategoryBaseSchema):
     '''
@@ -59,15 +59,13 @@ class ProductBaseSchema(BaseSchema):
     purchase_unit: Optional[str] = Field(None, max_length = 10)
     sale_unit: Optional[str] = Field(None, max_length = 10)
 
-    # Stock Control
-    near_expiration_days: int
-    minimum_stock: int
+    # Stock Control thresholds live in ProductAssignmentPOS (per POS).
 
     # Pricing
     stock_value: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
     purchase_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
     sale_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
-    currency: Optional[str] = Field(None, max_length = 10)
+    currency: Optional[int] = Field(None, description = 'ID from frontend app')
 
     # Other Data
     manufacturer: Optional[str] = Field(None, max_length = 255)
@@ -97,12 +95,10 @@ class ProductUpdateSchema(BaseSchema):
     replenishment_unit: Optional[str] = Field(None, max_length = 10)
     purchase_unit: Optional[str] = Field(None, max_length = 10)
     sale_unit: Optional[str] = Field(None, max_length = 10)
-    near_expiration_days: Optional[int] = None
-    minimum_stock: Optional[int] = None
     stock_value: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
     purchase_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
     sale_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
-    currency: Optional[str] = Field(None, max_length = 10)
+    currency: Optional[int] = Field(None, description = 'Currency ID from frontend app.')
     manufacturer: Optional[str] = Field(None, max_length = 255)
     country_of_origin: Optional[str] = Field(None, max_length = 10)
     handling_instructions: Optional[str] = None
@@ -116,6 +112,7 @@ class ProductResponseSchema(ProductBaseSchema):
         Response schema for a product, including generated fields and relationships.
     '''
     id: int
+    company_id: int = Field(..., description = 'Owner company of the product.')
     sku: str = Field(..., description = 'System-generated Stock Keeping Unit.')
 
     categories: List[ProductCategoryResponseSchema] = []
@@ -165,25 +162,23 @@ class ProductBulkCreateSchema(BaseSchema):
     replenishment_unit: str
     purchase_unit: Optional[str] = None
     sale_unit: Optional[str] = None
-    near_expiration_days: int
-    minimum_stock: int
     stock_value: Optional[Decimal] = None
     purchase_price: Optional[Decimal] = None
     sale_price: Optional[Decimal] = None
-    currency: Optional[str] = None
+    currency: Optional[int] = None
     manufacturer: Optional[str] = None
     country_of_origin: Optional[str] = None
     handling_instructions: Optional[str] = None
     storage_conditions: Optional[str] = None
     special_precautions: Optional[str] = None
     status: Optional[str] = 'ACTIVE'
-    category_1_name: str
+    category_1_id: int
     category_1_code: str
-    category_2_name: Optional[str] = None
+    category_2_id: Optional[int] = None
     category_2_code: Optional[str] = None
-    category_3_name: Optional[str] = None
+    category_3_id: Optional[int] = None
     category_3_code: Optional[str] = None
-    category_4_name: Optional[str] = None
+    category_4_id: Optional[int] = None
     category_4_code: Optional[str] = None
 
 
@@ -287,6 +282,16 @@ class ProductAssignmentPOSBaseSchema(BaseSchema):
         ...,
         description = 'ID of the Point of Sale to assign the product to.'
     )
+    near_expiration_days: int = Field(
+        ...,
+        ge = 0,
+        description = 'Threshold in days to flag near-expiration stock at this POS.'
+    )
+    minimum_stock: int = Field(
+        ...,
+        ge = 0,
+        description = 'Minimum stock level for this product at this POS.'
+    )
     status: Optional[str] = Field(
         'ACTIVE',
         max_length = 20,
@@ -304,9 +309,20 @@ class ProductAssignmentPOSCreateSchema(ProductAssignmentPOSBaseSchema):
 
 class ProductAssignmentPOSUpdateSchema(BaseSchema):
     '''
-        Schema for updating a Product to POS Assignment.
+        Schema for updating a Product to POS Assignment. To change product/pos
+        identity, delete the assignment and recreate. Stock thresholds and
+        status are editable.
     '''
-    # Only status is updatable. To change product/pos, delete and recreate.
+    near_expiration_days: Optional[int] = Field(
+        None,
+        ge = 0,
+        description = 'Threshold in days to flag near-expiration stock at this POS.'
+    )
+    minimum_stock: Optional[int] = Field(
+        None,
+        ge = 0,
+        description = 'Minimum stock level for this product at this POS.'
+    )
     status: Optional[str] = Field(
         None,
         max_length = 20,
@@ -321,6 +337,8 @@ class ProductAssignmentPOSResponseSchema(BaseSchema):
     company_id: int
     product_id: int # Returns the internal ID
     point_of_sale_id: int
+    near_expiration_days: int
+    minimum_stock: int
     status: str
     created_at: Optional[datetime]
     class Config:# pylint: disable=too-few-public-methods
@@ -372,5 +390,15 @@ class ProductAssignmentPOSBulkItemSchema(BaseSchema):
     pos_external_code: Optional[str] = Field(
         None,
         description = 'External code of the POS (alternative to ID).'
+    )
+    near_expiration_days: int = Field(
+        ...,
+        ge = 0,
+        description = 'Threshold in days to flag near-expiration stock at this POS.'
+    )
+    minimum_stock: int = Field(
+        ...,
+        ge = 0,
+        description = 'Minimum stock level for this product at this POS.'
     )
     status: Optional[str] = Field('ACTIVE', max_length = 20)

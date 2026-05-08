@@ -188,10 +188,15 @@ class PointOfSaleBaseSchema(BaseSchema):
     )
 
     # Operation and Classification
-    operating_hours: Optional[str] = Field(
+    opening_time: Optional[str] = Field(
         None,
-        max_length = 255,
-        description = 'Operating hours of the POS (e.g., "09:00-18:00").'
+        pattern = r'^([01]\d|2[0-3]):[0-5]\d$',
+        description = 'POS opening time in HH:MM 24h format (e.g., "09:00").'
+    )
+    closing_time: Optional[str] = Field(
+        None,
+        pattern = r'^([01]\d|2[0-3]):[0-5]\d$',
+        description = 'POS closing time in HH:MM 24h format (e.g., "18:00").'
     )
     pos_type_id: int = Field(
         ...,
@@ -299,10 +304,15 @@ class PointOfSaleUpdateSchema(BaseSchema):
     )
 
     # Operation and Classification
-    operating_hours: Optional[str] = Field(
+    opening_time: Optional[str] = Field(
         None,
-        max_length = 255,
-        description = 'Operating hours of the POS (e.g., "09:00-18:00").'
+        pattern = r'^([01]\d|2[0-3]):[0-5]\d$',
+        description = 'POS opening time in HH:MM 24h format (e.g., "09:00").'
+    )
+    closing_time: Optional[str] = Field(
+        None,
+        pattern = r'^([01]\d|2[0-3]):[0-5]\d$',
+        description = 'POS closing time in HH:MM 24h format (e.g., "18:00").'
     )
     pos_type_id: Optional[int] = Field(
         None,
@@ -453,10 +463,15 @@ class PointOfSaleBulkCreateSchema(BaseSchema):
     )
 
     # Operation and Classification
-    operating_hours: Optional[str] = Field(
+    opening_time: Optional[str] = Field(
         None,
-        max_length = 255,
-        description = 'Operating hours of the POS (e.g., "09:00-18:00").'
+        pattern = r'^([01]\d|2[0-3]):[0-5]\d$',
+        description = 'POS opening time in HH:MM 24h format (e.g., "09:00").'
+    )
+    closing_time: Optional[str] = Field(
+        None,
+        pattern = r'^([01]\d|2[0-3]):[0-5]\d$',
+        description = 'POS closing time in HH:MM 24h format (e.g., "18:00").'
     )
     pos_type_id: int = Field(
         ...,

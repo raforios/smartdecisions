@@ -1,120 +1,274 @@
 '''
-    Trade: routes handler
+    Trade routes — Planned Routes, Planned Points, Planning, Planning Detail,
+    Bulk uploads and Attendances.
 '''
-from typing import Any, Dict
-from fastapi import APIRouter, Depends, Query, Request, status
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, Depends, Form, Header, Query, Request, status
 from sqlalchemy.orm import Session
-from services.db_connection import GET_DB_DEPENDENCY
-from services.security import get_current_user
-from services.logger_config import custom_logger as logger
+
 from controllers.trade import (
-    create_adhoc_planning_controller,
+    attendance_check_in_controller,
+    attendance_check_out_controller,
+    bulk_upload_planned_routes_controller,
+    bulk_upload_trade_planning_controller,
+    create_planned_point_controller,
+    create_planned_route_controller,
+    create_planning_detail_controller,
     create_trade_planning_controller,
+    delete_planned_point_controller,
+    delete_planned_route_controller,
+    delete_planning_detail_controller,
     delete_trade_planning_controller,
-    get_trade_planning_by_id_controller,
-    get_trade_planning_list_controller,
-    justify_planning_absence_controller,
-    update_trade_planning_controller,
-    update_trade_planning_workload_controller,
-    register_attendance_check_in_controller,
-    register_attendance_check_out_controller
+    get_planned_route_controller,
+    get_trade_planning_controller,
+    list_planned_routes_controller,
+    list_trade_planning_controller,
+    update_planned_point_controller,
+    update_planned_route_controller,
+    update_trade_planning_controller
 )
 from schemas.trade import (
-    TradePlanningAdHocCreateSchema,
+    AttendanceCheckInSchema,
+    AttendanceCheckOutSchema,
+    AttendanceResponseSchema,
+    PlannedPointCreateSchema,
+    PlannedPointResponseSchema,
+    PlannedPointUpdateSchema,
+    PlannedRouteCreateSchema,
+    PlannedRouteFilterSchema,
+    PlannedRouteListResponseSchema,
+    PlannedRouteResponseSchema,
+    PlannedRouteUpdateSchema,
     TradePlanningCreateSchema,
+    TradePlanningDetailCreateSchema,
+    TradePlanningDetailResponseSchema,
     TradePlanningFilterSchema,
-    TradePlanningJustificationSchema,
     TradePlanningListResponseSchema,
     TradePlanningResponseSchema,
-    TradePlanningUpdateSchema,
-    TradePlanningWorkloadUpdateSchema,
-    AttendanceCreateSchema,
-    AttendanceCheckOutSchema,
-    AttendanceResponseSchema
+    TradePlanningUpdateSchema
 )
+from services.db_connection import GET_DB_DEPENDENCY
+from services.security import get_current_user
 
 router = APIRouter(prefix = '/v1/trade', tags = ['Trade'])
 
-# --- A.3. TRADE PLANNING ENDPOINTS ---
+
+# --- PLANNED ROUTES ---
+@router.post(
+    '/routes',
+    response_model = PlannedRouteResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Create a planned route'
+)
+async def create_planned_route_endpoint(
+    route_data: PlannedRouteCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> PlannedRouteResponseSchema:
+    '''Create a planned route with optional inline points.'''
+    return await create_planned_route_controller(
+        route_data = route_data, db = db,
+        request = request, current_user = current_user
+    )
+
+
+@router.get(
+    '/routes',
+    response_model = PlannedRouteListResponseSchema,
+    summary = 'List planned routes'
+)
+async def list_planned_routes_endpoint(
+    request: Request,
+    filters: PlannedRouteFilterSchema = Depends(),
+    skip: int = Query(0, ge = 0),
+    limit: int = Query(100, gt = 0, le = 500),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> PlannedRouteListResponseSchema:
+    '''Paginated list of planned routes with filters.'''
+    return await list_planned_routes_controller(
+        filters = filters, skip = skip, limit = limit,
+        db = db, request = request, current_user = current_user
+    )
+
+
+@router.get(
+    '/routes/{route_id}',
+    response_model = PlannedRouteResponseSchema,
+    summary = 'Get a planned route by ID'
+)
+async def get_planned_route_endpoint(
+    route_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> PlannedRouteResponseSchema:
+    '''Retrieve a planned route by ID with its points.'''
+    return await get_planned_route_controller(
+        route_id = route_id, db = db,
+        request = request, current_user = current_user
+    )
+
+
+@router.put(
+    '/routes/{route_id}',
+    response_model = PlannedRouteResponseSchema,
+    summary = 'Update a planned route master record'
+)
+async def update_planned_route_endpoint(
+    route_id: int,
+    update_data: PlannedRouteUpdateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> PlannedRouteResponseSchema:
+    '''Update planned route master fields.'''
+    return await update_planned_route_controller(
+        route_id = route_id, update_data = update_data,
+        db = db, request = request, current_user = current_user
+    )
+
+
+@router.delete(
+    '/routes/{route_id}',
+    response_model = Dict[str, Any],
+    summary = 'Delete a planned route'
+)
+async def delete_planned_route_endpoint(
+    route_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> Dict[str, Any]:
+    '''Delete a planned route (cascades to its points).'''
+    return await delete_planned_route_controller(
+        route_id = route_id, db = db,
+        request = request, current_user = current_user
+    )
+
+
+# --- PLANNED POINTS (subresource of a route) ---
+@router.post(
+    '/routes/{route_id}/points',
+    response_model = PlannedPointResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Add a planned point to a route'
+)
+async def create_planned_point_endpoint(
+    route_id: int,
+    point_data: PlannedPointCreateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> PlannedPointResponseSchema:
+    '''Append a planned point to an existing route.'''
+    return await create_planned_point_controller(
+        route_id = route_id, point_data = point_data,
+        db = db, request = request, current_user = current_user
+    )
+
+
+@router.put(
+    '/points/{point_id}',
+    response_model = PlannedPointResponseSchema,
+    summary = 'Update a planned point'
+)
+async def update_planned_point_endpoint(
+    point_id: int,
+    update_data: PlannedPointUpdateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> PlannedPointResponseSchema:
+    '''Update a planned point.'''
+    return await update_planned_point_controller(
+        point_id = point_id, update_data = update_data,
+        db = db, request = request, current_user = current_user
+    )
+
+
+@router.delete(
+    '/points/{point_id}',
+    response_model = Dict[str, Any],
+    summary = 'Delete a planned point'
+)
+async def delete_planned_point_endpoint(
+    point_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> Dict[str, Any]:
+    '''Delete a planned point.'''
+    return await delete_planned_point_controller(
+        point_id = point_id, db = db,
+        request = request, current_user = current_user
+    )
+
+
+# --- TRADE PLANNING (campaigns) ---
 @router.post(
     '/planning',
     response_model = TradePlanningResponseSchema,
     status_code = status.HTTP_201_CREATED,
-    summary = 'Create Trade Planning Entry',
-    description = 'Creates a new local planning entry linking User, POS, and Planning ID.'
+    summary = 'Create a planning campaign'
 )
 async def create_trade_planning_endpoint(
     planning_data: TradePlanningCreateSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to create a new Trade Planning entry.
-    '''
-    message = f'User: {current_user}. Request create Trade Planning.'
-    logger.info(message)
+) -> TradePlanningResponseSchema:
+    '''Create a planning campaign with optional inline detail rows.'''
     return await create_trade_planning_controller(
-        planning_data = planning_data,
-        db = db,
-        request = request,
-        current_user = current_user
+        planning_data = planning_data, db = db,
+        request = request, current_user = current_user
     )
 
-@router.get(
-    '/planning/{planning_id}',
-    response_model = TradePlanningResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Get Trade Planning by ID'
-)
-async def get_trade_planning_by_id_endpoint(
-    planning_id: int,
-    request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to retrieve a specific Trade Planning entry.
-    '''
-    return await get_trade_planning_by_id_controller(
-        planning_id = planning_id,
-        db = db,
-        request = request,
-        current_user = current_user
-    )
 
 @router.get(
     '/planning',
     response_model = TradePlanningListResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'List Trade Planning Entries'
+    summary = 'List planning campaigns'
 )
-# pylint: disable=too-many-arguments, too-many-positional-arguments
-async def get_trade_planning_list_endpoint(
+async def list_trade_planning_endpoint(
     request: Request,
     filters: TradePlanningFilterSchema = Depends(),
     skip: int = Query(0, ge = 0),
-    limit: int = Query(100, gt = 0),
+    limit: int = Query(100, gt = 0, le = 500),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to list Trade Planning entries with filtering and pagination.
-    '''
-    return await get_trade_planning_list_controller(
-        filters = filters,
-        db = db,
-        request = request,
-        current_user = current_user,
-        skip = skip,
-        limit = limit
+) -> TradePlanningListResponseSchema:
+    '''Paginated list of planning campaigns with filters.'''
+    return await list_trade_planning_controller(
+        filters = filters, skip = skip, limit = limit,
+        db = db, request = request, current_user = current_user
     )
+
+
+@router.get(
+    '/planning/{planning_id}',
+    response_model = TradePlanningResponseSchema,
+    summary = 'Get a planning campaign by ID'
+)
+async def get_trade_planning_endpoint(
+    planning_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> TradePlanningResponseSchema:
+    '''Retrieve a planning campaign by ID with its details.'''
+    return await get_trade_planning_controller(
+        planning_id = planning_id, db = db,
+        request = request, current_user = current_user
+    )
+
 
 @router.put(
     '/planning/{planning_id}',
     response_model = TradePlanningResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Update Trade Planning'
+    summary = 'Update a planning campaign master record'
 )
 async def update_trade_planning_endpoint(
     planning_id: int,
@@ -122,174 +276,146 @@ async def update_trade_planning_endpoint(
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to update a Trade Planning entry (status/comments).
-    '''
-    message = f'User: {current_user}. Request update Trade Planning ID: {planning_id}.'
-    logger.info(message)
+) -> TradePlanningResponseSchema:
+    '''Update planning master fields.'''
     return await update_trade_planning_controller(
-        planning_id = planning_id,
-        update_data = update_data,
-        db = db,
-        request = request,
-        current_user = current_user
+        planning_id = planning_id, update_data = update_data,
+        db = db, request = request, current_user = current_user
     )
+
 
 @router.delete(
     '/planning/{planning_id}',
     response_model = Dict[str, Any],
-    status_code = status.HTTP_200_OK,
-    summary = 'Delete Trade Planning'
+    summary = 'Delete a planning campaign'
 )
 async def delete_trade_planning_endpoint(
     planning_id: int,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to delete a Trade Planning entry.
-    '''
-    message = f'User: {current_user}. Request delete Trade Planning ID: {planning_id}.'
-    logger.info(message)
+) -> Dict[str, Any]:
+    '''Delete a planning campaign (cascades to its details).'''
     return await delete_trade_planning_controller(
-        planning_id = planning_id,
-        db = db,
-        request = request,
-        current_user = current_user
+        planning_id = planning_id, db = db,
+        request = request, current_user = current_user
     )
 
-@router.patch(
-    '/planning/{planning_id}/workload',
-    response_model = TradePlanningResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Calculate Workload (Legacy PATCH)'
-)
-async def update_trade_planning_workload_endpoint(
-    planning_id: int,
-    workload_data: TradePlanningWorkloadUpdateSchema,
-    request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to calculate actual workload based on Check-in/Check-out times.
-        DEPRECATED: Use /v1/trade/attendances/ for new implementation.
-    '''
-    message = f'User: {current_user}. Request Workload Calculation for ID: {planning_id}.'
-    logger.info(message)
-    return await update_trade_planning_workload_controller(
-        planning_id = planning_id,
-        workload_data = workload_data,
-        db = db,
-        request = request,
-        current_user = current_user
-    )
 
-# --- A.4. AGENDA DE CAMPO ENDPOINTS ---
+# --- PLANNING DETAIL (subresource) ---
 @router.post(
-    '/planning/adhoc',
-    response_model = TradePlanningResponseSchema,
+    '/planning/{planning_id}/details',
+    response_model = TradePlanningDetailResponseSchema,
     status_code = status.HTTP_201_CREATED,
-    summary = 'Create Ad-Hoc Visit',
-    description = 'Creates an unplanned visit (Fuera de Ruta) for the user.'
+    summary = 'Add a detail row to a planning'
 )
-async def create_adhoc_planning_endpoint(
-    adhoc_data: TradePlanningAdHocCreateSchema,
-    request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to create an Ad-Hoc visit.
-    '''
-    message = f'User: {current_user}. Request Create Ad-Hoc Visit.'
-    logger.info(message)
-    return await create_adhoc_planning_controller(
-        adhoc_data = adhoc_data,
-        db = db,
-        request = request,
-        current_user = current_user
-    )
-
-@router.patch(
-    '/planning/{planning_id}/justify',
-    response_model = TradePlanningResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Justify Non-Visit'
-)
-async def justify_planning_absence_endpoint(
+async def create_planning_detail_endpoint(
     planning_id: int,
-    justification_data: TradePlanningJustificationSchema,
+    detail_data: TradePlanningDetailCreateSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
-    '''
-    Endpoint to justify why a visit was not performed (cancels the visit).
-    '''
-    message = f'User: {current_user}. Request Justify Absence ID: {planning_id}.'
-    logger.info(message)
-    return await justify_planning_absence_controller(
-        planning_id = planning_id,
-        justification_data = justification_data,
-        db = db,
-        request = request,
-        current_user = current_user
+) -> TradePlanningDetailResponseSchema:
+    '''Append a detail row (route + day) to a planning campaign.'''
+    return await create_planning_detail_controller(
+        planning_id = planning_id, detail_data = detail_data,
+        db = db, request = request, current_user = current_user
     )
 
-# --- A.5. ATTENDANCE (CHECK-IN / CHECK-OUT) ENDPOINTS ---
 
+@router.delete(
+    '/planning/details/{detail_id}',
+    response_model = Dict[str, Any],
+    summary = 'Delete a planning detail row'
+)
+async def delete_planning_detail_endpoint(
+    detail_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> Dict[str, Any]:
+    '''Remove a detail row from a planning campaign.'''
+    return await delete_planning_detail_controller(
+        detail_id = detail_id, db = db,
+        request = request, current_user = current_user
+    )
+
+
+# --- BULK UPLOADS ---
+@router.post(
+    '/routes/bulk-upload',
+    response_model = Dict[str, Any],
+    summary = 'Bulk upload of planned routes + their points (CSV)'
+)
+async def bulk_upload_planned_routes_endpoint(
+    request: Request,
+    file_name: str = Form(..., description = 'CSV file name already uploaded to FILES.'),
+    delimiter: Optional[str] = Form(',', description = 'Field separator. Default: comma.'),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> Dict[str, Any]:
+    '''Bulk upload of planned routes + their points from a CSV file.'''
+    return await bulk_upload_planned_routes_controller(
+        db = db, request = request, current_user = current_user,
+        file_name = file_name, delimiter = delimiter, auth_token = authorization
+    )
+
+
+@router.post(
+    '/planning/bulk-upload',
+    response_model = Dict[str, Any],
+    summary = 'Bulk upload of planning campaigns + day-by-day route assignments (CSV)'
+)
+async def bulk_upload_trade_planning_endpoint(
+    request: Request,
+    file_name: str = Form(..., description = 'CSV file name already uploaded to FILES.'),
+    delimiter: Optional[str] = Form(',', description = 'Field separator. Default: comma.'),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> Dict[str, Any]:
+    '''Bulk upload of planning campaigns + day-by-day route assignments.'''
+    return await bulk_upload_trade_planning_controller(
+        db = db, request = request, current_user = current_user,
+        file_name = file_name, delimiter = delimiter, auth_token = authorization
+    )
+
+
+# --- ATTENDANCES ---
 @router.post(
     '/attendances/check-in',
     response_model = AttendanceResponseSchema,
     status_code = status.HTTP_201_CREATED,
-    summary = 'Register Check-In',
-    description = 'Registers a new visit start, validating Geofencing and POS status.'
+    summary = 'Register an attendance check-in'
 )
-async def register_attendance_check_in_endpoint(
-    check_in_data: AttendanceCreateSchema,
+async def attendance_check_in_endpoint(
+    payload: AttendanceCheckInSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to register a POS Check-In.
-    '''
-    message = f'User: {current_user}. Request Check-In for Planning: {
-        check_in_data.trade_planning_id}'
-    logger.info(message)
-    return await register_attendance_check_in_controller(
-        check_in_data = check_in_data,
-        db = db,
-        request = request,
-        current_user = current_user
+) -> AttendanceResponseSchema:
+    '''Register a check-in event against a planned point.'''
+    return await attendance_check_in_controller(
+        payload = payload, db = db,
+        request = request, current_user = current_user
     )
+
 
 @router.patch(
     '/attendances/{attendance_id}/check-out',
     response_model = AttendanceResponseSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Register Check-Out',
-    description = 'Registers the end of a visit and calculates duration.'
+    summary = 'Register an attendance check-out'
 )
-async def register_attendance_check_out_endpoint(
+async def attendance_check_out_endpoint(
     attendance_id: int,
-    check_out_data: AttendanceCheckOutSchema,
+    payload: AttendanceCheckOutSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
-):
-    '''
-        Endpoint to register a POS Check-Out.
-    '''
-    message = f'User: {current_user}. Request Check-Out for Attendance: {attendance_id}'
-    logger.info(message)
-    return await register_attendance_check_out_controller(
-        attendance_id = attendance_id,
-        check_out_data = check_out_data,
-        db = db,
-        request = request,
-        current_user = current_user
+) -> AttendanceResponseSchema:
+    '''Register a check-out event and compute duration + workload delta.'''
+    return await attendance_check_out_controller(
+        attendance_id = attendance_id, payload = payload,
+        db = db, request = request, current_user = current_user
     )
