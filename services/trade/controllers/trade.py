@@ -81,6 +81,7 @@ async def get_planned_route_controller(
 
 
 @handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def list_planned_routes_controller(
     filters: PlannedRouteFilterSchema,
     skip: int,
@@ -218,6 +219,7 @@ async def get_trade_planning_controller(
 
 
 @handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def list_trade_planning_controller(
     filters: TradePlanningFilterSchema,
     skip: int,
@@ -310,7 +312,7 @@ async def delete_planning_detail_controller(
 
 # --- BULK CONTROLLERS ---
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
+# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
 async def bulk_upload_planned_routes_controller(
     db: Session,
     request: Request,
@@ -339,7 +341,7 @@ async def bulk_upload_planned_routes_controller(
 
 
 @handle_service_errors('TRADE')
-# pylint: disable=too-many-arguments, too-many-positional-arguments
+# pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
 async def bulk_upload_trade_planning_controller(
     db: Session,
     request: Request,

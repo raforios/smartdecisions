@@ -79,6 +79,7 @@ async def create_planned_route_endpoint(
     response_model = PlannedRouteListResponseSchema,
     summary = 'List planned routes'
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def list_planned_routes_endpoint(
     request: Request,
     filters: PlannedRouteFilterSchema = Depends(),
@@ -232,6 +233,7 @@ async def create_trade_planning_endpoint(
     response_model = TradePlanningListResponseSchema,
     summary = 'List planning campaigns'
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def list_trade_planning_endpoint(
     request: Request,
     filters: TradePlanningFilterSchema = Depends(),
@@ -347,6 +349,7 @@ async def delete_planning_detail_endpoint(
     response_model = Dict[str, Any],
     summary = 'Bulk upload of planned routes + their points (CSV)'
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_planned_routes_endpoint(
     request: Request,
     file_name: str = Form(..., description = 'CSV file name already uploaded to FILES.'),
@@ -367,6 +370,7 @@ async def bulk_upload_planned_routes_endpoint(
     response_model = Dict[str, Any],
     summary = 'Bulk upload of planning campaigns + day-by-day route assignments (CSV)'
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def bulk_upload_trade_planning_endpoint(
     request: Request,
     file_name: str = Form(..., description = 'CSV file name already uploaded to FILES.'),

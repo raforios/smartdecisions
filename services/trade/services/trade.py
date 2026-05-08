@@ -31,7 +31,6 @@ from schemas.trade import (
     TradePlanningUpdateSchema
 )
 from services.crud import (
-    create_record,
     delete_record,
     get_record,
     update_record

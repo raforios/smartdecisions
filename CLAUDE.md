@@ -201,5 +201,4 @@ Cuando se solicite una nueva feature o servicio, sigue este orden:
 - [ ] ¿Logs usan `message` / `error_msg` según nivel?
 - [ ] ¿Sin secretos hardcodeados?
 - [ ] ¿Test unitario incluido para nueva lógica?
-- [ ] ¿Migración Alembic indicada si hubo cambio en `models/`?
 - [ ] ¿Comilla simple, espacios alrededor de `=`, línea ≤ 100 chars?
