@@ -5,7 +5,13 @@
 from datetime import datetime, time
 from sqlalchemy.orm import Session
 
-from models.trade import TradePlanning, Attendance
+from models.trade import (
+    TradePlanning,
+    TradePlanningDetail,
+    PlannedRoute,
+    PlannedPoint,
+    Attendance
+)
 from models.pos import PointOfSale
 from models.impulses import ImpulseSale, ImpulseSaleDetail
 from models.replenishments import (
@@ -19,6 +25,7 @@ from schemas.reports import (
     ComplianceFilterSchema,
     ComplianceReportResponseSchema,
     ComplianceUserStatsSchema,
+    ComplianceTeamStatsSchema,
     ComplianceGlobalStatsSchema,
     InventoryAlertFilterSchema,
     InventoryAlertResponseSchema,
@@ -39,68 +46,173 @@ from services.utils import handle_service_errors
 
 # --- COMPLIANCE REPORT SERVICE ---
 
+def _empty_stats() -> dict:
+    '''
+        Initial aggregation bucket for compliance counters.
+    '''
+    return {
+        'planned': 0, 'executed': 0, 'pending': 0, 'adhoc': 0, 'justified': 0,
+        'unassigned': 0,
+        'planned_mins': 0, 'actual_minutes': 0
+    }
+
+
 @handle_service_errors('REPORTS')
-# pylint: disable=too-many-locals
+# pylint: disable=too-many-locals,too-many-branches
 async def get_compliance_report_service(
     db: Session,
     filters: ComplianceFilterSchema
 ) -> ComplianceReportResponseSchema:
     '''
         Calculates Compliance KPIs: Planned vs. Executed visits.
+
+        Planning lives in PlannedPoint (reachable through TradePlanning →
+        TradePlanningDetail → PlannedRoute). Execution is the matching
+        Attendance row, which carries the operator's `user_id`. The report
+        provides two aggregation cuts:
+
+        * Per team (`team_id` from TradePlanning) — every planned point is
+          counted at the team level even if no Attendance exists.
+        * Per user (`user_id` from Attendance) — only planned points with at
+          least one Attendance contribute, since unexecuted points have no
+          user attribution.
     '''
     message = f'Generating Compliance Report for Company: {filters.company_id}'
     logger.info(message)
 
-    # 1. Define time range
-    start_dt = datetime.combine(filters.start_date, time.min)
-    end_dt = datetime.combine(filters.end_date, time.max)
-
-    # 2. Base Query for Planning
-    query = db.query(TradePlanning).filter(
+    # 1. Build planning query joined through the full hierarchy. The date
+    # range applies to TradePlanningDetail.date_of_day, which represents the
+    # actual day a route is meant to be executed.
+    rows_query = db.query(
+        PlannedPoint, TradePlanning.team_id, TradePlanningDetail.date_of_day
+    ).join(
+        PlannedRoute, PlannedPoint.planned_route_id == PlannedRoute.id
+    ).join(
+        TradePlanningDetail, TradePlanningDetail.planned_route_id == PlannedRoute.id
+    ).join(
+        TradePlanning, TradePlanningDetail.planning_id == TradePlanning.id
+    ).filter(
         TradePlanning.company_id == filters.company_id,
-        TradePlanning.created_at.between(start_dt, end_dt)
+        TradePlanningDetail.date_of_day.between(filters.start_date, filters.end_date)
     )
 
-    if filters.user_id:
-        query = query.filter(TradePlanning.user_id == filters.user_id)
+    if filters.team_id:
+        rows_query = rows_query.filter(TradePlanning.team_id == filters.team_id)
 
-    plans = query.all()
+    rows = rows_query.all()
 
-    # 3. Group by User
-    user_data = {}
-    for p in plans:
-        uid = p.user_id
-        if uid not in user_data:
-            user_data[uid] = {
-                'planned': 0, 'executed': 0, 'pending': 0, 'adhoc': 0, 'justified': 0,
-                'planned_mins': 0, 'actual_minutes': 0
-            }
+    if not rows:
+        empty_global = ComplianceGlobalStatsSchema(
+            total_teams = 0,
+            total_users = 0,
+            global_compliance_percentage = 0.0,
+            total_planned_visits = 0,
+            total_executed_visits = 0
+        )
+        return ComplianceReportResponseSchema(
+            period_start = filters.start_date,
+            period_end = filters.end_date,
+            global_stats = empty_global,
+            team_details = [],
+            details = []
+        )
 
-        user_data[uid]['planned'] += 1
-        user_data[uid]['planned_mins'] += p.planned_workload_minutes
+    # 2. Fetch Attendances for the involved planned points in one shot so we
+    # can attribute execution to the operator (user_id) coming from the
+    # frontend. A planned point may have multiple Attendances (re-visits);
+    # we attribute the planned slot to the user(s) that registered them.
+    point_ids = [p.id for (p, _t, _d) in rows]
+    attendances = db.query(Attendance).filter(
+        Attendance.trade_planned_point_id.in_(point_ids),
+        Attendance.company_id == filters.company_id
+    ).all()
 
-        if p.status == 'COMPLETED':
-            user_data[uid]['executed'] += 1
-            user_data[uid]['actual_minutes'] += (p.actual_workload_minutes or 0)
-        elif p.status == 'CANCELLED':
-            user_data[uid]['justified'] += 1
+    attendances_by_point: dict[int, list[Attendance]] = {}
+    for att in attendances:
+        attendances_by_point.setdefault(att.trade_planned_point_id, []).append(att)
+
+    # 3. Walk every planned point. Team aggregation always counts; user
+    # aggregation only happens when an Attendance exists.
+    team_data: dict[int, dict] = {}
+    user_data: dict[tuple[int, int], dict] = {}
+    team_users: dict[int, set[int]] = {}
+
+    for point, team_id, _date_of_day in rows:
+        team_bucket = team_data.setdefault(team_id, _empty_stats())
+        team_bucket['planned'] += 1
+        team_bucket['planned_mins'] += point.planned_workload_minutes or 0
+        if point.is_adhoc:
+            team_bucket['adhoc'] += 1
+
+        if point.status == 'COMPLETED':
+            team_bucket['executed'] += 1
+            team_bucket['actual_minutes'] += point.actual_workload_minutes or 0
+        elif point.status == 'CANCELLED':
+            team_bucket['justified'] += 1
         else:
-            user_data[uid]['pending'] += 1
+            team_bucket['pending'] += 1
 
-        if p.is_adhoc:
-            user_data[uid]['adhoc'] += 1
+        # User attribution comes from Attendance records. Points with no
+        # Attendance at all are flagged as unassigned at team level.
+        atts = attendances_by_point.get(point.id, [])
+        if not atts:
+            team_bucket['unassigned'] += 1
 
-    # 4. Build Detail List
-    details = []
+        seen_users: set[int] = set()
+        for att in atts:
+            if filters.user_id and att.user_id != filters.user_id:
+                continue
+            if att.user_id in seen_users:
+                continue
+            seen_users.add(att.user_id)
+            team_users.setdefault(team_id, set()).add(att.user_id)
+
+            key = (team_id, att.user_id)
+            user_bucket = user_data.setdefault(key, _empty_stats())
+            user_bucket['planned'] += 1
+            user_bucket['planned_mins'] += point.planned_workload_minutes or 0
+            if point.is_adhoc:
+                user_bucket['adhoc'] += 1
+
+            if point.status == 'COMPLETED' and att.check_out_time is not None:
+                user_bucket['executed'] += 1
+                user_bucket['actual_minutes'] += point.actual_workload_minutes or 0
+            elif point.status == 'CANCELLED':
+                user_bucket['justified'] += 1
+            else:
+                user_bucket['pending'] += 1
+
+    # 4. Build team detail rows.
+    team_details: list[ComplianceTeamStatsSchema] = []
     total_planned = 0
     total_executed = 0
 
-    for uid, stats in user_data.items():
+    for tid, stats in team_data.items():
         comp_pct = (stats['executed'] / stats['planned'] * 100) if stats['planned'] > 0 else 0
         total_planned += stats['planned']
         total_executed += stats['executed']
 
-        details.append(ComplianceUserStatsSchema(
+        team_details.append(ComplianceTeamStatsSchema(
+            team_id = tid,
+            total_users = len(team_users.get(tid, set())),
+            total_planned = stats['planned'],
+            total_executed = stats['executed'],
+            total_pending = stats['pending'],
+            total_adhoc = stats['adhoc'],
+            total_justified = stats['justified'],
+            unassigned_planned = stats['unassigned'],
+            compliance_percentage = round(comp_pct, 2),
+            total_planned_minutes = stats['planned_mins'],
+            total_actual_minutes = stats['actual_minutes'],
+            workload_gap_minutes = stats['actual_minutes'] - stats['planned_mins']
+        ))
+
+    # 5. Build user detail rows.
+    user_details: list[ComplianceUserStatsSchema] = []
+    for (tid, uid), stats in user_data.items():
+        comp_pct = (stats['executed'] / stats['planned'] * 100) if stats['planned'] > 0 else 0
+        user_details.append(ComplianceUserStatsSchema(
+            team_id = tid,
             user_id = uid,
             total_planned = stats['planned'],
             total_executed = stats['executed'],
@@ -113,9 +225,10 @@ async def get_compliance_report_service(
             workload_gap_minutes = stats['actual_minutes'] - stats['planned_mins']
         ))
 
-    # 5. Global Stats
+    # 6. Global stats.
     global_pct = (total_executed / total_planned * 100) if total_planned > 0 else 0
     global_stats = ComplianceGlobalStatsSchema(
+        total_teams = len(team_data),
         total_users = len(user_data),
         global_compliance_percentage = round(global_pct, 2),
         total_planned_visits = total_planned,
@@ -126,7 +239,8 @@ async def get_compliance_report_service(
         period_start = filters.start_date,
         period_end = filters.end_date,
         global_stats = global_stats,
-        details = details
+        team_details = team_details,
+        details = user_details
     )
 
 # --- INVENTORY ALERTS SERVICE ---
@@ -320,10 +434,12 @@ async def get_attendance_report_service(
     start_dt = datetime.combine(filters.start_date, time.min)
     end_dt = datetime.combine(filters.end_date, time.max)
 
-    query = db.query(Attendance, TradePlanning, PointOfSale).join(
-        TradePlanning, Attendance.trade_planning_id == TradePlanning.id
+    # POS is no longer attached to TradePlanning. The hierarchy is now
+    # Attendance → PlannedPoint → PointOfSale.
+    query = db.query(Attendance, PlannedPoint, PointOfSale).join(
+        PlannedPoint, Attendance.trade_planned_point_id == PlannedPoint.id
     ).join(
-        PointOfSale, TradePlanning.point_of_sale_id == PointOfSale.id
+        PointOfSale, PlannedPoint.point_of_sale_id == PointOfSale.id
     ).filter(
         Attendance.company_id == filters.company_id,
         Attendance.created_at.between(start_dt, end_dt)
@@ -332,7 +448,7 @@ async def get_attendance_report_service(
     if filters.user_id:
         query = query.filter(Attendance.user_id == filters.user_id)
     if filters.point_of_sale_id:
-        query = query.filter(TradePlanning.point_of_sale_id == filters.point_of_sale_id)
+        query = query.filter(PlannedPoint.point_of_sale_id == filters.point_of_sale_id)
 
     records = query.order_by(Attendance.check_in_time.desc()).all()
 

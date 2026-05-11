@@ -36,7 +36,11 @@ class ComplianceFilterSchema(BaseModel):
     )
     user_id: Optional[int] = Query(
         None,
-        description = 'Optional: Filter by specific User ID.'
+        description = 'Optional: Filter by specific User ID (operator from frontend).'
+    )
+    team_id: Optional[int] = Query(
+        None,
+        description = 'Optional: Filter by specific Team ID (from frontend).'
     )
 
     class Config: # pylint: disable=too-few-public-methods
@@ -48,8 +52,13 @@ class ComplianceFilterSchema(BaseModel):
 class ComplianceUserStatsSchema(ReportBaseSchema):
     '''
         Row details: Compliance statistics per User.
+
+        A user appears in this list only when at least one Attendance record
+        exists for them in the period. Planned points without any Attendance
+        cannot be attributed to a user and are reported at the team level.
     '''
-    user_id: int = Field(..., description = 'User ID.')
+    team_id: int = Field(..., description = 'Team the user belongs to.')
+    user_id: int = Field(..., description = 'User ID (operator from frontend).')
 
     # Contadores de Visitas
     total_planned: int = Field(..., description = 'Total visits initially planned.')
@@ -69,10 +78,41 @@ class ComplianceUserStatsSchema(ReportBaseSchema):
     total_actual_minutes: int = Field(..., description = 'Sum of actual workload.')
     workload_gap_minutes: int = Field(..., description = 'Difference (Actual - Planned).')
 
+class ComplianceTeamStatsSchema(ReportBaseSchema):
+    '''
+        Row details: Compliance statistics per Team. Includes every planned
+        point belonging to the team, regardless of whether it was executed.
+    '''
+    team_id: int = Field(..., description = 'Team ID (from frontend).')
+    total_users: int = Field(..., description = 'Distinct users that executed visits in the team.')
+
+    total_planned: int = Field(..., description = 'Total visits planned for the team.')
+    total_executed: int = Field(..., description = 'Total visits completed.')
+    total_pending: int = Field(..., description = 'Visits still pending.')
+    total_adhoc: int = Field(..., description = 'Unplanned visits created on the fly.')
+    total_justified: int = Field(..., description = 'Visits not performed with justification.')
+
+    # Planned points with no Attendance at all → cannot be attributed to any
+    # user. Useful to surface orphan/uncovered planning.
+    unassigned_planned: int = Field(
+        ...,
+        description = 'Planned points without any Attendance (no user attribution).'
+    )
+
+    compliance_percentage: float = Field(
+        ...,
+        description = 'Effectiveness % (Executed / Planned * 100).'
+    )
+
+    total_planned_minutes: int = Field(..., description = 'Sum of planned workload.')
+    total_actual_minutes: int = Field(..., description = 'Sum of actual workload.')
+    workload_gap_minutes: int = Field(..., description = 'Difference (Actual - Planned).')
+
 class ComplianceGlobalStatsSchema(ReportBaseSchema):
     '''
         Header details: Aggregated statistics for the whole query.
     '''
+    total_teams: int = Field(..., description = 'Number of teams in this report.')
     total_users: int = Field(..., description = 'Number of users in this report.')
     global_compliance_percentage: float = Field(..., description = 'Average compliance %.')
     total_planned_visits: int = Field(..., description = 'Sum of all planned visits.')
@@ -80,11 +120,13 @@ class ComplianceGlobalStatsSchema(ReportBaseSchema):
 
 class ComplianceReportResponseSchema(ReportBaseSchema):
     '''
-        Final Response: Contains the global summary and the per-user breakdown.
+        Final Response: Contains the global summary, team breakdown, and
+        per-user breakdown.
     '''
     period_start: date
     period_end: date
     global_stats: ComplianceGlobalStatsSchema
+    team_details: List[ComplianceTeamStatsSchema]
     details: List[ComplianceUserStatsSchema]
 
 # --- 2. INVENTORY ALERTS REPORT ---
