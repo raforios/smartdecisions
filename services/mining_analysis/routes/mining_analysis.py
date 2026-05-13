@@ -1,6 +1,7 @@
 '''
     Mining Analysis: routes handler
 '''
+from datetime import date as date_type
 from typing import List, Optional
 from fastapi import (
     APIRouter,
@@ -20,13 +21,17 @@ from controllers.mining_analysis import (
     get_mineral_prices_controller,
     get_royalties_summary_controller,
     get_transactions_summary_controller,
-    upload_royalties_controller
+    upload_royalties_controller,
+    get_daily_report_controller,
+    get_biweekly_report_controller,
 )
 from schemas.mining_analysis import (
     MiningPriceResponseSchema,
     BulkUploadMiningResponseSchema,
     RoyaltySummaryResponse,
-    TransactionSummaryResponse
+    TransactionSummaryResponse,
+    DailyReportResponse,
+    BiweeklyReportResponse,
 )
 
 router = APIRouter(prefix = '/v1/mining-analysis', tags = ['Mining Analysis'])
@@ -143,4 +148,61 @@ async def get_royalties_transactions(
         request = request,
         current_user = current_user,
         year = year
+    )
+
+@router.get(
+    '/reports/daily',
+    response_model = DailyReportResponse,
+    summary = 'Daily mineral report (Minerales_01 template).',
+    description = 'Returns the latest cotización per official mineral up to '
+                  'the reference date, with fallback to the most recent prior '
+                  'record when no entry exists on the date itself.'
+)
+async def get_daily_report_endpoint(
+    request: Request,
+    ref_date: date_type = Query(..., alias = 'date',
+                                description = 'Reference date (YYYY-MM-DD).'),
+    db: Session = Depends(get_db_dependency),
+    current_user: str = Depends(get_current_user)
+):
+    ''' Endpoint for the daily mineral report. '''
+    message = f'User: {current_user}. Requested daily report for {ref_date}.'
+    logger.info(message)
+
+    return await get_daily_report_controller(
+        db = db,
+        request = request,
+        current_user = current_user,
+        ref_date = ref_date,
+    )
+
+@router.get(
+    '/reports/biweekly',
+    response_model = BiweeklyReportResponse,
+    summary = 'Biweekly official mineral report (Minerales_02 template).',
+    description = 'Returns the simple mean of price_low across the requested '
+                  'half of the month. Falls back to the most recent prior '
+                  'biweekly period that has data when none exists.'
+)
+async def get_biweekly_report_endpoint(
+    request: Request,
+    year: int = Query(..., ge = 2000, le = 2100, description = 'Year.'),
+    month: int = Query(..., ge = 1, le = 12, description = 'Month (1-12).'),
+    half: int = Query(..., ge = 1, le = 2,
+                      description = '1 for days 1-15, 2 for 16-end.'),
+    db: Session = Depends(get_db_dependency),
+    current_user: str = Depends(get_current_user)
+):
+    ''' Endpoint for the biweekly official mineral report. '''
+    message = (f'User: {current_user}. Requested biweekly report for '
+               f'{year}-{month:02d} half {half}.')
+    logger.info(message)
+
+    return await get_biweekly_report_controller(
+        db = db,
+        request = request,
+        current_user = current_user,
+        year = year,
+        month = month,
+        half = half,
     )

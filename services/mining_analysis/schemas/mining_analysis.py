@@ -107,3 +107,59 @@ class TransactionSummaryResponse(BaseModel):
     status: str
     message: str
     data: List[CompanyTransactionItem]
+
+
+class DailyMineralPriceRow(BaseModel):
+    '''
+    One row of the daily mineral report (latest available cotización per mineral).
+
+    `is_fallback` is True when no record existed on `ref_date` itself and the
+    most-recent prior row was returned instead.
+    '''
+    mineral: str
+    chemical_symbol: Optional[str] = None
+    unit: Optional[str] = None
+    quoted_in: Optional[str] = None
+    price_low: float
+    price_high: float
+    price_date: date
+    is_fallback: bool = False
+
+
+class DailyReportResponse(BaseModel):
+    ''' Response schema for the daily mineral report. '''
+    status: str = 'success'
+    message: str = 'Daily report generated.'
+    ref_date: date
+    rows: List[DailyMineralPriceRow]
+
+
+class BiweeklyMineralPriceRow(BaseModel):
+    '''
+    One row of the biweekly official report.
+
+    `sample_size` is the number of distinct days with a price within the period;
+    `avg_price_low` is the simple mean over those days only.
+    '''
+    mineral: str
+    chemical_symbol: Optional[str] = None
+    unit: Optional[str] = None
+    quoted_in: Optional[str] = None
+    avg_price_low: float
+    sample_size: int
+    period_start: date
+    period_end: date
+    is_fallback: bool = False
+
+
+class BiweeklyReportResponse(BaseModel):
+    ''' Response schema for the biweekly official mineral report. '''
+    status: str = 'success'
+    message: str = 'Biweekly report generated.'
+    year: int
+    month: int
+    half: int = Field(..., ge = 1, le = 2,
+                      description = 'Half of the month: 1 for days 1-15, 2 for 16-end.')
+    period_start: date
+    period_end: date
+    rows: List[BiweeklyMineralPriceRow]

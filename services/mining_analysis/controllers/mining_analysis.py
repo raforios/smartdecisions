@@ -1,6 +1,7 @@
 '''
     Mining Analysis Controllers
 '''
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List
 from fastapi import Request
@@ -15,13 +16,17 @@ from services.mining_analysis import (
     get_royalties_summary_service,
     get_transactions_summary_service,
     process_mining_etl_service,
-    get_all_prices_service
+    get_all_prices_service,
+    get_daily_report_service,
+    get_biweekly_report_service,
 )
 from schemas.mining_analysis import (
     MiningPriceResponseSchema,
     BulkUploadMiningResponseSchema,
     RoyaltySummaryResponse,
-    TransactionSummaryResponse
+    TransactionSummaryResponse,
+    DailyReportResponse,
+    BiweeklyReportResponse,
 )
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -130,3 +135,38 @@ async def get_transactions_summary_controller(
     )
 
     return TransactionSummaryResponse(**result)
+
+@handle_service_errors('MINING_ANALYSIS')
+async def get_daily_report_controller(
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str,
+    ref_date: date,
+) -> DailyReportResponse:
+    '''
+    Orchestrates the daily mineral report (template Minerales_01).
+    '''
+    message = f'User: {current_user} requesting daily report for {ref_date}.'
+    logger.info(message)
+    result = await get_daily_report_service(db = db, ref_date = ref_date)
+    return DailyReportResponse(**result)
+
+@handle_service_errors('MINING_ANALYSIS')
+async def get_biweekly_report_controller(
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str,
+    year: int,
+    month: int,
+    half: int,
+) -> BiweeklyReportResponse:
+    '''
+    Orchestrates the biweekly official report (template Minerales_02).
+    '''
+    message = (f'User: {current_user} requesting biweekly report for '
+               f'{year}-{month:02d} half {half}.')
+    logger.info(message)
+    result = await get_biweekly_report_service(
+        db = db, year = year, month = month, half = half
+    )
+    return BiweeklyReportResponse(**result)

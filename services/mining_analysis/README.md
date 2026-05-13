@@ -41,6 +41,8 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | :--- | :--- | :--- |
 | `POST` | `/v1/mining-analysis/etl/upload` | Carga masiva de cotizaciones mineras desde un archivo CSV. Dispara proceso de normalización y auditoría. |
 | `GET`  | `/v1/mining-analysis/prices` | Recupera el listado completo de precios históricos, incluyendo la metadata de cada mineral. |
+| `GET`  | `/v1/mining-analysis/reports/daily?date=YYYY-MM-DD` | Devuelve la cotización más reciente por mineral del catálogo oficial hasta la fecha indicada, con `is_fallback = true` cuando se usa un día anterior. Insumo del reporte interno **Minerales_01**. |
+| `GET`  | `/v1/mining-analysis/reports/biweekly?year=YYYY&month=MM&half=1\|2` | Promedio simple de `price_low` por mineral en la quincena solicitada (`half=1` cubre los días 1-15; `half=2` cubre del 16 al fin de mes). Cuando no hay datos en el periodo, retrocede hasta hallar la quincena más reciente con cotizaciones. Insumo del reporte oficial **Minerales_02**. |
 
 ### Regalías Mineras y Transacciones
 
@@ -117,6 +119,40 @@ Para levantar el microservicio en tu entorno de desarrollo local, sigue estos pa
    python main.py
    ```
    *(El servidor se iniciará típicamente en `http://localhost:3000`, y podrás acceder a la documentación en `/docs`).*
+
+---
+
+## 🧰 Scripts Operativos
+
+Los scripts viven en `scripts/` y se ejecutan como módulos para que respeten el `PYTHONPATH` del microservicio. Todos exponen `--yes` como interruptor explícito de escritura; sin él imprimen el plan y salen sin tocar la base de datos.
+
+### Backfill de `t_mining_prices`
+Reproceso completo con el ETL ya corregido (separador decimal anglo/europeo). Borra el contenido actual de `t_mining_prices` antes de reingresar el archivo fuente:
+
+```shell
+python -m scripts.backfill_prices --source /ruta/cotizaciones_min.xlsx --yes
+```
+
+### Ingesta de Diarios extraídos de PDFs escaneados
+Carga las hojas `… Q1/Q2 - Diario` del Excel curado (`cotizaciones_mineras_bolivia.xlsx`) en `t_mining_prices`. Idempotente: omite fechas que ya tengan registro:
+
+```shell
+python -m scripts.ingest_pdf_xlsx --source /ruta/cotizaciones_mineras_bolivia.xlsx --yes
+```
+
+---
+
+## 🧪 Pruebas
+
+```shell
+pytest -v
+```
+
+Suite enfocada en:
+- `clean_currency_pro` (formato anglo vs. europeo, casos límite y la regresión Bismuto `17.54 → 1754`).
+- Servicio de reporte diario con fallback al registro previo más reciente.
+- Servicio de reporte quincenal con promedio sobre días disponibles, fallback al periodo anterior y manejo de `half` inválido.
+- Idempotencia del seed `ensure_official_minerals`.
 
 ---
 
