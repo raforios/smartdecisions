@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from schemas.trade import (
     AttendanceCheckInSchema,
     AttendanceCheckOutSchema,
+    AttendanceListResponseSchema,
+    AttendanceLookupFilterSchema,
     AttendanceResponseSchema,
     PlannedPointCreateSchema,
     PlannedPointResponseSchema,
@@ -38,6 +40,7 @@ from services.trade import (
     delete_planned_route_service,
     delete_planning_detail_service,
     delete_trade_planning_service,
+    get_attendances_list_service,
     get_planned_route_by_id_service,
     get_planned_routes_list_service,
     get_trade_planning_by_id_service,
@@ -398,3 +401,27 @@ async def attendance_check_out_controller(
         db = db, attendance_id = attendance_id, payload = payload
     )
     return AttendanceResponseSchema.model_validate(db_attendance, from_attributes = True)
+
+
+@handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def list_attendances_controller(
+    filters: AttendanceLookupFilterSchema,
+    skip: int,
+    limit: int,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str  # pylint: disable=unused-argument
+) -> AttendanceListResponseSchema:
+    '''
+        Controller to list attendances by POS and/or user inside a company,
+        optionally filtered by a check-in date range.
+    '''
+    items, total = await get_attendances_list_service(
+        db = db, filters = filters, skip = skip, limit = limit
+    )
+    serialized = [
+        AttendanceResponseSchema.model_validate(item, from_attributes = True)
+        for item in items
+    ]
+    return AttendanceListResponseSchema(items = serialized, total = total)

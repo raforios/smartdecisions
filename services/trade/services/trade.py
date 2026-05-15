@@ -2,7 +2,7 @@
     Business Logic for Trade — Planned Routes, Planned Points, Trade Planning,
     Planning Detail, and Attendances.
 '''
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session, joinedload
@@ -18,6 +18,7 @@ from models.trade import (
 from schemas.trade import (
     AttendanceCheckInSchema,
     AttendanceCheckOutSchema,
+    AttendanceLookupFilterSchema,
     PlannedPointCreateSchema,
     PlannedPointUpdateSchema,
     PlannedRouteBulkItemSchema,
@@ -777,3 +778,74 @@ async def register_attendance_check_out(
         'old_values': old_values,
         'new_values': sqlalchemy_object_as_dict(db_attendance)
     }
+
+
+@handle_service_errors('TRADE')
+async def get_attendances_list_service(
+    db: Session,
+    filters: AttendanceLookupFilterSchema,
+    skip: int = 0,
+    limit: int = 100
+) -> Tuple[List[Attendance], int]:
+    '''
+        Returns the list of attendances matching the supplied filters. The
+        date range is applied to `check_in_time`; when only `date_from` is
+        provided, the result includes every attendance from that date onward.
+
+        Args:
+            db (Session): The database session.
+            filters (AttendanceLookupFilterSchema): Tenant + pos/user/date filter.
+            skip (int): Pagination offset.
+            limit (int): Maximum number of rows to return.
+
+        Returns:
+            Tuple[List[Attendance], int]: Page of attendances + total count.
+
+        Raises:
+            InvalidInputError: When neither `pos_id` nor `user_id` is provided,
+                or when the supplied date range is inverted.
+    '''
+    if filters.pos_id is None and filters.user_id is None:
+        raise InvalidInputError(
+            detail = 'At least one of `pos_id` or `user_id` must be supplied.'
+        )
+    if (
+        filters.date_from is not None
+        and filters.date_to is not None
+        and filters.date_from > filters.date_to
+    ):
+        raise InvalidInputError(
+            detail = '`date_from` cannot be greater than `date_to`.'
+        )
+
+    query = (
+        db.query(Attendance)
+        .join(PlannedPoint, PlannedPoint.id == Attendance.trade_planned_point_id)
+        .filter(Attendance.company_id == filters.company_id)
+    )
+
+    if filters.pos_id is not None:
+        query = query.filter(PlannedPoint.point_of_sale_id == filters.pos_id)
+    if filters.user_id is not None:
+        query = query.filter(Attendance.user_id == filters.user_id)
+
+    if filters.date_from is not None:
+        # Inclusive lower bound: from 00:00 of the supplied date onward.
+        query = query.filter(
+            Attendance.check_in_time >= datetime.combine(filters.date_from, time.min)
+        )
+    if filters.date_to is not None:
+        # Inclusive upper bound: anything strictly before next day 00:00.
+        next_day = filters.date_to + timedelta(days = 1)
+        query = query.filter(
+            Attendance.check_in_time < datetime.combine(next_day, time.min)
+        )
+
+    total = query.count()
+    items = (
+        query.order_by(Attendance.check_in_time.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return items, total

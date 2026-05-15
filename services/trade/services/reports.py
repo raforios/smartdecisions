@@ -58,7 +58,7 @@ def _empty_stats() -> dict:
 
 
 @handle_service_errors('REPORTS')
-# pylint: disable=too-many-locals,too-many-branches
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
 async def get_compliance_report_service(
     db: Session,
     filters: ComplianceFilterSchema

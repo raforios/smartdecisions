@@ -20,6 +20,7 @@ from controllers.trade import (
     delete_planned_route_controller,
     delete_planning_detail_controller,
     delete_trade_planning_controller,
+    list_attendances_controller,
     get_planned_route_controller,
     get_trade_planning_controller,
     list_planned_routes_controller,
@@ -31,6 +32,8 @@ from controllers.trade import (
 from schemas.trade import (
     AttendanceCheckInSchema,
     AttendanceCheckOutSchema,
+    AttendanceListResponseSchema,
+    AttendanceLookupFilterSchema,
     AttendanceResponseSchema,
     PlannedPointCreateSchema,
     PlannedPointResponseSchema,
@@ -403,6 +406,31 @@ async def attendance_check_in_endpoint(
     return await attendance_check_in_controller(
         payload = payload, db = db,
         request = request, current_user = current_user
+    )
+
+
+@router.get(
+    '/attendances',
+    response_model = AttendanceListResponseSchema,
+    summary = 'List attendances by POS or user with optional date range'
+)
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def list_attendances_endpoint(
+    request: Request,
+    filters: AttendanceLookupFilterSchema = Depends(),
+    skip: int = Query(0, ge = 0),
+    limit: int = Query(100, gt = 0, le = 500),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> AttendanceListResponseSchema:
+    '''
+        Paginated list of attendances filtered by `pos_id` and/or `user_id`
+        inside a company. Optional `date_from` / `date_to` bound the search by
+        the attendance check-in date.
+    '''
+    return await list_attendances_controller(
+        filters = filters, skip = skip, limit = limit,
+        db = db, request = request, current_user = current_user
     )
 
 

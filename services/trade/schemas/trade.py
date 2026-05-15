@@ -334,3 +334,42 @@ class AttendanceResponseSchema(BaseSchema):
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes = True)
+
+
+class AttendanceLookupFilterSchema(BaseModel):
+    '''
+        Filter schema for the attendances lookup endpoint. Returns the list
+        of attendances matching `pos_id` and/or `user_id` inside a company,
+        optionally bound by a date range applied to `check_in_time`.
+        - Without dates: every attendance is returned.
+        - With both dates: results are restricted to the inclusive range.
+        - With only `date_from`: results equal or later than that date.
+        - With only `date_to`: results equal or earlier than that date.
+    '''
+    company_id: int = Query(..., description = 'Company ID (mandatory).')
+    pos_id: Optional[int] = Query(
+        None,
+        description = 'POS ID. Returns attendances whose planned point targets this POS.'
+    )
+    user_id: Optional[int] = Query(
+        None,
+        description = 'Operator user ID. Returns attendances owned by this user.'
+    )
+    date_from: Optional[date] = Query(
+        None,
+        description = 'Lower bound (inclusive) for the attendance check-in date.'
+    )
+    date_to: Optional[date] = Query(
+        None,
+        description = 'Upper bound (inclusive) for the attendance check-in date.'
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed = True)
+
+
+class AttendanceListResponseSchema(BaseSchema):
+    '''
+        Paginated list of attendances.
+    '''
+    items: List[AttendanceResponseSchema]
+    total: int
