@@ -14,6 +14,7 @@ import uvicorn
 
 # Importación del router del microservicio actual
 from routes.mining_analysis import router as mining_router
+from routes.public_reports import router as public_reports_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
@@ -28,7 +29,8 @@ ENV_VARS = load_and_validate_env_vars(
     },
     optional_env_vars = {
         'APP_ENV': str,
-        'ROOT_PATH': str
+        'ROOT_PATH': str,
+        'CORS_ORIGINS': str,
     }
 )
 
@@ -122,8 +124,18 @@ async def custom_swagger_ui():
         title = app.title + ' - Docs'
     )
 
-# Configuración de CORS basada en el modelo proporcionado
-origins = ['http://127.0.0.1:5500', 'http://localhost:5500']
+# CORS: pulled from `CORS_ORIGINS` (comma-separated). Defaults cover the
+# local dev origins for the Streamlit dashboard and the institutional
+# website served via Live Server on port 5500.
+_DEFAULT_ORIGINS = (
+    'http://127.0.0.1:5500',
+    'http://localhost:5500',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080',
+    'http://localhost:8501',
+)
+_cors_env = ENV_VARS.get('CORS_ORIGINS', '') or ''
+origins = [o.strip() for o in _cors_env.split(',') if o.strip()] or list(_DEFAULT_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins = origins,
@@ -132,7 +144,8 @@ app.add_middleware(
     allow_headers = ['*'],
 )
 
-# Inclusión del router principal
+# Inclusión de routers — el público va antes para que aparezca primero en /docs.
+app.include_router(public_reports_router)
 app.include_router(mining_router)
 
 if __name__ == '__main__':

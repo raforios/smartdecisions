@@ -193,3 +193,76 @@ def test_ensure_official_minerals_is_idempotent(db_session):
     assert second == 0
     names = {m.name for m in db_session.query(Mineral).all()}
     assert names == {m['name'] for m in OFFICIAL_MINERALS}
+
+
+# --- change_pct on the daily report ---------------------------------------
+
+def test_daily_report_includes_previous_price_and_change_pct(db_session):
+    '''
+    The daily report must report the immediately preceding row's price and
+    the variation %, computed against the most recent prior day with data.
+    '''
+    ids = _seed_catalog(db_session)
+    estano_id = ids[_normalize_name('Estaño')]
+    _add_price(db_session, estano_id, date(2026, 5, 10), 20.0)
+    _add_price(db_session, estano_id, date(2026, 5, 11), 22.0)
+    db_session.commit()
+
+    result = _run(get_daily_report_service(db_session, date(2026, 5, 11)))
+    row = next(r for r in result['rows'] if r['mineral'] == 'Estaño')
+
+    assert row['previous_price_low'] == pytest.approx(20.0)
+    assert row['previous_price_date'] == date(2026, 5, 10)
+    assert row['change_pct'] == pytest.approx(10.0)
+
+
+def test_daily_report_change_pct_zero_when_no_history(db_session):
+    '''
+    With a single price in storage, change_pct collapses to 0.0 instead of
+    raising or returning a misleading negative value.
+    '''
+    ids = _seed_catalog(db_session)
+    plata_id = ids[_normalize_name('Plata')]
+    _add_price(db_session, plata_id, date(2026, 5, 11), 75.0)
+    db_session.commit()
+
+    result = _run(get_daily_report_service(db_session, date(2026, 5, 11)))
+    row = next(r for r in result['rows'] if r['mineral'] == 'Plata')
+
+    assert row['previous_price_low'] == 0.0
+    assert row['previous_price_date'] is None
+    assert row['change_pct'] == 0.0
+
+
+# --- biweekly history -----------------------------------------------------
+
+def test_biweekly_history_lists_only_periods_with_data(db_session):
+    '''
+    Only biweekly periods that actually have data should appear in the list.
+    Fully-fallback rows are excluded.
+    '''
+    from services.mining_analysis import get_biweekly_history_service
+
+    ids = _seed_catalog(db_session)
+    estano_id = ids[_normalize_name('Estaño')]
+    _add_price(db_session, estano_id, date(2026, 4, 3), 21.0)
+    _add_price(db_session, estano_id, date(2026, 4, 20), 22.0)
+    db_session.commit()
+
+    result = _run(get_biweekly_history_service(db_session))
+    keys = [(p['year'], p['month'], p['half']) for p in result['periods']]
+    assert keys == [(2026, 4, 1), (2026, 4, 2)]
+    assert result['period_from'] == date(2026, 4, 3)
+    assert result['period_to'] == date(2026, 4, 20)
+
+
+def test_biweekly_history_empty_when_no_data(db_session):
+    '''
+    With no price rows at all, the history endpoint returns an empty list
+    instead of raising.
+    '''
+    from services.mining_analysis import get_biweekly_history_service
+
+    _seed_catalog(db_session)
+    result = _run(get_biweekly_history_service(db_session))
+    assert result['periods'] == []

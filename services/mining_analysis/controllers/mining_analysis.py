@@ -19,6 +19,7 @@ from services.mining_analysis import (
     get_all_prices_service,
     get_daily_report_service,
     get_biweekly_report_service,
+    get_biweekly_history_service,
 )
 from schemas.mining_analysis import (
     MiningPriceResponseSchema,
@@ -27,6 +28,7 @@ from schemas.mining_analysis import (
     TransactionSummaryResponse,
     DailyReportResponse,
     BiweeklyReportResponse,
+    BiweeklyHistoryResponse,
 )
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -170,3 +172,22 @@ async def get_biweekly_report_controller(
         db = db, year = year, month = month, half = half
     )
     return BiweeklyReportResponse(**result)
+
+@handle_service_errors('MINING_ANALYSIS')
+async def get_biweekly_history_controller(
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str,
+    period_from: date = None,
+    period_to: date = None,
+) -> BiweeklyHistoryResponse:
+    '''
+    Orchestrates the biweekly history endpoint.
+    '''
+    message = (f'User: {current_user} requesting biweekly history '
+               f'{period_from} → {period_to}.')
+    logger.info(message)
+    result = await get_biweekly_history_service(
+        db = db, period_from = period_from, period_to = period_to,
+    )
+    return BiweeklyHistoryResponse(**result)

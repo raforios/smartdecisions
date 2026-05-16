@@ -514,6 +514,9 @@ def _empty_daily_row(catalog: Dict[str, str], ref_date: date) -> Dict[str, Any]:
         'price_low': 0.0,
         'price_high': 0.0,
         'price_date': ref_date,
+        'previous_price_low': 0.0,
+        'previous_price_date': None,
+        'change_pct': 0.0,
         'is_fallback': True,
     }
 
@@ -547,25 +550,39 @@ async def get_daily_report_service(
             rows.append(_empty_daily_row(catalog, ref_date))
             continue
 
-        price = (
+        latest_two = (
             db.query(MiningPrice)
               .filter(MiningPrice.mineral_id == mineral_id,
                       MiningPrice.date <= ref_date)
               .order_by(MiningPrice.date.desc())
-              .first()
+              .limit(2)
+              .all()
         )
-        if price is None:
+        if not latest_two:
             rows.append(_empty_daily_row(catalog, ref_date))
             continue
+
+        price = latest_two[0]
+        prev = latest_two[1] if len(latest_two) > 1 else None
+        price_low = float(price.price_low or 0)
+        prev_low = float(prev.price_low or 0) if prev is not None else 0.0
+        change_pct = (
+            ((price_low - prev_low) / prev_low) * 100
+            if prev is not None and prev_low > 0
+            else 0.0
+        )
 
         rows.append({
             'mineral': catalog['name'],
             'chemical_symbol': catalog['chemical_symbol'],
             'unit': catalog['unit'],
             'quoted_in': catalog['quoted_in'],
-            'price_low': float(price.price_low or 0),
+            'price_low': price_low,
             'price_high': float(price.price_high or price.price_low or 0),
             'price_date': price.date,
+            'previous_price_low': prev_low,
+            'previous_price_date': prev.date if prev is not None else None,
+            'change_pct': round(change_pct, 4),
             'is_fallback': price.date != ref_date,
         })
 
@@ -685,6 +702,97 @@ async def get_biweekly_report_service(
         'period_start': period_start,
         'period_end': period_end,
         'rows': rows,
+    }
+
+
+def _iter_biweekly_periods(period_from: date, period_to: date):
+    '''
+    Yields (year, month, half) tuples covering every biweekly period between
+    `period_from` and `period_to` (inclusive) in chronological order.
+    '''
+    year, month = period_from.year, period_from.month
+    half = 1 if period_from.day <= 15 else 2
+    end_year, end_month = period_to.year, period_to.month
+    end_half = 1 if period_to.day <= 15 else 2
+
+    while (year, month, half) <= (end_year, end_month, end_half):
+        yield year, month, half
+        if half == 1:
+            half = 2
+        else:
+            half = 1
+            if month == 12:
+                month = 1
+                year += 1
+            else:
+                month += 1
+
+
+@handle_service_errors('MINING_ANALYSIS')
+async def get_biweekly_history_service(
+    db: Session,
+    period_from: Optional[date] = None,
+    period_to: Optional[date] = None,
+) -> Dict[str, Any]:
+    '''
+    Returns every biweekly period inside the requested window that has at
+    least one cotización for any official mineral.
+
+    When `period_from`/`period_to` are omitted, the bounds are derived from
+    the MIN/MAX dates in t_mining_prices so the caller automatically sees the
+    full history.
+
+    Args:
+        db (Session): Database session.
+        period_from (Optional[date]): Inclusive lower bound. Defaults to the
+            earliest cotización in storage.
+        period_to (Optional[date]): Inclusive upper bound. Defaults to the
+            latest cotización in storage.
+
+    Returns:
+        Dict[str, Any]: Payload matching BiweeklyHistoryResponse shape.
+    '''
+    bounds = db.query(
+        func.min(MiningPrice.date).label('min_d'),
+        func.max(MiningPrice.date).label('max_d'),
+    ).one()
+    if bounds.min_d is None:
+        today = date.today()
+        return {
+            'status': 'success',
+            'message': 'Biweekly history generated.',
+            'period_from': period_from or today,
+            'period_to': period_to or today,
+            'periods': [],
+        }
+
+    period_from = period_from or bounds.min_d
+    period_to = period_to or bounds.max_d
+    if period_from > period_to:
+        raise InvalidInputError(detail = 'period_from must be <= period_to.')
+
+    periods: List[Dict[str, Any]] = []
+    for year, month, half in _iter_biweekly_periods(period_from, period_to):
+        snapshot = await get_biweekly_report_service(db, year, month, half)
+        # Skip purely-fallback snapshots — they carry no information about
+        # the requested period itself, only about a recovered prior one.
+        if all(row['is_fallback'] for row in snapshot['rows']):
+            continue
+        periods.append({
+            'year': year,
+            'month': month,
+            'half': half,
+            'period_start': snapshot['period_start'],
+            'period_end': snapshot['period_end'],
+            'rows': snapshot['rows'],
+        })
+
+    return {
+        'status': 'success',
+        'message': 'Biweekly history generated.',
+        'period_from': period_from,
+        'period_to': period_to,
+        'periods': periods,
     }
 
 

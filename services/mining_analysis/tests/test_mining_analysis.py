@@ -1,6 +1,7 @@
 '''
-    services/localization/tests/test_localization.py
+    services/mining_analysis/tests/test_mining_analysis.py
 '''
+
 
 def test_placeholder():
     '''

@@ -41,8 +41,20 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 | :--- | :--- | :--- |
 | `POST` | `/v1/mining-analysis/etl/upload` | Carga masiva de cotizaciones mineras desde un archivo CSV. Dispara proceso de normalización y auditoría. |
 | `GET`  | `/v1/mining-analysis/prices` | Recupera el listado completo de precios históricos, incluyendo la metadata de cada mineral. |
-| `GET`  | `/v1/mining-analysis/reports/daily?date=YYYY-MM-DD` | Devuelve la cotización más reciente por mineral del catálogo oficial hasta la fecha indicada, con `is_fallback = true` cuando se usa un día anterior. Insumo del reporte interno **Minerales_01**. |
+| `GET`  | `/v1/mining-analysis/reports/daily?date=YYYY-MM-DD` | Devuelve la cotización más reciente por mineral del catálogo oficial hasta la fecha indicada, con `is_fallback = true` cuando se usa un día anterior. Incluye `previous_price_low` y `change_pct` (variación vs. día previo con dato). Insumo del reporte interno **Minerales_01**. |
 | `GET`  | `/v1/mining-analysis/reports/biweekly?year=YYYY&month=MM&half=1\|2` | Promedio simple de `price_low` por mineral en la quincena solicitada (`half=1` cubre los días 1-15; `half=2` cubre del 16 al fin de mes). Cuando no hay datos en el periodo, retrocede hasta hallar la quincena más reciente con cotizaciones. Insumo del reporte oficial **Minerales_02**. |
+
+### Endpoints públicos (sin JWT) para el sitio institucional
+
+Pensados para `mineria.gob.bo` y otros consumidores anónimos. Requieren que el dominio esté listado en la variable de entorno `CORS_ORIGINS` (lista separada por coma).
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET`  | `/v1/mining-analysis/public/reports/daily?date=YYYY-MM-DD` | Idéntico a `/reports/daily` pero anónimo. |
+| `GET`  | `/v1/mining-analysis/public/reports/biweekly?year=&month=&half=` | Idéntico a `/reports/biweekly` pero anónimo. |
+| `GET`  | `/v1/mining-analysis/public/reports/biweekly/history?from=YYYY-MM-DD&to=YYYY-MM-DD` | Serie histórica de quincenas con datos, ordenada cronológicamente. `from`/`to` opcionales (defaults a `MIN`/`MAX` de `t_mining_prices`). |
+| `GET`  | `/v1/mining-analysis/public/reports/daily/{png\|pdf}?date=YYYY-MM-DD` | Reporte diario renderizado sobre la plantilla **Minerales_01** (binario, descarga directa). |
+| `GET`  | `/v1/mining-analysis/public/reports/biweekly/{png\|pdf}?year=&month=&half=` | Reporte quincenal renderizado sobre la plantilla **Minerales_02** (binario, descarga directa). |
 
 ### Regalías Mineras y Transacciones
 

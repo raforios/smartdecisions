@@ -114,7 +114,9 @@ class DailyMineralPriceRow(BaseModel):
     One row of the daily mineral report (latest available cotización per mineral).
 
     `is_fallback` is True when no record existed on `ref_date` itself and the
-    most-recent prior row was returned instead.
+    most-recent prior row was returned instead. `previous_price_low` and
+    `change_pct` describe the variation against the immediately preceding day
+    with data; both are 0.0 when no prior record exists.
     '''
     mineral: str
     chemical_symbol: Optional[str] = None
@@ -123,6 +125,9 @@ class DailyMineralPriceRow(BaseModel):
     price_low: float
     price_high: float
     price_date: date
+    previous_price_low: float = 0.0
+    previous_price_date: Optional[date] = None
+    change_pct: float = 0.0
     is_fallback: bool = False
 
 
@@ -163,3 +168,29 @@ class BiweeklyReportResponse(BaseModel):
     period_start: date
     period_end: date
     rows: List[BiweeklyMineralPriceRow]
+
+
+class BiweeklyPeriodSummary(BaseModel):
+    '''
+    One element of the biweekly history series: identifies the period and
+    carries the per-mineral averages computed for it.
+    '''
+    year: int
+    month: int
+    half: int
+    period_start: date
+    period_end: date
+    rows: List[BiweeklyMineralPriceRow]
+
+
+class BiweeklyHistoryResponse(BaseModel):
+    '''
+    Aggregated response listing every biweekly period that has at least one
+    cotización in the requested range. Ordered chronologically (oldest first)
+    so the front-end can plot the line chart without sorting.
+    '''
+    status: str = 'success'
+    message: str = 'Biweekly history generated.'
+    period_from: date
+    period_to: date
+    periods: List[BiweeklyPeriodSummary]

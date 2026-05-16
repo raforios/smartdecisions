@@ -1,20 +1,30 @@
-# Usamos Python 3.13 para estabilidad en producción
-FROM python:3.14-slim
+# Dockerfile
 
-WORKDIR /app
+# Etapa 1: Construcción de dependencias
+ARG VARIANT=3.14
+# ARG BUILDPLATFORM=linux/amd64
+# FROM --platform=${BUILDPLATFORM} python:${VARIANT}-slim
+FROM python:${VARIANT}-slim
 
-# Dependencias del sistema para MySQL y herramientas de compilación
+
+# Instalar dependencias básicas del sistema
 RUN apt-get update && apt-get install -y \
     default-libmysqlclient-dev \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    curl build-essential zip && \
+    rm -rf /var/lib/apt/lists/*
 
+# Crea directorio de trabajo
+WORKDIR /app
+
+# Copia los requisitos
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
+# Instala dependencias con compatibilidad para Lambda (manylinux2014)
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+
+# Copia el resto de la app
 COPY . .
 
-# Exponemos el puerto definido en tus variables de entorno (3020)
 EXPOSE 3020
 
 CMD ["python", "main.py"]
