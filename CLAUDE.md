@@ -27,7 +27,6 @@ Actúa como un **Senior Software Architect & Backend Specialist** especializado 
 | Framework Web | FastAPI |
 | Servidor ASGI | Uvicorn |
 | ORM relacional | SQLAlchemy (MySQL / PostgreSQL) |
-| Migraciones | Alembic (mandatorio) |
 | NoSQL | `boto3` para DynamoDB |
 | Validación | Pydantic V2 (Request/Response schemas) |
 | Testing | Pytest |
@@ -75,7 +74,7 @@ microservice_name/
 │   ├── db_connection.py  # Conexión MySQL / DynamoDB
 │   ├── security.py       # Validación de tokens JWT
 │   └── utils.py          # Decoradores, logs y comunicación entre servicios
-├── tests/                # Pruebas unitarias con pytest + migraciones Alembic
+├── tests/                # Pruebas unitarias con pytest
 ├── .dockerignore
 ├── .env                  # Variables de entorno (credenciales, URLs)
 ├── .gitignore
@@ -171,11 +170,10 @@ Cuando se solicite una nueva feature o servicio, sigue este orden:
 
 1. **Schema primero** → Define DTOs de entrada/salida con Pydantic en `schemas/`.
 2. **Modelos** → Si hay persistencia, define entidades SQLAlchemy en `models/`.
-3. **Migración** → Cualquier cambio en `models/` requiere recrear/actualizar la migración Alembic. **Indícalo explícitamente.**
-4. **Lógica en `services/`** → Nunca colocar lógica de negocio en controllers o routes.
-5. **Controller / Route** → Cablea la entrada HTTP al servicio.
-6. **Test unitario** → Por cada función nueva en `services/`, genera su test correspondiente con `pytest`.
-7. **Documentación** → Actualiza el `README.md` del microservicio si hay cambios estructurales.
+3. **Lógica en `services/`** → Nunca colocar lógica de negocio en controllers o routes.
+4. **Controller / Route** → Cablea la entrada HTTP al servicio.
+5. **Test unitario** → Por cada función nueva en `services/`, genera su test correspondiente con `pytest`.
+6. **Documentación** → Actualiza el `README.md` del microservicio si hay cambios estructurales.
 
 ---
 

@@ -1,7 +1,9 @@
 export class Header {
     static render(data) {
         const menuHtml = data.menuPrincipal.map(m => `<li><a href="${m.url}">${m.titulo}</a></li>`).join('');
-        const tickerHtml = data.tickerPrecios.map(p => `<div class="ticker-item"><span>${p.name}</span><span>$${p.price}</span><span class="${p.status}">${p.trend} ${p.status === 'up' ? '▲' : '▼'}</span></div>`).join('');
+        // Inicialmente vacío — Ticker.js lo poblará desde el endpoint público.
+        // Mientras la API responde, mostramos un skeleton tenue.
+        const tickerPlaceholder = `<div class="ticker-item is-fallback"><span>Cargando cotizaciones…</span></div>`;
 
         return `
             <nav class="navbar">
@@ -13,7 +15,7 @@ export class Header {
                             <span class="logo-main">${data.institucion.nombreLargo}</span>
                         </div>
                     </div>
-                    
+
                     <div class="hamburger" id="mobile-menu-btn">
                         <span></span><span></span><span></span>
                     </div>
@@ -26,8 +28,8 @@ export class Header {
                 </div>
             </nav>
             <div class="ticker-wrap">
-                <div class="ticker" id="mineral-ticker">${tickerHtml}${tickerHtml}</div>
-                <a href="mercados.html" class="mercados-btn"><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i> Bolsa de Londres (LME)</a>
+                <div class="ticker" id="mineral-ticker">${tickerPlaceholder}</div>
+                <a href="mercados.html" class="mercados-btn"><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i> Ver detalle</a>
             </div>
         `;
     }

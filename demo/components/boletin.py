@@ -63,15 +63,29 @@ def render_boletin_tab(sel_year: int, sel_currency: str, ex_rate: float) -> None
     _safe_get(main_df, 'muni_neto_api', ['gov_muni_bob', 'distribucion_muni_bob'])
     _safe_get(main_df, 'dept_neto_api', ['gov_dept_bob', 'distribucion_dept_bob'])
     _safe_get(main_df, 'comision_api', ['commission_bob', 'comision_bob'])
-    
+
     # NUEVA EXTRACCIÓN SEGURA: Garantizamos que el código oficial siempre sea numérico
     _safe_get(main_df, 'official_code_num', ['official_code', 'codigo_oficial', 'codigo_municipio'])
 
+    # Cuadro 5 debe expresar RECAUDACIÓN BRUTA (`total_collected_bob`) y no
+    # la suma distribuida (`subtotal_bob`). Mantenemos el desglose GAD vs
+    # Municipio escalando cada parte por el ratio bruto/neto por fila, así
+    # GAD + Munis dentro de un departamento totaliza el `total_collected_bob`
+    # de ese departamento.
+    _ratio = np.where(
+        main_df['total_neto_api'] > 0,
+        main_df['total_bruto_api'] / main_df['total_neto_api'],
+        1.0,
+    )
+    main_df['muni_bruto_api'] = main_df['muni_neto_api'] * _ratio
+    main_df['dept_bruto_api'] = main_df['dept_neto_api'] * _ratio
+
     factor = 1.0 if sel_currency == 'BOB' else ex_rate
     symbol = 'Bs.' if sel_currency == 'BOB' else '$'
-    
+
     # LA MATEMÁTICA QUEDA INTACTA. NO SE ALTERA LA BASE DE DATOS CRUDA.
-    for col in ['total_bruto', 'total_neto', 'muni_neto', 'dept_neto', 'comision']:
+    for col in ['total_bruto', 'total_neto', 'muni_neto', 'dept_neto',
+                'comision', 'muni_bruto', 'dept_bruto']:
         main_df[col] = main_df[f'{col}_api'] / factor
 
     st.divider()
@@ -283,12 +297,12 @@ def render_boletin_tab(sel_year: int, sel_currency: str, ex_rate: float) -> None
             gad_row = {'DEPTOS/MUNICIPIOS': f'GAD {dept}'}
             total_gad = 0
             for q in range(min_q, max_q):
-                val = dept_df[dept_df['month'].apply(lambda x: (x-1)//3+1) == q]['dept_neto'].sum()
+                val = dept_df[dept_df['month'].apply(lambda x: (x-1)//3+1) == q]['dept_bruto'].sum()
                 gad_row[f'TRIMESTRE {q}'] = val; total_gad += val
-            
+
             q_max_total = 0
             for m in months_in_max_q:
-                val = dept_df[dept_df['month'] == m]['dept_neto'].sum()
+                val = dept_df[dept_df['month'] == m]['dept_bruto'].sum()
                 gad_row[MONTHS_SPANISH[m].upper()] = val; q_max_total += val; total_gad += val
             
             gad_row[f'TOTAL TRIMESTRE {max_q}'] = q_max_total
@@ -307,12 +321,12 @@ def render_boletin_tab(sel_year: int, sel_currency: str, ex_rate: float) -> None
                 muni_row = {'DEPTOS/MUNICIPIOS': muni}
                 total_muni = 0
                 for q in range(min_q, max_q):
-                    val = muni_df[muni_df['month'].apply(lambda x: (x-1)//3+1) == q]['muni_neto'].sum()
+                    val = muni_df[muni_df['month'].apply(lambda x: (x-1)//3+1) == q]['muni_bruto'].sum()
                     muni_row[f'TRIMESTRE {q}'] = val; total_muni += val
-                
+
                 q_max_total = 0
                 for m in months_in_max_q:
-                    val = muni_df[muni_df['month'] == m]['muni_neto'].sum()
+                    val = muni_df[muni_df['month'] == m]['muni_bruto'].sum()
                     muni_row[MONTHS_SPANISH[m].upper()] = val; q_max_total += val; total_muni += val
                     
                 muni_row[f'TOTAL TRIMESTRE {max_q}'] = q_max_total

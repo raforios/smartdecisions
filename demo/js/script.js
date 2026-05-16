@@ -79,7 +79,10 @@ function renderSharedComponents() {
 
     if (navCont) {
         const menuHtml = apiData.menu.map(m => `<li><a href="${m.url}">${m.titulo}</a></li>`).join('');
-        const tickerHtml = apiData.cotizaciones.map(p => `<div class="ticker-item"><span>${p.name}</span><span>$${p.price}</span><span class="${p.status}">${p.trend} ${p.status === 'up' ? '▲' : '▼'}</span></div>`).join('');
+        // El ticker se hidrata en runtime desde js/ticker_bootstrap.js (módulo
+        // ES que consume el endpoint público /reports/daily). Mantenemos un
+        // placeholder visible hasta que llegue la primera respuesta.
+        const tickerPlaceholder = `<div class="ticker-item is-fallback"><span>Cargando cotizaciones…</span></div>`;
 
         navCont.innerHTML = `
             <nav class="navbar">
@@ -99,8 +102,8 @@ function renderSharedComponents() {
                 </div>
             </nav>
             <div class="ticker-wrap">
-                <div class="ticker" id="mineral-ticker">${tickerHtml}${tickerHtml}</div>
-                <a href="mercados.html" class="mercados-btn"><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i> Bolsa de Londres (LME)</a>
+                <div class="ticker" id="mineral-ticker">${tickerPlaceholder}</div>
+                <a href="mercados.html" class="mercados-btn"><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i> Ver detalle</a>
             </div>
         `;
     }
@@ -250,42 +253,17 @@ function initTabs() {
     });
 }
 
-function initMarketChart() {
-    const ctxChart = document.getElementById('lme-chart');
-    if (!ctxChart || typeof Chart === 'undefined') return; 
-    
-    new Chart(ctxChart, {
-        type: 'line',
-        data: {
-            labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
-            datasets: [
-                { label: 'Oro ($)', data: [2140, 2145, 2138, 2150, 2155], borderColor: '#C9A751', backgroundColor: 'rgba(201, 167, 81, 0.2)', tension: 0.3, fill: true },
-                { label: 'Zinc ($)', data: [2510, 2525, 2540, 2530, 2540], borderColor: '#15592F', tension: 0.3 }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { labels: { color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#fff' : '#242732' } } },
-            scales: {
-                y: { ticks: { color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#fff' : '#363534' } },
-                x: { ticks: { color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#fff' : '#363534' } }
-            }
-        }
-    });
-}
-
 // ==========================================
 // 4. INICIALIZACIÓN GLOBAL
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     renderSharedComponents();
-    
+
     setTimeout(() => {
         renderContentBlocks();
         initHeroAnimation();
         if(canvas) animateHero();
         initTabs();
-        initMarketChart();
 
         const themeToggle = document.getElementById('theme-toggle');
         if (themeToggle) {

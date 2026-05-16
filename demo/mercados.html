@@ -12,23 +12,72 @@
 <body>
     <div id="navbar-container"></div>
 
-    <header class="hero" style="height: 35vh; min-height: 250px;">
+    <header class="hero">
         <canvas id="hero-canvas"></canvas>
         <div class="hero-content">
-            <h1 class="hero-title" style="font-size: 2.2rem;">Mercados Globales</h1>
-            <p>Cotizaciones en tiempo real - London Metal Exchange (LME)</p>
+            <h1 class="hero-title">Mercados Globales</h1>
+            <p>Cotizaciones oficiales quincenales — London Metal Exchange (LME)</p>
             <div class="hero-divider"></div>
         </div>
     </header>
 
     <main class="container section">
-        <h2 class="section-title">Variación Semanal de Cotizaciones</h2>
-        <div style="background: var(--card-bg); padding: 2rem; border-radius: 12px; box-shadow: var(--shadow); border-top: 4px solid var(--oro); max-width: 900px; margin: 0 auto;">
-            <canvas id="lme-chart" width="400" height="200"></canvas>
+        <div class="mercados-overview">
+            <section id="mercados-resumen" class="mercados-resumen">
+                <h2 class="section-title">Última Quincena Oficial</h2>
+                <div class="mercados-kpis" id="mercados-kpis">
+                    <div class="mercados-kpi-loading">Cargando…</div>
+                </div>
+                <p class="mercados-period-label" id="mercados-period-label"></p>
+            </section>
+
+            <section class="mercados-controls">
+                <div class="mercados-control">
+                    <label for="year-filter">Año</label>
+                    <select id="year-filter"></select>
+                </div>
+                <div class="mercados-control">
+                    <label for="unit-filter">Unidad de cotización</label>
+                    <select id="unit-filter"></select>
+                </div>
+                <div class="mercados-control">
+                    <label>Minerales en el gráfico</label>
+                    <div id="mineral-filter" class="mineral-filter"></div>
+                </div>
+                <div class="mercados-control">
+                    <label for="period-picker">Quincena para reporte oficial</label>
+                    <select id="period-picker"></select>
+                    <div class="mercados-downloads">
+                        <a id="dl-png" class="btn-download" target="_blank" rel="noopener">
+                            <i class="fa-solid fa-image"></i> PNG
+                        </a>
+                        <a id="dl-pdf" class="btn-download" target="_blank" rel="noopener">
+                            <i class="fa-solid fa-file-pdf"></i> PDF
+                        </a>
+                    </div>
+                </div>
+            </section>
         </div>
+
+        <section class="mercados-chart-card">
+            <h3>Serie histórica — promedio quincenal en <code id="chart-unit-label">USD / —</code></h3>
+            <canvas id="lme-chart"></canvas>
+        </section>
+
+        <section class="mercados-table-card">
+            <h3>Histórico quincenal completo</h3>
+            <div class="mercados-table-wrap">
+                <table id="mercados-table">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
     <div id="footer-container"></div>
     <script src="js/script.js"></script>
+    <script type="module" src="js/ticker_bootstrap.js"></script>
+    <script type="module" src="js/mercados.js"></script>
 </body>
 </html>

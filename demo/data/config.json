@@ -1,4 +1,9 @@
 {
+  "api": {
+    "miningBaseUrl": "https://api.binaria.app/v1/mining-analysis",
+    "miningBaseUrlFallback": "http://localhost:3020/v1/mining-analysis",
+    "tickerRefreshMs": 600000
+  },
   "institucion": {
     "nombreCorto": "MINISTERIO DE",
     "nombreLargo": "MINERÍA Y METALURGIA",

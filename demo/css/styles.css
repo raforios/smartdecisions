@@ -71,8 +71,8 @@ body {
 
 /* Hero Section Abstracto */
 .hero {
-    height: 45vh; /* Reducido del 80vh/75vh anterior */
-    min-height: 350px;
+    height: 30vh;
+    min-height: 220px;
     background-color: var(--negro);
     display: flex;
     align-items: center;
@@ -491,25 +491,6 @@ body {
     position: relative; 
 }
 
-.hero {
-    height: 50vh;
-    min-height: 400px;
-    background-color: var(--negro);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: white;
-    margin-top: 130px; 
-    position: relative;
-    overflow: hidden;
-}
-
-#hero-canvas {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
-}
-
 .escudo-img { height: 85px; width: auto; }
 
 /* MENÚ HAMBURGUESA MÓVIL */
@@ -553,3 +534,110 @@ body {
 .hamburger.active span:nth-child(1) { transform: translateY(9px) rotate(45deg); }
 .hamburger.active span:nth-child(2) { opacity: 0; }
 .hamburger.active span:nth-child(3) { transform: translateY(-9px) rotate(-45deg); }
+
+/* ===== Mercados (cotizaciones oficiales) ===== */
+.ticker-item.is-fallback { opacity: 0.55; font-style: italic; }
+
+.mercados-overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+    margin-bottom: 1.5rem;
+}
+@media (max-width: 900px) {
+    .mercados-overview { grid-template-columns: 1fr; }
+}
+.mercados-resumen { margin: 0; }
+.mercados-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+@media (max-width: 560px) {
+    .mercados-kpis { grid-template-columns: repeat(2, 1fr); }
+}
+.mercados-kpi-loading { color: #777; padding: 1rem; }
+.mercados-period-label {
+    font-size: 0.8rem; color: #666; margin-top: 0.6rem;
+}
+.kpi-card {
+    background: var(--card-bg, #fff);
+    border-left: 3px solid var(--accent, #888);
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    box-shadow: var(--shadow, 0 1px 3px rgba(0,0,0,0.08));
+}
+.kpi-card h4 {
+    margin: 0; font-size: 0.8rem; font-weight: 600;
+    display: flex; align-items: baseline; gap: 0.3rem;
+}
+.kpi-card h4 small { color: #888; font-weight: 400; font-size: 0.7rem; }
+.kpi-value { font-size: 1.15rem; font-weight: 700; margin-top: 0.2rem; line-height: 1.1; }
+.kpi-unit { font-size: 0.65rem; color: #888; margin-top: 1px; }
+.kpi-delta { margin-top: 0.25rem; font-weight: 600; font-size: 0.75rem; color: #888; }
+.kpi-delta.up { color: #198754; }
+.kpi-delta.down { color: #c62828; }
+
+.mercados-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin: 0;
+    background: var(--card-bg, #fff);
+    padding: 1.1rem 1.2rem;
+    border-radius: 10px;
+    box-shadow: var(--shadow, 0 1px 3px rgba(0,0,0,0.08));
+    border-top: 4px solid var(--oro, #c9a751);
+}
+.mercados-control { display: flex; flex-direction: column; gap: 6px; }
+.mercados-control label { font-size: 0.85rem; font-weight: 600; color: #444; }
+.mercados-control select {
+    padding: 8px 10px; border-radius: 6px; border: 1px solid #ccc;
+    background: #fff;
+}
+
+.mineral-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+.mineral-chip { display: inline-flex; align-items: center; gap: 4px; }
+.mineral-chip input { accent-color: var(--chip-color, #c9a751); }
+.mineral-chip span {
+    background: var(--chip-color, #888);
+    color: #fff; padding: 2px 8px; border-radius: 12px;
+    font-size: 0.75rem; font-weight: 600;
+}
+
+.mercados-downloads { display: flex; gap: 8px; margin-top: 6px; }
+.btn-download {
+    flex: 1; text-align: center;
+    background: var(--oro, #c9a751); color: #fff;
+    padding: 8px 10px; border-radius: 6px;
+    font-weight: 600; text-decoration: none; font-size: 0.85rem;
+}
+.btn-download:hover { filter: brightness(1.08); }
+.btn-download.disabled { opacity: 0.45; pointer-events: none; }
+
+.mercados-chart-card, .mercados-table-card {
+    background: var(--card-bg, #fff);
+    padding: 1.5rem; border-radius: 10px;
+    box-shadow: var(--shadow, 0 1px 3px rgba(0,0,0,0.08));
+    border-top: 4px solid var(--oro, #c9a751);
+    margin-bottom: 1.5rem;
+}
+.mercados-chart-card h3, .mercados-table-card h3 {
+    margin-top: 0; font-size: 1rem; color: #333;
+}
+.mercados-chart-card code { font-family: monospace; color: #555; }
+.mercados-table-wrap { overflow-x: auto; }
+#mercados-table {
+    width: 100%; border-collapse: collapse; font-size: 0.85rem;
+}
+#mercados-table th, #mercados-table td {
+    padding: 8px 10px; border-bottom: 1px solid #eee; text-align: right;
+}
+#mercados-table th { background: #f7f3e8; color: #444; font-weight: 600; }
+#mercados-table th:first-child, #mercados-table td:first-child,
+#mercados-table th:nth-child(2), #mercados-table td:nth-child(2) {
+    text-align: left;
+}
+#mercados-table td.is-fallback { color: #aaa; font-style: italic; }
+.mercados-error { color: #c62828; padding: 1rem; }

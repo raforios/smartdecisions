@@ -1,6 +1,8 @@
 import { ApiService } from './services/ApiService.js';
+import { MiningApiService } from './services/MiningApiService.js';
 import { Header } from './components/Header.js';
 import { Footer } from './components/Footer.js';
+import { Ticker } from './components/Ticker.js';
 
 const api = new ApiService();
 
@@ -17,16 +19,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (navContainer) {
         navContainer.innerHTML = Header.render(siteData);
-        Header.initInteractions(); 
+        Header.initInteractions();
     }
     if (footerContainer) {
         footerContainer.innerHTML = Footer.render(siteData);
     }
 
-    // 2. Inyectar Contenido Específico de Index
+    // 2. Arrancar el ticker de cotizaciones (consume el endpoint público).
+    const miningApi = new MiningApiService(siteData.api || {});
+    const ticker = new Ticker(miningApi, {
+        refreshMs: siteData.api?.tickerRefreshMs ?? 600_000,
+        fallback: siteData.tickerPrecios || [],
+    });
+    ticker.start();
+
+    // 3. Inyectar Contenido Específico de Index
     renderHomeBlocks(siteData);
 
-    // 3. Inicializar Lógicas (Tema, Canvas)
+    // 4. Inicializar Lógicas (Tema, Canvas)
     initThemeToggle();
     initHeroAnimation();
     animateHero();
