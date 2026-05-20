@@ -62,6 +62,10 @@ class ReplenishmentInventoryItemSchema(BaseSchema):
         ge = 0, # Quantity cannot be negative
         description = 'Quantity counted for this SKU/Batch/Expiration.'
     )
+    observations: Optional[str] = Field(
+        None,
+        description = 'Free-text notes captured by the operator for this line.',
+    )
 
 class ReplenishmentInventoryCreateSchema(BaseSchema):
     '''
@@ -92,6 +96,7 @@ class ReplenishmentInventoryResponseItemSchema(BaseSchema):
     batch_number: str
     expiration_date: datetime # Returns as datetime
     quantity: int
+    observations: Optional[str] = None
     created_at: Optional[datetime]
 
 class ReplenishmentInventoryListResponseSchema(BaseSchema):

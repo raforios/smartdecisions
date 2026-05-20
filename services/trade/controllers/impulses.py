@@ -14,17 +14,22 @@ from services.impulses import (
     get_promotion_by_id_service,
     get_promotions_list_service,
     update_promotion_service,
+    get_latest_impulse_inventory_for_pos_service,
+    get_impulse_inventory_start_by_attendance_service,
+    get_impulse_inventory_end_by_attendance_service,
 )
 from schemas.impulses import (
     ImpulseInventoryCreateSchema,
     ImpulseInventoryListResponseSchema,
     ImpulseSaleCreateSchema,
     ImpulseSaleResponseSchema,
+    LatestPOSInventoryResponseSchema,
     TradePromotionCreateSchema,
     TradePromotionFilterSchema,
     TradePromotionListResponseSchema,
     TradePromotionResponseSchema,
-    TradePromotionUpdateSchema
+    TradePromotionUpdateSchema,
+    VisitInventoryResponseSchema,
 )
 
 # --- TRADE PROMOTION (BANDEO) Controllers ---
@@ -188,3 +193,52 @@ async def create_impulse_inventory_end_controller(
         items = created_items,
         total = len(created_items)
     )
+
+
+@handle_service_errors('TRADE')
+async def get_latest_impulse_inventory_for_pos_controller(
+    pos_id: int,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> LatestPOSInventoryResponseSchema:
+    '''
+        Returns the most recent impulse inventory (start or end) ever
+        registered for the given POS. 404 when no inventory exists.
+    '''
+    result = await get_latest_impulse_inventory_for_pos_service(
+        db = db, pos_id = pos_id,
+    )
+    return LatestPOSInventoryResponseSchema.model_validate(result)
+
+
+@handle_service_errors('TRADE')
+async def get_impulse_inventory_start_by_attendance_controller(
+    attendance_id: int,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> VisitInventoryResponseSchema:
+    '''
+        Returns the full Impulse start inventory for a given visit.
+    '''
+    result = await get_impulse_inventory_start_by_attendance_service(
+        db = db, attendance_id = attendance_id,
+    )
+    return VisitInventoryResponseSchema.model_validate(result)
+
+
+@handle_service_errors('TRADE')
+async def get_impulse_inventory_end_by_attendance_controller(
+    attendance_id: int,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> VisitInventoryResponseSchema:
+    '''
+        Returns the full Impulse end inventory for a given visit.
+    '''
+    result = await get_impulse_inventory_end_by_attendance_service(
+        db = db, attendance_id = attendance_id,
+    )
+    return VisitInventoryResponseSchema.model_validate(result)

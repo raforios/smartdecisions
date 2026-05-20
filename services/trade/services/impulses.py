@@ -3,7 +3,7 @@
     Impulses
 '''
 from typing import Any, Dict, List, Tuple
-from sqlalchemy import and_
+from sqlalchemy import and_, desc
 from sqlalchemy.orm import Session, joinedload
 from services.products import (
     get_product_id_by_sku,
@@ -34,6 +34,8 @@ from models.impulses import (
     TradePromotion,
     TradePromotionDetail
 )
+from models.trade import Attendance, PlannedPoint
+from models.products import Product
 from schemas.impulses import (
     ImpulseInventoryCreateSchema,
     ImpulseSaleCreateSchema,
@@ -222,10 +224,13 @@ async def create_impulse_sale_service(
         pos_id = sale_data.pos_id
     )
 
-    # 1. Create Header
+    # 1. Create Header — store both the executor company (kept in
+    # `company_id` for backwards compatibility) and the client company
+    # (new in 2026-05-20) so downstream reports can split by either.
     db_sale = ImpulseSale(
         attendance_id = attendance_id,
-        company_id = sale_data.company_id
+        company_id = sale_data.company_id,
+        client_company_id = sale_data.client_company_id,
     )
     db.add(db_sale)
     db.flush()
@@ -329,3 +334,182 @@ async def create_impulse_inventory_end_service(
         items_list = inventory_data.items,
         model_class = ImpulseInventoryEnd
     )
+
+
+# --- LATEST INVENTORY FOR POS ---
+
+def _latest_inventory_for_pos(
+    db: Session, pos_id: int, model_class
+) -> Tuple[Any, Any] | Tuple[None, None]:
+    '''
+        Internal helper that returns `(inventory_row, attendance_row)`
+        for the most recent row of `model_class` (ImpulseInventoryStart
+        or ImpulseInventoryEnd) bound to a planned point on `pos_id`.
+        Returns `(None, None)` when no inventory was ever registered.
+    '''
+    row = (
+        db.query(model_class, Attendance)
+        .join(Attendance, model_class.attendance_id == Attendance.id)
+        .join(PlannedPoint, Attendance.trade_planned_point_id == PlannedPoint.id)
+        .filter(PlannedPoint.point_of_sale_id == pos_id)
+        .order_by(desc(model_class.created_at))
+        .first()
+    )
+    if row is None:
+        return None, None
+    return row[0], row[1]
+
+
+def _inventory_lines_for_attendance(
+    db: Session, attendance_id: int, model_class
+) -> List[Tuple[Any, Any]]:
+    '''
+        Returns the list of `(inventory_row, product)` tuples for the
+        given attendance and inventory model. Used by the per-visit GET
+        endpoints (start/end).
+    '''
+    return (
+        db.query(model_class, Product)
+        .join(Product, model_class.product_id == Product.id)
+        .filter(model_class.attendance_id == attendance_id)
+        .order_by(model_class.id.asc())
+        .all()
+    )
+
+
+@handle_service_errors('TRADE')
+async def get_impulse_inventory_start_by_attendance_service(
+    db: Session, attendance_id: int,
+) -> Dict[str, Any]:
+    '''
+        Returns the full Impulse "start" inventory for the given visit.
+        404 when nothing was registered.
+    '''
+    rows = _inventory_lines_for_attendance(
+        db, attendance_id, ImpulseInventoryStart,
+    )
+    if not rows:
+        raise RegisterNotFoundError(
+            detail = (
+                f'No impulse start inventory registered for attendance '
+                f'{attendance_id}.'
+            )
+        )
+    attendance = db.query(Attendance).filter(
+        Attendance.id == attendance_id,
+    ).first()
+    first_row = rows[0][0]
+    return {
+        'attendance_id': attendance_id,
+        'pos_id': attendance.point_of_sale_id if attendance else None,
+        'inventory_type': 'start',
+        'created_at': first_row.created_at,
+        'items': [
+            {
+                'product_id': inv.product_id,
+                'product_sku': product.sku,
+                'product_name': product.name,
+                'quantity': inv.quantity,
+                'observations': inv.observations,
+            }
+            for inv, product in rows
+        ],
+    }
+
+
+@handle_service_errors('TRADE')
+async def get_impulse_inventory_end_by_attendance_service(
+    db: Session, attendance_id: int,
+) -> Dict[str, Any]:
+    '''
+        Returns the full Impulse "end" inventory for the given visit.
+    '''
+    rows = _inventory_lines_for_attendance(
+        db, attendance_id, ImpulseInventoryEnd,
+    )
+    if not rows:
+        raise RegisterNotFoundError(
+            detail = (
+                f'No impulse end inventory registered for attendance '
+                f'{attendance_id}.'
+            )
+        )
+    attendance = db.query(Attendance).filter(
+        Attendance.id == attendance_id,
+    ).first()
+    first_row = rows[0][0]
+    return {
+        'attendance_id': attendance_id,
+        'pos_id': attendance.point_of_sale_id if attendance else None,
+        'inventory_type': 'end',
+        'created_at': first_row.created_at,
+        'items': [
+            {
+                'product_id': inv.product_id,
+                'product_sku': product.sku,
+                'product_name': product.name,
+                'quantity': inv.quantity,
+                'observations': inv.observations,
+            }
+            for inv, product in rows
+        ],
+    }
+
+
+@handle_service_errors('TRADE')
+async def get_latest_impulse_inventory_for_pos_service(
+    db: Session,
+    pos_id: int
+) -> Dict[str, Any]:
+    '''
+        Returns the most recent inventory record for a POS, picking
+        whichever is newer between the latest `ImpulseInventoryStart`
+        and `ImpulseInventoryEnd`. All line items belonging to that
+        attendance are returned.
+
+        Raises RegisterNotFoundError when no inventory exists for the POS.
+    '''
+    latest_start, start_attendance = _latest_inventory_for_pos(
+        db, pos_id, ImpulseInventoryStart,
+    )
+    latest_end, end_attendance = _latest_inventory_for_pos(
+        db, pos_id, ImpulseInventoryEnd,
+    )
+
+    if latest_start is None and latest_end is None:
+        raise RegisterNotFoundError(
+            detail = f'No impulse inventory found for POS {pos_id}.'
+        )
+
+    pick_end = (
+        latest_end is not None
+        and (latest_start is None
+             or latest_end.created_at >= latest_start.created_at)
+    )
+    chosen_model = ImpulseInventoryEnd if pick_end else ImpulseInventoryStart
+    chosen_row = latest_end if pick_end else latest_start
+    chosen_attendance = end_attendance if pick_end else start_attendance
+
+    items = (
+        db.query(chosen_model, Product)
+        .join(Product, chosen_model.product_id == Product.id)
+        .filter(chosen_model.attendance_id == chosen_attendance.id)
+        .all()
+    )
+
+    return {
+        'pos_id': pos_id,
+        'inventory_type': 'end' if pick_end else 'start',
+        'attendance_id': chosen_attendance.id,
+        'created_at': chosen_row.created_at,
+        'items': [
+            {
+                'product_id': inv.product_id,
+                'product_sku': product.sku,
+                'product_name': product.name,
+                'quantity': inv.quantity,
+                'observations': inv.observations,
+            }
+            for inv, product in items
+        ],
+    }

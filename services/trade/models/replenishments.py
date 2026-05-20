@@ -56,6 +56,9 @@ class ReplenishmentInventory(Base, AttendanceProductMixin):  # pylint: disable=t
     expiration_date = Column(DateTime, nullable = False)
     quantity = Column(Integer, nullable = False)
 
+    # Free-text notes captured by the operator during the count.
+    observations = Column(Text, nullable = True)
+
     # Audit field (Created only)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 

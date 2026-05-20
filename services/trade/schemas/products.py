@@ -297,6 +297,10 @@ class ProductAssignmentPOSBaseSchema(BaseSchema):
         max_length = 20,
         description = 'Status of the assignment (e.g., ACTIVE, INACTIVE).'
     )
+    observations: Optional[str] = Field(
+        None,
+        description = 'Free-text notes captured by the operator.',
+    )
 
 class ProductAssignmentPOSCreateSchema(ProductAssignmentPOSBaseSchema):
     '''
@@ -328,18 +332,38 @@ class ProductAssignmentPOSUpdateSchema(BaseSchema):
         max_length = 20,
         description = 'New status for the assignment.'
     )
+    observations: Optional[str] = Field(
+        None,
+        description = 'Free-text notes captured by the operator.',
+    )
+
+class ProductSummarySchema(BaseSchema):
+    '''
+        Minimal product fields shipped alongside a POS assignment so the
+        frontend can render the inventory grid without follow-up calls.
+    '''
+    sku: str
+    name: str
+    stock_unit: str
+
 
 class ProductAssignmentPOSResponseSchema(BaseSchema):
     '''
         Response schema for a Product to POS Assignment.
+
+        2026-05-20 (Binaria): now returns the related product summary
+        (sku / name / stock_unit) so the inventory screen doesn't need
+        an extra round-trip per row.
     '''
     id: int
     company_id: int
     product_id: int # Returns the internal ID
+    product: Optional[ProductSummarySchema] = None
     point_of_sale_id: int
     near_expiration_days: int
     minimum_stock: int
     status: str
+    observations: Optional[str] = None
     created_at: Optional[datetime]
     class Config:# pylint: disable=too-few-public-methods
         '''
@@ -351,7 +375,10 @@ class ProductAssignmentPOSFilterSchema(BaseModel):
     '''
         Schema to encapsulate filtering parameters for Product POS Assignments.
     '''
-    company_id: int = Query(..., description = 'Company ID (Mandatory for filtering).')
+    # 2026-05-20 (Binaria): company_id pasa a opcional. Cuando no viene,
+    # el listado se acota por point_of_sale_id (suficiente para pantalla
+    # de inventario donde el POS implica la compañía cliente).
+    company_id: Optional[int] = Query(None, description = 'Optional company filter.')
     product_id: Optional[int] = Query(None, description = 'Filter by internal Product ID.')
     point_of_sale_id: Optional[int] = Query(None, description = 'Filter by Point of Sale ID.')
     status: Optional[str] = Query(None, description = 'Filter by status (e.g., ACTIVE).')

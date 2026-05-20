@@ -27,18 +27,36 @@ from services.utils import get_current_time_gmt
 # --- A.1. PLANNED ROUTE (master) ---
 class PlannedRoute(Base):  # pylint: disable=too-few-public-methods
     '''
-        Planned route master. Each route belongs to a company and holds the
-        ordered list of POS visits (`planned_points`).
+        Planned route master. Each route belongs to a CLIENT company
+        (`company_id`) — i.e. the company that owns the POS being visited.
+        `executor_company_id` is the company whose work team actually runs
+        the route (Binaria's model splits ownership of the contract from
+        ownership of the workforce).
     '''
     __tablename__ = 't_trade_planned_routes'
 
     id = Column(Integer, primary_key = True, index = True)
     company_id = Column(Integer, nullable = False, index = True)
+    # Executor company (owner of the work team). Nullable for legacy rows.
+    executor_company_id = Column(Integer, nullable = True, index = True)
 
     route_name = Column(String(150), nullable = False)
     # `route_code` is unique per company so different companies can reuse codes.
     route_code = Column(String(50), nullable = False, index = True)
     description = Column(Text, nullable = True)
+
+    # Route classification. Pydantic schema enforces REPOSICION | IMPULSO.
+    route_type = Column(String(20), nullable = True)
+
+    # Location (catalog-driven ids, aligned with t_points_of_sale).
+    country_id = Column(Integer, nullable = True)
+    city_id = Column(Integer, nullable = True)
+
+    # Lifecycle flag. Pydantic schema enforces ACTIVE | INACTIVE.
+    status = Column(String(20), nullable = False, default = 'ACTIVE', index = True)
+
+    # Visual identifier used by the frontend (hex string '#RRGGBB').
+    color = Column(String(7), nullable = True)
 
     # Audit field
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
@@ -121,7 +139,13 @@ class TradePlanning(Base):  # pylint: disable=too-few-public-methods
     __tablename__ = 't_trade_planning'
 
     id = Column(Integer, primary_key = True, index = True)
-    company_id = Column(Integer, nullable = False, index = True)
+    # `company_id` is the EXECUTOR company (owner of the team). The CLIENT
+    # company (owner of the POS / route) lives in `client_company_id` so
+    # reports can break the work down by either side without joins.
+    # 2026-05-20 (Binaria): company_id is now NULLABLE so the executor
+    # can be assigned after the planning is created.
+    company_id = Column(Integer, nullable = True, index = True)
+    client_company_id = Column(Integer, nullable = True, index = True)
 
     planning_name = Column(String(150), nullable = False)
     description = Column(Text, nullable = True)
@@ -132,7 +156,7 @@ class TradePlanning(Base):  # pylint: disable=too-few-public-methods
     start_date = Column(Date, nullable = False)
     end_date = Column(Date, nullable = False)
 
-    status = Column(String(20), default = 'DRAFT', nullable = False)
+    status = Column(String(20), default = 'ACTIVE', nullable = False)
 
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
@@ -170,7 +194,9 @@ class TradePlanningDetail(Base):  # pylint: disable=too-few-public-methods
     )
     planned_route = relationship('PlannedRoute')
 
-    date_of_day = Column(Date, nullable = False)
+    # Holds both the date and the start time of the route execution.
+    # Migrated from DATE to DATETIME on 2026-05-19 (Binaria request).
+    date_of_day = Column(DateTime, nullable = False)
 
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
@@ -192,7 +218,12 @@ class Attendance(Base):  # pylint: disable=too-few-public-methods
     __tablename__ = 't_trade_attendances'
 
     id = Column(Integer, primary_key = True, index = True)
+    # `company_id` is the EXECUTOR company (owner of the work team).
+    # `client_company_id` is the CLIENT company (owner of POS / products).
+    # The frontend ensures consistency between the two; the service no
+    # longer cross-checks them against route ownership.
     company_id = Column(Integer, nullable = False, index = True)
+    client_company_id = Column(Integer, nullable = True, index = True)
     user_id = Column(Integer, nullable = False, index = True)
 
     # Replaces the old `trade_planning_id`: now we point to the specific
@@ -204,6 +235,17 @@ class Attendance(Base):  # pylint: disable=too-few-public-methods
         index = True
     )
     planned_point = relationship('PlannedPoint')
+
+    # Denormalized FK to the POS itself so the frontend can mark a POS as
+    # "open" / "closed" without joining through planned_point. Nullable
+    # for legacy rows; new attendances must populate it.
+    point_of_sale_id = Column(
+        Integer,
+        ForeignKey('t_points_of_sale.id'),
+        nullable = True,
+        index = True
+    )
+    point_of_sale = relationship('PointOfSale')
 
     # --- Check-In Data ---
     check_in_time = Column(DateTime, nullable = True)

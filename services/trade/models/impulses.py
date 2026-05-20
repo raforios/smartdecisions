@@ -92,6 +92,9 @@ class ImpulseInventoryStart(Base, AttendanceProductMixin):  # pylint: disable=to
     # Quantity counted at the start
     quantity = Column(Integer, nullable = False)
 
+    # Free-text notes captured by the operator during the count.
+    observations = Column(Text, nullable = True)
+
     # Audit field (Created only)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
@@ -115,6 +118,10 @@ class ImpulseSale(Base):  # pylint: disable=too-few-public-methods
     attendance_id = Column(Integer, nullable = False, index = True)
 
     company_id = Column(Integer, nullable = False, index = True)
+    # 2026-05-20 (Binaria): sales are owned by the CLIENT company (the
+    # one that owns the POS and the products sold). The executor lives
+    # in the parent attendance's `company_id`.
+    client_company_id = Column(Integer, nullable = True, index = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     # Relationship to the Sale Details (SKUs sold)
@@ -176,6 +183,9 @@ class ImpulseInventoryEnd(Base, AttendanceProductMixin):  # pylint: disable=too-
 
     # Quantity counted at the end
     quantity = Column(Integer, nullable = False)
+
+    # Free-text notes captured by the operator during the count.
+    observations = Column(Text, nullable = True)
 
     # Audit field (Created only)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)

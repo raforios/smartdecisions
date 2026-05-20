@@ -126,6 +126,10 @@ class ImpulseInventoryItemSchema(BaseSchema):
         ge = 0, # Quantity cannot be negative
         description = 'Quantity counted for this SKU.'
     )
+    observations: Optional[str] = Field(
+        None,
+        description = 'Free-text notes captured by the operator for this line.',
+    )
 
 class ImpulseInventoryCreateSchema(BaseSchema):
     '''
@@ -154,6 +158,7 @@ class ImpulseInventoryResponseItemSchema(BaseSchema):
     attendance_id: int
     product_id: int
     quantity: int
+    observations: Optional[str] = None
     created_at: Optional[datetime]
 
 class ImpulseInventoryListResponseSchema(BaseSchema):
@@ -162,6 +167,32 @@ class ImpulseInventoryListResponseSchema(BaseSchema):
     '''
     items: List[ImpulseInventoryResponseItemSchema]
     total: int
+
+
+class LatestInventoryItemSchema(BaseSchema):
+    '''
+        Single line of the latest-inventory response.
+    '''
+    product_id: int
+    product_sku: Optional[str] = None
+    product_name: Optional[str] = None
+    quantity: int
+    observations: Optional[str] = None
+
+
+class LatestPOSInventoryResponseSchema(BaseSchema):
+    '''
+        Most recent impulse inventory snapshot bound to a POS. The
+        `inventory_type` flag tells whether the snapshot came from the
+        start or the end of the visit.
+    '''
+    pos_id: int
+    inventory_type: str = Field(
+        ..., description = 'Either "start" or "end".',
+    )
+    attendance_id: int
+    created_at: datetime
+    items: List[LatestInventoryItemSchema]
 
 # --- Schemas for Sale ---
 
@@ -192,6 +223,13 @@ class ImpulseSaleCreateSchema(BaseSchema):
         ...,
         description = 'ID of the company for this transaction (needed for SKU lookup).'
     )
+    client_company_id: Optional[int] = Field(
+        None,
+        description = (
+            'Client company (owner of the POS / products). Stored on the '
+            'sale row for downstream reporting.'
+        ),
+    )
     pos_id: int = Field(
         ...,
         description = 'ID of the Point of Sale (sent by frontend) to validate assortment.'
@@ -218,7 +256,26 @@ class ImpulseSaleResponseSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
+    company_id: Optional[int] = None
+    client_company_id: Optional[int] = None
     # photos removed (handled by common schema/endpoint structure generally)
     photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]
     details: List[ImpulseSaleDetailResponseSchema]
+
+
+# 2026-05-20 (Binaria): per-visit GET endpoints (start/end). Returns the
+# full list of products counted on that visit, with summary product
+# fields so the frontend can build the cierre screen without extra
+# calls.
+class VisitInventoryResponseSchema(BaseSchema):
+    '''
+        Snapshot of all inventory lines tied to one Impulse visit (start
+        or end). Used by the two new GET endpoints behind
+        `/v1/impulses/visit/{attendance_id}/inventory-{start,end}`.
+    '''
+    attendance_id: int
+    pos_id: Optional[int] = None
+    inventory_type: str = Field(..., description = '"start" or "end".')
+    created_at: Optional[datetime] = None
+    items: List[LatestInventoryItemSchema]

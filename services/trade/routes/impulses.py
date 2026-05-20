@@ -22,6 +22,8 @@ from controllers.impulses import (
     get_promotion_by_id_controller,
     get_promotions_list_controller,
     update_promotion_controller,
+    get_impulse_inventory_start_by_attendance_controller,
+    get_impulse_inventory_end_by_attendance_controller,
 )
 from schemas.impulses import (
     ImpulseInventoryCreateSchema,
@@ -32,7 +34,8 @@ from schemas.impulses import (
     TradePromotionFilterSchema,
     TradePromotionListResponseSchema,
     TradePromotionResponseSchema,
-    TradePromotionUpdateSchema
+    TradePromotionUpdateSchema,
+    VisitInventoryResponseSchema,
 )
 
 router = APIRouter(prefix = '/v1/impulses', tags = ['Impulses'])
@@ -249,4 +252,68 @@ async def create_impulse_inventory_end_endpoint(
         db = db,
         request = request,
         current_user = current_user
+    )
+
+
+# --- 5.X. GET INVENTORY SNAPSHOT FOR A VISIT (Binaria 2026-05-20) ---
+
+@router.get(
+    '/visit/{attendance_id}/inventory-start',
+    response_model = VisitInventoryResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Retrieve start inventory for an Impulse visit',
+    description = (
+        'Returns every line of the initial inventory captured at the '
+        'start of the given visit, together with summary product info '
+        '(sku, name). Drives the closing-inventory screen, sales screen '
+        'and final reports.'
+    ),
+)
+async def get_impulse_inventory_start_endpoint(
+    attendance_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        GET endpoint for the start inventory of an Impulse visit.
+    '''
+    message = (f'User: {current_user}. Retrieving start inventory for '
+               f'attendance {attendance_id}.')
+    logger.info(message)
+    return await get_impulse_inventory_start_by_attendance_controller(
+        attendance_id = attendance_id,
+        db = db,
+        request = request,
+        current_user = current_user,
+    )
+
+
+@router.get(
+    '/visit/{attendance_id}/inventory-end',
+    response_model = VisitInventoryResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Retrieve end inventory for an Impulse visit',
+    description = (
+        'Returns every line of the closing inventory captured at the '
+        'end of the given visit.'
+    ),
+)
+async def get_impulse_inventory_end_endpoint(
+    attendance_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        GET endpoint for the end inventory of an Impulse visit.
+    '''
+    message = (f'User: {current_user}. Retrieving end inventory for '
+               f'attendance {attendance_id}.')
+    logger.info(message)
+    return await get_impulse_inventory_end_by_attendance_controller(
+        attendance_id = attendance_id,
+        db = db,
+        request = request,
+        current_user = current_user,
     )

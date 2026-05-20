@@ -2,11 +2,22 @@
     Trade Schemas — Planning, Routes, Planned Points, and Attendances.
 '''
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.common import BaseSchema
+
+
+# Canonical literals shared by Route schemas. Kept here next to the
+# request validation so they're discoverable when editing the API
+# contract.
+RouteType = Literal['REPOSICION', 'IMPULSO']
+RouteStatus = Literal['ACTIVE', 'INACTIVE']
+PlanningStatus = Literal['DRAFT', 'ACTIVE', 'CLOSED']
+
+# Hex color in '#RRGGBB' notation.
+HEX_COLOR_REGEX = r'^#[0-9A-Fa-f]{6}$'
 
 
 # ====================================================================
@@ -93,13 +104,33 @@ class PlannedRouteBaseSchema(BaseSchema):
     route_name: str = Field(..., max_length = 150)
     route_code: str = Field(..., max_length = 50)
     description: Optional[str] = None
+    route_type: Optional[RouteType] = Field(
+        None,
+        description = 'REPOSICION | IMPULSO. Drives downstream behavior.',
+    )
+    country_id: Optional[int] = None
+    city_id: Optional[int] = None
+    status: RouteStatus = Field(
+        'ACTIVE', description = 'Lifecycle flag for the route.',
+    )
+    color: Optional[str] = Field(
+        None, pattern = HEX_COLOR_REGEX,
+        description = 'Hex color used by the frontend, e.g. "#C9A751".',
+    )
 
 
 class PlannedRouteCreateSchema(PlannedRouteBaseSchema):
     '''
         Schema for creating a planned route together with its points.
     '''
-    company_id: int = Field(..., description = 'Owner company.')
+    company_id: int = Field(..., description = 'Owner / client company.')
+    executor_company_id: Optional[int] = Field(
+        None,
+        description = (
+            'Company that owns the work team executing the route. '
+            'Required for impulse/replenishment workflows.'
+        ),
+    )
     points: List[PlannedPointCreateSchema] = Field(
         default_factory = list,
         description = 'Optional initial points for the route.'
@@ -114,6 +145,12 @@ class PlannedRouteUpdateSchema(BaseSchema):
     route_name: Optional[str] = Field(None, max_length = 150)
     route_code: Optional[str] = Field(None, max_length = 50)
     description: Optional[str] = None
+    route_type: Optional[RouteType] = None
+    country_id: Optional[int] = None
+    city_id: Optional[int] = None
+    status: Optional[RouteStatus] = None
+    color: Optional[str] = Field(None, pattern = HEX_COLOR_REGEX)
+    executor_company_id: Optional[int] = None
 
 
 class PlannedRouteResponseSchema(PlannedRouteBaseSchema):
@@ -122,6 +159,7 @@ class PlannedRouteResponseSchema(PlannedRouteBaseSchema):
     '''
     id: int
     company_id: int
+    executor_company_id: Optional[int] = None
     points: List[PlannedPointResponseSchema] = []
     created_at: Optional[datetime] = None
 
@@ -155,7 +193,13 @@ class TradePlanningDetailBaseSchema(BaseSchema):
         Shared fields for a planning detail row.
     '''
     planned_route_id: int = Field(..., description = 'Planned route to execute that day.')
-    date_of_day: date = Field(..., description = 'Specific date the route is run.')
+    date_of_day: datetime = Field(
+        ...,
+        description = (
+            'Start date AND time of the route execution (ISO 8601). '
+            'Migrated from DATE to DATETIME on 2026-05-19.'
+        ),
+    )
 
 
 class TradePlanningDetailCreateSchema(TradePlanningDetailBaseSchema):
@@ -187,14 +231,30 @@ class TradePlanningBaseSchema(BaseSchema):
     team_id: int = Field(..., description = 'Team identifier from the frontend.')
     start_date: date
     end_date: date
-    status: Optional[str] = Field('DRAFT', max_length = 20)
+    # Default flipped from 'DRAFT' to 'ACTIVE' on 2026-05-19 (Binaria
+    # request): the planning lifecycle starts active so check-ins can be
+    # logged without an extra "publish" step.
+    status: PlanningStatus = Field(
+        'ACTIVE', description = 'Lifecycle status of the campaign.',
+    )
 
 
 class TradePlanningCreateSchema(TradePlanningBaseSchema):
     '''
         Schema for creating a planning campaign with optional inline details.
     '''
-    company_id: int = Field(..., description = 'Owner company.')
+    # 2026-05-20 (Binaria): executor company is optional — it can be
+    # assigned later through a PATCH once the team is decided.
+    company_id: Optional[int] = Field(
+        None, description = 'Executor company (owner of the work team).',
+    )
+    client_company_id: Optional[int] = Field(
+        None,
+        description = (
+            'Client company (owner of the POS / routes). The frontend '
+            'must ensure consistency with the executor.'
+        ),
+    )
     details: List[TradePlanningDetailCreateSchema] = Field(
         default_factory = list,
         description = 'Optional inline detail rows (route per day).'
@@ -210,7 +270,8 @@ class TradePlanningUpdateSchema(BaseSchema):
     team_id: Optional[int] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    status: Optional[str] = Field(None, max_length = 20)
+    status: Optional[PlanningStatus] = None
+    client_company_id: Optional[int] = None
 
 
 class TradePlanningResponseSchema(TradePlanningBaseSchema):
@@ -218,7 +279,8 @@ class TradePlanningResponseSchema(TradePlanningBaseSchema):
         Response schema for a planning campaign.
     '''
     id: int
-    company_id: int
+    company_id: Optional[int] = None
+    client_company_id: Optional[int] = None
     details: List[TradePlanningDetailResponseSchema] = []
     created_at: Optional[datetime] = None
 
@@ -256,9 +318,15 @@ class PlannedRouteBulkItemSchema(BaseSchema):
         an existing route within the same company.
     '''
     company_id: int
+    executor_company_id: Optional[int] = None
     route_code: str = Field(..., max_length = 50)
     route_name: str = Field(..., max_length = 150)
     route_description: Optional[str] = None
+    route_type: Optional[RouteType] = None
+    country_id: Optional[int] = None
+    city_id: Optional[int] = None
+    route_status: RouteStatus = 'ACTIVE'
+    color: Optional[str] = Field(None, pattern = HEX_COLOR_REGEX)
 
     sequence: int = Field(..., ge = 1)
     point_of_sale_id: int
@@ -276,16 +344,17 @@ class TradePlanningBulkItemSchema(BaseSchema):
         plus its day-by-day route assignment.
     '''
     company_id: int
+    client_company_id: Optional[int] = None
     planning_name: str = Field(..., max_length = 150)
     description: Optional[str] = None
     team_id: int
     start_date: date
     end_date: date
-    status: Optional[str] = Field('DRAFT', max_length = 20)
+    status: PlanningStatus = 'ACTIVE'
 
     # Detail row
     planned_route_code: str = Field(..., max_length = 50)
-    date_of_day: date
+    date_of_day: datetime
 
 
 # ====================================================================
@@ -295,7 +364,18 @@ class AttendanceCheckInSchema(BaseSchema):
     '''
         Payload for the check-in endpoint.
     '''
-    company_id: int
+    company_id: int = Field(
+        ...,
+        description = 'Executor company (owner of the work team).',
+    )
+    client_company_id: Optional[int] = Field(
+        None,
+        description = (
+            'Client company (owner of the POS / route). Persisted so '
+            'downstream transactions know which company the inventory / '
+            'sales belong to without joining through the route.'
+        ),
+    )
     user_id: int
     trade_planned_point_id: int = Field(
         ...,
@@ -319,9 +399,13 @@ class AttendanceResponseSchema(BaseSchema):
         Response schema for an attendance row.
     '''
     id: int
-    company_id: int
+    company_id: Optional[int] = None
+    client_company_id: Optional[int] = None
     user_id: int
     trade_planned_point_id: int
+    # Denormalized FK to the POS so the frontend can tell "open/closed"
+    # without joining through planned_point. Populated at check-in time.
+    point_of_sale_id: Optional[int] = None
     check_in_time: Optional[datetime] = None
     check_in_latitude: Optional[float] = None
     check_in_longitude: Optional[float] = None

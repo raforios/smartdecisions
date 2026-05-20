@@ -109,9 +109,15 @@ async def create_planned_route_service(
 
     db_route = PlannedRoute(
         company_id = route_data.company_id,
+        executor_company_id = route_data.executor_company_id,
         route_name = route_data.route_name,
         route_code = route_data.route_code,
-        description = route_data.description
+        description = route_data.description,
+        route_type = route_data.route_type,
+        country_id = route_data.country_id,
+        city_id = route_data.city_id,
+        status = route_data.status,
+        color = route_data.color,
     )
     db_route.points = [
         PlannedPoint(**point.model_dump()) for point in route_data.points
@@ -273,8 +279,13 @@ def _validate_planning_dates(start_date: date, end_date: date) -> None:
 
 
 def _validate_detail_in_range(
-    detail_date: date, start_date: date, end_date: date
+    detail_value, start_date: date, end_date: date
 ) -> None:
+    # `detail_value` may be a `date` or a `datetime` — since 2026-05-19
+    # `date_of_day` carries the start time too. We compare on the date
+    # portion so the planning window stays day-resolved.
+    detail_date = detail_value.date() \
+        if isinstance(detail_value, datetime) else detail_value
     if not start_date <= detail_date <= end_date:
         raise InvalidInputError(
             detail = (
@@ -297,29 +308,32 @@ async def create_trade_planning_service(
 
     db_planning = TradePlanning(
         company_id = planning_data.company_id,
+        # 2026-05-19 (Binaria): planning rows carry BOTH companies. The
+        # `company_id` field stores the executor; `client_company_id` the
+        # owner of the routes/POS. The frontend keeps them consistent.
+        client_company_id = planning_data.client_company_id,
         planning_name = planning_data.planning_name,
         description = planning_data.description,
         team_id = planning_data.team_id,
         start_date = planning_data.start_date,
         end_date = planning_data.end_date,
-        status = planning_data.status or 'DRAFT'
+        status = planning_data.status or 'ACTIVE'
     )
 
     for detail in planning_data.details:
         _validate_detail_in_range(
             detail.date_of_day, planning_data.start_date, planning_data.end_date
         )
-        # Confirm the route exists for this company.
+        # 2026-05-19 (Binaria): the route belongs to the CLIENT company,
+        # not the executor — so we only verify existence here. The
+        # frontend ensures the route/company combination is consistent
+        # before posting.
         route = db.query(PlannedRoute).filter(
-            PlannedRoute.id == detail.planned_route_id,
-            PlannedRoute.company_id == planning_data.company_id
+            PlannedRoute.id == detail.planned_route_id
         ).first()
         if not route:
             raise RegisterNotFoundError(
-                detail = (
-                    f'Planned route {detail.planned_route_id} not found for '
-                    f'company {planning_data.company_id}.'
-                )
+                detail = f'Planned route {detail.planned_route_id} not found.'
             )
         db_planning.details.append(TradePlanningDetail(**detail.model_dump()))
 
@@ -489,9 +503,15 @@ def _bulk_route_target(
     if not route:
         route = PlannedRoute(
             company_id = item.company_id,
+            executor_company_id = item.executor_company_id,
             route_code = item.route_code,
             route_name = item.route_name,
-            description = item.route_description
+            description = item.route_description,
+            route_type = item.route_type,
+            country_id = item.country_id,
+            city_id = item.city_id,
+            status = item.route_status,
+            color = item.color,
         )
         db.add(route)
         db.flush()
@@ -578,29 +598,40 @@ async def _insert_trade_planning_bulk_data(
             _validate_planning_dates(item.start_date, item.end_date)
             planning = TradePlanning(
                 company_id = item.company_id,
+                client_company_id = item.client_company_id,
                 planning_name = item.planning_name,
                 description = item.description,
                 team_id = item.team_id,
                 start_date = item.start_date,
                 end_date = item.end_date,
-                status = item.status or 'DRAFT'
+                status = item.status or 'ACTIVE'
             )
             db.add(planning)
             db.flush()
             plannings_created += 1
         plannings_seen[planning_key] = planning
 
-        route_key = (item.company_id, item.planned_route_code)
+        # 2026-05-19 (Binaria): routes belong to the CLIENT company, not
+        # the executor. We lookup by `client_company_id` when supplied;
+        # otherwise we resolve by route_code alone (the frontend ensures
+        # uniqueness on its side).
+        owner_company = item.client_company_id or item.company_id
+        route_key = (owner_company, item.planned_route_code)
         route = routes_seen.get(route_key)
         if route is None:
-            route = db.query(PlannedRoute).filter_by(
-                company_id = item.company_id, route_code = item.planned_route_code
-            ).first()
+            query = db.query(PlannedRoute).filter_by(
+                route_code = item.planned_route_code,
+            )
+            if item.client_company_id is not None:
+                query = query.filter(
+                    PlannedRoute.company_id == item.client_company_id
+                )
+            route = query.first()
             routes_seen[route_key] = route
         if route is None:
             error_msg = (
-                f'Skipping planning bulk row: route_code {item.planned_route_code} '
-                f'not found for company {item.company_id}.'
+                f'Skipping planning bulk row: route_code '
+                f'{item.planned_route_code} not found.'
             )
             logger.warning(error_msg)
             continue
@@ -710,8 +741,15 @@ async def register_attendance_check_in(
 
     db_attendance = Attendance(
         company_id = payload.company_id,
+        # 2026-05-20 (Binaria): the attendance also stores the client
+        # company so downstream inventory / sales transactions can
+        # validate the POS / product chain without ambiguity.
+        client_company_id = payload.client_company_id,
         user_id = payload.user_id,
         trade_planned_point_id = planned_point.id,
+        # 2026-05-19 (Binaria): denormalized so the frontend can query
+        # "open POS" without joining through planned_point.
+        point_of_sale_id = planned_point.point_of_sale_id,
         check_in_time = get_current_time_gmt(),
         check_in_latitude = payload.check_in_latitude,
         check_in_longitude = payload.check_in_longitude,

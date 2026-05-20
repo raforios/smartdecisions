@@ -793,14 +793,27 @@ async def get_product_assignments_list_service(
 ) -> Tuple[List[ProductAssignmentPOS], int]:
     '''
         Retrieves a paginated and filtered list of Product POS Assignments.
+
+        2026-05-20 (Binaria):
+        - `company_id` is now OPTIONAL on the filter — the inventory
+          screen calls this endpoint with `point_of_sale_id` only.
+        - Eager-loads `Product` (joinedload) so the response can ship
+          summary fields (sku / name / stock_unit) without an extra
+          round-trip per row.
     '''
-    message = f'Attempting to retrieve Product POS Assignment list for company {filters.company_id}'
+    message = (
+        f'Attempting to retrieve Product POS Assignment list '
+        f'(company={filters.company_id}, pos={filters.point_of_sale_id}).'
+    )
     logger.info(message)
 
-    query = db.query(ProductAssignmentPOS)
+    query = db.query(ProductAssignmentPOS).options(
+        joinedload(ProductAssignmentPOS.product)
+    )
 
-    conditions = [ProductAssignmentPOS.company_id == filters.company_id]
-
+    conditions = []
+    if filters.company_id is not None:
+        conditions.append(ProductAssignmentPOS.company_id == filters.company_id)
     if filters.product_id:
         conditions.append(ProductAssignmentPOS.product_id == filters.product_id)
     if filters.point_of_sale_id:
@@ -808,7 +821,8 @@ async def get_product_assignments_list_service(
     if filters.status:
         conditions.append(ProductAssignmentPOS.status == filters.status)
 
-    query = query.filter(and_(*conditions))
+    if conditions:
+        query = query.filter(and_(*conditions))
 
     total = query.count()
     items = query.offset(skip).limit(limit).all()

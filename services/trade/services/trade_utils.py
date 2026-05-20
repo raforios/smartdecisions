@@ -56,16 +56,19 @@ def validate_geofence(
 def validate_active_attendance(
     db: Session,
     attendance_id: int,
-    company_id: int,
+    company_id: int,  # pylint: disable=unused-argument
     pos_id: int = None
 ) -> Attendance:
     '''
-        Validates that the attendance is active (no check-out) and belongs to the company.
-        Optionally validates that it corresponds to the specific POS.
+        Validates that the attendance exists, is still open (no check-out)
+        and (optionally) matches the POS provided. 2026-05-20 (Binaria):
+        the company filter was dropped — the attendance stores the
+        EXECUTOR company while the downstream transactions ship the
+        CLIENT company, so equality never held. The frontend keeps the
+        contracts consistent.
     '''
     attendance = db.query(Attendance).filter(
-        Attendance.id == attendance_id,
-        Attendance.company_id == company_id
+        Attendance.id == attendance_id
     ).first()
 
     if not attendance:

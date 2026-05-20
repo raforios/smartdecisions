@@ -239,6 +239,9 @@ class ProductAssignmentPOS(Base):  # pylint: disable=too-few-public-methods
     # Standard status field
     status = Column(String(20), default = 'ACTIVE', nullable = False)
 
+    # Free-text notes captured by the operator when assigning the product.
+    observations = Column(Text, nullable = True)
+
     # Audit field (Created only)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
