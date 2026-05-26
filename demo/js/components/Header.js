@@ -37,12 +37,30 @@ export class Header {
     static initInteractions() {
         const hamburger = document.getElementById('mobile-menu-btn');
         const navLinks = document.getElementById('nav-links-container');
+        if (!hamburger || !navLinks) return;
 
-        if (hamburger && navLinks) {
-            hamburger.addEventListener('click', () => {
-                hamburger.classList.toggle('active');
-                navLinks.classList.toggle('active');
-            });
-        }
+        const close = () => {
+            hamburger.classList.remove('active');
+            navLinks.classList.remove('active');
+        };
+
+        hamburger.addEventListener('click', event => {
+            event.stopPropagation();
+            hamburger.classList.toggle('active');
+            navLinks.classList.toggle('active');
+        });
+
+        // Close on link click (mobile UX).
+        navLinks.querySelectorAll('a').forEach(anchor => {
+            anchor.addEventListener('click', close);
+        });
+
+        // Close on outside click.
+        document.addEventListener('click', event => {
+            if (!navLinks.classList.contains('active')) return;
+            if (navLinks.contains(event.target)) return;
+            if (hamburger.contains(event.target)) return;
+            close();
+        });
     }
 }

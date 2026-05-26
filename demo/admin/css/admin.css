@@ -1,0 +1,302 @@
+:root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --border: #e2e5ea;
+    --text: #242732;
+    --muted: #6b7280;
+    --primary: #15592f;
+    --primary-hover: #0f4324;
+    --accent: #c9a751;
+    --danger: #b54141;
+    --danger-bg: #fdecec;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    font-family: 'Montserrat', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+button {
+    font-family: inherit;
+    font-size: 0.92rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+button.primary {
+    background: var(--primary);
+    color: white;
+}
+button.primary:hover { background: var(--primary-hover); }
+button.ghost {
+    background: transparent;
+    color: var(--text);
+}
+button.ghost:hover { background: rgba(0, 0, 0, 0.04); }
+button.ghost.danger { color: var(--danger); }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.form-error {
+    color: var(--danger);
+    background: var(--danger-bg);
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+}
+
+/* ---------- Login ---------- */
+.admin-login {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #15592f 0%, #0f4324 100%);
+}
+.login-card {
+    background: var(--surface);
+    padding: 2.5rem 2rem;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    width: min(360px, 90vw);
+}
+.login-card h1 {
+    margin: 0 0 0.4rem;
+    font-size: 1.3rem;
+}
+.login-hint {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0 0 1.5rem;
+}
+.login-card form {
+    display: grid;
+    gap: 1rem;
+}
+.login-card label {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+.login-card input {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.95rem;
+}
+.login-card input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.login-card button[type="submit"] {
+    background: var(--primary);
+    color: white;
+    border-radius: 6px;
+    padding: 0.65rem;
+    font-weight: 600;
+}
+.login-card button[type="submit"]:hover { background: var(--primary-hover); }
+
+/* ---------- Admin shell ---------- */
+.admin-shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+}
+.admin-sidebar {
+    background: #1a1f29;
+    color: #d8dce4;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.admin-brand {
+    font-family: 'Cinzel', serif;
+    color: var(--accent);
+    font-size: 1.4rem;
+    margin: 0 0 1rem;
+    line-height: 1;
+}
+.admin-brand small {
+    color: #8c93a2;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+}
+#admin-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+}
+.nav-item {
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.nav-item:hover { background: rgba(255, 255, 255, 0.08); }
+.nav-item.active {
+    background: var(--primary);
+    color: white;
+}
+.admin-sidebar-foot {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+}
+.user-chip {
+    color: #c8cdda;
+    word-break: break-all;
+}
+.admin-sidebar-foot button { color: white; }
+
+.admin-main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+.admin-header h2 { margin: 0; font-size: 1.4rem; }
+.panel-host {
+    padding: 1.5rem 2rem;
+    overflow: auto;
+}
+.panel-loading, .panel-empty {
+    color: var(--muted);
+    margin: 1rem 0;
+}
+
+/* ---------- Tables ---------- */
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.admin-table th,
+.admin-table td {
+    text-align: left;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+.admin-table th {
+    background: #f0f2f5;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.07em;
+}
+.admin-table tbody tr:last-child td { border-bottom: none; }
+.admin-table tbody tr:hover { background: #fbfbfd; }
+.row-actions { text-align: right; white-space: nowrap; }
+.row-actions button { padding: 0.3rem 0.55rem; }
+
+/* ---------- Modal ---------- */
+.modal-host {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+}
+.modal-host[hidden] { display: none; }
+.modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+}
+.modal-card {
+    position: relative;
+    background: var(--surface);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    width: min(600px, 92vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+.modal-header {
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-header h3 { margin: 0; font-size: 1.05rem; }
+.modal-form {
+    padding: 1.2rem;
+    overflow: auto;
+    display: grid;
+    gap: 0.9rem;
+}
+.form-field {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+.form-field input,
+.form-field select,
+.form-field textarea {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: var(--text);
+    background: white;
+}
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.form-field-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+}
+.form-field-inline input { margin: 0; }
+.file-current {
+    color: var(--muted);
+    font-size: 0.78rem;
+    word-break: break-all;
+}
+.modal-footer {
+    padding: 0.9rem 1.2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+#modal-error {
+    margin: 0 1.2rem;
+}

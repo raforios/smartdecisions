@@ -2,6 +2,14 @@
   "api": {
     "miningBaseUrl": "https://api.binaria.app/v1/mining-analysis",
     "miningBaseUrlFallback": "http://localhost:3020/v1/mining-analysis",
+    "cmsBaseUrl": "https://api.binaria.app/v1/cms",
+    "cmsBaseUrlFallback": "http://localhost:3021/v1/cms",
+    "authBaseUrl": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+    "authBaseUrlFallback": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+    "filesBaseUrl": "https://ek2xktuyr4.execute-api.us-east-1.amazonaws.com/v1/s3",
+    "filesBaseUrlFallback": "https://ek2xktuyr4.execute-api.us-east-1.amazonaws.com/v1/s3",
+    "cmsAssetsBucket": "ml-data-file-handler",
+    "cmsAssetsPath": "cms/",
     "tickerRefreshMs": 600000
   },
   "institucion": {

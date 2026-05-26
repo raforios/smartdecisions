@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMS Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-shell">
+    <aside class="admin-sidebar">
+        <h1 class="admin-brand">CMS<br><small>Admin</small></h1>
+        <nav id="admin-nav">
+            <button class="nav-item" data-entity="news"><i class="fa-solid fa-newspaper"></i> Noticias</button>
+            <button class="nav-item" data-entity="documents"><i class="fa-solid fa-file-lines"></i> Documentos</button>
+            <button class="nav-item" data-entity="slides"><i class="fa-solid fa-images"></i> Slider</button>
+            <button class="nav-item" data-entity="entities"><i class="fa-solid fa-building-columns"></i> Entidades</button>
+        </nav>
+        <div class="admin-sidebar-foot">
+            <span id="current-user" class="user-chip"></span>
+            <button id="logout-btn" class="ghost">Salir</button>
+        </div>
+    </aside>
+
+    <main class="admin-main">
+        <header class="admin-header">
+            <h2 id="panel-title">—</h2>
+            <button id="new-item-btn" class="primary"><i class="fa-solid fa-plus"></i> Nuevo</button>
+        </header>
+        <section id="panel-host" class="panel-host">
+            <p class="panel-loading">Cargando…</p>
+        </section>
+    </main>
+
+    <div id="modal-host" class="modal-host" hidden>
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" role="dialog" aria-modal="true">
+            <header class="modal-header">
+                <h3 id="modal-title">—</h3>
+                <button id="modal-close" class="ghost"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <form id="modal-form" class="modal-form"></form>
+            <p id="modal-error" class="form-error" hidden></p>
+            <footer class="modal-footer">
+                <button id="modal-cancel" type="button" class="ghost">Cancelar</button>
+                <button id="modal-save" type="button" class="primary">Guardar</button>
+            </footer>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
