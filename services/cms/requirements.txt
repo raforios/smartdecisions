@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+pydantic-core
+python-multipart
+boto3
+mangum
+python-jose[cryptography]
+python-dotenv
+requests
+pytest
+
+beautifulsoup4
+moto[dynamodb]
