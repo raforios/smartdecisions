@@ -1,5 +1,7 @@
 '''
-    One-shot ingest of biweekly Diario sheets extracted from scanned PDFs.
+    Biweekly ingest of Diario sheets extracted from scanned PDFs. Designed to
+    run every 15 days against the same consolidated xlsx that the operator
+    keeps appending new quincenas to.
 
     Input file layout (produced manually from the scanned monthly PDFs):
       - Sheet name pattern: `{Mes} Q{1|2} - Diario`
@@ -11,10 +13,19 @@
       - A trailing `Promedio` row is ignored (we recompute it ourselves).
 
     Mineral name matching is case-insensitive and accent-insensitive so the
-    sheet headers map correctly to the OFFICIAL_MINERALS catalog.
+    sheet headers map correctly to the OFFICIAL_MINERALS catalog. Header
+    columns whose mineral is not in the catalog are logged as warnings and
+    silently skipped (e.g. HIERRO CONCENT, PELLET).
+
+    Idempotency: re-ingesting the same period is a no-op because each
+    (mineral_id, date) pair is checked before insertion.
 
     Usage:
-        python -m scripts.ingest_pdf_xlsx --source /path/to/file.xlsx [--yes]
+        # Uses the default source under <repo>/data/.
+        python -m scripts.ingest_pdf_xlsx --yes
+
+        # Override when the operator keeps the file elsewhere.
+        python -m scripts.ingest_pdf_xlsx --source /path/to/file.xlsx --yes
 '''
 import argparse
 import re
@@ -42,6 +53,14 @@ SPANISH_MONTHS = {
 }
 
 
+# Default location of the consolidated biweekly xlsx, resolved relative to
+# this script so the operator can run `python -m scripts.ingest_pdf_xlsx --yes`
+# without recalling the path every fortnight.
+DEFAULT_SOURCE = (
+    Path(__file__).resolve().parents[4] / 'data' / 'cotizaciones_mineras_bolivia.xlsx'
+)
+
+
 def _parse_period_title(title: str) -> Optional[Tuple[int, int]]:
     '''
     Extracts (year, month) from titles like 'PRIMERA QUINCENA DE ABRIL 2026 (...)'.
@@ -56,28 +75,42 @@ def _parse_period_title(title: str) -> Optional[Tuple[int, int]]:
     return int(match.group(2)), SPANISH_MONTHS[match.group(1).lower()]
 
 
-def _extract_mineral_columns(header_row: Tuple) -> Dict[int, str]:
+def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[str]]:
     '''
-    Returns {column_index: normalized_mineral_name} for each header cell that
-    matches an entry in OFFICIAL_MINERALS. Column A (the day number) is skipped.
+    Splits header columns into matched/unmatched against OFFICIAL_MINERALS.
+
+    Args:
+        header_row (Tuple): Raw row 3 of the Diario sheet (column headers).
+
+    Returns:
+        Tuple[Dict[int, str], List[str]]:
+            - {column_index: normalized_mineral_name} for catalog hits.
+            - Raw header labels that did not match the catalog (caller may
+              choose to warn). Column A (the day number) is always skipped.
     '''
     official = {_normalize_name(m['name']) for m in OFFICIAL_MINERALS}
-    columns: Dict[int, str] = {}
+    matched: Dict[int, str] = {}
+    unmatched: List[str] = []
     for idx, cell in enumerate(header_row):
         if idx == 0 or cell is None:
             continue
         raw = str(cell).split('\n')[0].strip()
+        if not raw:
+            continue
         norm = _normalize_name(raw)
         if norm in official:
-            columns[idx] = norm
-    return columns
+            matched[idx] = norm
+        else:
+            unmatched.append(raw)
+    return matched, unmatched
 
 
-def _iter_daily_rows(sheet) -> List[Tuple[date, Dict[str, float]]]:
+def _iter_daily_rows(sheet, sheet_name: str) -> List[Tuple[date, Dict[str, float]]]:
     '''
     Yields (price_date, {normalized_mineral: price}) for every numeric day row
     in a Diario sheet. Returns [] if the sheet does not match the expected
-    layout (e.g. it is a Regalías sheet instead).
+    layout (e.g. it is a Regalías sheet instead). Logs a warning when the
+    sheet exposes mineral columns that are not part of OFFICIAL_MINERALS.
     '''
     rows = list(sheet.iter_rows(values_only = True))
     if len(rows) < 4:
@@ -88,9 +121,13 @@ def _iter_daily_rows(sheet) -> List[Tuple[date, Dict[str, float]]]:
         return []
     year, month = period
 
-    mineral_cols = _extract_mineral_columns(rows[2])
+    mineral_cols, unmatched = _extract_mineral_columns(rows[2])
     if not mineral_cols:
         return []
+    if unmatched:
+        error_msg = (f'[{sheet_name}] {len(unmatched)} column(s) not in '
+                     f'OFFICIAL_MINERALS, ignored: {", ".join(unmatched)}.')
+        logger.warning(error_msg)
 
     parsed: List[Tuple[date, Dict[str, float]]] = []
     for row in rows[3:]:
@@ -160,9 +197,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description = 'Ingest biweekly Diario sheets from a curated xlsx.'
     )
-    parser.add_argument('--source', required = True, type = Path,
-                        help = 'Path to cotizaciones_mineras_bolivia.xlsx '
-                               '(or similar layout).')
+    parser.add_argument('--source', type = Path, default = DEFAULT_SOURCE,
+                        help = ('Path to cotizaciones_mineras_bolivia.xlsx '
+                                '(or similar layout). Defaults to '
+                                f'{DEFAULT_SOURCE}.'))
     parser.add_argument('--yes', action = 'store_true',
                         help = 'Apply the changes. Without this flag the '
                                'script only prints a plan.')
@@ -182,7 +220,7 @@ def main() -> int:
 
     all_parsed: List[Tuple[date, Dict[str, float]]] = []
     for sheet_name in diary_sheets:
-        rows = _iter_daily_rows(workbook[sheet_name])
+        rows = _iter_daily_rows(workbook[sheet_name], sheet_name)
         print(f'[{sheet_name}] {len(rows)} day-rows with prices.')
         all_parsed.extend(rows)
 
