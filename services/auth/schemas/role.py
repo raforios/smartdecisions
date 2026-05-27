@@ -5,7 +5,10 @@ from enum import Enum
 
 class Role(str, Enum):
     '''
-        Role Class with ENUM settings
+        Role Class with ENUM settings.
+        Global per-user role emitted in the JWT payload and consumed by all
+        downstream microservices.
     '''
     ADMIN = 'ADMIN'
-    USER = 'USER'
+    WAREHOUSE_MANAGER = 'WAREHOUSE_MANAGER'
+    REQUESTER = 'REQUESTER'

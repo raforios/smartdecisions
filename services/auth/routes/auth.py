@@ -32,7 +32,7 @@ async def login(
             detail = 'Incorrect email or password.'
         )
 
-    access_token = create_access_token({'email': user.email})
+    access_token = create_access_token({'email': user.email, 'role': user.role})
     message = f'User {user.email} logged in successfully.'
     logger.info(message)
     return Token(access_token = access_token, token_type = 'bearer')

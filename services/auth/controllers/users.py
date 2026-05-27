@@ -122,7 +122,7 @@ async def create_user(
         'first_name': user_data.first_name,
         'last_name': user_data.last_name,
         'hashed_password': hashed_pw,
-        'role': Role.USER.value,
+        'role': Role.REQUESTER.value,
         'status': True,
         'date_register': current_time,
         'date_update': current_time
@@ -178,6 +178,11 @@ def build_user_update_params(
             update_expression_parts.append('#status_alias = :status')
             expression_attribute_values[':status'] = value
             expression_attribute_names['#status_alias'] = 'status'
+        elif field == 'role':
+            # Persist enum value so DynamoDB receives a primitive string.
+            update_expression_parts.append('#role_alias = :role')
+            expression_attribute_values[':role'] = value.value if hasattr(value, 'value') else value
+            expression_attribute_names['#role_alias'] = 'role'
         elif field in update_fields_map:
             db_field = update_fields_map[field]
             update_expression_parts.append(f'{db_field} = :{field}')

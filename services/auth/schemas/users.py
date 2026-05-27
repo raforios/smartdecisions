@@ -31,6 +31,8 @@ class UserUpdateRequest(BaseModel):
                             description = 'User\'s updated password.')
     client: Optional[str] = Field(None, min_length = 3, max_length = 50,
                             description = 'Client associated with the user.')
+    role: Optional[Role] = Field(None,
+                            description = 'User\'s role. Only ADMIN should be allowed to update.')
     status: Optional[bool] = Field(None,
                             description = 'User\'s active status (True/False).')
 
