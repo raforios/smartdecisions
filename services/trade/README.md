@@ -97,8 +97,11 @@ A continuación se listan los **endpoints** vigentes, organizados por módulos f
 | `POST` | `/v1/impulses/promotions` | Crea una promoción/bandeo - Catálogo (`t_trade_promotions`). |
 | `GET` | `/v1/impulses/promotions` | Lista promociones registradas. |
 | `POST` | `/v1/impulses/visit/{attendance_id}/inventory-start` | Inventario inicial de visita (`t_trade_impulse_inventory_start`). |
-| `POST` | `/v1/impulses/visit/{attendance_id}/sale` | Registro de venta con evidencia (`t_trade_impulse_sales`). |
+| `POST` | `/v1/impulses/visit/{attendance_id}/sale` | Registro de venta con evidencia (`t_trade_impulse_sales`). Acepta campo opcional `observations`. |
 | `POST` | `/v1/impulses/visit/{attendance_id}/inventory-end` | Inventario final de visita (`t_trade_impulse_inventory_end`). |
+| `GET` | `/v1/impulses/sales` | **(2026-05-28)** Listado de ventas filtrable por `company_id`, `client_company_id`, `pos_id`, `user_id`, `date_from`, `date_to`, todos opcionales. |
+| `GET` | `/v1/pos/{pos_id}/stock` | **(2026-05-28)** Stock disponible por producto en el PDV. Si la visita más reciente está abierta usa `inventory_start - sum(ventas)`; si está cerrada usa `inventory_end`. |
+| `GET` | `/v1/pos/{pos_id}/inventory/latest` | Último inventario registrado para el PDV (start o end). |
 
 ### 6. Reposición y Complementarios (`/v1/replenishment`)
 | Método | Endpoint | Descripción |
@@ -119,6 +122,29 @@ A continuación se listan los **endpoints** vigentes, organizados por módulos f
 | `GET` | `/v1/reports/merchandising` | Consolidado de Bandeos, Competencia y Puntos Promocionales. |
 | `GET` | `/v1/reports/photographic` | Galería centralizada de evidencias fotográficas. |
 | `GET` | `/v1/reports/attendance` | Reporte de asistencia, duración y geofencing. |
+
+-----
+
+## 📷 Convención de paths S3 para fotos
+
+Las subidas de archivos pasan por el microservicio **FILES** (`POST /v1/s3/upload`),
+que recibe `bucket_name` + `file_path`. Para mantener la galería ordenada y
+permitir filtros por PDV/visita, usar **siempre** estas convenciones cuando
+se suban archivos asociados a una venta o reposición:
+
+| Caso | `file_path` a enviar al FILES service |
+| :--- | :--- |
+| Venta de impulso (foto del ticket / evidencia) | `trade/sales/impulses/{pos_id}/{attendance_id}/` |
+| Reposición / reporte de éxito | `trade/sales/replenishments/{pos_id}/{attendance_id}/` |
+| Recepción de mercadería (factura, remito) | `trade/replenishments/receptions/{pos_id}/{attendance_id}/` |
+| Inventario inicial / final | `trade/inventories/{pos_id}/{attendance_id}/` |
+| Fotos de PDV (alta del PDV) | `trade/pos/{pos_id}/` |
+| Bandeos / puntos promocionales / competencia | `trade/merchandising/{pos_id}/{attendance_id}/` |
+
+> **Cliente confirmado el 2026-05-28** (Binaria iter 3). El `bucket_name` por
+> defecto es el del entorno (`BUCKET_NAME` en `.env`). El backend solo
+> persiste la `file_key` devuelta por FILES; el path lo controla el frontend
+> al armar la subida.
 
 -----
 

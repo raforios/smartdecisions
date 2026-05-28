@@ -1,7 +1,7 @@
 '''
     Impulses Schemas (Request/Response)
 '''
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime
 from fastapi import Query
 from pydantic import Field, BaseModel
@@ -234,6 +234,13 @@ class ImpulseSaleCreateSchema(BaseSchema):
         ...,
         description = 'ID of the Point of Sale (sent by frontend) to validate assortment.'
     )
+    observations: Optional[str] = Field(
+        None,
+        description = (
+            'Optional free-text annotation captured at the sale level '
+            '(promo applied, customer remark, delivery issue, etc.).'
+        ),
+    )
     details: List[ImpulseSaleDetailCreateSchema] = Field(
         ...,
         min_length = 1,
@@ -258,10 +265,91 @@ class ImpulseSaleResponseSchema(BaseSchema):
     attendance_id: int
     company_id: Optional[int] = None
     client_company_id: Optional[int] = None
+    observations: Optional[str] = None
     # photos removed (handled by common schema/endpoint structure generally)
     photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]
     details: List[ImpulseSaleDetailResponseSchema]
+
+
+# 2026-05-28 (Binaria): cross-attendance sales listing. Filterable by
+# company, POS, user and date range; every filter is optional. The
+# `type` field is included as a forward-compat slot so future
+# replenishment-side sales can land in the same listing.
+SaleType = Literal['IMPULSE']
+
+
+class SaleListFilterSchema(BaseModel):
+    '''
+        Query filters for GET /v1/impulses/sales. All optional; an empty
+        filter returns every sale the caller is authorized to see.
+    '''
+    company_id: Optional[int] = Query(None, description = 'Executor company.')
+    client_company_id: Optional[int] = Query(None, description = 'Client company.')
+    pos_id: Optional[int] = Query(None, description = 'Filter by point of sale.')
+    user_id: Optional[int] = Query(None, description = 'Filter by operator user id.')
+    date_from: Optional[datetime] = Query(
+        None, description = 'Inclusive lower bound on created_at.',
+    )
+    date_to: Optional[datetime] = Query(
+        None, description = 'Inclusive upper bound on created_at.',
+    )
+    type: SaleType = Query('IMPULSE', description = 'Sale type. Today only IMPULSE.')
+
+
+class SaleListItemSchema(BaseSchema):
+    '''
+        Row in the unified sales listing. Aggregated totals are
+        precomputed so the frontend can render the table without a
+        second round-trip per row.
+    '''
+    id: int
+    type: SaleType
+    attendance_id: int
+    pos_id: Optional[int]
+    user_id: int
+    company_id: Optional[int]
+    client_company_id: Optional[int]
+    observations: Optional[str]
+    total_items: int = Field(..., description = 'Distinct product count.')
+    total_quantity: int = Field(..., description = 'Sum of detail quantities.')
+    created_at: datetime
+
+
+class SaleListResponseSchema(BaseSchema):
+    '''
+        Paginated container for the sales listing.
+    '''
+    items: List[SaleListItemSchema]
+    total: int
+
+
+# 2026-05-28 (Binaria): per-POS stock projection. Decides between the
+# open-attendance computation (start - sales) and the closed-attendance
+# snapshot (end inventory).
+class POSStockItemSchema(BaseSchema):
+    '''
+        Available stock for a single product at a POS, with the product
+        metadata needed by the frontend to render a row.
+    '''
+    product_id: int
+    product_sku: str
+    product_name: str
+    available_qty: int
+
+
+class POSStockResponseSchema(BaseSchema):
+    '''
+        Stock snapshot for a POS. `source` documents which formula was
+        applied: 'inventory_start_minus_sales' when the latest visit is
+        still open, 'inventory_end' when it was already closed.
+    '''
+    pos_id: int
+    attendance_id: Optional[int] = None
+    is_open: bool
+    source: Literal['inventory_start_minus_sales', 'inventory_end', 'empty']
+    computed_at: datetime
+    items: List[POSStockItemSchema]
 
 
 # 2026-05-20 (Binaria): per-visit GET endpoints (start/end). Returns the

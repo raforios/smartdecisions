@@ -28,6 +28,7 @@ from schemas.trade import (
     TradePlanningBulkItemSchema,
     TradePlanningCreateSchema,
     TradePlanningDetailCreateSchema,
+    TradePlanningDetailUpdateSchema,
     TradePlanningFilterSchema,
     TradePlanningUpdateSchema
 )
@@ -465,6 +466,62 @@ async def create_planning_detail_service(
 
 
 @handle_service_errors('TRADE')
+@audit_event('TRADE', 'TradePlanningDetail', 'UPDATE')
+async def update_planning_detail_service(
+    db: Session,
+    detail_id: int,
+    detail_data: TradePlanningDetailUpdateSchema
+) -> Tuple[TradePlanningDetail, Dict[str, Any]]:
+    '''
+        Updates a planning detail row already persisted. Validates the new
+        date_of_day stays within the parent planning's date range and that
+        the resulting (planning_id, planned_route_id, date_of_day) tuple
+        remains unique.
+    '''
+    db_detail = get_record(db, TradePlanningDetail, detail_id)
+    old_values = sqlalchemy_object_as_dict(db_detail)
+
+    payload = detail_data.model_dump(exclude_unset = True)
+    if not payload:
+        raise InvalidInputError(
+            detail = 'No fields supplied. At least one of '
+                     'planned_route_id / date_of_day is required.'
+        )
+
+    new_route_id = payload.get('planned_route_id', db_detail.planned_route_id)
+    new_date = payload.get('date_of_day', db_detail.date_of_day)
+
+    # Range validation against the parent planning (cheap join via FK).
+    db_planning = get_record(db, TradePlanning, db_detail.planning_id)
+    _validate_detail_in_range(new_date, db_planning.start_date, db_planning.end_date)
+
+    # Uniqueness check ignoring the row being updated.
+    duplicate = db.query(TradePlanningDetail).filter(
+        TradePlanningDetail.planning_id == db_detail.planning_id,
+        TradePlanningDetail.planned_route_id == new_route_id,
+        TradePlanningDetail.date_of_day == new_date,
+        TradePlanningDetail.id != detail_id,
+    ).first()
+    if duplicate:
+        raise RegisterAlreadyExistsError(
+            detail = (
+                f'Another detail already covers route {new_route_id} '
+                f'on {new_date} for planning {db_detail.planning_id}.'
+            )
+        )
+
+    db_detail.planned_route_id = new_route_id
+    db_detail.date_of_day = new_date
+    db.add(db_detail)
+    db.commit()
+    db.refresh(db_detail)
+    return db_detail, {
+        'old_values': old_values,
+        'new_values': sqlalchemy_object_as_dict(db_detail),
+    }
+
+
+@handle_service_errors('TRADE')
 @audit_event('TRADE', 'TradePlanningDetail', 'DELETE')
 async def delete_planning_detail_service(
     db: Session,
@@ -791,7 +848,21 @@ async def register_attendance_check_out(
 
     old_values = sqlalchemy_object_as_dict(db_attendance)
     now = get_current_time_gmt()
-    delta_seconds = (now - db_attendance.check_in_time).total_seconds()
+
+    # MySQL DATETIME is stored timezone-naive; `now` is timezone-aware
+    # (ZoneInfo from get_current_time_gmt). Subtracting them directly raises
+    # `TypeError: can't subtract offset-naive and offset-aware datetimes`,
+    # which the service decorator does not catch and surfaces as a generic
+    # 500. Normalize both sides to the same naive wall-clock representation.
+    if db_attendance.check_in_time is None:
+        raise InvalidInputError(
+            detail = f'Attendance {attendance_id} has no check-in time recorded.'
+        )
+    now_naive = now.replace(tzinfo = None) if now.tzinfo is not None else now
+    check_in_naive = db_attendance.check_in_time
+    if check_in_naive.tzinfo is not None:
+        check_in_naive = check_in_naive.replace(tzinfo = None)
+    delta_seconds = (now_naive - check_in_naive).total_seconds()
     duration_minutes = max(0, int(delta_seconds // 60))
 
     db_attendance.check_out_time = now

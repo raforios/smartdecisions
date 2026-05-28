@@ -2,8 +2,9 @@
     Business logic services for the Trade Microservice
     Impulses
 '''
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session, joinedload
 from services.products import (
     get_product_id_by_sku,
@@ -22,9 +23,10 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 from services.utils import (
-    handle_service_errors,
     audit_event,
-    sqlalchemy_object_as_dict
+    get_current_time_gmt,
+    handle_service_errors,
+    sqlalchemy_object_as_dict,
 )
 from models.impulses import (
     ImpulseInventoryEnd,
@@ -39,6 +41,7 @@ from models.products import Product
 from schemas.impulses import (
     ImpulseInventoryCreateSchema,
     ImpulseSaleCreateSchema,
+    SaleListFilterSchema,
     TradePromotionCreateSchema,
     TradePromotionFilterSchema,
     TradePromotionUpdateSchema,
@@ -231,6 +234,7 @@ async def create_impulse_sale_service(
         attendance_id = attendance_id,
         company_id = sale_data.company_id,
         client_company_id = sale_data.client_company_id,
+        observations = sale_data.observations,
     )
     db.add(db_sale)
     db.flush()
@@ -512,4 +516,193 @@ async def get_latest_impulse_inventory_for_pos_service(
             }
             for inv, product in items
         ],
+    }
+
+
+# --- 2026-05-28 (Binaria): cross-attendance sales listing + POS stock ---
+
+@handle_service_errors('TRADE')
+async def list_impulse_sales_service(
+    db: Session,
+    filters: SaleListFilterSchema,
+    skip: int = 0,
+    limit: int = 100,
+) -> Tuple[List[Dict[str, Any]], int]:
+    '''
+        Returns the list of impulse sales matching the supplied filters.
+        Every filter is optional; an empty filter set returns the whole
+        history (capped by skip/limit). Aggregates count + sum of detail
+        quantities so the frontend can render the table without a second
+        round-trip per row.
+
+        Args:
+            db: SQLAlchemy session.
+            filters: All filters optional (company_id, client_company_id,
+                pos_id, user_id, date_from, date_to).
+            skip: Pagination offset.
+            limit: Maximum page size.
+
+        Returns:
+            Tuple of (items, total_count).
+    '''
+    # Pull sales with their attendance for user/pos resolution. Aggregates
+    # are joined via a subquery so we get one row per sale.
+    detail_agg = (
+        db.query(
+            ImpulseSaleDetail.impulse_sale_id.label('sale_id'),
+            func.count(ImpulseSaleDetail.id).label('total_items'),
+            func.coalesce(func.sum(ImpulseSaleDetail.quantity), 0).label('total_quantity'),
+        )
+        .group_by(ImpulseSaleDetail.impulse_sale_id)
+        .subquery()
+    )
+
+    query = (
+        db.query(
+            ImpulseSale,
+            Attendance,
+            detail_agg.c.total_items,
+            detail_agg.c.total_quantity,
+        )
+        .join(Attendance, ImpulseSale.attendance_id == Attendance.id)
+        .outerjoin(detail_agg, detail_agg.c.sale_id == ImpulseSale.id)
+    )
+
+    if filters.company_id is not None:
+        query = query.filter(ImpulseSale.company_id == filters.company_id)
+    if filters.client_company_id is not None:
+        query = query.filter(ImpulseSale.client_company_id == filters.client_company_id)
+    if filters.pos_id is not None:
+        query = query.filter(Attendance.point_of_sale_id == filters.pos_id)
+    if filters.user_id is not None:
+        query = query.filter(Attendance.user_id == filters.user_id)
+    if filters.date_from is not None:
+        query = query.filter(ImpulseSale.created_at >= filters.date_from)
+    if filters.date_to is not None:
+        query = query.filter(ImpulseSale.created_at <= filters.date_to)
+
+    total = query.count()
+    rows = (
+        query.order_by(desc(ImpulseSale.created_at))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    items = [
+        {
+            'id': sale.id,
+            'type': 'IMPULSE',
+            'attendance_id': sale.attendance_id,
+            'pos_id': attendance.point_of_sale_id,
+            'user_id': attendance.user_id,
+            'company_id': sale.company_id,
+            'client_company_id': sale.client_company_id,
+            'observations': sale.observations,
+            'total_items': int(total_items or 0),
+            'total_quantity': int(total_quantity or 0),
+            'created_at': sale.created_at,
+        }
+        for sale, attendance, total_items, total_quantity in rows
+    ]
+    return items, total
+
+
+@handle_service_errors('TRADE')
+async def get_pos_stock_service(
+    db: Session,
+    pos_id: int,
+) -> Dict[str, Any]:
+    '''
+        Computes the available stock for every product at a POS, applying
+        the rule:
+            - If the latest attendance at the POS is still open (no
+              check-out), available_qty = start_inventory.quantity -
+              SUM(sale_detail.quantity).
+            - If it is closed, available_qty = end_inventory.quantity.
+            - If no attendance ever happened, returns an empty stock list
+              with source='empty'.
+    '''
+    latest_attendance = (
+        db.query(Attendance)
+        .filter(Attendance.point_of_sale_id == pos_id)
+        .order_by(desc(Attendance.check_in_time))
+        .first()
+    )
+    now = get_current_time_gmt()
+    if latest_attendance is None:
+        return {
+            'pos_id': pos_id,
+            'attendance_id': None,
+            'is_open': False,
+            'source': 'empty',
+            'computed_at': now,
+            'items': [],
+        }
+
+    is_open = latest_attendance.check_out_time is None
+
+    if not is_open:
+        # Closed visit: end-of-visit inventory is the source of truth.
+        rows = (
+            db.query(ImpulseInventoryEnd, Product)
+            .join(Product, ImpulseInventoryEnd.product_id == Product.id)
+            .filter(ImpulseInventoryEnd.attendance_id == latest_attendance.id)
+            .all()
+        )
+        items = [
+            {
+                'product_id': inv.product_id,
+                'product_sku': product.sku,
+                'product_name': product.name,
+                'available_qty': int(inv.quantity),
+            }
+            for inv, product in rows
+        ]
+        return {
+            'pos_id': pos_id,
+            'attendance_id': latest_attendance.id,
+            'is_open': False,
+            'source': 'inventory_end',
+            'computed_at': now,
+            'items': items,
+        }
+
+    # Open visit: start inventory minus sales for the same attendance.
+    start_rows = (
+        db.query(ImpulseInventoryStart, Product)
+        .join(Product, ImpulseInventoryStart.product_id == Product.id)
+        .filter(ImpulseInventoryStart.attendance_id == latest_attendance.id)
+        .all()
+    )
+
+    sold_rows = (
+        db.query(
+            ImpulseSaleDetail.product_id,
+            func.coalesce(func.sum(ImpulseSaleDetail.quantity), 0).label('sold_qty'),
+        )
+        .join(ImpulseSale, ImpulseSaleDetail.impulse_sale_id == ImpulseSale.id)
+        .filter(ImpulseSale.attendance_id == latest_attendance.id)
+        .group_by(ImpulseSaleDetail.product_id)
+        .all()
+    )
+    sold_by_product = {pid: int(qty or 0) for pid, qty in sold_rows}
+
+    items = []
+    for inv, product in start_rows:
+        sold = sold_by_product.get(inv.product_id, 0)
+        items.append({
+            'product_id': inv.product_id,
+            'product_sku': product.sku,
+            'product_name': product.name,
+            'available_qty': int(inv.quantity) - sold,
+        })
+
+    return {
+        'pos_id': pos_id,
+        'attendance_id': latest_attendance.id,
+        'is_open': True,
+        'source': 'inventory_start_minus_sales',
+        'computed_at': now,
+        'items': items,
     }

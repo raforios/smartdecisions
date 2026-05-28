@@ -13,6 +13,8 @@ from services.impulses import (
     delete_promotion_service,
     get_promotion_by_id_service,
     get_promotions_list_service,
+    get_pos_stock_service,
+    list_impulse_sales_service,
     update_promotion_service,
     get_latest_impulse_inventory_for_pos_service,
     get_impulse_inventory_start_by_attendance_service,
@@ -24,6 +26,9 @@ from schemas.impulses import (
     ImpulseSaleCreateSchema,
     ImpulseSaleResponseSchema,
     LatestPOSInventoryResponseSchema,
+    POSStockResponseSchema,
+    SaleListFilterSchema,
+    SaleListResponseSchema,
     TradePromotionCreateSchema,
     TradePromotionFilterSchema,
     TradePromotionListResponseSchema,
@@ -242,3 +247,41 @@ async def get_impulse_inventory_end_by_attendance_controller(
         db = db, attendance_id = attendance_id,
     )
     return VisitInventoryResponseSchema.model_validate(result)
+
+
+# --- 2026-05-28 (Binaria): cross-attendance sales listing + POS stock --
+
+@handle_service_errors('TRADE')
+async def list_impulse_sales_controller(
+    filters: SaleListFilterSchema,
+    skip: int,
+    limit: int,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str,  # pylint: disable=unused-argument
+) -> SaleListResponseSchema:
+    '''
+        Lists impulse sales with optional filters (company, POS, user,
+        date range). The frontend uses this to build the global sales
+        listing demanded by Binaria for the 2026-06-03 go-live.
+    '''
+    items, total = await list_impulse_sales_service(
+        db = db, filters = filters, skip = skip, limit = limit,
+    )
+    return SaleListResponseSchema(items = items, total = total)
+
+
+@handle_service_errors('TRADE')
+async def get_pos_stock_controller(
+    pos_id: int,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str,  # pylint: disable=unused-argument
+) -> POSStockResponseSchema:
+    '''
+        Returns the available stock per product for a POS. Open visits
+        use the (start - sales) formula; closed visits use the closing
+        inventory snapshot.
+    '''
+    result = await get_pos_stock_service(db = db, pos_id = pos_id)
+    return POSStockResponseSchema.model_validate(result)

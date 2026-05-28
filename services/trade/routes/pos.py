@@ -27,7 +27,10 @@ from controllers.pos import (
     update_inventory_item_controller,
     delete_inventory_item_controller
 )
-from controllers.impulses import get_latest_impulse_inventory_for_pos_controller
+from controllers.impulses import (
+    get_latest_impulse_inventory_for_pos_controller,
+    get_pos_stock_controller,
+)
 from schemas.pos import (
     POSFilterSchema,
     POSListResponseSchema,
@@ -39,7 +42,7 @@ from schemas.pos import (
     POSInventoryResponseSchema,
     POSInventoryUpdateSchema
 )
-from schemas.impulses import LatestPOSInventoryResponseSchema
+from schemas.impulses import LatestPOSInventoryResponseSchema, POSStockResponseSchema
 
 router = APIRouter(prefix = '/v1/pos', tags = ['POS'])
 
@@ -383,4 +386,35 @@ async def get_latest_pos_inventory_endpoint(
         db = db,
         request = request,
         current_user = current_user,
+    )
+
+
+@router.get(
+    '/{pos_id}/stock',
+    response_model = POSStockResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Available stock per product at a POS',
+    description = (
+        'Computes the available stock for every product at a POS. The '
+        'service decides between two formulas using the latest attendance: '
+        'open visit -> start_inventory.quantity - SUM(sales.quantity); '
+        'closed visit -> end_inventory.quantity. When no attendance ever '
+        'happened for the POS, returns an empty stock list with '
+        'source="empty" (200 OK, not 404, to keep the frontend simple).'
+    ),
+)
+async def get_pos_stock_endpoint(
+    pos_id: int,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user),
+):
+    '''
+        Endpoint backing the stock screen demanded by Binaria for the
+        2026-06-03 go-live.
+    '''
+    message = f'User: {current_user}. Computing stock for POS {pos_id}.'
+    logger.info(message)
+    return await get_pos_stock_controller(
+        pos_id = pos_id, db = db, request = request, current_user = current_user,
     )

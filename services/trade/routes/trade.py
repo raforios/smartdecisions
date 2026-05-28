@@ -27,6 +27,7 @@ from controllers.trade import (
     list_trade_planning_controller,
     update_planned_point_controller,
     update_planned_route_controller,
+    update_planning_detail_controller,
     update_trade_planning_controller
 )
 from schemas.trade import (
@@ -46,6 +47,7 @@ from schemas.trade import (
     TradePlanningCreateSchema,
     TradePlanningDetailCreateSchema,
     TradePlanningDetailResponseSchema,
+    TradePlanningDetailUpdateSchema,
     TradePlanningFilterSchema,
     TradePlanningListResponseSchema,
     TradePlanningResponseSchema,
@@ -324,6 +326,25 @@ async def create_planning_detail_endpoint(
     '''Append a detail row (route + day) to a planning campaign.'''
     return await create_planning_detail_controller(
         planning_id = planning_id, detail_data = detail_data,
+        db = db, request = request, current_user = current_user
+    )
+
+
+@router.put(
+    '/planning/details/{detail_id}',
+    response_model = TradePlanningDetailResponseSchema,
+    summary = 'Update a planning detail row'
+)
+async def update_planning_detail_endpoint(
+    detail_id: int,
+    detail_data: TradePlanningDetailUpdateSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> TradePlanningDetailResponseSchema:
+    '''Edit an existing detail row of a planning campaign.'''
+    return await update_planning_detail_controller(
+        detail_id = detail_id, detail_data = detail_data,
         db = db, request = request, current_user = current_user
     )
 

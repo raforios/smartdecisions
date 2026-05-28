@@ -52,8 +52,10 @@ class PlannedRoute(Base):  # pylint: disable=too-few-public-methods
     country_id = Column(Integer, nullable = True)
     city_id = Column(Integer, nullable = True)
 
-    # Lifecycle flag. Pydantic schema enforces ACTIVE | INACTIVE.
-    status = Column(String(20), nullable = False, default = 'ACTIVE', index = True)
+    # Lifecycle flag. Pydantic schema enforces IN_CREATION | ACTIVE | INACTIVE.
+    # New routes start in IN_CREATION; the frontend transitions them to
+    # ACTIVE once the master + points are filled.
+    status = Column(String(20), nullable = False, default = 'IN_CREATION', index = True)
 
     # Visual identifier used by the frontend (hex string '#RRGGBB').
     color = Column(String(7), nullable = True)

@@ -21,6 +21,7 @@ from controllers.impulses import (
     delete_promotion_controller,
     get_promotion_by_id_controller,
     get_promotions_list_controller,
+    list_impulse_sales_controller,
     update_promotion_controller,
     get_impulse_inventory_start_by_attendance_controller,
     get_impulse_inventory_end_by_attendance_controller,
@@ -30,6 +31,8 @@ from schemas.impulses import (
     ImpulseInventoryListResponseSchema,
     ImpulseSaleCreateSchema,
     ImpulseSaleResponseSchema,
+    SaleListFilterSchema,
+    SaleListResponseSchema,
     TradePromotionCreateSchema,
     TradePromotionFilterSchema,
     TradePromotionListResponseSchema,
@@ -198,6 +201,40 @@ async def create_impulse_inventory_start_endpoint(
         request = request,
         current_user = current_user
     )
+
+@router.get(
+    '/sales',
+    response_model = SaleListResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'List impulse sales with optional filters',
+    description = (
+        'Lists impulse sales across attendances. Every filter is optional: '
+        'company_id, client_company_id, pos_id, user_id, date_from, date_to. '
+        'Each row aggregates the total number of distinct products and the '
+        'sum of detail quantities so the frontend can render the listing '
+        'without extra calls.'
+    ),
+)
+async def list_impulse_sales_endpoint(
+    request: Request,
+    filters: SaleListFilterSchema = Depends(),
+    skip: int = Query(0, ge = 0),
+    limit: int = Query(100, ge = 1, le = 500),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user),
+):
+    '''
+        GET endpoint for the unified sales listing demanded by Binaria
+        for the 2026-06-03 go-live.
+    '''
+    message = f'User: {current_user}. Listing impulse sales (filters={filters}).'
+    logger.info(message)
+    return await list_impulse_sales_controller(
+        filters = filters,
+        skip = skip, limit = limit,
+        db = db, request = request, current_user = current_user,
+    )
+
 
 @router.post(
     '/visit/{attendance_id}/sale',

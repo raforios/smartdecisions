@@ -13,7 +13,10 @@ from schemas.common import BaseSchema
 # request validation so they're discoverable when editing the API
 # contract.
 RouteType = Literal['REPOSICION', 'IMPULSO']
-RouteStatus = Literal['ACTIVE', 'INACTIVE']
+# IN_CREATION is the default for newly created routes; the frontend can
+# fill points and metadata before flipping it to ACTIVE. ACTIVE/INACTIVE
+# control whether the route is dispatched to operators.
+RouteStatus = Literal['IN_CREATION', 'ACTIVE', 'INACTIVE']
 PlanningStatus = Literal['DRAFT', 'ACTIVE', 'CLOSED']
 
 # Hex color in '#RRGGBB' notation.
@@ -111,7 +114,11 @@ class PlannedRouteBaseSchema(BaseSchema):
     country_id: Optional[int] = None
     city_id: Optional[int] = None
     status: RouteStatus = Field(
-        'ACTIVE', description = 'Lifecycle flag for the route.',
+        'IN_CREATION',
+        description = (
+            'Lifecycle flag for the route. New routes default to IN_CREATION '
+            'and are flipped to ACTIVE once ready for dispatch.'
+        ),
     )
     color: Optional[str] = Field(
         None, pattern = HEX_COLOR_REGEX,
@@ -206,6 +213,26 @@ class TradePlanningDetailCreateSchema(TradePlanningDetailBaseSchema):
     '''
         Schema for creating a planning detail row inline with its parent.
     '''
+
+
+class TradePlanningDetailUpdateSchema(BaseSchema):
+    '''
+        Schema to update a planning detail row already persisted. Both
+        fields are optional; at least one must be supplied. The service
+        enforces that the resulting (planned_route_id, date_of_day) is
+        within the parent planning's date range and remains unique.
+    '''
+    planned_route_id: Optional[int] = Field(
+        None,
+        description = 'New planned route to execute that day.',
+    )
+    date_of_day: Optional[datetime] = Field(
+        None,
+        description = (
+            'New start date+time of the route execution (ISO 8601). '
+            'Must fall within the parent planning date range.'
+        ),
+    )
 
 
 class TradePlanningDetailResponseSchema(TradePlanningDetailBaseSchema):
@@ -325,7 +352,7 @@ class PlannedRouteBulkItemSchema(BaseSchema):
     route_type: Optional[RouteType] = None
     country_id: Optional[int] = None
     city_id: Optional[int] = None
-    route_status: RouteStatus = 'ACTIVE'
+    route_status: RouteStatus = 'IN_CREATION'
     color: Optional[str] = Field(None, pattern = HEX_COLOR_REGEX)
 
     sequence: int = Field(..., ge = 1)

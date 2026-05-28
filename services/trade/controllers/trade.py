@@ -24,6 +24,7 @@ from schemas.trade import (
     TradePlanningCreateSchema,
     TradePlanningDetailCreateSchema,
     TradePlanningDetailResponseSchema,
+    TradePlanningDetailUpdateSchema,
     TradePlanningFilterSchema,
     TradePlanningListResponseSchema,
     TradePlanningResponseSchema,
@@ -49,6 +50,7 @@ from services.trade import (
     register_attendance_check_out,
     update_planned_point_service,
     update_planned_route_service,
+    update_planning_detail_service,
     update_trade_planning_service
 )
 from services.utils import generic_bulk_controller_wrapper, handle_service_errors
@@ -292,6 +294,23 @@ async def create_planning_detail_controller(
     '''
     db_detail = await create_planning_detail_service(
         db = db, planning_id = planning_id, detail_data = detail_data
+    )
+    return TradePlanningDetailResponseSchema.model_validate(db_detail, from_attributes = True)
+
+
+@handle_service_errors('TRADE')
+async def update_planning_detail_controller(
+    detail_id: int,
+    detail_data: TradePlanningDetailUpdateSchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str  # pylint: disable=unused-argument
+) -> TradePlanningDetailResponseSchema:
+    '''
+        Controller to update a planning detail row already persisted.
+    '''
+    db_detail = await update_planning_detail_service(
+        db = db, detail_id = detail_id, detail_data = detail_data
     )
     return TradePlanningDetailResponseSchema.model_validate(db_detail, from_attributes = True)
 

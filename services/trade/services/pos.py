@@ -212,6 +212,23 @@ async def update_pos_service(
     db_pos = get_record(db, PointOfSale, pos_id)
     old_values = sqlalchemy_object_as_dict(db_pos)
 
+    # --- IN_CREATION edit gate (2026-05-28 Binaria) ---
+    # Master/contact/location fields may only be edited while the POS is
+    # still IN_CREATION. Once it has been ACTIVE or INACTIVE the only
+    # change accepted on this endpoint is a status transition between
+    # ACTIVE and INACTIVE; any other field change is rejected with 409.
+    incoming_fields = pos_data.model_dump(exclude_unset = True)
+    non_status_fields = {k: v for k, v in incoming_fields.items() if k != 'status'}
+    if db_pos.status != PointOfSaleStatus.IN_CREATION and non_status_fields:
+        raise InvalidInputError(
+            detail = (
+                f'POS {db_pos.code} can only have its master fields edited while '
+                f'in IN_CREATION. Current status: {db_pos.status.value}. '
+                f'Once the POS is ACTIVE/INACTIVE only the status field can be '
+                f'updated via this endpoint.'
+            )
+        )
+
     # --- Status Transition Validation ---
     if pos_data.status is not None:
         new_status = pos_data.status

@@ -122,6 +122,10 @@ class ImpulseSale(Base):  # pylint: disable=too-few-public-methods
     # one that owns the POS and the products sold). The executor lives
     # in the parent attendance's `company_id`.
     client_company_id = Column(Integer, nullable = True, index = True)
+    # 2026-05-28 (Binaria): free-text annotation captured at the sale
+    # header so the operator can attach context (promo applied, customer
+    # remark, delivery issue) that doesn't fit at the line-item level.
+    observations = Column(Text, nullable = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     # Relationship to the Sale Details (SKUs sold)
