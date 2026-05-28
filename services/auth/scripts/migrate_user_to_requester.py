@@ -14,6 +14,15 @@
 
         # Apply the update
         python migrate_user_to_requester.py --apply
+        
+         # Primero dry-run para ver qué se va a cambiar
+        TABLE_NAME=auth-users AWS_PROFILE=deploy_ml AWS_REGION=us-east-1 \
+        python migrate_user_to_requester.py --dry-run
+
+        # Si el output es el esperado, aplicar
+        TABLE_NAME=auth-users AWS_PROFILE=deploy_ml AWS_REGION=us-east-1 \
+        python migrate_user_to_requester.py --apply
+
 
     Environment:
         TABLE_NAME : Name of the AUTH DynamoDB users table.
