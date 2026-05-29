@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supplies — Iniciar sesión</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/supplies.css">
+</head>
+<body class="sup-login">
+    <main class="sup-login-card">
+        <div class="sup-login-brand">
+            <span class="sup-login-logo"><i class="fa-solid fa-boxes-stacked"></i></span>
+            <h1>SUPPLIES</h1>
+            <p class="sup-login-subtitle">Sistema de Inventarios del Ministerio</p>
+        </div>
+        <form id="login-form" autocomplete="on">
+            <label class="sup-field">
+                <span>Email</span>
+                <input type="email" name="email" autocomplete="email" required>
+            </label>
+            <label class="sup-field">
+                <span>Contraseña</span>
+                <input type="password" name="password" autocomplete="current-password" required>
+            </label>
+            <button type="submit" id="login-submit" class="sup-btn sup-btn-primary sup-btn-block">
+                Entrar
+            </button>
+            <p id="login-error" class="sup-form-error" hidden></p>
+        </form>
+    </main>
+    <script type="module" src="js/login.js"></script>
+</body>
+</html>

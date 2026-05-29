@@ -8,6 +8,8 @@
     "authBaseUrlFallback": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
     "filesBaseUrl": "https://ek2xktuyr4.execute-api.us-east-1.amazonaws.com/v1/s3",
     "filesBaseUrlFallback": "https://ek2xktuyr4.execute-api.us-east-1.amazonaws.com/v1/s3",
+    "suppliesBaseUrl": "https://api.binaria.app/supplies/v1/supplies",
+    "suppliesBaseUrlFallback": "http://localhost:3004/v1/supplies",
     "cmsAssetsBucket": "ml-data-file-handler",
     "cmsAssetsPath": "cms/",
     "tickerRefreshMs": 600000

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supplies — Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/supplies.css">
+</head>
+<body class="sup-shell">
+
+    <button id="sidebar-toggle" class="sup-sidebar-toggle" aria-label="Abrir menú">
+        <i class="fa-solid fa-bars"></i>
+    </button>
+
+    <aside class="sup-sidebar" id="sup-sidebar">
+        <div class="sup-sidebar-brand">
+            <span class="sup-sidebar-logo"><i class="fa-solid fa-boxes-stacked"></i></span>
+            <div>
+                <h1>SUPPLIES</h1>
+                <small>Inventarios</small>
+            </div>
+        </div>
+        <nav class="sup-nav" id="sup-nav">
+            <button class="sup-nav-item" data-route="dashboard">
+                <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+            </button>
+            <button class="sup-nav-item" data-route="catalog" data-roles="ADMIN,WAREHOUSE_MANAGER">
+                <i class="fa-solid fa-cubes"></i><span>Catálogo</span>
+            </button>
+            <button class="sup-nav-item" data-route="requests">
+                <i class="fa-solid fa-clipboard-list"></i><span>Solicitudes</span>
+            </button>
+            <button class="sup-nav-item" data-route="replenishments" data-roles="ADMIN,WAREHOUSE_MANAGER">
+                <i class="fa-solid fa-truck-ramp-box"></i><span>Reposiciones</span>
+            </button>
+            <button class="sup-nav-item" data-route="kardex" data-roles="ADMIN,WAREHOUSE_MANAGER">
+                <i class="fa-solid fa-book-open"></i><span>Kárdex</span>
+            </button>
+            <button class="sup-nav-item" data-route="reports" data-roles="ADMIN,WAREHOUSE_MANAGER">
+                <i class="fa-solid fa-chart-line"></i><span>Reportes</span>
+            </button>
+        </nav>
+        <div class="sup-sidebar-foot">
+            <div class="sup-user-chip">
+                <i class="fa-solid fa-user-circle"></i>
+                <div>
+                    <span id="current-user-email">—</span>
+                    <small id="current-user-role" class="sup-badge sup-badge-role">—</small>
+                </div>
+            </div>
+            <button id="logout-btn" class="sup-btn sup-btn-ghost sup-btn-block">
+                <i class="fa-solid fa-right-from-bracket"></i> Salir
+            </button>
+        </div>
+    </aside>
+
+    <div class="sup-sidebar-backdrop" id="sup-sidebar-backdrop" hidden></div>
+
+    <main class="sup-main">
+        <header class="sup-topbar">
+            <h2 id="page-title">—</h2>
+            <div class="sup-topbar-actions" id="page-actions"></div>
+        </header>
+        <section class="sup-page" id="sup-page">
+            <p class="sup-placeholder">Cargando…</p>
+        </section>
+    </main>
+
+    <div class="sup-modal-host" id="modal-host" hidden>
+        <div class="sup-modal-backdrop"></div>
+        <div class="sup-modal" role="dialog" aria-modal="true">
+            <header class="sup-modal-header">
+                <h3 id="modal-title">—</h3>
+                <button id="modal-close" class="sup-icon-btn" aria-label="Cerrar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </header>
+            <div class="sup-modal-body" id="modal-body"></div>
+            <footer class="sup-modal-footer" id="modal-footer"></footer>
+        </div>
+    </div>
+
+    <div class="sup-toast-host" id="toast-host" aria-live="polite"></div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
