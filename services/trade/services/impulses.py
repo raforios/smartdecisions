@@ -2,7 +2,6 @@
     Business logic services for the Trade Microservice
     Impulses
 '''
-from datetime import datetime
 from typing import Any, Dict, List, Tuple
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session, joinedload
@@ -546,11 +545,13 @@ async def list_impulse_sales_service(
             Tuple of (items, total_count).
     '''
     # Pull sales with their attendance for user/pos resolution. Aggregates
-    # are joined via a subquery so we get one row per sale.
+    # are joined via a subquery so we get one row per sale. The not-callable
+    # disable is for pylint's static check against SQLAlchemy's dynamically
+    # generated `func` namespace, which it cannot resolve.
     detail_agg = (
         db.query(
             ImpulseSaleDetail.impulse_sale_id.label('sale_id'),
-            func.count(ImpulseSaleDetail.id).label('total_items'),
+            func.count(ImpulseSaleDetail.id).label('total_items'),  # pylint: disable=not-callable
             func.coalesce(func.sum(ImpulseSaleDetail.quantity), 0).label('total_quantity'),
         )
         .group_by(ImpulseSaleDetail.impulse_sale_id)

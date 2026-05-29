@@ -115,6 +115,10 @@ async def add_photo_service(
         entity_path = 'attendances'
     elif service_data.entity_type == 'COMPETITION':
         entity_path = 'competition'
+    elif service_data.entity_type == 'IMPULSES':
+        entity_path = 'impulses'
+    elif service_data.entity_type == 'REPLENISHMENT':
+        entity_path = 'replenishment'
     elif service_data.entity_type == 'BANDEO':
         entity_path = 'bandeo'
     elif service_data.entity_type == 'PROMO_POINT':

@@ -52,9 +52,9 @@ class PhotoUploadForm:# pylint: disable=too-few-public-methods
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(
         self,
-        company_id: int = Form(..., description='ID of the company'),
-        entity_type: str = Form(..., description='Entity type (e.g., PRODUCT, POS)'),
-        entity_id: int = Form(..., description='ID of the entity (e.g., product_id)'),
+        company_id: int = Form(..., description = 'ID of the company'),
+        entity_type: str = Form(..., description = 'Entity type (e.g., PRODUCT, POS)'),
+        entity_id: int = Form(..., description = 'ID of the entity (e.g., product_id)'),
         description: Optional[str] = Form(None, description = 'Photo Description'),
         file: UploadFile = File(..., description = 'Image file to upload')
     ):

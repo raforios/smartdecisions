@@ -627,6 +627,7 @@ async def _insert_planned_routes_bulk_data(
     }
 
 
+# pylint: disable=too-many-locals
 async def _insert_trade_planning_bulk_data(
     db: Session,
     processed_data: List[TradePlanningBulkItemSchema],

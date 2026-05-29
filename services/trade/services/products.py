@@ -1,6 +1,7 @@
 '''
     Business Logic for Products and SKUs.
 '''
+# pylint: disable=too-many-lines
 from typing import Any, Dict, List, Tuple, Type
 from pydantic import BaseModel
 from sqlalchemy import and_

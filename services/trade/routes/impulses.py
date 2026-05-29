@@ -215,6 +215,7 @@ async def create_impulse_inventory_start_endpoint(
         'without extra calls.'
     ),
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def list_impulse_sales_endpoint(
     request: Request,
     filters: SaleListFilterSchema = Depends(),

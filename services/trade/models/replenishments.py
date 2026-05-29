@@ -1,6 +1,12 @@
 '''
     Replenishments Models
 '''
+# Inventory-style models intentionally share the same shape with
+# `models.impulses` (quantity + observations + audit + unique constraint
+# per attendance/product/batch). Pylint's duplicate-code detector flags
+# the overlap; we keep the parallel structure to keep each model self-
+# contained and silence the warning here.
+# pylint: disable=duplicate-code
 from typing import Optional
 from sqlalchemy import (
     Column,

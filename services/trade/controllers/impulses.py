@@ -252,6 +252,7 @@ async def get_impulse_inventory_end_by_attendance_controller(
 # --- 2026-05-28 (Binaria): cross-attendance sales listing + POS stock --
 
 @handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def list_impulse_sales_controller(
     filters: SaleListFilterSchema,
     skip: int,
