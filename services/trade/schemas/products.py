@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 from fastapi import Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from schemas.common import (
     PhotoResponseSchema,
@@ -53,11 +53,11 @@ class ProductBaseSchema(BaseSchema):
     # --- Fields from section 5.3 ---
     product_type: str = Field(..., max_length = 50) # Venta / Promocional
 
-    # Units of Measure
-    stock_unit: str = Field(..., max_length = 10)
-    replenishment_unit: str = Field(..., max_length = 10)
-    purchase_unit: Optional[str] = Field(None, max_length = 10)
-    sale_unit: Optional[str] = Field(None, max_length = 10)
+    # Units of Measure (IDs from the frontend catalog, not labels).
+    stock_unit: int = Field(..., description = 'Unit ID from frontend catalog.')
+    replenishment_unit: int = Field(..., description = 'Unit ID from frontend catalog.')
+    purchase_unit: Optional[int] = Field(None, description = 'Unit ID from frontend catalog.')
+    sale_unit: Optional[int] = Field(None, description = 'Unit ID from frontend catalog.')
 
     # Stock Control thresholds live in ProductAssignmentPOS (per POS).
 
@@ -69,7 +69,8 @@ class ProductBaseSchema(BaseSchema):
 
     # Other Data
     manufacturer: Optional[str] = Field(None, max_length = 255)
-    country_of_origin: Optional[str] = Field(None, max_length = 10)
+    country_of_origin: Optional[int] = Field(None,
+                       description = 'Country ID from frontend catalog.')
     handling_instructions: Optional[str] = None
     storage_conditions: Optional[str] = None
     special_precautions: Optional[str] = None
@@ -91,16 +92,18 @@ class ProductUpdateSchema(BaseSchema):
     name: Optional[str] = Field(None, max_length = 255)
     description: Optional[str] = None
     product_type: Optional[str] = Field(None, max_length = 50)
-    stock_unit: Optional[str] = Field(None, max_length = 10)
-    replenishment_unit: Optional[str] = Field(None, max_length = 10)
-    purchase_unit: Optional[str] = Field(None, max_length = 10)
-    sale_unit: Optional[str] = Field(None, max_length = 10)
+    stock_unit: Optional[int] = Field(None, description = 'Unit ID from frontend catalog.')
+    replenishment_unit: Optional[int] = Field(None,
+                              description = 'Unit ID from frontend catalog.')
+    purchase_unit: Optional[int] = Field(None, description = 'Unit ID from frontend catalog.')
+    sale_unit: Optional[int] = Field(None, description = 'Unit ID from frontend catalog.')
     stock_value: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
     purchase_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
     sale_price: Optional[Decimal] = Field(None, description = 'Decimal(10, 2)')
     currency: Optional[int] = Field(None, description = 'Currency ID from frontend app.')
     manufacturer: Optional[str] = Field(None, max_length = 255)
-    country_of_origin: Optional[str] = Field(None, max_length = 10)
+    country_of_origin: Optional[int] = Field(None,
+                              description = 'Country ID from frontend catalog.')
     handling_instructions: Optional[str] = None
     storage_conditions: Optional[str] = None
     special_precautions: Optional[str] = None
@@ -153,21 +156,29 @@ class ProductBulkCreateSchema(BaseSchema):
     '''
         Schema for a single row in the Product bulk upload file.
         Matches the new flat CSV structure with multiple category columns.
+
+        Field shape after 2026-05-30 (Binaria):
+        - stock_unit / replenishment_unit / purchase_unit / sale_unit /
+          country_of_origin are external catalog IDs and are typed as int.
+        - category_*_code are the segments that compose the SKU. They are
+          persisted as strings and zero-padded to 3 chars so canonical
+          placeholders like "000" or "007" keep their leading zeros end
+          to end (the upstream CSV parser strips them, so we re-pad here).
     '''
     company_id: int
     name: str
     description: Optional[str] = None
     product_type: str
-    stock_unit: str
-    replenishment_unit: str
-    purchase_unit: Optional[str] = None
-    sale_unit: Optional[str] = None
+    stock_unit: int
+    replenishment_unit: int
+    purchase_unit: Optional[int] = None
+    sale_unit: Optional[int] = None
     stock_value: Optional[Decimal] = None
     purchase_price: Optional[Decimal] = None
     sale_price: Optional[Decimal] = None
     currency: Optional[int] = None
     manufacturer: Optional[str] = None
-    country_of_origin: Optional[str] = None
+    country_of_origin: Optional[int] = None
     handling_instructions: Optional[str] = None
     storage_conditions: Optional[str] = None
     special_precautions: Optional[str] = None
@@ -180,6 +191,32 @@ class ProductBulkCreateSchema(BaseSchema):
     category_3_code: Optional[str] = None
     category_4_id: Optional[int] = None
     category_4_code: Optional[str] = None
+
+    @field_validator(
+        'category_1_code', 'category_2_code', 'category_3_code', 'category_4_code',
+        mode = 'before',
+    )
+    @classmethod
+    def _pad_three_digits(cls, value):
+        '''
+            Normalizes category code segments to a 3-digit zero-padded
+            string so SKU construction keeps a stable shape. Runs BEFORE
+            Pydantic type coercion so a raw int from pandas (e.g. 0
+            coming from CSV "000") is normalized into "000". Alphanumeric
+            values (e.g. "HEL") are returned untouched.
+        '''
+        if value is None or value == '':
+            return None
+        # bool is a subclass of int; guard against True/False sneaking in.
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return f'{int(value):03d}'
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.isdigit():
+                return stripped.zfill(3)
+        return value
 
 
 # --- SKU EQUIVALENCY SCHEMAS ---
@@ -344,7 +381,7 @@ class ProductSummarySchema(BaseSchema):
     '''
     sku: str
     name: str
-    stock_unit: str
+    stock_unit: int
 
 
 class ProductAssignmentPOSResponseSchema(BaseSchema):

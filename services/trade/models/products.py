@@ -73,11 +73,15 @@ class Product(Base):  # pylint: disable=too-few-public-methods
     # --- Fields from section 5.3 ---
     product_type = Column(String(50), nullable = False) # Venta / Promocional
 
-    # Units of Measure
-    stock_unit = Column(String(10), nullable = False)
-    replenishment_unit = Column(String(10), nullable = False)
-    purchase_unit = Column(String(10), nullable = True)
-    sale_unit = Column(String(10), nullable = True)
+    # Units of Measure. These are ID references coming from an external
+    # catalog system (managed in the frontend). They're stored as integers
+    # so range queries and joins stay efficient; the frontend resolves the
+    # human-readable unit label from its own dictionary.
+    # 2026-05-30 (Binaria): migrated from VARCHAR(10) to INTEGER.
+    stock_unit = Column(Integer, nullable = False)
+    replenishment_unit = Column(Integer, nullable = False)
+    purchase_unit = Column(Integer, nullable = True)
+    sale_unit = Column(Integer, nullable = True)
 
     # Stock Control fields are managed at the assignment level (ProductAssignmentPOS)
     # so each Point of Sale can have its own thresholds for the same product.
@@ -90,7 +94,9 @@ class Product(Base):  # pylint: disable=too-few-public-methods
 
     # Other Product Data
     manufacturer = Column(String(255), nullable = True)
-    country_of_origin = Column(String(10), nullable = True)
+    # 2026-05-30 (Binaria): country_of_origin is an external catalog ID,
+    # migrated from VARCHAR(10) to INTEGER for the same reason as the units.
+    country_of_origin = Column(Integer, nullable = True)
     handling_instructions = Column(Text, nullable = True)
     storage_conditions = Column(Text, nullable = True)
     special_precautions = Column(Text, nullable = True)
