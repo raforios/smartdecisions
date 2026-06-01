@@ -30,8 +30,8 @@ get_dependencies_string() {
     case "$1" in
         "binaria-localization-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service" ;;
         "binaria-forms-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service" ;;
-        "binaria-trade-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service" ;;
-        "binaria-planning-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service" ;;
+        "binaria-trade-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service,FORMS_SERVICE_URL:binaria-forms-handler-service" ;;
+        "binaria-planning-handler-service") echo "FILES_SERVICE_URL:binaria-file-handler-service,EVENTS_SERVICE_URL:binaria-events-handler-service,LOCALIZATION_SERVICE_URL:binaria-localization-handler-service,FORMS_SERVICE_URL:binaria-forms-handler-service,TRADE_SERVICE_URL:binaria-trade-handler-service" ;;
         *) echo "" ;; # Sin dependencias
     esac
 }
