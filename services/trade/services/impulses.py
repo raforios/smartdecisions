@@ -241,20 +241,28 @@ async def create_impulse_sale_service(
     # 2. Create Details & Validate Assortment
     pos_id = sale_data.pos_id
 
+    # 2026-05-31 (Binaria): SKU, assortment and promotion ownership live
+    # on the CLIENT company side (the owner of the POS / products). When
+    # the executor company runs the sale, `client_company_id` carries the
+    # right tenant; fall back to `company_id` for legacy payloads that
+    # still only ship the executor.
+    catalog_company_id = sale_data.client_company_id or sale_data.company_id
+
     for detail in sale_data.details:
-        product_id = get_product_id_by_sku(db, sale_data.company_id, detail.product_sku)
+        product_id = get_product_id_by_sku(db, catalog_company_id, detail.product_sku)
 
         # Assortment Validation
         validate_product_assigned_to_pos(
-            db, sale_data.company_id, pos_id, product_id
+            db, catalog_company_id, pos_id, product_id
         )
 
         # Validate Promotion if provided
         if detail.promotion_id:
-            # Check if promotion exists and belongs to company
+            # Check if promotion exists and belongs to the catalog company
+            # (same tenant that owns the products being sold).
             promo = db.query(TradePromotion).filter(
                 TradePromotion.id == detail.promotion_id,
-                TradePromotion.company_id == sale_data.company_id
+                TradePromotion.company_id == catalog_company_id
             ).first()
             if not promo:
                 raise RegisterNotFoundError(
@@ -590,6 +598,29 @@ async def list_impulse_sales_service(
         .all()
     )
 
+    # 2026-05-31 (Binaria): batch-fetch the per-product breakdown for the
+    # sales currently on screen so callers can sum quantities by SKU. We
+    # use a single query joining `Product` to avoid N+1 lookups; the
+    # result is grouped in Python by sale_id.
+    sale_ids = [sale.id for sale, *_ in rows]
+    details_by_sale: Dict[int, List[Dict[str, Any]]] = {sid: [] for sid in sale_ids}
+    if sale_ids:
+        detail_rows = (
+            db.query(ImpulseSaleDetail, Product)
+            .join(Product, ImpulseSaleDetail.product_id == Product.id)
+            .filter(ImpulseSaleDetail.impulse_sale_id.in_(sale_ids))
+            .order_by(ImpulseSaleDetail.impulse_sale_id, ImpulseSaleDetail.id)
+            .all()
+        )
+        for detail, product in detail_rows:
+            details_by_sale[detail.impulse_sale_id].append({
+                'product_id': product.id,
+                'product_sku': product.sku,
+                'product_name': product.name,
+                'quantity': int(detail.quantity),
+                'promotion_id': getattr(detail, 'promotion_id', None),
+            })
+
     items = [
         {
             'id': sale.id,
@@ -602,6 +633,7 @@ async def list_impulse_sales_service(
             'observations': sale.observations,
             'total_items': int(total_items or 0),
             'total_quantity': int(total_quantity or 0),
+            'details': details_by_sale.get(sale.id, []),
             'created_at': sale.created_at,
         }
         for sale, attendance, total_items, total_quantity in rows

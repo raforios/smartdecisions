@@ -300,6 +300,28 @@ async def delete_pos_service(
 
 # --- POS BULK HELPERS ---
 
+# 2026-05-31 (Binaria): sentinel string values produced upstream by the
+# shared generic_bulk_processor when a CSV cell is empty. Pandas converts
+# blanks to NaN, FastAPI's JSON encoder normalizes them to None, then the
+# bulk processor calls str(None) -> "None" before handing the row to
+# Pydantic. The literal "None" / "nan" / "NaN" strings end up persisted
+# in VARCHAR columns and break subsequent dedup checks against truly
+# empty values. We treat them as empty here.
+_EMPTY_STR_SENTINELS = frozenset(('none', 'nan', 'null', ''))
+
+
+def _coerce_blank(value: Any) -> Any:
+    '''
+        Returns None when `value` is a sentinel string produced by the
+        upstream bulk processor; otherwise returns the value as-is.
+    '''
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in _EMPTY_STR_SENTINELS:
+        return None
+    return value
+
+
 async def _insert_pos_bulk_data(
     db: Session,
     processed_data: List[PointOfSaleBulkCreateSchema],
@@ -307,49 +329,104 @@ async def _insert_pos_bulk_data(
     auth_token: str # pylint: disable=unused-argument
 ) -> Dict[str, Any]:
     '''
-        Handles insertion of POS records in bulk.
+        Handles insertion of POS records in bulk. Existing combinations
+        of (company_id, code) or (company_id, external_code) are skipped
+        and reported back so the frontend can show the user exactly which
+        rows did not land.
     '''
     pos_created = 0
+    skipped_details: List[Dict[str, Any]] = []
     if not processed_data:
-        return {'message': 'No valid POS data.', 'created_records': 0}
+        return {
+            'message': 'No valid POS data.',
+            'created_records': 0,
+            'skipped_records': 0,
+            'skipped_details': [],
+        }
 
     for item in processed_data:
         try:
-            # Check for conflict using new unique constraints:
-            # (company_id, code) or company_id, external_code)
-            # Simpler approach reflecting UniqueConstraint logic: check
-            # for code conflict and external_code conflict separately
+            # Normalize the empty sentinels BEFORE running the dedup
+            # query so we don't compare 'None' (the literal string) to
+            # legacy rows that also stored 'None'. The Pydantic model is
+            # frozen by default; we work off the model_dump copy.
+            row_data = item.model_dump()
+            row_data['code'] = _coerce_blank(row_data.get('code'))
+            row_data['external_code'] = _coerce_blank(row_data.get('external_code'))
+
+            # Check for conflict using the unique constraints:
+            # (company_id, code) and (company_id, external_code).
             code_conflict = db.query(PointOfSale).filter_by(
                 company_id = item.company_id,
-                code = item.code
-            ).first()
+                code = row_data['code']
+            ).first() if row_data['code'] else None
 
             external_code_conflict = None
-            if item.external_code:
+            if row_data['external_code']:
                 external_code_conflict = db.query(PointOfSale).filter_by(
                     company_id = item.company_id,
-                    external_code = item.external_code
+                    external_code = row_data['external_code']
                 ).first()
 
             if code_conflict or external_code_conflict:
-                error_msg = (
-                    f'POS conflict detected for company {item.company_id} with '
-                    f'code {item.code} or external code {item.external_code}. Skipping.'
+                # Not an error: dedup by (company_id, code|external_code)
+                # is part of the idempotent contract. Log at INFO and
+                # record the row in the response so the frontend can show
+                # the user exactly what was skipped and why.
+                #
+                # The matched record's ID and stored code are surfaced so
+                # the caller can pinpoint the existing row in DB even when
+                # MySQL collation hides case differences (utf8mb4_*_ci
+                # treats 'cod08' and 'COD08' as equal).
+                matched = code_conflict or external_code_conflict
+                reason = (
+                    'code already exists for this company'
+                    if code_conflict
+                    else 'external_code already exists for this company'
                 )
-                logger.warning(error_msg)
+                info_msg = (
+                    f'POS skipped for company {item.company_id}: '
+                    f'code={item.code!r}, external_code={item.external_code!r}. '
+                    f'Reason: {reason}. '
+                    f'Existing record: id={matched.id}, code={matched.code!r}, '
+                    f'external_code={matched.external_code!r}.'
+                )
+                logger.info(info_msg)
+                skipped_details.append({
+                    'company_id': item.company_id,
+                    'code': item.code,
+                    'external_code': item.external_code,
+                    'reason': reason,
+                    'existing_id': matched.id,
+                    'existing_code': matched.code,
+                    'existing_external_code': matched.external_code,
+                })
                 continue
 
             with db.begin_nested():
-                db.add(PointOfSale(**item.model_dump()))
+                # Use the normalized row_data so blanks land in DB as
+                # actual NULL instead of the literal 'None' string.
+                db.add(PointOfSale(**row_data))
                 db.flush()
                 pos_created += 1
 
         except (IntegrityError, SQLAlchemyError) as e:
             error_msg = f'Error inserting POS Code: {item.code} or Name: {item.name}: {e}'
             logger.error(error_msg, exc_info = True)
+            skipped_details.append({
+                'company_id': item.company_id,
+                'code': item.code,
+                'external_code': item.external_code,
+                'reason': 'database error during insert',
+            })
             continue
 
-    return {'message': 'Bulk POS completed.', 'created_records': pos_created}
+    return {
+        'message': 'Bulk POS completed.',
+        'created_records': pos_created,
+        'skipped_records': len(skipped_details),
+        'skipped_details': skipped_details,
+    }
 
 @handle_service_errors('TRADE')
 async def bulk_create_points_of_sale_service(

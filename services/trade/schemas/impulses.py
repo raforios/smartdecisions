@@ -297,11 +297,25 @@ class SaleListFilterSchema(BaseModel):
     type: SaleType = Query('IMPULSE', description = 'Sale type. Today only IMPULSE.')
 
 
+class SaleListItemDetailSchema(BaseSchema):
+    '''
+        2026-05-31 (Binaria): per-product breakdown shipped on each row of
+        the sales listing so reports can sum quantities by SKU without an
+        extra round-trip.
+    '''
+    product_id: int
+    product_sku: str
+    product_name: str
+    quantity: int
+    promotion_id: Optional[int] = None
+
+
 class SaleListItemSchema(BaseSchema):
     '''
         Row in the unified sales listing. Aggregated totals are
         precomputed so the frontend can render the table without a
-        second round-trip per row.
+        second round-trip per row; `details` ships the per-product
+        breakdown for use cases that need to sum quantities per SKU.
     '''
     id: int
     type: SaleType
@@ -313,6 +327,10 @@ class SaleListItemSchema(BaseSchema):
     observations: Optional[str]
     total_items: int = Field(..., description = 'Distinct product count.')
     total_quantity: int = Field(..., description = 'Sum of detail quantities.')
+    details: List[SaleListItemDetailSchema] = Field(
+        default_factory = list,
+        description = 'Per-product breakdown of the sale.',
+    )
     created_at: datetime
 
 
