@@ -368,7 +368,9 @@ class TradePlanningBulkItemSchema(BaseSchema):
     '''
         Single CSV row for the planning campaigns bulk upload. Each row maps
         a planning campaign (uniqueness by company + planning_name + team)
-        plus its day-by-day route assignment.
+        plus its day-by-day route assignment. The route is referenced by
+        `planned_route_id` to keep the contract aligned with the JSON POST
+        endpoint `/trade/planning`.
     '''
     company_id: int
     client_company_id: Optional[int] = None
@@ -380,7 +382,7 @@ class TradePlanningBulkItemSchema(BaseSchema):
     status: PlanningStatus = 'ACTIVE'
 
     # Detail row
-    planned_route_code: str = Field(..., max_length = 50)
+    planned_route_id: int = Field(..., description = 'Planned route to execute that day.')
     date_of_day: datetime
 
 

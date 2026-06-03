@@ -639,7 +639,7 @@ async def _insert_trade_planning_bulk_data(
         referenced by their human-friendly route_code.
     '''
     plannings_seen: Dict[Tuple[int, str, int], TradePlanning] = {}
-    routes_seen: Dict[Tuple[int, str], Optional[PlannedRoute]] = {}
+    routes_seen: Dict[int, Optional[PlannedRoute]] = {}
     details_created = 0
     plannings_created = 0
 
@@ -669,27 +669,18 @@ async def _insert_trade_planning_bulk_data(
             plannings_created += 1
         plannings_seen[planning_key] = planning
 
-        # 2026-05-19 (Binaria): routes belong to the CLIENT company, not
-        # the executor. We lookup by `client_company_id` when supplied;
-        # otherwise we resolve by route_code alone (the frontend ensures
-        # uniqueness on its side).
-        owner_company = item.client_company_id or item.company_id
-        route_key = (owner_company, item.planned_route_code)
-        route = routes_seen.get(route_key)
-        if route is None:
-            query = db.query(PlannedRoute).filter_by(
-                route_code = item.planned_route_code,
-            )
-            if item.client_company_id is not None:
-                query = query.filter(
-                    PlannedRoute.company_id == item.client_company_id
-                )
-            route = query.first()
-            routes_seen[route_key] = route
+        # Routes are referenced directly by id (same contract as POST
+        # /trade/planning). The frontend ensures the id belongs to a
+        # route owned by the client company.
+        if item.planned_route_id not in routes_seen:
+            routes_seen[item.planned_route_id] = db.query(PlannedRoute).filter(
+                PlannedRoute.id == item.planned_route_id
+            ).first()
+        route = routes_seen[item.planned_route_id]
         if route is None:
             error_msg = (
-                f'Skipping planning bulk row: route_code '
-                f'{item.planned_route_code} not found.'
+                f'Skipping planning bulk row: planned_route_id '
+                f'{item.planned_route_id} not found.'
             )
             logger.warning(error_msg)
             continue
