@@ -624,6 +624,7 @@ async def list_impulse_sales_service(
     items = [
         {
             'id': sale.id,
+            'sale_id': sale.id,
             'type': 'IMPULSE',
             'attendance_id': sale.attendance_id,
             'pos_id': attendance.point_of_sale_id,

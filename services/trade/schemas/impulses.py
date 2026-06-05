@@ -318,6 +318,10 @@ class SaleListItemSchema(BaseSchema):
         breakdown for use cases that need to sum quantities per SKU.
     '''
     id: int
+    # 2026-06-05 (Binaria): explicit alias of `id` so consumers can
+    # group detail rows and look up photos (entity_type='IMPULSE_SALE',
+    # entity_id=sale_id) without guessing what the generic `id` refers to.
+    sale_id: int
     type: SaleType
     attendance_id: int
     pos_id: Optional[int]
