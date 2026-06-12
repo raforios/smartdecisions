@@ -1,4 +1,4 @@
-# CLAUDE.md — SmartBear API
+# CLAUDE.md — SmartDecisions API
 
 > Fuente de verdad para Claude Code al trabajar en este proyecto de microservicios.
 > Este archivo se carga automáticamente al iniciar una sesión en el directorio del proyecto.
@@ -101,9 +101,7 @@ python main.py
 | **EVENTS** (`Events-Service`) | Auditoría, logs de uso, trazabilidad | DynamoDB | Recibe logs vía `utils.py` |
 | **FILES** (`File-Handler-Service`) | Interfaz con AWS S3 (upload, read, delete, pre-signed URLs) | S3 | — |
 | **ML_FUNCTIONS** (`ML-Functions-Service`) | Cálculo matemático/estadístico | — | Regresión lineal/logística, gradiente descendente, Z-score |
-| **LOCALIZATION** (`Localization-Service`) | Rutas planificadas vs ejecutadas, check-in/out | MySQL | Provee geo-data a FORMS y TRADE |
-| **FORMS** (`Forms-Service`) | Formularios dinámicos, recolección, asignación operativa | DynamoDB (temporal) → MySQL (final) | — |
-| **TRADE** (`Trade-Service`) | Trade marketing, reglas comerciales | — | ⚠️ En desarrollo, requiere validación exhaustiva |
+| **LOCALIZATION** (`Localization-Service`) | Rutas planificadas vs ejecutadas, check-in/out | MySQL | Provee geo-data |
 
 ---
 

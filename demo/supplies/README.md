@@ -1,7 +1,7 @@
 # Supplies — Frontend
 
 UI estática que consume el microservicio Supplies (`/v1/supplies/*`) y
-reusa el AUTH del ecosistema SmartBear. Sin frameworks: HTML5 + Vanilla
+reusa el AUTH del ecosistema SmartDecisions. Sin frameworks: HTML5 + Vanilla
 JS (módulos ES) + CSS3, responsive con drawer hamburguesa.
 
 ## Layout

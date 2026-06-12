@@ -38,3 +38,6 @@ logs/*.log
 
 # PEM files
 *.pem
+
+# CLAUDE files
+.claude/
