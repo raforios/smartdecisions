@@ -43,9 +43,9 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         *)
             echo "Uso: $0 --path <ruta_al_microservicio> [--destroy] [--skip-table-creation] [--skip-code-update]"
-            echo "Ejemplo: $0 --path /Users/rafael/Work/projects/back/SmartBear/services/files"
-            echo "Ejemplo para destruir: $0 --path /Users/rafael/Work/projects/back/SmartBear/services/files --destroy"
-            echo "Ejemplo para saltar creación de tabla y actualización de código: $0 --path /Users/rafael/Work/projects/back/SmartBear/services/files --skip-table-creation --skip-code-update"
+            echo "Ejemplo: $0 --path /Users/rafael/Work/projects/back/SmartDecisions/services/files"
+            echo "Ejemplo para destruir: $0 --path /Users/rafael/Work/projects/back/SmartDecisions/services/files --destroy"
+            echo "Ejemplo para saltar creación de tabla y actualización de código: $0 --path /Users/rafael/Work/projects/back/SmartDecisions/services/files --skip-table-creation --skip-code-update"
             exit 1
             ;;
     esac

@@ -122,12 +122,12 @@ BUCKET_PATH=""
 ```shell
 # --- PASO 1 ---
 # Deplegar servicios LAMBDA
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/events
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --skip-table-creation
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/localization --skip-table-creation
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/planning --skip-table-creation
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/forms 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/auth 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/events
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/localization --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/planning --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/forms 
 
 ./create_dynamodb_tables.sh
 
@@ -214,9 +214,9 @@ API_MAPPINGS=(
 # --- PASO 5 ---
 # Reinicio y reintegro de los servicios lambda que utilizan el RDS para que estén integrados a la nueva infraestructura
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/localization --skip-table-creation  --skip-code-update
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/planning --skip-table-creation  --skip-code-update
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/forms --skip-table-creation  --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/localization --skip-table-creation  --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/planning --skip-table-creation  --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/forms --skip-table-creation  --skip-code-update
 
 # --- PASO 6 ---
 # Configuración del HTTPS

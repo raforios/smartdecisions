@@ -65,13 +65,13 @@ Las siguientes librerías son esenciales para el funcionamiento del **File-Handl
 ## 🚀 Despliegue manual en AWS
 
 ```shell
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files 
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --destroy
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --destroy
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --skip-code-update
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --skip-table-creation 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --skip-table-creation 
 ```
 
 -----

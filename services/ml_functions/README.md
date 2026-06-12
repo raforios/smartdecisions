@@ -80,15 +80,15 @@ Las siguientes librerías son esenciales para el funcionamiento del **ML-Functio
 ## 🚀 Despliegue manual en AWS
 
 ```shell
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/ml_functions 
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --destroy
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/ml_functions --destroy
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/ml_functions --skip-table-creation
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/ml_functions --skip-code-update
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --enable-sqs
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/ml_functions --enable-sqs
 
 ```
 -----

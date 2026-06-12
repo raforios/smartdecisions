@@ -10,10 +10,10 @@ PROFILE="deploy_ml"
 
 echo "Iniciando el despliegue y construcción de la infraestructura de SmartDecisions..."
 
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/events
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/files --skip-table-creation
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/ml_functions --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/auth
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/events
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --skip-table-creation
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/ml_functions --skip-table-creation
 
 ./create_dynamodb_tables.sh
 
