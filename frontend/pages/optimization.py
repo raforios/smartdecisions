@@ -31,13 +31,13 @@ def load_dataframes(route_id, day, dist) -> tuple:
 
 
 st.set_page_config(
-    page_title = 'SmartBear Optimization',
+    page_title = 'SmartDecisions Optimization',
     page_icon = '🚚',
     layout = 'wide',
     initial_sidebar_state = 'collapsed'
 )
 
-st.title('SmartBear')
+st.title('SmartDecisions')
 st.header('Optimization')
 menu()
 

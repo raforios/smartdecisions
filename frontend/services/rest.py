@@ -10,7 +10,7 @@ import requests as req
 
 def get_data(url, headers = '', primary = 0, field = 'data') -> pd.DataFrame:
     '''
-        Get data from SmartBear API
+        Get data from SmartDecisions API
     '''
     try :
         response = req.request(
@@ -39,7 +39,7 @@ def get_data(url, headers = '', primary = 0, field = 'data') -> pd.DataFrame:
 
 def post_data(url, data, headers = '') -> dict:
     '''
-        Post data into SmartBear API
+        Post data into SmartDecisions API
     '''
     try :
         response = req.post(
@@ -61,7 +61,7 @@ def post_data(url, data, headers = '') -> dict:
 
 def login(url) -> str:
     '''
-        Login into SmartBear API
+        Login into SmartDecisions API
     '''
     data = {
         # 'email' : PARAMETERS.get('EMAIL'),
@@ -78,7 +78,7 @@ def login(url) -> str:
 
 def data_api(token, url, endpoint, route_id, day, primary, dist = 1500) -> pd.DataFrame:#pylint: disable=R0917 disable=R0913
     '''
-        Extract and prepare data from SmartBear API and return it
+        Extract and prepare data from SmartDecisions API and return it
     '''
     headers = {'Authorization': f'Bearer {token}'}
     endpoit_map = f'/api/v1/optimization/{endpoint}'

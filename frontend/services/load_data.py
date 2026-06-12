@@ -8,7 +8,7 @@ from services.rest import login, data_api
 
 def login_api() -> str | None:
     '''
-        Function to connect with SmartBear API
+        Function to connect with SmartDecisions API
     '''
     # url = PARAMETERS.get('API_URL')
     url = st.secrets['API_URL']
@@ -19,7 +19,7 @@ def login_api() -> str | None:
 def get_data(token: str, endpoint: str, route_id: int,#pylint: disable=R0917 disable=R0913
              day: int, primary: int = 1, dist: int = 1500) -> pd.DataFrame:#pylint: disable=R0917 disable=R0913
     '''
-        Function to connect with SmartBear API
+        Function to connect with SmartDecisions API
     '''
     # url = PARAMETERS.get('API_URL')
     url = st.secrets['API_URL']

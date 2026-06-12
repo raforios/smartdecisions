@@ -1,26 +1,26 @@
 '''
-    Main function for SamartBear frontend APP
+    Main function for SmartDecisions frontend APP
 '''
 import streamlit as st
 from layout.menu import menu
 
 st.set_page_config(
-    page_title = 'SmartBear Dashboard',
+    page_title = 'SmartDecisions Dashboard',
     page_icon = '🌐',
     layout = 'wide',
     initial_sidebar_state = 'collapsed',
     menu_items={
         'Get Help': 'mailto:raforios@gmail.com',
         'Report a bug': "mailto:raforios@gmail.com",
-        'About': "# SmartBear APP. This is an *BETA* version!"
+        'About': "# SmartDecisions APP. This is an *BETA* version!"
     }
 )
 def main():
     '''
-        Main function Frontend SmartBear
+        Main function Frontend SmartDecisions
     '''
 
-    st.title('SmartBear')
+    st.title('SmartDecisions')
     st.header('BI - APP')
     menu()
 

@@ -1,7 +1,7 @@
 # Supplies Service
 
 Microservicio de inventarios para materiales e insumos del Ministerio.
-Forma parte del ecosistema SmartBear (BearSoft) y sigue el mismo
+Forma parte del ecosistema SmartDecisions (BaarSoft) y sigue el mismo
 boilerplate que `Localization-Service` y `Forms-Service`.
 
 ## Procesos cubiertos

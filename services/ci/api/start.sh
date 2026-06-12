@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Este script crea y despliega toda la infraestructura necesaria para la API SmartBear.
+# Este script crea y despliega toda la infraestructura necesaria para la API SmartDecisions.
 
 # Detiene la ejecución si algún comando falla
 set -e
@@ -8,7 +8,7 @@ set -e
 REGION="us-east-1" # Asegúrate de que esta sea tu región de AWS
 PROFILE="deploy_ml"
 
-echo "Iniciando el despliegue y construcción de la infraestructura de SmartBear..."
+echo "Iniciando el despliegue y construcción de la infraestructura de SmartDecisions..."
 
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/auth
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartBear/app/services/events

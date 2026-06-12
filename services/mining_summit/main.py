@@ -115,7 +115,7 @@ def root() -> Dict[str, Any]:
         'Last Update': date.today().isoformat(),
         'Application': 'Python - FastAPI',
         'Database': 'AWS DynamoDB',
-        'Owner': f'BearSoft {copyright_symbol} {today.year}'
+        'Owner': f'BaarSoft {copyright_symbol} {today.year}'
     }
 
 

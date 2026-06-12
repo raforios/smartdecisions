@@ -18,7 +18,7 @@ El **Mining-Analysis-Service** está diseñado para centralizar la inteligencia 
 
 ## 🛠️ Tecnologías Utilizadas
 
-Este microservicio sigue los estándares de alta disponibilidad, precisión financiera y robustez de la arquitectura SmartBear:
+Este microservicio sigue los estándares de alta disponibilidad, precisión financiera y robustez de la arquitectura SmartDecisions:
 
 * **Lenguaje:** Python 3.14 🐍
 * **Framework Web:** FastAPI ✨

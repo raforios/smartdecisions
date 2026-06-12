@@ -77,7 +77,7 @@ def root() -> Dict[str, Any]:
         'Last Update': date.today().isoformat(),
         'Application': 'Python - FastAPI',
         'Database': 'No Database',
-        'Owner': f'BearSoft {copyright_symbol} {today.year}'
+        'Owner': f'BaarSoft {copyright_symbol} {today.year}'
     }
     return output
 

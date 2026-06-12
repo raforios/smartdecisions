@@ -46,7 +46,7 @@ st.set_page_config(
     initial_sidebar_state = 'collapsed'
 )
 
-st.title('SmartBear')
+st.title('SmartDecisions')
 st.header('Content Generator GPT-4o')
 menu()
 

@@ -109,7 +109,7 @@ def _call_api(
 
 def login(url: str, email: str = None, password: str = None) -> str:
     '''
-        Login into SmartBear API.
+        Login into SmartDecisions API.
 
         Args:
             url (str): The base URL of the API gateway.
@@ -163,7 +163,7 @@ def login(url: str, email: str = None, password: str = None) -> str:
 
 def data_api(token: str, url: str, endpoint: str, params: OptimizationParams) -> pd.DataFrame:
     '''
-        Extract and prepare data from SmartBear API and return it
+        Extract and prepare data from SmartDecisions API and return it
     '''
     headers = {'Authorization': f'Bearer {token}'}
     # endpoint_path = f'/v1/{endpoint}'
@@ -179,7 +179,7 @@ def data_microservice(token: str, url: str, endpoint: str,
     data: Union[float, int, str],
     primary: int) -> Union[float, int, pd.DataFrame]:
     '''
-        Extract and prepare data from SmartBear API and return it
+        Extract and prepare data from SmartDecisions API and return it
     '''
     headers = {'Authorization': f'Bearer {token}'}
     full_url = f'{url}/v1/{endpoint}/{data}'

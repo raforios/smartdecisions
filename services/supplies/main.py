@@ -17,9 +17,6 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from mangum import Mangum
 import uvicorn
 
-# Importing the models module here makes sure SQLAlchemy registers every
-# table against Base.metadata before create_all is invoked on startup.
-from models import supplies  # noqa: F401  pylint: disable=unused-import
 from routes.catalog import router as catalog_router
 from routes.dashboard import router as dashboard_router
 from routes.kardex import router as kardex_router
@@ -123,7 +120,7 @@ def root() -> Dict[str, Any]:
         'Last Update': date.today().isoformat(),
         'Application': 'Python - FastAPI',
         'Database': 'MySQL transactional Database',
-        'Owner': f'BearSoft {copyright_symbol} {today.year}',
+        'Owner': f'BaarSoft {copyright_symbol} {today.year}',
     }
     return output
 

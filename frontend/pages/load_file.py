@@ -6,12 +6,12 @@ import pandas as pd
 from layout.menu import menu
 
 st.set_page_config(
-    page_title = 'SmartBear Load Files',
+    page_title = 'SmartDecisions Load Files',
     page_icon = '🗂️',
     layout = 'wide',
     initial_sidebar_state = 'collapsed'
 )
-st.title('SmartBear')
+st.title('SmartDecisions')
 st.header('Load Files')
 menu()
 

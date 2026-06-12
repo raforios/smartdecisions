@@ -87,7 +87,7 @@ def get_data(
 def post_data(url: str, data: dict,
     headers: dict = None) -> dict:
     '''
-        Post data into SmartBear API
+        Post data into SmartDecisions API
     '''
     if headers is None:
         headers = {}
@@ -125,7 +125,7 @@ def post_data(url: str, data: dict,
 def put_data(url: str, data: dict,
     headers: dict = None) -> dict:
     '''
-        Put data into SmartBear API
+        Put data into SmartDecisions API
     '''
     if headers is None:
         headers = {}
@@ -163,7 +163,7 @@ def put_data(url: str, data: dict,
 def delete_data(url: str, data: dict,
     headers: dict = None) -> str:
     '''
-        Delete data into SmartBear API
+        Delete data into SmartDecisions API
     '''
     if headers is None:
         headers = {}
