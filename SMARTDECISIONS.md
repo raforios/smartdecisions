@@ -5,7 +5,7 @@
 >
 > USO: en la terminal, indícale a Claude "lee SMARTDECISIONS.md" para cargar el contexto.
 >
-> ⚠️ NOMBRE: empresa **BaarSoft**; producto / API / SaaS **SmartDecisions**.
+> ⚠️ NOMBRE: empresa **BearSoft**; producto / API / SaaS **SmartDecisions**.
 > SmartBear fue descartado y ya no es relevante.
 > "TRADE" y "FORMS" NO son parte de SmartDecisions: son módulos exclusivos del
 > cliente **Binaria** y viven en este monorepo solo por conveniencia.
@@ -164,7 +164,7 @@ Opciones gratuitas a evaluar (confirmar límites vigentes al implementar):
 
 ## 8. Portal web (artifact existente)
 
-Existe un portal HTML (marca a actualizar a "SmartDecisions / BaarSoft"; el
+Existe un portal HTML (marca a actualizar a "SmartDecisions / BearSoft"; el
 artifact original decía "BearSoft / SmartBear"). Es una landing de una sola página, dark theme, con
 secciones: hero, nosotros, servicios, producto, cómo funciona, contacto
 (formulario→mailto). Stack: HTML+CSS+JS vanilla, sin dependencias → **ya es
@@ -172,7 +172,7 @@ publicable gratis** (§7). El artifact traía un oso 🐻 como mascota (de "Bear
 "SmartDecisions" ese oso pierde sentido — decidir si se mantiene una mascota y cuál.
 
 Tareas sobre el portal:
-- [ ] Renombrar marca SmartBear/BearSoft → SmartDecisions/BaarSoft (logo, textos, footer).
+- [ ] Renombrar marca SmartBear/BearSoft → SmartDecisions/BearSoft (logo, textos, footer).
 - [ ] Revisar la mascota: el oso ya no corresponde; decidir si hay mascota nueva o ninguna.
 - [ ] Ajustar el mensaje al nuevo enfoque (Excel self-service para micro/pequeña empresa).
 - [ ] Conectar el botón "demo" al flujo real de carga de Excel cuando exista.

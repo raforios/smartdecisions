@@ -1,6 +1,6 @@
 # POC_PROGRESS.md — SmartDecisions POC
 
-> Bitácora de trabajo del POC de **SmartDecisions** (empresa: **BaarSoft**).
+> Bitácora de trabajo del POC de **SmartDecisions** (empresa: **BearSoft**).
 > Mantenido por Claude entre sesiones para no perder contexto.
 > Fuentes asociadas: `SMARTDECISIONS.md` (visión), `CLAUDE.md` (estándares).
 
@@ -32,13 +32,13 @@
 | Archivo | Cambio |
 |---|---|
 | `app/CLAUDE.md` | Título `SmartBear API` → `SmartDecisions API` |
-| `app/SMARTDECISIONS.md` | Nota de marca reescrita (BaarSoft empresa, SmartDecisions producto, aclaración explícita TRADE/FORMS = Binaria); contexto histórico ("el artifact original decía...") preservado intencionalmente |
-| `app/services/{auth,events,events_mysql,files,forms,localization,mining_summit,ml_functions,planning,supplies,trade}/main.py` + `api/main.py` | Metadata `'Owner': f'BearSoft …'` → `'BaarSoft …'` (12 archivos) |
+| `app/SMARTDECISIONS.md` | Nota de marca reescrita (BearSoft empresa, SmartDecisions producto, aclaración explícita TRADE/FORMS = Binaria); contexto histórico ("el artifact original decía...") preservado intencionalmente |
+| `app/services/{auth,events,events_mysql,files,forms,localization,mining_summit,ml_functions,planning,supplies,trade}/main.py` + `api/main.py` | Metadata `'Owner': f'BearSoft …'` → `'BearSoft …'` (12 archivos) |
 | `app/frontend/main.py` + `pages/{load_file,optimization,dashboard,content_generator}.py` + `services/{rest,load_data}.py` | Streamlit titles, `page_title`, docstrings y comentarios `SmartBear` → `SmartDecisions` |
 | `app/notebooks/lib/{rest,frontend_functions}.py` | Docstrings `SmartBear API` → `SmartDecisions API` |
 | `app/notebooks/routes.ipynb` | Markdown cell `## Login into SmartBear API` → `SmartDecisions API` |
 | `app/services/ci/api/start.sh` | Comentario y echo descriptivos (rutas del filesystem preservadas) |
-| `app/services/supplies/README.md` + `app/demo/supplies/README.md` + `app/services/mining_analysis/README.md` + `boilerplate.md` | Texto descriptivo "ecosistema/arquitectura/proyecto SmartBear (BearSoft)" → "SmartDecisions (BaarSoft)" |
+| `app/services/supplies/README.md` + `app/demo/supplies/README.md` + `app/services/mining_analysis/README.md` + `boilerplate.md` | Texto descriptivo "ecosistema/arquitectura/proyecto SmartBear (BearSoft)" → "SmartDecisions (BearSoft)" |
 
 **Referencias preservadas intencionalmente (no tocar):**
 - ~37 refs en paths absolutos del filesystem (`/Users/rafael/Work/projects/back/SmartDecisions/...`) en CI scripts, READMEs de auth/files/ml_functions y Postman collections → son la ruta física del directorio.
@@ -91,7 +91,7 @@ grep -rIc "/Users/rafael/Work/projects/back/SmartBear/" . | grep -v ":0$"
 
 ## Memoria persistente vinculada
 
-- `project_naming.md` — empresa BaarSoft / producto SmartDecisions / TRADE-FORMS son Binaria
+- `project_naming.md` — empresa BearSoft / producto SmartDecisions / TRADE-FORMS son Binaria
 - `project_deployment_strategy.md` — sin RDS; default DynamoDB+Lambda+S3/CloudFront
 - `reference_deployed_services.md` — AUTH/FILES/EVENTS en API Gateway/Lambda
 - `project_notebooks_as_frontend_spec.md` — frontend.ipynb + routes.ipynb son spec del frontend, no scratch pads
@@ -103,7 +103,7 @@ grep -rIc "/Users/rafael/Work/projects/back/SmartBear/" . | grep -v ":0$"
 
 ### 2026-06-11 — Inicio del POC
 - Definido el plan de 5 pasos (revisado con notebooks como spec del frontend).
-- Confirmada nomenclatura: empresa **BaarSoft**, producto **SmartDecisions**.
+- Confirmada nomenclatura: empresa **BearSoft**, producto **SmartDecisions**.
 - Confirmada infra: CloudFront + S3 (frontend), Lambda + API Gateway (servicios).
 - Paso 1 ejecutado: ~30 ocurrencias cosméticas reemplazadas (SmartBear→SmartDecisions, BearSoft→BaarSoft) en docs, código Python de servicios y frontend, scripts CI y READMEs.
 - `deploy.config` verificado sin referencias a la marca antigua → no hay recursos AWS por renombrar.
