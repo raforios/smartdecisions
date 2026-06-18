@@ -1,0 +1,155 @@
+/* Module-specific styles for /demo/playground/. */
+
+/* ============ Tabs ============ */
+.tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 1.6rem;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+}
+.tab {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 0.8rem 1.2rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.is-active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.tab-panel { display: none; }
+.tab-panel.is-active { display: block; animation: panel-in 0.18s ease; }
+
+@keyframes panel-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ Playground grid ============ */
+.playground-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 1.4rem;
+}
+.playground-grid > .card { display: flex; flex-direction: column; gap: 0.8rem; }
+.playground-grid > .card h3 { margin: 0; }
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem;
+}
+.grid-2 label { font-size: 0.85rem; color: var(--muted); }
+
+.form-stack textarea {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+.form-actions .btn { padding: 0.55rem 0.95rem; font-size: 0.88rem; }
+
+/* ============ Result blocks ============ */
+.result-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    display: none;
+}
+.result-block.is-shown { display: block; animation: panel-in 0.18s ease; }
+.result-block h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+}
+.result-block pre {
+    margin: 0;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    color: var(--text);
+}
+.result-block .result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 0.8rem;
+}
+.result-block .result-pill {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.7rem;
+}
+.result-block .result-pill .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+}
+.result-block .result-pill .value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.result-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+}
+.result-table th, .result-table td {
+    padding: 0.4rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.result-table th:first-child, .result-table td:first-child { text-align: left; }
+.result-table thead th {
+    background: var(--panel-elevated);
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+}
+
+/* ============ Charts ============ */
+.chart-wrapper {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem;
+    height: 260px;
+    display: none;
+}
+.chart-wrapper.is-shown { display: block; }
+.chart-wrapper canvas { width: 100% !important; height: 100% !important; }
+
+@media (max-width: 720px) {
+    .playground-grid { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+}

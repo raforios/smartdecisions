@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel → Oportunidades — SmartDecisions Demo</title>
+    <link rel="stylesheet" href="../styles/demo.css">
+    <link rel="stylesheet" href="excel.css">
+    <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+    <script src="../js/config.js"></script>
+    <script src="../js/auth.js" defer></script>
+    <script src="../js/api.js" defer></script>
+    <script src="../js/ui.js" defer></script>
+    <script src="excel.js" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="../home.html" class="brand">
+            <img src="../../assets/logo-bear.svg" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <a href="../home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Excel → Oportunidades</h1>
+        <p class="page-subtitle">
+            Sube tu archivo de ventas, valídalo contra el contrato y ejecuta el motor
+            <strong>Afinidad × Drop Size</strong>. El resultado es una lista de
+            acciones comerciales priorizadas por impacto en dólares.
+        </p>
+
+        <!-- ===================== Step 1+2: Template + Upload ===================== -->
+        <section id="stepUpload" class="step-grid">
+            <article class="card">
+                <span class="step-pill">1</span>
+                <h3>Plantilla v1</h3>
+                <p>Descarga el Excel con las columnas requeridas y opcionales del contrato
+                   de ventas.</p>
+                <button id="downloadTemplateButton" class="btn btn-ghost">
+                    Descargar plantilla
+                </button>
+                <p class="form-note" id="templateNote" aria-live="polite"></p>
+            </article>
+
+            <article class="card">
+                <span class="step-pill">2</span>
+                <h3>Subir tu archivo</h3>
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".xlsx,.csv" hidden>
+                    <p class="upload-hint">
+                        Arrastra tu <code>.xlsx</code> o <code>.csv</code> aquí
+                        <br>o <a href="#" id="chooseFileLink">elige un archivo</a>.
+                    </p>
+                    <p id="fileChip" class="file-chip" hidden></p>
+                </div>
+                <button id="uploadButton" class="btn btn-primary" disabled>
+                    Subir y validar
+                </button>
+                <p class="form-note" id="uploadNote" aria-live="polite"></p>
+            </article>
+        </section>
+
+        <!-- ===================== Step 3: Validation result ===================== -->
+        <section id="stepValidation" class="step-section" hidden>
+            <h2 class="section-title">Resultado de la validación</h2>
+            <div class="metric-grid" id="ingestSummary"></div>
+
+            <div id="errorsBlock" hidden>
+                <h3 class="block-title">Errores detectados</h3>
+                <p class="page-subtitle">
+                    El archivo no pasó la validación. Corrige las filas indicadas y
+                    vuelve a subir.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="errorsTable">
+                        <thead>
+                            <tr>
+                                <th>Fila</th>
+                                <th>Columna</th>
+                                <th>Valor</th>
+                                <th>Mensaje</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="validatedBlock" hidden>
+                <h3 class="block-title">Archivo validado ✓</h3>
+                <p class="page-subtitle">
+                    Ejecuta el motor de afinidad × drop size para obtener las
+                    oportunidades comerciales priorizadas por impacto en $.
+                </p>
+                <button id="runAnalyticsButton" class="btn btn-primary">
+                    Ejecutar análisis
+                </button>
+                <p class="form-note" id="runNote" aria-live="polite"></p>
+            </div>
+        </section>
+
+        <!-- ===================== Step 4: Opportunities ===================== -->
+        <section id="stepOpportunities" class="step-section" hidden>
+            <h2 class="section-title">Oportunidades comerciales</h2>
+            <div class="metric-grid" id="opportunitySummary"></div>
+
+            <div class="filters-row">
+                <label class="filter-label">
+                    <span>Filtrar por PdV</span>
+                    <input type="text" id="pdvFilter" placeholder="Ej: PDV-007 o Tienda Doña Rosa">
+                </label>
+                <span class="filter-count" id="filterCount"></span>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-table sortable" id="opportunitiesTable">
+                    <thead>
+                        <tr>
+                            <th data-sort="pdv">PdV</th>
+                            <th data-sort="product">Producto recomendado</th>
+                            <th data-sort="based_on">Basado en</th>
+                            <th data-sort="lift" class="numeric">Lift</th>
+                            <th data-sort="confidence" class="numeric">Confianza</th>
+                            <th data-sort="units" class="numeric">Drop (u)</th>
+                            <th data-sort="amount" class="numeric">$ esperado</th>
+                            <th data-sort="score" class="numeric">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="page-subtitle" style="margin-top: 1rem;">
+                Tip: pasa el cursor sobre una fila para ver la explicación en español de
+                por qué se recomienda esa acción comercial.
+            </p>
+        </section>
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        Una iniciativa de <strong>BearSoft</strong> · Demo SmartDecisions
+    </div>
+</footer>
+
+</body>
+</html>

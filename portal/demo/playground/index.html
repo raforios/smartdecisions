@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playground ML — SmartDecisions Demo</title>
+    <link rel="stylesheet" href="../styles/demo.css">
+    <link rel="stylesheet" href="playground.css">
+    <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+    <script src="../js/config.js"></script>
+    <script src="../js/auth.js" defer></script>
+    <script src="../js/api.js" defer></script>
+    <script src="../js/ui.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+    <script src="playground.js" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="../home.html" class="brand">
+            <img src="../../assets/logo-bear.svg" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <a href="../home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Playground ML</h1>
+        <p class="page-subtitle">
+            Experimenta con los algoritmos de <strong>ML_FUNCTIONS</strong>:
+            regresión lineal y logística (cost / gradient / train / predict),
+            sigmoid en batch y normalización Z-score. Cada panel se conecta
+            directo al microservicio. Las matrices se ingresan como JSON.
+        </p>
+
+        <nav class="tabs" role="tablist" aria-label="Algoritmos">
+            <button class="tab is-active" role="tab" data-tab="linear" aria-selected="true">Regresión Lineal</button>
+            <button class="tab" role="tab" data-tab="logistic" aria-selected="false">Regresión Logística</button>
+            <button class="tab" role="tab" data-tab="common" aria-selected="false">Z-Score + Sigmoid</button>
+        </nav>
+
+        <!-- ===================== TAB: Linear ===================== -->
+        <section class="tab-panel is-active" data-panel="linear" role="tabpanel">
+            <div class="playground-grid">
+
+                <article class="card">
+                    <h3>Entrenar (Linear Regression)</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Ejecuta gradiente descendente con tus datos. Devuelve los pesos finales
+                        y el historial de costo para visualizar la convergencia.
+                    </p>
+                    <form id="formLinearTrain" class="form-stack" data-form>
+                        <label><span>x (lista o matriz JSON)</span>
+                            <textarea name="x" rows="2" required></textarea></label>
+                        <label><span>y (lista JSON)</span>
+                            <textarea name="y" rows="2" required></textarea></label>
+                        <div class="grid-2">
+                            <label><span>w_in</span><input name="w_in" required></label>
+                            <label><span>b_in</span><input name="b_in" type="number" step="any" required></label>
+                            <label><span>alpha</span><input name="alpha" type="number" step="any" required></label>
+                            <label><span>num_iters</span><input name="num_iters" type="number" min="1" required></label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="submit" class="btn btn-primary">Entrenar</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultLinearTrain"></div>
+                    <div class="chart-wrapper"><canvas id="chartLinearTrain"></canvas></div>
+                </article>
+
+                <article class="card">
+                    <h3>Predecir (Linear Regression)</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Usa los pesos entrenados (o tus propios valores) para calcular
+                        predicciones sobre nuevos puntos.
+                    </p>
+                    <form id="formLinearPredict" class="form-stack" data-form>
+                        <label><span>x_test (lista o matriz JSON)</span>
+                            <textarea name="x_test" rows="2" required></textarea></label>
+                        <div class="grid-2">
+                            <label><span>w</span><input name="w" required></label>
+                            <label><span>b</span><input name="b" type="number" step="any" required></label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="button" class="btn btn-ghost" id="reuseLinearWeights">Usar pesos entrenados</button>
+                            <button type="submit" class="btn btn-primary">Predecir</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultLinearPredict"></div>
+                </article>
+
+                <article class="card">
+                    <h3>Cost / Gradient (Linear)</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Inspecciona el costo y el gradiente para un set de pesos
+                        cualquiera (sin entrenar).
+                    </p>
+                    <form id="formLinearCostGrad" class="form-stack" data-form>
+                        <label><span>x</span><textarea name="x" rows="2" required></textarea></label>
+                        <label><span>y</span><textarea name="y" rows="2" required></textarea></label>
+                        <div class="grid-2">
+                            <label><span>w</span><input name="w" required></label>
+                            <label><span>b</span><input name="b" type="number" step="any" required></label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="submit" class="btn btn-primary">Calcular</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultLinearCostGrad"></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- ===================== TAB: Logistic ===================== -->
+        <section class="tab-panel" data-panel="logistic" role="tabpanel">
+            <div class="playground-grid">
+
+                <article class="card">
+                    <h3>Entrenar (Logistic Regression)</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Gradiente descendente para clasificación binaria. Usa
+                        <code>y ∈ {0, 1}</code>.
+                    </p>
+                    <form id="formLogisticTrain" class="form-stack" data-form>
+                        <label><span>x_matrix (matriz JSON)</span>
+                            <textarea name="x_matrix" rows="3" required></textarea></label>
+                        <label><span>y (lista 0/1)</span>
+                            <textarea name="y" rows="2" required></textarea></label>
+                        <div class="grid-2">
+                            <label><span>w_in (lista)</span><input name="w_in" required></label>
+                            <label><span>b_in</span><input name="b_in" type="number" step="any" required></label>
+                            <label><span>alpha</span><input name="alpha" type="number" step="any" required></label>
+                            <label><span>num_iters</span><input name="num_iters" type="number" min="1" required></label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="submit" class="btn btn-primary">Entrenar</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultLogisticTrain"></div>
+                    <div class="chart-wrapper"><canvas id="chartLogisticTrain"></canvas></div>
+                </article>
+
+                <article class="card">
+                    <h3>Predecir (Logistic Regression)</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Devuelve etiquetas binarias (0 o 1) usando el modelo entrenado.
+                    </p>
+                    <form id="formLogisticPredict" class="form-stack" data-form>
+                        <label><span>x_matrix (matriz JSON)</span>
+                            <textarea name="x_matrix" rows="3" required></textarea></label>
+                        <div class="grid-2">
+                            <label><span>w (lista)</span><input name="w" required></label>
+                            <label><span>b</span><input name="b" type="number" step="any" required></label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="button" class="btn btn-ghost" id="reuseLogisticWeights">Usar pesos entrenados</button>
+                            <button type="submit" class="btn btn-primary">Predecir</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultLogisticPredict"></div>
+                </article>
+
+                <article class="card">
+                    <h3>Cost / Gradient (Logistic)</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Inspecciona costo y gradiente con un set de pesos arbitrario.
+                    </p>
+                    <form id="formLogisticCostGrad" class="form-stack" data-form>
+                        <label><span>x_matrix</span><textarea name="x_matrix" rows="3" required></textarea></label>
+                        <label><span>y</span><textarea name="y" rows="2" required></textarea></label>
+                        <div class="grid-2">
+                            <label><span>w (lista)</span><input name="w" required></label>
+                            <label><span>b</span><input name="b" type="number" step="any" required></label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="submit" class="btn btn-primary">Calcular</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultLogisticCostGrad"></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- ===================== TAB: Common ===================== -->
+        <section class="tab-panel" data-panel="common" role="tabpanel">
+            <div class="playground-grid">
+
+                <article class="card">
+                    <h3>Normalización Z-Score</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Normaliza cada columna restando su media y dividiendo por su
+                        desviación estándar. Útil antes de entrenar cuando las
+                        features tienen escalas muy distintas.
+                    </p>
+                    <form id="formNormalize" class="form-stack" data-form>
+                        <label><span>x_matrix (matriz JSON)</span>
+                            <textarea name="x_matrix" rows="4" required></textarea></label>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="submit" class="btn btn-primary">Normalizar</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultNormalize"></div>
+                </article>
+
+                <article class="card">
+                    <h3>Sigmoid (batch)</h3>
+                    <p class="page-subtitle" style="margin: 0 0 1rem;">
+                        Aplica <code>σ(z) = 1 / (1 + e<sup>-z</sup>)</code> a una lista
+                        de valores. Útil para inspeccionar la salida del modelo
+                        logístico antes del thresholding.
+                    </p>
+                    <form id="formSigmoid" class="form-stack" data-form>
+                        <label><span>z_values (lista JSON)</span>
+                            <textarea name="z_values" rows="2" required></textarea></label>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
+                            <button type="submit" class="btn btn-primary">Calcular</button>
+                        </div>
+                        <p class="form-note" data-note></p>
+                    </form>
+                    <div class="result-block" id="resultSigmoid"></div>
+                </article>
+            </div>
+        </section>
+
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        Una iniciativa de <strong>BearSoft</strong> · Demo SmartDecisions
+    </div>
+</footer>
+
+</body>
+</html>

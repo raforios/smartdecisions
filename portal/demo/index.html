@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar sesión — SmartDecisions Demo</title>
+    <link rel="stylesheet" href="styles/demo.css">
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+    <script src="js/config.js"></script>
+    <script src="js/auth.js" defer></script>
+    <script src="js/ui.js" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="../index.html" class="brand">
+            <img src="../assets/logo-bear.svg" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <span>Demo</span>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title" style="text-align: center;">Inicia sesión</h1>
+        <p class="page-subtitle" style="text-align: center; margin-left: auto; margin-right: auto;">
+            Usa tu cuenta SmartDecisions para acceder a los tres módulos del demo:
+            Excel → oportunidades, Playground ML y Optimización de rutas.
+        </p>
+
+        <form id="loginForm" class="form-card form-stack" novalidate>
+            <label>
+                <span>Email</span>
+                <input type="email" name="email" required autocomplete="email" autofocus>
+            </label>
+            <label>
+                <span>Contraseña</span>
+                <input type="password" name="password" required autocomplete="current-password">
+            </label>
+            <button type="submit" class="btn btn-primary" id="loginButton">Entrar</button>
+            <p class="form-note" id="loginNote" aria-live="polite"></p>
+        </form>
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        Una iniciativa de <strong>BearSoft</strong> · Demo SmartDecisions
+    </div>
+</footer>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const { qs, toast, setButtonBusy } = window.SD_UI;
+        const form = qs('#loginForm');
+        const note = qs('#loginNote');
+        const button = qs('#loginButton');
+
+        // If already authenticated, jump straight to the home (or ?next=...).
+        if (window.SD_AUTH.isAuthenticated()) {
+            const next = new URLSearchParams(location.search).get('next');
+            location.href = next || 'home.html';
+            return;
+        }
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            note.className = 'form-note';
+            note.textContent = '';
+
+            const data = new FormData(form);
+            const email = (data.get('email') || '').toString().trim();
+            const password = (data.get('password') || '').toString();
+
+            if (!email || !password) {
+                note.classList.add('error');
+                note.textContent = 'Completa email y contraseña.';
+                return;
+            }
+
+            const done = setButtonBusy(button, 'Entrando…');
+            try {
+                await window.SD_AUTH.login(email, password);
+                toast('Bienvenido a SmartDecisions Demo.', 'success');
+                const next = new URLSearchParams(location.search).get('next');
+                location.href = next || 'home.html';
+            } catch (error) {
+                note.classList.add('error');
+                note.textContent = error.message || 'No se pudo iniciar sesión.';
+            } finally {
+                done();
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

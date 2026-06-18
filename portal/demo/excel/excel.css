@@ -1,0 +1,182 @@
+/* Module-specific styles for /demo/excel/. Continues the shared demo.css palette. */
+
+.step-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2.5rem;
+}
+
+.step-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #06231f;
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.card h3 { margin-top: 0; }
+
+/* ============ Upload zone ============ */
+.upload-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 1.6rem 1rem;
+    margin: 1rem 0;
+    text-align: center;
+    background: var(--bg);
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+.upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(90, 214, 194, 0.05);
+}
+.upload-hint { color: var(--muted); margin: 0; }
+.upload-hint a { font-weight: 600; }
+.upload-hint code {
+    background: rgba(122, 162, 255, 0.12);
+    border: 1px solid var(--border);
+    padding: 0.05rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.88em;
+}
+
+.file-chip {
+    margin: 0.8rem auto 0;
+    display: inline-block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.3rem 0.9rem;
+    color: var(--text);
+    font-size: 0.88rem;
+}
+
+/* ============ Sections after upload ============ */
+.step-section { margin-top: 2.5rem; }
+.section-title {
+    margin: 0 0 1rem;
+    font-size: clamp(1.3rem, 2vw, 1.6rem);
+    letter-spacing: -0.01em;
+}
+.block-title {
+    margin: 2rem 0 0.5rem;
+    font-size: 1.15rem;
+    color: var(--text);
+}
+
+/* ============ Metric cards ============ */
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.6rem;
+}
+.metric {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem;
+}
+.metric-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 0 0 0.4rem;
+}
+.metric-value {
+    font-size: 1.7rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+.metric-value.accent { color: var(--accent); }
+.metric-value.success { color: var(--success); }
+.metric-value.warning { color: var(--warning); }
+.metric-hint { color: var(--muted); font-size: 0.8rem; margin: 0.25rem 0 0; }
+
+/* ============ Filters ============ */
+.filters-row {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-bottom: 0.9rem;
+}
+.filter-label {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    min-width: 280px;
+}
+.filter-label input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+.filter-label input:focus { outline: none; border-color: var(--accent); }
+.filter-count { color: var(--muted); font-size: 0.85rem; }
+
+/* ============ Tables ============ */
+.table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+.data-table thead th {
+    text-align: left;
+    padding: 0.7rem 0.9rem;
+    background: var(--panel-elevated);
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+.data-table tbody td {
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tbody tr:hover { background: rgba(90, 214, 194, 0.04); }
+.data-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table.sortable thead th[data-sort] { cursor: pointer; user-select: none; }
+.data-table.sortable thead th[data-sort]:hover { color: var(--text); }
+.data-table.sortable thead th[data-sort].asc::after  { content: ' ▲'; color: var(--accent); }
+.data-table.sortable thead th[data-sort].desc::after { content: ' ▼'; color: var(--accent); }
+
+.based-on {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+.empty-row td {
+    text-align: center;
+    color: var(--muted);
+    padding: 1.4rem;
+}
+
+@media (max-width: 720px) {
+    .step-grid { grid-template-columns: 1fr; }
+    .demo-nav-actions .user-chip { display: none; }
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo — SmartDecisions</title>
+    <link rel="stylesheet" href="styles/demo.css">
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+    <script src="js/config.js"></script>
+    <script src="js/auth.js" defer></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/ui.js" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="home.html" class="brand">
+            <img src="../assets/logo-bear.svg" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Elige un módulo del demo</h1>
+        <p class="page-subtitle">
+            Cada módulo corre contra un microservicio independiente de SmartDecisions.
+            Empieza por <strong>Excel → oportunidades</strong> si vas a probar el motor
+            comercial; los otros dos exploran capacidades de ML y rutas.
+        </p>
+
+        <div class="card-grid">
+            <a class="module-card" href="excel/index.html">
+                <div class="module-icon">📊</div>
+                <h3>Excel → oportunidades</h3>
+                <p>Sube tu Excel de ventas, valídalo contra el contrato, ejecuta el motor
+                   afinidad × drop size y mira las oportunidades priorizadas por impacto en $.</p>
+                <span class="module-tag">ingest · analytics</span>
+            </a>
+
+            <a class="module-card" href="playground/index.html">
+                <div class="module-icon">🧪</div>
+                <h3>Playground ML</h3>
+                <p>Experimenta con regresión lineal/logística, gradiente descendente y
+                   normalización Z-score sobre datasets de juguete. Visualización con Chart.js.</p>
+                <span class="module-tag">ml_functions</span>
+            </a>
+
+            <a class="module-card" href="routes/index.html">
+                <div class="module-icon">🗺️</div>
+                <h3>Optimización de rutas</h3>
+                <p>Visualiza la ruta planificada, calcula el orden óptimo de visitas y
+                   proyéctalo sobre la red vial real (OpenStreetMap + Leaflet).</p>
+                <span class="module-tag">optimization</span>
+            </a>
+        </div>
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        Una iniciativa de <strong>BearSoft</strong> · Demo SmartDecisions
+    </div>
+</footer>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!window.SD_AUTH.requireAuth()) return;
+        const { qs, toast } = window.SD_UI;
+        qs('#userChip').textContent = window.SD_AUTH.getEmail() || 'usuario';
+        qs('#logoutButton').addEventListener('click', () => {
+            window.SD_AUTH.logout();
+            toast('Sesión cerrada.', 'info');
+        });
+    });
+</script>
+
+</body>
+</html>

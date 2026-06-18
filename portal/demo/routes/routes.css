@@ -1,0 +1,141 @@
+/* Module-specific styles for /demo/routes/. */
+
+/* ============ Layout: sidebar + map ============ */
+.routes-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 1.4rem;
+    align-items: start;
+}
+
+.routes-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.routes-sidebar .card { margin: 0; }
+.routes-sidebar h3 { margin: 0 0 0.6rem; font-size: 1.05rem; }
+
+.routes-map-wrapper {
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-alt);
+}
+
+.routes-map {
+    width: 100%;
+    height: 640px;
+}
+
+/* Leaflet dark-theme attribution tweaks so it doesn't clash with the dark UI. */
+.leaflet-control-attribution {
+    background: rgba(11, 16, 32, 0.7) !important;
+    color: var(--muted) !important;
+    font-size: 0.7rem !important;
+}
+.leaflet-control-attribution a { color: var(--accent) !important; }
+.leaflet-container { background: var(--bg-alt); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--panel-elevated);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+.leaflet-popup-content {
+    font-family: var(--font);
+    font-size: 0.88rem;
+    margin: 0.7rem 0.9rem;
+}
+
+/* ============ Form ============ */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+
+/* ============ Toggle rows ============ */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+    font-size: 0.92rem;
+    color: var(--text);
+    cursor: pointer;
+}
+.toggle-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+.swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid var(--border-strong);
+}
+.swatch-original { background: #7aa2ff; }
+.swatch-optimized { background: var(--accent); }
+.swatch-points { background: #f1c40f; border-radius: 50%; }
+
+/* ============ Metric grid (summary) ============ */
+.metric-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+.metric {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.7rem 0.8rem;
+}
+.metric-label {
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 0.3rem;
+}
+.metric-value {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+}
+.metric-value.accent { color: var(--accent); }
+
+/* ============ Map loader overlay ============ */
+.map-loader {
+    position: absolute;
+    inset: 0;
+    background: rgba(11, 16, 32, 0.6);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    color: var(--text);
+    z-index: 500;
+    pointer-events: none;
+}
+.spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(90, 214, 194, 0.25);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============ Responsive ============ */
+@media (max-width: 920px) {
+    .routes-layout { grid-template-columns: 1fr; }
+    .routes-map { height: 460px; }
+}
