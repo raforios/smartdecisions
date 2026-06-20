@@ -22,15 +22,16 @@ def _build_dataset_item(payload: Dict[str, Any]) -> Dict[str, Any]:
     '''
         Builds the DynamoDB item shape for a new ingested dataset.
 
-        Args:
-            payload (Dict[str, Any]): Pre-computed values from the ingest pipeline.
-
-        Returns:
-            Dict[str, Any]: Item ready to persist.
+        Note on the schema: the live AWS table `ingest_datasets` uses a
+        simple partition key named `id` (S). We keep `dataset_id` as a
+        mirror attribute so callers and downstream services that already
+        rely on the `dataset_id` label do not need to change.
     '''
     now = get_current_time_gmt()
+    dataset_id = payload.get('dataset_id') or str(uuid.uuid4())
     return {
-        'dataset_id': payload.get('dataset_id') or str(uuid.uuid4()),
+        'id': dataset_id,
+        'dataset_id': dataset_id,
         'owner_email': payload['owner_email'],
         'status': payload['status'],
         'file_s3_key': payload.get('file_s3_key'),
@@ -55,21 +56,13 @@ def persist_dataset(
 ) -> Dict[str, Any]:
     '''
         Persists a new ingested dataset record in DynamoDB.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            payload (Dict[str, Any]): Ingest metadata (already computed by the
-                                      pipeline + s3 key + owner).
-
-        Returns:
-            Dict[str, Any]: The persisted item.
     '''
     item = _build_dataset_item(payload)
     persisted = create_item(
         dynamodb_resource = dynamodb_resource,
         table_name = DATASETS_TABLE,
         item_data = item,
-        unique_key_attribute = 'dataset_id'
+        unique_key_attribute = 'id'
     )
     message = f'Persisted ingest dataset {item["dataset_id"]} (status={item["status"]}).'
     logger.info(message)
@@ -84,18 +77,11 @@ def get_dataset_by_id(
     '''
         Retrieves an ingested dataset record by its primary key.
 
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset_id (str): The UUID of the dataset.
-
-        Returns:
-            Dict[str, Any]: The dataset item.
-
-        Raises:
-            RegisterNotFoundError: If no record exists for that dataset_id.
+        The AWS table uses `id` as the PK; we accept the logical
+        `dataset_id` argument and use it as the key value.
     '''
     return get_item_by_key(
         dynamodb_resource = dynamodb_resource,
         table_name = DATASETS_TABLE,
-        key = {'dataset_id': dataset_id}
+        key = {'id': dataset_id}
     )

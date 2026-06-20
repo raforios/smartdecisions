@@ -34,8 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
         attributionControl: true
     });
 
-    // CartoDB Dark Matter tiles — match the demo dark theme; free + open.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // CartoDB Voyager tiles — light + color, matches the corporate theme.
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 19
@@ -97,9 +97,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function colorFor(point) {
-        if (point.color === 'red') return '#ff6b6b';
-        if (point.color === 'green') return '#39d353';
-        return '#f1c40f';
+        if (point.color === 'red') return '#c0392b';
+        if (point.color === 'green') return '#2d7d46';
+        return '#c8941d';
     }
 
     function drawPoints(points) {
@@ -107,8 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
         points.forEach((point) => {
             L.circleMarker([point.y, point.x], {
                 radius: point.color === 'red' || point.color === 'green' ? 9 : 7,
-                color: '#0b1020',
-                weight: 1.5,
+                color: '#ffffff',
+                weight: 2,
                 fillColor: colorFor(point),
                 fillOpacity: 0.95
             })
@@ -132,9 +132,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const sorted = [...points].sort((a, b) => a.client_id - b.client_id);
         const latlngs = sorted.map((p) => [p.y, p.x]);
         L.polyline(latlngs, {
-            color: '#7aa2ff',
+            color: '#7a4a2a',
             weight: 3,
-            opacity: 0.9,
+            opacity: 0.85,
             dashArray: '6 6'
         })
             .bindPopup('Ruta original (orden client_id)')
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // two consecutive stops in the optimized visit order.
         segments.forEach((seg) => {
             L.polyline([[seg.y, seg.x], [seg.y_next, seg.x_next]], {
-                color: '#5ad6c2',
+                color: '#0d1e4c',
                 weight: 4,
                 opacity: 0.95
             })
@@ -206,6 +206,125 @@ document.addEventListener('DOMContentLoaded', () => {
             .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
             .replaceAll("'", '&#039;');
     }
+
+    // ---------- CSV upload ----------
+    const routeFileInput = qs('#routeFileInput');
+    const routeUploadZone = qs('#routeUploadZone');
+    const routeFileChip = qs('#routeFileChip');
+    const routeUploadButton = qs('#routeUploadButton');
+    const routeUploadNote = qs('#routeUploadNote');
+    let stagedRouteFile = null;
+
+    qs('#routeChooseLink').addEventListener('click', (event) => {
+        event.preventDefault();
+        routeFileInput.click();
+    });
+    routeFileInput.addEventListener('change', () => {
+        const file = routeFileInput.files && routeFileInput.files[0];
+        if (file) stageRouteFile(file);
+    });
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        routeUploadZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            routeUploadZone.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach((eventName) => {
+        routeUploadZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            routeUploadZone.classList.remove('dragover');
+        });
+    });
+    routeUploadZone.addEventListener('drop', (event) => {
+        const file = event.dataTransfer.files && event.dataTransfer.files[0];
+        if (file) stageRouteFile(file);
+    });
+    routeUploadZone.addEventListener('click', (event) => {
+        // Avoid double-trigger when clicking the inner anchor.
+        if (event.target.id === 'routeChooseLink') return;
+        routeFileInput.click();
+    });
+
+    function stageRouteFile(file) {
+        if (!/\.(csv|txt)$/i.test(file.name)) {
+            setRouteUploadNote('Solo se aceptan .csv o .txt.', 'error');
+            return;
+        }
+        stagedRouteFile = file;
+        routeFileChip.hidden = false;
+        routeFileChip.textContent = `${file.name} · ${formatBytes(file.size)}`;
+        routeUploadButton.disabled = false;
+        setRouteUploadNote('', '');
+    }
+
+    function setRouteUploadNote(message, variant) {
+        routeUploadNote.className = 'form-note' + (variant ? ' ' + variant : '');
+        routeUploadNote.textContent = message || '';
+    }
+
+    function formatBytes(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    // Download a CSV template the user can fill in.
+    qs('#routeSampleButton').addEventListener('click', () => {
+        const sample = [
+            'route_id,day,client_id,latitude,longitude,client',
+            '2,1,101,-16.5000,-68.1500,Tienda Doña Rosa',
+            '2,1,102,-16.5050,-68.1450,Mini-market El Sol',
+            '2,1,103,-16.5100,-68.1400,Bodega Lupita',
+            '2,1,104,-16.5070,-68.1525,Almacén San Pedro',
+            '2,1,105,-16.4980,-68.1455,Tienda Esquina'
+        ].join('\n');
+        const blob = new Blob([sample], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'plantilla_puntos_ruta.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setRouteUploadNote('Plantilla descargada. Completá tus puntos y volvé a subir.', 'success');
+    });
+
+    routeUploadButton.addEventListener('click', async () => {
+        if (!stagedRouteFile) return;
+        const done = setButtonBusy(routeUploadButton, 'Subiendo…');
+        setRouteUploadNote('Subiendo CSV…', '');
+        showLoader('Subiendo CSV…');
+        try {
+            const formData = new FormData();
+            formData.append('file', stagedRouteFile);
+            const response = await window.SD_API.postFormData(
+                `${OPT_URL}/v1/optimization/routes/bulk-upload`,
+                formData
+            );
+            const writtenRoute = response.route_id;
+            const writtenDay = response.day;
+            const writtenCount = response.points_written;
+            // Mirror the just-uploaded (route_id, day) onto the form so a
+            // subsequent "Cargar puntos" hits the same partition.
+            const form = qs('#routeForm');
+            form.elements.route_id.value = writtenRoute;
+            form.elements.day.value = writtenDay;
+            setRouteUploadNote(
+                `OK — ${writtenCount} punto(s) escritos para route_id=${writtenRoute}, day=${writtenDay}.`,
+                'success'
+            );
+            toast(`CSV subido: ${writtenCount} punto(s).`, 'success');
+            // Auto-trigger the existing load flow so the map updates right away.
+            qs('#loadPointsButton').click();
+        } catch (error) {
+            setRouteUploadNote(error.message || 'Error al subir el CSV.', 'error');
+            toast(error.message || 'Error al subir el CSV.', 'error');
+        } finally {
+            hideLoader();
+            done();
+        }
+    });
 
     // ---------- API actions ----------
     qs('#loadPointsButton').addEventListener('click', async () => {

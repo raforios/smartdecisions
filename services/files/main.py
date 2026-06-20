@@ -1,11 +1,12 @@
 '''
-    File handler Microservice
+    Auth handler Microservice
 '''
 import socket
 from datetime import datetime, date
 from typing import Dict, Any
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 
@@ -17,6 +18,7 @@ from routes.files import router as file_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.logger_config import custom_logger as logger
+
 from services.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars(
@@ -26,7 +28,8 @@ ENV_VARS = load_and_validate_env_vars(
     },
     optional_env_vars = {
         'APP_ENV': str,
-        'ROOT_PATH': str
+        'ROOT_PATH': str,
+        'CORS_ALLOWED_ORIGINS': str
     }
 )
 
@@ -37,6 +40,19 @@ APP_ENV = ENV_VARS['APP_ENV']
 ROOT_PATH_VALUE = ENV_VARS.get('ROOT_PATH', '').strip('/')
 ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED else '/openapi.json'
+
+CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
+DEFAULT_CORS_ORIGINS = [
+    'http://127.0.0.1:5500',
+    'http://localhost:5500',
+    'http://127.0.0.1:5501',
+    'http://localhost:5501',
+    'http://127.0.0.1:8000',
+    'http://localhost:8000'
+]
+ORIGINS = [
+    origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
+] or DEFAULT_CORS_ORIGINS
 
 
 APP_CONFIG = {
@@ -60,22 +76,29 @@ app = FastAPI(**APP_CONFIG)
 
 setup_exception_handlers(app)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins = ORIGINS,
+    allow_credentials = True,
+    allow_methods = ['*'],
+    allow_headers = ['*'],
+)
+
 @app.get('/favicon.ico', include_in_schema = False)
 async def favicon():
     '''
         Serves the favicon.ico file to prevent 404 errors from browsers.
     '''
-    return FileResponse('favicon.ico')
+    return FileResponse('./favicon.ico')
 
 # Root path (Healtcheck function)
 @app.get('/', tags = ['Home'])
 def root() -> Dict[str, Any]:
     '''
-    Function root: health check function
+        Function root: health check function
 
-    Returns:
-        Dict[str, Any]: A dictionary with system info.
-
+        Returns:
+            Dict[str, Any]: A dictionary with system info.
     '''
     today = datetime.now()
     copyright_symbol = '\u00A9'
@@ -108,7 +131,6 @@ async def custom_swagger_ui():
         openapi_url = OPENAPI_URL,
         title = app.title + ' - Docs'
     )
-
 
 # Include routers
 app.include_router(file_router, tags = ['Management S3 File System'])

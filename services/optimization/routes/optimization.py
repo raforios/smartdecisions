@@ -7,21 +7,24 @@
     frontend clients only need to swap the base URL.
 '''
 from typing import Dict, List
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from boto3.resources.base import ServiceResource
 
 from controllers.optimization import (
+    bulk_upload_routes_controller,
     data_ordered_controller,
     optimization_algorithm_controller,
     preparing_data_controller,
     simulation_algorithm_controller
 )
 from schemas.optimization import (
+    BulkUploadResponse,
     DataMapResponse,
     OptimizationQueryParams,
     OptimizationResponse,
     RouteResponse
 )
+from services.exceptions import InvalidInputError
 from services.db_connection import GET_DB_DEPENDENCY
 from services.events_emitter import log_usage
 from services.logger_config import custom_logger as logger
@@ -177,5 +180,48 @@ async def get_route_endpoint(
         route_id = query_params.route_id,
         day = query_params.day,
         dist = query_params.dist,
+        current_user = current_user
+    )
+
+
+@router.post(
+    '/routes/bulk-upload',
+    response_model = BulkUploadResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Upload route points from a CSV',
+    description = (
+        'Accepts a CSV with columns route_id, day, client_id, latitude, '
+        'longitude (+ optional client name). All rows must share the same '
+        '(route_id, day); re-upload of the same pair replaces the previous '
+        'content.'
+    )
+)
+@log_usage(MICROSERVICE_NAME)
+async def bulk_upload_routes_endpoint(
+    request: Request,
+    file: UploadFile = File(...),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to bulk-upload route points via CSV.
+    '''
+    filename = file.filename or ''
+    if not filename.lower().endswith(('.csv', '.txt')):
+        raise InvalidInputError(detail = 'Solo se aceptan archivos .csv o .txt.')
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise InvalidInputError(detail = 'El archivo subido está vacío.')
+    try:
+        csv_text = raw_bytes.decode('utf-8-sig')
+    except UnicodeDecodeError as e:
+        raise InvalidInputError(
+            detail = 'El archivo no pudo decodificarse como UTF-8.'
+        ) from e
+    message = f'Bulk-uploading routes CSV "{filename}" from {current_user}.'
+    logger.info(message)
+    return await bulk_upload_routes_controller(
+        dynamodb_resource = dynamodb_resource,
+        csv_text = csv_text,
         current_user = current_user
     )

@@ -8,8 +8,10 @@ class IngestDataset(TypedDict, total = False):
     '''
         Python model representing an ingested dataset document in DynamoDB.
 
-        Table: t_ingest_datasets
-        Partition Key: dataset_id (String, UUIDv4)
+        Table: ingest_datasets
+        Partition Key: id (String, UUIDv4) — same value as the logical
+                       `dataset_id` attribute, kept as a mirror for backward
+                       compatibility with downstream consumers.
 
         Status values:
             - 'validated': file passed the contract and is ready for analytics.

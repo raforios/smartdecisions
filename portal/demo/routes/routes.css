@@ -78,9 +78,9 @@
     border-radius: 3px;
     border: 1px solid var(--border-strong);
 }
-.swatch-original { background: #7aa2ff; }
+.swatch-original { background: #7a4a2a; }
 .swatch-optimized { background: var(--accent); }
-.swatch-points { background: #f1c40f; border-radius: 50%; }
+.swatch-points { background: #c8941d; border-radius: 50%; }
 
 /* ============ Metric grid (summary) ============ */
 .metric-grid {

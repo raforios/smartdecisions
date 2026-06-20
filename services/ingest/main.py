@@ -49,12 +49,37 @@ ORIGINS = [
 ] or DEFAULT_CORS_ORIGINS
 
 
+def _ensure_template_present() -> None:
+    '''
+        Generates `assets/template_ventas_v1.xlsx` if it is not already on
+        disk. The Dockerfile bakes it at build time, but `python main.py`
+        in local dev does not — without this step `GET /template/file`
+        would 400 with "plantilla aún no disponible".
+    '''
+    from pathlib import Path
+    target = (
+        Path(__file__).resolve().parent / 'assets' / 'template_ventas_v1.xlsx'
+    )
+    if target.exists():
+        return
+    try:
+        from scripts.generate_template import generate
+        generate(target)
+        message = f'Generated v1 template at {target}.'
+        logger.info(message)
+    except Exception as e: # pylint: disable=broad-exception-caught
+        error_msg = f'Could not pre-generate v1 template: {e}'
+        logger.warning(error_msg)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     '''
         Handles startup/shutdown. DynamoDB tables are managed outside the app
-        lifecycle (via dynamodb.sh / IaC); we only log readiness here.
+        lifecycle (via dynamodb.sh / IaC). Pre-generates the canonical v1
+        template if it is missing so `GET /template/file` always works.
     '''
+    _ensure_template_present()
     message = 'Ingest startup: DynamoDB-backed service ready.'
     logger.info(message)
     yield

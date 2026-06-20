@@ -1,4 +1,4 @@
-/* Module-specific styles for /demo/playground/. */
+/* Module-specific styles for /demo/playground/. Extends ../styles/demo.css. */
 
 /* ============ Tabs ============ */
 .tabs {
@@ -34,28 +34,48 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* ============ Playground grid ============ */
-.playground-grid {
+/* ============ Generic helpers ============ */
+.layout-split {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
     gap: 1.4rem;
+    margin-bottom: 1.4rem;
 }
-.playground-grid > .card { display: flex; flex-direction: column; gap: 0.8rem; }
-.playground-grid > .card h3 { margin: 0; }
+.layout-3col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 1.4rem;
+}
+.layout-3col > .card { display: flex; flex-direction: column; gap: 0.7rem; }
+.layout-3col > .card label { display: grid; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+.layout-3col > .card label > span { color: var(--muted); }
+.layout-3col input,
+.layout-3col select,
+.layout-3col textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+.layout-3col input:focus,
+.layout-3col select:focus,
+.layout-3col textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.layout-3col textarea {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+}
 
 .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.7rem;
-}
-.grid-2 label { font-size: 0.85rem; color: var(--muted); }
-
-.form-stack textarea {
-    font-family: 'SF Mono', Menlo, Consolas, monospace;
-    font-size: 0.85rem;
-    line-height: 1.5;
-    resize: vertical;
-    min-height: 60px;
 }
 
 .form-actions {
@@ -64,92 +84,248 @@
     gap: 0.5rem;
     justify-content: flex-end;
 }
-.form-actions .btn { padding: 0.55rem 0.95rem; font-size: 0.88rem; }
 
-/* ============ Result blocks ============ */
-.result-block {
+.small { font-size: 0.85rem; }
+.muted { color: var(--muted); }
+
+/* ============ Upload zone (Datasets tab) ============ */
+.upload-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 1.4rem 1rem;
+    margin: 0.6rem 0 1rem;
+    text-align: center;
+    background: var(--bg);
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+.upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(90, 214, 194, 0.05);
+}
+.upload-hint { color: var(--muted); margin: 0; }
+.upload-hint a { font-weight: 600; }
+.upload-hint code {
+    background: rgba(122, 162, 255, 0.12);
+    border: 1px solid var(--border);
+    padding: 0.05rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.88em;
+}
+.file-chip {
+    margin: 0.8rem auto 0;
+    display: inline-block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.3rem 0.9rem;
+    color: var(--text);
+    font-size: 0.85rem;
+}
+
+/* ============ Dataset list ============ */
+.bucket-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.6rem;
+}
+.dataset-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.dataset-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    color: var(--text);
+    font-size: 0.92rem;
+    transition: background 0.12s ease;
+}
+.dataset-list li:hover { background: rgba(90, 214, 194, 0.06); }
+.dataset-list li:last-child { border-bottom: 0; }
+.dataset-list li.is-selected {
+    background: rgba(90, 214, 194, 0.12);
+    color: var(--accent);
+    font-weight: 600;
+}
+.dataset-list li.empty {
+    color: var(--muted);
+    font-style: italic;
+    cursor: default;
+    text-align: center;
+}
+.dataset-list li.empty:hover { background: transparent; }
+.dataset-list .ext-tag {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--panel-elevated);
+    color: var(--muted);
+}
+
+/* ============ Preview toolbar ============ */
+.preview-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    align-items: flex-end;
+    margin: 1rem 0;
+}
+.preview-toolbar label {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+.preview-toolbar input,
+.preview-toolbar select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.45rem 0.65rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+/* ============ Tables ============ */
+.table-wrapper {
+    overflow-x: auto;
+    max-height: 320px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    margin-bottom: 1rem;
+}
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.data-table thead th {
+    text-align: left;
+    padding: 0.55rem 0.8rem;
+    background: var(--panel-elevated);
+    color: var(--muted);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+}
+.data-table tbody td {
+    padding: 0.45rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    font-variant-numeric: tabular-nums;
+}
+.data-table tbody tr:last-child td { border-bottom: 0; }
+
+/* ============ Metric grid ============ */
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.8rem;
+    margin: 0.6rem 0 1rem;
+}
+.metric {
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 1rem;
-    font-size: 0.9rem;
-    color: var(--text);
-    display: none;
+    padding: 0.7rem 0.85rem;
 }
-.result-block.is-shown { display: block; animation: panel-in 0.18s ease; }
-.result-block h4 {
-    margin: 0 0 0.4rem;
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+.metric-label {
     color: var(--muted);
-}
-.result-block pre {
-    margin: 0;
-    font-family: 'SF Mono', Menlo, Consolas, monospace;
-    font-size: 0.85rem;
-    overflow-x: auto;
-    color: var(--text);
-}
-.result-block .result-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 0.6rem;
-    margin-bottom: 0.8rem;
-}
-.result-block .result-pill {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.5rem 0.7rem;
-}
-.result-block .result-pill .label {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--muted);
+    margin: 0 0 0.25rem;
 }
-.result-block .result-pill .value {
-    font-size: 1.05rem;
+.metric-value {
+    margin: 0;
+    font-size: 1.1rem;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
     color: var(--accent);
-    font-variant-numeric: tabular-nums;
+    word-break: break-word;
 }
+.metric-value.muted { color: var(--text); }
 
-.result-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 0.6rem;
-    font-size: 0.85rem;
-}
-.result-table th, .result-table td {
-    padding: 0.4rem 0.7rem;
-    border-bottom: 1px solid var(--border);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-.result-table th:first-child, .result-table td:first-child { text-align: left; }
-.result-table thead th {
-    background: var(--panel-elevated);
+/* ============ Empty banners ============ */
+.empty-banner {
+    background: var(--panel);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
     color: var(--muted);
-    text-transform: uppercase;
-    font-size: 0.72rem;
-    letter-spacing: 0.1em;
 }
+.empty-banner p { margin: 0; }
 
-/* ============ Charts ============ */
+/* ============ Chart cards ============ */
+.dataset-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin: 0 0 1rem;
+}
+.dataset-header h3 { margin: 0; font-size: 1.15rem; }
+
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 1.2rem;
+    margin-top: 1rem;
+}
+.chart-card { display: flex; flex-direction: column; }
+.chart-card h4 { margin: 0 0 0.6rem; font-size: 1rem; }
 .chart-wrapper {
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 0.6rem;
-    height: 260px;
-    display: none;
+    padding: 0.5rem;
+    height: 320px;
+    min-height: 0;
 }
-.chart-wrapper.is-shown { display: block; }
+.chart-wrapper.tall { height: 380px; }
 .chart-wrapper canvas { width: 100% !important; height: 100% !important; }
 
+/* ============ Utility tab ============ */
+.utility-toolbar {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-end;
+    margin-bottom: 0.6rem;
+}
+.utility-toolbar label {
+    flex: 1;
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+.block-title {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.92rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
 @media (max-width: 720px) {
-    .playground-grid { grid-template-columns: 1fr; }
+    .layout-split, .layout-3col, .chart-grid { grid-template-columns: 1fr; }
     .grid-2 { grid-template-columns: 1fr; }
 }

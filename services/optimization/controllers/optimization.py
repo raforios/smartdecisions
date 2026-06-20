@@ -8,21 +8,29 @@
     while this microservice reads the same shape from DynamoDB via
     `services.route_data.get_route_points`.
 '''
-from typing import List, Optional
+import csv
+import io
+from typing import List, Optional, Tuple
 import pandas as pd
 import osmnx as ox
 import networkx as nx
 from boto3.resources.base import ServiceResource
 
-from schemas.optimization import DataMapResponse, OptimizationResponse, RouteResponse
+from schemas.optimization import (
+    BulkUploadResponse,
+    DataMapResponse,
+    OptimizationResponse,
+    RouteResponse
+)
 from services.events_emitter import audit_event
+from services.exceptions import InvalidInputError
 from services.ml_optimization import (
     GeoAnalyzer,
     distance_between_points,
     fiter_order_df,
     optimal_route
 )
-from services.route_data import get_route_points
+from services.route_data import bulk_upload_points, get_route_points
 
 
 # ---------------------------------------------------------------------------
@@ -263,3 +271,132 @@ async def simulation_algorithm_controller(
 
     df_distances = geo_analyzer.get_distance_matrix()
     return df_distances.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Bulk upload — CSV → DynamoDB
+# ---------------------------------------------------------------------------
+_COLUMN_ALIASES = {
+    'route_id':  ['route_id', 'routeid', 'ruta', 'ruta_id', 'rutaid'],
+    'day':       ['day', 'dia', 'día', 'jornada'],
+    'client_id': ['client_id', 'clientid', 'cliente_id', 'cliente', 'id_cliente', 'id'],
+    'latitude':  ['latitude', 'lat', 'latitud', 'y'],
+    'longitude': ['longitude', 'lon', 'lng', 'longitud', 'x'],
+    'client':    ['client', 'cliente_nombre', 'nombre', 'name']
+}
+REQUIRED_COLUMNS = {'route_id', 'day', 'client_id', 'latitude', 'longitude'}
+
+
+def _resolve_header(raw_header: str) -> Optional[str]:
+    '''
+        Maps a CSV header column to its canonical name. Returns None when
+        the header is not part of the recognized set.
+    '''
+    norm = raw_header.strip().lower()
+    for canonical, aliases in _COLUMN_ALIASES.items():
+        if norm in aliases:
+            return canonical
+    return None
+
+
+def _parse_csv_text(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
+    '''
+        Parses the CSV body. Returns:
+            - rows: list of dicts keyed by canonical column name
+            - detected_headers: canonical headers that appeared in the file
+            - route_id_detected
+            - day_detected
+        Raises InvalidInputError on missing required columns or mixed
+        (route_id, day) values across the file.
+    '''
+    reader = csv.reader(io.StringIO(raw_text))
+    rows_iter = iter(reader)
+    try:
+        header = next(rows_iter)
+    except StopIteration as e:
+        raise InvalidInputError(detail = 'El archivo CSV está vacío.') from e
+
+    resolved = [_resolve_header(cell) for cell in header]
+    canonical_set = {col for col in resolved if col}
+    missing = REQUIRED_COLUMNS - canonical_set
+    if missing:
+        raise InvalidInputError(
+            detail = (
+                f'Faltan columnas obligatorias en el CSV: {sorted(missing)}. '
+                f'Columnas detectadas: {sorted(canonical_set)}.'
+            )
+        )
+
+    rows: List[dict] = []
+    route_id_set = set()
+    day_set = set()
+    for line_no, raw_row in enumerate(rows_iter, start = 2):
+        if not raw_row or all((cell or '').strip() == '' for cell in raw_row):
+            continue
+        record: dict = {}
+        for idx, value in enumerate(raw_row):
+            if idx >= len(resolved):
+                continue
+            col = resolved[idx]
+            if col is None:
+                continue
+            record[col] = (value or '').strip()
+        try:
+            record['route_id'] = int(record['route_id'])
+            record['day'] = int(record['day'])
+            record['client_id'] = int(record['client_id'])
+            record['latitude'] = float(record['latitude'])
+            record['longitude'] = float(record['longitude'])
+        except (KeyError, ValueError) as e:
+            raise InvalidInputError(
+                detail = f'Fila {line_no} con valores inválidos ({e}).'
+            ) from e
+        route_id_set.add(record['route_id'])
+        day_set.add(record['day'])
+        rows.append(record)
+
+    if not rows:
+        raise InvalidInputError(detail = 'El CSV no contiene filas de datos.')
+    if len(route_id_set) != 1 or len(day_set) != 1:
+        raise InvalidInputError(
+            detail = (
+                'Todos los puntos del CSV deben compartir el mismo route_id y day. '
+                f'route_id encontrados: {sorted(route_id_set)}; '
+                f'day encontrados: {sorted(day_set)}.'
+            )
+        )
+    return (
+        rows,
+        sorted(canonical_set),
+        next(iter(route_id_set)),
+        next(iter(day_set))
+    )
+
+
+@audit_event('OPTIMIZATION', 'RoutePoints', 'BULK_CREATE')
+async def bulk_upload_routes_controller(
+    dynamodb_resource: ServiceResource,
+    csv_text: str,
+    current_user: str
+) -> BulkUploadResponse:
+    '''
+        Parses a CSV body and persists every point into DynamoDB under the
+        (route_id, day) partition. Re-uploading the same (route_id, day)
+        replaces the previous content.
+
+        `current_user` is accepted so the @audit_event decorator can stamp
+        the event with the operator email.
+    '''
+    rows, headers, route_id, day = _parse_csv_text(csv_text)
+    written = bulk_upload_points(
+        dynamodb_resource = dynamodb_resource,
+        route_id = route_id,
+        day = day,
+        points = rows
+    )
+    return BulkUploadResponse(
+        route_id = route_id,
+        day = day,
+        points_written = written,
+        columns_detected = headers
+    )

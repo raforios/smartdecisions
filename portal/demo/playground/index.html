@@ -4,22 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Playground ML — SmartDecisions Demo</title>
-    <link rel="stylesheet" href="../styles/demo.css">
-    <link rel="stylesheet" href="playground.css">
-    <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
-    <script src="../js/config.js"></script>
-    <script src="../js/auth.js" defer></script>
-    <script src="../js/api.js" defer></script>
-    <script src="../js/ui.js" defer></script>
+    <link rel="stylesheet" href="../styles/demo.css?v=4">
+    <link rel="stylesheet" href="playground.css?v=4">
+    <link rel="icon" href="../../assets/favicon.svg?v=4" type="image/svg+xml">
+    <script src="../js/config.js?v=2"></script>
+    <script src="../js/auth.js?v=2" defer></script>
+    <script src="../js/api.js?v=2" defer></script>
+    <script src="../js/ui.js?v=2" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
-    <script src="playground.js" defer></script>
+    <script src="playground.shell.js?v=3" defer></script>
+    <script src="playground.datasets.js?v=3" defer></script>
+    <script src="playground.classification.js?v=3" defer></script>
+    <script src="playground.prediction.js?v=3" defer></script>
+    <script src="playground.utilities.js?v=3" defer></script>
 </head>
 <body>
 
 <header class="demo-header">
     <div class="container demo-nav">
         <a href="../home.html" class="brand">
-            <img src="../../assets/logo-bear.svg" alt="" aria-hidden="true">
+            <img src="../../assets/bear-face.jpg" alt="" aria-hidden="true">
             <span class="brand-text">Smart<span class="accent">Decisions</span></span>
         </a>
         <div class="demo-nav-actions">
@@ -34,212 +38,413 @@
     <div class="container">
         <h1 class="page-title">Playground ML</h1>
         <p class="page-subtitle">
-            Experimenta con los algoritmos de <strong>ML_FUNCTIONS</strong>:
-            regresión lineal y logística (cost / gradient / train / predict),
-            sigmoid en batch y normalización Z-score. Cada panel se conecta
-            directo al microservicio. Las matrices se ingresan como JSON.
+            Reproduce los 3 escenarios reales del notebook
+            <code>frontend.ipynb</code> contra los microservicios productivos
+            <strong>FILES</strong> (datasets en S3) y <strong>ML_FUNCTIONS</strong>
+            (entrenamiento + predicción). Empezá subiendo tu dataset en
+            <em>Datasets</em>, o usá uno ya en el bucket.
         </p>
 
-        <nav class="tabs" role="tablist" aria-label="Algoritmos">
-            <button class="tab is-active" role="tab" data-tab="linear" aria-selected="true">Regresión Lineal</button>
-            <button class="tab" role="tab" data-tab="logistic" aria-selected="false">Regresión Logística</button>
-            <button class="tab" role="tab" data-tab="common" aria-selected="false">Z-Score + Sigmoid</button>
+        <nav class="tabs" role="tablist" aria-label="Playground sections">
+            <button class="tab is-active" role="tab" data-tab="datasets" aria-selected="true">
+                1 · Datasets
+            </button>
+            <button class="tab" role="tab" data-tab="classification" aria-selected="false">
+                2 · Clasificación (Logistic)
+            </button>
+            <button class="tab" role="tab" data-tab="prediction" aria-selected="false">
+                3 · Regresión Lineal
+            </button>
+            <button class="tab" role="tab" data-tab="utilities" aria-selected="false">
+                4 · Utilidades (Z-Score · Sigmoid)
+            </button>
         </nav>
 
-        <!-- ===================== TAB: Linear ===================== -->
-        <section class="tab-panel is-active" data-panel="linear" role="tabpanel">
-            <div class="playground-grid">
+        <!-- ============================================================ -->
+        <!--  TAB · DATASETS                                              -->
+        <!-- ============================================================ -->
+        <section class="tab-panel is-active" data-panel="datasets" role="tabpanel">
 
+            <div class="layout-split">
                 <article class="card">
-                    <h3>Entrenar (Linear Regression)</h3>
+                    <h3>Subir un dataset al bucket</h3>
                     <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Ejecuta gradiente descendente con tus datos. Devuelve los pesos finales
-                        y el historial de costo para visualizar la convergencia.
+                        Sube un <code>.txt</code> o <code>.csv</code>. El archivo
+                        viaja al microservicio <strong>FILES</strong> y queda
+                        disponible en el bucket
+                        <code id="bucketLabel">ml-data-file-handler</code>.
                     </p>
-                    <form id="formLinearTrain" class="form-stack" data-form>
-                        <label><span>x (lista o matriz JSON)</span>
-                            <textarea name="x" rows="2" required></textarea></label>
-                        <label><span>y (lista JSON)</span>
-                            <textarea name="y" rows="2" required></textarea></label>
-                        <div class="grid-2">
-                            <label><span>w_in</span><input name="w_in" required></label>
-                            <label><span>b_in</span><input name="b_in" type="number" step="any" required></label>
-                            <label><span>alpha</span><input name="alpha" type="number" step="any" required></label>
-                            <label><span>num_iters</span><input name="num_iters" type="number" min="1" required></label>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="submit" class="btn btn-primary">Entrenar</button>
-                        </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultLinearTrain"></div>
-                    <div class="chart-wrapper"><canvas id="chartLinearTrain"></canvas></div>
+
+                    <div class="upload-zone" id="datasetUploadZone">
+                        <input type="file" id="datasetFileInput" accept=".csv,.txt" hidden>
+                        <p class="upload-hint">
+                            Arrastra tu <code>.csv</code> o <code>.txt</code> aquí
+                            <br>o <a href="#" id="datasetChooseLink">elegí un archivo</a>.
+                        </p>
+                        <p id="datasetFileChip" class="file-chip" hidden></p>
+                    </div>
+
+                    <button id="datasetUploadButton" class="btn btn-primary" disabled>
+                        Subir al bucket
+                    </button>
+                    <p class="form-note" id="datasetUploadNote" aria-live="polite"></p>
                 </article>
 
                 <article class="card">
-                    <h3>Predecir (Linear Regression)</h3>
+                    <h3>Archivos en el bucket</h3>
                     <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Usa los pesos entrenados (o tus propios valores) para calcular
-                        predicciones sobre nuevos puntos.
+                        Selecciona un archivo para previsualizarlo y enviarlo a
+                        un escenario.
                     </p>
-                    <form id="formLinearPredict" class="form-stack" data-form>
-                        <label><span>x_test (lista o matriz JSON)</span>
-                            <textarea name="x_test" rows="2" required></textarea></label>
-                        <div class="grid-2">
-                            <label><span>w</span><input name="w" required></label>
-                            <label><span>b</span><input name="b" type="number" step="any" required></label>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="button" class="btn btn-ghost" id="reuseLinearWeights">Usar pesos entrenados</button>
-                            <button type="submit" class="btn btn-primary">Predecir</button>
-                        </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultLinearPredict"></div>
+                    <div class="bucket-toolbar">
+                        <button id="datasetRefreshButton" class="btn btn-ghost btn-small">
+                            ↻ Refrescar
+                        </button>
+                        <span id="datasetCount" class="filter-count">—</span>
+                    </div>
+                    <ul id="datasetList" class="dataset-list"></ul>
+                    <p class="form-note" id="datasetListNote" aria-live="polite"></p>
                 </article>
+            </div>
 
-                <article class="card">
-                    <h3>Cost / Gradient (Linear)</h3>
-                    <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Inspecciona el costo y el gradiente para un set de pesos
-                        cualquiera (sin entrenar).
-                    </p>
-                    <form id="formLinearCostGrad" class="form-stack" data-form>
-                        <label><span>x</span><textarea name="x" rows="2" required></textarea></label>
-                        <label><span>y</span><textarea name="y" rows="2" required></textarea></label>
+            <article class="card" id="datasetPreviewCard" hidden>
+                <h3>Previsualización — <span id="datasetPreviewName">—</span></h3>
+                <div class="metric-grid" id="datasetPreviewSummary"></div>
+
+                <div class="preview-toolbar">
+                    <label>
+                        <span>Delimiter</span>
+                        <select id="previewDelimiter">
+                            <option value="auto">auto</option>
+                            <option value=",">coma ,</option>
+                            <option value=";">punto y coma ;</option>
+                            <option value="\t">tab</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Skip rows</span>
+                        <input type="number" id="previewSkipRows" min="0" value="0">
+                    </label>
+                    <label>
+                        <span>Tiene header</span>
+                        <input type="checkbox" id="previewHasHeader">
+                    </label>
+                    <button id="previewReparseButton" class="btn btn-ghost btn-small">
+                        Reparsear
+                    </button>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="datasetPreviewTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="form-actions">
+                    <button id="loadIntoClassificationButton" class="btn btn-primary" disabled>
+                        Usar en Clasificación →
+                    </button>
+                    <button id="loadIntoPredictionButton" class="btn btn-primary" disabled>
+                        Usar en Regresión Lineal →
+                    </button>
+                </div>
+                <p class="form-note" id="loadIntoNote" aria-live="polite"></p>
+            </article>
+        </section>
+
+        <!-- ============================================================ -->
+        <!--  TAB · CLASSIFICATION                                        -->
+        <!-- ============================================================ -->
+        <section class="tab-panel" data-panel="classification" role="tabpanel">
+            <p class="page-subtitle">
+                Espera un dataset con <strong>2 features numéricas + 1 etiqueta
+                binaria (0/1)</strong>. Réplica del caso <em>Admisión
+                universitaria</em> (ex2data1.txt) del notebook.
+            </p>
+
+            <div id="classificationEmpty" class="empty-banner">
+                <p>Aún no cargaste un dataset acá. Andá a la pestaña <strong>Datasets</strong>,
+                   previsualiza un archivo y elegí <em>Usar en Clasificación</em>.</p>
+            </div>
+
+            <div id="classificationContent" hidden>
+                <header class="dataset-header">
+                    <h3 id="classificationDatasetName">—</h3>
+                    <span id="classificationDatasetStats" class="muted small"></span>
+                </header>
+
+                <div class="layout-3col">
+                    <article class="card">
+                        <h4>Features</h4>
+                        <label>X (eje horizontal)
+                            <select id="classificationFeatureX"></select>
+                        </label>
+                        <label>Y (eje vertical)
+                            <select id="classificationFeatureY"></select>
+                        </label>
+                        <label>Etiqueta (0/1)
+                            <select id="classificationLabelCol"></select>
+                        </label>
+                        <label>
+                            <input type="checkbox" id="classificationNormalize">
+                            Aplicar Z-Score antes de entrenar
+                        </label>
+                    </article>
+
+                    <article class="card">
+                        <h4>Entrenamiento</h4>
                         <div class="grid-2">
-                            <label><span>w</span><input name="w" required></label>
-                            <label><span>b</span><input name="b" type="number" step="any" required></label>
+                            <label>alpha
+                                <input type="number" step="any" id="classificationAlpha" value="0.001">
+                            </label>
+                            <label>num_iters
+                                <input type="number" min="1" id="classificationIters" value="3000">
+                            </label>
+                            <label>w₀ inicial
+                                <input type="text" id="classificationW0" value="[0, 0]">
+                            </label>
+                            <label>b inicial
+                                <input type="number" step="any" id="classificationB0" value="-8">
+                            </label>
                         </div>
                         <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="submit" class="btn btn-primary">Calcular</button>
+                            <button id="classificationTrainButton" class="btn btn-primary">
+                                Entrenar Logistic Regression
+                            </button>
                         </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultLinearCostGrad"></div>
+                        <p class="form-note" id="classificationTrainNote" aria-live="polite"></p>
+                    </article>
+
+                    <article class="card">
+                        <h4>Predecir un punto</h4>
+                        <div class="grid-2">
+                            <label>X (feature 1)
+                                <input type="number" step="any" id="classificationPredX" value="55">
+                            </label>
+                            <label>Y (feature 2)
+                                <input type="number" step="any" id="classificationPredY" value="85">
+                            </label>
+                        </div>
+                        <div class="form-actions">
+                            <button id="classificationPredictButton" class="btn btn-ghost" disabled>
+                                Calcular probabilidad
+                            </button>
+                        </div>
+                        <p class="form-note" id="classificationPredictNote" aria-live="polite"></p>
+                    </article>
+                </div>
+
+                <div class="chart-grid">
+                    <article class="card chart-card">
+                        <h4>Scatter + frontera de decisión</h4>
+                        <div class="chart-wrapper"><canvas id="classificationScatter"></canvas></div>
+                    </article>
+                    <article class="card chart-card">
+                        <h4>Costo J vs iteración</h4>
+                        <div class="chart-wrapper"><canvas id="classificationCost"></canvas></div>
+                    </article>
+                </div>
+
+                <article class="card" id="classificationResults" hidden>
+                    <h4>Resultado del último entrenamiento</h4>
+                    <div class="metric-grid" id="classificationResultsGrid"></div>
                 </article>
             </div>
         </section>
 
-        <!-- ===================== TAB: Logistic ===================== -->
-        <section class="tab-panel" data-panel="logistic" role="tabpanel">
-            <div class="playground-grid">
+        <!-- ============================================================ -->
+        <!--  TAB · LINEAR REGRESSION                                     -->
+        <!-- ============================================================ -->
+        <section class="tab-panel" data-panel="prediction" role="tabpanel">
+            <p class="page-subtitle">
+                Espera un dataset con <strong>N features numéricas + 1 columna
+                objetivo</strong>. Réplica del caso <em>Precio de casas</em>
+                (houses.txt) — mostrá cómo cambia la convergencia con el alpha
+                y con/sin Z-Score. También sirve para regresión simple tipo
+                Celsius/Fahrenheit (1 sola feature).
+            </p>
 
-                <article class="card">
-                    <h3>Entrenar (Logistic Regression)</h3>
-                    <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Gradiente descendente para clasificación binaria. Usa
-                        <code>y ∈ {0, 1}</code>.
-                    </p>
-                    <form id="formLogisticTrain" class="form-stack" data-form>
-                        <label><span>x_matrix (matriz JSON)</span>
-                            <textarea name="x_matrix" rows="3" required></textarea></label>
-                        <label><span>y (lista 0/1)</span>
-                            <textarea name="y" rows="2" required></textarea></label>
+            <div id="predictionEmpty" class="empty-banner">
+                <p>Aún no cargaste un dataset acá. Andá a la pestaña
+                <strong>Datasets</strong> y elegí <em>Usar en Regresión Lineal</em>.</p>
+            </div>
+
+            <div id="predictionContent" hidden>
+                <header class="dataset-header">
+                    <h3 id="predictionDatasetName">—</h3>
+                    <span id="predictionDatasetStats" class="muted small"></span>
+                </header>
+
+                <div class="layout-3col">
+                    <article class="card">
+                        <h4>Features y objetivo</h4>
+                        <label>Columnas X (Ctrl/Cmd para multi-select)
+                            <select id="predictionFeatures" multiple size="6"></select>
+                        </label>
+                        <label>Columna objetivo y
+                            <select id="predictionTarget"></select>
+                        </label>
+                        <label>
+                            <input type="checkbox" id="predictionNormalize" checked>
+                            Aplicar Z-Score antes de entrenar
+                        </label>
+                    </article>
+
+                    <article class="card">
+                        <h4>Entrenamiento</h4>
                         <div class="grid-2">
-                            <label><span>w_in (lista)</span><input name="w_in" required></label>
-                            <label><span>b_in</span><input name="b_in" type="number" step="any" required></label>
-                            <label><span>alpha</span><input name="alpha" type="number" step="any" required></label>
-                            <label><span>num_iters</span><input name="num_iters" type="number" min="1" required></label>
+                            <label>alpha
+                                <input type="number" step="any" id="predictionAlpha" value="0.3">
+                            </label>
+                            <label>num_iters
+                                <input type="number" min="1" id="predictionIters" value="1000">
+                            </label>
                         </div>
                         <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="submit" class="btn btn-primary">Entrenar</button>
+                            <button id="predictionTrainButton" class="btn btn-primary">
+                                Entrenar Linear Regression
+                            </button>
                         </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultLogisticTrain"></div>
-                    <div class="chart-wrapper"><canvas id="chartLogisticTrain"></canvas></div>
-                </article>
+                        <p class="form-note" id="predictionTrainNote" aria-live="polite"></p>
+                        <p class="page-subtitle small" style="margin-top: 0.6rem;">
+                            Tip: para alphas <em>sin</em> normalización probá
+                            <code>9.9e-7</code> / <code>9e-7</code> / <code>1e-7</code>
+                            como en el notebook.
+                        </p>
+                    </article>
 
-                <article class="card">
-                    <h3>Predecir (Logistic Regression)</h3>
-                    <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Devuelve etiquetas binarias (0 o 1) usando el modelo entrenado.
-                    </p>
-                    <form id="formLogisticPredict" class="form-stack" data-form>
-                        <label><span>x_matrix (matriz JSON)</span>
-                            <textarea name="x_matrix" rows="3" required></textarea></label>
-                        <div class="grid-2">
-                            <label><span>w (lista)</span><input name="w" required></label>
-                            <label><span>b</span><input name="b" type="number" step="any" required></label>
-                        </div>
+                    <article class="card">
+                        <h4>Predecir una observación</h4>
+                        <p class="page-subtitle small" style="margin: 0 0 0.6rem;">
+                            Ingresá los valores de cada X en el orden de selección
+                            (JSON array). Se aplica Z-Score si fue usado al entrenar.
+                        </p>
+                        <label>x (lista JSON)
+                            <textarea id="predictionPredX" rows="2">[500, 3, 3, 20]</textarea>
+                        </label>
                         <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="button" class="btn btn-ghost" id="reuseLogisticWeights">Usar pesos entrenados</button>
-                            <button type="submit" class="btn btn-primary">Predecir</button>
+                            <button id="predictionPredictButton" class="btn btn-ghost" disabled>
+                                Predecir
+                            </button>
                         </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultLogisticPredict"></div>
-                </article>
+                        <p class="form-note" id="predictionPredictNote" aria-live="polite"></p>
+                    </article>
+                </div>
 
-                <article class="card">
-                    <h3>Cost / Gradient (Logistic)</h3>
-                    <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Inspecciona costo y gradiente con un set de pesos arbitrario.
-                    </p>
-                    <form id="formLogisticCostGrad" class="form-stack" data-form>
-                        <label><span>x_matrix</span><textarea name="x_matrix" rows="3" required></textarea></label>
-                        <label><span>y</span><textarea name="y" rows="2" required></textarea></label>
-                        <div class="grid-2">
-                            <label><span>w (lista)</span><input name="w" required></label>
-                            <label><span>b</span><input name="b" type="number" step="any" required></label>
+                <div class="chart-grid">
+                    <article class="card chart-card">
+                        <h4>Scatter por feature (vs objetivo)</h4>
+                        <div class="chart-wrapper tall">
+                            <canvas id="predictionFeaturesChart"></canvas>
                         </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="submit" class="btn btn-primary">Calcular</button>
+                    </article>
+                    <article class="card chart-card">
+                        <h4>Costo J vs iteración</h4>
+                        <div class="chart-wrapper tall">
+                            <canvas id="predictionCost"></canvas>
                         </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultLogisticCostGrad"></div>
+                    </article>
+                </div>
+
+                <article class="card" id="predictionResults" hidden>
+                    <h4>Resultado del último entrenamiento</h4>
+                    <div class="metric-grid" id="predictionResultsGrid"></div>
                 </article>
             </div>
         </section>
 
-        <!-- ===================== TAB: Common ===================== -->
-        <section class="tab-panel" data-panel="common" role="tabpanel">
-            <div class="playground-grid">
+        <!-- ============================================================ -->
+        <!--  TAB · UTILITIES (Z-Score + Sigmoid)                         -->
+        <!-- ============================================================ -->
+        <section class="tab-panel" data-panel="utilities" role="tabpanel">
+            <p class="page-subtitle">
+                Acceso directo a los dos helpers más usados del API
+                <strong>ML_FUNCTIONS</strong> — útiles cuando el equipo
+                técnico del cliente quiere ver los endpoints aislados o
+                inspeccionar transformaciones sobre sus datos.
+            </p>
+
+            <div class="layout-split">
 
                 <article class="card">
-                    <h3>Normalización Z-Score</h3>
-                    <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Normaliza cada columna restando su media y dividiendo por su
-                        desviación estándar. Útil antes de entrenar cuando las
-                        features tienen escalas muy distintas.
+                    <h3>Z-Score sobre una matriz</h3>
+                    <p class="page-subtitle small" style="margin: 0 0 0.8rem;">
+                        Llama a <code>POST /v1/common/normalize-features</code> y
+                        devuelve <code>x_norm</code>, μ y σ por columna.
                     </p>
-                    <form id="formNormalize" class="form-stack" data-form>
-                        <label><span>x_matrix (matriz JSON)</span>
-                            <textarea name="x_matrix" rows="4" required></textarea></label>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="submit" class="btn btn-primary">Normalizar</button>
+                    <div class="utility-toolbar">
+                        <label>
+                            <span>Origen de datos</span>
+                            <select id="zscoreSource">
+                                <option value="manual">Ingresar matriz JSON</option>
+                                <option value="dataset_class">Usar dataset de Clasificación</option>
+                                <option value="dataset_pred">Usar dataset de Regresión Lineal</option>
+                            </select>
+                        </label>
+                        <button id="zscoreLoadButton" class="btn btn-ghost btn-small" hidden>
+                            Cargar selección
+                        </button>
+                    </div>
+                    <label>
+                        <span>x_matrix (JSON)</span>
+                        <textarea id="zscoreMatrix" rows="5">[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]</textarea>
+                    </label>
+                    <div class="form-actions">
+                        <button type="button" id="zscoreResetButton" class="btn btn-ghost btn-small">
+                            Restablecer ejemplo
+                        </button>
+                        <button type="button" id="zscoreRunButton" class="btn btn-primary">
+                            Normalizar
+                        </button>
+                    </div>
+                    <p class="form-note" id="zscoreNote" aria-live="polite"></p>
+
+                    <div id="zscoreResults" hidden>
+                        <div class="metric-grid" id="zscoreMetrics"></div>
+                        <h4 class="block-title">x_norm</h4>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="zscoreTable">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
                         </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultNormalize"></div>
+                    </div>
                 </article>
 
                 <article class="card">
-                    <h3>Sigmoid (batch)</h3>
-                    <p class="page-subtitle" style="margin: 0 0 1rem;">
-                        Aplica <code>σ(z) = 1 / (1 + e<sup>-z</sup>)</code> a una lista
-                        de valores. Útil para inspeccionar la salida del modelo
-                        logístico antes del thresholding.
+                    <h3>Sigmoid en batch</h3>
+                    <p class="page-subtitle small" style="margin: 0 0 0.8rem;">
+                        Llama a <code>POST /v1/classification/sigmoid-batch</code>
+                        para cualquier lista de valores z. Útil para inspeccionar
+                        la salida del modelo logístico antes del thresholding.
                     </p>
-                    <form id="formSigmoid" class="form-stack" data-form>
-                        <label><span>z_values (lista JSON)</span>
-                            <textarea name="z_values" rows="2" required></textarea></label>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" data-reset>Restablecer ejemplo</button>
-                            <button type="submit" class="btn btn-primary">Calcular</button>
+                    <label>
+                        <span>z_values (JSON)</span>
+                        <textarea id="sigmoidValues" rows="3">[-5, -1, 0, 1, 2, 5]</textarea>
+                    </label>
+                    <div class="form-actions">
+                        <button type="button" id="sigmoidResetButton" class="btn btn-ghost btn-small">
+                            Restablecer ejemplo
+                        </button>
+                        <button type="button" id="sigmoidRunButton" class="btn btn-primary">
+                            Calcular σ(z)
+                        </button>
+                    </div>
+                    <p class="form-note" id="sigmoidNote" aria-live="polite"></p>
+
+                    <div id="sigmoidResults" hidden>
+                        <div class="metric-grid" id="sigmoidMetrics"></div>
+                        <div class="chart-wrapper" style="height: 240px;">
+                            <canvas id="sigmoidChart"></canvas>
                         </div>
-                        <p class="form-note" data-note></p>
-                    </form>
-                    <div class="result-block" id="resultSigmoid"></div>
+                        <div class="table-wrapper" style="margin-top: 0.8rem;">
+                            <table class="data-table" id="sigmoidTable">
+                                <thead><tr><th>z</th><th>σ(z)</th><th>clase (≥0.5)</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </article>
             </div>
         </section>

@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Optimización de rutas — SmartDecisions Demo</title>
-    <link rel="stylesheet" href="../styles/demo.css">
+    <link rel="stylesheet" href="../styles/demo.css?v=5">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="">
-    <link rel="stylesheet" href="routes.css">
-    <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="routes.css?v=5">
+    <link rel="icon" href="../../assets/favicon.svg?v=4" type="image/svg+xml">
     <script src="../js/config.js"></script>
     <script src="../js/auth.js" defer></script>
     <script src="../js/api.js" defer></script>
@@ -17,14 +17,14 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin="" defer></script>
-    <script src="routes.js" defer></script>
+    <script src="routes.js?v=5" defer></script>
 </head>
 <body>
 
 <header class="demo-header">
     <div class="container demo-nav">
         <a href="../home.html" class="brand">
-            <img src="../../assets/logo-bear.svg" alt="" aria-hidden="true">
+            <img src="../../assets/bear-face.jpg" alt="" aria-hidden="true">
             <span class="brand-text">Smart<span class="accent">Decisions</span></span>
         </a>
         <div class="demo-nav-actions">
@@ -71,6 +71,36 @@
                         </div>
                         <p class="form-note" id="formNote" aria-live="polite"></p>
                     </form>
+                </article>
+
+                <article class="card">
+                    <h3>Subir CSV de puntos</h3>
+                    <p class="page-subtitle" style="margin: 0 0 0.8rem; font-size: 0.85rem;">
+                        Columnas requeridas: <code>route_id</code>, <code>day</code>,
+                        <code>client_id</code>, <code>latitude</code>, <code>longitude</code>
+                        (+ opcional <code>client</code>). Todas las filas comparten el
+                        mismo <code>route_id</code> y <code>day</code>; re-subir
+                        reemplaza los puntos previos.
+                    </p>
+                    <div class="upload-zone" id="routeUploadZone">
+                        <input type="file" id="routeFileInput" accept=".csv,.txt" hidden>
+                        <p class="upload-hint">
+                            Arrastra tu <code>.csv</code> aquí o
+                            <a href="#" id="routeChooseLink">elegí un archivo</a>.
+                        </p>
+                        <p id="routeFileChip" class="file-chip" hidden></p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="routeSampleButton">
+                            Bajar plantilla
+                        </button>
+                        <button type="button" class="btn btn-primary btn-small"
+                                id="routeUploadButton" disabled>
+                            Subir y cargar
+                        </button>
+                    </div>
+                    <p class="form-note" id="routeUploadNote" aria-live="polite"></p>
                 </article>
 
                 <article class="card">

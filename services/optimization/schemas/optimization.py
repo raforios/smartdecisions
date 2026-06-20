@@ -55,6 +55,18 @@ class OptimizationResponse(BaseModel):
     x: float
 
 
+class BulkUploadResponse(BaseModel):
+    '''
+        Response for POST /v1/optimization/routes/bulk-upload.
+    '''
+    route_id: int
+    day: int
+    points_written: int = Field(..., ge = 0)
+    columns_detected: list[str] = Field(
+        ..., description = 'Headers parsed from the CSV that were recognized.'
+    )
+
+
 class RouteResponse(BaseModel):
     '''
         Final route segment with road-network projection.
