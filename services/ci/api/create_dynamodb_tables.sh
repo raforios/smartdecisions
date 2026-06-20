@@ -16,6 +16,10 @@ TABLES=(
     "usage_logs:id:S"
     "mining_summit_participants:ci:N"
     "mining_summit_attendances:id:S"
+    "ingest_datasets:id:S"
+    "optimization_routes:id:S"
+    "analytics_runs:id:S"
+    "ingest_datasets:id:S"
 )
 
 REGION="us-east-1" # Asegúrate de que esta sea tu región de AWS

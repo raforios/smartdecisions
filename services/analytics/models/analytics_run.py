@@ -8,13 +8,16 @@ class AnalyticsRun(TypedDict, total = False):
     '''
         Python model representing an analytics run document in DynamoDB.
 
-        Table: t_analytics_runs
-        Partition Key: dataset_id (String)
-        Sort Key:      run_id     (String, UUIDv4)
+        Table: analytics_runs
+        Partition Key: id (String, UUIDv4) — same value as `run_id`,
+                       mirrored so any run is uniquely addressable.
 
-        Sort key allows multiple runs on the same dataset (e.g., re-tuned
-        Apriori thresholds) without overwriting prior history.
+        Multiple runs per dataset are still possible (the `dataset_id`
+        attribute is regular, not part of the key). To list every run for
+        a given dataset, scan with FilterExpression — implemented in
+        services/analytics_runs.py:get_latest_run_for_dataset.
     '''
+    id: str
     dataset_id: str
     run_id: str
     status: str

@@ -4,7 +4,7 @@
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, List
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
 from services.crud import create_item
@@ -52,11 +52,18 @@ def _decimal_to_native(value: Any) -> Any:
 def _build_run_item(payload: Dict[str, Any]) -> Dict[str, Any]:
     '''
         Materializes the DynamoDB item shape for a finished analytics run.
+
+        The AWS table `analytics_runs` uses a simple partition key `id` (S).
+        Each item carries `id = run_id` (UUID) so collisions are impossible,
+        and `dataset_id` is a regular attribute used to filter runs by
+        dataset.
     '''
     now = get_current_time_gmt()
+    run_id = payload.get('run_id') or str(uuid.uuid4())
     return {
+        'id': run_id,
+        'run_id': run_id,
         'dataset_id': payload['dataset_id'],
-        'run_id': payload.get('run_id') or str(uuid.uuid4()),
         'status': payload['status'],
         'owner_email': payload['owner_email'],
         'summary': _floats_to_decimal(payload.get('summary', {})),
@@ -74,21 +81,13 @@ def persist_run(
 ) -> Dict[str, Any]:
     '''
         Persists a finished analytics run.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            payload (Dict[str, Any]): Run output (summary + opportunities + parameters).
-
-        Returns:
-            Dict[str, Any]: The persisted item (with Decimal values converted back
-            to native types so the controller can map it into the response schema).
     '''
     item = _build_run_item(payload)
     create_item(
         dynamodb_resource = dynamodb_resource,
         table_name = ANALYTICS_RUNS_TABLE,
         item_data = item,
-        unique_key_attribute = 'run_id'
+        unique_key_attribute = 'id'
     )
     message = (
         f'Persisted analytics run {item["run_id"]} for dataset {item["dataset_id"]} '
@@ -105,12 +104,25 @@ def get_latest_run_for_dataset(
 ) -> Dict[str, Any]:
     '''
         Returns the most recent run for the given dataset.
+
+        With PK `id`, there is no DynamoDB Query that filters by dataset_id
+        directly, so we Scan the table with a FilterExpression. This is OK
+        for POC volumes; if the table grows, the right move is to add a
+        Global Secondary Index on `dataset_id`.
     '''
     table = dynamodb_resource.Table(ANALYTICS_RUNS_TABLE)
-    response = table.query(
-        KeyConditionExpression = Key('dataset_id').eq(dataset_id)
-    )
-    items: List[Dict[str, Any]] = response.get('Items', [])
+    items: List[Dict[str, Any]] = []
+    last_evaluated_key = None
+    while True:
+        scan_kwargs = {'FilterExpression': Attr('dataset_id').eq(dataset_id)}
+        if last_evaluated_key:
+            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get('Items', []))
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+
     if not items:
         error_msg = f'No analytics run found for dataset {dataset_id}.'
         logger.warning(error_msg)

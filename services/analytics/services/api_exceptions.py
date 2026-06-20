@@ -122,6 +122,24 @@ def setup_exception_handlers(app):
             content = {'detail': exc.detail}
         )
 
+    @app.exception_handler(RuntimeError)
+    async def runtime_error_handler(
+        request: Request, exc: RuntimeError
+    ) -> JSONResponse:
+        '''
+            Handles RuntimeError (typically wrapped from upstream service or
+            DB failures by handle_service_errors). Returning a proper 500 here
+            lets CORSMiddleware attach Access-Control-* headers, instead of
+            letting Starlette emit a bare ASGI error response that the browser
+            rejects as "CORS blocked".
+        '''
+        error_msg = f'Runtime error: {exc} for path: {request.url.path}'
+        logger.error(error_msg, exc_info = True)
+        return JSONResponse(
+            status_code = 500,
+            content = {'detail': str(exc) or 'An unexpected internal error occurred.'}
+        )
+
     @app.exception_handler(Exception)
     async def generic_exception_handler(
         request: Request, exc: Exception

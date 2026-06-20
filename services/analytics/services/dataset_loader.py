@@ -26,14 +26,15 @@ from services.utils import handle_service_errors
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
     'BUCKET_NAME': str,
-    'DYNAMODB_REGION': str,
 })
 
 INGEST_DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
-AWS_REGION = ENV_VARS['DYNAMODB_REGION']
 
-_s3_client = boto3.client('s3', region_name = AWS_REGION)
+# boto3 resolves region + credentials from the default chain (Lambda IAM
+# role in AWS, ~/.aws/credentials in local dev) — same way AUTH and EVENTS
+# do it. No region_name argument needed.
+_s3_client = boto3.client('s3')
 
 
 @handle_service_errors
@@ -55,8 +56,11 @@ def get_dataset_metadata(
             RegisterNotFoundError: If the dataset_id is unknown.
             InvalidInputError: If the dataset exists but its status is not 'validated'.
     '''
+    # The AWS table `ingest_datasets` uses `id` as its partition key (set
+    # to the same UUID value as the logical `dataset_id` attribute by the
+    # ingest service — see ingest/services/datasets.py:_build_dataset_item).
     table = dynamodb_resource.Table(INGEST_DATASETS_TABLE)
-    response = table.get_item(Key = {'dataset_id': dataset_id})
+    response = table.get_item(Key = {'id': dataset_id})
     item = response.get('Item')
     if not item:
         error_msg = f'Dataset {dataset_id} not found in {INGEST_DATASETS_TABLE}.'
