@@ -130,3 +130,59 @@ async def get_attendance_report_controller(
         db = db,
         filters = filters
     )
+
+
+# ============================================================================
+# iter6 (Binaria, 2026-06-22) — Monitor de Trade panels (req 7.4)
+# ============================================================================
+from schemas.reports import (
+    ImpulsesPanelResponseSchema,
+    PanelFilterSchema,
+    ReplenishmentsPanelResponseSchema,
+    RouteTrackingFilterSchema,
+    RouteTrackingResponseSchema,
+)
+from services.reports import (
+    get_impulses_panel_service,
+    get_replenishments_panel_service,
+    get_route_tracking_service,
+)
+
+
+@handle_service_errors('REPORTS')
+async def get_impulses_panel_controller(
+    filters: PanelFilterSchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str,  # pylint: disable=unused-argument
+) -> ImpulsesPanelResponseSchema:
+    '''
+        Controller for the Impulses monitor panel.
+    '''
+    return await get_impulses_panel_service(db = db, filters = filters)
+
+
+@handle_service_errors('REPORTS')
+async def get_replenishments_panel_controller(
+    filters: PanelFilterSchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str,  # pylint: disable=unused-argument
+) -> ReplenishmentsPanelResponseSchema:
+    '''
+        Controller for the Replenishments monitor panel.
+    '''
+    return await get_replenishments_panel_service(db = db, filters = filters)
+
+
+@handle_service_errors('REPORTS')
+async def get_route_tracking_controller(
+    filters: RouteTrackingFilterSchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str,  # pylint: disable=unused-argument
+) -> RouteTrackingResponseSchema:
+    '''
+        Controller for the route tracking map.
+    '''
+    return await get_route_tracking_service(db = db, filters = filters)

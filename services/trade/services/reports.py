@@ -13,14 +13,21 @@ from models.trade import (
     Attendance
 )
 from models.pos import PointOfSale
-from models.impulses import ImpulseSale, ImpulseSaleDetail
+from models.impulses import (
+    ImpulseInventoryStart,
+    ImpulseSale,
+    ImpulseSaleDetail,
+)
 from models.replenishments import (
+    # iter5 (Binaria, 2026-06-20): ReplenishmentInventory removed; inventory
+    # now lives in the unified Impulses tables (ImpulseInventoryStart).
     ReplenishmentReport,
-    ReplenishmentInventory,
     ComplementaryBandeo,
     ComplementaryCompetition,
     ComplementaryPromoPoint
 )
+from models.impulses import ImpulseInventoryEnd
+from models.products import Product, ProductAssignmentPOS
 from schemas.reports import (
     ComplianceFilterSchema,
     ComplianceReportResponseSchema,
@@ -39,7 +46,24 @@ from schemas.reports import (
     PhotographicReportResponseSchema,
     AttendanceReportFilterSchema,
     AttendanceReportResponseSchema,
-    AttendanceReportItemSchema
+    AttendanceReportItemSchema,
+    # iter6 panel schemas
+    PanelFilterSchema,
+    PanelByCityRow,
+    PanelByDayRow,
+    PanelGeneralIndicatorsSchema,
+    PanelInventorySnapshotRow,
+    PanelExpirationRow,
+    PanelRouteIndicatorsSchema,
+    PanelSalesSummaryRow,
+    PanelSheetRow,
+    ImpulsesPanelResponseSchema,
+    ReplenishmentsPanelResponseSchema,
+    RouteTrackingFilterSchema,
+    RouteTrackingPointSchema,
+    RouteTrackingPosInventoryRow,
+    RouteTrackingResponseSchema,
+    RouteTrackingRouteSchema,
 )
 from services.logger_config import custom_logger as logger
 from services.utils import handle_service_errors
@@ -253,10 +277,10 @@ async def get_inventory_alerts_service(
     '''
         Scans current inventory for stockouts or short-dated products.
     '''
-    # Simplified scan logic
-    # In a real scenario, we would filter by expiration_date <= today + threshold
-    _ = db.query(PointOfSale, ReplenishmentInventory).join(
-        ReplenishmentInventory, PointOfSale.id == ReplenishmentInventory.attendance_id
+    # Simplified scan logic. iter5: inventory lives in ImpulseInventoryStart
+    # now (unified Impulses + Replenishments table).
+    _ = db.query(PointOfSale, ImpulseInventoryStart).join(
+        ImpulseInventoryStart, PointOfSale.id == ImpulseInventoryStart.attendance_id
     ).filter(PointOfSale.company_id == filters.company_id)
 
     # ... (Actual DB logic would be more complex joining POS and Inventory models)
@@ -486,4 +510,636 @@ async def get_attendance_report_service(
         total_visits = len(items_list),
         average_duration_minutes = avg_duration,
         items = items_list
+    )
+
+
+# ============================================================================
+# iter6 (Binaria, 2026-06-22) — Monitor de Trade (req 7.4)
+#
+# The three services below back the executive panels. They run against the
+# same operational tables already covered by other reports; each one merely
+# composes a pre-aggregated payload so the frontend renders the panel in a
+# single round-trip (the doc lists six widgets per panel — without these
+# endpoints the frontend would have to issue 5-6 calls and join in JS).
+# ============================================================================
+from collections import defaultdict
+from datetime import time as _time
+from sqlalchemy import func
+
+
+def _apply_attendance_panel_filters(query, filters: PanelFilterSchema, *,
+                                    route_type: str | None):
+    '''
+        Bolts the panel filters onto an Attendance query already joined to
+        PlannedPoint / PlannedRoute / PointOfSale. Centralised so the
+        Impulses and Replenishments services stay in sync.
+    '''
+    start_dt = datetime.combine(filters.date_from, time.min)
+    end_dt = datetime.combine(filters.date_to, time.max)
+    query = query.filter(
+        Attendance.company_id == filters.company_id,
+        Attendance.check_in_time.between(start_dt, end_dt),
+    )
+    if route_type is not None:
+        query = query.filter(PlannedRoute.route_type == route_type)
+    if filters.client_company_id is not None:
+        query = query.filter(Attendance.client_company_id == filters.client_company_id)
+    if filters.pos_id is not None:
+        query = query.filter(PointOfSale.id == filters.pos_id)
+    if filters.country_id is not None:
+        query = query.filter(PlannedRoute.country_id == filters.country_id)
+    if filters.city_id is not None:
+        query = query.filter(PlannedRoute.city_id == filters.city_id)
+    if filters.route_id is not None:
+        query = query.filter(PlannedRoute.id == filters.route_id)
+    if filters.user_id is not None:
+        query = query.filter(Attendance.user_id == filters.user_id)
+    return query
+
+
+def _percentages(rows):
+    '''
+        Returns rows enriched with a percentage column computed against the
+        total count.
+    '''
+    total = sum(r['count'] for r in rows) or 1
+    for row in rows:
+        row['percentage'] = round(row['count'] * 100.0 / total, 2)
+    return rows
+
+
+def _build_general_indicators(attendances, products_count, products_per_activity):
+    '''
+        Computes the "Indicadores generales" cuadro from a list of
+        attendance rows.
+    '''
+    pdvs = {a.point_of_sale_id for a in attendances if a.point_of_sale_id}
+    activity_count = len(attendances)
+    durations = [a.duration_minutes for a in attendances if a.duration_minutes]
+    return PanelGeneralIndicatorsSchema(
+        pdv_count = len(pdvs),
+        activity_count = activity_count,
+        activities_per_pdv = (
+            round(activity_count / len(pdvs), 2) if pdvs else 0.0
+        ),
+        products_count = products_count,
+        products_per_activity = products_per_activity,
+        avg_time_per_pdv_minutes = (
+            round(sum(durations) / len(durations), 2) if durations else 0.0
+        ),
+    )
+
+
+def _build_route_indicators(attendances) -> PanelRouteIndicatorsSchema:
+    '''
+        Computes the "Indicadores de ruta" cuadro. Returns zeros if there
+        is not enough data; the panel hides the box on the frontend when
+        no route was filtered.
+    '''
+    by_route = defaultdict(list)
+    for a in attendances:
+        if a.planned_route_id:
+            by_route[a.planned_route_id].append(a)
+
+    if not by_route:
+        return PanelRouteIndicatorsSchema()
+
+    avg_pdv_per_route = sum(
+        len({a.point_of_sale_id for a in atts}) for atts in by_route.values()
+    ) / len(by_route)
+
+    route_durations = []
+    between_pdv_durations = []
+    for atts in by_route.values():
+        atts_sorted = [a for a in atts if a.check_in_time and a.check_out_time]
+        atts_sorted.sort(key = lambda x: x.check_in_time)
+        if len(atts_sorted) >= 1:
+            delta = (
+                atts_sorted[-1].check_out_time - atts_sorted[0].check_in_time
+            ).total_seconds() / 60
+            route_durations.append(delta)
+        for prev, curr in zip(atts_sorted, atts_sorted[1:]):
+            gap = (curr.check_in_time - prev.check_out_time).total_seconds() / 60
+            if gap >= 0:
+                between_pdv_durations.append(gap)
+
+    pdv_durations = [
+        a.duration_minutes for atts in by_route.values()
+        for a in atts if a.duration_minutes
+    ]
+
+    return PanelRouteIndicatorsSchema(
+        pdv_per_route = round(avg_pdv_per_route, 2),
+        avg_time_per_route_minutes = (
+            round(sum(route_durations) / len(route_durations), 2)
+            if route_durations else 0.0
+        ),
+        avg_time_per_pdv_minutes = (
+            round(sum(pdv_durations) / len(pdv_durations), 2)
+            if pdv_durations else 0.0
+        ),
+        avg_time_between_pdv_minutes = (
+            round(sum(between_pdv_durations) / len(between_pdv_durations), 2)
+            if between_pdv_durations else 0.0
+        ),
+    )
+
+
+@handle_service_errors('REPORTS')
+async def get_impulses_panel_service(
+    db: Session,
+    filters: PanelFilterSchema,
+) -> ImpulsesPanelResponseSchema:
+    '''
+        Aggregates everything the Impulses panel (req 7.4.1) needs.
+    '''
+    logger.info(
+        f'Generating Impulses panel for company {filters.company_id}.'
+    )
+
+    base = (
+        db.query(Attendance, PlannedPoint, PlannedRoute, PointOfSale)
+        .join(PlannedPoint, PlannedPoint.id == Attendance.trade_planned_point_id)
+        .join(PlannedRoute, PlannedRoute.id == PlannedPoint.planned_route_id)
+        .join(PointOfSale, PointOfSale.id == PlannedPoint.point_of_sale_id)
+    )
+    base = _apply_attendance_panel_filters(base, filters, route_type = 'IMPULSO')
+
+    rows = base.all()
+    attendance_ids = [r[0].id for r in rows]
+
+    # Attach planned_route_id to attendance rows for the indicators helper.
+    attendances_norm = []
+    for att, _pp, pr, pos in rows:
+        att.point_of_sale_id = pos.id
+        att.planned_route_id = pr.id
+        attendances_norm.append(att)
+
+    # Sales aggregation per product over the same attendances.
+    sales_q = (
+        db.query(
+            ImpulseSaleDetail.product_id,
+            Product.sku,
+            Product.name,
+            func.sum(ImpulseSaleDetail.quantity).label('total_quantity'),
+        )
+        .join(ImpulseSale, ImpulseSale.id == ImpulseSaleDetail.impulse_sale_id)
+        .join(Product, Product.id == ImpulseSaleDetail.product_id)
+        .filter(ImpulseSale.attendance_id.in_(attendance_ids or [0]))
+        .group_by(ImpulseSaleDetail.product_id, Product.sku, Product.name)
+    )
+    sales_rows = sales_q.all()
+    if filters.product_id is not None:
+        sales_rows = [r for r in sales_rows if r.product_id == filters.product_id]
+
+    sales_summary = [
+        PanelSalesSummaryRow(
+            product_id = r.product_id, sku = r.sku, name = r.name,
+            total_quantity = int(r.total_quantity or 0),
+        ) for r in sales_rows
+    ]
+    products_count = len({r.product_id for r in sales_rows})
+    products_per_activity = (
+        round(sum(r.total_quantity or 0 for r in sales_rows) / len(attendances_norm), 2)
+        if attendances_norm else 0.0
+    )
+
+    general = _build_general_indicators(
+        attendances_norm, products_count, products_per_activity
+    )
+    route_indicators = (
+        _build_route_indicators(attendances_norm)
+        if filters.route_id is not None else None
+    )
+
+    # PDV / activities por ciudad — agregamos por city_id del POS.
+    by_city_pdv = defaultdict(set)
+    by_city_act = defaultdict(int)
+    for att, _pp, _pr, pos in rows:
+        by_city_pdv[pos.city_id].add(pos.id)
+        by_city_act[pos.city_id] += 1
+    pdv_by_city = _percentages([
+        {'city_id': city_id, 'count': len(pdvs)}
+        for city_id, pdvs in by_city_pdv.items()
+    ])
+    activities_by_city = _percentages([
+        {'city_id': city_id, 'count': cnt}
+        for city_id, cnt in by_city_act.items()
+    ])
+
+    # Activities por dia.
+    by_day = defaultdict(int)
+    for att in attendances_norm:
+        if att.check_in_time:
+            by_day[att.check_in_time.date()] += 1
+    activities_by_day = [
+        PanelByDayRow(day = d, count = c) for d, c in sorted(by_day.items())
+    ]
+
+    # Inventory snapshot — usa el ultimo inventario START por POS dentro del rango.
+    inv_q = (
+        db.query(ImpulseInventoryStart)
+        .filter(ImpulseInventoryStart.attendance_id.in_(attendance_ids or [0]))
+    )
+    inv_rows = inv_q.all()
+    sales_by_product = {r.product_id: int(r.total_quantity or 0) for r in sales_rows}
+    snapshot_acc = defaultdict(lambda: {'quantity': 0, 'sku': None, 'name': None})
+    for inv in inv_rows:
+        prod = db.query(Product).filter_by(id = inv.product_id).first()
+        if prod is None:
+            continue
+        base_qty = (inv.quantity_in_room or 0) + (inv.quantity_in_warehouse or 0)
+        if base_qty == 0 and inv.quantity is not None:
+            base_qty = inv.quantity
+        snapshot_acc[inv.product_id]['quantity'] += base_qty
+        snapshot_acc[inv.product_id]['sku'] = prod.sku
+        snapshot_acc[inv.product_id]['name'] = prod.name
+    inventory_snapshot = []
+    for pid, acc in snapshot_acc.items():
+        remaining = acc['quantity'] - sales_by_product.get(pid, 0)
+        inventory_snapshot.append(PanelInventorySnapshotRow(
+            product_id = pid, sku = acc['sku'], name = acc['name'],
+            quantity = max(remaining, 0),
+        ))
+
+    # Sheet: a flat row per (attendance, product) using sales detail.
+    sheet = []
+    sale_details = (
+        db.query(ImpulseSaleDetail, ImpulseSale, Product)
+        .join(ImpulseSale, ImpulseSale.id == ImpulseSaleDetail.impulse_sale_id)
+        .join(Product, Product.id == ImpulseSaleDetail.product_id)
+        .filter(ImpulseSale.attendance_id.in_(attendance_ids or [0]))
+        .all()
+    )
+    sales_by_att_prod = defaultdict(int)
+    for d, s, _p in sale_details:
+        sales_by_att_prod[(s.attendance_id, d.product_id)] += d.quantity
+
+    row_index = {(a.id): (a, _pp, _pr, _pos) for a, _pp, _pr, _pos in rows}
+    for (att_id, product_id), qty in sales_by_att_prod.items():
+        if att_id not in row_index:
+            continue
+        att, _pp, pr, pos = row_index[att_id]
+        prod = db.query(Product).filter_by(id = product_id).first()
+        if prod is None:
+            continue
+        sheet.append(PanelSheetRow(
+            company_id = filters.company_id,
+            check_in_time = att.check_in_time,
+            check_out_time = att.check_out_time,
+            country_id = pr.country_id,
+            city_id = pr.city_id,
+            route_id = pr.id,
+            route_name = pr.route_name,
+            pos_id = pos.id,
+            pos_name = pos.name,
+            product_id = prod.id,
+            sku = prod.sku,
+            product_name = prod.name,
+            quantity_sold = qty,
+            user_id = att.user_id,
+        ))
+
+    return ImpulsesPanelResponseSchema(
+        filters_applied = filters,
+        general_indicators = general,
+        route_indicators = route_indicators,
+        pdv_by_city = [PanelByCityRow(**r) for r in pdv_by_city],
+        activities_by_city = [PanelByCityRow(**r) for r in activities_by_city],
+        activities_by_day = activities_by_day,
+        sales_summary = sales_summary,
+        inventory_snapshot = inventory_snapshot,
+        sheet = sheet,
+    )
+
+
+@handle_service_errors('REPORTS')
+async def get_replenishments_panel_service(
+    db: Session,
+    filters: PanelFilterSchema,
+) -> ReplenishmentsPanelResponseSchema:
+    '''
+        Aggregates everything the Replenishments panel (req 7.4.3) needs.
+        Uses the unified Impulses inventory tables to compute sala/almacen
+        snapshots and exposes the expiration list expected by the panel.
+    '''
+    logger.info(
+        f'Generating Replenishments panel for company {filters.company_id}.'
+    )
+
+    base = (
+        db.query(Attendance, PlannedPoint, PlannedRoute, PointOfSale)
+        .join(PlannedPoint, PlannedPoint.id == Attendance.trade_planned_point_id)
+        .join(PlannedRoute, PlannedRoute.id == PlannedPoint.planned_route_id)
+        .join(PointOfSale, PointOfSale.id == PlannedPoint.point_of_sale_id)
+    )
+    base = _apply_attendance_panel_filters(base, filters, route_type = 'REPOSICION')
+
+    rows = base.all()
+    attendance_ids = [r[0].id for r in rows]
+
+    attendances_norm = []
+    for att, _pp, pr, pos in rows:
+        att.point_of_sale_id = pos.id
+        att.planned_route_id = pr.id
+        attendances_norm.append(att)
+
+    # Inventory snapshot: aggregate latest start records by product.
+    inv_q = (
+        db.query(ImpulseInventoryStart)
+        .filter(ImpulseInventoryStart.attendance_id.in_(attendance_ids or [0]))
+    )
+    inv_rows = inv_q.all()
+    snapshot_acc = defaultdict(
+        lambda: {'room': 0, 'warehouse': 0, 'sku': None, 'name': None,
+                 'minimum': 0}
+    )
+    expiration_rows: list[PanelExpirationRow] = []
+    today = datetime.utcnow().date()
+    for inv in inv_rows:
+        prod = db.query(Product).filter_by(id = inv.product_id).first()
+        if prod is None:
+            continue
+        snapshot_acc[inv.product_id]['room'] += inv.quantity_in_room or 0
+        snapshot_acc[inv.product_id]['warehouse'] += inv.quantity_in_warehouse or 0
+        snapshot_acc[inv.product_id]['sku'] = prod.sku
+        snapshot_acc[inv.product_id]['name'] = prod.name
+        assignment = db.query(ProductAssignmentPOS).filter_by(
+            product_id = inv.product_id, point_of_sale_id = inv.product_id  # placeholder
+        ).first()
+        if assignment is not None:
+            snapshot_acc[inv.product_id]['minimum'] += assignment.minimum_stock or 0
+        if inv.batch_number or inv.expiration_date:
+            days_remaining = None
+            short = False
+            if inv.expiration_date:
+                days_remaining = (inv.expiration_date.date() - today).days
+                short = days_remaining <= 30
+            expiration_rows.append(PanelExpirationRow(
+                product_id = inv.product_id,
+                sku = prod.sku,
+                name = prod.name,
+                location = 'ROOM' if (inv.quantity_in_room or 0) > 0 else 'WAREHOUSE',
+                batch_number = inv.batch_number,
+                expiration_date = (
+                    inv.expiration_date.date() if inv.expiration_date else None
+                ),
+                days_remaining = days_remaining,
+                is_short_dated = short,
+            ))
+
+    inventory_snapshot = []
+    for pid, acc in snapshot_acc.items():
+        total = acc['room'] + acc['warehouse']
+        minimum = acc['minimum']
+        inventory_snapshot.append(PanelInventorySnapshotRow(
+            product_id = pid, sku = acc['sku'], name = acc['name'],
+            quantity = total,
+            quantity_in_room = acc['room'],
+            quantity_in_warehouse = acc['warehouse'],
+            quantity_minimum = minimum or None,
+            stockout = (minimum > 0 and total < minimum),
+        ))
+
+    # PDV / activities por ciudad.
+    by_city_pdv = defaultdict(set)
+    by_city_act = defaultdict(int)
+    for att, _pp, _pr, pos in rows:
+        by_city_pdv[pos.city_id].add(pos.id)
+        by_city_act[pos.city_id] += 1
+    pdv_by_city = _percentages([
+        {'city_id': city_id, 'count': len(pdvs)}
+        for city_id, pdvs in by_city_pdv.items()
+    ])
+    activities_by_city = _percentages([
+        {'city_id': city_id, 'count': cnt}
+        for city_id, cnt in by_city_act.items()
+    ])
+
+    by_day = defaultdict(int)
+    for att in attendances_norm:
+        if att.check_in_time:
+            by_day[att.check_in_time.date()] += 1
+    activities_by_day = [
+        PanelByDayRow(day = d, count = c) for d, c in sorted(by_day.items())
+    ]
+
+    products_count = len(snapshot_acc)
+    products_per_activity = (
+        round(products_count / len(attendances_norm), 2)
+        if attendances_norm else 0.0
+    )
+    general = _build_general_indicators(
+        attendances_norm, products_count, products_per_activity
+    )
+    route_indicators = (
+        _build_route_indicators(attendances_norm)
+        if filters.route_id is not None else None
+    )
+
+    # Sheet: one row per (attendance, product) using inventory rows.
+    sheet = []
+    for inv in inv_rows:
+        prod = db.query(Product).filter_by(id = inv.product_id).first()
+        if prod is None:
+            continue
+        att = next((a for a, *_ in rows if a.id == inv.attendance_id), None)
+        if att is None:
+            continue
+        pp_pr_pos = next((triple for a, *triple in rows if a.id == inv.attendance_id), None)
+        if pp_pr_pos is None:
+            continue
+        _pp, pr, pos = pp_pr_pos
+        total = (inv.quantity_in_room or 0) + (inv.quantity_in_warehouse or 0)
+        sheet.append(PanelSheetRow(
+            company_id = filters.company_id,
+            check_in_time = att.check_in_time,
+            check_out_time = att.check_out_time,
+            country_id = pr.country_id,
+            city_id = pr.city_id,
+            route_id = pr.id,
+            route_name = pr.route_name,
+            pos_id = pos.id,
+            pos_name = pos.name,
+            product_id = prod.id,
+            sku = prod.sku,
+            product_name = prod.name,
+            quantity_initial = total,
+            user_id = att.user_id,
+        ))
+
+    return ReplenishmentsPanelResponseSchema(
+        filters_applied = filters,
+        general_indicators = general,
+        route_indicators = route_indicators,
+        pdv_by_city = [PanelByCityRow(**r) for r in pdv_by_city],
+        activities_by_city = [PanelByCityRow(**r) for r in activities_by_city],
+        activities_by_day = activities_by_day,
+        inventory_snapshot = inventory_snapshot,
+        expirations = expiration_rows,
+        sheet = sheet,
+    )
+
+
+@handle_service_errors('REPORTS')
+async def get_route_tracking_service(
+    db: Session,
+    filters: RouteTrackingFilterSchema,
+) -> RouteTrackingResponseSchema:
+    '''
+        Returns one or many routes with their planned points + execution
+        state, so the frontend can render the map (req 7.4.4).
+    '''
+    logger.info(
+        f'Generating route tracking for company {filters.company_id} '
+        f'on {filters.target_date} (activity={filters.activity}).'
+    )
+
+    routes_q = db.query(PlannedRoute).filter(
+        PlannedRoute.company_id == filters.company_id,
+        PlannedRoute.route_type == filters.activity,
+    )
+    if filters.route_id is not None:
+        routes_q = routes_q.filter(PlannedRoute.id == filters.route_id)
+    routes = routes_q.all()
+
+    start_dt = datetime.combine(filters.target_date, time.min)
+    end_dt = datetime.combine(filters.target_date, time.max)
+
+    result_routes: list[RouteTrackingRouteSchema] = []
+    for route in routes:
+        points = (
+            db.query(PlannedPoint, PointOfSale)
+            .join(PointOfSale, PointOfSale.id == PlannedPoint.point_of_sale_id)
+            .filter(PlannedPoint.planned_route_id == route.id)
+            .order_by(PlannedPoint.sequence.asc())
+            .all()
+        )
+        point_payloads: list[RouteTrackingPointSchema] = []
+        for pp, pos in points:
+            att_q = db.query(Attendance).filter(
+                Attendance.trade_planned_point_id == pp.id,
+                Attendance.check_in_time.between(start_dt, end_dt),
+            )
+            if filters.team_id is not None:
+                # Match attendance via TradePlanning team_id.
+                att_q = att_q.join(
+                    TradePlanningDetail,
+                    TradePlanningDetail.planned_route_id == route.id
+                ).join(
+                    TradePlanning,
+                    TradePlanning.id == TradePlanningDetail.planning_id
+                ).filter(TradePlanning.team_id == filters.team_id)
+            if filters.user_id is not None:
+                att_q = att_q.filter(Attendance.user_id == filters.user_id)
+            att = att_q.order_by(Attendance.check_in_time.asc()).first()
+
+            if att and att.check_out_time:
+                status = 'CLOSED'
+            elif att:
+                status = 'OPEN'
+            else:
+                status = 'PENDING'
+
+            inventory_rows: list[RouteTrackingPosInventoryRow] = []
+            if att is not None:
+                if filters.activity == 'IMPULSO':
+                    starts = db.query(ImpulseInventoryStart).filter_by(
+                        attendance_id = att.id
+                    ).all()
+                    sales = (
+                        db.query(
+                            ImpulseSaleDetail.product_id,
+                            func.sum(ImpulseSaleDetail.quantity)
+                        )
+                        .join(ImpulseSale,
+                              ImpulseSale.id == ImpulseSaleDetail.impulse_sale_id)
+                        .filter(ImpulseSale.attendance_id == att.id)
+                        .group_by(ImpulseSaleDetail.product_id)
+                        .all()
+                    )
+                    sold_map = {pid: int(q or 0) for pid, q in sales}
+                    for start_row in starts:
+                        prod = db.query(Product).filter_by(
+                            id = start_row.product_id
+                        ).first()
+                        if prod is None:
+                            continue
+                        initial = (
+                            (start_row.quantity_in_room or 0)
+                            + (start_row.quantity_in_warehouse or 0)
+                        )
+                        if initial == 0 and start_row.quantity is not None:
+                            initial = start_row.quantity
+                        sold = sold_map.get(start_row.product_id, 0)
+                        inventory_rows.append(RouteTrackingPosInventoryRow(
+                            product_id = start_row.product_id,
+                            sku = prod.sku,
+                            name = prod.name,
+                            quantity_initial = initial,
+                            quantity_sold = sold,
+                            quantity_remaining = max(initial - sold, 0),
+                        ))
+                else:
+                    starts = db.query(ImpulseInventoryStart).filter_by(
+                        attendance_id = att.id
+                    ).all()
+                    for start_row in starts:
+                        prod = db.query(Product).filter_by(
+                            id = start_row.product_id
+                        ).first()
+                        if prod is None:
+                            continue
+                        room = start_row.quantity_in_room or 0
+                        warehouse = start_row.quantity_in_warehouse or 0
+                        total = room + warehouse
+                        assignment = db.query(ProductAssignmentPOS).filter_by(
+                            product_id = start_row.product_id,
+                            point_of_sale_id = pos.id
+                        ).first()
+                        minimum = (
+                            assignment.minimum_stock if assignment else None
+                        )
+                        inventory_rows.append(RouteTrackingPosInventoryRow(
+                            product_id = start_row.product_id,
+                            sku = prod.sku,
+                            name = prod.name,
+                            quantity_in_room = room,
+                            quantity_in_warehouse = warehouse,
+                            quantity_total = total,
+                            quantity_minimum = minimum,
+                            stockout = (
+                                minimum is not None and total < minimum
+                            ),
+                        ))
+
+            point_payloads.append(RouteTrackingPointSchema(
+                planned_point_id = pp.id,
+                sequence = pp.sequence,
+                pos_id = pos.id,
+                pos_name = pos.name,
+                latitude = getattr(pos, 'latitude', None),
+                longitude = getattr(pos, 'longitude', None),
+                planned_check_in_time = (
+                    pp.planned_check_in_time.isoformat()
+                    if isinstance(pp.planned_check_in_time, _time) else None
+                ),
+                status = status,
+                check_in_time = att.check_in_time if att else None,
+                check_out_time = att.check_out_time if att else None,
+                inventory = inventory_rows,
+            ))
+
+        result_routes.append(RouteTrackingRouteSchema(
+            route_id = route.id,
+            route_name = route.route_name,
+            route_code = route.route_code,
+            color = route.color,
+            activity = filters.activity,
+            points = point_payloads,
+        ))
+
+    return RouteTrackingResponseSchema(
+        filters_applied = filters,
+        routes = result_routes,
     )

@@ -5,25 +5,32 @@ from sqlalchemy.orm import Session
 from fastapi import Request
 from services.utils import handle_service_errors
 from services.replenishments import (
-    create_complementary_bandeo_service,
     create_complementary_competition_service,
     create_complementary_promo_point_service,
-    create_replenishment_inventory_service,
     create_replenishment_reception_service,
     create_replenishment_report_service,
+    get_complementary_bandeo_by_id_service,    # iter6
+    list_complementary_bandeos_for_visit_service,  # iter6
+    list_replenishment_reception_service,   # iter5
+    list_replenishment_reports_service,     # iter5
+    receive_complementary_bandeo_service,   # iter6
+    return_complementary_bandeo_service,    # iter6
 )
 from schemas.replenishments import (
-    ComplementaryBandeoCreateSchema,
+    ComplementaryBandeoListResponseSchema,    # iter6
+    ComplementaryBandeoReceiveSchema,         # iter6
     ComplementaryBandeoResponseSchema,
+    ComplementaryBandeoReturnSchema,          # iter6
     ComplementaryCompetitionCreateSchema,
     ComplementaryCompetitionResponseSchema,
     ComplementaryPromoPointCreateSchema,
     ComplementaryPromoPointResponseSchema,
-    ReplenishmentInventoryCreateSchema,
-    ReplenishmentInventoryListResponseSchema,
     ReplenishmentReceptionCreateSchema,
     ReplenishmentReceptionListResponseSchema,
+    ReplenishmentReceptionQuerySchema,        # iter5
     ReplenishmentReportCreateSchema,
+    ReplenishmentReportListResponseSchema,    # iter5
+    ReplenishmentReportQuerySchema,           # iter5
     ReplenishmentReportResponseSchema,
 )
 
@@ -50,27 +57,9 @@ async def create_replenishment_report_controller(
         db_report, from_attributes = True
     )
 
-@handle_service_errors('TRADE')
-async def create_replenishment_inventory_controller(
-    attendance_id: int,
-    inventory_data_rep: ReplenishmentInventoryCreateSchema,
-    db: Session,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
-) -> ReplenishmentInventoryListResponseSchema:
-    '''
-        Controller for creating a Replenishment Inventory (Detailed) report.
-    '''
-    created_items = await create_replenishment_inventory_service(
-        db = db,
-        attendance_id = attendance_id,
-        inventory_data_rep = inventory_data_rep
-    )
-
-    return ReplenishmentInventoryListResponseSchema(
-        items = created_items,
-        total = len(created_items)
-    )
+# iter5 (Binaria, 2026-06-20): create_replenishment_inventory_controller
+# was removed. Inventory now lives in the unified Impulses tables; use
+# the Impulses inventory-start / inventory-end controllers instead.
 
 @handle_service_errors('TRADE')
 async def create_replenishment_reception_controller(
@@ -94,23 +83,132 @@ async def create_replenishment_reception_controller(
         total = len(created_items)
     )
 
-# --- B.3. COMPLEMENTARY ACTIVITIES Controllers ---
+# --- iter5: LIST controllers ---
 
 @handle_service_errors('TRADE')
-async def create_complementary_bandeo_controller(
+async def list_replenishment_reports_controller(
+    query: ReplenishmentReportQuerySchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str  # pylint: disable=unused-argument
+) -> ReplenishmentReportListResponseSchema:
+    '''
+        Controller for paginated listing of replenishment reports.
+    '''
+    items, total = await list_replenishment_reports_service(
+        db = db, query = query
+    )
+    return ReplenishmentReportListResponseSchema(
+        items = [
+            ReplenishmentReportResponseSchema.model_validate(item, from_attributes = True)
+            for item in items
+        ],
+        total = total
+    )
+
+# iter5: list_replenishment_inventory_controller removed (use Impulses).
+
+@handle_service_errors('TRADE')
+async def list_replenishment_reception_controller(
     attendance_id: int,
-    bandeo_data: ComplementaryBandeoCreateSchema,
+    query: ReplenishmentReceptionQuerySchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str  # pylint: disable=unused-argument
+) -> ReplenishmentReceptionListResponseSchema:
+    '''
+        Controller for listing the reception rows of a single visit.
+    '''
+    items, total = await list_replenishment_reception_service(
+        db = db, attendance_id = attendance_id, query = query
+    )
+    return ReplenishmentReceptionListResponseSchema(
+        items = items,
+        total = total
+    )
+
+# --- B.3. COMPLEMENTARY ACTIVITIES Controllers ---
+
+# iter6 (Binaria, 2026-06-22): the legacy single-shot
+# create_complementary_bandeo_controller was replaced by the 2-stage flow
+# below (Recibir + Devolver) plus listing/lookup controllers.
+
+@handle_service_errors('TRADE')
+async def receive_complementary_bandeo_controller(
+    attendance_id: int,
+    bandeo_data: ComplementaryBandeoReceiveSchema,
     db: Session,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
 ) -> ComplementaryBandeoResponseSchema:
     '''
-        Controller for creating a Complementary Bandeo Report (Returns/Photos).
+        Controller for the Receive step of a Bandeo.
     '''
-    db_bandeo = await create_complementary_bandeo_service(
+    db_bandeo = await receive_complementary_bandeo_service(
         db = db,
         attendance_id = attendance_id,
         bandeo_data = bandeo_data
+    )
+    return ComplementaryBandeoResponseSchema.model_validate(
+        db_bandeo, from_attributes = True
+    )
+
+
+@handle_service_errors('TRADE')
+async def return_complementary_bandeo_controller(
+    bandeo_id: int,
+    return_data: ComplementaryBandeoReturnSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ComplementaryBandeoResponseSchema:
+    '''
+        Controller for the Return step of a Bandeo.
+    '''
+    db_bandeo = await return_complementary_bandeo_service(
+        db = db,
+        bandeo_id = bandeo_id,
+        return_data = return_data
+    )
+    return ComplementaryBandeoResponseSchema.model_validate(
+        db_bandeo, from_attributes = True
+    )
+
+
+@handle_service_errors('TRADE')
+async def list_complementary_bandeos_for_visit_controller(
+    attendance_id: int,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ComplementaryBandeoListResponseSchema:
+    '''
+        Controller for the per-visit bandeo listing.
+    '''
+    items, total = await list_complementary_bandeos_for_visit_service(
+        db = db, attendance_id = attendance_id
+    )
+    return ComplementaryBandeoListResponseSchema(
+        items = [
+            ComplementaryBandeoResponseSchema.model_validate(b, from_attributes = True)
+            for b in items
+        ],
+        total = total
+    )
+
+
+@handle_service_errors('TRADE')
+async def get_complementary_bandeo_by_id_controller(
+    bandeo_id: int,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ComplementaryBandeoResponseSchema:
+    '''
+        Controller for the single-bandeo lookup used on re-entry.
+    '''
+    db_bandeo = await get_complementary_bandeo_by_id_service(
+        db = db, bandeo_id = bandeo_id
     )
     return ComplementaryBandeoResponseSchema.model_validate(
         db_bandeo, from_attributes = True

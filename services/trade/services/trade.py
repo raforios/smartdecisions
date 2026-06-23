@@ -612,6 +612,7 @@ async def _insert_planned_routes_bulk_data(
             sequence = item.sequence,
             point_of_sale_id = item.point_of_sale_id,
             planned_workload_minutes = item.planned_workload_minutes,
+            planned_check_in_time = item.planned_check_in_time,  # iter6
             is_adhoc = item.is_adhoc,
             justification = item.justification,
             status = item.point_status or 'PENDING',

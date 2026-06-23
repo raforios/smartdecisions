@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Boolean,
+    Time,
     UniqueConstraint,
     Numeric
 )
@@ -109,6 +110,11 @@ class PlannedPoint(Base):  # pylint: disable=too-few-public-methods
         index = True
     )
     point_of_sale = relationship('PointOfSale')
+
+    # iter6 (Binaria, 2026-06-22): hora prevista de ingreso al PDV (req
+    # 7.1.1). Independiente del planned_workload_minutes; permite armar
+    # la agenda del dia incluso si la planificacion se carga en bulk.
+    planned_check_in_time = Column(Time, nullable = True)
 
     # Workload metrics. `planned_workload_minutes` is the budgeted time for
     # the visit. `actual_workload_minutes` and `workload_difference_minutes`

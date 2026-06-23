@@ -354,3 +354,262 @@ class AttendanceReportResponseSchema(ReportBaseSchema):
     total_visits: int
     average_duration_minutes: float
     items: List[AttendanceReportItemSchema]
+
+
+# ============================================================================
+# iter6 (Binaria, 2026-06-22): Monitor de Trade (req 7.4)
+# ----------------------------------------------------------------------------
+# Three aggregated endpoints power the executive panels demanded by the
+# requirement document. Each one consolidates the metrics that today the
+# frontend would have to assemble from 4-5 round-trips.
+# ============================================================================
+
+class PanelFilterSchema(BaseModel):
+    '''
+        Common filter shape for the Impulses and Replenishments panels.
+        Mirrors req 7.4.1 / 7.4.3: company is mandatory, the rest are
+        optional; missing = "all values".
+    '''
+    company_id: int = Query(..., description = 'Mandatory company filter.')
+    client_company_id: Optional[int] = Query(None)
+    date_from: date = Query(..., description = 'Inclusive lower date.')
+    date_to: date = Query(..., description = 'Inclusive upper date.')
+    country_id: Optional[int] = Query(None)
+    city_id: Optional[int] = Query(None)
+    pos_type_id: Optional[int] = Query(None)
+    channel_id: Optional[int] = Query(None)
+    pos_id: Optional[int] = Query(None)
+    route_id: Optional[int] = Query(None)
+    team_id: Optional[int] = Query(None)
+    user_id: Optional[int] = Query(None)
+    product_id: Optional[int] = Query(None)
+
+    class Config:  # pylint: disable=too-few-public-methods
+        '''Arbitrary types allowed for FastAPI query parsing.'''
+        arbitrary_types_allowed = True
+
+
+class PanelGeneralIndicatorsSchema(BaseModel):
+    '''
+        Cuadro "Indicadores generales" (7.4.1 / 7.4.3).
+    '''
+    pdv_count: int = 0
+    activity_count: int = 0
+    activities_per_pdv: float = 0.0
+    products_count: int = 0
+    products_per_activity: float = 0.0
+    avg_time_per_pdv_minutes: float = 0.0
+
+
+class PanelRouteIndicatorsSchema(BaseModel):
+    '''
+        Cuadro "Indicadores de ruta" (7.4.1 / 7.4.3). Returned only when
+        at least one route filter is applied.
+    '''
+    pdv_per_route: float = 0.0
+    avg_time_per_route_minutes: float = 0.0
+    avg_time_per_pdv_minutes: float = 0.0
+    avg_time_between_pdv_minutes: float = 0.0
+
+
+class PanelByCityRow(BaseModel):
+    '''
+        One row of a "X por ciudad" pie chart.
+    '''
+    city_id: Optional[int] = None
+    city_name: Optional[str] = None
+    count: int
+    percentage: float
+
+
+class PanelByDayRow(BaseModel):
+    '''
+        One row of a "X por dia" line chart.
+    '''
+    day: date
+    count: int
+
+
+class PanelSalesSummaryRow(BaseModel):
+    '''
+        Sales aggregation per SKU for the panel "Datos de ventas" cell.
+    '''
+    product_id: int
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    total_quantity: int = 0
+    unit_of_measure: Optional[str] = None
+
+
+class PanelInventorySnapshotRow(BaseModel):
+    '''
+        Inventory snapshot per SKU. For Impulses uses Q_initial - Q_sold;
+        for Replenishments splits into room/warehouse with breakage flag.
+    '''
+    product_id: int
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    quantity: int = 0
+    quantity_in_room: Optional[int] = None
+    quantity_in_warehouse: Optional[int] = None
+    quantity_minimum: Optional[int] = None
+    stockout: bool = False
+    unit_of_measure: Optional[str] = None
+
+
+class PanelExpirationRow(BaseModel):
+    '''
+        One row of the Replenishments panel "Datos de vencimientos" table.
+    '''
+    product_id: int
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    location: Optional[str] = None
+    batch_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_remaining: Optional[int] = None
+    is_short_dated: bool = False
+
+
+class PanelSheetRow(BaseModel):
+    '''
+        Flat row of the "Planilla" tab, ready to export to CSV/Excel.
+    '''
+    company_id: int
+    check_in_time: Optional[datetime] = None
+    check_out_time: Optional[datetime] = None
+    country_id: Optional[int] = None
+    city_id: Optional[int] = None
+    route_id: Optional[int] = None
+    route_name: Optional[str] = None
+    pos_id: Optional[int] = None
+    pos_name: Optional[str] = None
+    product_id: Optional[int] = None
+    sku: Optional[str] = None
+    product_name: Optional[str] = None
+    quantity_initial: Optional[int] = None
+    quantity_sold: Optional[int] = None
+    quantity_final: Optional[int] = None
+    user_id: Optional[int] = None
+
+
+class ImpulsesPanelResponseSchema(BaseModel):
+    '''
+        Response for GET /v1/reports/panel/impulses (req 7.4.1).
+    '''
+    generated_at: datetime = Field(default_factory = get_current_time_gmt)
+    filters_applied: PanelFilterSchema
+    general_indicators: PanelGeneralIndicatorsSchema
+    route_indicators: Optional[PanelRouteIndicatorsSchema] = None
+    pdv_by_city: List[PanelByCityRow] = []
+    activities_by_city: List[PanelByCityRow] = []
+    activities_by_day: List[PanelByDayRow] = []
+    sales_summary: List[PanelSalesSummaryRow] = []
+    inventory_snapshot: List[PanelInventorySnapshotRow] = []
+    sheet: List[PanelSheetRow] = []
+
+
+class ReplenishmentsPanelResponseSchema(BaseModel):
+    '''
+        Response for GET /v1/reports/panel/replenishments (req 7.4.3).
+    '''
+    generated_at: datetime = Field(default_factory = get_current_time_gmt)
+    filters_applied: PanelFilterSchema
+    general_indicators: PanelGeneralIndicatorsSchema
+    route_indicators: Optional[PanelRouteIndicatorsSchema] = None
+    pdv_by_city: List[PanelByCityRow] = []
+    activities_by_city: List[PanelByCityRow] = []
+    activities_by_day: List[PanelByDayRow] = []
+    inventory_snapshot: List[PanelInventorySnapshotRow] = []
+    expirations: List[PanelExpirationRow] = []
+    sheet: List[PanelSheetRow] = []
+
+
+# ----------------------------------------------------------------------------
+# Route tracking (req 7.4.4)
+# ----------------------------------------------------------------------------
+
+RouteTrackingActivity = 'IMPULSO'  # default; literal validation done below
+
+class RouteTrackingFilterSchema(BaseModel):
+    '''
+        Filters for GET /v1/reports/route-tracking (req 7.4.4).
+    '''
+    company_id: int = Query(...)
+    activity: str = Query(
+        'IMPULSO',
+        description = 'Object: IMPULSO or REPOSICION.'
+    )
+    route_id: Optional[int] = Query(
+        None,
+        description = (
+            'Route to render on the map. If omitted, returns every route '
+            'matching the other filters.'
+        )
+    )
+    target_date: date = Query(..., description = 'Day to render.')
+    team_id: Optional[int] = Query(None)
+    user_id: Optional[int] = Query(None)
+
+    class Config:  # pylint: disable=too-few-public-methods
+        '''Arbitrary types allowed for FastAPI query parsing.'''
+        arbitrary_types_allowed = True
+
+
+class RouteTrackingPosInventoryRow(BaseModel):
+    '''
+        Per-product line shown on the POS popup of the map.
+    '''
+    product_id: int
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    quantity_initial: Optional[int] = None
+    quantity_sold: Optional[int] = None
+    quantity_remaining: Optional[int] = None
+    quantity_in_room: Optional[int] = None
+    quantity_in_warehouse: Optional[int] = None
+    quantity_total: Optional[int] = None
+    quantity_minimum: Optional[int] = None
+    unit_of_measure: Optional[str] = None
+    stockout: bool = False
+
+
+class RouteTrackingPointSchema(BaseModel):
+    '''
+        One PDV on the route track. Status:
+          PENDING -> red pin (no check-in nor check-out)
+          OPEN    -> yellow pin (check-in only)
+          CLOSED  -> green pin (check-in + check-out)
+    '''
+    planned_point_id: int
+    sequence: int
+    pos_id: int
+    pos_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    planned_check_in_time: Optional[str] = None
+    status: str = 'PENDING'
+    check_in_time: Optional[datetime] = None
+    check_out_time: Optional[datetime] = None
+    inventory: List[RouteTrackingPosInventoryRow] = []
+
+
+class RouteTrackingRouteSchema(BaseModel):
+    '''
+        One route to render on the map.
+    '''
+    route_id: int
+    route_name: Optional[str] = None
+    route_code: Optional[str] = None
+    color: Optional[str] = None
+    activity: str
+    points: List[RouteTrackingPointSchema] = []
+
+
+class RouteTrackingResponseSchema(BaseModel):
+    '''
+        Response for GET /v1/reports/route-tracking (req 7.4.4).
+    '''
+    generated_at: datetime = Field(default_factory = get_current_time_gmt)
+    filters_applied: RouteTrackingFilterSchema
+    routes: List[RouteTrackingRouteSchema] = []

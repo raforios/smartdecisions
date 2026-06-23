@@ -186,9 +186,19 @@ async def create_impulse_inventory_start_service(
         pos_id = inventory_data.pos_id
     )
 
-    # Validate Assortment
+    # Validate Assortment + iter5 quantity normalization
     pos_id = inventory_data.pos_id
     for item in inventory_data.items:
+        # iter5: roll the legacy `quantity` field into quantity_in_room when
+        # both location fields arrive empty (frontend backwards-compat). Then
+        # always keep `quantity` aligned with the sum of the two locations so
+        # external consumers that still read the legacy column see the total.
+        if (item.quantity_in_room == 0
+            and item.quantity_in_warehouse == 0
+            and item.quantity):
+            item.quantity_in_room = item.quantity
+        item.quantity = item.quantity_in_room + item.quantity_in_warehouse
+
         product_id = get_product_id_by_sku(
             db, inventory_data.company_id, item.product_sku
         )
@@ -201,7 +211,10 @@ async def create_impulse_inventory_start_service(
         attendance_id = attendance_id,
         company_id = inventory_data.company_id,
         items_list = inventory_data.items,
-        model_class = ImpulseInventoryStart
+        model_class = ImpulseInventoryStart,
+        extra_fields = {  # iter5
+            'client_company_id': inventory_data.client_company_id
+        }
     )
 
 @handle_service_errors('TRADE')
@@ -328,9 +341,15 @@ async def create_impulse_inventory_end_service(
         pos_id = inventory_data.pos_id
     )
 
-    # Validate Assortment
+    # Validate Assortment + iter5 quantity normalization (see _start counterpart).
     pos_id = inventory_data.pos_id
     for item in inventory_data.items:
+        if (item.quantity_in_room == 0
+            and item.quantity_in_warehouse == 0
+            and item.quantity):
+            item.quantity_in_room = item.quantity
+        item.quantity = item.quantity_in_room + item.quantity_in_warehouse
+
         product_id = get_product_id_by_sku(
             db, inventory_data.company_id, item.product_sku
         )
@@ -343,7 +362,10 @@ async def create_impulse_inventory_end_service(
         attendance_id = attendance_id,
         company_id = inventory_data.company_id,
         items_list = inventory_data.items,
-        model_class = ImpulseInventoryEnd
+        model_class = ImpulseInventoryEnd,
+        extra_fields = {  # iter5
+            'client_company_id': inventory_data.client_company_id
+        }
     )
 
 

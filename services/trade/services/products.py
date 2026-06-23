@@ -33,7 +33,8 @@ from models.impulses import (
     TradePromotionDetail
 )
 from models.replenishments import (
-    ReplenishmentInventory,
+    # iter5 (Binaria, 2026-06-20): ReplenishmentInventory removed; inventory
+    # now lives in the unified Impulses tables (see models.impulses).
     ReplenishmentReception,
     ComplementaryBandeoDetail
 )
@@ -65,13 +66,20 @@ async def create_bulk_items_from_skus(
     attendance_id: int,
     company_id: int,
     items_list: List[BaseModel],
-    model_class: Type[DeclarativeBase]
+    model_class: Type[DeclarativeBase],
+    extra_fields: dict = None
 ) -> List[DeclarativeBase]:
     '''
         Generic helper to create multiple inventory/reception items.
         Handles SKU-to-ID translation and bulk commit.
+
+        `extra_fields` lets the caller inject column values that live on
+        the parent payload (e.g. client_company_id from the Create schema,
+        not from each item). Passed as kwargs to the model constructor and
+        overridable per-row by any matching key in the item itself.
     '''
     created_items = []
+    base_extras = dict(extra_fields or {})
     for item in items_list:
         product_id = get_product_id_by_sku(
             db, company_id, item.product_sku
@@ -82,6 +90,7 @@ async def create_bulk_items_from_skus(
         db_item = model_class(
             attendance_id = attendance_id,
             product_id = product_id,
+            **base_extras,
             **item_data
         )
         db.add(db_item)
@@ -336,10 +345,9 @@ async def delete_product_service(
     db.query(ImpulseSaleDetail).filter(ImpulseSaleDetail.product_id == product_id).delete()
     db.query(TradePromotionDetail).filter(TradePromotionDetail.product_id == product_id).delete()
 
-    # Replenishment tables
-    db.query(ReplenishmentInventory).filter(
-        ReplenishmentInventory.product_id == product_id
-    ).delete()
+    # Replenishment tables. iter5: ReplenishmentInventory was unified into
+    # the Impulses inventory tables; those rows are already cleaned by the
+    # Impulses cascade above.
     db.query(ReplenishmentReception).filter(
         ReplenishmentReception.product_id == product_id
     ).delete()

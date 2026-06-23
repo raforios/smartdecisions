@@ -188,3 +188,106 @@ async def get_attendance_report_endpoint(
         request = request,
         current_user = current_user,
     )
+
+
+# ============================================================================
+# iter6 (Binaria, 2026-06-22) — Monitor de Trade endpoints (req 7.4)
+# ============================================================================
+from schemas.reports import (
+    ImpulsesPanelResponseSchema,
+    PanelFilterSchema,
+    ReplenishmentsPanelResponseSchema,
+    RouteTrackingFilterSchema,
+    RouteTrackingResponseSchema,
+)
+from controllers.reports import (
+    get_impulses_panel_controller,
+    get_replenishments_panel_controller,
+    get_route_tracking_controller,
+)
+
+
+@router.get(
+    '/panel/impulses',
+    response_model = ImpulsesPanelResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Impulses monitor panel (req 7.4.1)',
+    description = (
+        'Returns the aggregated indicators, charts, sales summary, '
+        'inventory snapshot and flat sheet expected by the Impulses '
+        'panel. Mandatory filters: company_id, date_from, date_to.'
+    ),
+)
+async def get_impulses_panel_endpoint(
+    request: Request,
+    filters: PanelFilterSchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''Endpoint backing the Impulses panel.'''
+    message = (
+        f'User: {current_user}. Impulses panel for company '
+        f'{filters.company_id}.'
+    )
+    logger.info(message)
+    return await get_impulses_panel_controller(
+        filters = filters, db = db,
+        request = request, current_user = current_user,
+    )
+
+
+@router.get(
+    '/panel/replenishments',
+    response_model = ReplenishmentsPanelResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Replenishments monitor panel (req 7.4.3)',
+    description = (
+        'Returns the aggregated indicators, charts, inventory snapshot '
+        '(sala/almacen), expirations table and flat sheet expected by the '
+        'Replenishments panel.'
+    ),
+)
+async def get_replenishments_panel_endpoint(
+    request: Request,
+    filters: PanelFilterSchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''Endpoint backing the Replenishments panel.'''
+    message = (
+        f'User: {current_user}. Replenishments panel for company '
+        f'{filters.company_id}.'
+    )
+    logger.info(message)
+    return await get_replenishments_panel_controller(
+        filters = filters, db = db,
+        request = request, current_user = current_user,
+    )
+
+
+@router.get(
+    '/route-tracking',
+    response_model = RouteTrackingResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Route tracking map (req 7.4.4)',
+    description = (
+        'Returns the chosen route(s) for a date with each PDV state '
+        '(PENDING/OPEN/CLOSED) plus the inventory popup payload.'
+    ),
+)
+async def get_route_tracking_endpoint(
+    request: Request,
+    filters: RouteTrackingFilterSchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''Endpoint backing the route tracking map.'''
+    message = (
+        f'User: {current_user}. Route tracking for company '
+        f'{filters.company_id} on {filters.target_date}.'
+    )
+    logger.info(message)
+    return await get_route_tracking_controller(
+        filters = filters, db = db,
+        request = request, current_user = current_user,
+    )

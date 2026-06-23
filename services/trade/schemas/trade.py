@@ -1,7 +1,7 @@
 '''
     Trade Schemas — Planning, Routes, Planned Points, and Attendances.
 '''
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import List, Literal, Optional
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -44,6 +44,13 @@ class PlannedPointBaseSchema(BaseSchema):
         ge = 0,
         description = 'Budgeted time in minutes for this visit.'
     )
+    planned_check_in_time: Optional[time] = Field(
+        None,
+        description = (
+            'iter6: hora prevista de ingreso al PDV (HH:MM[:SS]). '
+            'Per req 7.1.1.'
+        )
+    )
     is_adhoc: bool = Field(
         False,
         description = 'True when the visit is off-route (ad-hoc).'
@@ -76,6 +83,7 @@ class PlannedPointUpdateSchema(BaseSchema):
     sequence: Optional[int] = Field(None, ge = 1)
     point_of_sale_id: Optional[int] = None
     planned_workload_minutes: Optional[int] = Field(None, ge = 0)
+    planned_check_in_time: Optional[time] = None  # iter6
     actual_workload_minutes: Optional[int] = Field(None, ge = 0)
     workload_difference_minutes: Optional[int] = None
     is_adhoc: Optional[bool] = None
@@ -358,6 +366,7 @@ class PlannedRouteBulkItemSchema(BaseSchema):
     sequence: int = Field(..., ge = 1)
     point_of_sale_id: int
     planned_workload_minutes: int = Field(..., ge = 0)
+    planned_check_in_time: Optional[time] = None  # iter6
     is_adhoc: bool = False
     justification: Optional[str] = None
     point_status: Optional[str] = Field('PENDING', max_length = 20)

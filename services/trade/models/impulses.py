@@ -83,14 +83,31 @@ class TradePromotionDetail(Base):  # pylint: disable=too-few-public-methods
 
 class ImpulseInventoryStart(Base, AttendanceProductMixin):  # pylint: disable=too-few-public-methods
     '''
-        Records the initial inventory count at the start of an Impulse visit.
+        Records the initial inventory count at the start of a visit.
+
+        iter5 (Binaria, 2026-06-20): unified storage for both Impulses and
+        Replenishments inventory. The same physical stock is touched by
+        both processes (Impulses move it, Replenishments restore it), so
+        the table now carries batch + expiration + sala/almacén breakdown
+        + client_company_id. Legacy `quantity` column kept nullable so
+        existing callers that read it keep working; new code populates the
+        new columns and derives `quantity = quantity_in_room + quantity_in_warehouse`.
     '''
     __tablename__ = 't_trade_impulse_inventory_start'
 
     id = Column(Integer, primary_key = True, index = True)
 
-    # Quantity counted at the start
-    quantity = Column(Integer, nullable = False)
+    # iter5: brand / client owner — same convention as t_trade_impulse_sales.
+    client_company_id = Column(Integer, nullable = True, index = True)
+
+    # iter5: traceability of incoming batches.
+    batch_number = Column(String(50), nullable = True, index = True)
+    expiration_date = Column(DateTime, nullable = True)
+
+    # iter5: split count by physical location. Legacy `quantity` aggregates both.
+    quantity_in_room = Column(Integer, nullable = False, default = 0)
+    quantity_in_warehouse = Column(Integer, nullable = False, default = 0)
+    quantity = Column(Integer, nullable = True)
 
     # Free-text notes captured by the operator during the count.
     observations = Column(Text, nullable = True)
@@ -99,10 +116,11 @@ class ImpulseInventoryStart(Base, AttendanceProductMixin):  # pylint: disable=to
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     __table_args__ = (
-        # A product can only be registered once per attendance (visit)
+        # iter5: batch_number added to the unique tuple. A PoS can now report
+        # the same product across multiple lots in a single visit.
         UniqueConstraint(
-            'attendance_id', 'product_id',
-            name = 'uc_impulse_start_attendance_product'
+            'attendance_id', 'product_id', 'batch_number',
+            name = 'uc_impulse_start_attendance_product_batch'
         ),
     )
 
@@ -181,12 +199,22 @@ class ImpulseSaleDetail(Base):  # pylint: disable=too-few-public-methods
 class ImpulseInventoryEnd(Base, AttendanceProductMixin):  # pylint: disable=too-few-public-methods
     '''
         Records the final inventory count.
+
+        iter5: same shape as ImpulseInventoryStart (batch + expiration +
+        sala/almacén + client_company_id). See that model's docstring for
+        the rationale behind unifying Impulses + Replenishments inventory.
     '''
     __tablename__ = 't_trade_impulse_inventory_end'
     id = Column(Integer, primary_key = True, index = True)
 
-    # Quantity counted at the end
-    quantity = Column(Integer, nullable = False)
+    client_company_id = Column(Integer, nullable = True, index = True)
+
+    batch_number = Column(String(50), nullable = True, index = True)
+    expiration_date = Column(DateTime, nullable = True)
+
+    quantity_in_room = Column(Integer, nullable = False, default = 0)
+    quantity_in_warehouse = Column(Integer, nullable = False, default = 0)
+    quantity = Column(Integer, nullable = True)
 
     # Free-text notes captured by the operator during the count.
     observations = Column(Text, nullable = True)

@@ -116,15 +116,40 @@ class TradePromotionListResponseSchema(BaseSchema):
 class ImpulseInventoryItemSchema(BaseSchema):
     '''
         Base schema for a single item in an inventory report (Start or End).
+
+        iter5 (Binaria, 2026-06-20): inventory items now carry batch +
+        expiration + a split count by physical location (sala/almacén).
+        The legacy `quantity` field is optional and treated as a fallback:
+        if both quantity_in_room and quantity_in_warehouse are zero, the
+        caller's `quantity` is rolled into quantity_in_room.
     '''
     product_sku: str = Field(
         ...,
         description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) being reported.'
     )
-    quantity: int = Field(
-        ...,
-        ge = 0, # Quantity cannot be negative
-        description = 'Quantity counted for this SKU.'
+    batch_number: Optional[str] = Field(  # iter5
+        None,
+        max_length = 50,
+        description = 'Batch or lot number of the product being counted.'
+    )
+    expiration_date: Optional[str] = Field(  # iter5
+        None,
+        description = 'Expiration date of the batch (YYYY-MM-DD).'
+    )
+    quantity_in_room: int = Field(  # iter5
+        0, ge = 0,
+        description = 'Quantity counted on the sales floor (sala).'
+    )
+    quantity_in_warehouse: int = Field(  # iter5
+        0, ge = 0,
+        description = 'Quantity counted in the back room (almacén).'
+    )
+    quantity: Optional[int] = Field(
+        None, ge = 0,
+        description = (
+            'Legacy aggregated quantity. Optional. Used as a fallback for '
+            'quantity_in_room when both location fields are zero.'
+        )
     )
     observations: Optional[str] = Field(
         None,
@@ -134,11 +159,16 @@ class ImpulseInventoryItemSchema(BaseSchema):
 class ImpulseInventoryCreateSchema(BaseSchema):
     '''
         Schema for creating a list of inventory items (Start or End).
-        UPDATED: Includes pos_id for validation.
+        Includes pos_id for assortment validation and (iter5)
+        client_company_id for brand ownership.
     '''
     company_id: int = Field(
         ...,
         description = 'ID of the company for this transaction (needed for SKU lookup).'
+    )
+    client_company_id: Optional[int] = Field(  # iter5
+        None,
+        description = 'ID of the client company (brand / product owner).'
     )
     pos_id: int = Field(
         ...,
@@ -157,7 +187,12 @@ class ImpulseInventoryResponseItemSchema(BaseSchema):
     id: int
     attendance_id: int
     product_id: int
-    quantity: int
+    client_company_id: Optional[int] = None    # iter5
+    batch_number: Optional[str] = None         # iter5
+    expiration_date: Optional[datetime] = None # iter5
+    quantity_in_room: int = 0                  # iter5
+    quantity_in_warehouse: int = 0             # iter5
+    quantity: Optional[int] = None             # iter5: legacy aggregated
     observations: Optional[str] = None
     created_at: Optional[datetime]
 
