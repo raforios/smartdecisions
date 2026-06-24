@@ -76,7 +76,7 @@ button { font-family: inherit; }
     border-right: 4px solid var(--oro);
 }
 
-.login-hero img { height: 110px; width: auto; margin-bottom: 1.5rem; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4)); }
+.login-hero img { height: 550px; width: auto; margin-bottom: 1.5rem; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4)); }
 .login-hero h1 {
     font-family: 'Cinzel', serif;
     font-size: 3rem;
