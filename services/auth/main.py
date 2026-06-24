@@ -49,7 +49,9 @@ DEFAULT_CORS_ORIGINS = [
     'http://127.0.0.1:5501',
     'http://localhost:5501',
     'http://127.0.0.1:8000',
-    'http://localhost:8000'
+    'http://localhost:8000',
+    'https://d1wz098n1gidtt.cloudfront.net',
+    'https://cumbre.mineria.gob.bo'
 ]
 ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
