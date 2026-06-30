@@ -13,9 +13,10 @@ class OptimizationQueryParams(BaseModel):
     '''
         Shared query-string contract for all optimization endpoints.
 
-        `dist` is only consumed by the optimization-algorithm endpoints
-        (`/optimal_route`, `/route`) where the road-network radius matters;
-        the data-extraction endpoints ignore it.
+        `dist` is retained for backward compatibility with the legacy OSM-graph
+        radius contract; routing now uses OSRM, which resolves the full street
+        geometry regardless of this value. The data-extraction endpoints
+        ignore it as well.
     '''
     model_config = ConfigDict(extra = 'forbid')
 
@@ -25,7 +26,7 @@ class OptimizationQueryParams(BaseModel):
         default = 1500,
         ge = 100,
         le = 50000,
-        description = 'OSM graph radius in meters (only used by optimal_route and route).'
+        description = 'Legacy OSM graph radius in meters; kept for compatibility, no longer used.'
     )
 
 
@@ -69,10 +70,12 @@ class BulkUploadResponse(BaseModel):
 
 class RouteResponse(BaseModel):
     '''
-        Final route segment with road-network projection.
+        Final route segment with road-network projection (OSRM).
 
-        `route` is the list of OSM node ids that compose the shortest path
-        between origin_node and destination_node.
+        `route` is the street polyline that joins the segment endpoints,
+        expressed as a list of `[longitude, latitude]` points (GeoJSON order)
+        ready to be drawn on a map. `road_distance` and `road_duration` are the
+        real driving distance (meters) and duration (seconds) reported by OSRM.
     '''
     origin: int
     target: int
@@ -82,6 +85,6 @@ class RouteResponse(BaseModel):
     x_next: float
     distance: float
     time_seg: float
-    origin_node: int
-    destination_node: int
-    route: list[int]
+    road_distance: float
+    road_duration: float
+    route: list[list[float]]

@@ -12,8 +12,6 @@ import csv
 import io
 from typing import List, Optional, Tuple
 import pandas as pd
-import osmnx as ox
-import networkx as nx
 from boto3.resources.base import ServiceResource
 
 from schemas.optimization import (
@@ -31,6 +29,7 @@ from services.ml_optimization import (
     optimal_route
 )
 from services.route_data import bulk_upload_points, get_route_points
+from services.routing import road_segment
 
 
 # ---------------------------------------------------------------------------
@@ -146,13 +145,12 @@ def _final_data(dtf: pd.DataFrame, dtf_distances: pd.DataFrame) -> pd.DataFrame:
     return dtf_final
 
 
-def _final_route(dtf: pd.DataFrame, dist: int) -> pd.DataFrame:
+def _final_route(dtf: pd.DataFrame) -> pd.DataFrame:
     '''
-        Projects the linear-distance route onto the OSM road network using
-        osmnx and returns it with per-segment distances, times and nodes.
+        Projects the ordered route onto the real road network via OSRM and
+        returns it with per-segment linear time, real road distance/duration
+        and the street geometry (list of [longitude, latitude] points).
     '''
-    start = dtf[dtf.index == 0][['y', 'x']].values[0]
-
     df_route = dtf.copy()
     df_route.index.name = 'visit_order'
     df_route.drop(columns = ['target'], axis = 1, inplace = True)
@@ -171,21 +169,14 @@ def _final_route(dtf: pd.DataFrame, dist: int) -> pd.DataFrame:
         axis = 1
     )
 
-    graph = ox.graph_from_point(start, dist = dist, network_type = 'drive')
-    df_route_segments.loc[:, 'origin_node'] = df_route_segments[['y', 'x']].apply(
-        lambda x: ox.distance.nearest_nodes(graph, x.iloc[1], x.iloc[0]), axis = 1
-    )
-    df_route_segments.loc[:, 'destination_node'] = df_route_segments[
-        ['y_next', 'x_next']
-    ].apply(
-        lambda x: ox.distance.nearest_nodes(graph, x.iloc[1], x.iloc[0]), axis = 1
-    )
-    df_route_segments.loc[:, 'route'] = df_route_segments[
-        ['origin_node', 'destination_node']
-    ].apply(
-        lambda x: nx.shortest_path(graph, x.iloc[0], x.iloc[1], weight = 'length'),
+    # Each segment is resolved against the OSRM road network (see services.routing).
+    segments = df_route_segments.apply(
+        lambda stop: road_segment((stop.y, stop.x), (stop.y_next, stop.x_next)),
         axis = 1
     )
+    df_route_segments['road_distance'] = segments.apply(lambda leg: leg['distance'])
+    df_route_segments['road_duration'] = segments.apply(lambda leg: leg['duration'])
+    df_route_segments['route'] = segments.apply(lambda leg: leg['geometry'])
     return df_route_segments
 
 
@@ -240,11 +231,15 @@ async def optimization_algorithm_controller(
     dist: int
 ) -> Optional[List[RouteResponse]]:
     '''
-        Runs the full route-optimization pipeline (ordering + OSM projection).
+        Runs the full route-optimization pipeline (ordering + OSRM projection).
+
+        `dist` is kept for backward compatibility with the legacy OSM-graph
+        radius contract but no longer affects routing: OSRM resolves the full
+        street geometry for every segment regardless of any radius.
     '''
     dtf_final_models = await data_ordered_controller(dynamodb_resource, route_id, day)
     dtf_final = pd.DataFrame([m.model_dump() for m in dtf_final_models])
-    dtf_route = _final_route(dtf_final, dist)
+    dtf_route = _final_route(dtf_final)
     return _df_to_pydantic(dtf_route, RouteResponse)
 
 

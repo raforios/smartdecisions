@@ -31,7 +31,7 @@ MICROSERVICE_NAME = 'ANALYTICS'
     summary = 'Run the affinity × drop size engine on a previously ingested dataset',
     description = (
         'Reads the dataset from the ingest service (S3 via FILES bucket), '
-        'computes association rules with mlxtend (Apriori), weights each '
+        'computes association rules with a lightweight Apriori, weights each '
         'rule by the expected drop size of the consequent product and '
         'returns the top N opportunities per point of sale, ranked by '
         'expected monetary impact.'

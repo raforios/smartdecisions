@@ -97,8 +97,8 @@ async def get_distances_endpoint(
     '/optimal_route',
     response_model = List[RouteResponse],
     status_code = status.HTTP_200_OK,
-    summary = 'Optimized route projected on OSM road network',
-    description = 'Returns the per-segment optimized route, including OSM node ids and shortest paths.'
+    summary = 'Optimized route projected on the road network (OSRM)',
+    description = 'Returns the per-segment optimized route with real road distance, duration and street geometry.'
 )
 @log_usage(MICROSERVICE_NAME)
 async def get_optimal_route_endpoint(

@@ -42,7 +42,11 @@ OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED els
 CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
 DEFAULT_CORS_ORIGINS = [
     'http://127.0.0.1:5500',
-    'http://localhost:5500'
+    'http://localhost:5500',
+    'http://127.0.0.1:5501',
+    'http://localhost:5501',
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
 ]
 ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
@@ -69,7 +73,7 @@ APP_CONFIG = {
         'SmartDecisions route optimization microservice: reads geolocated '
         'client points per (route_id, day) from DynamoDB, computes geodesic '
         'distances, runs the optimal-route heuristic and projects the result '
-        'onto the OpenStreetMap road network using osmnx + networkx. Replaces '
+        'onto the real road network using the OSRM routing API. Replaces '
         'the legacy monolith endpoints under /api/v1/optimization/*.'
     ),
     'version': '1.0.0',

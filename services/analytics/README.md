@@ -3,8 +3,8 @@
 Microservicio backend del producto **SmartDecisions** (de BearSoft). Es el
 motor diferenciador del SaaS: **Afinidad × Drop Size = Oportunidad Comercial
 Real** (SMARTDECISIONS.md §2). Toma un dataset ya validado por el servicio
-`ingest`, calcula reglas de asociación con `mlxtend` (Apriori +
-`association_rules`), las pondera por el drop size esperado de cada producto
+`ingest`, calcula reglas de asociación con un Apriori ligero propio (sin
+dependencias pesadas), las pondera por el drop size esperado de cada producto
 (en moneda cuando hay precios) y devuelve el **top N de oportunidades por
 punto de venta**, rankeadas por impacto monetario.
 
@@ -13,7 +13,7 @@ punto de venta**, rankeadas por impacto monetario.
 - Python 3.14 + FastAPI + Uvicorn
 - AWS Lambda (handler `Mangum`) + API Gateway
 - AWS DynamoDB (`boto3`) + AWS S3 (lectura directa del bucket de FILES)
-- pandas + mlxtend (Apriori, `association_rules`)
+- pandas + Apriori ligero propio (frequent itemsets + `association_rules`)
 - Autenticación JWT delegada al servicio AUTH
 
 ## Estructura

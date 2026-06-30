@@ -4,9 +4,9 @@
     Pipeline:
         1. Group the ingested sales DataFrame by `id_pedido` to form
            transactions (lists of products bought together).
-        2. Run mlxtend's Apriori to find frequent itemsets, then
-           `association_rules` to produce affinity rules with support,
-           confidence and lift.
+        2. Run a lightweight, dependency-free Apriori to find frequent
+           itemsets, then derive affinity rules with support, confidence
+           and lift (same metrics as mlxtend, no scikit-learn/scipy weight).
         3. Per PdV: identify which products the PdV already buys and which
            association rules apply.
         4. For each candidate consequent (product the PdV doesn't yet buy),
@@ -17,11 +17,10 @@
     Output is a flat list of `Opportunity` dicts ready to be wrapped in the
     public schema.
 '''
+from itertools import combinations
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-from mlxtend.frequent_patterns import apriori, association_rules
-from mlxtend.preprocessing import TransactionEncoder
 
 from services.logger_config import custom_logger as logger
 
@@ -34,7 +33,8 @@ def _build_transactions(dataframe: pd.DataFrame) -> List[List[str]]:
     '''
         Groups the sales dataframe by `id_pedido` and returns one list of
         product SKUs per transaction. Duplicate products in the same order
-        are collapsed (the TransactionEncoder expects sets, not multisets).
+        are collapsed, since market-basket support counts itemsets as sets,
+        not multisets.
 
         Args:
             dataframe (pd.DataFrame): Sales rows (one product per row).
@@ -48,37 +48,126 @@ def _build_transactions(dataframe: pd.DataFrame) -> List[List[str]]:
     return [products for products in grouped.tolist() if products]
 
 
+_RULE_COLUMNS = ['antecedents', 'consequents', 'support', 'confidence', 'lift']
+
+
+def _frequent_itemsets(
+    transactions: List[List[str]],
+    min_support: float
+) -> Dict[frozenset, float]:
+    '''
+        Apriori frequent-itemset mining without external dependencies.
+
+        Generates candidate k-itemsets from frequent (k-1)-itemsets, prunes
+        them with the Apriori property (every (k-1)-subset must be frequent)
+        and keeps those whose support reaches `min_support`.
+
+        Args:
+            transactions (List[List[str]]): One list of unique SKUs per order.
+            min_support (float): Minimum fraction of transactions (0..1).
+
+        Returns:
+            Dict[frozenset, float]: Frequent itemsets mapped to their support.
+    '''
+    total = len(transactions)
+    if total == 0:
+        return {}
+
+    transaction_sets = [frozenset(items) for items in transactions]
+    min_count = min_support * total
+
+    counts: Dict[frozenset, int] = {}
+    for items in transaction_sets:
+        for item in items:
+            single = frozenset((item,))
+            counts[single] = counts.get(single, 0) + 1
+    current = {itemset: count for itemset, count in counts.items() if count >= min_count}
+
+    supports: Dict[frozenset, float] = dict(current)
+    size = 2
+    while current:
+        previous = list(current.keys())
+        candidates: set = set()
+        for left in range(len(previous)):
+            for right in range(left + 1, len(previous)):
+                union = previous[left] | previous[right]
+                if len(union) != size:
+                    continue
+                # Apriori pruning: every (size - 1)-subset must be frequent.
+                if all(frozenset(subset) in current
+                       for subset in combinations(union, size - 1)):
+                    candidates.add(union)
+
+        if not candidates:
+            break
+
+        candidate_counts: Dict[frozenset, int] = {candidate: 0 for candidate in candidates}
+        for items in transaction_sets:
+            for candidate in candidates:
+                if candidate <= items:
+                    candidate_counts[candidate] += 1
+
+        current = {
+            itemset: count
+            for itemset, count in candidate_counts.items()
+            if count >= min_count
+        }
+        supports.update(current)
+        size += 1
+
+    return {itemset: count / total for itemset, count in supports.items()}
+
+
 def _compute_affinity_rules(
     transactions: List[List[str]],
     min_support: float,
     min_lift: float
 ) -> pd.DataFrame:
     '''
-        Runs Apriori + association_rules over the transactions and returns
-        the rule table with columns
+        Derives association rules from the frequent itemsets and returns the
+        rule table with columns
         `[antecedents, consequents, support, confidence, lift]`.
+
+        For every frequent itemset of size >= 2 it evaluates each non-empty
+        antecedent → consequent partition, computing the same metrics mlxtend
+        produced:
+            support    = support(antecedents ∪ consequents)
+            confidence = support(itemset) / support(antecedents)
+            lift       = confidence / support(consequents)
+        Rules are kept when `lift >= min_lift`.
     '''
-    if not transactions:
-        return pd.DataFrame(columns = ['antecedents', 'consequents', 'support', 'confidence', 'lift'])
+    supports = _frequent_itemsets(transactions, min_support)
+    if not supports:
+        return pd.DataFrame(columns = _RULE_COLUMNS)
 
-    encoder = TransactionEncoder()
-    encoded = encoder.fit(transactions).transform(transactions)
-    one_hot = pd.DataFrame(encoded, columns = encoder.columns_)
+    records: List[Dict[str, Any]] = []
+    for itemset, itemset_support in supports.items():
+        if len(itemset) < 2:
+            continue
+        items = sorted(itemset)
+        for antecedent_size in range(1, len(items)):
+            for antecedent_items in combinations(items, antecedent_size):
+                antecedents = frozenset(antecedent_items)
+                consequents = itemset - antecedents
+                antecedent_support = supports.get(antecedents)
+                consequent_support = supports.get(consequents)
+                if not antecedent_support or not consequent_support:
+                    continue
+                confidence = itemset_support / antecedent_support
+                lift = confidence / consequent_support
+                if lift < min_lift:
+                    continue
+                records.append({
+                    'antecedents': antecedents,
+                    'consequents': consequents,
+                    'support': itemset_support,
+                    'confidence': confidence,
+                    'lift': lift
+                })
 
-    frequent_itemsets = apriori(
-        one_hot,
-        min_support = min_support,
-        use_colnames = True
-    )
-    if frequent_itemsets.empty:
-        return pd.DataFrame(columns = ['antecedents', 'consequents', 'support', 'confidence', 'lift'])
-
-    rules = association_rules(
-        frequent_itemsets,
-        metric = 'lift',
-        min_threshold = min_lift
-    )
-    return rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']]
+    if not records:
+        return pd.DataFrame(columns = _RULE_COLUMNS)
+    return pd.DataFrame(records, columns = _RULE_COLUMNS)
 
 
 def _compute_drop_size(
