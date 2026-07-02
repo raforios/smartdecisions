@@ -86,8 +86,11 @@ python main.py
 ```
 
 Variables de entorno requeridas (ver `services/environment.py`):
-`HOST`, `PORT`, `APP_ENV`, `ROOT_PATH`, `CORS_ORIGINS`, y las del
-`db_connection` (credenciales MySQL).
+`HOST`, `PORT`, `APP_ENV`, `ROOT_PATH`, `CORS_ALLOWED_ORIGINS`,
+`CORS_ALLOWED_ORIGIN_REGEX`, y las del `db_connection` (credenciales MySQL).
+`CORS_ALLOWED_ORIGINS` es una lista CSV de orígenes exactos (opcional); el default
+del regex ya cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo` y
+`localhost`, así que no hace falta listar URLs una por una.
 
 ---
 

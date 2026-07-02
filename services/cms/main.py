@@ -27,7 +27,8 @@ ENV_VARS = load_and_validate_env_vars(
     optional_env_vars = {
         'APP_ENV': str,
         'ROOT_PATH': str,
-        'CORS_ORIGINS': str,
+        'CORS_ALLOWED_ORIGINS': str,
+        'CORS_ALLOWED_ORIGIN_REGEX': str,
     }
 )
 
@@ -38,13 +39,6 @@ APP_ENV = ENV_VARS.get('APP_ENV', 'development')
 ROOT_PATH_VALUE = ENV_VARS.get('ROOT_PATH', '').strip('/')
 ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED else '/openapi.json'
-
-# CloudFront distributions follow the pattern d<random>.cloudfront.net.
-# The regex below lets any future distribution reach the service without
-# redeploying; production should still pin a specific origin via the
-# CORS_ORIGINS env var once the dominio definitivo is allocated.
-_CLOUDFRONT_REGEX = r'^https://[a-z0-9-]+\.cloudfront\.net$'
-
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -132,22 +126,23 @@ async def custom_swagger_ui():
     )
 
 
-# CORS: explicit origins come from CORS_ORIGINS (comma-separated) with
-# local-dev fallbacks. The CloudFront regex matches any distribution
-# subdomain so the portal puede consumir esta API mientras se finaliza el
-# dominio definitivo.
-_DEFAULT_ORIGINS = (
-    'http://127.0.0.1:5500',
-    'http://localhost:5500',
-    'http://127.0.0.1:8080',
-    'http://localhost:8080',
+# CORS estándar: lista explícita opcional por env (CORS_ALLOWED_ORIGINS, CSV) +
+# un patrón que cubre nuestros frontends sin listar URLs una por una.
+CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
+ORIGINS = [
+    origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
+]
+DEFAULT_CORS_ORIGIN_REGEX = (
+    r'^https://([a-z0-9-]+\.)*bearsoft\.com\.bo$'
+    r'|^https://[a-z0-9-]+\.cloudfront\.net$'
+    r'|^https://([a-z0-9-]+\.)*mineria\.gob\.bo$'
+    r'|^http://(localhost|127\.0\.0\.1)(:\d+)?$'
 )
-_cors_env = ENV_VARS.get('CORS_ORIGINS', '') or ''
-origins = [o.strip() for o in _cors_env.split(',') if o.strip()] or list(_DEFAULT_ORIGINS)
+CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT_CORS_ORIGIN_REGEX
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = origins,
-    allow_origin_regex = _CLOUDFRONT_REGEX,
+    allow_origins = ORIGINS,
+    allow_origin_regex = CORS_ALLOWED_ORIGIN_REGEX,
     allow_credentials = True,
     allow_methods = ['*'],
     allow_headers = ['*'],
