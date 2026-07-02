@@ -56,7 +56,8 @@ ingest/
 | `FILES_SERVICE_URL` | sí | URL base del servicio FILES para subir el archivo a S3. |
 | `AUTH_SERVICE_URL` | no | Para validaciones cruzadas (no usado aún). |
 | `EVENTS_SERVICE_URL` | no | Para auditoría futura. |
-| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes permitidos. |
+| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes exactos adicionales (terceros). Vacío por defecto. |
+| `CORS_ALLOWED_ORIGIN_REGEX` | no | Regex de orígenes permitidos. Default cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo` y `localhost`. |
 
 ## Endpoints (todos requieren `Authorization: Bearer <jwt>`)
 

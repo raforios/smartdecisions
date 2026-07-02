@@ -67,7 +67,8 @@ optimization/
 | `DYNAMODB_TABLE_NAME_OPTIMIZATION_ROUTES` | sí | Default: `t_optimization_routes`. |
 | `AWS_REGION` | sí | Región de DynamoDB. |
 | `OSRM_BASE_URL` | no | Base de la API OSRM. Default: `https://router.project-osrm.org`. |
-| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes permitidos. |
+| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes exactos adicionales (terceros). Vacío por defecto. |
+| `CORS_ALLOWED_ORIGIN_REGEX` | no | Regex de orígenes permitidos. Default cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo` y `localhost`. |
 
 ## Endpoints (todos requieren `Authorization: Bearer <jwt>`)
 

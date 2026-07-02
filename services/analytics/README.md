@@ -75,7 +75,8 @@ Tablas leídas:
 | `AFFINITY_MIN_SUPPORT` | no | Apriori support threshold (default `0.01`). |
 | `AFFINITY_MIN_LIFT` | no | `association_rules` lift threshold (default `1.0`). |
 | `AFFINITY_TOP_N_PER_PDV` | no | Máximo de oportunidades por PdV (default `10`). |
-| `CORS_ALLOWED_ORIGINS` | no | Lista CSV. |
+| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes exactos adicionales (terceros). Vacío por defecto. |
+| `CORS_ALLOWED_ORIGIN_REGEX` | no | Regex de orígenes permitidos. Default cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo` y `localhost`. |
 
 ## Endpoints (todos requieren `Authorization: Bearer <jwt>`)
 

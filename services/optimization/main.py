@@ -27,7 +27,8 @@ ENV_VARS = load_and_validate_env_vars(
     optional_env_vars = {
         'APP_ENV': str,
         'ROOT_PATH': str,
-        'CORS_ALLOWED_ORIGINS': str
+        'CORS_ALLOWED_ORIGINS': str,
+        'CORS_ALLOWED_ORIGIN_REGEX': str
     }
 )
 
@@ -40,17 +41,20 @@ ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED else '/openapi.json'
 
 CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
-DEFAULT_CORS_ORIGINS = [
-    'http://127.0.0.1:5500',
-    'http://localhost:5500',
-    'http://127.0.0.1:5501',
-    'http://localhost:5501',
-    'http://127.0.0.1:8000',
-    'http://localhost:8000',
-]
 ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
-] or DEFAULT_CORS_ORIGINS
+]
+
+# Además de la lista explícita (ORIGINS), un patrón cubre todos nuestros frontends
+# —subdominios de bearsoft.com.bo, *.cloudfront.net y localhost— sin listarlos uno
+# por uno. Se puede sobreescribir con la env var CORS_ALLOWED_ORIGIN_REGEX.
+DEFAULT_CORS_ORIGIN_REGEX = (
+    r'^https://([a-z0-9-]+\.)*bearsoft\.com\.bo$'
+    r'|^https://[a-z0-9-]+\.cloudfront\.net$'
+    r'|^https://([a-z0-9-]+\.)*mineria\.gob\.bo$'
+    r'|^http://(localhost|127\.0\.0\.1)(:\d+)?$'
+)
+CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT_CORS_ORIGIN_REGEX
 
 
 @asynccontextmanager
@@ -94,6 +98,7 @@ setup_exception_handlers(app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins = ORIGINS,
+    allow_origin_regex = CORS_ALLOWED_ORIGIN_REGEX,
     allow_credentials = True,
     allow_methods = ['*'],
     allow_headers = ['*'],
