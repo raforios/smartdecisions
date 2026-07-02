@@ -46,7 +46,7 @@ A continuación se listan los **endpoints** principales de la API, agrupados por
 
 ### Endpoints públicos (sin JWT) para el sitio institucional
 
-Pensados para `mineria.gob.bo` y otros consumidores anónimos. Requieren que el dominio esté listado en la variable de entorno `CORS_ORIGINS` (lista separada por coma).
+Pensados para `mineria.gob.bo` y otros consumidores anónimos. El default del regex CORS ya cubre `*.mineria.gob.bo` (además de `*.bearsoft.com.bo`, `*.cloudfront.net` y `localhost`), así que no requieren configuración extra. Para otros dominios de terceros, agrégalos a `CORS_ALLOWED_ORIGINS` (lista CSV) o ajusta `CORS_ALLOWED_ORIGIN_REGEX`.
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |

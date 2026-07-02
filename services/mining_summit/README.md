@@ -52,7 +52,8 @@ mining_summit/
 | `DYNAMODB_ENDPOINT_URL` | no | Endpoint local (`http://localhost:3100`). |
 | `DYNAMODB_TABLE_NAME_PARTICIPANTS` | sí | Nombre de la tabla de participantes. |
 | `DYNAMODB_TABLE_NAME_ATTENDANCES` | sí | Nombre de la tabla de asistencias. |
-| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes permitidos. |
+| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes exactos adicionales (terceros). Vacío por defecto. |
+| `CORS_ALLOWED_ORIGIN_REGEX` | no | Regex de orígenes permitidos. Default cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo` y `localhost`. |
 
 ## Endpoints (todos requieren `Authorization: Bearer <jwt>`)
 
