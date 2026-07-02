@@ -37,6 +37,8 @@ ENV_VARS = load_and_validate_env_vars(
     optional_env_vars = {
         'APP_ENV': str,
         'ROOT_PATH': str,
+        'CORS_ALLOWED_ORIGINS': str,
+        'CORS_ALLOWED_ORIGIN_REGEX': str,
     },
 )
 
@@ -144,16 +146,24 @@ async def custom_swagger_ui():
     )
 
 
-origins = [
-    'http://127.0.0.1:5500',
-    'http://localhost:5500',
-    'http://127.0.0.1:5501',
-    'http://localhost:5501',
+# CORS estándar: lista explícita opcional por env (CORS_ALLOWED_ORIGINS, CSV) +
+# un patrón que cubre nuestros frontends sin listar URLs una por una.
+CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
+ORIGINS = [
+    origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
 ]
+DEFAULT_CORS_ORIGIN_REGEX = (
+    r'^https://([a-z0-9-]+\.)*bearsoft\.com\.bo$'
+    r'|^https://[a-z0-9-]+\.cloudfront\.net$'
+    r'|^https://([a-z0-9-]+\.)*mineria\.gob\.bo$'
+    r'|^http://(localhost|127\.0\.0\.1)(:\d+)?$'
+)
+CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT_CORS_ORIGIN_REGEX
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = origins,
+    allow_origins = ORIGINS,
+    allow_origin_regex = CORS_ALLOWED_ORIGIN_REGEX,
     allow_credentials = True,
     allow_methods = ['*'],
     allow_headers = ['*'],
