@@ -3,7 +3,9 @@
     Contains the business logic for calculating KPIs and aggregating report data.
 '''
 from datetime import datetime, time
+from collections import defaultdict
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from models.trade import (
     TradePlanning,
@@ -26,7 +28,6 @@ from models.replenishments import (
     ComplementaryCompetition,
     ComplementaryPromoPoint
 )
-from models.impulses import ImpulseInventoryEnd
 from models.products import Product, ProductAssignmentPOS
 from schemas.reports import (
     ComplianceFilterSchema,
@@ -522,10 +523,6 @@ async def get_attendance_report_service(
 # single round-trip (the doc lists six widgets per panel — without these
 # endpoints the frontend would have to issue 5-6 calls and join in JS).
 # ============================================================================
-from collections import defaultdict
-from datetime import time as _time
-from sqlalchemy import func
-
 
 def _apply_attendance_panel_filters(query, filters: PanelFilterSchema, *,
                                     route_type: str | None):
@@ -653,9 +650,8 @@ async def get_impulses_panel_service(
     '''
         Aggregates everything the Impulses panel (req 7.4.1) needs.
     '''
-    logger.info(
-        f'Generating Impulses panel for company {filters.company_id}.'
-    )
+    message = f'Generating Impulses panel for company {filters.company_id}.'
+    logger.info(message)
 
     base = (
         db.query(Attendance, PlannedPoint, PlannedRoute, PointOfSale)
@@ -823,9 +819,8 @@ async def get_replenishments_panel_service(
         Uses the unified Impulses inventory tables to compute sala/almacen
         snapshots and exposes the expiration list expected by the panel.
     '''
-    logger.info(
-        f'Generating Replenishments panel for company {filters.company_id}.'
-    )
+    message = f'Generating Replenishments panel for company {filters.company_id}.'
+    logger.info(message)
 
     base = (
         db.query(Attendance, PlannedPoint, PlannedRoute, PointOfSale)
@@ -990,10 +985,9 @@ async def get_route_tracking_service(
         Returns one or many routes with their planned points + execution
         state, so the frontend can render the map (req 7.4.4).
     '''
-    logger.info(
-        f'Generating route tracking for company {filters.company_id} '
-        f'on {filters.target_date} (activity={filters.activity}).'
-    )
+    message = f'Generating route tracking for company {filters.company_id
+            } on {filters.target_date} (activity={filters.activity}).'
+    logger.info(message)
 
     routes_q = db.query(PlannedRoute).filter(
         PlannedRoute.company_id == filters.company_id,
@@ -1122,7 +1116,7 @@ async def get_route_tracking_service(
                 longitude = getattr(pos, 'longitude', None),
                 planned_check_in_time = (
                     pp.planned_check_in_time.isoformat()
-                    if isinstance(pp.planned_check_in_time, _time) else None
+                    if isinstance(pp.planned_check_in_time, time) else None
                 ),
                 status = status,
                 check_in_time = att.check_in_time if att else None,

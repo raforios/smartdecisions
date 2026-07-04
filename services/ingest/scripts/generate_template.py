@@ -14,7 +14,7 @@ from datetime import date
 from pathlib import Path
 import pandas as pd
 
-from services.excel_validator import REQUIRED_COLUMNS, OPTIONAL_COLUMNS, TEMPLATE_VERSION
+from services.excel_validator import REQUIRED_COLUMNS, TEMPLATE_VERSION
 
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / 'assets' / 'template_ventas_v1.xlsx'
@@ -96,7 +96,7 @@ def _description_for(column: str) -> str:
         'nombre_producto': 'Nombre legible del producto (solo para la interfaz).',
         'cantidad': 'Unidades vendidas. Debe ser mayor que 0.',
         'precio_unitario': 'Precio por unidad. Necesario para calcular Drop Size en moneda.',
-        'monto_total': 'Monto total de la línea. Si falta, se calcula como cantidad × precio_unitario.',
+        'monto_total': 'Monto total de la línea. Se calcula comocantidad × precio_unitario.',
     }
     return descriptions.get(column, '')
 
@@ -123,13 +123,15 @@ def generate(output_path: Path) -> Path:
         worksheet = writer.sheets['Ventas']
         for column_cells in worksheet.columns:
             max_length = max((len(str(cell.value or '')) for cell in column_cells), default = 12)
-            worksheet.column_dimensions[column_cells[0].column_letter].width = min(max_length + 2, 28)
+            worksheet.column_dimensions[column_cells[0].column_letter].width = \
+                min(max_length + 2, 28)
 
     return output_path
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description = 'Generates the SmartDecisions sales Excel template.')
+    parser = argparse.ArgumentParser(description = \
+        'Generates the SmartDecisions sales Excel template.')
     parser.add_argument(
         '--output',
         type = Path,

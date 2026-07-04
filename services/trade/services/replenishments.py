@@ -15,7 +15,6 @@
 '''
 from typing import List, Tuple
 from datetime import datetime
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from services.products import (
     get_product_id_by_sku,
@@ -25,6 +24,10 @@ from services.products import (
 from services.logger_config import custom_logger as logger
 from services.exceptions import RegisterAlreadyExistsError
 from services.utils import handle_service_errors, audit_event
+from services.exceptions import (
+    InvalidInputError,
+    RegisterNotFoundError,
+)
 
 from models.replenishments import (
     ComplementaryBandeo,
@@ -43,10 +46,6 @@ from schemas.replenishments import (
     ComplementaryBandeoReturnSchema,     # iter6
     ComplementaryCompetitionCreateSchema,
     ComplementaryPromoPointCreateSchema
-)
-from services.exceptions import (
-    InvalidInputError,
-    RegisterNotFoundError,
 )
 from .trade_utils import validate_active_attendance
 

@@ -12,7 +12,10 @@ from controllers.reports import (
     get_merchandising_report_controller,
     get_photographic_report_controller,
     get_sales_report_controller,
-    get_attendance_report_controller
+    get_attendance_report_controller,
+    get_impulses_panel_controller,
+    get_replenishments_panel_controller,
+    get_route_tracking_controller,
 )
 from schemas.reports import (
     ComplianceFilterSchema,
@@ -25,7 +28,12 @@ from schemas.reports import (
     SalesReportFilterSchema,
     SalesReportResponseSchema,
     AttendanceReportFilterSchema,
-    AttendanceReportResponseSchema
+    AttendanceReportResponseSchema,
+    ImpulsesPanelResponseSchema,
+    PanelFilterSchema,
+    ReplenishmentsPanelResponseSchema,
+    RouteTrackingFilterSchema,
+    RouteTrackingResponseSchema,
 )
 
 router = APIRouter(prefix = '/v1/reports', tags = ['Reports'])
@@ -193,20 +201,6 @@ async def get_attendance_report_endpoint(
 # ============================================================================
 # iter6 (Binaria, 2026-06-22) — Monitor de Trade endpoints (req 7.4)
 # ============================================================================
-from schemas.reports import (
-    ImpulsesPanelResponseSchema,
-    PanelFilterSchema,
-    ReplenishmentsPanelResponseSchema,
-    RouteTrackingFilterSchema,
-    RouteTrackingResponseSchema,
-)
-from controllers.reports import (
-    get_impulses_panel_controller,
-    get_replenishments_panel_controller,
-    get_route_tracking_controller,
-)
-
-
 @router.get(
     '/panel/impulses',
     response_model = ImpulsesPanelResponseSchema,

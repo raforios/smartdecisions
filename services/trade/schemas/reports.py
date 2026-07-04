@@ -529,7 +529,7 @@ class ReplenishmentsPanelResponseSchema(BaseModel):
 # Route tracking (req 7.4.4)
 # ----------------------------------------------------------------------------
 
-RouteTrackingActivity = 'IMPULSO'  # default; literal validation done below
+# RouteTrackingActivity = 'IMPULSO'  # default; literal validation done below
 
 class RouteTrackingFilterSchema(BaseModel):
     '''

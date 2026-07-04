@@ -352,7 +352,7 @@ async def update_form_response_status_logic(
     # 1. Rescatamos el ID del administrador/usuario que ejecuta el cambio de estado
     admin_user_id = status_data.user_id
 
-    # 2. Enmascaramos el payload devolviéndole el user_id original. 
+    # 2. Enmascaramos el payload devolviéndole el user_id original.
     # Así, cuando 'update_record' actúe, simplemente reescribirá el mismo valor sin alterarlo.
     status_data.user_id = db_form_response.user_id
 

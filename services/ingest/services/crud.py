@@ -273,6 +273,7 @@ def put_unique_composite_item(
         raise e
 
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 def query_by_partition(
     dynamodb_resource: ServiceResource,
     table_name: str,

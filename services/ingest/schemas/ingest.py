@@ -31,8 +31,10 @@ class IngestSummary(BaseModel):
     error_rows: int = Field(..., ge = 0)
     unique_points_of_sale: int = Field(..., ge = 0)
     unique_products: int = Field(..., ge = 0)
-    date_range_start: Optional[str] = Field(None, description = 'ISO date of the earliest valid sale.')
-    date_range_end: Optional[str] = Field(None, description = 'ISO date of the latest valid sale.')
+    date_range_start: Optional[str] = Field(None,
+                    description = 'ISO date of the earliest valid sale.')
+    date_range_end: Optional[str] = Field(None,
+                    description = 'ISO date of the latest valid sale.')
 
 
 class IngestResponse(BaseModel):
@@ -86,7 +88,9 @@ class TemplateInfo(BaseModel):
     '''
         Metadata describing the canonical Excel template version.
     '''
-    template_version: str = Field(..., description = "Semantic version of the contract, e.g. 'v1'.")
-    download_url: str = Field(..., description = 'Pre-signed URL or static URL to download the template.')
+    template_version: str = Field(...,
+                description = "Semantic version of the contract, e.g. 'v1'.")
+    download_url: str = Field(...,
+                description = 'Pre-signed URL or static URL to download the template.')
     required_columns: list[str]
     optional_columns: list[str]

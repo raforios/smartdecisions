@@ -52,9 +52,11 @@ class Opportunity(BaseModel):
     )
     opportunity_score: float = Field(
         ..., ge = 0,
-        description = 'Ranking metric = lift * confidence * expected_drop_size_amount (or _units when amount missing).'
+        description = '''Ranking metric = lift * confidence * expected_drop_size_amount
+        (or _units when amount missing).'''
     )
-    rationale: str = Field(..., description = 'Human-readable Spanish explanation for the end user.')
+    rationale: str = Field(...,
+        description = 'Human-readable Spanish explanation for the end user.')
 
 
 class AnalyticsSummary(BaseModel):
@@ -65,7 +67,8 @@ class AnalyticsSummary(BaseModel):
     total_opportunities: int = Field(..., ge = 0)
     total_expected_value: Optional[float] = Field(
         default = None,
-        description = 'Sum of expected_drop_size_amount across all opportunities (when prices are available).'
+        description = '''Sum of expected_drop_size_amount across all opportunities
+        (when prices are available).'''
     )
     affinity_rules_evaluated: int = Field(..., ge = 0)
     parameters: dict

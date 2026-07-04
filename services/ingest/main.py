@@ -2,6 +2,7 @@
     Ingest Microservice Main Handler
 '''
 import socket
+from pathlib import Path
 from datetime import date, datetime
 from typing import Any, AsyncIterator, Dict
 from contextlib import asynccontextmanager
@@ -18,6 +19,8 @@ from routes.ingest import router as ingest_router
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+
+from scripts.generate_template import generate
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
@@ -64,14 +67,12 @@ def _ensure_template_present() -> None:
         in local dev does not — without this step `GET /template/file`
         would 400 with "plantilla aún no disponible".
     '''
-    from pathlib import Path
     target = (
         Path(__file__).resolve().parent / 'assets' / 'template_ventas_v1.xlsx'
     )
     if target.exists():
         return
     try:
-        from scripts.generate_template import generate
         generate(target)
         message = f'Generated v1 template at {target}.'
         logger.info(message)

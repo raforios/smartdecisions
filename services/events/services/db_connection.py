@@ -48,4 +48,4 @@ def get_table(table_name: str):
         ) from e
 
 # Instancia de la dependencia para su uso en FastAPI
-GET_DB_DEPENDENCY: Callable = get_db_resource()
+GET_DB_DEPENDENCY: Callable = get_db_resource() # pylint: disable=invalid-name

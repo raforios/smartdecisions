@@ -11,8 +11,12 @@ from services.reports import (
     get_merchandising_report_service,
     get_photographic_report_service,
     get_sales_report_service,
-    get_attendance_report_service
+    get_attendance_report_service,
+    get_impulses_panel_service,
+    get_replenishments_panel_service,
+    get_route_tracking_service,
 )
+
 from schemas.reports import (
     ComplianceFilterSchema,
     ComplianceReportResponseSchema,
@@ -25,7 +29,12 @@ from schemas.reports import (
     SalesReportFilterSchema,
     SalesReportResponseSchema,
     AttendanceReportFilterSchema,
-    AttendanceReportResponseSchema
+    AttendanceReportResponseSchema,
+    ImpulsesPanelResponseSchema,
+    PanelFilterSchema,
+    ReplenishmentsPanelResponseSchema,
+    RouteTrackingFilterSchema,
+    RouteTrackingResponseSchema,
 )
 
 # --- COMPLIANCE REPORT CONTROLLER ---
@@ -135,20 +144,6 @@ async def get_attendance_report_controller(
 # ============================================================================
 # iter6 (Binaria, 2026-06-22) — Monitor de Trade panels (req 7.4)
 # ============================================================================
-from schemas.reports import (
-    ImpulsesPanelResponseSchema,
-    PanelFilterSchema,
-    ReplenishmentsPanelResponseSchema,
-    RouteTrackingFilterSchema,
-    RouteTrackingResponseSchema,
-)
-from services.reports import (
-    get_impulses_panel_service,
-    get_replenishments_panel_service,
-    get_route_tracking_service,
-)
-
-
 @handle_service_errors('REPORTS')
 async def get_impulses_panel_controller(
     filters: PanelFilterSchema,

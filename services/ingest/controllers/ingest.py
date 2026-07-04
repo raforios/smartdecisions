@@ -135,7 +135,7 @@ def get_template_info_controller(base_path: Path) -> TemplateInfo:
             TemplateInfo: Version + required/optional columns + relative URL.
     '''
     template_path = (base_path / TEMPLATE_RELATIVE_PATH).resolve()
-    download_url = f'/v1/ingest/template/file' if template_path.exists() else ''
+    download_url = '/v1/ingest/template/file' if template_path.exists() else ''
     return TemplateInfo(
         template_version = TEMPLATE_VERSION,
         download_url = download_url,

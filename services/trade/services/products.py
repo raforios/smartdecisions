@@ -61,6 +61,7 @@ from schemas.products import (
     ProductCategoryCreateSchema
 )
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def create_bulk_items_from_skus(
     db: Session,
     attendance_id: int,
