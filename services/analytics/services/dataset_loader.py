@@ -21,7 +21,6 @@ from services.exceptions import (
     ServiceUnavailableError
 )
 from services.logger_config import custom_logger as logger
-from services.utils import handle_service_errors
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
@@ -37,7 +36,6 @@ FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 _s3_client = boto3.client('s3')
 
 
-@handle_service_errors
 def get_dataset_metadata(
     dynamodb_resource: ServiceResource,
     dataset_id: str

@@ -9,10 +9,9 @@ from boto3.resources.base import ServiceResource
 
 from services.crud import create_item
 from services.environment import load_and_validate_env_vars
-from services.events_emitter import audit_event
 from services.exceptions import RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt, handle_service_errors
+from services.utils import audit_event, get_current_time_gmt
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_ANALYTICS_RUNS': str
@@ -73,7 +72,6 @@ def _build_run_item(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@handle_service_errors
 @audit_event('ANALYTICS', 'AnalyticsRun', 'CREATE')
 def persist_run(
     dynamodb_resource: ServiceResource,
@@ -97,7 +95,6 @@ def persist_run(
     return _decimal_to_native(item)
 
 
-@handle_service_errors
 def get_latest_run_for_dataset(
     dynamodb_resource: ServiceResource,
     dataset_id: str

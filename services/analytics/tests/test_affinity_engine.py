@@ -119,6 +119,6 @@ def test_empty_dataframe_returns_zero_opportunities() -> None:
         'id_pedido', 'id_punto_venta', 'id_producto', 'cantidad', 'monto_total'
     ])
     opportunities, summary = compute_opportunities(empty)
-    assert opportunities == []
+    assert not opportunities
     assert summary['total_opportunities'] == 0
     assert summary['affinity_rules_evaluated'] == 0

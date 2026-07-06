@@ -17,6 +17,7 @@
     Output is a flat list of `Opportunity` dicts ready to be wrapped in the
     public schema.
 '''
+from dataclasses import dataclass
 from itertools import combinations
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -27,6 +28,48 @@ from services.logger_config import custom_logger as logger
 
 PRODUCT_NAMES_KEY = 'product_names'
 PDV_NAMES_KEY = 'pdv_names'
+
+_RULE_COLUMNS = ['antecedents', 'consequents', 'support', 'confidence', 'lift']
+
+
+@dataclass
+class RationaleContext:
+    '''
+        Inputs needed to render the Spanish-language explanation of a single
+        opportunity. Grouped as a dataclass to keep `_format_rationale` under
+        the argument limit.
+    '''
+    pdv_name: Optional[str]
+    consequent_name: Optional[str]
+    consequent_id: str
+    antecedent_names: List[str]
+    lift: float
+    drop_units: float
+    drop_amount: Optional[float]
+
+
+@dataclass
+class _EngineData:
+    '''
+        Read-only bundle of the pre-computed indices shared across every PdV
+        while building opportunities.
+    '''
+    rules: pd.DataFrame
+    avg_units: pd.Series
+    avg_amount: pd.Series
+    product_names: Dict[str, str]
+    pdv_names: Dict[str, str]
+
+
+@dataclass
+class _PdvBasket:
+    '''
+        A single point of sale together with the set of products it already
+        buys — the unit of work for `_candidates_for_pdv`.
+    '''
+    pdv_id: str
+    pdv_name: Optional[str]
+    products_bought: set
 
 
 def _build_transactions(dataframe: pd.DataFrame) -> List[List[str]]:
@@ -48,7 +91,51 @@ def _build_transactions(dataframe: pd.DataFrame) -> List[List[str]]:
     return [products for products in grouped.tolist() if products]
 
 
-_RULE_COLUMNS = ['antecedents', 'consequents', 'support', 'confidence', 'lift']
+def _count_singletons(transaction_sets: List[frozenset]) -> Dict[frozenset, int]:
+    '''
+        Counts how many transactions contain each single product.
+    '''
+    counts: Dict[frozenset, int] = {}
+    for items in transaction_sets:
+        for item in items:
+            single = frozenset((item,))
+            counts[single] = counts.get(single, 0) + 1
+    return counts
+
+
+def _generate_candidates(
+    previous_frequent: List[frozenset],
+    size: int
+) -> set:
+    '''
+        Builds candidate k-itemsets from frequent (k-1)-itemsets and prunes
+        them with the Apriori property: every (k-1)-subset must be frequent.
+    '''
+    frequent = set(previous_frequent)
+    candidates: set = set()
+    for left, right in combinations(previous_frequent, 2):
+        union = left | right
+        if len(union) != size:
+            continue
+        if all(frozenset(subset) in frequent
+               for subset in combinations(union, size - 1)):
+            candidates.add(union)
+    return candidates
+
+
+def _count_supersets(
+    transaction_sets: List[frozenset],
+    candidates: set
+) -> Dict[frozenset, int]:
+    '''
+        Counts, for each candidate itemset, the transactions that contain it.
+    '''
+    candidate_counts: Dict[frozenset, int] = {candidate: 0 for candidate in candidates}
+    for items in transaction_sets:
+        for candidate in candidates:
+            if candidate <= items:
+                candidate_counts[candidate] += 1
+    return candidate_counts
 
 
 def _frequent_itemsets(
@@ -57,10 +144,6 @@ def _frequent_itemsets(
 ) -> Dict[frozenset, float]:
     '''
         Apriori frequent-itemset mining without external dependencies.
-
-        Generates candidate k-itemsets from frequent (k-1)-itemsets, prunes
-        them with the Apriori property (every (k-1)-subset must be frequent)
-        and keeps those whose support reaches `min_support`.
 
         Args:
             transactions (List[List[str]]): One list of unique SKUs per order.
@@ -76,37 +159,19 @@ def _frequent_itemsets(
     transaction_sets = [frozenset(items) for items in transactions]
     min_count = min_support * total
 
-    counts: Dict[frozenset, int] = {}
-    for items in transaction_sets:
-        for item in items:
-            single = frozenset((item,))
-            counts[single] = counts.get(single, 0) + 1
-    current = {itemset: count for itemset, count in counts.items() if count >= min_count}
-
+    current = {
+        itemset: count
+        for itemset, count in _count_singletons(transaction_sets).items()
+        if count >= min_count
+    }
     supports: Dict[frozenset, float] = dict(current)
+
     size = 2
     while current:
-        previous = list(current.keys())
-        candidates: set = set()
-        for left in range(len(previous)):
-            for right in range(left + 1, len(previous)):
-                union = previous[left] | previous[right]
-                if len(union) != size:
-                    continue
-                # Apriori pruning: every (size - 1)-subset must be frequent.
-                if all(frozenset(subset) in current
-                       for subset in combinations(union, size - 1)):
-                    candidates.add(union)
-
+        candidates = _generate_candidates(list(current.keys()), size)
         if not candidates:
             break
-
-        candidate_counts: Dict[frozenset, int] = {candidate: 0 for candidate in candidates}
-        for items in transaction_sets:
-            for candidate in candidates:
-                if candidate <= items:
-                    candidate_counts[candidate] += 1
-
+        candidate_counts = _count_supersets(transaction_sets, candidates)
         current = {
             itemset: count
             for itemset, count in candidate_counts.items()
@@ -116,6 +181,41 @@ def _frequent_itemsets(
         size += 1
 
     return {itemset: count / total for itemset, count in supports.items()}
+
+
+def _rules_from_itemset(
+    itemset: frozenset,
+    itemset_support: float,
+    supports: Dict[frozenset, float],
+    min_lift: float
+) -> List[Dict[str, Any]]:
+    '''
+        Evaluates every non-empty antecedent → consequent partition of a
+        single frequent itemset and keeps the rules whose lift reaches
+        `min_lift`.
+    '''
+    rules: List[Dict[str, Any]] = []
+    items = sorted(itemset)
+    for antecedent_size in range(1, len(items)):
+        for antecedent_items in combinations(items, antecedent_size):
+            antecedents = frozenset(antecedent_items)
+            consequents = itemset - antecedents
+            antecedent_support = supports.get(antecedents)
+            consequent_support = supports.get(consequents)
+            if not antecedent_support or not consequent_support:
+                continue
+            confidence = itemset_support / antecedent_support
+            lift = confidence / consequent_support
+            if lift < min_lift:
+                continue
+            rules.append({
+                'antecedents': antecedents,
+                'consequents': consequents,
+                'support': itemset_support,
+                'confidence': confidence,
+                'lift': lift
+            })
+    return rules
 
 
 def _compute_affinity_rules(
@@ -142,37 +242,17 @@ def _compute_affinity_rules(
 
     records: List[Dict[str, Any]] = []
     for itemset, itemset_support in supports.items():
-        if len(itemset) < 2:
-            continue
-        items = sorted(itemset)
-        for antecedent_size in range(1, len(items)):
-            for antecedent_items in combinations(items, antecedent_size):
-                antecedents = frozenset(antecedent_items)
-                consequents = itemset - antecedents
-                antecedent_support = supports.get(antecedents)
-                consequent_support = supports.get(consequents)
-                if not antecedent_support or not consequent_support:
-                    continue
-                confidence = itemset_support / antecedent_support
-                lift = confidence / consequent_support
-                if lift < min_lift:
-                    continue
-                records.append({
-                    'antecedents': antecedents,
-                    'consequents': consequents,
-                    'support': itemset_support,
-                    'confidence': confidence,
-                    'lift': lift
-                })
+        if len(itemset) >= 2:
+            records.extend(
+                _rules_from_itemset(itemset, itemset_support, supports, min_lift)
+            )
 
     if not records:
         return pd.DataFrame(columns = _RULE_COLUMNS)
     return pd.DataFrame(records, columns = _RULE_COLUMNS)
 
 
-def _compute_drop_size(
-    dataframe: pd.DataFrame
-) -> Tuple[pd.Series, pd.Series]:
+def _compute_drop_size(dataframe: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
     '''
         For each product, computes:
             - avg units per transaction (cantidad)
@@ -222,31 +302,190 @@ def _build_pdv_name_index(dataframe: pd.DataFrame) -> Dict[str, str]:
     }
 
 
-def _format_rationale(
-    pdv_name: Optional[str],
-    consequent_name: Optional[str],
-    consequent_id: str,
-    antecedent_names: List[str],
-    lift: float,
-    drop_units: float,
-    drop_amount: Optional[float]
-) -> str:
+def _index_pdv_products(dataframe: pd.DataFrame) -> Dict[str, set]:
+    '''
+        Maps each id_punto_venta to the set of product SKUs it already buys.
+    '''
+    return (
+        dataframe.assign(id_producto = dataframe['id_producto'].astype(str))
+                 .groupby('id_punto_venta')['id_producto']
+                 .apply(set)
+                 .to_dict()
+    )
+
+
+def _format_rationale(context: RationaleContext) -> str:
     '''
         Builds the Spanish-language explanation shown to the end user.
     '''
-    antecedents_label = ', '.join(antecedent_names) if antecedent_names else 'productos similares'
-    consequent_label = consequent_name or consequent_id
-    pdv_label = f' en {pdv_name}' if pdv_name else ''
+    antecedents_label = (
+        ', '.join(context.antecedent_names)
+        if context.antecedent_names else 'productos similares'
+    )
+    consequent_label = context.consequent_name or context.consequent_id
+    pdv_label = f' en {context.pdv_name}' if context.pdv_name else ''
     amount_clause = (
-        f' / ${drop_amount:.2f}'
-        if drop_amount is not None and not pd.isna(drop_amount)
+        f' / ${context.drop_amount:.2f}'
+        if context.drop_amount is not None and not pd.isna(context.drop_amount)
         else ''
     )
     return (
         f'Quienes compran {antecedents_label} tienden a comprar {consequent_label} '
-        f'(lift {lift:.2f}). Drop size esperado{pdv_label}: '
-        f'{drop_units:.1f} unidades{amount_clause}.'
+        f'(lift {context.lift:.2f}). Drop size esperado{pdv_label}: '
+        f'{context.drop_units:.1f} unidades{amount_clause}.'
     )
+
+
+def _drop_size_for(consequent_id: str, data: _EngineData) -> Tuple[float, Optional[float]]:
+    '''
+        Returns (expected units, expected amount) for a recommended product.
+        The amount is None when the source provided no pricing.
+    '''
+    drop_units = float(data.avg_units.get(consequent_id, 0.0) or 0.0)
+    raw_amount = data.avg_amount.get(consequent_id)
+    drop_amount = (
+        float(raw_amount)
+        if raw_amount is not None and not pd.isna(raw_amount)
+        else None
+    )
+    return drop_units, drop_amount
+
+
+def _build_candidate(
+    basket: _PdvBasket,
+    rule: pd.Series,
+    consequent_id: str,
+    antecedents: set,
+    data: _EngineData
+) -> Dict[str, Any]:
+    '''
+        Materializes a single opportunity dict for a (PdV, recommended
+        product) pair, scoring it by monetary impact when prices exist and
+        falling back to volume otherwise.
+    '''
+    drop_units, drop_amount = _drop_size_for(consequent_id, data)
+    ranking_weight = drop_amount if drop_amount is not None else drop_units
+    opportunity_score = float(rule['lift']) * float(rule['confidence']) * ranking_weight
+
+    antecedent_ids = sorted(antecedents)
+    antecedent_names = [data.product_names.get(aid, aid) for aid in antecedent_ids]
+
+    rationale = _format_rationale(RationaleContext(
+        pdv_name = basket.pdv_name,
+        consequent_name = data.product_names.get(consequent_id),
+        consequent_id = consequent_id,
+        antecedent_names = antecedent_names,
+        lift = float(rule['lift']),
+        drop_units = drop_units,
+        drop_amount = drop_amount
+    ))
+
+    return {
+        'pdv_id': basket.pdv_id,
+        'pdv_name': basket.pdv_name,
+        'recommended_product_id': consequent_id,
+        'recommended_product_name': data.product_names.get(consequent_id),
+        'based_on_products': antecedent_ids,
+        'support': float(rule['support']),
+        'confidence': float(rule['confidence']),
+        'lift': float(rule['lift']),
+        'expected_drop_size_units': round(drop_units, 4),
+        'expected_drop_size_amount': (
+            round(drop_amount, 4) if drop_amount is not None else None
+        ),
+        'opportunity_score': round(opportunity_score, 4),
+        'rationale': rationale
+    }
+
+
+def _candidates_for_pdv(basket: _PdvBasket, data: _EngineData) -> List[Dict[str, Any]]:
+    '''
+        Builds every candidate opportunity for a single PdV: rules only fire
+        when the PdV already buys all antecedents, and products it already
+        buys are never recommended.
+    '''
+    candidates: List[Dict[str, Any]] = []
+    for _, rule in data.rules.iterrows():
+        antecedents = set(rule['antecedents'])
+        if not antecedents.issubset(basket.products_bought):
+            continue
+        for consequent_id in set(rule['consequents']):
+            if consequent_id in basket.products_bought:
+                continue
+            candidates.append(
+                _build_candidate(basket, rule, consequent_id, antecedents, data)
+            )
+    return candidates
+
+
+def _dedupe_and_rank(
+    candidates: List[Dict[str, Any]],
+    top_n: int
+) -> List[Dict[str, Any]]:
+    '''
+        Collapses duplicate (pdv, product) candidates keeping the highest
+        score — a product can be the consequent of several rules for the same
+        PdV — then returns the top N by opportunity score.
+    '''
+    deduped: Dict[str, Dict[str, Any]] = {}
+    for candidate in candidates:
+        key = candidate['recommended_product_id']
+        existing = deduped.get(key)
+        if existing is None or candidate['opportunity_score'] > existing['opportunity_score']:
+            deduped[key] = candidate
+
+    return sorted(
+        deduped.values(),
+        key = lambda item: item['opportunity_score'],
+        reverse = True
+    )[:top_n]
+
+
+def _collect_opportunities(
+    dataframe: pd.DataFrame,
+    data: _EngineData,
+    top_n_per_pdv: int
+) -> List[Dict[str, Any]]:
+    '''
+        Iterates over every PdV, builds and ranks its candidates and returns
+        the flattened opportunity list.
+    '''
+    opportunities: List[Dict[str, Any]] = []
+    for pdv_id, products_bought in _index_pdv_products(dataframe).items():
+        pdv_id_str = str(pdv_id)
+        basket = _PdvBasket(
+            pdv_id = pdv_id_str,
+            pdv_name = data.pdv_names.get(pdv_id_str),
+            products_bought = products_bought
+        )
+        candidates = _candidates_for_pdv(basket, data)
+        opportunities.extend(_dedupe_and_rank(candidates, top_n_per_pdv))
+    return opportunities
+
+
+def _build_summary(
+    opportunities: List[Dict[str, Any]],
+    rules_count: int,
+    parameters: Dict[str, Any]
+) -> Dict[str, Any]:
+    '''
+        Aggregates the run-level statistics returned alongside the
+        opportunities.
+    '''
+    amounts = [
+        opp['expected_drop_size_amount']
+        for opp in opportunities
+        if opp.get('expected_drop_size_amount') is not None
+    ]
+    total_expected_value = round(sum(amounts), 2) if amounts else None
+    pdvs_with_opps = {opp['pdv_id'] for opp in opportunities}
+    return {
+        'total_pdvs_with_opportunities': len(pdvs_with_opps),
+        'total_opportunities': len(opportunities),
+        'total_expected_value': total_expected_value,
+        'affinity_rules_evaluated': int(rules_count),
+        'parameters': parameters
+    }
 
 
 def compute_opportunities(
@@ -272,9 +511,13 @@ def compute_opportunities(
     transactions = _build_transactions(dataframe)
     rules = _compute_affinity_rules(transactions, min_support, min_lift)
     avg_units, avg_amount = _compute_drop_size(dataframe)
-    product_names = _build_product_name_index(dataframe)
-    pdv_names = _build_pdv_name_index(dataframe)
-
+    data = _EngineData(
+        rules = rules,
+        avg_units = avg_units,
+        avg_amount = avg_amount,
+        product_names = _build_product_name_index(dataframe),
+        pdv_names = _build_pdv_name_index(dataframe)
+    )
     parameters = {
         'min_support': min_support,
         'min_lift': min_lift,
@@ -284,109 +527,10 @@ def compute_opportunities(
     if rules.empty:
         message = 'Affinity rules table is empty; returning zero opportunities.'
         logger.info(message)
-        summary = {
-            'total_pdvs_with_opportunities': 0,
-            'total_opportunities': 0,
-            'total_expected_value': None,
-            'affinity_rules_evaluated': 0,
-            'parameters': parameters
-        }
-        return [], summary
+        return [], _build_summary([], 0, parameters)
 
-    # Pre-index rules by their antecedent frozenset for fast PdV-level lookup.
-    pdv_to_products: Dict[str, set] = (
-        dataframe.assign(id_producto = dataframe['id_producto'].astype(str))
-                 .groupby('id_punto_venta')['id_producto']
-                 .apply(lambda values: set(values))
-                 .to_dict()
-    )
-
-    opportunities: List[Dict[str, Any]] = []
-    for pdv_id, products_bought in pdv_to_products.items():
-        pdv_id_str = str(pdv_id)
-        pdv_label = pdv_names.get(pdv_id_str)
-        candidates: List[Dict[str, Any]] = []
-
-        for _, rule in rules.iterrows():
-            antecedents = set(rule['antecedents'])
-            consequents = set(rule['consequents'])
-            # Rule only fires when the PdV already buys every antecedent.
-            if not antecedents.issubset(products_bought):
-                continue
-            for consequent_id in consequents:
-                # Skip products the PdV already buys.
-                if consequent_id in products_bought:
-                    continue
-                drop_units = float(avg_units.get(consequent_id, 0.0) or 0.0)
-                raw_amount = avg_amount.get(consequent_id)
-                drop_amount = (
-                    float(raw_amount)
-                    if raw_amount is not None and not pd.isna(raw_amount)
-                    else None
-                )
-                # Opportunity score uses monetary impact when prices exist,
-                # otherwise falls back to volume.
-                ranking_weight = drop_amount if drop_amount is not None else drop_units
-                opportunity_score = float(rule['lift']) * float(rule['confidence']) * ranking_weight
-
-                antecedent_ids = sorted(antecedents)
-                antecedent_names = [
-                    product_names.get(aid, aid) for aid in antecedent_ids
-                ]
-                candidates.append({
-                    'pdv_id': pdv_id_str,
-                    'pdv_name': pdv_label,
-                    'recommended_product_id': consequent_id,
-                    'recommended_product_name': product_names.get(consequent_id),
-                    'based_on_products': antecedent_ids,
-                    'support': float(rule['support']),
-                    'confidence': float(rule['confidence']),
-                    'lift': float(rule['lift']),
-                    'expected_drop_size_units': round(drop_units, 4),
-                    'expected_drop_size_amount': (
-                        round(drop_amount, 4) if drop_amount is not None else None
-                    ),
-                    'opportunity_score': round(opportunity_score, 4),
-                    'rationale': _format_rationale(
-                        pdv_label, product_names.get(consequent_id), consequent_id,
-                        antecedent_names, float(rule['lift']),
-                        drop_units, drop_amount
-                    )
-                })
-
-        # Deduplicate (pdv_id, recommended_product_id) keeping the highest score
-        # — a product can appear as consequent of several rules for the same PdV.
-        deduped: Dict[str, Dict[str, Any]] = {}
-        for candidate in candidates:
-            key = candidate['recommended_product_id']
-            existing = deduped.get(key)
-            if existing is None or candidate['opportunity_score'] > existing['opportunity_score']:
-                deduped[key] = candidate
-
-        ranked = sorted(
-            deduped.values(),
-            key = lambda item: item['opportunity_score'],
-            reverse = True
-        )[:top_n_per_pdv]
-        opportunities.extend(ranked)
-
-    total_expected_value = None
-    amounts = [
-        opp['expected_drop_size_amount']
-        for opp in opportunities
-        if opp.get('expected_drop_size_amount') is not None
-    ]
-    if amounts:
-        total_expected_value = round(sum(amounts), 2)
-
-    pdvs_with_opps = {opp['pdv_id'] for opp in opportunities}
-    summary = {
-        'total_pdvs_with_opportunities': len(pdvs_with_opps),
-        'total_opportunities': len(opportunities),
-        'total_expected_value': total_expected_value,
-        'affinity_rules_evaluated': int(len(rules)),
-        'parameters': parameters
-    }
+    opportunities = _collect_opportunities(dataframe, data, top_n_per_pdv)
+    summary = _build_summary(opportunities, len(rules), parameters)
 
     message = (
         f'Affinity engine produced {summary["total_opportunities"]} opportunities '

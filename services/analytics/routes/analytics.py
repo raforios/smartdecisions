@@ -15,13 +15,10 @@ from schemas.analytics import (
     AnalyticsRunResponse
 )
 from services.db_connection import GET_DB_DEPENDENCY
-from services.events_emitter import log_usage
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
 
 router = APIRouter(prefix = '/v1/analytics', tags = ['Analytics'])
-
-MICROSERVICE_NAME = 'ANALYTICS'
 
 
 @router.post(
@@ -37,7 +34,6 @@ MICROSERVICE_NAME = 'ANALYTICS'
         'expected monetary impact.'
     )
 )
-@log_usage(MICROSERVICE_NAME)
 async def run_analytics_endpoint(
     request: Request,
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
@@ -49,10 +45,11 @@ async def run_analytics_endpoint(
     '''
     message = f'Running analytics for dataset {dataset_id} requested by {current_user}.'
     logger.info(message)
-    return run_analytics_controller(
+    return await run_analytics_controller(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
-        current_user = current_user
+        current_user = current_user,
+        request = request
     )
 
 
@@ -63,7 +60,6 @@ async def run_analytics_endpoint(
     summary = 'Get the latest analytics run for a dataset',
     description = 'Returns the most recent persisted run (summary + opportunities).'
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_results_endpoint(
     request: Request,
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
@@ -73,11 +69,13 @@ async def get_results_endpoint(
     '''
         Endpoint to retrieve the latest analytics results for a dataset.
     '''
-    message = f'Retrieving analytics results for dataset {dataset_id}.'
+    message = f'User: {current_user}. Retrieving analytics results for dataset {dataset_id}.'
     logger.info(message)
-    return get_results_controller(
+    return await get_results_controller(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        request = request,
+        current_user = current_user
     )
 
 
@@ -88,7 +86,6 @@ async def get_results_endpoint(
     summary = 'Get the top opportunities for a single point of sale',
     description = 'Filters the latest run to the recommendations targeting one PdV.'
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_pdv_opportunities_endpoint(
     request: Request,
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
@@ -99,10 +96,13 @@ async def get_pdv_opportunities_endpoint(
     '''
         Endpoint to retrieve opportunities filtered by point of sale.
     '''
-    message = f'Retrieving opportunities for dataset {dataset_id} / pdv {pdv_id}.'
+    message = f'User: {current_user}. Retrieving opportunities for dataset {dataset_id} / pdv {
+            pdv_id}.'
     logger.info(message)
-    return get_pdv_opportunities_controller(
+    return await get_pdv_opportunities_controller(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
-        pdv_id = pdv_id
+        pdv_id = pdv_id,
+        request = request,
+        current_user = current_user
     )

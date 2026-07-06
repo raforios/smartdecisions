@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict, List
 from boto3.resources.base import ServiceResource
 from dotenv import dotenv_values
+from fastapi import Request
 
 from schemas.analytics import (
     AnalyticsPdvResponse,
@@ -69,11 +70,12 @@ def _summary_to_schema(summary: Dict[str, Any]) -> AnalyticsSummary:
     return AnalyticsSummary(**summary)
 
 
-@handle_service_errors
-def run_analytics_controller(
+@handle_service_errors('ANALYTICS')
+async def run_analytics_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    current_user: str
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
 ) -> AnalyticsRunResponse:
     '''
         Full pipeline:
@@ -118,10 +120,12 @@ def run_analytics_controller(
     )
 
 
-@handle_service_errors
-def get_results_controller(
+@handle_service_errors('ANALYTICS')
+async def get_results_controller(
     dynamodb_resource: ServiceResource,
-    dataset_id: str
+    dataset_id: str,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> AnalyticsResultsResponse:
     '''
         Returns the most recent persisted run for the dataset.
@@ -140,11 +144,13 @@ def get_results_controller(
     )
 
 
-@handle_service_errors
-def get_pdv_opportunities_controller(
+@handle_service_errors('ANALYTICS')
+async def get_pdv_opportunities_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    pdv_id: str
+    pdv_id: str,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> AnalyticsPdvResponse:
     '''
         Returns the opportunities for a single PdV from the latest run.
