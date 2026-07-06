@@ -88,8 +88,14 @@ def _summarize(dataframe: pd.DataFrame, error_rows: int) -> dict:
         'total_rows': total,
         'valid_rows': max(total - error_rows, 0),
         'error_rows': error_rows,
-        'unique_points_of_sale': int(dataframe['id_punto_venta'].nunique()) if 'id_punto_venta' in dataframe else 0,
-        'unique_products': int(dataframe['id_producto'].nunique()) if 'id_producto' in dataframe else 0,
+        'unique_points_of_sale': (
+            int(dataframe['id_punto_venta'].nunique())
+            if 'id_punto_venta' in dataframe else 0
+        ),
+        'unique_products': (
+            int(dataframe['id_producto'].nunique())
+            if 'id_producto' in dataframe else 0
+        ),
         'date_range_start': None,
         'date_range_end': None,
     }

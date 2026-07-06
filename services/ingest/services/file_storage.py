@@ -42,22 +42,40 @@ def _content_type_for(filename: str) -> str:
     return 'application/octet-stream'
 
 
-def _extract_s3_key(payload: dict, filename: str, bucket_name: str) -> Optional[str]:
+def _key_from_url(raw_url: str, bucket_name: str) -> Optional[str]:
     '''
-        Extracts the FULL S3 object key (including any folder prefix) from
-        the FILES upload response.
+        Extracts the S3 object key from a FILES URL, preserving any folder
+        prefix so downstream S3 downloads do not fail with NoSuchKey.
 
-        Current FILES `POST /v1/s3/upload` returns:
-            {
-              'message': 'File ... uploaded successfully.',
-              'url': 'https://<bucket>.s3.amazonaws.com/<full_key>',
-              'file_key': '<full_key>'        # ← canonical field
-            }
+        Handles s3:// URIs, virtual-hosted style
+        (https://<bucket>.s3.<region>.amazonaws.com/<key>) and path-style
+        (https://s3.<region>.amazonaws.com/<bucket>/<key>) URLs.
+    '''
+    # s3://bucket/path/to/file → strip scheme + bucket
+    if raw_url.startswith('s3://'):
+        without_scheme = raw_url[len('s3://'):]
+        if '/' in without_scheme:
+            return without_scheme.split('/', 1)[1] or None
+        return None
 
-        We prefer `file_key` (or the legacy aliases). When falling back to
-        the URL we MUST keep the path segments after the bucket, otherwise
-        analytics gets only the basename and the subsequent S3 download
-        fails with NoSuchKey.
+    bucket_token = f'/{bucket_name}/'
+    if bucket_token in raw_url:
+        return raw_url.split(bucket_token, 1)[1] or None
+
+    # Last-resort: drop scheme + host, return whatever path remains.
+    after_scheme = raw_url.split('://', 1)[-1]
+    if '/' in after_scheme:
+        return after_scheme.split('/', 1)[1] or None
+    return None
+
+
+def _extract_s3_key(payload: dict, bucket_name: str) -> Optional[str]:
+    '''
+        Extracts the FULL S3 object key from the FILES upload response.
+
+        Current FILES `POST /v1/s3/upload` returns a dict with a canonical
+        `file_key` field (plus legacy aliases and a `url`). We prefer the
+        explicit key and fall back to parsing the URL.
     '''
     if not isinstance(payload, dict):
         return None
@@ -74,24 +92,7 @@ def _extract_s3_key(payload: dict, filename: str, bucket_name: str) -> Optional[
     if not raw_url:
         return None
 
-    # s3://bucket/path/to/file → strip scheme + bucket
-    if raw_url.startswith('s3://'):
-        without_scheme = raw_url[len('s3://'):]
-        if '/' in without_scheme:
-            return without_scheme.split('/', 1)[1] or None
-        return None
-
-    # Virtual-hosted style — https://<bucket>.s3.<region>.amazonaws.com/<key>
-    # or path-style — https://s3.<region>.amazonaws.com/<bucket>/<key>.
-    bucket_token = f'/{bucket_name}/'
-    if bucket_token in raw_url:
-        return raw_url.split(bucket_token, 1)[1] or None
-
-    # Last-resort: drop scheme + host, return whatever path remains.
-    after_scheme = raw_url.split('://', 1)[-1]
-    if '/' in after_scheme:
-        return after_scheme.split('/', 1)[1] or None
-    return None
+    return _key_from_url(raw_url, bucket_name)
 
 
 def upload_excel(
@@ -149,7 +150,10 @@ def upload_excel(
         )
         logger.error(error_msg)
         raise ServiceUnavailableError(
-            detail = f'El servicio de archivos rechazó la subida del Excel ({response.status_code}).'
+            detail = (
+                'El servicio de archivos rechazó la subida del Excel '
+                f'({response.status_code}).'
+            )
         )
 
     payload: dict = {}
@@ -158,7 +162,7 @@ def upload_excel(
     except ValueError:
         pass
 
-    s3_key = _extract_s3_key(payload, filename, BUCKET_NAME)
+    s3_key = _extract_s3_key(payload, BUCKET_NAME)
     if not s3_key:
         # Last-resort fallback: rebuild the conventional key from what we sent.
         s3_key = f'{target_folder}/{filename}' if target_folder else filename

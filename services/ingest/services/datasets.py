@@ -7,9 +7,8 @@ from boto3.resources.base import ServiceResource
 
 from services.crud import create_item, get_item_by_key
 from services.environment import load_and_validate_env_vars
-from services.events_emitter import audit_event
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt, handle_service_errors
+from services.utils import audit_event, get_current_time_gmt
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str
@@ -48,7 +47,6 @@ def _build_dataset_item(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@handle_service_errors
 @audit_event('INGEST', 'IngestDataset', 'CREATE')
 def persist_dataset(
     dynamodb_resource: ServiceResource,
@@ -69,7 +67,6 @@ def persist_dataset(
     return persisted
 
 
-@handle_service_errors
 def get_dataset_by_id(
     dynamodb_resource: ServiceResource,
     dataset_id: str

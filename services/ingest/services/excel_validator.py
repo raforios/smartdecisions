@@ -107,7 +107,10 @@ SCHEMA: Final[pa.DataFrameSchema] = pa.DataFrameSchema(
             required = False,
             coerce = True,
             checks = pa.Check.greater_than_or_equal_to(0),
-            description = 'Monto total de la línea (si falta, se calcula cantidad * precio_unitario).'
+            description = (
+                'Monto total de la línea '
+                '(si falta, se calcula cantidad * precio_unitario).'
+            )
         ),
     },
     strict = 'filter',

@@ -19,14 +19,12 @@ from schemas.ingest import (
     TemplateInfo
 )
 from services.db_connection import GET_DB_DEPENDENCY
-from services.events_emitter import log_usage
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
 
 router = APIRouter(prefix = '/v1/ingest', tags = ['Ingest'])
 
-MICROSERVICE_NAME = 'INGEST'
 SERVICE_ROOT = Path(__file__).resolve().parent.parent
 SUPPORTED_EXTENSIONS = ('.xlsx', '.csv')
 
@@ -46,9 +44,11 @@ def _extract_bearer(authorization: str) -> str:
     response_model = TemplateInfo,
     status_code = status.HTTP_200_OK,
     summary = 'Get sales template metadata',
-    description = 'Returns the canonical template version, required/optional columns and the download URL.'
+    description = (
+        'Returns the canonical template version, required/optional columns '
+        'and the download URL.'
+    )
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_template_info_endpoint(
     request: Request,
     current_user: str = Depends(get_current_user)
@@ -56,9 +56,13 @@ async def get_template_info_endpoint(
     '''
         Endpoint to retrieve template metadata.
     '''
-    message = 'Retrieving Excel template metadata.'
+    message = f'User: {current_user}. Retrieving Excel template metadata.'
     logger.info(message)
-    return get_template_info_controller(base_path = SERVICE_ROOT)
+    return await get_template_info_controller(
+        base_path = SERVICE_ROOT,
+        request = request,
+        current_user = current_user
+    )
 
 
 @router.get(
@@ -68,14 +72,14 @@ async def get_template_info_endpoint(
     description = 'Streams the canonical template_ventas_v1.xlsx file.',
     response_class = FileResponse
 )
-@log_usage(MICROSERVICE_NAME)
 async def download_template_endpoint(
-    request: Request,
     current_user: str = Depends(get_current_user)
 ):
     '''
         Endpoint that streams the canonical .xlsx template generated at deploy time.
     '''
+    message = f'User: {current_user}. Downloading Excel template file.'
+    logger.info(message)
     template_path = SERVICE_ROOT / 'assets' / 'template_ventas_v1.xlsx'
     if not template_path.exists():
         raise InvalidInputError(detail = 'La plantilla aún no está disponible en el servidor.')
@@ -97,7 +101,6 @@ async def download_template_endpoint(
         'are also stored in S3 via the FILES microservice.'
     )
 )
-@log_usage(MICROSERVICE_NAME)
 async def ingest_excel_endpoint(
     request: Request,
     file: UploadFile = File(...),
@@ -122,12 +125,13 @@ async def ingest_excel_endpoint(
     message = f'Ingesting "{filename}" ({len(file_bytes)} bytes) from {current_user}.'
     logger.info(message)
 
-    return ingest_excel_controller(
+    return await ingest_excel_controller(
         dynamodb_resource = dynamodb_resource,
         file_bytes = file_bytes,
         filename = filename,
         bearer_token = _extract_bearer(authorization),
-        current_user = current_user
+        current_user = current_user,
+        request = request
     )
 
 
@@ -138,7 +142,6 @@ async def ingest_excel_endpoint(
     summary = 'Get ingest dataset status',
     description = 'Retrieves a previously ingested dataset by its UUID.'
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_dataset_endpoint(
     request: Request,
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
@@ -148,9 +151,11 @@ async def get_dataset_endpoint(
     '''
         Endpoint to retrieve dataset status/metadata.
     '''
-    message = f'Retrieving dataset {dataset_id}.'
+    message = f'User: {current_user}. Retrieving dataset {dataset_id}.'
     logger.info(message)
-    return get_dataset_status_controller(
+    return await get_dataset_status_controller(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        request = request,
+        current_user = current_user
     )

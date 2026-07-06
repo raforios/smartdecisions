@@ -4,6 +4,7 @@
 from pathlib import Path
 from typing import Any, Dict, Optional
 from boto3.resources.base import ServiceResource
+from fastapi import Request
 
 from schemas.ingest import (
     IngestColumnError,
@@ -44,13 +45,15 @@ def _to_response(item: Dict[str, Any]) -> IngestResponse:
     )
 
 
-@handle_service_errors
-def ingest_excel_controller(
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+@handle_service_errors('INGEST')
+async def ingest_excel_controller(
     dynamodb_resource: ServiceResource,
     file_bytes: bytes,
     filename: str,
     bearer_token: str,
-    current_user: str
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
 ) -> IngestResponse:
     '''
         Controller orchestrating the full ingest flow:
@@ -94,10 +97,12 @@ def ingest_excel_controller(
     return _to_response(persisted)
 
 
-@handle_service_errors
-def get_dataset_status_controller(
+@handle_service_errors('INGEST')
+async def get_dataset_status_controller(
     dynamodb_resource: ServiceResource,
-    dataset_id: str
+    dataset_id: str,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> IngestStatusResponse:
     '''
         Controller to retrieve the status of a previously ingested dataset.
@@ -124,7 +129,12 @@ def get_dataset_status_controller(
     )
 
 
-def get_template_info_controller(base_path: Path) -> TemplateInfo:
+@handle_service_errors('INGEST')
+async def get_template_info_controller(
+    base_path: Path,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> TemplateInfo:
     '''
         Controller returning the metadata of the canonical Excel template.
 

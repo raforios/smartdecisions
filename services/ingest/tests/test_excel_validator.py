@@ -27,7 +27,7 @@ def test_valid_minimum_required_columns() -> None:
          'id_producto': 'SKU-A', 'cantidad': 5},
     ])
     _, errors, summary = parse_and_validate(_to_xlsx_bytes(dataframe), 'min.xlsx')
-    assert errors == []
+    assert not errors
     assert summary['total_rows'] == 1
     assert summary['valid_rows'] == 1
 
@@ -78,7 +78,7 @@ def test_monto_total_is_derived_when_missing() -> None:
          'id_producto': 'SKU-A', 'cantidad': 3, 'precio_unitario': 10.0},
     ])
     df_out, errors, _ = parse_and_validate(_to_xlsx_bytes(dataframe), 'derived.xlsx')
-    assert errors == []
+    assert not errors
     assert df_out['monto_total'].iloc[0] == pytest.approx(30.0)
 
 
