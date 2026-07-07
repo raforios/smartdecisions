@@ -19,8 +19,7 @@ from routes.ingest import router as ingest_router
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
-
-from scripts.generate_template import generate
+from services.template_builder import generate
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {

@@ -23,11 +23,10 @@ ingest/
 ├── models/             # TypedDict del item DynamoDB.
 ├── routes/             # Endpoints FastAPI.
 ├── schemas/            # Modelos Pydantic V2 (request / response).
-├── scripts/            # CLI utilitarios (generate_template.py).
-├── services/           # Lógica de negocio + helpers compartidos.
+├── services/           # Lógica de negocio + helpers compartidos (incl. template_builder.py).
 ├── tests/              # Tests con pytest.
 ├── .env.example        # Plantilla de variables de entorno.
-├── Dockerfile          # Build para Lambda (incluye generación de la plantilla).
+├── Dockerfile          # Build para Lambda.
 ├── deploy.config       # Variables de despliegue.
 ├── dynamodb.sh         # Provisión local de DynamoDB.
 ├── main.py             # Entrypoint FastAPI.
@@ -103,8 +102,8 @@ Errores: respuesta con `status: 'failed'` + lista `errors[]` indicando `row`,
    usuario pueda revisarlos sin re-subir.
 3. `monto_total` se deriva automáticamente cuando hay `cantidad` y
    `precio_unitario` pero falta el total.
-4. La plantilla `.xlsx` se genera en build time vía `scripts/generate_template.py`
-   y queda bundleada en `assets/`, lista para descarga directa.
+4. La plantilla `.xlsx` la genera el servicio (`services/template_builder.py`)
+   automáticamente al arrancar si falta en `assets/`, lista para descarga directa.
 
 ## Ejecución local
 
@@ -120,11 +119,8 @@ pip install -r requirements.txt
 python main.py
 ```
 
-La plantilla `.xlsx` se genera con:
-
-```bash
-python scripts/generate_template.py --output assets/template_ventas_v1.xlsx
-```
+La plantilla `.xlsx` se genera automáticamente al iniciar el servicio
+(`services/template_builder.generate`); no requiere un paso manual.
 
 Tests:
 

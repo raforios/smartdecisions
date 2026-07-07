@@ -16,6 +16,7 @@ from schemas.ingest import (
 from services.datasets import get_dataset_by_id, persist_dataset
 from services.excel_parser import parse_and_validate
 from services.excel_validator import OPTIONAL_COLUMNS, REQUIRED_COLUMNS, TEMPLATE_VERSION
+from services.exceptions import InvalidInputError
 from services.file_storage import upload_excel
 from services.utils import handle_service_errors
 
@@ -127,6 +128,29 @@ async def get_dataset_status_controller(
         ),
         created_at = item['created_at']
     )
+
+
+@handle_service_errors('INGEST', with_log = False)
+async def download_template_controller(
+    base_path: Path,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> Path:
+    '''
+        Validates that the canonical template exists and returns its path so
+        the route can stream it. Decorated with `with_log = False`: the event
+        (endpoint, user, status, timing) is still shipped to EVENTS, but the
+        binary file body is not logged.
+
+        Raises:
+            InvalidInputError: If the template has not been generated yet.
+    '''
+    template_path = (base_path / TEMPLATE_RELATIVE_PATH).resolve()
+    if not template_path.exists():
+        raise InvalidInputError(
+            detail = 'La plantilla aún no está disponible en el servidor.'
+        )
+    return template_path
 
 
 @handle_service_errors('INGEST')

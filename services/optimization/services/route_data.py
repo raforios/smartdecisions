@@ -14,7 +14,6 @@ from boto3.resources.base import ServiceResource
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.utils import handle_service_errors
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_OPTIMIZATION_ROUTES': str
@@ -37,7 +36,42 @@ def _build_route_day_key(route_id: int, day: int) -> str:
     return f'{int(route_id)}#{int(day)}'
 
 
-@handle_service_errors
+def _point_to_item(
+    raw: Dict[str, Any],
+    route_id: int,
+    day: int,
+    partition_key: str
+) -> Dict[str, Any]:
+    '''
+        Converts a raw CSV point dict into the DynamoDB item shape.
+
+        Raises:
+            InvalidInputError: If a mandatory coordinate/key is missing or
+                not numeric.
+    '''
+    try:
+        client_id = int(raw['client_id'])
+        latitude = float(raw['latitude'])
+        longitude = float(raw['longitude'])
+    except (KeyError, TypeError, ValueError) as e:
+        raise InvalidInputError(detail = f'Punto inválido: {raw}. Error: {e}') from e
+
+    item: Dict[str, Any] = {
+        'route_day_key': partition_key,
+        'client_id': client_id,
+        'route_id': int(route_id),
+        'day': int(day),
+        # DynamoDB rejects native floats; store as Decimal.
+        'latitude': Decimal(str(latitude)),
+        'longitude': Decimal(str(longitude)),
+    }
+    raw_client = raw.get('client')
+    client_name = raw_client.strip() if isinstance(raw_client, str) else ''
+    if client_name:
+        item['client'] = client_name
+    return item
+
+
 def get_route_points(
     dynamodb_resource: ServiceResource,
     route_id: int,
@@ -80,7 +114,6 @@ def get_route_points(
     return items
 
 
-@handle_service_errors
 def delete_points_for_route_day(
     dynamodb_resource: ServiceResource,
     route_id: int,
@@ -126,7 +159,6 @@ def delete_points_for_route_day(
     return len(existing)
 
 
-@handle_service_errors
 def bulk_upload_points(
     dynamodb_resource: ServiceResource,
     route_id: int,
@@ -167,30 +199,11 @@ def bulk_upload_points(
     seen_client_ids = set()
     with table.batch_writer() as batch:
         for raw in points:
-            try:
-                client_id = int(raw['client_id'])
-                latitude = float(raw['latitude'])
-                longitude = float(raw['longitude'])
-            except (KeyError, TypeError, ValueError) as e:
-                raise InvalidInputError(
-                    detail = f'Punto inválido: {raw}. Error: {e}'
-                ) from e
-            if client_id in seen_client_ids:
+            item = _point_to_item(raw, route_id, day, partition_key)
+            if item['client_id'] in seen_client_ids:
                 # Composite SK requires client_id unique per partition.
                 continue
-            seen_client_ids.add(client_id)
-            item = {
-                'route_day_key': partition_key,
-                'client_id': client_id,
-                'route_id': int(route_id),
-                'day': int(day),
-                # DynamoDB rejects native floats; store as Decimal.
-                'latitude': Decimal(str(latitude)),
-                'longitude': Decimal(str(longitude)),
-            }
-            client_name = (raw.get('client') or '').strip() if isinstance(raw.get('client'), str) else ''
-            if client_name:
-                item['client'] = client_name
+            seen_client_ids.add(item['client_id'])
             batch.put_item(Item = item)
             written += 1
 

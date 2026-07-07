@@ -170,6 +170,10 @@ def optimal_route(size: int, origin: int, target: int, df_distances: pd.DataFram
     counter = 0
     origins: list = []
     values: list = []
+    # df_id is only read by the distance == 2 / == 3 branches below, which
+    # always assign it first; it is seeded here so static analysis can prove
+    # it is bound before the match without altering the ported algorithm.
+    df_id: pd.DataFrame = pd.DataFrame()
     while counter <= size:
 
         filter_value = ((df_distances['target'] == target) &

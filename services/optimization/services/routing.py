@@ -20,6 +20,27 @@ OSRM_BASE_URL = os.getenv('OSRM_BASE_URL', 'https://router.project-osrm.org')
 _REQUEST_TIMEOUT_SECONDS = 10
 
 
+def _fetch_osrm_route(coordinates: str) -> Dict[str, Any]:
+    '''
+        Calls OSRM for a coordinate pair and returns the parsed JSON payload.
+
+        Raises:
+            ServiceUnavailableError: If OSRM is unreachable.
+    '''
+    url = f'{OSRM_BASE_URL}/route/v1/driving/{coordinates}'
+    query = {'overview': 'full', 'geometries': 'geojson'}
+    try:
+        response = requests.get(url, params = query, timeout = _REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as error:
+        error_msg = f'OSRM request failed for segment {coordinates}: {error}'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(
+            detail = 'El servicio de ruteo vial (OSRM) no está disponible.'
+        ) from error
+
+
 def road_segment(
     origin: Tuple[float, float],
     destination: Tuple[float, float]
@@ -43,19 +64,8 @@ def road_segment(
     origin_lat, origin_lon = origin
     destination_lat, destination_lon = destination
     coordinates = f'{origin_lon},{origin_lat};{destination_lon},{destination_lat}'
-    url = f'{OSRM_BASE_URL}/route/v1/driving/{coordinates}'
-    query = {'overview': 'full', 'geometries': 'geojson'}
 
-    try:
-        response = requests.get(url, params = query, timeout = _REQUEST_TIMEOUT_SECONDS)
-        response.raise_for_status()
-        payload = response.json()
-    except requests.RequestException as error:
-        error_msg = f'OSRM request failed for segment {coordinates}: {error}'
-        logger.error(error_msg)
-        raise ServiceUnavailableError(
-            detail = 'El servicio de ruteo vial (OSRM) no está disponible.'
-        ) from error
+    payload = _fetch_osrm_route(coordinates)
 
     routes = payload.get('routes') or []
     if not routes:

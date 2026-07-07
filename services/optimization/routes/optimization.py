@@ -26,13 +26,10 @@ from schemas.optimization import (
 )
 from services.exceptions import InvalidInputError
 from services.db_connection import GET_DB_DEPENDENCY
-from services.events_emitter import log_usage
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
 
 router = APIRouter(prefix = '/v1/optimization', tags = ['Optimization'])
-
-MICROSERVICE_NAME = 'OPTIMIZATION'
 
 
 @router.get(
@@ -42,7 +39,6 @@ MICROSERVICE_NAME = 'OPTIMIZATION'
     summary = 'Base map data for a (route_id, day)',
     description = 'Returns the geolocated client points tagged with start/middle/end colors.'
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_base_data_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
@@ -53,14 +49,16 @@ async def get_base_data_endpoint(
         Endpoint mirroring legacy GET /api/v1/optimization/data_model.
     '''
     message = (
-        f'Retrieving base data for route_id={query_params.route_id} '
-        f'day={query_params.day}.'
+        f'User: {current_user}. Retrieving base data for '
+        f'route_id={query_params.route_id} day={query_params.day}.'
     )
     logger.info(message)
     return await preparing_data_controller(
         dynamodb_resource = dynamodb_resource,
         route_id = query_params.route_id,
-        day = query_params.day
+        day = query_params.day,
+        request = request,
+        current_user = current_user
     )
 
 
@@ -71,7 +69,6 @@ async def get_base_data_endpoint(
     summary = 'Ordered linear distances between points',
     description = 'Returns the ordered (origin, target, distance) triples for the route.'
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_distances_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
@@ -82,14 +79,16 @@ async def get_distances_endpoint(
         Endpoint mirroring legacy GET /api/v1/optimization/distances.
     '''
     message = (
-        f'Computing distances for route_id={query_params.route_id} '
-        f'day={query_params.day}.'
+        f'User: {current_user}. Computing distances for '
+        f'route_id={query_params.route_id} day={query_params.day}.'
     )
     logger.info(message)
     return await data_ordered_controller(
         dynamodb_resource = dynamodb_resource,
         route_id = query_params.route_id,
-        day = query_params.day
+        day = query_params.day,
+        request = request,
+        current_user = current_user
     )
 
 
@@ -98,9 +97,11 @@ async def get_distances_endpoint(
     response_model = List[RouteResponse],
     status_code = status.HTTP_200_OK,
     summary = 'Optimized route projected on the road network (OSRM)',
-    description = 'Returns the per-segment optimized route with real road distance, duration and street geometry.'
+    description = (
+        'Returns the per-segment optimized route with real road distance, '
+        'duration and street geometry.'
+    )
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_optimal_route_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
@@ -111,7 +112,7 @@ async def get_optimal_route_endpoint(
         Endpoint mirroring legacy GET /api/v1/optimization/optimal_route.
     '''
     message = (
-        f'Optimizing route route_id={query_params.route_id} '
+        f'User: {current_user}. Optimizing route route_id={query_params.route_id} '
         f'day={query_params.day} dist={query_params.dist}.'
     )
     logger.info(message)
@@ -119,7 +120,7 @@ async def get_optimal_route_endpoint(
         dynamodb_resource = dynamodb_resource,
         route_id = query_params.route_id,
         day = query_params.day,
-        dist = query_params.dist,
+        request = request,
         current_user = current_user
     )
 
@@ -129,9 +130,11 @@ async def get_optimal_route_endpoint(
     response_model = Dict,
     status_code = status.HTTP_200_OK,
     summary = 'Geodesic distance matrix between all points',
-    description = 'Returns the symmetric distance matrix (in meters) between every pair of client points.'
+    description = (
+        'Returns the symmetric distance matrix (in meters) between every '
+        'pair of client points.'
+    )
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_distance_matrix_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
@@ -142,14 +145,16 @@ async def get_distance_matrix_endpoint(
         Endpoint mirroring legacy GET /api/v1/optimization/distance_matrix.
     '''
     message = (
-        f'Building distance matrix for route_id={query_params.route_id} '
-        f'day={query_params.day}.'
+        f'User: {current_user}. Building distance matrix for '
+        f'route_id={query_params.route_id} day={query_params.day}.'
     )
     logger.info(message)
     return await simulation_algorithm_controller(
         dynamodb_resource = dynamodb_resource,
         route_id = query_params.route_id,
-        day = query_params.day
+        day = query_params.day,
+        request = request,
+        current_user = current_user
     )
 
 
@@ -160,7 +165,6 @@ async def get_distance_matrix_endpoint(
     summary = 'Per-segment route data (alias of /optimal_route)',
     description = 'Mirrors the legacy /route endpoint kept for notebook compatibility.'
 )
-@log_usage(MICROSERVICE_NAME)
 async def get_route_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
@@ -171,15 +175,16 @@ async def get_route_endpoint(
         Endpoint mirroring legacy GET /api/v1/optimization/route.
     '''
     message = (
-        f'Building route segments for route_id={query_params.route_id} '
-        f'day={query_params.day} dist={query_params.dist}.'
+        f'User: {current_user}. Building route segments for '
+        f'route_id={query_params.route_id} day={query_params.day} '
+        f'dist={query_params.dist}.'
     )
     logger.info(message)
     return await optimization_algorithm_controller(
         dynamodb_resource = dynamodb_resource,
         route_id = query_params.route_id,
         day = query_params.day,
-        dist = query_params.dist,
+        request = request,
         current_user = current_user
     )
 
@@ -196,7 +201,6 @@ async def get_route_endpoint(
         'content.'
     )
 )
-@log_usage(MICROSERVICE_NAME)
 async def bulk_upload_routes_endpoint(
     request: Request,
     file: UploadFile = File(...),
@@ -223,5 +227,6 @@ async def bulk_upload_routes_endpoint(
     return await bulk_upload_routes_controller(
         dynamodb_resource = dynamodb_resource,
         csv_text = csv_text,
-        current_user = current_user
+        current_user = current_user,
+        request = request
     )

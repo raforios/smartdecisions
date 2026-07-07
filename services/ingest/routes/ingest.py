@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from boto3.resources.base import ServiceResource
 
 from controllers.ingest import (
+    download_template_controller,
     get_dataset_status_controller,
     get_template_info_controller,
     ingest_excel_controller
@@ -73,16 +74,19 @@ async def get_template_info_endpoint(
     response_class = FileResponse
 )
 async def download_template_endpoint(
+    request: Request,
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Endpoint that streams the canonical .xlsx template generated at deploy time.
+        Endpoint that streams the canonical .xlsx template.
     '''
     message = f'User: {current_user}. Downloading Excel template file.'
     logger.info(message)
-    template_path = SERVICE_ROOT / 'assets' / 'template_ventas_v1.xlsx'
-    if not template_path.exists():
-        raise InvalidInputError(detail = 'La plantilla aún no está disponible en el servidor.')
+    template_path = await download_template_controller(
+        base_path = SERVICE_ROOT,
+        request = request,
+        current_user = current_user
+    )
     return FileResponse(
         path = str(template_path),
         filename = 'template_ventas_v1.xlsx',

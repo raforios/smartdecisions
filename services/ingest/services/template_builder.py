@@ -1,23 +1,20 @@
 '''
-    Generates the canonical sales Excel template (template_ventas_v1.xlsx).
+    Canonical sales Excel template builder (template_ventas_v1.xlsx).
 
-    The template ships with:
+    Produces the workbook the INGEST service serves via
+    `GET /v1/ingest/template/file`:
       - A 'Ventas' sheet with the v1 contract headers and 3 example rows.
       - An 'Instrucciones' sheet documenting required vs optional columns.
 
-    Run locally:
-        python scripts/generate_template.py
-    The file is written to ../assets/template_ventas_v1.xlsx by default.
+    The service pre-generates the file on startup (see main._ensure_template_present)
+    so the download endpoint always has a file to stream.
 '''
-import argparse
 from datetime import date
 from pathlib import Path
 import pandas as pd
 
-from services.excel_validator import REQUIRED_COLUMNS, TEMPLATE_VERSION
+from services.excel_validator import REQUIRED_COLUMNS
 
-
-DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / 'assets' / 'template_ventas_v1.xlsx'
 
 EXAMPLE_ROWS = [
     {
@@ -64,6 +61,25 @@ COLUMN_ORDER = [
 ]
 
 
+def _description_for(column: str) -> str:
+    '''
+        Returns the canonical Spanish description for a template column.
+    '''
+    descriptions = {
+        'id_pedido': 'Identificador del pedido. Agrupa los productos de una misma venta.',
+        'fecha': 'Fecha de la venta. Acepta formato ISO (aaaa-mm-dd) o dd/mm/aaaa.',
+        'id_punto_venta': 'Identificador del punto de venta o cliente.',
+        'nombre_pdv': 'Nombre legible del PdV (solo para la interfaz).',
+        'zona': 'Zona geográfica del PdV (para análisis y rutas).',
+        'id_producto': 'SKU o código del producto.',
+        'nombre_producto': 'Nombre legible del producto (solo para la interfaz).',
+        'cantidad': 'Unidades vendidas. Debe ser mayor que 0.',
+        'precio_unitario': 'Precio por unidad. Necesario para calcular Drop Size en moneda.',
+        'monto_total': 'Monto total de la línea. Se calcula como cantidad × precio_unitario.',
+    }
+    return descriptions.get(column, '')
+
+
 def build_instructions_dataframe() -> pd.DataFrame:
     '''
         Builds the 'Instrucciones' sheet content from the v1 contract.
@@ -80,25 +96,6 @@ def build_instructions_dataframe() -> pd.DataFrame:
             'Descripción': _description_for(col),
         })
     return pd.DataFrame(rows)
-
-
-def _description_for(column: str) -> str:
-    '''
-        Returns the canonical Spanish description for a template column.
-    '''
-    descriptions = {
-        'id_pedido': 'Identificador del pedido. Agrupa los productos de una misma venta/visita.',
-        'fecha': 'Fecha de la venta. Acepta formato ISO (aaaa-mm-dd) o dd/mm/aaaa.',
-        'id_punto_venta': 'Identificador del punto de venta o cliente.',
-        'nombre_pdv': 'Nombre legible del PdV (solo para la interfaz).',
-        'zona': 'Zona geográfica del PdV (para análisis y rutas).',
-        'id_producto': 'SKU o código del producto.',
-        'nombre_producto': 'Nombre legible del producto (solo para la interfaz).',
-        'cantidad': 'Unidades vendidas. Debe ser mayor que 0.',
-        'precio_unitario': 'Precio por unidad. Necesario para calcular Drop Size en moneda.',
-        'monto_total': 'Monto total de la línea. Se calcula comocantidad × precio_unitario.',
-    }
-    return descriptions.get(column, '')
 
 
 def generate(output_path: Path) -> Path:
@@ -127,17 +124,3 @@ def generate(output_path: Path) -> Path:
                 min(max_length + 2, 28)
 
     return output_path
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description = \
-        'Generates the SmartDecisions sales Excel template.')
-    parser.add_argument(
-        '--output',
-        type = Path,
-        default = DEFAULT_OUTPUT,
-        help = f'Output path (default: {DEFAULT_OUTPUT}).'
-    )
-    args = parser.parse_args()
-    written = generate(args.output)
-    print(f'Generated template {TEMPLATE_VERSION} at: {written}')

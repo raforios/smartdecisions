@@ -13,6 +13,7 @@ import io
 from typing import List, Optional, Tuple
 import pandas as pd
 from boto3.resources.base import ServiceResource
+from fastapi import Request
 
 from schemas.optimization import (
     BulkUploadResponse,
@@ -20,7 +21,6 @@ from schemas.optimization import (
     OptimizationResponse,
     RouteResponse
 )
-from services.events_emitter import audit_event
 from services.exceptions import InvalidInputError
 from services.ml_optimization import (
     GeoAnalyzer,
@@ -30,6 +30,7 @@ from services.ml_optimization import (
 )
 from services.route_data import bulk_upload_points, get_route_points
 from services.routing import road_segment
+from services.utils import audit_event, handle_service_errors
 
 
 # ---------------------------------------------------------------------------
@@ -191,26 +192,16 @@ def _df_to_pydantic(df: pd.DataFrame, model) -> list:
 # ---------------------------------------------------------------------------
 # Public controllers (mirror monolith signatures)
 # ---------------------------------------------------------------------------
-async def preparing_data_controller(
+def _ordered_route_models(
     dynamodb_resource: ServiceResource,
     route_id: int,
     day: int
-) -> Optional[List[DataMapResponse]]:
+) -> List[OptimizationResponse]:
     '''
-        Returns the base map data (geolocated client points tagged with color).
-    '''
-    dtf = _load_dataframe(dynamodb_resource, route_id, day)
-    data = _draw_map(dtf)
-    return _df_to_pydantic(data, DataMapResponse)
-
-
-async def data_ordered_controller(
-    dynamodb_resource: ServiceResource,
-    route_id: int,
-    day: int
-) -> Optional[List[OptimizationResponse]]:
-    '''
-        Returns the ordered linear-distance pairs (origin → target).
+        Computes the ordered linear-distance route and returns it as the
+        OptimizationResponse list. Shared by `data_ordered_controller` and
+        `optimization_algorithm_controller` so the latter does not have to
+        call a decorated controller.
     '''
     dtf = _load_dataframe(dynamodb_resource, route_id, day)
     dtf_distances = _distances(dtf)
@@ -223,30 +214,65 @@ async def data_ordered_controller(
     return _df_to_pydantic(dtf_final, OptimizationResponse)
 
 
+@handle_service_errors('OPTIMIZATION')
+async def preparing_data_controller(
+    dynamodb_resource: ServiceResource,
+    route_id: int,
+    day: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> Optional[List[DataMapResponse]]:
+    '''
+        Returns the base map data (geolocated client points tagged with color).
+    '''
+    dtf = _load_dataframe(dynamodb_resource, route_id, day)
+    data = _draw_map(dtf)
+    return _df_to_pydantic(data, DataMapResponse)
+
+
+@handle_service_errors('OPTIMIZATION')
+async def data_ordered_controller(
+    dynamodb_resource: ServiceResource,
+    route_id: int,
+    day: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> Optional[List[OptimizationResponse]]:
+    '''
+        Returns the ordered linear-distance pairs (origin → target).
+    '''
+    return _ordered_route_models(dynamodb_resource, route_id, day)
+
+
+@handle_service_errors('OPTIMIZATION')
 @audit_event('OPTIMIZATION', 'OptimalRoute', 'READ')
 async def optimization_algorithm_controller(
     dynamodb_resource: ServiceResource,
     route_id: int,
     day: int,
-    dist: int
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> Optional[List[RouteResponse]]:
     '''
         Runs the full route-optimization pipeline (ordering + OSRM projection).
 
-        `dist` is kept for backward compatibility with the legacy OSM-graph
-        radius contract but no longer affects routing: OSRM resolves the full
-        street geometry for every segment regardless of any radius.
+        The legacy OSM-graph radius (`dist`) is still accepted at the route
+        layer for backward compatibility but no longer affects routing: OSRM
+        resolves the full street geometry for every segment regardless.
     '''
-    dtf_final_models = await data_ordered_controller(dynamodb_resource, route_id, day)
+    dtf_final_models = _ordered_route_models(dynamodb_resource, route_id, day)
     dtf_final = pd.DataFrame([m.model_dump() for m in dtf_final_models])
     dtf_route = _final_route(dtf_final)
     return _df_to_pydantic(dtf_route, RouteResponse)
 
 
+@handle_service_errors('OPTIMIZATION')
 async def simulation_algorithm_controller(
     dynamodb_resource: ServiceResource,
     route_id: int,
-    day: int
+    day: int,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
 ) -> dict:
     '''
         Returns the geodesic distance matrix between all client points
@@ -294,6 +320,60 @@ def _resolve_header(raw_header: str) -> Optional[str]:
     return None
 
 
+def _resolve_and_validate_header(header: List[str]) -> List[Optional[str]]:
+    '''
+        Maps each raw header cell to its canonical name and ensures every
+        required column is present.
+
+        Raises:
+            InvalidInputError: If a mandatory column is missing.
+    '''
+    resolved = [_resolve_header(cell) for cell in header]
+    canonical_set = {col for col in resolved if col}
+    missing = REQUIRED_COLUMNS - canonical_set
+    if missing:
+        raise InvalidInputError(
+            detail = (
+                f'Faltan columnas obligatorias en el CSV: {sorted(missing)}. '
+                f'Columnas detectadas: {sorted(canonical_set)}.'
+            )
+        )
+    return resolved
+
+
+def _parse_csv_row(
+    raw_row: List[str],
+    resolved: List[Optional[str]],
+    line_no: int
+) -> dict:
+    '''
+        Builds a single canonical record from a raw CSV row, coercing the
+        numeric columns.
+
+        Raises:
+            InvalidInputError: If a row has non-numeric or missing values.
+    '''
+    record: dict = {}
+    for idx, value in enumerate(raw_row):
+        if idx >= len(resolved):
+            continue
+        col = resolved[idx]
+        if col is None:
+            continue
+        record[col] = (value or '').strip()
+    try:
+        record['route_id'] = int(record['route_id'])
+        record['day'] = int(record['day'])
+        record['client_id'] = int(record['client_id'])
+        record['latitude'] = float(record['latitude'])
+        record['longitude'] = float(record['longitude'])
+    except (KeyError, ValueError) as e:
+        raise InvalidInputError(
+            detail = f'Fila {line_no} con valores inválidos ({e}).'
+        ) from e
+    return record
+
+
 def _parse_csv_text(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
     '''
         Parses the CSV body. Returns:
@@ -311,47 +391,19 @@ def _parse_csv_text(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
     except StopIteration as e:
         raise InvalidInputError(detail = 'El archivo CSV está vacío.') from e
 
-    resolved = [_resolve_header(cell) for cell in header]
-    canonical_set = {col for col in resolved if col}
-    missing = REQUIRED_COLUMNS - canonical_set
-    if missing:
-        raise InvalidInputError(
-            detail = (
-                f'Faltan columnas obligatorias en el CSV: {sorted(missing)}. '
-                f'Columnas detectadas: {sorted(canonical_set)}.'
-            )
-        )
+    resolved = _resolve_and_validate_header(header)
 
     rows: List[dict] = []
-    route_id_set = set()
-    day_set = set()
     for line_no, raw_row in enumerate(rows_iter, start = 2):
         if not raw_row or all((cell or '').strip() == '' for cell in raw_row):
             continue
-        record: dict = {}
-        for idx, value in enumerate(raw_row):
-            if idx >= len(resolved):
-                continue
-            col = resolved[idx]
-            if col is None:
-                continue
-            record[col] = (value or '').strip()
-        try:
-            record['route_id'] = int(record['route_id'])
-            record['day'] = int(record['day'])
-            record['client_id'] = int(record['client_id'])
-            record['latitude'] = float(record['latitude'])
-            record['longitude'] = float(record['longitude'])
-        except (KeyError, ValueError) as e:
-            raise InvalidInputError(
-                detail = f'Fila {line_no} con valores inválidos ({e}).'
-            ) from e
-        route_id_set.add(record['route_id'])
-        day_set.add(record['day'])
-        rows.append(record)
+        rows.append(_parse_csv_row(raw_row, resolved, line_no))
 
     if not rows:
         raise InvalidInputError(detail = 'El CSV no contiene filas de datos.')
+
+    route_id_set = {record['route_id'] for record in rows}
+    day_set = {record['day'] for record in rows}
     if len(route_id_set) != 1 or len(day_set) != 1:
         raise InvalidInputError(
             detail = (
@@ -360,19 +412,18 @@ def _parse_csv_text(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
                 f'day encontrados: {sorted(day_set)}.'
             )
         )
-    return (
-        rows,
-        sorted(canonical_set),
-        next(iter(route_id_set)),
-        next(iter(day_set))
-    )
+
+    canonical_set = sorted({col for col in resolved if col})
+    return rows, canonical_set, next(iter(route_id_set)), next(iter(day_set))
 
 
+@handle_service_errors('OPTIMIZATION')
 @audit_event('OPTIMIZATION', 'RoutePoints', 'BULK_CREATE')
 async def bulk_upload_routes_controller(
     dynamodb_resource: ServiceResource,
     csv_text: str,
-    current_user: str
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
 ) -> BulkUploadResponse:
     '''
         Parses a CSV body and persists every point into DynamoDB under the
@@ -380,7 +431,8 @@ async def bulk_upload_routes_controller(
         replaces the previous content.
 
         `current_user` is accepted so the @audit_event decorator can stamp
-        the event with the operator email.
+        the event with the operator email; `request` is consumed by
+        @handle_service_errors for the usage log.
     '''
     rows, headers, route_id, day = _parse_csv_text(csv_text)
     written = bulk_upload_points(
