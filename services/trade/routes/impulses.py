@@ -21,6 +21,7 @@ from controllers.impulses import (
     delete_promotion_controller,
     get_promotion_by_id_controller,
     get_promotions_list_controller,
+    list_impulse_inventory_controller,    # Binaria 2026-07-07
     list_impulse_sales_controller,
     update_promotion_controller,
     get_impulse_inventory_start_by_attendance_controller,
@@ -28,6 +29,7 @@ from controllers.impulses import (
 )
 from schemas.impulses import (
     ImpulseInventoryCreateSchema,
+    ImpulseInventoryListQuerySchema,     # Binaria 2026-07-07
     ImpulseInventoryListResponseSchema,
     ImpulseSaleCreateSchema,
     ImpulseSaleResponseSchema,
@@ -234,6 +236,40 @@ async def list_impulse_sales_endpoint(
         filters = filters,
         skip = skip, limit = limit,
         db = db, request = request, current_user = current_user,
+    )
+
+
+@router.get(
+    '/inventory',
+    response_model = ImpulseInventoryListResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'List impulse inventory records (START/END) with optional filters',
+    description = (
+        'Lists impulse inventory rows across attendances. Required: '
+        'inventory_type (START or END). Optional: company_id, '
+        'client_company_id, pos_id, user_id, date_from, date_to.'
+    ),
+)
+async def list_impulse_inventory_endpoint(
+    request: Request,
+    query: ImpulseInventoryListQuerySchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user),
+):
+    '''
+        Binaria, 2026-07-07: GET endpoint for the unified impulse inventory
+        listing (initial / closing), for inventory + sales-control reports.
+    '''
+    message = (
+        f'User: {current_user}. Listing impulse inventory '
+        f'({query.inventory_type}).'
+    )
+    logger.info(message)
+    return await list_impulse_inventory_controller(
+        query = query,
+        db = db,
+        request = request,
+        current_user = current_user,
     )
 
 

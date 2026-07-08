@@ -16,6 +16,29 @@ from schemas.common import BaseSchema, PhotoResponseSchema
 
 # --- Schemas for Replenishment Report ---
 
+class ReplenishmentReportDetailCreateSchema(BaseSchema):
+    '''
+        Per-product line of a Replenishment Report (Binaria, 2026-07-07):
+        marks whether the product was replaced, with an optional replaced
+        quantity and a per-product comment.
+    '''
+    product_sku: str = Field(
+        ...,
+        description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) of the product.'
+    )
+    replaced: bool = Field(
+        ...,
+        description = 'Whether this product was replaced during the visit (repuesto sí/no).'
+    )
+    quantity: Optional[int] = Field(
+        None, ge = 0,
+        description = 'Optional quantity replaced for this product.'
+    )
+    comments: Optional[str] = Field(
+        None,
+        description = 'Optional comment for this specific product.'
+    )
+
 class ReplenishmentReportCreateSchema(BaseSchema):
     '''
         Schema for creating a Replenishment Report (Success Photos).
@@ -43,6 +66,22 @@ class ReplenishmentReportCreateSchema(BaseSchema):
         False,
         description = 'Marker for review / approval workflow. Defaults to False.'
     )
+    # Binaria, 2026-07-07: per-product replaced yes/no detail. Optional so
+    # existing header-only callers keep working.
+    details: List[ReplenishmentReportDetailCreateSchema] = Field(
+        default_factory = list,
+        description = 'Per-product detail marking whether each product was replaced.'
+    )
+
+class ReplenishmentReportDetailResponseSchema(BaseSchema):
+    '''
+        Response schema for a single Replenishment Report product line.
+    '''
+    id: int
+    product_id: int
+    replaced: bool
+    quantity: Optional[int] = None
+    comments: Optional[str] = None
 
 class ReplenishmentReportResponseSchema(BaseSchema):
     '''
@@ -54,6 +93,7 @@ class ReplenishmentReportResponseSchema(BaseSchema):
     attendance_id: int
     comments: Optional[str]
     reviewed: bool = False  # iter5
+    details: List[ReplenishmentReportDetailResponseSchema] = []  # Binaria 2026-07-07
     photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]
 
@@ -65,7 +105,10 @@ class ReplenishmentReportQuerySchema(BaseSchema):
     '''
     company_id: Optional[int] = Field(None, description = 'Operator company filter.')
     client_company_id: Optional[int] = Field(None, description = 'Brand / client filter.')
-    pos_id: Optional[int] = Field(None, description = 'POS filter.')
+    pos_id: Optional[int] = Field(None, description = 'POS filter (via the visit attendance).')
+    user_id: Optional[int] = Field(
+        None, description = 'Operator filter (via the visit attendance).'
+    )
     attendance_id: Optional[int] = Field(None, description = 'Visit filter.')
     reviewed: Optional[bool] = Field(None, description = 'Only reviewed (True) or pending (False).')
     date_from: Optional[datetime] = Field(None, description = 'created_at >= this datetime.')
@@ -176,6 +219,102 @@ class ReplenishmentReceptionQuerySchema(BaseSchema):
     product_id: Optional[int] = Field(None)
     batch_number: Optional[str] = Field(None, max_length = 50)
     limit: int = Field(200, ge = 1, le = 1000)
+    offset: int = Field(0, ge = 0)
+
+# --- Schemas for Replenishment Inventory (Binaria, 2026-07-08, line-free) ---
+
+class ReplenishmentInventoryItemSchema(BaseSchema):
+    '''
+        A single line-free inventory line: the same product may appear on
+        several lines with different quantity / batch / expiration / location.
+    '''
+    product_sku: str = Field(
+        ...,
+        description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) being counted.'
+    )
+    quantity: int = Field(
+        ..., ge = 0,
+        description = 'Quantity counted for this line.'
+    )
+    batch_number: Optional[str] = Field(
+        None, max_length = 50,
+        description = 'Batch / lot number of this line.'
+    )
+    expiration_date: Optional[str] = Field(
+        None,
+        description = 'Expiration date of this line (YYYY-MM-DD).'
+    )
+    location: Literal['SALA', 'ALMACEN'] = Field(
+        ...,
+        description = 'Physical location of this line: SALA or ALMACEN.'
+    )
+    observations: Optional[str] = Field(
+        None,
+        description = 'Optional notes for this line.'
+    )
+
+class ReplenishmentInventoryCreateSchema(BaseSchema):
+    '''
+        Schema for registering a replenishment inventory (one count per visit,
+        many lines). pos_id is used for assortment validation.
+    '''
+    company_id: int = Field(
+        ...,
+        description = 'ID of the company (needed for SKU lookup).'
+    )
+    client_company_id: Optional[int] = Field(
+        None,
+        description = 'ID of the client company (brand / product owner).'
+    )
+    pos_id: int = Field(
+        ...,
+        description = 'ID of the POS (sent by frontend) to validate assortment.'
+    )
+    items: List[ReplenishmentInventoryItemSchema] = Field(
+        ...,
+        min_length = 1,
+        description = 'Inventory lines (line-free: repeat a product for other batches).'
+    )
+
+class ReplenishmentInventoryResponseItemSchema(BaseSchema):
+    '''
+        Response schema for a single replenishment inventory line.
+    '''
+    id: int
+    attendance_id: int
+    product_id: int
+    client_company_id: Optional[int] = None
+    quantity: int
+    batch_number: Optional[str] = None
+    expiration_date: Optional[datetime] = None
+    location: str
+    observations: Optional[str] = None
+    created_at: Optional[datetime]
+
+class ReplenishmentInventoryListResponseSchema(BaseSchema):
+    '''
+        Wrapper for replenishment inventory listings (bulk create, latest and
+        the paginated list share this shape).
+    '''
+    items: List[ReplenishmentInventoryResponseItemSchema]
+    total: int
+
+class ReplenishmentInventoryQuerySchema(BaseSchema):
+    '''
+        Filters for GET /v1/replenishment/inventory. pos_id / user_id are
+        resolved through the visit attendance.
+    '''
+    company_id: Optional[int] = Field(None, description = 'Operator company filter.')
+    client_company_id: Optional[int] = Field(None, description = 'Brand / client filter.')
+    pos_id: Optional[int] = Field(
+        None, description = 'POS filter (via the visit attendance).'
+    )
+    user_id: Optional[int] = Field(
+        None, description = 'Operator filter (via the visit attendance).'
+    )
+    date_from: Optional[datetime] = Field(None, description = 'created_at >= this datetime.')
+    date_to: Optional[datetime] = Field(None, description = 'created_at <= this datetime.')
+    limit: int = Field(100, ge = 1, le = 1000)
     offset: int = Field(0, ge = 0)
 
 # --- B.3. COMPLEMENTARY ACTIVITIES SCHEMAS ---
@@ -400,6 +539,12 @@ class ComplementaryCompetitionCreateSchema(BaseSchema):
         ...,
         description = 'ID of the user creating the report (from frontend session).'
     )
+    # Binaria, 2026-07-07: brand / client the competition report belongs to,
+    # so the listing can be filtered by client_company_id.
+    client_company_id: Optional[int] = Field(
+        None,
+        description = 'ID of the client company (brand / product owner).'
+    )
     pos_id: Optional[int] = Field(
         None,
         description = 'Optional: ID of the POS where the activity was observed.'
@@ -456,6 +601,7 @@ class ComplementaryCompetitionResponseSchema(BaseSchema):
     id: int
     user_id: int
     company_id: int
+    client_company_id: Optional[int] = None  # Binaria 2026-07-07
     pos_id: Optional[int]
     competitor_name: str
     activity_type: Optional[str]
@@ -468,3 +614,49 @@ class ComplementaryCompetitionResponseSchema(BaseSchema):
     location_description: Optional[str] = None
     photos: List[PhotoResponseSchema] = []
     created_at: Optional[datetime]
+
+
+# --- Binaria, 2026-07-07: LIST schemas for promo points and competition ---
+
+class ComplementaryPromoPointQuerySchema(BaseSchema):
+    '''
+        Filters for GET /v1/replenishment/complementary/promo-points. pos_id
+        and user_id are resolved through the visit attendance.
+    '''
+    company_id: Optional[int] = Field(None, description = 'Operator company filter.')
+    client_company_id: Optional[int] = Field(None, description = 'Brand / client filter.')
+    pos_id: Optional[int] = Field(None, description = 'POS filter (via the visit attendance).')
+    user_id: Optional[int] = Field(
+        None, description = 'Operator filter (via the visit attendance).'
+    )
+    date_from: Optional[datetime] = Field(None, description = 'created_at >= this datetime.')
+    date_to: Optional[datetime] = Field(None, description = 'created_at <= this datetime.')
+    limit: int = Field(50, ge = 1, le = 500)
+    offset: int = Field(0, ge = 0)
+
+class ComplementaryPromoPointListResponseSchema(BaseSchema):
+    '''
+        Wrapper for the promotional-point listing endpoint.
+    '''
+    items: List[ComplementaryPromoPointResponseSchema]
+    total: int
+
+class ComplementaryCompetitionQuerySchema(BaseSchema):
+    '''
+        Filters for GET /v1/replenishment/complementary/competition. Competition
+        reports are not tied to an attendance, so user_id is filtered directly.
+    '''
+    company_id: Optional[int] = Field(None, description = 'Operator company filter.')
+    client_company_id: Optional[int] = Field(None, description = 'Brand / client filter.')
+    user_id: Optional[int] = Field(None, description = 'Operator filter.')
+    date_from: Optional[datetime] = Field(None, description = 'created_at >= this datetime.')
+    date_to: Optional[datetime] = Field(None, description = 'created_at <= this datetime.')
+    limit: int = Field(50, ge = 1, le = 500)
+    offset: int = Field(0, ge = 0)
+
+class ComplementaryCompetitionListResponseSchema(BaseSchema):
+    '''
+        Wrapper for the competition-report listing endpoint.
+    '''
+    items: List[ComplementaryCompetitionResponseSchema]
+    total: int

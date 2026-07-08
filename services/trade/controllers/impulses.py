@@ -14,6 +14,7 @@ from services.impulses import (
     get_promotion_by_id_service,
     get_promotions_list_service,
     get_pos_stock_service,
+    list_impulse_inventory_service,    # Binaria 2026-07-07
     list_impulse_sales_service,
     update_promotion_service,
     get_latest_impulse_inventory_for_pos_service,
@@ -22,6 +23,7 @@ from services.impulses import (
 )
 from schemas.impulses import (
     ImpulseInventoryCreateSchema,
+    ImpulseInventoryListQuerySchema,   # Binaria 2026-07-07
     ImpulseInventoryListResponseSchema,
     ImpulseSaleCreateSchema,
     ImpulseSaleResponseSchema,
@@ -270,6 +272,21 @@ async def list_impulse_sales_controller(
         db = db, filters = filters, skip = skip, limit = limit,
     )
     return SaleListResponseSchema(items = items, total = total)
+
+
+@handle_service_errors('TRADE')
+async def list_impulse_inventory_controller(
+    query: ImpulseInventoryListQuerySchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str,  # pylint: disable=unused-argument
+) -> ImpulseInventoryListResponseSchema:
+    '''
+        Binaria, 2026-07-07: paginated listing of impulse inventory records
+        (START or END) with company / client / pos / user / date filters.
+    '''
+    items, total = await list_impulse_inventory_service(db = db, query = query)
+    return ImpulseInventoryListResponseSchema(items = items, total = total)
 
 
 @handle_service_errors('TRADE')

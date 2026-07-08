@@ -7,7 +7,6 @@ from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session, joinedload
 from services.products import (
     get_product_id_by_sku,
-    create_bulk_items_from_skus,
     validate_product_assigned_to_pos
 )
 from services.crud import (
@@ -39,13 +38,18 @@ from models.trade import Attendance, PlannedPoint
 from models.products import Product
 from schemas.impulses import (
     ImpulseInventoryCreateSchema,
+    ImpulseInventoryListQuerySchema,   # Binaria 2026-07-07
     ImpulseSaleCreateSchema,
     SaleListFilterSchema,
     TradePromotionCreateSchema,
     TradePromotionFilterSchema,
     TradePromotionUpdateSchema,
 )
-from .trade_utils import validate_active_attendance
+from .trade_utils import (
+    create_visit_items,
+    filter_query_by_attendance,
+    validate_active_attendance,
+)
 
 # --- TRADE PROMOTION (BANDEO) SERVICES ---
 
@@ -164,6 +168,20 @@ async def delete_promotion_service(
 
 # --- B.1. IMPULSE ACTIVITIES SERVICES ---
 
+def _normalize_inventory_locations(items) -> None:
+    '''
+        iter5: roll the legacy `quantity` into quantity_in_room when both
+        location fields arrive empty, then keep `quantity` aligned with the
+        sum of the two locations so legacy consumers still see the total.
+    '''
+    for item in items:
+        if (item.quantity_in_room == 0
+                and item.quantity_in_warehouse == 0
+                and item.quantity):
+            item.quantity_in_room = item.quantity
+        item.quantity = item.quantity_in_room + item.quantity_in_warehouse
+
+
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ImpulseInventoryStart', 'CREATE')
 async def create_impulse_inventory_start_service(
@@ -178,39 +196,12 @@ async def create_impulse_inventory_start_service(
     message = f'Creating Impulse Inventory Start for attendance ID: {attendance_id}'
     logger.info(message)
 
-    # 0. Validate Active Attendance
-    validate_active_attendance(
+    _normalize_inventory_locations(inventory_data.items)
+
+    return await create_visit_items(
         db = db,
         attendance_id = attendance_id,
-        company_id = inventory_data.company_id,
-        pos_id = inventory_data.pos_id
-    )
-
-    # Validate Assortment + iter5 quantity normalization
-    pos_id = inventory_data.pos_id
-    for item in inventory_data.items:
-        # iter5: roll the legacy `quantity` field into quantity_in_room when
-        # both location fields arrive empty (frontend backwards-compat). Then
-        # always keep `quantity` aligned with the sum of the two locations so
-        # external consumers that still read the legacy column see the total.
-        if (item.quantity_in_room == 0
-            and item.quantity_in_warehouse == 0
-            and item.quantity):
-            item.quantity_in_room = item.quantity
-        item.quantity = item.quantity_in_room + item.quantity_in_warehouse
-
-        product_id = get_product_id_by_sku(
-            db, inventory_data.company_id, item.product_sku
-        )
-        validate_product_assigned_to_pos(
-            db, inventory_data.company_id, pos_id, product_id
-        )
-
-    return await create_bulk_items_from_skus(
-        db = db,
-        attendance_id = attendance_id,
-        company_id = inventory_data.company_id,
-        items_list = inventory_data.items,
+        payload = inventory_data,
         model_class = ImpulseInventoryStart,
         extra_fields = {  # iter5
             'client_company_id': inventory_data.client_company_id
@@ -333,40 +324,62 @@ async def create_impulse_inventory_end_service(
     message = f'Creating Impulse Inventory End for attendance ID: {attendance_id}'
     logger.info(message)
 
-    # 0. Validate Active Attendance
-    validate_active_attendance(
+    _normalize_inventory_locations(inventory_data.items)
+
+    return await create_visit_items(
         db = db,
         attendance_id = attendance_id,
-        company_id = inventory_data.company_id,
-        pos_id = inventory_data.pos_id
-    )
-
-    # Validate Assortment + iter5 quantity normalization (see _start counterpart).
-    pos_id = inventory_data.pos_id
-    for item in inventory_data.items:
-        if (item.quantity_in_room == 0
-            and item.quantity_in_warehouse == 0
-            and item.quantity):
-            item.quantity_in_room = item.quantity
-        item.quantity = item.quantity_in_room + item.quantity_in_warehouse
-
-        product_id = get_product_id_by_sku(
-            db, inventory_data.company_id, item.product_sku
-        )
-        validate_product_assigned_to_pos(
-            db, inventory_data.company_id, pos_id, product_id
-        )
-
-    return await create_bulk_items_from_skus(
-        db = db,
-        attendance_id = attendance_id,
-        company_id = inventory_data.company_id,
-        items_list = inventory_data.items,
+        payload = inventory_data,
         model_class = ImpulseInventoryEnd,
         extra_fields = {  # iter5
             'client_company_id': inventory_data.client_company_id
         }
     )
+
+
+@handle_service_errors('TRADE')
+async def list_impulse_inventory_service(
+    db: Session,
+    query: ImpulseInventoryListQuerySchema
+) -> Tuple[List[Any], int]:
+    '''
+        Binaria, 2026-07-07: paginated listing of impulse inventory records.
+
+        `inventory_type` picks the START or END table. company_id / pos_id /
+        user_id are resolved through the visit attendance (same filter shape
+        as GET /v1/impulses/sales); client_company_id and the created_at range
+        filter the inventory row itself.
+    '''
+    message = (
+        f'Listing impulse inventory ({query.inventory_type}) with filters '
+        f'{query.model_dump(exclude_none = True)}'
+    )
+    logger.info(message)
+
+    model = (
+        ImpulseInventoryStart if query.inventory_type == 'START'
+        else ImpulseInventoryEnd
+    )
+    base_query = db.query(model).join(
+        Attendance, model.attendance_id == Attendance.id
+    )
+    base_query = filter_query_by_attendance(base_query, query)
+    if query.client_company_id is not None:
+        base_query = base_query.filter(model.client_company_id == query.client_company_id)
+    if query.date_from is not None:
+        base_query = base_query.filter(model.created_at >= query.date_from)
+    if query.date_to is not None:
+        base_query = base_query.filter(model.created_at <= query.date_to)
+
+    total = base_query.count()
+    items = (
+        base_query
+        .order_by(desc(model.created_at))
+        .offset(query.offset)
+        .limit(query.limit)
+        .all()
+    )
+    return items, total
 
 
 # --- LATEST INVENTORY FOR POS ---

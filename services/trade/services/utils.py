@@ -8,7 +8,7 @@ import decimal
 import asyncio
 import json
 import enum
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Type, Tuple
@@ -124,10 +124,17 @@ async def _perform_request(
 
 class CustomJSONEncoder(json.JSONEncoder):
     '''
-        JSON encoder to handle date and datetime objects, Pydantic models, and custom Enums.
+        JSON encoder to handle date, datetime and time objects, Pydantic
+        models, Decimals and custom Enums.
     '''
     def default(self, o):
         if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        # datetime.time (e.g. promo-point opening_time / closing_time) is not
+        # a subclass of date; it must be handled explicitly or json.dumps in
+        # the audit / usage-log path raises "Object of type time is not JSON
+        # serializable" and the endpoint 500s.
+        if isinstance(o, dt_time):
             return o.isoformat()
         if isinstance(o, BaseModel):
             return o.model_dump()

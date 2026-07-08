@@ -1,4 +1,4 @@
--- Active: 1753321721448@@api-binaria-mysql-db.cgbqmuawkgko.us-east-1.rds.amazonaws.com@3306@binaria
+-- Active: 1753321721448@@localhost@3309@binaria
 -- ============================================================================
 -- Binaria iter 6 (2026-06-22) — Bandeo en ejecucion (req 7.3.4.1)
 --

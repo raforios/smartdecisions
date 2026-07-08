@@ -204,6 +204,40 @@ class ImpulseInventoryListResponseSchema(BaseSchema):
     total: int
 
 
+class ImpulseInventoryListQuerySchema(BaseSchema):
+    '''
+        Binaria, 2026-07-07: filters for GET /v1/impulses/inventory.
+
+        `inventory_type` selects the START (initial) or END (closing) table;
+        company_id / pos_id / user_id are resolved through the visit
+        attendance, client_company_id and the date range filter the row.
+    '''
+    inventory_type: Literal['START', 'END'] = Field(
+        ...,
+        description = 'Which inventory to list: START (initial) or END (closing).'
+    )
+    company_id: Optional[int] = Field(
+        None, description = 'Operator company filter (via attendance).'
+    )
+    client_company_id: Optional[int] = Field(
+        None, description = 'Brand / client filter.'
+    )
+    pos_id: Optional[int] = Field(
+        None, description = 'POS filter (via attendance).'
+    )
+    user_id: Optional[int] = Field(
+        None, description = 'Operator filter (via attendance).'
+    )
+    date_from: Optional[datetime] = Field(
+        None, description = 'created_at >= this datetime.'
+    )
+    date_to: Optional[datetime] = Field(
+        None, description = 'created_at <= this datetime.'
+    )
+    limit: int = Field(100, ge = 1, le = 1000)
+    offset: int = Field(0, ge = 0)
+
+
 class LatestInventoryItemSchema(BaseSchema):
     '''
         Single line of the latest-inventory response.

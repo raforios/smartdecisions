@@ -186,13 +186,12 @@ class AttendanceProductMixin: # pylint: disable=too-few-public-methods
         and a product (product_id).
     '''
 
-    @declared_attr
-    # pylint: disable=no-self-argument
-    def attendance_id(cls) -> Mapped[int]:
-        '''
-            Foreign Key column for LOCALIZATION.t_attendances (The Visit ID)
-        '''
-        return mapped_column(Integer, nullable = False, index = True)
+    # Plain Column (no FK): defined directly instead of via @declared_attr so
+    # static analysis sees it as a Column — which exposes .in_() — rather than
+    # a method. As a declared_attr, pylint flagged `attendance_id.in_(...)` at
+    # every query site with E1101 (no-member). Behaviour is identical: a plain
+    # non-FK column is copied to each subclass by SQLAlchemy's mixin handling.
+    attendance_id = Column(Integer, nullable = False, index = True)
 
     @declared_attr
     # pylint: disable=no-self-argument

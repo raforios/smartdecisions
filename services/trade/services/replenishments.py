@@ -15,10 +15,10 @@
 '''
 from typing import List, Tuple
 from datetime import datetime
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from services.products import (
     get_product_id_by_sku,
-    create_bulk_items_from_skus,
     validate_product_assigned_to_pos
 )
 from services.logger_config import custom_logger as logger
@@ -34,10 +34,15 @@ from models.replenishments import (
     ComplementaryBandeoDetail,
     ComplementaryCompetition,
     ComplementaryPromoPoint,
+    ReplenishmentInventory,                   # Binaria 2026-07-08
     ReplenishmentReception,
     ReplenishmentReport,
+    ReplenishmentReportDetail,
 )
+from models.trade import Attendance
 from schemas.replenishments import (
+    ReplenishmentInventoryCreateSchema,       # Binaria 2026-07-08
+    ReplenishmentInventoryQuerySchema,        # Binaria 2026-07-08
     ReplenishmentReceptionCreateSchema,
     ReplenishmentReceptionQuerySchema,
     ReplenishmentReportCreateSchema,
@@ -45,9 +50,15 @@ from schemas.replenishments import (
     ComplementaryBandeoReceiveSchema,    # iter6
     ComplementaryBandeoReturnSchema,     # iter6
     ComplementaryCompetitionCreateSchema,
-    ComplementaryPromoPointCreateSchema
+    ComplementaryCompetitionQuerySchema,      # Binaria 2026-07-07
+    ComplementaryPromoPointCreateSchema,
+    ComplementaryPromoPointQuerySchema,       # Binaria 2026-07-07
 )
-from .trade_utils import validate_active_attendance
+from .trade_utils import (
+    create_visit_items,
+    filter_query_by_attendance,
+    validate_active_attendance,
+)
 
 # --- B.2. REPLENISHMENT ACTIVITIES SERVICES ---
 
@@ -82,6 +93,24 @@ async def create_replenishment_report_service(
         reviewed = report_data.reviewed  # iter5
     )
     db.add(db_report)
+    db.flush()  # obtain db_report.id before attaching the product detail
+
+    # Binaria, 2026-07-07: per-product replaced yes/no detail. Each SKU is
+    # resolved to its product_id and validated against the POS assortment,
+    # mirroring the reception flow.
+    for item in report_data.details:
+        product_id = get_product_id_by_sku(db, report_data.company_id, item.product_sku)
+        validate_product_assigned_to_pos(
+            db, report_data.company_id, report_data.pos_id, product_id
+        )
+        db.add(ReplenishmentReportDetail(
+            report_id = db_report.id,
+            product_id = product_id,
+            replaced = item.replaced,
+            quantity = item.quantity,
+            comments = item.comments,
+        ))
+
     db.commit()
     db.refresh(db_report)
 
@@ -119,8 +148,15 @@ async def list_replenishment_reports_service(
         base_query = base_query.filter(ReplenishmentReport.created_at >= query.date_from)
     if query.date_to is not None:
         base_query = base_query.filter(ReplenishmentReport.created_at <= query.date_to)
-    # `pos_id` is not a column on the report itself; honored only via
-    # attendance_id lookups in the controller layer if/when needed.
+    # Binaria, 2026-07-07: pos_id / user_id live on the visit attendance.
+    if query.pos_id is not None or query.user_id is not None:
+        base_query = base_query.join(
+            Attendance, ReplenishmentReport.attendance_id == Attendance.id
+        )
+        if query.pos_id is not None:
+            base_query = base_query.filter(Attendance.point_of_sale_id == query.pos_id)
+        if query.user_id is not None:
+            base_query = base_query.filter(Attendance.user_id == query.user_id)
 
     total = base_query.count()
     items = (
@@ -154,27 +190,10 @@ async def create_replenishment_reception_service(
     message = f'Creating Replenishment Reception for attendance ID: {attendance_id}'
     logger.info(message)
 
-    validate_active_attendance(
+    return await create_visit_items(
         db = db,
         attendance_id = attendance_id,
-        company_id = reception_data.company_id,
-        pos_id = reception_data.pos_id
-    )
-
-    pos_id = reception_data.pos_id
-    for item in reception_data.items:
-        product_id = get_product_id_by_sku(
-            db, reception_data.company_id, item.product_sku
-        )
-        validate_product_assigned_to_pos(
-            db, reception_data.company_id, pos_id, product_id
-        )
-
-    return await create_bulk_items_from_skus(
-        db = db,
-        attendance_id = attendance_id,
-        company_id = reception_data.company_id,
-        items_list = reception_data.items,
+        payload = reception_data,
         model_class = ReplenishmentReception,
         extra_fields = {  # iter5
             'client_company_id': reception_data.client_company_id
@@ -219,6 +238,98 @@ async def list_replenishment_reception_service(
             .offset(query.offset)
             .limit(query.limit)
             .all()
+    )
+    return items, total
+
+# --- Replenishment Inventory services (Binaria, 2026-07-08, line-free) ---
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'ReplenishmentInventory', 'CREATE')
+async def create_replenishment_inventory_service(
+    db: Session,
+    attendance_id: int,
+    inventory_data: ReplenishmentInventoryCreateSchema
+) -> List[ReplenishmentInventory]:
+    '''
+        Registers a line-free replenishment inventory for a visit. The same
+        product may appear on several lines (different batch / expiration /
+        location); no uniqueness is enforced.
+    '''
+    message = f'Creating Replenishment Inventory for attendance ID: {attendance_id}'
+    logger.info(message)
+
+    return await create_visit_items(
+        db = db,
+        attendance_id = attendance_id,
+        payload = inventory_data,
+        model_class = ReplenishmentInventory,
+        extra_fields = {'client_company_id': inventory_data.client_company_id}
+    )
+
+@handle_service_errors('TRADE')
+async def get_latest_replenishment_inventory_service(
+    db: Session,
+    pos_id: int
+) -> Tuple[List[ReplenishmentInventory], int]:
+    '''
+        Returns every line of the most recent replenishment inventory count
+        registered at a POS (product + batch + expiration detail).
+    '''
+    latest = (
+        db.query(ReplenishmentInventory)
+        .join(Attendance, ReplenishmentInventory.attendance_id == Attendance.id)
+        .filter(Attendance.point_of_sale_id == pos_id)
+        .order_by(desc(ReplenishmentInventory.created_at))
+        .first()
+    )
+    if latest is None:
+        raise RegisterNotFoundError(
+            detail = f'No replenishment inventory registered for POS {pos_id}.'
+        )
+    items = (
+        db.query(ReplenishmentInventory)
+        .filter(ReplenishmentInventory.attendance_id == latest.attendance_id)
+        .order_by(ReplenishmentInventory.id.asc())
+        .all()
+    )
+    return items, len(items)
+
+@handle_service_errors('TRADE')
+async def list_replenishment_inventory_service(
+    db: Session,
+    query: ReplenishmentInventoryQuerySchema
+) -> Tuple[List[ReplenishmentInventory], int]:
+    '''
+        Paginated listing of replenishment inventory lines. company_id /
+        pos_id / user_id are resolved through the visit attendance; the batch /
+        expiration detail comes on every line.
+    '''
+    message = (
+        f'Listing replenishment inventory with filters '
+        f'{query.model_dump(exclude_none = True)}'
+    )
+    logger.info(message)
+
+    base_query = db.query(ReplenishmentInventory).join(
+        Attendance, ReplenishmentInventory.attendance_id == Attendance.id
+    )
+    base_query = filter_query_by_attendance(base_query, query)
+    if query.client_company_id is not None:
+        base_query = base_query.filter(
+            ReplenishmentInventory.client_company_id == query.client_company_id
+        )
+    if query.date_from is not None:
+        base_query = base_query.filter(ReplenishmentInventory.created_at >= query.date_from)
+    if query.date_to is not None:
+        base_query = base_query.filter(ReplenishmentInventory.created_at <= query.date_to)
+
+    total = base_query.count()
+    items = (
+        base_query
+        .order_by(desc(ReplenishmentInventory.created_at))
+        .offset(query.offset)
+        .limit(query.limit)
+        .all()
     )
     return items, total
 
@@ -458,6 +569,48 @@ async def create_complementary_promo_point_service(
     return db_report
 
 @handle_service_errors('TRADE')
+async def list_complementary_promo_points_service(
+    db: Session,
+    query: ComplementaryPromoPointQuerySchema
+) -> Tuple[List[ComplementaryPromoPoint], int]:
+    '''
+        Binaria, 2026-07-07: paginated listing of promotional-point reports.
+        pos_id / user_id are resolved through the visit attendance.
+    '''
+    message = f'Listing promo points with filters {query.model_dump(exclude_none=True)}'
+    logger.info(message)
+
+    base_query = db.query(ComplementaryPromoPoint)
+    if query.company_id is not None:
+        base_query = base_query.filter(ComplementaryPromoPoint.company_id == query.company_id)
+    if query.client_company_id is not None:
+        base_query = base_query.filter(
+            ComplementaryPromoPoint.client_company_id == query.client_company_id
+        )
+    if query.date_from is not None:
+        base_query = base_query.filter(ComplementaryPromoPoint.created_at >= query.date_from)
+    if query.date_to is not None:
+        base_query = base_query.filter(ComplementaryPromoPoint.created_at <= query.date_to)
+    if query.pos_id is not None or query.user_id is not None:
+        base_query = base_query.join(
+            Attendance, ComplementaryPromoPoint.attendance_id == Attendance.id
+        )
+        if query.pos_id is not None:
+            base_query = base_query.filter(Attendance.point_of_sale_id == query.pos_id)
+        if query.user_id is not None:
+            base_query = base_query.filter(Attendance.user_id == query.user_id)
+
+    total = base_query.count()
+    items = (
+        base_query
+        .order_by(ComplementaryPromoPoint.created_at.desc())
+        .offset(query.offset)
+        .limit(query.limit)
+        .all()
+    )
+    return items, total
+
+@handle_service_errors('TRADE')
 @audit_event('TRADE', 'ComplementaryCompetition', 'CREATE')
 async def create_complementary_competition_service(
     db: Session,
@@ -501,3 +654,39 @@ async def create_complementary_competition_service(
     db.commit()
     db.refresh(db_report)
     return db_report
+
+@handle_service_errors('TRADE')
+async def list_complementary_competitions_service(
+    db: Session,
+    query: ComplementaryCompetitionQuerySchema
+) -> Tuple[List[ComplementaryCompetition], int]:
+    '''
+        Binaria, 2026-07-07: paginated listing of competition reports. These
+        are not tied to an attendance, so user_id is filtered directly.
+    '''
+    message = f'Listing competition reports with filters {query.model_dump(exclude_none=True)}'
+    logger.info(message)
+
+    base_query = db.query(ComplementaryCompetition)
+    if query.company_id is not None:
+        base_query = base_query.filter(ComplementaryCompetition.company_id == query.company_id)
+    if query.client_company_id is not None:
+        base_query = base_query.filter(
+            ComplementaryCompetition.client_company_id == query.client_company_id
+        )
+    if query.user_id is not None:
+        base_query = base_query.filter(ComplementaryCompetition.user_id == query.user_id)
+    if query.date_from is not None:
+        base_query = base_query.filter(ComplementaryCompetition.created_at >= query.date_from)
+    if query.date_to is not None:
+        base_query = base_query.filter(ComplementaryCompetition.created_at <= query.date_to)
+
+    total = base_query.count()
+    items = (
+        base_query
+        .order_by(ComplementaryCompetition.created_at.desc())
+        .offset(query.offset)
+        .limit(query.limit)
+        .all()
+    )
+    return items, total

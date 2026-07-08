@@ -1,4 +1,4 @@
--- Active: 1753321721448@@api-binaria-mysql-db.cgbqmuawkgko.us-east-1.rds.amazonaws.com@3306@binaria
+-- Active: 1753321721448@@localhost@3309@binaria
 -- ============================================================================
 -- Binaria iter 5 (2026-06-20) — Replenishment + Impulses unification
 --

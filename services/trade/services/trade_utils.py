@@ -2,11 +2,18 @@
     Utility functions for Trade Microservice.
 '''
 import math
-from sqlalchemy.orm import Session
+from typing import List, Type
+from pydantic import BaseModel
+from sqlalchemy.orm import Session, DeclarativeBase
 from models.pos import PointOfSale, PointOfSaleStatus
 from models.trade import Attendance, PlannedPoint
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
+from services.products import (
+    create_bulk_items_from_skus,
+    get_product_id_by_sku,
+    validate_product_assigned_to_pos,
+)
 
 # Geofencing Parameters
 EARTH_RADIUS_KM = 6371
@@ -94,3 +101,53 @@ def validate_active_attendance(
         raise InvalidInputError(detail = error_msg)
 
     return attendance
+
+
+async def create_visit_items(
+    db: Session,
+    attendance_id: int,
+    payload: BaseModel,
+    model_class: Type[DeclarativeBase],
+    extra_fields: dict = None
+) -> List[DeclarativeBase]:
+    '''
+        Shared visit-item creation flow used by the inventory / reception
+        create services: validates the active attendance, checks each item's
+        SKU is assigned to the POS and bulk-creates the rows.
+
+        `payload` must expose company_id, pos_id and items[*].product_sku.
+    '''
+    validate_active_attendance(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = payload.company_id,
+        pos_id = payload.pos_id
+    )
+    for item in payload.items:
+        product_id = get_product_id_by_sku(db, payload.company_id, item.product_sku)
+        validate_product_assigned_to_pos(
+            db, payload.company_id, payload.pos_id, product_id
+        )
+    return await create_bulk_items_from_skus(
+        db = db,
+        attendance_id = attendance_id,
+        company_id = payload.company_id,
+        items_list = payload.items,
+        model_class = model_class,
+        extra_fields = extra_fields
+    )
+
+
+def filter_query_by_attendance(query, filters):
+    '''
+        Applies the company_id / pos_id / user_id filters that live on the
+        visit Attendance to a query already joined to Attendance. Shared by the
+        impulse and replenishment inventory listings.
+    '''
+    if filters.company_id is not None:
+        query = query.filter(Attendance.company_id == filters.company_id)
+    if filters.pos_id is not None:
+        query = query.filter(Attendance.point_of_sale_id == filters.pos_id)
+    if filters.user_id is not None:
+        query = query.filter(Attendance.user_id == filters.user_id)
+    return query

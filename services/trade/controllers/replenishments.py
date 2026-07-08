@@ -7,10 +7,15 @@ from services.utils import handle_service_errors
 from services.replenishments import (
     create_complementary_competition_service,
     create_complementary_promo_point_service,
+    create_replenishment_inventory_service,    # Binaria 2026-07-08
     create_replenishment_reception_service,
     create_replenishment_report_service,
     get_complementary_bandeo_by_id_service,    # iter6
+    get_latest_replenishment_inventory_service,  # Binaria 2026-07-08
     list_complementary_bandeos_for_visit_service,  # iter6
+    list_complementary_competitions_service,   # Binaria 2026-07-07
+    list_complementary_promo_points_service,   # Binaria 2026-07-07
+    list_replenishment_inventory_service,      # Binaria 2026-07-08
     list_replenishment_reception_service,   # iter5
     list_replenishment_reports_service,     # iter5
     receive_complementary_bandeo_service,   # iter6
@@ -22,9 +27,16 @@ from schemas.replenishments import (
     ComplementaryBandeoResponseSchema,
     ComplementaryBandeoReturnSchema,          # iter6
     ComplementaryCompetitionCreateSchema,
+    ComplementaryCompetitionListResponseSchema,   # Binaria 2026-07-07
+    ComplementaryCompetitionQuerySchema,          # Binaria 2026-07-07
     ComplementaryCompetitionResponseSchema,
     ComplementaryPromoPointCreateSchema,
+    ComplementaryPromoPointListResponseSchema,    # Binaria 2026-07-07
+    ComplementaryPromoPointQuerySchema,           # Binaria 2026-07-07
     ComplementaryPromoPointResponseSchema,
+    ReplenishmentInventoryCreateSchema,           # Binaria 2026-07-08
+    ReplenishmentInventoryListResponseSchema,     # Binaria 2026-07-08
+    ReplenishmentInventoryQuerySchema,            # Binaria 2026-07-08
     ReplenishmentReceptionCreateSchema,
     ReplenishmentReceptionListResponseSchema,
     ReplenishmentReceptionQuerySchema,        # iter5
@@ -251,3 +263,98 @@ async def create_complementary_competition_controller(
     return ComplementaryCompetitionResponseSchema.model_validate(
         db_report, from_attributes = True
     )
+
+
+@handle_service_errors('TRADE')
+async def list_complementary_promo_points_controller(
+    query: ComplementaryPromoPointQuerySchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ComplementaryPromoPointListResponseSchema:
+    '''
+        Binaria, 2026-07-07: paginated listing of promotional-point reports.
+    '''
+    items, total = await list_complementary_promo_points_service(
+        db = db, query = query
+    )
+    return ComplementaryPromoPointListResponseSchema(
+        items = [
+            ComplementaryPromoPointResponseSchema.model_validate(item, from_attributes = True)
+            for item in items
+        ],
+        total = total
+    )
+
+
+@handle_service_errors('TRADE')
+async def list_complementary_competitions_controller(
+    query: ComplementaryCompetitionQuerySchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ComplementaryCompetitionListResponseSchema:
+    '''
+        Binaria, 2026-07-07: paginated listing of competition reports.
+    '''
+    items, total = await list_complementary_competitions_service(
+        db = db, query = query
+    )
+    return ComplementaryCompetitionListResponseSchema(
+        items = [
+            ComplementaryCompetitionResponseSchema.model_validate(item, from_attributes = True)
+            for item in items
+        ],
+        total = total
+    )
+
+
+@handle_service_errors('TRADE')
+async def create_replenishment_inventory_controller(
+    attendance_id: int,
+    inventory_data: ReplenishmentInventoryCreateSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ReplenishmentInventoryListResponseSchema:
+    '''
+        Binaria, 2026-07-08: registers a line-free replenishment inventory.
+    '''
+    created = await create_replenishment_inventory_service(
+        db = db, attendance_id = attendance_id, inventory_data = inventory_data
+    )
+    return ReplenishmentInventoryListResponseSchema(
+        items = created, total = len(created)
+    )
+
+
+@handle_service_errors('TRADE')
+async def get_latest_replenishment_inventory_controller(
+    pos_id: int,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ReplenishmentInventoryListResponseSchema:
+    '''
+        Binaria, 2026-07-08: latest replenishment inventory registered at a POS.
+    '''
+    items, total = await get_latest_replenishment_inventory_service(
+        db = db, pos_id = pos_id
+    )
+    return ReplenishmentInventoryListResponseSchema(items = items, total = total)
+
+
+@handle_service_errors('TRADE')
+async def list_replenishment_inventory_controller(
+    query: ReplenishmentInventoryQuerySchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ReplenishmentInventoryListResponseSchema:
+    '''
+        Binaria, 2026-07-08: paginated listing of replenishment inventory lines.
+    '''
+    items, total = await list_replenishment_inventory_service(
+        db = db, query = query
+    )
+    return ReplenishmentInventoryListResponseSchema(items = items, total = total)

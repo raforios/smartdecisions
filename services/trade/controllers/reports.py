@@ -12,6 +12,8 @@ from services.reports import (
     get_photographic_report_service,
     get_sales_report_service,
     get_attendance_report_service,
+)
+from services.panel_reports import (
     get_impulses_panel_service,
     get_replenishments_panel_service,
     get_route_tracking_service,

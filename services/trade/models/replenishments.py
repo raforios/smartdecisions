@@ -51,6 +51,14 @@ class ReplenishmentReport(Base):  # pylint: disable=too-few-public-methods
     # Audit field (Created only)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
+    # Per-product detail (Binaria, 2026-07-07): each product carries its own
+    # replaced yes/no flag plus optional quantity and comment.
+    details = relationship(
+        'ReplenishmentReportDetail',
+        back_populates = 'report',
+        cascade = 'all, delete-orphan'
+    )
+
     # Relationship to Photos (Polymorphic)
     photos = relationship(
         'Photo',
@@ -58,6 +66,43 @@ class ReplenishmentReport(Base):  # pylint: disable=too-few-public-methods
                     "Photo.entity_type=='REPLENISHMENT_REPORT')",
         uselist = True,
         viewonly = True
+    )
+
+
+class ReplenishmentReportDetail(Base):  # pylint: disable=too-few-public-methods
+    '''
+        Per-product line of a Replenishment Report (Binaria, 2026-07-07).
+
+        Marks whether each product was replaced (repuesto sí/no) and keeps the
+        optional replaced quantity and a per-product comment.
+    '''
+    __tablename__ = 't_trade_replenishment_report_details'
+
+    id = Column(Integer, primary_key = True, index = True)
+
+    report_id = Column(
+        Integer, ForeignKey('t_trade_replenishment_reports.id', ondelete = 'CASCADE'),
+        nullable = False, index = True
+    )
+    report = relationship('ReplenishmentReport', back_populates = 'details')
+
+    product_id = Column(
+        Integer, ForeignKey('t_products.id', ondelete = 'RESTRICT'),
+        nullable = False, index = True
+    )
+    product = relationship('Product')
+
+    # Whether this product was replaced during the visit.
+    replaced = Column(Boolean, nullable = False, default = False)
+    # Optional quantity replaced and free-text comment per product.
+    quantity = Column(Integer, nullable = True)
+    comments = Column(Text, nullable = True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            'report_id', 'product_id',
+            name = 'uc_replenishment_report_product'
+        ),
     )
 
 # iter5 (Binaria, 2026-06-20): ReplenishmentInventory was removed.
@@ -92,6 +137,33 @@ class ReplenishmentReception(Base, AttendanceProductMixin):  # pylint: disable=t
     comments = Column(Text, nullable = True)
 
     # Audit field (Created only)
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+
+class ReplenishmentInventory(Base, AttendanceProductMixin):  # pylint: disable=too-few-public-methods
+    '''
+        Line-free replenishment inventory (Binaria, 2026-07-08).
+
+        Unlike the unified Impulses inventory (one row per attendance / product
+        / batch with a sala + almacén column split), a replenishment count can
+        register several independent lines for the SAME product, each with its
+        own quantity, batch, expiration date and location. This lets the
+        operator report short-dated stock line by line. No unique constraint is
+        enforced, so product_id is not a key.
+    '''
+    __tablename__ = 't_trade_replenishment_inventory'
+
+    id = Column(Integer, primary_key = True, index = True)
+
+    # Brand / client owner (same convention as the impulse inventory tables).
+    client_company_id = Column(Integer, nullable = True, index = True)
+
+    quantity = Column(Integer, nullable = False, default = 0)
+    batch_number = Column(String(50), nullable = True, index = True)
+    expiration_date = Column(DateTime, nullable = True)
+    # Physical location of this line: 'SALA' (sales floor) or 'ALMACEN'.
+    location = Column(String(20), nullable = False)
+
+    observations = Column(Text, nullable = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
 # --- B.3. COMPLEMENTARY ACTIVITIES MODELS ---
@@ -246,6 +318,8 @@ class ComplementaryCompetition(Base):  # pylint: disable=too-few-public-methods
     # Linked to the user and company
     user_id = Column(Integer, nullable = False, index = True)
     company_id = Column(Integer, nullable = False, index = True)
+    # Binaria, 2026-07-07: brand / client the report belongs to (for filtering).
+    client_company_id = Column(Integer, nullable = True, index = True)
 
     # Optionally linked to a POS if the report is specific to one
     point_of_sale_id = Column(
