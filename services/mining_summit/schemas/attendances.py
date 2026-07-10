@@ -2,10 +2,12 @@
     Attendance Schemas (Request / Response / Query) for the Mining Summit service.
 '''
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from schemas.common import OptionalContactSchema
 
 
-class AttendanceCreateSchema(BaseModel):
+class AttendanceCreateSchema(OptionalContactSchema):
     '''
         Pydantic schema for registering a daily attendance.
 
@@ -15,12 +17,6 @@ class AttendanceCreateSchema(BaseModel):
     ci: str = Field(..., min_length = 4, max_length = 20)
     first_name: Optional[str] = Field(None, min_length = 1, max_length = 80)
     last_name: Optional[str] = Field(None, min_length = 1, max_length = 80)
-    email: Optional[EmailStr] = Field(None, max_length = 120)
-    phone: Optional[str] = Field(None, max_length = 30)
-    department: Optional[str] = Field(None, max_length = 60)
-    company: Optional[str] = Field(None, max_length = 120)
-
-    model_config = ConfigDict(extra = 'ignore')
 
 
 class AttendanceResponseSchema(BaseModel):

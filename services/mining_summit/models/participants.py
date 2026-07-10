@@ -18,5 +18,12 @@ class Participant(TypedDict, total = False):
     phone: Optional[str]
     department: Optional[str]
     company: Optional[str]
+    institution_id: Optional[str]
+    institution_name: Optional[str]
+    role: Optional[str]
+    assignment_type: Optional[str]
+    axis: Optional[str]
+    axis_label: Optional[str]
+    mesa_code: Optional[str]
     registered_date: str
     registered_at: str

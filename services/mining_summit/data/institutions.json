@@ -1,0 +1,578 @@
+[
+  {
+    "id": "asociacion-nacional-de-mineros-medianos-anmm",
+    "number": 1,
+    "name": "Asociación Nacional de Mineros Medianos (ANMM)",
+    "abbreviation": "ANMM",
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 25
+  },
+  {
+    "id": "asociacion-de-proveedores-mineros-y-empresas-vinculadas-apromev",
+    "number": 2,
+    "name": "Asociación de Proveedores Mineros y Empresas Vinculadas (APROMEV)",
+    "abbreviation": "APROMEV",
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 10
+  },
+  {
+    "id": "comite-impulsor-de-actores-mineros-privados-de-bolivia",
+    "number": 3,
+    "name": "Comité Impulsor de Actores Mineros Privados de Bolivia",
+    "abbreviation": null,
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 15
+  },
+  {
+    "id": "camara-nacional-de-mineria-canalmin",
+    "number": 4,
+    "name": "Cámara Nacional de Minería (CANALMIN)",
+    "abbreviation": "CANALMIN",
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 30
+  },
+  {
+    "id": "empresa-minera-alchemy-s-r-l",
+    "number": 5,
+    "name": "Empresa Minera ALCHEMY S.R.L.",
+    "abbreviation": null,
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 5
+  },
+  {
+    "id": "federacion-nacional-de-cooperativas-mineras-de-bolivia-fencomin",
+    "number": 6,
+    "name": "Federación Nacional de Cooperativas Mineras de Bolivia (FENCOMIN)",
+    "abbreviation": "FENCOMIN",
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 150
+  },
+  {
+    "id": "federacion-regional-de-cooperativas-mineras-auriferas-ferreco",
+    "number": 7,
+    "name": "Federación Regional de Cooperativas Mineras Auríferas (FERRECO)",
+    "abbreviation": "FERRECO",
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 75
+  },
+  {
+    "id": "federacion-sindical-de-trabajadores-mineros-de-bolivia-fstmm",
+    "number": 8,
+    "name": "Federación Sindical de Trabajadores Mineros de Bolivia (FSTMM)",
+    "abbreviation": "FSTMM",
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 95
+  },
+  {
+    "id": "federacion-de-cooperativas-mineras-auriferas-del-norte-de-la-paz-fecoman",
+    "number": 9,
+    "name": "Federación de Cooperativas Mineras Auríferas del Norte de La Paz (FECOMAN)",
+    "abbreviation": "FECOMAN",
+    "category": "ACTORES PRODUCTIVOS MINEROS",
+    "cupos": 75
+  },
+  {
+    "id": "banco-interamericano-de-desarrollo-bid",
+    "number": 10,
+    "name": "Banco Interamericano de Desarrollo (BID)",
+    "abbreviation": "BID",
+    "category": "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "cupos": 2
+  },
+  {
+    "id": "banco-mundial-bm",
+    "number": 11,
+    "name": "Banco Mundial (BM)",
+    "abbreviation": "BM",
+    "category": "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "cupos": 2
+  },
+  {
+    "id": "commercial-law-development-program-cldp",
+    "number": 12,
+    "name": "Commercial Law Development Program (CLDP)",
+    "abbreviation": "CLDP",
+    "category": "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "cupos": 5
+  },
+  {
+    "id": "cumbre-del-sajama",
+    "number": 13,
+    "name": "Cumbre del Sajama",
+    "abbreviation": null,
+    "category": "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "cupos": 3
+  },
+  {
+    "id": "organizacion-de-las-naciones-unidas-para-el-desarrollo-industrial-onudi",
+    "number": 14,
+    "name": "Organización de las Naciones Unidas para el Desarrollo Industrial (ONUDI)",
+    "abbreviation": "ONUDI",
+    "category": "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "cupos": 12
+  },
+  {
+    "id": "planet-gold",
+    "number": 15,
+    "name": "Planet Gold",
+    "abbreviation": null,
+    "category": "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "cupos": 3
+  },
+  {
+    "id": "programa-de-las-naciones-unidas-para-el-desarrollo-pnud",
+    "number": 16,
+    "name": "Programa de las Naciones Unidas para el Desarrollo (PNUD)",
+    "abbreviation": "PNUD",
+    "category": "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "cupos": 4
+  },
+  {
+    "id": "camara-nacional-de-industrias-cni",
+    "number": 17,
+    "name": "Cámara Nacional de Industrias (CNI)",
+    "abbreviation": "CNI",
+    "category": "CÁMARAS INDUSTRIALES Y EMPRESARIALES",
+    "cupos": 3
+  },
+  {
+    "id": "camara-de-exportadores-de-bolivia-caneb",
+    "number": 18,
+    "name": "Cámara de Exportadores de Bolivia (CANEB)",
+    "abbreviation": "CANEB",
+    "category": "CÁMARAS INDUSTRIALES Y EMPRESARIALES",
+    "cupos": 3
+  },
+  {
+    "id": "camara-nacional-de-comercio-cnc",
+    "number": 19,
+    "name": "Cámara Nacional de Comercio (CNC)",
+    "abbreviation": "CNC",
+    "category": "CÁMARAS INDUSTRIALES Y EMPRESARIALES",
+    "cupos": 3
+  },
+  {
+    "id": "gobernacion-de-beni",
+    "number": 20,
+    "name": "Gobernación de Beni",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-chuquisaca",
+    "number": 21,
+    "name": "Gobernación de Chuquisaca",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-cochabamba",
+    "number": 22,
+    "name": "Gobernación de Cochabamba",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-la-paz",
+    "number": 23,
+    "name": "Gobernación de La Paz",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-oruro",
+    "number": 24,
+    "name": "Gobernación de Oruro",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-pando",
+    "number": 25,
+    "name": "Gobernación de Pando",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-potosi",
+    "number": 26,
+    "name": "Gobernación de Potosí",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-santa-cruz",
+    "number": 27,
+    "name": "Gobernación de Santa Cruz",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "gobernacion-de-tarija",
+    "number": 28,
+    "name": "Gobernación de Tarija",
+    "abbreviation": null,
+    "category": "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "cupos": 2
+  },
+  {
+    "id": "federacion-de-empresarios-privados-de-oruro-fepo",
+    "number": 29,
+    "name": "Federación de Empresarios Privados de Oruro (FEPO)",
+    "abbreviation": "FEPO",
+    "category": "INSTITUCIONES AFINES Y REGIONALES",
+    "cupos": 6
+  },
+  {
+    "id": "parque-industrial-guajara",
+    "number": 30,
+    "name": "Parque Industrial Guajara",
+    "abbreviation": null,
+    "category": "INSTITUCIONES AFINES Y REGIONALES",
+    "cupos": 5
+  },
+  {
+    "id": "parque-industrial-vinto",
+    "number": 31,
+    "name": "Parque Industrial Vinto",
+    "abbreviation": null,
+    "category": "INSTITUCIONES AFINES Y REGIONALES",
+    "cupos": 5
+  },
+  {
+    "id": "red-nacional-mujeres-y-mineria",
+    "number": 32,
+    "name": "Red Nacional Mujeres y Minería",
+    "abbreviation": null,
+    "category": "INSTITUCIONES AFINES Y REGIONALES",
+    "cupos": 2
+  },
+  {
+    "id": "afcoop",
+    "number": 33,
+    "name": "AFCOOP",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "agencia-nacional-de-hidrocarburos-anh",
+    "number": 34,
+    "name": "Agencia Nacional de Hidrocarburos (ANH)",
+    "abbreviation": "ANH",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "autoridad-jurisdiccional-administrativa-minera-ajam",
+    "number": 35,
+    "name": "Autoridad Jurisdiccional Administrativa Minera (AJAM)",
+    "abbreviation": "AJAM",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 15
+  },
+  {
+    "id": "cofadena",
+    "number": 36,
+    "name": "COFADENA",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "corporacion-minera-de-bolivia-comibol",
+    "number": 37,
+    "name": "Corporación Minera de Bolivia (COMIBOL)",
+    "abbreviation": "COMIBOL",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 15
+  },
+  {
+    "id": "empresa-metalurgica-karachipampa-emk",
+    "number": 38,
+    "name": "Empresa Metalúrgica Karachipampa (EMK)",
+    "abbreviation": "EMK",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "empresa-metalurgica-vinto-emv",
+    "number": 39,
+    "name": "Empresa Metalúrgica Vinto (EMV)",
+    "abbreviation": "EMV",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "empresa-minera-colquiri-emc",
+    "number": 40,
+    "name": "Empresa Minera Colquiri (EMC)",
+    "abbreviation": "EMC",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "empresa-minera-corocoro-emcc",
+    "number": 41,
+    "name": "Empresa Minera Corocoro (EMCC)",
+    "abbreviation": "EMCC",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "empresa-minera-huanuni-emh",
+    "number": 42,
+    "name": "Empresa Minera Huanuni (EMH)",
+    "abbreviation": "EMH",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "empresa-publica-productiva-de-recursos-evaporiticos-epcoro",
+    "number": 43,
+    "name": "Empresa Pública Productiva de Recursos Evaporíticos (EPCORO)",
+    "abbreviation": "EPCORO",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "empresa-siderurgica-del-mutun-esm",
+    "number": 44,
+    "name": "Empresa Siderúrgica del Mutún (ESM)",
+    "abbreviation": "ESM",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "fondo-de-financiamiento-para-la-mineria-fofim",
+    "number": 45,
+    "name": "Fondo de Financiamiento para la Minería (FOFIM)",
+    "abbreviation": "FOFIM",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-defensa",
+    "number": 46,
+    "name": "Ministerio de Defensa",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-desarrollo-productivo-rural-y-agua",
+    "number": 47,
+    "name": "Ministerio de Desarrollo Productivo, Rural y Agua",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-economia-y-finanzas-publicas",
+    "number": 48,
+    "name": "Ministerio de Economía y Finanzas Públicas",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-educacion",
+    "number": 49,
+    "name": "Ministerio de Educación",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-gobierno",
+    "number": 50,
+    "name": "Ministerio de Gobierno",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-hidrocarburos-y-energias",
+    "number": 51,
+    "name": "Ministerio de Hidrocarburos y Energías",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-obras-publicas-servicios-y-vivienda",
+    "number": 52,
+    "name": "Ministerio de Obras Públicas, Servicios y Vivienda",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-planificacion-del-desarrollo-y-medio-ambiente",
+    "number": 53,
+    "name": "Ministerio de Planificación del Desarrollo y Medio Ambiente",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-relaciones-exteriores-cancilleria",
+    "number": 54,
+    "name": "Ministerio de Relaciones Exteriores (Cancillería)",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-salud-y-deportes",
+    "number": 55,
+    "name": "Ministerio de Salud y Deportes",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-trabajo-empleo-y-prevision-social",
+    "number": 56,
+    "name": "Ministerio de Trabajo, Empleo y Previsión Social",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-turismo-sostenible-culturas-folklore-y-gastronomia",
+    "number": 57,
+    "name": "Ministerio de Turismo Sostenible, Culturas, Folklore y Gastronomía",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "ministerio-de-la-presidencia",
+    "number": 58,
+    "name": "Ministerio de la Presidencia",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 2
+  },
+  {
+    "id": "presidencia-del-estado-plurinacional",
+    "number": 59,
+    "name": "Presidencia del Estado Plurinacional",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 10
+  },
+  {
+    "id": "servicio-geologico-minero-sergeomin",
+    "number": 60,
+    "name": "Servicio Geológico Minero (SERGEOMIN)",
+    "abbreviation": "SERGEOMIN",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 10
+  },
+  {
+    "id": "servicio-nacional-de-registro-y-control-de-la-comercializacion-de-minerales-y-metales-senarecom",
+    "number": 61,
+    "name": "Servicio Nacional de Registro y Control de la Comercialización de Minerales y Metales (SENARECOM)",
+    "abbreviation": "SENARECOM",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 10
+  },
+  {
+    "id": "servicio-nacional-de-areas-protegidas-sernap",
+    "number": 62,
+    "name": "Servicio Nacional de Áreas Protegidas (SERNAP)",
+    "abbreviation": "SERNAP",
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 3
+  },
+  {
+    "id": "viceministerio-de-medio-ambiente",
+    "number": 63,
+    "name": "Viceministerio de Medio Ambiente",
+    "abbreviation": null,
+    "category": "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "cupos": 3
+  },
+  {
+    "id": "camara-de-diputados",
+    "number": 64,
+    "name": "Cámara de Diputados",
+    "abbreviation": null,
+    "category": "ÓRGANO LEGISLATIVO",
+    "cupos": 10
+  },
+  {
+    "id": "camara-de-senadores",
+    "number": 65,
+    "name": "Cámara de Senadores",
+    "abbreviation": null,
+    "category": "ÓRGANO LEGISLATIVO",
+    "cupos": 10
+  },
+  {
+    "id": "ministerio-de-mineria-y-metalurgia-equipo-tecnico-y-legal",
+    "number": 66,
+    "name": "Ministerio de Minería y Metalurgia (Equipo Técnico y Legal)",
+    "abbreviation": null,
+    "category": "ORGANIZADOR / ENTE RECTOR",
+    "cupos": 40
+  },
+  {
+    "id": "comite-ejecutivo-de-la-universidad-boliviana-ceub",
+    "number": 67,
+    "name": "Comité Ejecutivo de la Universidad Boliviana (CEUB)",
+    "abbreviation": "CEUB",
+    "category": "SECTOR ACADÉMICO Y DE INVESTIGACIÓN",
+    "cupos": 2
+  },
+  {
+    "id": "universidad-autonoma-gabriel-rene-moreno-uagrm",
+    "number": 68,
+    "name": "Universidad Autónoma Gabriel René Moreno (UAGRM)",
+    "abbreviation": "UAGRM",
+    "category": "SECTOR ACADÉMICO Y DE INVESTIGACIÓN",
+    "cupos": 2
+  },
+  {
+    "id": "universidad-autonoma-tomas-frias-uatf-potosi",
+    "number": 69,
+    "name": "Universidad Autónoma Tomás Frías (UATF) - Potosí",
+    "abbreviation": null,
+    "category": "SECTOR ACADÉMICO Y DE INVESTIGACIÓN",
+    "cupos": 2
+  },
+  {
+    "id": "universidad-mayor-de-san-andres-umsa-ingenieria-geologica-metalurgica",
+    "number": 70,
+    "name": "Universidad Mayor de San Andrés (UMSA) - Ingeniería Geológica/Metalúrgica",
+    "abbreviation": null,
+    "category": "SECTOR ACADÉMICO Y DE INVESTIGACIÓN",
+    "cupos": 2
+  },
+  {
+    "id": "universidad-mayor-de-san-simon-umss",
+    "number": 71,
+    "name": "Universidad Mayor de San Simón (UMSS)",
+    "abbreviation": "UMSS",
+    "category": "SECTOR ACADÉMICO Y DE INVESTIGACIÓN",
+    "cupos": 2
+  },
+  {
+    "id": "universidad-tecnica-de-oruro-uto-facultad-nacional-de-ingenieria",
+    "number": 72,
+    "name": "Universidad Técnica de Oruro (UTO) - Facultad Nacional de Ingeniería",
+    "abbreviation": null,
+    "category": "SECTOR ACADÉMICO Y DE INVESTIGACIÓN",
+    "cupos": 2
+  }
+]

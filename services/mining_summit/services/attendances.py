@@ -1,7 +1,7 @@
 '''
     Business logic for the Attendances module of the Mining Summit service.
 '''
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from boto3.resources.base import ServiceResource
 
 from services.crud import (
@@ -11,6 +11,7 @@ from services.crud import (
 )
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError
+from services.filters import filter_items_by_date_range
 from services.logger_config import custom_logger as logger
 from services.participants import create_participant, find_participant_by_ci
 from services.utils import get_current_time_gmt, handle_service_errors
@@ -34,31 +35,6 @@ def _build_attendance_item(ci: str, marked_by: str) -> Dict[str, Any]:
         'attendance_at': now.isoformat(),
         'marked_by': marked_by
     }
-
-
-def _apply_date_range(
-    items: List[Dict[str, Any]],
-    date_from: Optional[str],
-    date_to: Optional[str]
-) -> List[Dict[str, Any]]:
-    '''
-        Filters attendances by an inclusive [date_from, date_to] range on
-        attendance_date. Date filters are applied client-side because the
-        generic CRUD primitive only pushes equality filters to DynamoDB.
-    '''
-    if not date_from and not date_to:
-        return items
-    filtered: List[Dict[str, Any]] = []
-    for item in items:
-        value = item.get('attendance_date')
-        if not value:
-            continue
-        if date_from and value < date_from:
-            continue
-        if date_to and value > date_to:
-            continue
-        filtered.append(item)
-    return filtered
 
 
 def _ensure_participant_exists(
@@ -178,8 +154,9 @@ def list_attendances(
         table_name = ATTENDANCES_TABLE,
         query_params = scan_params
     )
-    response['items'] = _apply_date_range(
+    response['items'] = filter_items_by_date_range(
         items = response['items'],
+        date_field = 'attendance_date',
         date_from = date_from,
         date_to = date_to
     )

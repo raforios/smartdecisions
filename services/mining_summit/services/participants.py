@@ -4,6 +4,7 @@
 from typing import Any, Dict, List, Optional
 from boto3.resources.base import ServiceResource
 
+from schemas.enums import AssignmentType
 from services.crud import (
     create_item,
     find_item_by_key,
@@ -11,7 +12,11 @@ from services.crud import (
     get_item_by_key
 )
 from services.environment import load_and_validate_env_vars
+from services.exceptions import InvalidInputError
+from services.filters import filter_items_by_date_range
+from services.institutions import get_institution
 from services.logger_config import custom_logger as logger
+from services.seating import select_seat
 from services.utils import get_current_time_gmt, handle_service_errors
 
 ENV_VARS = load_and_validate_env_vars({
@@ -21,13 +26,17 @@ ENV_VARS = load_and_validate_env_vars({
 PARTICIPANTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_PARTICIPANTS']
 
 
-def _build_participant_item(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _build_participant_item(
+    payload: Dict[str, Any],
+    seat: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     '''
         Builds the DynamoDB item shape for a new participant, stamping the
         registration date and timestamp using the configured target timezone.
+        Any resolved seat attributes (role, eje, mesa) are merged in.
     '''
     now = get_current_time_gmt()
-    return {
+    item = {
         'ci': payload['ci'].strip(),
         'first_name': payload['first_name'].strip(),
         'last_name': payload['last_name'].strip(),
@@ -38,33 +47,46 @@ def _build_participant_item(payload: Dict[str, Any]) -> Dict[str, Any]:
         'registered_date': now.date().isoformat(),
         'registered_at': now.isoformat()
     }
+    if seat:
+        item.update(seat)
+    return item
 
 
-def _apply_date_range(
-    items: List[Dict[str, Any]],
-    date_field: str,
-    date_from: Optional[str],
-    date_to: Optional[str]
-) -> List[Dict[str, Any]]:
+def _resolve_participant_seat(
+    dynamodb_resource: ServiceResource,
+    institution_id: Optional[str]
+) -> Dict[str, Any]:
     '''
-        Filters a list of items by an inclusive date range on the given field.
-        DynamoDB Scan does not natively express date-range filters in our
-        generic CRUD primitive, so the bound is applied client-side over the
-        already-paginated batch.
+        Resolves the role and seat assignment for a participant from their
+        reference institution. Fixed-seat (FIJO) roles are auto-distributed to
+        the least-occupied mesa; rotating roles are recorded without a seat.
+
+        Returns:
+            Dict[str, Any]: Attributes to persist (empty when no institution).
+
+        Raises:
+            InvalidInputError: If every fixed seat is already taken.
     '''
-    if not date_from and not date_to:
-        return items
-    filtered: List[Dict[str, Any]] = []
-    for item in items:
-        value = item.get(date_field)
-        if not value:
-            continue
-        if date_from and value < date_from:
-            continue
-        if date_to and value > date_to:
-            continue
-        filtered.append(item)
-    return filtered
+    if not institution_id:
+        return {}
+    institution = get_institution(institution_id)
+    seat: Dict[str, Any] = {
+        'institution_id': institution['id'],
+        'institution_name': institution['name'],
+        'role': institution['role'],
+        'assignment_type': institution['assignment_type']
+    }
+    if institution['assignment_type'] != AssignmentType.FIJO.value:
+        return seat
+    mesa = select_seat(compute_mesa_occupancy(dynamodb_resource))
+    if mesa is None:
+        raise InvalidInputError(detail = 'No fixed seats available; all mesas are full.')
+    seat.update({
+        'axis': mesa['axis'],
+        'axis_label': mesa['axis_label'],
+        'mesa_code': mesa['code']
+    })
+    return seat
 
 
 @handle_service_errors
@@ -73,7 +95,9 @@ def create_participant(
     payload: Dict[str, Any]
 ) -> Dict[str, Any]:
     '''
-        Persists a new participant ensuring the CI is unique.
+        Persists a new participant ensuring the CI is unique. When an
+        institution is provided, the role and a stable eje/mesa seat are
+        resolved and stored so the participant keeps them for the whole event.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
@@ -82,7 +106,8 @@ def create_participant(
         Returns:
             Dict[str, Any]: The persisted participant item.
     '''
-    item = _build_participant_item(payload)
+    seat = _resolve_participant_seat(dynamodb_resource, payload.get('institution_id'))
+    item = _build_participant_item(payload, seat)
     message = f'Creating participant ci={item["ci"]}'
     logger.info(message)
     return create_item(
@@ -141,7 +166,7 @@ def list_participants(
         table_name = PARTICIPANTS_TABLE,
         query_params = query_params
     )
-    response['items'] = _apply_date_range(
+    response['items'] = filter_items_by_date_range(
         items = response['items'],
         date_field = 'registered_date',
         date_from = date_from,
@@ -166,3 +191,20 @@ def scan_all_participants(
         response = table.scan(ExclusiveStartKey = response['LastEvaluatedKey'])
         items.extend(response.get('Items', []))
     return items
+
+
+@handle_service_errors
+def compute_mesa_occupancy(dynamodb_resource: ServiceResource) -> Dict[str, int]:
+    '''
+        Counts how many participants are currently seated at each mesa, so the
+        seating engine can pick the least-occupied one.
+
+        Returns:
+            Dict[str, int]: Seat count keyed by mesa code (only seated ones).
+    '''
+    occupancy: Dict[str, int] = {}
+    for participant in scan_all_participants(dynamodb_resource):
+        mesa_code = participant.get('mesa_code')
+        if mesa_code:
+            occupancy[mesa_code] = occupancy.get(mesa_code, 0) + 1
+    return occupancy
