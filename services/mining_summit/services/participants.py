@@ -69,7 +69,7 @@ def _resolve_participant_seat(
     '''
     if not institution_id:
         return {}
-    institution = get_institution(institution_id)
+    institution = get_institution(dynamodb_resource, institution_id)
     seat: Dict[str, Any] = {
         'institution_id': institution['id'],
         'institution_name': institution['name'],

@@ -1,40 +1,35 @@
 '''
-    Business logic for the Institutions reference catalog of the Mining Summit.
+    Business logic for the Institutions catalog of the Mining Summit.
 
-    The catalog is static reference data bundled as data/institutions.json. It is
-    served read-only; role and seat-assignment type are derived per entry from
-    the category so the rules stay single-sourced in summit_rules.
+    The catalog lives in the DynamoDB table `mining_summit_institutions` (seeded
+    from the official participation matrix by tools/mining_summit/
+    import_institutions.py). It is served read-only; the role and seat-assignment
+    type are derived per entry from the category so the rules stay single-sourced
+    in summit_rules.
 '''
-import json
-from functools import lru_cache
-from pathlib import Path
 from typing import Any, Dict, List, Optional
+from boto3.resources.base import ServiceResource
 
 from schemas.enums import InstitutionCategory
-from services.exceptions import RegisterNotFoundError
+from services.crud import get_all_records_paginated, get_item_by_key
+from services.environment import load_and_validate_env_vars
 from services.summit_rules import resolve_assignment_type, resolve_role
+from services.utils import handle_service_errors
 
-CATALOG_PATH = Path(__file__).resolve().parent.parent / 'data' / 'institutions.json'
+ENV_VARS = load_and_validate_env_vars({
+    'DYNAMODB_TABLE_NAME_INSTITUTIONS': str
+})
 
-
-@lru_cache(maxsize = 1)
-def _load_catalog() -> tuple[Dict[str, Any], ...]:
-    '''
-        Loads and caches the bundled institutions catalog from disk.
-
-        Returns:
-            tuple[Dict[str, Any], ...]: Immutable sequence of raw entries.
-    '''
-    raw = CATALOG_PATH.read_text(encoding = 'utf-8')
-    return tuple(json.loads(raw))
+INSTITUTIONS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INSTITUTIONS']
 
 
 def _enrich(institution: Dict[str, Any]) -> Dict[str, Any]:
     '''
-        Adds the derived role and seat-assignment type to a catalog entry.
+        Adds the derived role and seat-assignment type to a catalog entry and
+        normalizes DynamoDB numeric types (Decimal) to int.
 
         Args:
-            institution (Dict[str, Any]): Raw catalog entry.
+            institution (Dict[str, Any]): Raw catalog item from DynamoDB.
 
         Returns:
             Dict[str, Any]: Entry including 'role' and 'assignment_type'.
@@ -42,38 +37,54 @@ def _enrich(institution: Dict[str, Any]) -> Dict[str, Any]:
     role = resolve_role(InstitutionCategory(institution['category']))
     return {
         **institution,
+        'number': int(institution['number']),
+        'cupos': int(institution['cupos']),
         'role': role.value,
         'assignment_type': resolve_assignment_type(role).value
     }
 
 
+@handle_service_errors
 def list_institutions(
+    dynamodb_resource: ServiceResource,
     category: Optional[str] = None,
     role: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     '''
-        Returns the enriched catalog, optionally filtered by category and role.
+        Returns the enriched catalog, optionally filtered by category and role,
+        ordered by the original matrix number.
 
         Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
             category (Optional[str]): Category value to filter by.
             role (Optional[str]): Derived role value to filter by.
 
         Returns:
             List[Dict[str, Any]]: Matching enriched institutions.
     '''
-    items = [_enrich(item) for item in _load_catalog()]
+    response = get_all_records_paginated(
+        dynamodb_resource = dynamodb_resource,
+        table_name = INSTITUTIONS_TABLE,
+        query_params = {}
+    )
+    items = [_enrich(item) for item in response['items']]
     if category:
         items = [item for item in items if item['category'] == category]
     if role:
         items = [item for item in items if item['role'] == role]
-    return items
+    return sorted(items, key = lambda item: item['number'])
 
 
-def get_institution(institution_id: str) -> Dict[str, Any]:
+@handle_service_errors
+def get_institution(
+    dynamodb_resource: ServiceResource,
+    institution_id: str
+) -> Dict[str, Any]:
     '''
         Returns a single enriched institution by id.
 
         Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
             institution_id (str): The institution slug identifier.
 
         Returns:
@@ -82,7 +93,9 @@ def get_institution(institution_id: str) -> Dict[str, Any]:
         Raises:
             RegisterNotFoundError: If no institution matches the id.
     '''
-    for item in _load_catalog():
-        if item['id'] == institution_id:
-            return _enrich(item)
-    raise RegisterNotFoundError(detail = f'Institution not found: {institution_id}')
+    item = get_item_by_key(
+        dynamodb_resource = dynamodb_resource,
+        table_name = INSTITUTIONS_TABLE,
+        key = {'id': institution_id.strip()}
+    )
+    return _enrich(item)

@@ -2,6 +2,7 @@
     Institutions: routes handler.
 '''
 from fastapi import APIRouter, Depends, Path, status
+from boto3.resources.base import ServiceResource
 
 from controllers.institutions import (
     get_institution_controller,
@@ -12,6 +13,7 @@ from schemas.institutions import (
     InstitutionResponseSchema,
     InstitutionsListResponseSchema
 )
+from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
 
@@ -31,6 +33,7 @@ router = APIRouter(prefix = '/v1/mining-summit/institutions', tags = ['Instituti
 )
 def list_institutions_endpoint(
     query_params: InstitutionQuerySchema = Depends(),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     _: str = Depends(get_current_user)
 ):
     '''
@@ -38,7 +41,10 @@ def list_institutions_endpoint(
     '''
     message = 'Retrieving institutions catalog.'
     logger.info(message)
-    return list_institutions_controller(query_params = query_params)
+    return list_institutions_controller(
+        dynamodb_resource = dynamodb_resource,
+        query_params = query_params
+    )
 
 
 @router.get(
@@ -50,6 +56,7 @@ def list_institutions_endpoint(
 )
 def get_institution_endpoint(
     institution_id: str = Path(..., min_length = 1, max_length = 120),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     _: str = Depends(get_current_user)
 ):
     '''
@@ -57,4 +64,7 @@ def get_institution_endpoint(
     '''
     message = f'Retrieving institution id={institution_id}'
     logger.info(message)
-    return get_institution_controller(institution_id = institution_id)
+    return get_institution_controller(
+        dynamodb_resource = dynamodb_resource,
+        institution_id = institution_id
+    )
