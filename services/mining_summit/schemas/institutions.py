@@ -13,13 +13,20 @@ class InstitutionResponseSchema(BaseModel):
         seat-assignment type derived from its category.
     '''
     id: str
-    number: int
+    number: Optional[int] = None
     name: str
     abbreviation: Optional[str] = None
     category: InstitutionCategory
     cupos: int
     role: ParticipantRole
     assignment_type: AssignmentType
+    # Live occupancy, populated on the single-institution detail endpoint.
+    accredited_count: Optional[int] = Field(
+        None, description = 'ACTIVE participants already accredited for this institution.'
+    )
+    available_cupos: Optional[int] = Field(
+        None, description = 'Remaining cupo (cupos - accredited_count).'
+    )
 
     model_config = ConfigDict(extra = 'ignore')
 
@@ -43,3 +50,33 @@ class InstitutionQuerySchema(BaseModel):
     role: Optional[ParticipantRole] = Field(
         None, description = 'Filter by derived participant role.'
     )
+
+
+class InstitutionCuposUpdateSchema(BaseModel):
+    '''
+        Parametric update of an institution's participant quota (cupos).
+    '''
+    cupos: int = Field(..., ge = 0, description = 'New non-negative participant quota.')
+
+
+class InstitutionCreateSchema(BaseModel):
+    '''
+        Payload to register a new institution. The id is optional; when omitted
+        it is derived from the name (slug).
+    '''
+    name: str = Field(..., min_length = 2, max_length = 160)
+    category: InstitutionCategory = Field(..., description = 'Institutional category.')
+    cupos: int = Field(..., ge = 0, description = 'Participant quota.')
+    abbreviation: Optional[str] = Field(None, max_length = 40)
+    id: Optional[str] = Field(None, min_length = 1, max_length = 120,
+                              description = 'Optional explicit slug id.')
+
+
+class InstitutionUpdateSchema(BaseModel):
+    '''
+        Partial update of an institution. Only the supplied fields change.
+    '''
+    name: Optional[str] = Field(None, min_length = 2, max_length = 160)
+    category: Optional[InstitutionCategory] = None
+    cupos: Optional[int] = Field(None, ge = 0)
+    abbreviation: Optional[str] = Field(None, max_length = 40)

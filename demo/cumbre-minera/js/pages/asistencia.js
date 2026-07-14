@@ -35,6 +35,13 @@ export const AsistenciaPage = {
                         </div>
                     </div>
 
+                    <div id="qr-reader-wrap" class="qr-scan" hidden>
+                        <div id="qr-reader"></div>
+                        <button id="scan-close" class="btn btn-ghost" type="button">
+                            <i class="fa-solid fa-xmark"></i> Cerrar cámara
+                        </button>
+                    </div>
+
                     <div id="onthefly" style="display:none; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border);">
                         <div class="chip danger" style="margin-bottom: 0.75rem;">
                             <i class="fa-solid fa-circle-info"></i> Participante no registrado — completa los datos para crearlo.
@@ -57,7 +64,7 @@ export const AsistenciaPage = {
                                 <input id="phone" name="phone" type="tel" maxlength="30">
                             </div>
                             <div class="form-field">
-                                <label for="department">Departamento de Procedencia</label>
+                                <label for="department">Departamento</label>
                                 <select id="department" name="department">
                                     <option value="">— Seleccionar —</option>
                                     ${departamentos}
@@ -74,6 +81,9 @@ export const AsistenciaPage = {
                         <button id="submit-btn" class="btn btn-primary" type="submit">
                             <i class="fa-solid fa-check"></i> Registrar asistencia
                         </button>
+                        <button id="scan-btn" class="btn btn-ghost" type="button">
+                            <i class="fa-solid fa-qrcode"></i> Escanear QR
+                        </button>
                         <button id="reset-btn" class="btn btn-ghost" type="button">
                             <i class="fa-solid fa-rotate-left"></i> Limpiar
                         </button>
@@ -89,11 +99,52 @@ export const AsistenciaPage = {
         const submitBtn = container.querySelector('#submit-btn');
         const resetBtn = container.querySelector('#reset-btn');
         const result = container.querySelector('#last-result');
+        const ciInput = container.querySelector('#ci');
+        const scanBtn = container.querySelector('#scan-btn');
+        const readerWrap = container.querySelector('#qr-reader-wrap');
+        const scanClose = container.querySelector('#scan-close');
+        let qrScanner = null;
+
+        async function stopScan() {
+            readerWrap.hidden = true;
+            if (!qrScanner) return;
+            try { await qrScanner.stop(); qrScanner.clear(); } catch (_) { /* already stopped */ }
+            qrScanner = null;
+        }
+
+        async function startScan() {
+            if (typeof Html5Qrcode === 'undefined') {
+                Toast.danger('El lector de QR no está disponible.');
+                return;
+            }
+            readerWrap.hidden = false;
+            qrScanner = new Html5Qrcode('qr-reader');
+            try {
+                await qrScanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: 220 },
+                    async (decodedText) => {
+                        await stopScan();
+                        ciInput.value = extractCi(decodedText);
+                        Toast.info(`QR leído: CI ${ciInput.value}. Marcando asistencia…`);
+                        form.requestSubmit();
+                    },
+                    () => { /* ignore per-frame decode errors */ }
+                );
+            } catch (error) {
+                Toast.danger(`No se pudo abrir la cámara: ${error}`);
+                await stopScan();
+            }
+        }
+
+        scanBtn.addEventListener('click', startScan);
+        scanClose.addEventListener('click', stopScan);
 
         resetBtn.addEventListener('click', () => {
             form.reset();
             onthefly.style.display = 'none';
             result.innerHTML = '';
+            stopScan();
         });
 
         form.addEventListener('submit', async (e) => {
@@ -131,6 +182,20 @@ export const AsistenciaPage = {
         });
     }
 };
+
+/**
+ * Extracts the CI from a scanned QR. The credential QR now encodes a JSON
+ * object with the full participant data; older/plain QRs encode just the CI.
+ * Either way we only need the CI to mark attendance.
+ */
+function extractCi(decodedText) {
+    const raw = String(decodedText).trim();
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.ci) return String(parsed.ci).trim();
+    } catch (_) { /* not JSON: treat as a plain CI */ }
+    return raw;
+}
 
 function readFormPayload(form, ontheflyEl) {
     const data = new FormData(form);

@@ -6,15 +6,20 @@ from boto3.resources.base import ServiceResource
 
 from schemas.participants import (
     ParticipantCreateSchema,
+    ParticipantDeactivateSchema,
     ParticipantQuerySchema,
+    ParticipantReplaceSchema,
     ParticipantResponseSchema,
     ParticipantsListResponseSchema
 )
 from services.attendances import register_attendance
 from services.participants import (
+    assert_cupo_available,
     create_participant,
+    deactivate_participant,
     get_participant_by_ci,
-    list_participants
+    list_participants,
+    replace_participant
 )
 from services.utils import handle_service_errors
 
@@ -26,12 +31,19 @@ def create_participant_controller(
     current_user: str
 ) -> ParticipantResponseSchema:
     '''
-        Controller to register a new participant. Per business rule, the first
-        attendance is recorded automatically using the operator email.
+        Controller to register a new participant on-the-fly (accreditation desk).
+        Only allowed while the institution still has free cupo. Per business
+        rule, the first attendance is recorded automatically with the operator
+        email, since an on-the-fly creation happens at the event door.
     '''
+    if payload.institution_id:
+        assert_cupo_available(
+            dynamodb_resource = dynamodb_resource,
+            institution_id = payload.institution_id
+        )
     saved = create_participant(
         dynamodb_resource = dynamodb_resource,
-        payload = payload.model_dump()
+        payload = payload.model_dump(exclude_none = True)
     )
     register_attendance(
         dynamodb_resource = dynamodb_resource,
@@ -60,6 +72,7 @@ def list_participants_controller(
 ) -> ParticipantsListResponseSchema:
     '''
         Controller to retrieve a paginated list of participants with filters.
+        Defaults to ACTIVE participants only.
     '''
     response: Dict[str, Any] = list_participants(
         dynamodb_resource = dynamodb_resource,
@@ -69,3 +82,39 @@ def list_participants_controller(
         items = [ParticipantResponseSchema(**record) for record in response['items']],
         last_evaluated_key = response.get('last_evaluated_key')
     )
+
+
+@handle_service_errors
+def deactivate_participant_controller(
+    dynamodb_resource: ServiceResource,
+    ci: str,
+    payload: ParticipantDeactivateSchema
+) -> ParticipantResponseSchema:
+    '''
+        Controller to soft-delete (deactivate) an accredited participant.
+        Restricted to ADMIN at the route layer.
+    '''
+    updated = deactivate_participant(
+        dynamodb_resource = dynamodb_resource,
+        ci = ci,
+        observation = payload.observation
+    )
+    return ParticipantResponseSchema(**updated)
+
+
+@handle_service_errors
+def replace_participant_controller(
+    dynamodb_resource: ServiceResource,
+    outgoing_ci: str,
+    payload: ParticipantReplaceSchema
+) -> ParticipantResponseSchema:
+    '''
+        Controller to replace an accredited participant with a substitute that
+        inherits the outgoing seat. Restricted to ADMIN at the route layer.
+    '''
+    saved = replace_participant(
+        dynamodb_resource = dynamodb_resource,
+        outgoing_ci = outgoing_ci,
+        payload = payload.model_dump(exclude_none = True)
+    )
+    return ParticipantResponseSchema(**saved)

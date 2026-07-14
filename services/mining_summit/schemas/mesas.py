@@ -40,6 +40,33 @@ class MesaQuerySchema(BaseModel):
     )
 
 
+class MesaUpdateSchema(BaseModel):
+    '''
+        Parametric update for an aula: change its seat capacity and/or the
+        thematic axis it is allocated to. At least one field must be provided.
+    '''
+    capacity: Optional[int] = Field(
+        None, gt = 0, description = 'New seat capacity for the aula.'
+    )
+    axis: Optional[ThematicAxis] = Field(
+        None, description = 'New thematic axis the aula is allocated to.'
+    )
+
+
+class MesaCreateSchema(BaseModel):
+    '''
+        Registers a new aula (extra classroom) with its capacity and axis.
+    '''
+    code: str = Field(..., min_length = 1, max_length = 20,
+                      description = 'Unique aula code (e.g. "A18").')
+    block: str = Field(..., min_length = 1, max_length = 40,
+                       description = 'Campus block the aula belongs to.')
+    location: str = Field(..., min_length = 1, max_length = 60,
+                          description = 'Human-readable location (floor/wing).')
+    capacity: int = Field(..., gt = 0, description = 'Seat capacity of the aula.')
+    axis: ThematicAxis = Field(..., description = 'Thematic axis the aula is allocated to.')
+
+
 class AxisResponseSchema(BaseModel):
     '''
         Pydantic schema for a thematic axis with its allocated mesa count and

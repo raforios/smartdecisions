@@ -6,18 +6,23 @@ from boto3.resources.base import ServiceResource
 
 from controllers.participants import (
     create_participant_controller,
+    deactivate_participant_controller,
     get_participant_controller,
-    list_participants_controller
+    list_participants_controller,
+    replace_participant_controller
 )
+from schemas.enums import REGISTRATION_ROLES, VIEW_ROLES, RoleEnum
 from schemas.participants import (
     ParticipantCreateSchema,
+    ParticipantDeactivateSchema,
     ParticipantQuerySchema,
+    ParticipantReplaceSchema,
     ParticipantResponseSchema,
     ParticipantsListResponseSchema
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/mining-summit/participants', tags = ['Participants'])
 
@@ -26,19 +31,20 @@ router = APIRouter(prefix = '/v1/mining-summit/participants', tags = ['Participa
     '',
     response_model = ParticipantResponseSchema,
     status_code = status.HTTP_201_CREATED,
-    summary = 'Register a new participant',
+    summary = 'Register a new participant (on-the-fly)',
     description = (
-        'Registers a participant and automatically records the first attendance '
-        'using the current Bolivia date.'
+        'Registers a participant at the accreditation desk and records the '
+        'first attendance automatically. When an institution is supplied the '
+        'creation is only allowed while it still has free cupo.'
     )
 )
 def create_participant_endpoint(
     payload: ParticipantCreateSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(require_roles(*REGISTRATION_ROLES))
 ):
     '''
-        Endpoint to register a new participant.
+        Endpoint to register a new participant on-the-fly.
     '''
     message = f'Registering new participant ci={payload.ci}'
     logger.info(message)
@@ -59,7 +65,7 @@ def create_participant_endpoint(
 def list_participants_endpoint(
     query_params: ParticipantQuerySchema = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(get_current_user)
+    _: str = Depends(require_roles(*VIEW_ROLES))
 ):
     '''
         Endpoint to retrieve a paginated participants list.
@@ -82,7 +88,7 @@ def list_participants_endpoint(
 def get_participant_endpoint(
     ci: str = Path(..., min_length = 4, max_length = 20),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(get_current_user)
+    _: str = Depends(require_roles(*VIEW_ROLES))
 ):
     '''
         Endpoint to retrieve a single participant.
@@ -92,4 +98,62 @@ def get_participant_endpoint(
     return get_participant_controller(
         dynamodb_resource = dynamodb_resource,
         ci = ci
+    )
+
+
+@router.patch(
+    '/{ci}/deactivate',
+    response_model = ParticipantResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Deactivate (soft-delete) a participant',
+    description = (
+        'Marks an accredited participant as CANCELLED. Data is retained but the '
+        'participant is removed from the initial reports and frees the seat. '
+        'Restricted to ADMIN.'
+    )
+)
+def deactivate_participant_endpoint(
+    payload: ParticipantDeactivateSchema,
+    ci: str = Path(..., min_length = 4, max_length = 20),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    _: str = Depends(require_roles(RoleEnum.ADMIN.value))
+):
+    '''
+        Endpoint to deactivate an accredited participant.
+    '''
+    message = f'Deactivating participant ci={ci}'
+    logger.info(message)
+    return deactivate_participant_controller(
+        dynamodb_resource = dynamodb_resource,
+        ci = ci,
+        payload = payload
+    )
+
+
+@router.post(
+    '/{ci}/replace',
+    response_model = ParticipantResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Replace a participant with a substitute',
+    description = (
+        'Replaces an accredited participant with an institution-authorized '
+        'substitute that inherits the outgoing seat (axis/mesa). The outgoing '
+        'participant is marked REPLACED. Restricted to ADMIN.'
+    )
+)
+def replace_participant_endpoint(
+    payload: ParticipantReplaceSchema,
+    ci: str = Path(..., min_length = 4, max_length = 20),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    _: str = Depends(require_roles(RoleEnum.ADMIN.value))
+):
+    '''
+        Endpoint to replace an accredited participant.
+    '''
+    message = f'Replacing participant ci={ci}'
+    logger.info(message)
+    return replace_participant_controller(
+        dynamodb_resource = dynamodb_resource,
+        outgoing_ci = ci,
+        payload = payload
     )

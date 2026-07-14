@@ -1,104 +1,267 @@
 # Mining Summit Service
 
-Microservicio backend para el evento **"La Cumbre Minera"**. Provee endpoints
-JWT-protegidos para registrar participantes, marcar asistencia diaria y
-generar reportes (listados y agregaciones estadísticas) que alimentan al
-frontend Vanilla JS publicado en S3 + CloudFront.
+Microservicio backend de la **Cumbre Nacional Minera**. Gestiona el ciclo
+completo de participación del evento: acreditación masiva de participantes por
+institución, asignación de asientos por eje temático, control de asistencia
+diaria y generación de reportes. Expone una API REST protegida por JWT que
+consume el panel de operación (frontend Vanilla JS sobre S3 + CloudFront).
 
-## Stack
+---
 
-- Python 3.14 + FastAPI + Uvicorn
-- AWS Lambda (handler `Mangum`)
-- AWS DynamoDB (`boto3`)
-- Autenticación JWT delegada al servicio AUTH (validación de Bearer token).
+## 1. Arquitectura
 
-## Estructura
+Construido con **Clean Architecture**: cada capa tiene una única responsabilidad
+y depende solo de la capa inferior.
+
+| Capa | Carpeta | Responsabilidad |
+|------|---------|-----------------|
+| Rutas | `routes/` | Entrada HTTP, validación de esquemas y control de acceso por rol. |
+| Controladores | `controllers/` | Orquestación entre rutas y lógica de negocio. |
+| Servicios | `services/` | Lógica de negocio, reglas del evento e integraciones. |
+| Esquemas | `schemas/` | DTOs Pydantic v2 (request / response / query) y enumeraciones. |
+| Modelos | `models/` | Forma de los documentos DynamoDB (`TypedDict`). |
+
+**Stack:** Python 3.14 · FastAPI · Uvicorn · AWS Lambda (handler `Mangum`) ·
+AWS DynamoDB (`boto3`) · Pydantic v2. La autenticación se delega al servicio
+**AUTH**: este servicio solo valida el *Bearer token* y su claim `role`.
 
 ```text
 mining_summit/
-├── controllers/        # Orquestación entre rutas y servicios.
-├── models/             # TypedDict de items DynamoDB.
-├── routes/             # Endpoints FastAPI.
-├── schemas/            # Modelos Pydantic V2 (request / response / query).
-├── services/           # Lógica de negocio + helpers compartidos.
-├── tests/              # Tests con pytest.
-├── .env                # Variables locales.
-├── Dockerfile          # Build para Lambda.
-├── deploy.config       # Variables de despliegue.
-├── dynamodb.sh         # Provisión local de DynamoDB.
-├── main.py             # Entrypoint FastAPI.
-└── requirements.txt
+├── controllers/     # Orquestación entre rutas y servicios
+├── models/          # Documentos DynamoDB (TypedDict)
+├── routes/          # Endpoints FastAPI + control de acceso
+├── schemas/         # DTOs Pydantic v2 y enumeraciones
+├── services/        # Lógica de negocio y reglas del evento
+├── tests/           # Pruebas unitarias (pytest)
+├── main.py          # Punto de entrada FastAPI
+├── requirements.txt
+├── Dockerfile       # Imagen de build para Lambda
+└── deploy.config    # Parámetros de despliegue
 ```
 
-## Tablas DynamoDB
+---
 
-| Tabla | Partition Key | Sort Key | Notas |
-|---|---|---|---|
-| `mining_summit_participants` | `ci` (S) | — | CI único por participante. |
-| `mining_summit_attendances` | `ci` (S) | `attendance_date` (S, `YYYY-MM-DD`) | El composite key garantiza una asistencia por persona por día. |
+## 2. Modelo de datos
 
-> Las fechas se calculan en `America/La_Paz` (variable `TARGET_TIMEZONE`).
+Todo el estado persiste en **DynamoDB** (no se usa base relacional). Las fechas
+se calculan en la zona horaria configurada (`America/La_Paz`).
 
-## Variables de entorno
+| Tabla | Clave de partición | Clave de orden | Descripción |
+|-------|--------------------|----------------|-------------|
+| `mining_summit_participants` | `ci` | — | Participante acreditado. Incluye estado de ciclo de vida (`ACTIVE` / `REPLACED` / `CANCELLED`). |
+| `mining_summit_attendances` | `ci` | `attendance_date` | Asistencia diaria. La clave compuesta garantiza **una asistencia por persona por día**. |
+| `mining_summit_institutions` | `id` | — | Catálogo oficial de instituciones, con su cupo asignado. |
+| `mining_summit_aulas` | `code` | — | Aulas del campus. Cada aula guarda su capacidad y el eje temático al que está asignada. |
+| `mining_summit_load_batches` | `batch_id` | — | Bitácora de cada archivo cargado por el ETL (responsable + resultado). |
 
-| Variable | Obligatoria | Descripción |
-|---|---|---|
-| `HOST`, `PORT` | sí | Bind para Uvicorn. |
-| `APP_ENV` | no | `development` / `staging` / `production`. |
-| `ROOT_PATH` | no | Prefijo cuando corre detrás de API Gateway. |
-| `SECRET_KEY`, `ALGORITHM` | sí | Validación del JWT emitido por AUTH. |
-| `TARGET_TIMEZONE` | sí | Por defecto `America/La_Paz`. |
-| `DYNAMODB_REGION` | sí | Región de DynamoDB. |
-| `DYNAMODB_ENDPOINT_URL` | no | Endpoint local (`http://localhost:3100`). |
-| `DYNAMODB_TABLE_NAME_PARTICIPANTS` | sí | Nombre de la tabla de participantes. |
-| `DYNAMODB_TABLE_NAME_ATTENDANCES` | sí | Nombre de la tabla de asistencias. |
-| `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes exactos adicionales (terceros). Vacío por defecto. |
-| `CORS_ALLOWED_ORIGIN_REGEX` | no | Regex de orígenes permitidos. Default cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo` y `localhost`. |
+Las cinco tablas se aprovisionan por infraestructura, fuera del ciclo de vida de
+la aplicación (ver [§7 Despliegue](#7-despliegue)).
 
-## Endpoints (todos requieren `Authorization: Bearer <jwt>`)
+---
+
+## 3. Seguridad y roles
+
+Todas las operaciones requieren el encabezado `Authorization: Bearer <jwt>`. El
+control de acceso se basa en el claim **`role`** del token emitido por AUTH.
+
+### Roles de acceso
+
+| Rol | Perfil | Alcance |
+|-----|--------|---------|
+| `ADMIN` | Administrador | Acceso total: configuración, ETL, bajas y reemplazos, reportes y descargas. |
+| `REGISTRATION` | Personal de acreditación | Busca por CI/QR, marca asistencia y da de alta participantes cuando la institución tiene cupo libre. Sin acceso a configuración ni reportes. |
+| `REPORTS` | Consulta | Solo lectura: consulta reportes y descarga los archivos Excel. No registra ni modifica datos. |
+
+### Roles de participante
+
+Independientes de los roles de acceso, describen la función del asistente y se
+imprimen en su credencial: `PARTICIPANTE`, `MODERADOR`, `VEEDOR`, `INVITADO`,
+`ORGANIZADOR`, `PRENSA` y `FACILITADOR`. El ETL asigna uno a todo el archivo que
+carga.
+
+---
+
+## 4. Reglas de negocio
+
+1. **Asiento por eje.** El participante elige un eje temático (1–6) en el Excel.
+   Ese eje siempre se respeta; dentro de él, el motor lo asienta en el aula menos
+   ocupada, distribuyendo de forma equitativa.
+2. **Capacidad por eje.** Es la suma de las capacidades de sus aulas. Cuando se
+   alcanza, el eje deja de admitir registros.
+3. **Cupo por institución.** El ETL acredita únicamente a los primeros
+   participantes que caben en el cupo; el resto queda como *no acreditado*.
+4. **Asistencia diaria única.** Un mismo CI solo puede marcar asistencia una vez
+   al día (un segundo intento responde `409 Conflict`). Solo se admite la
+   asistencia de participantes `ACTIVE`.
+5. **Baja y reemplazo.** La baja es lógica: se conserva el registro pero se
+   excluye de los reportes y libera el asiento. Un reemplazo hereda el asiento
+   del participante saliente, que queda marcado como `REPLACED`.
+
+---
+
+## 5. API
+
+Prefijo común: `/v1/mining-summit`. La columna **Roles** indica quién puede
+invocar cada endpoint (además de `ADMIN`, que siempre tiene acceso).
 
 ### Participantes
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/v1/mining-summit/participants` | Registra un participante y crea su primera asistencia. |
-| `GET` | `/v1/mining-summit/participants` | Lista paginada con filtros (`department`, `company`, `registered_from`, `registered_to`). |
-| `GET` | `/v1/mining-summit/participants/{ci}` | Detalle por CI. |
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| `POST` | `/participants` | REGISTRATION | Alta on-the-fly; marca la primera asistencia y exige cupo libre si trae institución. Acepta `axis` para el asiento. |
+| `GET` | `/participants` | REGISTRATION, REPORTS | Listado paginado. Por defecto solo `ACTIVE`; filtros por institución, eje, departamento, estado y rango de fechas. |
+| `GET` | `/participants/{ci}` | REGISTRATION, REPORTS | Detalle por CI. |
+| `PATCH` | `/participants/{ci}/deactivate` | — | Baja lógica: marca `CANCELLED` y libera el asiento. |
+| `POST` | `/participants/{ci}/replace` | — | Reemplazo: el sustituto hereda el asiento; el saliente queda `REPLACED`. |
 
 ### Asistencias
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/v1/mining-summit/attendances` | Registra asistencia. Si el CI no existe, crea al participante on-the-fly (requiere `first_name` y `last_name`). |
-| `GET` | `/v1/mining-summit/attendances` | Lista filtrable por `ci`, `date_from`, `date_to`. |
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| `POST` | `/attendances` | REGISTRATION | Marca asistencia diaria (solo participantes `ACTIVE`, una vez por día). |
+| `GET` | `/attendances` | REGISTRATION, REPORTS | Listado filtrable por CI y rango de fechas. |
+
+### Aulas y ejes
+
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| `GET` | `/mesas` | autenticado | Aulas con su capacidad y eje, filtrable por eje. |
+| `POST` | `/mesas` | — | Registra un aula nueva (código, bloque, ubicación, capacidad, eje). |
+| `PATCH` | `/mesas/{code}` | — | Ajusta la capacidad y/o el eje de un aula. |
+| `DELETE` | `/mesas/{code}` | — | Elimina un aula de la asignación. |
+| `GET` | `/axes` | autenticado | Ejes con su número de aulas y capacidad agregada. |
+
+### Instituciones
+
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| `GET` | `/institutions` | autenticado | Catálogo (orden alfabético) con rol y tipo de asiento derivados. |
+| `POST` | `/institutions` | — | Crea una institución (id derivado del nombre si no se envía). |
+| `GET` | `/institutions/{id}` | autenticado | Detalle, con **cupo usado y disponible** (`accredited_count`, `available_cupos`). |
+| `PATCH` | `/institutions/{id}` | — | Edita nombre, sigla, categoría y/o cupo. |
+| `PATCH` | `/institutions/{id}/cupos` | — | Atajo para ajustar solo el cupo. |
+| `DELETE` | `/institutions/{id}` | — | Elimina una institución del catálogo. |
+
+### ETL
+
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| `POST` | `/etl/participants` | — | Carga un Excel de institución (`multipart/form-data`). Ver [§8](#8-operación). |
 
 ### Reportes
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/v1/mining-summit/reports/stats?group_by=department\|company` | Conteo y porcentaje por dimensión, listo para el chart del frontend. |
+| Método | Ruta | Roles | Descripción |
+|--------|------|-------|-------------|
+| `GET` | `/reports/stats?group_by=department\|company` | REPORTS | Conteos y porcentajes por dimensión. |
+| `GET` | `/reports/not-accredited` | REPORTS | Constancia de participantes no acreditados de todos los lotes. |
+| `GET` | `/reports/participants.xlsx` | REPORTS | Descarga el reporte de participantes en Excel. |
+| `GET` | `/reports/attendances.xlsx` | REPORTS | Descarga el reporte de asistencias en Excel. |
 
-## Reglas de negocio relevantes
+> Los endpoints marcados con **—** en la columna Roles son exclusivos de `ADMIN`.
+> La especificación interactiva (Swagger) está disponible en `/docs`.
 
-1. `ci` es la clave única del participante.
-2. Al registrar un participante se crea automáticamente su primera asistencia
-   con la fecha y hora de Bolivia.
-3. Una asistencia por CI por día (idempotencia garantizada por la composite key).
-   Un segundo POST en el mismo día responde **409 Conflict**.
-4. El registro de asistencia auto-crea al participante si el CI no existe,
-   siempre que el payload incluya `first_name` y `last_name`.
-5. Los reportes estadísticos agrupan por `department` o `company`, ubicando
-   los valores ausentes bajo la etiqueta **"Sin especificar"**.
+---
 
-## Ejecución local
+## 6. Configuración
+
+Variables de entorno del servicio. Los secretos y credenciales nunca se
+versionan; se inyectan por el entorno de ejecución.
+
+**Requeridas**
+
+| Variable | Descripción |
+|----------|-------------|
+| `SECRET_KEY`, `ALGORITHM` | Verificación de la firma del JWT emitido por AUTH. |
+| `TARGET_TIMEZONE` | Zona horaria del evento (`America/La_Paz`). |
+| `DYNAMODB_TABLE_NAME_PARTICIPANTS` | Tabla de participantes. |
+| `DYNAMODB_TABLE_NAME_ATTENDANCES` | Tabla de asistencias. |
+| `DYNAMODB_TABLE_NAME_INSTITUTIONS` | Tabla de instituciones. |
+| `DYNAMODB_TABLE_NAME_AULAS` | Tabla de aulas. |
+| `DYNAMODB_TABLE_NAME_LOAD_BATCHES` | Tabla de lotes del ETL. |
+| `HOST`, `PORT` | Interfaz y puerto del servidor ASGI. |
+
+**Opcionales**
+
+| Variable | Descripción |
+|----------|-------------|
+| `APP_ENV` | Entorno lógico (`development` / `staging` / `production`). |
+| `ROOT_PATH` | Prefijo de ruta cuando corre detrás de API Gateway. |
+| `CORS_ALLOWED_ORIGINS` | Orígenes exactos adicionales (lista separada por comas). |
+| `CORS_ALLOWED_ORIGIN_REGEX` | Patrón de orígenes permitidos. Por defecto cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo`. |
+| `DYNAMODB_ENDPOINT_URL` | Endpoint alternativo de DynamoDB. Solo se usa para apuntar a una instancia distinta a la de AWS (p. ej. pruebas); en producción se omite. |
+
+> La **región** de AWS la provee el propio entorno de ejecución (`AWS_REGION`),
+> no una variable específica del servicio.
+
+---
+
+## 7. Despliegue
+
+El servicio se empaqueta y despliega como **función AWS Lambda** (handler
+`Mangum`) detrás de **API Gateway**, con **DynamoDB** como almacenamiento. Las
+tablas se crean por infraestructura (CLI/IaC), de forma independiente al ciclo
+de vida de la aplicación. Los parámetros de despliegue viven en `deploy.config`.
+
+---
+
+## 8. Operación
+
+### 8.1 Sembrado de catálogos
+
+Antes de la primera carga (o tras reiniciar las tablas) hay que poblar los
+catálogos de instituciones y aulas:
 
 ```bash
-# 1. Levantar DynamoDB local con las tablas requeridas.
-./dynamodb.sh
-
-# 2. Instalar dependencias y arrancar la API.
-pip install -r requirements.txt
-python main.py
+python tools/mining_summit/import_institutions.py   # instituciones (matriz oficial)
+python tools/mining_summit/seed_aulas.py            # aulas: capacidad + eje por aula
 ```
 
-La documentación interactiva queda disponible en `http://localhost:3010/docs`.
+### 8.2 Carga de participantes (ETL)
+
+Cada institución completa la plantilla
+`templates/plantilla_registro_cumbre_minera.xlsx` y la remite junto con los
+datos de un **responsable**. La carga se realiza contra el endpoint del ETL
+(rol `ADMIN`). La institución y el rol de participante se pasan como parámetros,
+por lo que la columna «Institución» de la planilla es meramente informativa.
+
+```bash
+curl -X POST "$BASE_URL/v1/mining-summit/etl/participants" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -F "institution_id=fencomin" \
+  -F "role=PARTICIPANTE" \
+  -F "responsible_name=Juana Perez" \
+  -F "responsible_phone=70000000" \
+  -F "file=@fencomin.xlsx"
+```
+
+El proceso, fila por fila:
+
+1. Valida los campos obligatorios (todos excepto el correo).
+2. Respeta el cupo de la institución: acredita solo a los que caben; el resto se
+   reporta como no acreditado.
+3. Resuelve el eje elegido (columna 1–6), asigna el aula menos ocupada de ese
+   eje y estampa el rol recibido.
+4. Registra el lote (responsable y resultado) y devuelve un resumen con los
+   `accepted` y `rejected`.
+
+La constancia consolidada de no acreditados está en
+`GET /v1/mining-summit/reports/not-accredited`.
+
+---
+
+## 9. Desarrollo local
+
+Para levantar el servicio localmente contra un DynamoDB en contenedor:
+
+```bash
+./dynamodb.sh                 # DynamoDB local + tablas (requiere Docker)
+pip install -r requirements.txt
+python main.py                # API en el puerto configurado; Swagger en /docs
+```
+
+Apunta el servicio al DynamoDB local exportando `DYNAMODB_ENDPOINT_URL`. Las
+pruebas unitarias no requieren infraestructura (DynamoDB se simula con `moto`):
+
+```bash
+pytest
+```

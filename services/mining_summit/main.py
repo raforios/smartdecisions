@@ -14,6 +14,7 @@ from mangum import Mangum
 import uvicorn
 
 from routes.attendances import router as attendances_router
+from routes.etl import router as etl_router
 from routes.institutions import router as institutions_router
 from routes.mesas import router as mesas_router
 from routes.participants import router as participants_router
@@ -154,6 +155,7 @@ app.include_router(attendances_router)
 app.include_router(institutions_router)
 app.include_router(mesas_router)
 app.include_router(reports_router)
+app.include_router(etl_router)
 
 
 if __name__ == '__main__':

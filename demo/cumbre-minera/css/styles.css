@@ -1,5 +1,5 @@
 /* =========================================================================
-   La Cumbre Minera - Estilos
+   Cumbre Minera - Estilos
    Reutiliza la línea gráfica del Ministerio de Minería y Metalurgia.
    ========================================================================= */
 
@@ -10,6 +10,7 @@
     --gris: #363534;
     --blanco: #ffffff;
     --bg-body: #f8f9fa;
+    --surface: #e9ecef;
     --text-main: #242732;
     --text-muted: #6c757d;
     --card-bg: #ffffff;
@@ -38,9 +39,11 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body { height: 100%; }
+html { overflow-x: hidden; }
+body { max-width: 100%; overflow-x: hidden; }
 
 body {
-    font-family: 'Montserrat', sans-serif;
+    font-family: var(--font-ubuntu);
     background-color: var(--bg-body);
     color: var(--text-main);
     line-height: 1.6;
@@ -59,39 +62,40 @@ button { font-family: inherit; }
     min-height: 100vh;
     display: flex;
     align-items: stretch;
-    background: var(--negro);
-    color: white;
+    background: var(--surface);
+    color: var(--text-main);
 }
 
 .login-hero {
     flex: 1.1;
     background:
-        linear-gradient(135deg, rgba(36,39,50,0.85) 0%, rgba(54,53,52,0.7) 100%),
-        radial-gradient(circle at 30% 30%, rgba(201,167,81,0.18), transparent 60%),
-        var(--negro);
+        radial-gradient(circle at 30% 30%, rgba(201,167,81,0.16), transparent 60%),
+        linear-gradient(135deg, #eef0f3 0%, #e4e7eb 100%);
     padding: 4rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
+    text-align: center;
     border-right: 4px solid var(--oro);
 }
 
-.login-hero img { height: 550px; width: auto; margin-bottom: 1.5rem; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4)); }
+.login-hero img { max-height: 44vh; width: auto; max-width: 100%; align-self: center; object-fit: contain; margin-bottom: 1.5rem; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.18)); }
 .login-hero h1 {
-    font-family: 'Cinzel', serif;
+    font-family: var(--font-ubuntu);
     font-size: 3rem;
-    color: var(--oro);
+    color: var(--oro-dark);
     line-height: 1.1;
     margin-bottom: 0.5rem;
 }
 .login-hero h2 {
-    font-family: 'Cinzel', serif;
+    font-family: var(--font-ubuntu);
     font-size: 1.5rem;
-    color: var(--blanco);
+    color: var(--negro);
     letter-spacing: 4px;
     font-weight: 400;
 }
-.login-hero p { color: rgba(255,255,255,0.75); margin-top: 1rem; max-width: 480px; }
+.login-hero p { color: var(--text-muted); margin-top: 1rem; max-width: 480px; margin-left: auto; margin-right: auto; }
 
 .login-form-wrap {
     flex: 0.9;
@@ -108,7 +112,7 @@ button { font-family: inherit; }
     max-width: 400px;
 }
 .login-card h3 {
-    font-family: 'Cinzel', serif;
+    font-family: var(--font-ubuntu);
     font-size: 1.6rem;
     border-left: 4px solid var(--oro);
     padding-left: 12px;
@@ -137,30 +141,34 @@ button { font-family: inherit; }
 
 .topbar {
     grid-area: topbar;
-    background: var(--negro);
-    color: white;
+    background: var(--surface);
+    color: var(--text-main);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 1.5rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     z-index: 10;
 }
 
-.topbar-brand { display: flex; align-items: center; gap: 14px; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.icon-btn.menu-toggle { display: none; }
+.topbar-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .topbar-brand img { height: 50px; width: auto; }
 .topbar-brand .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
-.topbar-brand .brand-short { color: var(--oro); font-size: 0.7rem; letter-spacing: 2px; }
-.topbar-brand .brand-long { font-family: 'Cinzel', serif; font-weight: 600; font-size: 1.05rem; }
+.topbar-brand .brand-short { color: var(--oro-dark); font-size: 0.7rem; letter-spacing: 2px; }
+.topbar-brand .brand-long { font-family: var(--font-ubuntu); font-weight: 600; font-size: 1.05rem; }
 
-.topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
+.topbar-actions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
 .topbar-user {
     display: flex; align-items: center; gap: 8px;
     background: rgba(201,167,81,0.15);
     padding: 6px 12px; border-radius: 999px;
-    font-size: 0.85rem; color: var(--oro);
+    font-size: 0.85rem; color: var(--oro-dark);
+    max-width: 220px;
 }
 .topbar-user i { font-size: 0.9rem; }
+.topbar-user .user-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .icon-btn {
     background: none; border: 1px solid var(--oro);
@@ -220,6 +228,7 @@ button { font-family: inherit; }
     grid-area: main;
     padding: 2rem 2.5rem;
     overflow-y: auto;
+    min-width: 0;
 }
 
 .page-header {
@@ -227,23 +236,57 @@ button { font-family: inherit; }
     margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
 }
 .page-header h2 {
-    font-family: 'Cinzel', serif;
+    font-family: var(--font-ubuntu);
     font-size: 1.6rem;
     border-left: 5px solid var(--oro);
     padding-left: 14px;
 }
 .page-header .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
 
+.sidebar-backdrop { display: none; }
+
 @media (max-width: 900px) {
     .app-shell {
         grid-template-columns: 1fr;
-        grid-template-areas: "topbar" "tricolor" "sidebar" "main";
-        grid-template-rows: 70px 6px auto 1fr;
+        grid-template-areas: "topbar" "tricolor" "main";
+        grid-template-rows: 70px 6px 1fr;
     }
-    .sidebar { flex-direction: row; flex-wrap: wrap; padding: 0.75rem; }
-    .nav-item { border-left: none; border-bottom: 3px solid transparent; }
-    .nav-item.active { border-left: none; border-bottom-color: var(--oro); }
+    .icon-btn.menu-toggle { display: inline-flex; }
+    .sidebar {
+        position: fixed;
+        top: 76px;
+        left: 0;
+        width: 260px;
+        max-width: 82vw;
+        height: calc(100vh - 76px);
+        transform: translateX(-100%);
+        transition: transform 0.28s ease;
+        z-index: 60;
+        box-shadow: var(--shadow-lg);
+        overflow-y: auto;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-backdrop.show {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 55;
+    }
     .main-content { padding: 1.5rem; }
+}
+
+@media (max-width: 640px) {
+    .topbar { padding: 0 0.9rem; }
+    .topbar-actions { gap: 0.4rem; }
+    .topbar-user { max-width: none; padding: 6px 10px; }
+    .topbar-user .user-email { display: none; }
+    .topbar-brand img { height: 42px; }
+    .main-content { padding: 1.25rem 1rem; }
+    .table-toolbar { flex-direction: column; align-items: stretch; }
+    .table-toolbar .form-field { width: 100%; min-width: 0; }
+    .pagination { flex-wrap: wrap; justify-content: center; }
+    .page-header h2 { font-size: 1.35rem; }
 }
 
 /* =========================================================================
@@ -258,7 +301,7 @@ button { font-family: inherit; }
     margin-bottom: 1.5rem;
 }
 .card h3 {
-    font-family: 'Cinzel', serif;
+    font-family: var(--font-ubuntu);
     font-size: 1.15rem;
     margin-bottom: 1rem;
     color: var(--text-main);
@@ -442,7 +485,7 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
     border-left: 4px solid var(--oro);
 }
 .stat-card .label { color: var(--text-muted); font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
-.stat-card .value { font-family: 'Cinzel', serif; font-size: 2rem; color: var(--oro); margin-top: 4px; }
+.stat-card .value { font-family: var(--font-ubuntu); font-size: 2rem; color: var(--oro); margin-top: 4px; }
 
 .chart-container {
     background: var(--card-bg);
@@ -491,11 +534,155 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
 
 /* Footer */
 .event-footer {
-    background: var(--negro);
-    color: rgba(255,255,255,0.7);
+    background: var(--surface);
+    color: var(--text-muted);
     text-align: center;
     padding: 1rem;
     font-size: 0.8rem;
-    margin-top: 2rem;
+    border-top: 3px solid var(--oro);
+    width: 100%;
 }
-.event-footer strong { color: var(--oro); }
+.event-footer strong { color: var(--oro-dark); }
+
+/* =========================================================================
+   Ubuntu (línea gráfica oficial de Cumbre Minera) + Credencial con QR
+   ========================================================================= */
+@font-face {
+    font-family: 'Ubuntu';
+    src: url('../assets/Ubuntu-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Ubuntu';
+    src: url('../assets/Ubuntu-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Ubuntu';
+    src: url('../assets/Ubuntu-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-display: swap;
+}
+:root { --font-ubuntu: 'Ubuntu', system-ui, -apple-system, sans-serif; }
+
+/* Acciones de fila (editar/eliminar) en las tablas de administración */
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+.btn-sm { padding: 6px 10px; font-size: 0.85rem; }
+
+/* Institución: campo a todo el ancho de la grilla + pista de rol */
+.form-field-wide { grid-column: 1 / -1; }
+.role-hint {
+    margin-top: 4px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    min-height: 1.1rem;
+}
+.role-hint strong { color: var(--oro-dark); }
+
+/* Credencial imprimible */
+.credential { font-family: var(--font-ubuntu); margin-top: 1.5rem; }
+.credential-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 2px solid var(--oro);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+.cred-logo { height: 64px; width: auto; }
+.cred-title { font-weight: 700; font-size: 1.15rem; color: var(--negro); }
+.cred-sub { font-size: 0.85rem; color: var(--text-muted); letter-spacing: 0.5px; }
+
+.credential-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: center;
+    justify-content: space-between;
+}
+.cred-info { flex: 1 1 240px; }
+.cred-name { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; }
+.cred-line { font-size: 0.95rem; margin: 2px 0; }
+.cred-line span {
+    display: inline-block;
+    min-width: 84px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.cred-seat {
+    margin-top: 12px;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+.cred-seat > div {
+    background: rgba(201, 167, 81, 0.12);
+    border: 1px solid var(--oro);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+.cred-seat > div span {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--oro-dark);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.cred-seat-rotating {
+    margin-top: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+/* Seated participants: the thematic axis is the headline, the aula goes below. */
+.cred-seat-fixed {
+    margin-top: 12px;
+    background: rgba(201, 167, 81, 0.12);
+    border: 1px solid var(--oro);
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+}
+.cred-eje {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--negro);
+    line-height: 1.25;
+}
+.cred-aula {
+    margin-top: 6px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--oro-dark);
+}
+.cred-aula span {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--oro-dark);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.cred-qr { text-align: center; flex: 0 0 auto; }
+.cred-qr canvas { border: 1px solid var(--border); border-radius: 8px; }
+.cred-qr-caption {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+/* Lector QR con cámara (página de Asistencia) */
+.qr-scan {
+    margin-top: 1rem;
+    max-width: 340px;
+}
+.qr-scan #qr-reader {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 0.6rem;
+}

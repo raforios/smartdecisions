@@ -168,6 +168,31 @@ def get_all_records_paginated(
 # ----------------------------------------------------------------------------
 
 
+def scan_all_items(
+    dynamodb_resource: ServiceResource,
+    table_name: str
+) -> List[Dict[str, Any]]:
+    '''
+        Scans a full DynamoDB table, transparently following pagination. Meant
+        for small reference/aggregation tables where a full sweep is acceptable.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            table_name (str): Target DynamoDB table.
+
+        Returns:
+            List[Dict[str, Any]]: Every item in the table.
+    '''
+    table = dynamodb_resource.Table(table_name)
+    items: List[Dict[str, Any]] = []
+    response = table.scan()
+    items.extend(response.get('Items', []))
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey = response['LastEvaluatedKey'])
+        items.extend(response.get('Items', []))
+    return items
+
+
 def get_item_by_key(
     dynamodb_resource: ServiceResource,
     table_name: str,

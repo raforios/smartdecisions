@@ -53,6 +53,22 @@ export class AuthService {
         return localStorage.getItem(this.userKey);
     }
 
+    /**
+     * Returns the access role embedded in the JWT ('role' claim), or null.
+     * Drives the role-based menu and section access in the dashboard.
+     */
+    getUserRole() {
+        const token = this.getToken();
+        if (!token) return null;
+        try {
+            const payload = token.split('.')[1];
+            const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+            return decoded.role || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
     isAuthenticated() {
         const token = this.getToken();
         if (!token) return false;

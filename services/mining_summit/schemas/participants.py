@@ -5,13 +5,19 @@ from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.common import OptionalContactSchema
-from schemas.enums import AssignmentType, ParticipantRole, ThematicAxis
+from schemas.enums import (
+    AssignmentType,
+    ParticipantRole,
+    ParticipantStatus,
+    ThematicAxis
+)
 
 
 class ParticipantCreateSchema(OptionalContactSchema):
     '''
         Pydantic schema for registering a new summit participant.
         First name, last name and CI are mandatory; remaining fields are optional.
+        When 'axis' is provided the participant is seated in that axis.
     '''
     first_name: str = Field(..., min_length = 1, max_length = 80)
     last_name: str = Field(..., min_length = 1, max_length = 80)
@@ -19,7 +25,38 @@ class ParticipantCreateSchema(OptionalContactSchema):
                     description = 'Carnet de Identidad. Unique identifier per participant.')
     institution_id: Optional[str] = Field(
         None, max_length = 120,
-        description = 'Reference institution slug; drives role and seat assignment.'
+        description = 'Reference institution slug; drives role and institution data.'
+    )
+    axis: Optional[ThematicAxis] = Field(
+        None, description = 'Thematic axis chosen by the participant; drives seat assignment.'
+    )
+    observation: Optional[str] = Field(None, max_length = 300)
+
+
+class ParticipantDeactivateSchema(BaseModel):
+    '''
+        Pydantic schema for deactivating (soft-deleting) an accredited
+        participant. The observation records the authorization / reason.
+    '''
+    observation: Optional[str] = Field(
+        None, max_length = 300,
+        description = 'Reason or institutional authorization for the removal.'
+    )
+
+
+class ParticipantReplaceSchema(OptionalContactSchema):
+    '''
+        Pydantic schema for replacing an accredited participant with a
+        substitute authorized by the same institution. The substitute inherits
+        the outgoing participant's seat (axis/mesa/institution).
+    '''
+    ci: str = Field(..., min_length = 4, max_length = 20,
+                    description = 'CI of the substitute participant.')
+    first_name: str = Field(..., min_length = 1, max_length = 80)
+    last_name: str = Field(..., min_length = 1, max_length = 80)
+    observation: Optional[str] = Field(
+        None, max_length = 300,
+        description = 'Institutional authorization note for the replacement.'
     )
 
 
@@ -42,6 +79,10 @@ class ParticipantResponseSchema(BaseModel):
     axis: Optional[ThematicAxis] = None
     axis_label: Optional[str] = None
     mesa_code: Optional[str] = None
+    status: ParticipantStatus = ParticipantStatus.ACTIVE
+    observation: Optional[str] = None
+    replaces_ci: Optional[str] = None
+    replaced_by_ci: Optional[str] = None
     registered_date: str
     registered_at: str
 
@@ -54,6 +95,14 @@ class ParticipantQuerySchema(BaseModel):
     '''
     department: Optional[str] = Field(None, max_length = 60)
     company: Optional[str] = Field(None, max_length = 120)
+    institution_id: Optional[str] = Field(None, max_length = 120)
+    axis: Optional[ThematicAxis] = Field(None, description = 'Filter by thematic axis.')
+    status: Optional[ParticipantStatus] = Field(
+        None, description = 'Filter by lifecycle status. Defaults to ACTIVE only.'
+    )
+    include_inactive: bool = Field(
+        False, description = 'If True, include REPLACED/CANCELLED participants.'
+    )
     registered_from: Optional[str] = Field(
         None, description = 'Inclusive lower bound (YYYY-MM-DD) for registered_date.'
     )

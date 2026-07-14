@@ -4,13 +4,15 @@
 from typing import Any, Dict, Optional, Tuple
 from boto3.resources.base import ServiceResource
 
+from schemas.enums import ParticipantStatus
 from services.crud import (
+    find_item_by_key,
     get_all_records_paginated,
     put_unique_composite_item,
     query_by_partition
 )
 from services.environment import load_and_validate_env_vars
-from services.exceptions import InvalidInputError
+from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from services.filters import filter_items_by_date_range
 from services.logger_config import custom_logger as logger
 from services.participants import create_participant, find_participant_by_ci
@@ -42,18 +44,28 @@ def _ensure_participant_exists(
     payload: Dict[str, Any]
 ) -> bool:
     '''
-        Ensures the CI is registered. If missing, registers the participant
-        on-the-fly using the optional fields provided in the attendance payload.
+        Ensures the CI is registered and accredited. If missing, registers the
+        participant on-the-fly using the optional fields in the attendance
+        payload. Inactive (replaced/cancelled) participants are rejected, since
+        attendance verifies that the person was actually accredited.
 
         Returns:
             bool: True if the participant was created during this call.
 
         Raises:
-            InvalidInputError: If the participant has to be created on-the-fly
-                but mandatory fields (first_name, last_name) are missing.
+            InvalidInputError: If the participant is inactive, or has to be
+                created on-the-fly but mandatory fields are missing.
     '''
     existing = find_participant_by_ci(dynamodb_resource, payload['ci'])
     if existing:
+        status_value = existing.get('status', ParticipantStatus.ACTIVE.value)
+        if status_value != ParticipantStatus.ACTIVE.value:
+            raise InvalidInputError(
+                detail = (
+                    f'Participant ci={payload["ci"]} is not accredited '
+                    f'(status={status_value}); attendance cannot be registered.'
+                )
+            )
         return False
 
     if not payload.get('first_name') or not payload.get('last_name'):
@@ -103,6 +115,22 @@ def register_attendance(
     participant_created = _ensure_participant_exists(dynamodb_resource, payload)
 
     item = _build_attendance_item(ci = payload['ci'], marked_by = marked_by)
+
+    # Business rule: attendance can only be registered once per day. Pre-check so
+    # the operator gets an explicit message instead of a generic conflict.
+    existing_today = find_item_by_key(
+        dynamodb_resource = dynamodb_resource,
+        table_name = ATTENDANCES_TABLE,
+        key = {'ci': item['ci'], 'attendance_date': item['attendance_date']}
+    )
+    if existing_today:
+        raise RegisterAlreadyExistsError(
+            detail = (
+                f'Attendance for ci={item["ci"]} was already registered today '
+                f'({item["attendance_date"]}).'
+            )
+        )
+
     message = (
         f'Registering attendance ci={item["ci"]} '
         f'date={item["attendance_date"]} (participant_created={participant_created})'

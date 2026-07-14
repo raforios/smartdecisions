@@ -25,5 +25,10 @@ class Participant(TypedDict, total = False):
     axis: Optional[str]
     axis_label: Optional[str]
     mesa_code: Optional[str]
+    # Lifecycle: ACTIVE by default; REPLACED/CANCELLED for soft-deleted seats.
+    status: str
+    observation: Optional[str]
+    replaces_ci: Optional[str]
+    replaced_by_ci: Optional[str]
     registered_date: str
     registered_at: str

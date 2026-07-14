@@ -13,11 +13,14 @@ from schemas.enums import (
     InstitutionCategory,
     ParticipantRole
 )
-from services.exceptions import RegisterNotFoundError
+from services.exceptions import RegisterAlreadyExistsError, RegisterNotFoundError
 from services.institutions import (
     INSTITUTIONS_TABLE,
+    create_institution,
+    delete_institution,
     get_institution,
-    list_institutions
+    list_institutions,
+    update_institution
 )
 from services.summit_rules import (
     CATEGORY_ROLE_MAP,
@@ -61,12 +64,44 @@ def dynamodb_fixture():
 def test_list_returns_all_enriched_and_sorted(dynamodb):
     '''
         Listing returns every seeded institution enriched with role and
-        assignment, ordered by the matrix number.
+        assignment, ordered alphabetically by name.
     '''
     items = list_institutions(dynamodb)
     assert len(items) == len(SEED_INSTITUTIONS)
-    assert [item['number'] for item in items] == sorted(item['number'] for item in items)
+    names = [item['name'].lower() for item in items]
+    assert names == sorted(names)
     assert all(item['role'] and item['assignment_type'] for item in items)
+
+
+def test_create_update_delete_institution(dynamodb):
+    '''
+        A new institution can be created (id derived from name), updated and
+        deleted through the CRUD helpers.
+    '''
+    created = create_institution(dynamodb, {
+        'name': 'Nueva Minera Andina', 'category': 'ACTORES PRODUCTIVOS MINEROS',
+        'cupos': 10
+    })
+    assert created['id'] == 'nueva-minera-andina'
+    assert created['cupos'] == 10
+    assert created['role']  # derived from category
+
+    updated = update_institution(dynamodb, created['id'], {'cupos': 25, 'abbreviation': 'NMA'})
+    assert updated['cupos'] == 25
+    assert updated['abbreviation'] == 'NMA'
+
+    delete_institution(dynamodb, created['id'])
+    with pytest.raises(RegisterNotFoundError):
+        get_institution(dynamodb, created['id'])
+
+
+def test_create_duplicate_id_raises(dynamodb):
+    '''Creating an institution whose derived id already exists must raise.'''
+    with pytest.raises(RegisterAlreadyExistsError):
+        create_institution(dynamodb, {
+            'name': 'FENCOMIN', 'category': 'ACTORES PRODUCTIVOS MINEROS',
+            'cupos': 5, 'id': 'fencomin'
+        })
 
 
 def test_numeric_fields_are_int_not_decimal(dynamodb):

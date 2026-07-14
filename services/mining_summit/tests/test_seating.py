@@ -1,51 +1,76 @@
 '''
     services/mining_summit/tests/test_seating.py
 
-    Unit tests for the fixed-seat auto-distribution engine. Pure logic, no AWS.
+    Unit tests for the per-axis seat-distribution engine. DynamoDB (aulas table)
+    is mocked with moto.
 '''
+import pytest
+from moto import mock_aws
+
+from schemas.enums import ThematicAxis
+from services.exceptions import InvalidInputError
+from services.mesas import AULAS_TABLE, list_mesas
 from services.seating import select_seat
-from services.summit_rules import AULAS_SEED, MESA_CAPACITY
+from tests.dynamo_helpers import build_resource
+
+# Two axes with distinct capacities to exercise axis-scoped balancing.
+_AXIS = ThematicAxis.CONTRATOS.value
+_OTHER_AXIS = ThematicAxis.MEDIO_AMBIENTE.value
+_SEED = [
+    {'code': 'C1', 'block': 'A', 'location': 'PB', 'capacity': 2, 'axis': _AXIS},
+    {'code': 'C2', 'block': 'A', 'location': 'PB', 'capacity': 2, 'axis': _AXIS},
+    {'code': 'M1', 'block': 'A', 'location': 'PB', 'capacity': 5, 'axis': _OTHER_AXIS},
+]
 
 
-def test_empty_occupancy_returns_first_mesa():
+@pytest.fixture(name = 'dynamodb')
+def dynamodb_fixture():
+    '''Provides a moto-mocked DynamoDB resource with a small aulas seed.'''
+    with mock_aws():
+        resource = build_resource([(AULAS_TABLE, 'code')])
+        table = resource.Table(AULAS_TABLE)
+        for item in _SEED:
+            table.put_item(Item = item)
+        yield resource
+
+
+def test_seat_is_within_chosen_axis(dynamodb):
     '''
-        With no one seated the engine must return a mesa carrying axis metadata.
+        The engine must only ever return an aula of the chosen axis.
     '''
-    seat = select_seat({})
-    assert seat is not None
-    assert seat['code']
-    assert seat['axis'] and seat['axis_number']
+    seat = select_seat(dynamodb, axis = _AXIS, occupancy = {})
+    assert seat['axis'] == _AXIS
+    assert seat['code'] in {'C1', 'C2'}
 
 
-def test_distribution_is_balanced_across_all_mesas():
+def test_distribution_is_balanced_within_axis(dynamodb):
     '''
-        Seating participants one by one must spread them evenly: the first pass
-        of assignments fills every mesa exactly once before any gets a second.
+        Filling the axis one by one must spread evenly across its aulas before
+        any of them gets a second occupant.
     '''
     occupancy: dict[str, int] = {}
     picks: list[str] = []
-    for _ in range(len(AULAS_SEED)):
-        seat = select_seat(occupancy)
-        assert seat is not None
+    for _ in range(2):
+        seat = select_seat(dynamodb, axis = _AXIS, occupancy = occupancy)
         picks.append(seat['code'])
         occupancy[seat['code']] = occupancy.get(seat['code'], 0) + 1
-    assert len(set(picks)) == len(AULAS_SEED)
+    assert set(picks) == {'C1', 'C2'}
 
 
-def test_least_occupied_mesa_is_preferred():
+def test_axis_full_raises(dynamodb):
     '''
-        The engine must prefer the mesa with the fewest occupants.
+        When every aula of the chosen axis is at capacity, the engine must raise
+        (axis capacity reached).
     '''
-    occupancy = {mesa['code']: 5 for mesa in AULAS_SEED}
-    target = AULAS_SEED[7]['code']
-    occupancy[target] = 1
-    seat = select_seat(occupancy)
-    assert seat['code'] == target
+    occupancy = {mesa['code']: mesa['capacity']
+                 for mesa in list_mesas(dynamodb, axis = _AXIS)}
+    with pytest.raises(InvalidInputError):
+        select_seat(dynamodb, axis = _AXIS, occupancy = occupancy)
 
 
-def test_returns_none_when_all_mesas_are_full():
+def test_unknown_axis_raises(dynamodb):
     '''
-        When every mesa is at capacity the engine must return None (no seat).
+        An axis with no allocated aulas must raise InvalidInputError.
     '''
-    occupancy = {mesa['code']: MESA_CAPACITY for mesa in AULAS_SEED}
-    assert select_seat(occupancy) is None
+    with pytest.raises(InvalidInputError):
+        select_seat(dynamodb, axis = ThematicAxis.SEGURIDAD_JURIDICA.value, occupancy = {})

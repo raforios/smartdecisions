@@ -33,7 +33,9 @@ ROLE_ASSIGNMENT_MAP: dict[ParticipantRole, AssignmentType] = {
     ParticipantRole.MODERADOR: AssignmentType.FIJO,
     ParticipantRole.VEEDOR: AssignmentType.ROTATIVO,
     ParticipantRole.INVITADO: AssignmentType.ROTATIVO,
-    ParticipantRole.ORGANIZADOR: AssignmentType.ROTATIVO
+    ParticipantRole.ORGANIZADOR: AssignmentType.ROTATIVO,
+    ParticipantRole.PRENSA: AssignmentType.ROTATIVO,
+    ParticipantRole.FACILITADOR: AssignmentType.ROTATIVO
 }
 
 # Display metadata for the six thematic axes: (official number, human label).
@@ -45,6 +47,28 @@ AXIS_METADATA: dict[ThematicAxis, tuple[int, str]] = {
     ThematicAxis.COMERCIALIZACION: (5, 'Comercialización, Trazabilidad y Minería Ilegal'),
     ThematicAxis.DESARROLLO_PRODUCTIVO: (6, 'Desarrollo Productivo, Inversiones e Incentivos')
 }
+
+# Reverse lookup used by the ETL to resolve the Excel "Eje Temático" number
+# (1-6) chosen by each participant into its thematic axis.
+AXIS_BY_NUMBER: dict[int, ThematicAxis] = {
+    number: axis for axis, (number, _label) in AXIS_METADATA.items()
+}
+
+
+def resolve_axis_by_number(number: int) -> ThematicAxis:
+    '''
+        Resolves the thematic axis for an official axis number (1-6).
+
+        Args:
+            number (int): The axis number as filled in the registration Excel.
+
+        Returns:
+            ThematicAxis: The matching thematic axis.
+
+        Raises:
+            KeyError: If the number is outside the 1-6 range.
+    '''
+    return AXIS_BY_NUMBER[number]
 
 # Every classroom-table (aula ≡ mesa) seats the same number of people.
 MESA_CAPACITY = 30

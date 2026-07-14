@@ -13,6 +13,8 @@ REGION="us-east-1"
 TABLES=(
     '{ "name": "mining_summit_participants", "attributes": "AttributeName=ci,AttributeType=S", "keys": "AttributeName=ci,KeyType=HASH" }'
     '{ "name": "mining_summit_attendances", "attributes": "AttributeName=ci,AttributeType=S AttributeName=attendance_date,AttributeType=S", "keys": "AttributeName=ci,KeyType=HASH AttributeName=attendance_date,KeyType=RANGE" }'
+    '{ "name": "mining_summit_aulas", "attributes": "AttributeName=code,AttributeType=S", "keys": "AttributeName=code,KeyType=HASH" }'
+    '{ "name": "mining_summit_load_batches", "attributes": "AttributeName=batch_id,AttributeType=S", "keys": "AttributeName=batch_id,KeyType=HASH" }'
 )
 
 echo "==================================================="

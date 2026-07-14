@@ -8,10 +8,17 @@ from typing import Any, Dict, List
 from boto3.resources.base import ServiceResource
 
 from schemas.reports import StatsGroupBy
+from services.crud import scan_all_items
+from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 from services.participants import scan_all_participants
 from services.utils import handle_service_errors
 
+ENV_VARS = load_and_validate_env_vars({
+    'DYNAMODB_TABLE_NAME_LOAD_BATCHES': str
+})
+
+LOAD_BATCHES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_LOAD_BATCHES']
 
 _UNDEFINED_LABEL = 'Sin especificar'
 
@@ -66,3 +73,33 @@ def get_participant_stats(
         'total': len(items),
         'items': aggregated
     }
+
+
+@handle_service_errors
+def get_not_accredited_report(
+    dynamodb_resource: ServiceResource
+) -> Dict[str, Any]:
+    '''
+        Builds the not-accredited report (constancia): every spreadsheet row
+        that could not be accredited across all ETL load batches, flattened with
+        its institution context.
+
+        Returns:
+            Dict[str, Any]: total count and the per-row not-accredited entries.
+    '''
+    message = 'Building not-accredited report from load batches.'
+    logger.info(message)
+
+    batches = scan_all_items(dynamodb_resource, LOAD_BATCHES_TABLE)
+    entries: List[Dict[str, Any]] = []
+    for batch in batches:
+        for rejected in batch.get('rejected', []):
+            entries.append({
+                'institution_id': batch.get('institution_id'),
+                'institution_name': batch.get('institution_name'),
+                'batch_id': batch.get('batch_id'),
+                'row': int(rejected.get('row')) if rejected.get('row') is not None else None,
+                'ci': rejected.get('ci'),
+                'reason': rejected.get('reason')
+            })
+    return {'total': len(entries), 'items': entries}

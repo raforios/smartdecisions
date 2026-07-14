@@ -3,8 +3,18 @@
  * for the hash-based router driving the dashboard.
  */
 export class Sidebar {
-    static render(config) {
-        const items = config.menu.map(item => `
+    /**
+     * Returns the menu items the given role is allowed to see. An item without a
+     * 'roles' list is visible to everyone; a null role sees only such items.
+     */
+    static allowedItems(config, role) {
+        return config.menu.filter(
+            item => !item.roles || (role && item.roles.includes(role))
+        );
+    }
+
+    static render(config, role) {
+        const items = Sidebar.allowedItems(config, role).map(item => `
             <div class="nav-item" data-module="${item.module}" data-id="${item.id}">
                 <i class="${item.icon}"></i>
                 <span>${item.label}</span>

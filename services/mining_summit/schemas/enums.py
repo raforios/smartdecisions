@@ -4,6 +4,46 @@
 from enum import Enum
 
 
+class RoleEnum(str, Enum):
+    '''
+        Access-control roles consumed from the JWT 'role' claim (issued by AUTH).
+
+        ADMIN        -> full access (config, ETL, baja/reemplazo, reports).
+        REGISTRATION -> accreditation desk: scan QR / mark attendance and
+                        register new attendees when authorized (cupo available).
+        REPORTS      -> read-only: view reports and download the Excel exports;
+                        cannot register or modify data.
+    '''
+    ADMIN = 'ADMIN'
+    REGISTRATION = 'REGISTRATION'
+    REPORTS = 'REPORTS'
+
+
+# Role sets used by the route guards, single-sourced to avoid divergence.
+# Attendance desk (register attendance / create attendees on-the-fly).
+REGISTRATION_ROLES: tuple[str, ...] = (RoleEnum.ADMIN.value, RoleEnum.REGISTRATION.value)
+# Read-only viewing of participants/attendances (any authenticated operator).
+VIEW_ROLES: tuple[str, ...] = (
+    RoleEnum.ADMIN.value, RoleEnum.REGISTRATION.value, RoleEnum.REPORTS.value
+)
+# Reports and Excel exports.
+REPORT_ROLES: tuple[str, ...] = (RoleEnum.ADMIN.value, RoleEnum.REPORTS.value)
+
+
+class ParticipantStatus(str, Enum):
+    '''
+        Lifecycle state of an accredited participant.
+
+        ACTIVE   -> currently accredited; appears in the initial reports.
+        REPLACED -> stepped down; a substitute took the seat (data retained,
+                    hidden from the initial reports).
+        CANCELLED -> accreditation annulled without substitute (data retained).
+    '''
+    ACTIVE = 'ACTIVE'
+    REPLACED = 'REPLACED'
+    CANCELLED = 'CANCELLED'
+
+
 class ParticipantRole(str, Enum):
     '''
         Functional role a participant plays at the summit working tables.
@@ -14,6 +54,8 @@ class ParticipantRole(str, Enum):
     VEEDOR = 'VEEDOR'
     INVITADO = 'INVITADO'
     ORGANIZADOR = 'ORGANIZADOR'
+    PRENSA = 'PRENSA'
+    FACILITADOR = 'FACILITADOR'
 
 
 class AssignmentType(str, Enum):

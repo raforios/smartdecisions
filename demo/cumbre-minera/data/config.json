@@ -1,11 +1,11 @@
 {
   "event": {
-    "shortName": "LA CUMBRE",
+    "shortName": "CUMBRE",
     "longName": "MINERA",
-    "fullName": "La Cumbre Minera",
+    "fullName": "Cumbre Minera",
     "subtitle": "Registro de Asistencia y Estadísticas del Evento",
     "year": 2026,
-    "logo": "img/cumbre_minera.png",
+    "logo": "assets/logo_oficial.png",
     "organizer": "Ministerio de Minería y Metalurgia | Estado Plurinacional de Bolivia"
   },
   "endpoints": {
@@ -22,14 +22,32 @@
   "miningSummit": {
     "participantsPath": "/v1/mining-summit/participants",
     "attendancesPath": "/v1/mining-summit/attendances",
-    "statsPath": "/v1/mining-summit/reports/stats"
+    "statsPath": "/v1/mining-summit/reports/stats",
+    "participantsExportPath": "/v1/mining-summit/reports/participants.xlsx",
+    "attendancesExportPath": "/v1/mining-summit/reports/attendances.xlsx",
+    "institutionsPath": "/v1/mining-summit/institutions",
+    "mesasPath": "/v1/mining-summit/mesas",
+    "axesPath": "/v1/mining-summit/axes"
   },
   "menu": [
-    { "id": "registro",     "label": "Registro",     "icon": "fa-solid fa-user-plus",     "module": "registro" },
-    { "id": "asistencia",   "label": "Asistencia",   "icon": "fa-solid fa-clipboard-check","module": "asistencia" },
-    { "id": "reportes",     "label": "Participantes","icon": "fa-solid fa-users",         "module": "reportes" },
-    { "id": "asistencias",  "label": "Asistencias",  "icon": "fa-solid fa-calendar-check","module": "asistencias" },
-    { "id": "estadisticas", "label": "Estadísticas", "icon": "fa-solid fa-chart-pie",     "module": "estadisticas" }
+    { "id": "registro",     "label": "Registro",     "icon": "fa-solid fa-user-plus",     "module": "registro",     "roles": ["ADMIN", "REGISTRATION"] },
+    { "id": "asistencia",   "label": "Asistencia",   "icon": "fa-solid fa-clipboard-check","module": "asistencia",   "roles": ["ADMIN", "REGISTRATION"] },
+    { "id": "reportes",     "label": "Participantes","icon": "fa-solid fa-users",         "module": "reportes",     "roles": ["ADMIN", "REPORTS"] },
+    { "id": "asistencias",  "label": "Asistencias",  "icon": "fa-solid fa-calendar-check","module": "asistencias",  "roles": ["ADMIN", "REPORTS"] },
+    { "id": "estadisticas", "label": "Estadísticas", "icon": "fa-solid fa-chart-pie",     "module": "estadisticas", "roles": ["ADMIN", "REPORTS"] },
+    { "id": "admin-instituciones", "label": "Instituciones", "icon": "fa-solid fa-building", "module": "admin-instituciones", "roles": ["ADMIN"] },
+    { "id": "admin-aulas",         "label": "Aulas",         "icon": "fa-solid fa-chalkboard", "module": "admin-aulas",       "roles": ["ADMIN"] }
+  ],
+  "institutionCategories": [
+    "ACTORES PRODUCTIVOS MINEROS",
+    "COOPERACIÓN Y APOYO LOGÍSTICO",
+    "CÁMARAS INDUSTRIALES Y EMPRESARIALES",
+    "GOBIERNOS AUTÓNOMOS DEPARTAMENTALES",
+    "INSTITUCIONES AFINES Y REGIONALES",
+    "INSTITUCIONES PÚBLICAS - NIVEL CENTRAL",
+    "ÓRGANO LEGISLATIVO",
+    "ORGANIZADOR / ENTE RECTOR",
+    "SECTOR ACADÉMICO Y DE INVESTIGACIÓN"
   ],
   "departments": [
     "La Paz",

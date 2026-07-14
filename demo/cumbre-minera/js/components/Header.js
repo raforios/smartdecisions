@@ -6,17 +6,22 @@ export class Header {
     static render(config, currentUser) {
         const event = config.event;
         return `
-            <div class="topbar-brand">
-                <img src="${event.logo}" alt="Logo">
-                <div class="brand-text">
-                    <span class="brand-short">${event.shortName}</span>
-                    <span class="brand-long">${event.longName}</span>
+            <div class="topbar-left">
+                <button id="menu-toggle" class="icon-btn menu-toggle" title="Menú" aria-label="Menú">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="topbar-brand">
+                    <img src="${event.logo}" alt="Logo">
+                    <div class="brand-text">
+                        <span class="brand-short">${event.shortName}</span>
+                        <span class="brand-long">${event.longName}</span>
+                    </div>
                 </div>
             </div>
             <div class="topbar-actions">
                 <span class="topbar-user" title="Operador autenticado">
                     <i class="fa-solid fa-user-shield"></i>
-                    ${currentUser || 'operador'}
+                    <span class="user-email">${currentUser || 'operador'}</span>
                 </span>
                 <button id="theme-toggle" class="icon-btn" title="Cambiar tema">
                     <i class="fa-solid fa-moon"></i>

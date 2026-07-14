@@ -16,6 +16,9 @@ export const AsistenciasPage = {
                     <h2>Reporte de Asistencias</h2>
                     <div class="subtitle">Filtra por CI y/o rango de fechas. Usa los filtros para acotar la consulta.</div>
                 </div>
+                <button id="export-btn" class="btn btn-primary">
+                    <i class="fa-solid fa-file-excel"></i> Descargar Excel
+                </button>
             </div>
 
             <div class="card">
@@ -47,13 +50,15 @@ export const AsistenciasPage = {
                         <tr>
                             <th>CI</th>
                             <th>Participante</th>
+                            <th>Institución</th>
+                            <th>Aula</th>
                             <th>Fecha</th>
                             <th>Hora</th>
                             <th>Usuario activo</th>
                         </tr>
                     </thead>
                     <tbody id="attendances-tbody">
-                        <tr><td colspan="5"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>
+                        <tr><td colspan="7"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>
                     </tbody>
                 </table>
                 <div class="pagination">
@@ -80,8 +85,12 @@ export const AsistenciasPage = {
                 if (lastKey) params.last_evaluated_key = lastKey;
                 const data = await api.get(config.miningSummit.participantsPath, params);
                 for (const p of (data.items || [])) {
-                    const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-                    participantsByCi.set(p.ci, fullName);
+                    participantsByCi.set(p.ci, {
+                        name: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+                        institution: p.institution_name || p.company || '',
+                        mesa: p.mesa_code || '',
+                        axisLabel: p.axis_label || ''
+                    });
                 }
                 lastKey = data.last_evaluated_key;
             } while (lastKey);
@@ -95,7 +104,7 @@ export const AsistenciasPage = {
                 date_to:   container.querySelector('#date-to').value || undefined,
                 limit:     config.ui.pageSize || 25
             };
-            tbody.innerHTML = `<tr><td colspan="5"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
             try {
                 const [attendancesData, participantsMap] = await Promise.all([
                     api.get(config.miningSummit.attendancesPath, queryParams),
@@ -106,12 +115,28 @@ export const AsistenciasPage = {
                 renderStats(statGrid, items);
                 pageInfo.textContent = `${items.length} asistencias`;
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     <p>${error.message}</p></div></td></tr>`;
                 Toast.danger(`No se pudo cargar: ${error.message}`);
             }
         }
+
+        const exportBtn = container.querySelector('#export-btn');
+        exportBtn.addEventListener('click', async () => {
+            const original = exportBtn.innerHTML;
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Generando...';
+            try {
+                await api.download(config.miningSummit.attendancesExportPath, 'asistencias.xlsx');
+                Toast.success('Reporte de asistencias descargado.');
+            } catch (error) {
+                Toast.danger(`No se pudo exportar: ${error.message}`);
+            } finally {
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = original;
+            }
+        });
 
         container.querySelector('#apply-btn').addEventListener('click', loadAttendances);
         container.querySelector('#clear-btn').addEventListener('click', () => {
@@ -127,17 +152,22 @@ export const AsistenciasPage = {
 
 function renderRows(tbody, items, participantsByCi) {
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
             <i class="fa-solid fa-calendar-xmark"></i>
             <p>Sin asistencias para los filtros aplicados.</p></div></td></tr>`;
         return;
     }
     tbody.innerHTML = items.map(a => {
-        const fullName = participantsByCi.get(a.ci) || '—';
+        const info = participantsByCi.get(a.ci) || {};
+        const aula = info.mesa
+            ? `<strong>${escapeHtml(info.mesa)}</strong>${info.axisLabel ? `<br><small style="color:var(--text-muted)">${escapeHtml(info.axisLabel)}</small>` : ''}`
+            : '—';
         return `
             <tr>
                 <td><strong>${escapeHtml(a.ci)}</strong></td>
-                <td>${escapeHtml(fullName)}</td>
+                <td>${escapeHtml(info.name || '—')}</td>
+                <td>${escapeHtml(info.institution || '—')}</td>
+                <td>${aula}</td>
                 <td>${escapeHtml(a.attendance_date || '—')}</td>
                 <td>${formatTime(a.attendance_at)}</td>
                 <td>${escapeHtml(a.marked_by || '—')}</td>

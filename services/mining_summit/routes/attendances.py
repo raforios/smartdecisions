@@ -14,9 +14,10 @@ from schemas.attendances import (
     AttendanceResponseSchema,
     AttendancesListResponseSchema
 )
+from schemas.enums import REGISTRATION_ROLES, VIEW_ROLES
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/mining-summit/attendances', tags = ['Attendances'])
 
@@ -35,7 +36,7 @@ router = APIRouter(prefix = '/v1/mining-summit/attendances', tags = ['Attendance
 def register_attendance_endpoint(
     payload: AttendanceCreateSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(require_roles(*REGISTRATION_ROLES))
 ):
     '''
         Endpoint to register an attendance.
@@ -59,7 +60,7 @@ def register_attendance_endpoint(
 def list_attendances_endpoint(
     query_params: AttendanceQuerySchema = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(get_current_user)
+    _: str = Depends(require_roles(*VIEW_ROLES))
 ):
     '''
         Endpoint to retrieve the attendances list.

@@ -8,4 +8,5 @@ boto3
 mangum
 python-jose[cryptography]
 python-dotenv
+openpyxl
 pytest

@@ -2,7 +2,7 @@
     Report Schemas for the Mining Summit service (statistics endpoint).
 '''
 from enum import Enum
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -33,3 +33,25 @@ class StatsResponseSchema(BaseModel):
     group_by: StatsGroupBy
     total: int = Field(..., ge = 0)
     items: List[StatsItemSchema]
+
+
+class NotAccreditedItemSchema(BaseModel):
+    '''
+        A single not-accredited spreadsheet row across the ETL load batches.
+    '''
+    institution_id: Optional[str] = None
+    institution_name: Optional[str] = None
+    batch_id: Optional[str] = None
+    row: Optional[int] = None
+    ci: Optional[str] = None
+    reason: str
+
+    model_config = ConfigDict(extra = 'ignore')
+
+
+class NotAccreditedReportSchema(BaseModel):
+    '''
+        Not-accredited report (constancia) aggregating every rejected row.
+    '''
+    total: int = Field(..., ge = 0)
+    items: List[NotAccreditedItemSchema]
