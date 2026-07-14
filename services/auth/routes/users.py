@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, status
 from controllers.users import (
     read_users,
-    get_current_active_user,
+    get_current_admin_user,
     read_user_by_email,
     update_user,
     delete_user
@@ -21,11 +21,11 @@ router = APIRouter(prefix = '/v1/users', tags = ['Users'])
     '/',
     response_model = List[UserResponse],
     status_code = status.HTTP_200_OK,
-    dependencies = [Depends(get_current_active_user)]
+    dependencies = [Depends(get_current_admin_user)]
 )
 async def read_all_users():
     '''
-        Endpoint to read all users (requires active user authentication).
+        Endpoint to read all users. Restricted to ADMIN.
     '''
     users = await read_users()
     logger.info('Accessed all users list.')
@@ -35,13 +35,13 @@ async def read_all_users():
     '/{email}',
     response_model = UserResponse,
     status_code = status.HTTP_200_OK,
-    dependencies = [Depends(get_current_active_user)]
+    dependencies = [Depends(get_current_admin_user)]
 )
 async def read_user(
     email: str
 ):
     '''
-        Endpoint to read a user's email (requires active user authentication).
+        Endpoint to read a single user by email. Restricted to ADMIN.
     '''
     user = await read_user_by_email(email)
     if not user:
@@ -58,7 +58,7 @@ async def read_user(
 @router.patch(
     '/{email}',
     status_code = status.HTTP_200_OK,
-    dependencies = [Depends(get_current_active_user)]
+    dependencies = [Depends(get_current_admin_user)]
 )
 async def patch_user(
     email: str,
@@ -82,7 +82,7 @@ async def patch_user(
 @router.delete(
     '/{email}',
     status_code = status.HTTP_200_OK,
-    dependencies = [Depends(get_current_active_user)],
+    dependencies = [Depends(get_current_admin_user)],
     response_model = SignupResponse
 )
 async def del_user(

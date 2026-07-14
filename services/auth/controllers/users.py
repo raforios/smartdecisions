@@ -20,6 +20,7 @@ from services.logger_config import custom_logger as logger
 from services.exceptions import (
     UnauthorizedError,
     InvalidInputError,
+    ForbiddenError,
     RegisterAlreadyExistsError
 )
 from schemas.users import (
@@ -83,6 +84,25 @@ async def get_current_active_user(
         logger.warning(message)
         raise InvalidInputError(
             detail = 'Inactive user'
+        )
+
+    return current_user
+
+async def get_current_admin_user(
+    current_user: UserResponse = Depends(get_current_active_user)
+) -> UserResponse:
+    '''
+        Ensures the authenticated active user has the ADMIN role. Guards the
+        user-management endpoints (list/read/update/delete) so only
+        administrators can manage users; prevents privilege escalation such as a
+        non-admin promoting itself to ADMIN.
+    '''
+    if current_user.role != Role.ADMIN:
+        message = (f'Forbidden: user {current_user.email} with role '
+                   f'{current_user.role} attempted a user-management operation.')
+        logger.warning(message)
+        raise ForbiddenError(
+            detail = 'Administrator role required for this operation.'
         )
 
     return current_user
