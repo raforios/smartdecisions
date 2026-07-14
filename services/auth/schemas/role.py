@@ -12,3 +12,6 @@ class Role(str, Enum):
     ADMIN = 'ADMIN'
     WAREHOUSE_MANAGER = 'WAREHOUSE_MANAGER'
     REQUESTER = 'REQUESTER'
+    # Mining Summit (Cumbre Minera) roles.
+    REGISTRATION = 'REGISTRATION'
+    REPORTS = 'REPORTS'
