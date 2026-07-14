@@ -627,6 +627,98 @@ demo/
 
 ---
 
+## 🛠️ Post-POC PRs (correcciones tras prueba E2E del usuario)
+
+Después de cerrar el plan original de 5 pasos, el usuario corrió pruebas
+end-to-end del demo en su browser y encontró bloqueos y problemas de UX
+que requirieron 4 PRs adicionales de pulido.
+
+### PR1 — Bugs bloqueantes (✅ completo, 2026-06-18)
+
+| Bug | Causa | Fix |
+|---|---|---|
+| INGEST → FILES upload 404 | Inventé endpoint `/v1/files/upload`. Real: `POST /v1/s3/upload` multipart con `bucket_name` + `file_path` + `file` | Reescrito `services/file_storage.py`. Cliente HTTP correcto + parser de respuesta tolerante a 4 shapes (`file_key`/`file_s3_key`/`key`/`url`+bucket) |
+| CORS en respuestas 500 | `RuntimeError` levantado por `handle_service_errors` salía sin pasar por exception handler, browser lo marcaba como CORS-blocked | Handler explícito `@app.exception_handler(RuntimeError)` en `api_exceptions.py` antes del genérico de `Exception`. Replicado a los 3 servicios |
+| Plantilla 400 al servir local | Dockerfile la generaba en build pero `python main.py` no | `_ensure_template_present()` en lifespan startup |
+| INGEST file_s3_key sin prefijo | `_extract_s3_key` ignoraba el campo `file_key` real y caía a fallback que devolvía solo el basename → ANALYTICS hacía `get_object` con key inválida → `NoSuchKey` | Reescrita la función para preferir `file_key` (canónico de FILES), y el fallback de URL preserva el path completo del bucket |
+| ANALYTICS schema mismatch | `get_dataset_metadata` buscaba `Key={'dataset_id': ...}` pero la tabla AWS tiene PK `id` | Corregido a `Key={'id': dataset_id}` |
+| Optimization tabla simple vs compuesta | `.env` apuntaba a Dynamo productivo, pero la tabla creada inicialmente tenía PK `id` simple, incompatible con el query por (route_id, day) | Script `scripts/recreate_aws_table.sh` que recrea con PK compuesta `route_day_key` + SK `client_id` |
+| `db_connection.py` divergente del canónico | Yo había agregado lógica `DYNAMODB_ENDPOINT_URL` para Dynamo local; rompía la regla "boilerplate compartido idéntico a EVENTS" | Revertido al canónico verbatim de EVENTS (`boto3.resource('dynamodb')` sin parámetros). `.env` apunta a AWS productivo como AUTH/EVENTS |
+
+**Cambios estructurales:** las 3 tablas DynamoDB ahora viven en AWS productivo
+con nombres definitivos `ingest_datasets`, `analytics_runs`,
+`optimization_routes`. `ingest_datasets` y `analytics_runs` usan PK simple `id`
+(con `dataset_id`/`run_id` como atributo mirror). `optimization_routes` usa PK
+compuesta `route_day_key` + SK `client_id`.
+
+### PR2 — Playground ML real (✅ completo, 2026-06-19)
+
+Eliminado el viejo Playground con forms hardcoded ("inservible" según el
+usuario). Reescrito con 4 tabs reales basadas en `notebooks/frontend.ipynb`:
+
+| Tab | Funcionalidad | Endpoints |
+|---|---|---|
+| **1 · Datasets** | Upload `.csv`/`.txt` al bucket vía FILES, listar bucket, preview con delimiter/header configurables, despachar a tabs 2/3 | `POST /v1/s3/upload`, `POST /v1/s3/list-files`, `GET /v1/s3/read/{bucket}/{key}` |
+| **2 · Clasificación (Logistic)** | Selector X/Y/Label, scatter por clase, train logistic + Z-Score opcional, decision boundary `y = -(b + w₀x)/w₁`, predict punto custom con probabilidad | `POST /v1/classification/train-logistic-regression`, `POST /v1/classification/sigmoid-batch` |
+| **3 · Regresión Lineal** | Multi-select features + target, scatter por feature, train linear (single + multi), Z-Score opcional vía endpoint, cost J en escala log, predict con normalización aplicada al input | `POST /v1/common/normalize-features`, `POST /v1/prediction/train-linear-regression`, `POST /v1/prediction/predict-linear-regression` |
+| **4 · Utilidades (Z-Score · Sigmoid)** | Z-Score standalone (manual o pull de dataset cargado) + Sigmoid batch con curve chart + threshold 0.5 line + tabla z → σ(z) → clase | mismos que tab 3 + tab 2 |
+
+**Arquitectura JS:** dividido en 5 archivos (`playground.shell.js` con FILES
+client + parser tabular + state compartido; `playground.datasets.js`,
+`playground.classification.js`, `playground.prediction.js`,
+`playground.utilities.js`).
+
+### PR3 — Módulo Rutas con upload (✅ completo, 2026-06-20)
+
+Antes el módulo Rutas solo leía de Dynamo — sin forma de subir puntos
+propios desde el browser.
+
+**Backend** (`services/optimization/`):
+- `services/route_data.py`: `bulk_upload_points(route_id, day, points)` con strategy delete-then-write para idempotencia + `delete_points_for_route_day` + dedupe por client_id.
+- `controllers/optimization.py`: `bulk_upload_routes_controller` + `_parse_csv_text` con aliases tolerantes (`id/cliente_id/client_id`, `lat/latitude/y`, `lon/lng/longitude/x`); valida que todas las filas compartan (route_id, day). Decorado con `@audit_event('OPTIMIZATION', 'RoutePoints', 'BULK_CREATE')`.
+- `routes/optimization.py`: `POST /v1/optimization/routes/bulk-upload` multipart, decorado con `@log_usage`.
+- `schemas/optimization.py`: `BulkUploadResponse`.
+
+**Frontend** (`portal/demo/routes/`):
+- Nueva card "Subir CSV de puntos" en sidebar con drag-and-drop + botón "Bajar plantilla" (genera `plantilla_puntos_ruta.csv` con 5 PdVs de La Paz) + botón "Subir y cargar".
+- POST al endpoint → auto-sincroniza `route_id`/`day` del form con la respuesta → dispara click programático a "Cargar puntos" → mapa se refresca automáticamente.
+
+### PR4 — Identidad visual BearSoft (✅ completo, 2026-06-19)
+
+El dark theme + acentos teal del demo inicial no respetaba la marca real.
+Migración completa a light corporate basada en los assets que pasó el usuario.
+
+**Assets nuevos en `portal/assets/`:**
+- `bear-face.jpg` — cara del oso, brand mark circular del header.
+- `bear-mascot.jpg` — oso caminando con frasco, hero del landing.
+- `bearsoft-logo.jpg` — banner de la marca.
+- `favicon.svg` — SVG vectorial con huella brown + monograma "SD" navy.
+
+**Paleta light corporate (CSS variables compartidas en `style.css` y `demo.css`):**
+- `--bg #ffffff` blanco puro, `--bg-alt #f7f3ea` crema claro.
+- `--text #0d1e4c` navy del logo BearSoft.
+- `--accent #0d1e4c` primary (navy), `--accent-2 #7a4a2a` secondary (brown huella), `--accent-3 #c4a378` tan claro.
+- `--border #e3dccc`, sombras suaves rgba(navy).
+
+**Cambios:**
+- Botones primary navy sólido, secondary brown sólido, ghost outline navy.
+- Header de cada página (landing + 5 demo) usa `bear-face.jpg` con borde navy circular.
+- Hero del landing reemplaza el SVG genérico por `bear-mascot.jpg`.
+- Chart.js defaults pasaron de teal/gris-oscuro a navy/cream.
+- Leaflet tiles de **CartoDB Dark Matter** → **CartoDB Voyager** (light + color).
+- Polylines/markers del módulo Rutas con paleta corporativa (rojo profesional, verde corporativo, brown punteada para original, navy sólida para optimizada).
+- Cache-bust `?v=4` y `?v=5` en CSS/JS para forzar reload sin hard refresh por archivo.
+
+### Próximos pasos del usuario (anotados, no son trabajo de Claude todavía)
+
+- Prueba E2E del módulo Rutas (no validada visualmente todavía).
+- Deploy de los 3 microservicios nuevos (`ingest`, `optimization`, `analytics`) a AWS Lambda + API Gateway.
+- Deploy del frontend estático a S3 + CloudFront.
+- DNS vía CloudFlare → `smartdecisions.bearsoft.com.bo` o `smartdecisions.raforios.com`.
+- Una vez deployado, actualizar `portal/demo/js/config.js` con las URLs reales de los 3 nuevos servicios.
+
+---
+
 ## Memoria persistente vinculada
 
 - `project_naming.md` — empresa BearSoft / producto SmartDecisions / TRADE-FORMS son Binaria

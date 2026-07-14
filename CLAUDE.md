@@ -72,6 +72,9 @@ microservice_name/
 │   ├── api_exceptions.py # Manejo centralizado de errores
 │   ├── crud.py           # Operaciones genéricas de BD
 │   ├── db_connection.py  # Conexión MySQL / DynamoDB
+│   ├── environment.py     # Carga de variables de entorno.
+│   ├── exceptions.py      # Definición de Excepciones.
+│   ├── logger_config.py   # Configuración del logger.
 │   ├── security.py       # Validación de tokens JWT
 │   └── utils.py          # Decoradores, logs y comunicación entre servicios
 ├── tests/                # Pruebas unitarias con pytest
@@ -101,7 +104,6 @@ python main.py
 | **EVENTS** (`Events-Service`) | Auditoría, logs de uso, trazabilidad | DynamoDB | Recibe logs vía `utils.py` |
 | **FILES** (`File-Handler-Service`) | Interfaz con AWS S3 (upload, read, delete, pre-signed URLs) | S3 | — |
 | **ML_FUNCTIONS** (`ML-Functions-Service`) | Cálculo matemático/estadístico | — | Regresión lineal/logística, gradiente descendente, Z-score |
-| **LOCALIZATION** (`Localization-Service`) | Rutas planificadas vs ejecutadas, check-in/out | MySQL | Provee geo-data |
 
 ---
 
