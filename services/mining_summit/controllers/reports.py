@@ -1,15 +1,23 @@
 '''
     Reports controllers.
 '''
+from typing import Optional
+
 from boto3.resources.base import ServiceResource
 
 from schemas.reports import (
     NotAccreditedReportSchema,
+    SeatDistributionResponseSchema,
+    StatsBasis,
     StatsGroupBy,
     StatsResponseSchema
 )
 from services.exports import export_attendances_xlsx, export_participants_xlsx
-from services.reports import get_not_accredited_report, get_participant_stats
+from services.reports import (
+    get_not_accredited_report,
+    get_participant_stats,
+    get_seat_distribution
+)
 from services.utils import handle_service_errors
 
 
@@ -27,6 +35,24 @@ def get_participant_stats_controller(
         group_by = group_by
     )
     return StatsResponseSchema(**payload)
+
+
+@handle_service_errors
+def get_seat_distribution_controller(
+    dynamodb_resource: ServiceResource,
+    basis: StatsBasis,
+    date: Optional[str] = None
+) -> SeatDistributionResponseSchema:
+    '''
+        Controller to compute the distribution of people across thematic axes
+        and aulas, either for those present on a date or all registered.
+    '''
+    payload = get_seat_distribution(
+        dynamodb_resource = dynamodb_resource,
+        basis = basis,
+        date = date
+    )
+    return SeatDistributionResponseSchema(**payload)
 
 
 @handle_service_errors

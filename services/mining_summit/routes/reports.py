@@ -8,11 +8,14 @@ from controllers.reports import (
     export_attendances_controller,
     export_participants_controller,
     get_not_accredited_report_controller,
-    get_participant_stats_controller
+    get_participant_stats_controller,
+    get_seat_distribution_controller
 )
 from schemas.enums import REPORT_ROLES
 from schemas.reports import (
     NotAccreditedReportSchema,
+    SeatDistributionResponseSchema,
+    StatsBasis,
     StatsGroupBy,
     StatsResponseSchema
 )
@@ -60,6 +63,42 @@ def get_participant_stats_endpoint(
     return get_participant_stats_controller(
         dynamodb_resource = dynamodb_resource,
         group_by = group_by
+    )
+
+
+@router.get(
+    '/seat-distribution',
+    response_model = SeatDistributionResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Seat distribution by axis and aula',
+    description = (
+        'Returns the head-count across thematic axes and their aulas. With '
+        'basis=present only people with an attendance on the given date '
+        '(default today) are counted; with basis=registered every active '
+        'participant is counted. Restricted to ADMIN/REPORTS.'
+    )
+)
+def get_seat_distribution_endpoint(
+    basis: StatsBasis = Query(
+        StatsBasis.PRESENT,
+        description = 'Counting basis: present (by attendance) or registered.'
+    ),
+    date: str | None = Query(
+        None,
+        description = 'ISO date (YYYY-MM-DD) for the present basis; default today.'
+    ),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    _: str = Depends(require_roles(*REPORT_ROLES))
+):
+    '''
+        Endpoint to retrieve the seat distribution by axis and aula.
+    '''
+    message = f'Retrieving seat distribution basis={basis.value} date={date}'
+    logger.info(message)
+    return get_seat_distribution_controller(
+        dynamodb_resource = dynamodb_resource,
+        basis = basis,
+        date = date
     )
 
 
