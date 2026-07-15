@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cumbre Nacional Minera | La Paz 2026</title>
     <meta name="description" content="Cumbre Nacional Minera — La Paz, 22, 23 y 24 de julio de 2026. Ministerio de Minería y Metalurgia del Estado Plurinacional de Bolivia.">
+    <link rel="icon" type="image/png" href="assets/favicon-64.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/landing.css">
@@ -75,6 +77,7 @@
         <p class="obj-general">
             <strong>Objetivo general:</strong> contar con un escenario de diálogo nacional y sectorial que permita analizar, debatir y consensuar propuestas para mejorar la actividad minera en Bolivia, mediante la participación de los diferentes actores productivos, contribuyendo al desarrollo de una minería responsable, sostenible y competitiva, con beneficios y legitimidad social para la población boliviana.
         </p>
+        <h3 class="obj-specific-title">Objetivos específicos</h3>
         <div class="obj-list">
             <div class="obj-item"><i class="fa-solid fa-check"></i><span>Identificar y analizar los aspectos normativos, institucionales, tributarios, productivos y ambientales del sector.</span></div>
             <div class="obj-item"><i class="fa-solid fa-check"></i><span>Analizar propuestas técnicas de prospección, exploración, explotación, comercialización, seguridad jurídica y contratos.</span></div>
@@ -220,10 +223,13 @@
                 <h4>Fechas</h4>
                 <p>22, 23 y 24 de julio de 2026</p>
             </div>
-            <div class="info-card">
+            <div class="info-card info-card-action" data-image-modal="assets/plano.jpeg"
+                 data-image-caption="Plano del campus — Universidad Privada Boliviana, La Paz"
+                 role="button" tabindex="0" title="Ver plano del campus">
                 <i class="fa-solid fa-location-dot"></i>
                 <h4>Sede</h4>
                 <p>Campus La Paz «Fernando Illanes De La Riva»<br>Universidad Privada Boliviana</p>
+                <span class="info-card-hint"><i class="fa-solid fa-map-location-dot"></i> Ver plano del campus</span>
             </div>
             <div class="info-card">
                 <i class="fa-solid fa-landmark"></i>
@@ -241,13 +247,13 @@
         <!-- Ordenadas por relevancia (no alfabéticamente): fila 1 AJAM · SENARECOM
              · SERGEOMIN · FOFIM; fila 2 COMIBOL · ESM · VINTO. -->
         <div class="enlaces-grid">
-            <a class="enlace-card" href="https://www.autoridadminera.gob.bo/" target="_blank" rel="noopener"><span>AJAM</span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-            <a class="enlace-card" href="https://www.senarecom.gob.bo/" target="_blank" rel="noopener"><span>SENARECOM</span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-            <a class="enlace-card" href="https://www.sergeomin.gob.bo/" target="_blank" rel="noopener"><span>SERGEOMIN</span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-            <a class="enlace-card" href="https://www.fofim.gob.bo/" target="_blank" rel="noopener"><span>FOFIM</span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-            <a class="enlace-card" href="https://www.comibol.gob.bo/" target="_blank" rel="noopener"><span>COMIBOL</span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-            <a class="enlace-card" href="https://esm.gob.bo/" target="_blank" rel="noopener"><span>ESM</span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-            <a class="enlace-card" href="https://vinto.gob.bo/" target="_blank" rel="noopener"><span>VINTO</span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            <a class="enlace-card" href="https://www.autoridadminera.gob.bo/" target="_blank" rel="noopener"><img class="enlace-logo" src="assets/enlaces/ajam.png" alt="AJAM"><span>AJAM</span></a>
+            <a class="enlace-card" href="https://www.senarecom.gob.bo/" target="_blank" rel="noopener"><img class="enlace-logo" src="assets/enlaces/senarecom.png" alt="SENARECOM"><span>SENARECOM</span></a>
+            <a class="enlace-card" href="https://www.sergeomin.gob.bo/" target="_blank" rel="noopener"><img class="enlace-logo" src="assets/enlaces/sergeomin.png" alt="SERGEOMIN"><span>SERGEOMIN</span></a>
+            <a class="enlace-card" href="https://www.fofim.gob.bo/" target="_blank" rel="noopener"><img class="enlace-logo" src="assets/enlaces/fofim.png" alt="FOFIM"><span>FOFIM</span></a>
+            <a class="enlace-card" href="https://www.comibol.gob.bo/" target="_blank" rel="noopener"><img class="enlace-logo" src="assets/enlaces/comibol.png" alt="COMIBOL"><span>COMIBOL</span></a>
+            <a class="enlace-card" href="https://esm.gob.bo/" target="_blank" rel="noopener"><img class="enlace-logo" src="assets/enlaces/esm.png" alt="ESM"><span>ESM</span></a>
+            <a class="enlace-card" href="https://vinto.gob.bo/" target="_blank" rel="noopener"><img class="enlace-logo" src="assets/enlaces/vinto.png" alt="VINTO"><span>VINTO</span></a>
         </div>
     </section>
 
@@ -255,19 +261,20 @@
         <div class="section-head">
             <h2>Con el Apoyo de</h2>
         </div>
-        <div class="media-empty">
-            <i class="fa-solid fa-handshake-angle"></i>
-            <h3>Próximamente</h3>
-            <p>Los logos de las organizaciones e instituciones aliadas se publicarán aquí.</p>
-        </div>
-
-        <!-- Cuando haya aliados, reemplazar el bloque anterior por la grilla de logos:
         <div class="apoyo-grid">
-            <a class="apoyo-item" href="https://…" target="_blank" rel="noopener">
-                <img src="assets/aliados/logo-01.png" alt="Nombre del aliado">
+            <a class="apoyo-item" href="https://www.bancomundial.org/ext/es/home" target="_blank" rel="noopener">
+                <img src="assets/apoyo/banco_mundial.png" alt="Banco Mundial">
+            </a>
+            <a class="apoyo-item" href="https://www.iadb.org/es" target="_blank" rel="noopener">
+                <img src="assets/apoyo/bid.png" alt="BID — Banco Interamericano de Desarrollo">
+            </a>
+            <a class="apoyo-item" href="https://www.entel.bo/" target="_blank" rel="noopener">
+                <img src="assets/apoyo/entel.png" alt="ENTEL">
+            </a>
+            <a class="apoyo-item" href="https://www.upb.edu/" target="_blank" rel="noopener">
+                <img src="assets/apoyo/upb.png" alt="UPB — Universidad Privada Boliviana">
             </a>
         </div>
-        -->
     </section>
 
     <footer class="landing-footer">
@@ -309,5 +316,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.min.js"></script>
     <script src="js/brochure-flip.js"></script>
+    <script src="js/landing-modals.js"></script>
 </body>
 </html>

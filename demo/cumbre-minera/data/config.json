@@ -23,6 +23,7 @@
     "participantsPath": "/v1/mining-summit/participants",
     "attendancesPath": "/v1/mining-summit/attendances",
     "statsPath": "/v1/mining-summit/reports/stats",
+    "seatDistributionPath": "/v1/mining-summit/reports/seat-distribution",
     "participantsExportPath": "/v1/mining-summit/reports/participants.xlsx",
     "attendancesExportPath": "/v1/mining-summit/reports/attendances.xlsx",
     "institutionsPath": "/v1/mining-summit/institutions",

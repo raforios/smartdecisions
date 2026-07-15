@@ -498,6 +498,86 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
 }
 
 /* =========================================================================
+   Estadísticas: switch de vistas, controles y detalle por aula
+   ========================================================================= */
+.view-switch { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.stats-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+.basis-toggle { display: flex; gap: 8px; }
+.date-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.date-field input {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-main);
+    font-family: inherit;
+}
+
+.aula-detail { margin-top: 1.25rem; }
+.aula-hint {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 0.75rem;
+}
+.aula-detail-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.aula-detail-head h3 { font-size: 1.1rem; margin: 0; color: var(--text-main); }
+.aula-detail-total { margin-left: auto; font-weight: 700; color: var(--oro-dark); }
+.eje-badge {
+    background: var(--oro);
+    color: #242732;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+.aula-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.85rem;
+}
+.aula-card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    border-top: 4px solid var(--oro);
+    box-shadow: var(--shadow);
+    padding: 0.9rem;
+    text-align: center;
+}
+.aula-card .aula-code {
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 1px;
+}
+.aula-card .aula-count {
+    font-family: var(--font-ubuntu);
+    font-size: 1.8rem;
+    color: var(--oro);
+    line-height: 1.1;
+}
+.aula-card .aula-cap { font-size: 0.72rem; color: var(--text-muted); }
+
+/* =========================================================================
    Pagination
    ========================================================================= */
 .pagination {

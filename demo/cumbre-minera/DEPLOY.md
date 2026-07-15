@@ -140,7 +140,7 @@ un wizard razonable. Pasos exactos:
    - Price class: **Use only North America and Europe** (`PriceClass_100`).
    - Alternate domain name (CNAME): **`cumbre.mineria.gob.bo`**.
    - Custom SSL certificate: el cert recién emitido (ACM `0264f6d5-...`).
-   - Default root object: **`login.html`**.
+   - Default root object: **`index.html`** (landing público; `login.html` es solo el acceso de operador).
 5. **Create distribution** y espera 3-8 min al *Deployed*.
 6. Anota el `Distribution domain name` (ej. `d3xxxxxxx.cloudfront.net`) y el
    `Distribution ID` (ej. `E1ABCXXXXXXX`). Los necesitas en los pasos F y al
