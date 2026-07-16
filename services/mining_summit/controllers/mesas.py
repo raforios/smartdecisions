@@ -4,7 +4,9 @@
 from boto3.resources.base import ServiceResource
 
 from schemas.mesas import (
+    AvailabilityResponseSchema,
     AxesListResponseSchema,
+    AxisAvailabilitySchema,
     AxisResponseSchema,
     MesaCreateSchema,
     MesaQuerySchema,
@@ -12,6 +14,7 @@ from schemas.mesas import (
     MesasListResponseSchema,
     MesaUpdateSchema
 )
+from services.availability import get_axis_availability
 from services.mesas import (
     create_mesa,
     delete_mesa,
@@ -79,6 +82,20 @@ def delete_mesa_controller(dynamodb_resource: ServiceResource, code: str) -> Non
         Controller to delete an aula. Restricted to ADMIN at the route layer.
     '''
     delete_mesa(dynamodb_resource = dynamodb_resource, code = code)
+
+
+@handle_service_errors
+def get_axis_availability_controller(
+    dynamodb_resource: ServiceResource
+) -> AvailabilityResponseSchema:
+    '''
+        Controller to compute the seat availability per thematic axis and aula.
+    '''
+    records = get_axis_availability(dynamodb_resource = dynamodb_resource)
+    return AvailabilityResponseSchema(
+        items = [AxisAvailabilitySchema(**record) for record in records],
+        total_free = sum(record['free'] for record in records)
+    )
 
 
 @handle_service_errors

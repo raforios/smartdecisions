@@ -7,12 +7,14 @@ from boto3.resources.base import ServiceResource
 from controllers.mesas import (
     create_mesa_controller,
     delete_mesa_controller,
+    get_axis_availability_controller,
     list_axes_controller,
     list_mesas_controller,
     update_mesa_controller
 )
-from schemas.enums import RoleEnum
+from schemas.enums import VIEW_ROLES, RoleEnum
 from schemas.mesas import (
+    AvailabilityResponseSchema,
     AxesListResponseSchema,
     MesaCreateSchema,
     MesaQuerySchema,
@@ -147,3 +149,26 @@ def list_axes_endpoint(
     message = 'Retrieving thematic axes.'
     logger.info(message)
     return list_axes_controller(dynamodb_resource = dynamodb_resource)
+
+
+@router.get(
+    '/axes/availability',
+    response_model = AvailabilityResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Seat availability per axis and aula',
+    description = (
+        'Returns, for each thematic axis and its aulas, the free seats '
+        '(capacity minus active registrations). Guides the accreditation desk '
+        'to pick an axis with room. Available to any authenticated operator.'
+    )
+)
+def get_axis_availability_endpoint(
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    _: str = Depends(require_roles(*VIEW_ROLES))
+):
+    '''
+        Endpoint to retrieve the seat availability per thematic axis and aula.
+    '''
+    message = 'Retrieving seat availability.'
+    logger.info(message)
+    return get_axis_availability_controller(dynamodb_resource = dynamodb_resource)

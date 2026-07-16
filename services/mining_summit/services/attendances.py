@@ -4,7 +4,6 @@
 from typing import Any, Dict, Optional, Tuple
 from boto3.resources.base import ServiceResource
 
-from schemas.enums import ParticipantStatus
 from services.crud import (
     find_item_by_key,
     get_all_records_paginated,
@@ -16,6 +15,7 @@ from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from services.filters import filter_items_by_date_range
 from services.logger_config import custom_logger as logger
 from services.participants import create_participant, find_participant_by_ci
+from services.registration import find_registration_by_ci, is_active
 from services.utils import get_current_time_gmt, handle_service_errors
 
 ENV_VARS = load_and_validate_env_vars({
@@ -58,12 +58,15 @@ def _ensure_participant_exists(
     '''
     existing = find_participant_by_ci(dynamodb_resource, payload['ci'])
     if existing:
-        status_value = existing.get('status', ParticipantStatus.ACTIVE.value)
-        if status_value != ParticipantStatus.ACTIVE.value:
+        # A person whose registration was replaced/cancelled stepped down and
+        # cannot mark attendance; people without a registration (walk-ins) can.
+        registration = find_registration_by_ci(dynamodb_resource, payload['ci'])
+        if registration and not is_active(registration):
             raise InvalidInputError(
                 detail = (
                     f'Participant ci={payload["ci"]} is not accredited '
-                    f'(status={status_value}); attendance cannot be registered.'
+                    f'(registration status={registration.get("status")}); '
+                    'attendance cannot be registered.'
                 )
             )
         return False
@@ -76,18 +79,9 @@ def _ensure_participant_exists(
             )
         )
 
-    create_participant(
-        dynamodb_resource = dynamodb_resource,
-        payload = {
-            'ci': payload['ci'],
-            'first_name': payload['first_name'],
-            'last_name': payload['last_name'],
-            'email': payload.get('email'),
-            'phone': payload.get('phone'),
-            'department': payload.get('department'),
-            'company': payload.get('company')
-        }
-    )
+    # The attendance payload already carries the person fields; it never carries
+    # an axis, so the walk-in is created as a person without a seat/registration.
+    create_participant(dynamodb_resource = dynamodb_resource, payload = payload)
     return True
 
 

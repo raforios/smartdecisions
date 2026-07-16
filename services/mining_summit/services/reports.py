@@ -1,19 +1,19 @@
 '''
     Business logic for the Reports module of the Mining Summit service.
 
-    Computes aggregate statistics over the participants table by an arbitrary
-    grouping dimension (department or company).
+    Computes aggregate statistics over the persons table (by department) and the
+    distribution of people across thematic axes and aulas (from registrations).
 '''
 from typing import Any, Dict, List, Optional
 from boto3.resources.base import ServiceResource
 
-from schemas.enums import ParticipantStatus
 from schemas.reports import StatsBasis, StatsGroupBy
 from services.crud import scan_all_items
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 from services.mesas import list_mesas
 from services.participants import scan_all_participants
+from services.registration import is_active, scan_all_registrations
 from services.utils import get_current_time_gmt, handle_service_errors
 
 ENV_VARS = load_and_validate_env_vars({
@@ -148,22 +148,25 @@ def get_seat_distribution(
     message = f'Building seat distribution basis={basis.value} date={resolved_date}'
     logger.info(message)
 
-    participants = [
-        participant for participant in scan_all_participants(dynamodb_resource)
-        if participant.get('status', ParticipantStatus.ACTIVE.value)
-        == ParticipantStatus.ACTIVE.value
-    ]
+    # Active registrations carry the axis/mesa seat; join by ci.
+    registrations = {
+        registration['ci']: registration
+        for registration in scan_all_registrations(dynamodb_resource)
+        if is_active(registration)
+    }
     if basis == StatsBasis.PRESENT:
-        present = _present_cis_on_date(dynamodb_resource, resolved_date)
-        counted = [p for p in participants if p.get('ci') in present]
+        # People present on the date (attendances); walk-ins without an active
+        # registration are counted in the total but reported as unassigned.
+        population = _present_cis_on_date(dynamodb_resource, resolved_date)
     else:
-        counted = participants
+        population = set(registrations)
 
     skeleton = _build_axis_skeleton(list_mesas(dynamodb_resource))
     unassigned = 0
-    for participant in counted:
-        axis = skeleton.get(participant.get('axis'))
-        mesa_code = participant.get('mesa_code')
+    for ci in population:
+        registration = registrations.get(ci)
+        mesa_code = registration.get('mesa_code') if registration else None
+        axis = skeleton.get(registration.get('axis')) if registration else None
         if not axis or not mesa_code or mesa_code not in axis['aulas']:
             unassigned += 1
             continue
@@ -178,7 +181,7 @@ def get_seat_distribution(
     return {
         'basis': basis,
         'date': resolved_date if basis == StatsBasis.PRESENT else None,
-        'total': len(counted),
+        'total': len(population),
         'unassigned': unassigned,
         'axes': axes
     }

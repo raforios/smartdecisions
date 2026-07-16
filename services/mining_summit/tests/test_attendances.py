@@ -9,14 +9,15 @@ from moto import mock_aws
 from services.attendances import ATTENDANCES_TABLE, register_attendance
 from services.exceptions import RegisterAlreadyExistsError
 from services.participants import PARTICIPANTS_TABLE, create_participant
+from services.registration import REGISTRATION_TABLE
 from tests.dynamo_helpers import build_resource
 
 
 @pytest.fixture(name = 'dynamodb')
 def dynamodb_fixture():
-    '''Provides moto DynamoDB with the participants and attendances tables.'''
+    '''Provides moto DynamoDB with the participants, registration and attendances.'''
     with mock_aws():
-        resource = build_resource([(PARTICIPANTS_TABLE, 'ci')])
+        resource = build_resource([(PARTICIPANTS_TABLE, 'ci'), (REGISTRATION_TABLE, 'ci')])
         # Attendances uses a composite (ci, attendance_date) key.
         resource.create_table(
             TableName = ATTENDANCES_TABLE,

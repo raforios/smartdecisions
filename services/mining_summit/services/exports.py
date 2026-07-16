@@ -11,10 +11,9 @@ import openpyxl
 from boto3.resources.base import ServiceResource
 from openpyxl.styles import Font, PatternFill
 
-from schemas.enums import ParticipantStatus
 from services.attendances import ATTENDANCES_TABLE
 from services.crud import scan_all_items
-from services.participants import scan_all_participants
+from services.participants import list_participants
 from services.utils import handle_service_errors
 
 _HEADER_FILL = PatternFill('solid', fgColor = '242732')
@@ -92,13 +91,11 @@ def export_participants_xlsx(
         participants are exported (the initial report); pass include_inactive to
         include replaced/cancelled ones too.
     '''
-    items = scan_all_participants(dynamodb_resource = dynamodb_resource)
-    if not include_inactive:
-        items = [
-            item for item in items
-            if item.get('status', ParticipantStatus.ACTIVE.value) ==
-            ParticipantStatus.ACTIVE.value
-        ]
+    response = list_participants(
+        dynamodb_resource = dynamodb_resource,
+        query_params = {'include_inactive': include_inactive, 'limit': 100000}
+    )
+    items = response['items']
     items.sort(key = lambda item: (item.get('institution_name') or '', item.get('last_name') or ''))
     return _write_workbook('Participantes', _PARTICIPANT_COLUMNS, items)
 

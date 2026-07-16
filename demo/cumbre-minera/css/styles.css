@@ -651,6 +651,69 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 .btn-sm { padding: 6px 10px; font-size: 0.85rem; }
 
+/* =========================================================================
+   Modal de edición de participante + disponibilidad de aulas
+   ========================================================================= */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(20, 22, 30, 0.72);
+}
+.modal-overlay.is-open { display: flex; }
+.modal-box {
+    position: relative;
+    background: var(--card-bg);
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+    padding: 1.5rem;
+    max-height: 92vh;
+    overflow: auto;
+}
+.modal-form { width: min(640px, 96vw); }
+.modal-form h3 { margin-bottom: 0.25rem; }
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--text-main);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.modal-close:hover { background: var(--oro); color: #fff; }
+.edit-subject { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+
+.avail-hint {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    background: rgba(201, 167, 81, 0.08);
+    border-left: 3px solid var(--oro);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+}
+.avail-hint.avail-empty { border-left-color: var(--rojo, #B82227); color: var(--text-main); }
+.avail-intro { font-weight: 700; color: var(--oro-dark); margin-bottom: 4px; }
+.avail-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 3px 0;
+    color: var(--text-main);
+}
+.avail-row .avail-axis { font-weight: 600; }
+.avail-row .avail-free { color: var(--oro-dark); }
+.avail-row .avail-aulas { color: var(--text-muted); }
+
 /* Institución: campo a todo el ancho de la grilla + pista de rol */
 .form-field-wide { grid-column: 1 / -1; }
 .role-hint {

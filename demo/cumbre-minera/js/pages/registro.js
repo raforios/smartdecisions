@@ -9,6 +9,7 @@
  */
 import { Toast } from '../components/Toast.js';
 import { renderQr, printCredential } from '../components/Credential.js';
+import { loadAvailability, buildAxisOptions, renderAvailabilityHint } from '../components/AxisPicker.js';
 
 export const RegistroPage = {
     async render(container, { config, api }) {
@@ -62,6 +63,13 @@ export const RegistroPage = {
                                 ${departamentos}
                             </select>
                         </div>
+                        <div class="form-field form-field-wide">
+                            <label for="axis">Eje temático</label>
+                            <select id="axis" name="axis">
+                                <option value="">— Cargando disponibilidad… —</option>
+                            </select>
+                            <div id="axis-availability"></div>
+                        </div>
                     </div>
                     <div class="form-actions">
                         <button id="submit-btn" class="btn btn-primary" type="submit">
@@ -82,9 +90,19 @@ export const RegistroPage = {
         const resetBtn = container.querySelector('#reset-btn');
         const institutionSelect = container.querySelector('#institution_id');
         const roleHint = container.querySelector('#role-hint');
+        const axisSelect = container.querySelector('#axis');
+        const axisHint = container.querySelector('#axis-availability');
         const resultBox = container.querySelector('#registro-result');
 
         const institutions = await loadInstitutions(api, config, institutionSelect);
+
+        async function refreshAvailability() {
+            const availability = await loadAvailability(api, config);
+            axisSelect.innerHTML = buildAxisOptions(availability, axisSelect.value);
+            renderAvailabilityHint(axisHint, availability);
+            return availability;
+        }
+        await refreshAvailability();
 
         institutionSelect.addEventListener('change', () => {
             renderRoleHint(roleHint, institutions.get(institutionSelect.value));
@@ -93,6 +111,7 @@ export const RegistroPage = {
         resetBtn.addEventListener('click', () => {
             form.reset();
             roleHint.innerHTML = '';
+            refreshAvailability();
         });
 
         form.addEventListener('submit', async (e) => {
@@ -113,8 +132,13 @@ export const RegistroPage = {
                 renderCredential(resultBox, saved);
                 form.reset();
                 roleHint.innerHTML = '';
+                await refreshAvailability();
             } catch (error) {
                 Toast.danger(`No se pudo registrar: ${error.message}`);
+                // The chosen axis may have just filled up; refresh and surface the
+                // aulas/ejes that still have room.
+                const availability = await refreshAvailability();
+                renderAvailabilityHint(axisHint, availability, payload.axis);
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = original;

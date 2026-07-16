@@ -16,6 +16,7 @@ from services.etl import LOAD_BATCHES_TABLE, load_participants_from_excel
 from services.institutions import INSTITUTIONS_TABLE
 from services.mesas import AULAS_TABLE
 from services.participants import PARTICIPANTS_TABLE
+from services.registration import REGISTRATION_TABLE
 from tests.dynamo_helpers import build_resource
 
 _AXIS = ThematicAxis.SEGURIDAD_JURIDICA  # axis number 1
@@ -46,6 +47,7 @@ def dynamodb_fixture():
             (INSTITUTIONS_TABLE, 'id'),
             (AULAS_TABLE, 'code'),
             (PARTICIPANTS_TABLE, 'ci'),
+            (REGISTRATION_TABLE, 'ci'),
             (LOAD_BATCHES_TABLE, 'batch_id')
         ])
         resource.Table(INSTITUTIONS_TABLE).put_item(Item = {
@@ -129,11 +131,13 @@ def test_batch_and_participants_persisted_active(dynamodb):
         dynamodb, file_bytes, 'inst-a', _RESPONSIBLE, ParticipantRole.PARTICIPANTE.value
     )
 
-    participant = dynamodb.Table(PARTICIPANTS_TABLE).get_item(Key = {'ci': '111'})['Item']
-    assert participant['status'] == ParticipantStatus.ACTIVE.value
-    assert participant['institution_id'] == 'inst-a'
-    assert participant['mesa_code'] == 'A1'
-    assert participant['role'] == ParticipantRole.PARTICIPANTE.value
+    person = dynamodb.Table(PARTICIPANTS_TABLE).get_item(Key = {'ci': '111'})['Item']
+    assert person['institution_id'] == 'inst-a'
+    assert person['role'] == ParticipantRole.PARTICIPANTE.value
+    # Seat and lifecycle live in the registration table.
+    registration = dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '111'})['Item']
+    assert registration['status'] == ParticipantStatus.ACTIVE.value
+    assert registration['mesa_code'] == 'A1'
     assert summary['role'] == ParticipantRole.PARTICIPANTE.value
 
     batch = dynamodb.Table(LOAD_BATCHES_TABLE).get_item(

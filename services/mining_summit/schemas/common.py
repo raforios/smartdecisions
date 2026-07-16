@@ -14,6 +14,5 @@ class OptionalContactSchema(BaseModel):
     email: Optional[EmailStr] = Field(None, max_length = 120)
     phone: Optional[str] = Field(None, max_length = 30)
     department: Optional[str] = Field(None, max_length = 60)
-    company: Optional[str] = Field(None, max_length = 120)
 
     model_config = ConfigDict(extra = 'ignore')

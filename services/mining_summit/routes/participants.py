@@ -9,7 +9,8 @@ from controllers.participants import (
     deactivate_participant_controller,
     get_participant_controller,
     list_participants_controller,
-    replace_participant_controller
+    replace_participant_controller,
+    update_participant_controller
 )
 from schemas.enums import REGISTRATION_ROLES, VIEW_ROLES, RoleEnum
 from schemas.participants import (
@@ -18,7 +19,8 @@ from schemas.participants import (
     ParticipantQuerySchema,
     ParticipantReplaceSchema,
     ParticipantResponseSchema,
-    ParticipantsListResponseSchema
+    ParticipantsListResponseSchema,
+    ParticipantUpdateSchema
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
@@ -98,6 +100,36 @@ def get_participant_endpoint(
     return get_participant_controller(
         dynamodb_resource = dynamodb_resource,
         ci = ci
+    )
+
+
+@router.patch(
+    '/{ci}',
+    response_model = ParticipantResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Edit a participant (accreditation)',
+    description = (
+        'Edits a participant so it can be fully accredited: department, contact, '
+        'institution (validated against its cupo) and a thematic-axis seat '
+        '(validated against the axis aula availability). Restricted to the '
+        'registration desk (ADMIN/REGISTRATION).'
+    )
+)
+def update_participant_endpoint(
+    payload: ParticipantUpdateSchema,
+    ci: str = Path(..., min_length = 4, max_length = 20),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    _: str = Depends(require_roles(*REGISTRATION_ROLES))
+):
+    '''
+        Endpoint to edit a participant for accreditation.
+    '''
+    message = f'Editing participant ci={ci}'
+    logger.info(message)
+    return update_participant_controller(
+        dynamodb_resource = dynamodb_resource,
+        ci = ci,
+        payload = payload
     )
 
 

@@ -27,8 +27,7 @@ def get_participant_stats_controller(
     group_by: StatsGroupBy
 ) -> StatsResponseSchema:
     '''
-        Controller to compute participants statistics grouped by department
-        or company.
+        Controller to compute participants statistics grouped by department.
     '''
     payload = get_participant_stats(
         dynamodb_resource = dynamodb_resource,

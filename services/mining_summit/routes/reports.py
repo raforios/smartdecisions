@@ -44,13 +44,13 @@ def _xlsx_response(content: bytes, filename: str) -> Response:
     summary = 'Participant statistics',
     description = (
         'Returns aggregate counts and percentages of registered participants '
-        'grouped by department or company. Restricted to ADMIN/REPORTS.'
+        'grouped by department. Restricted to ADMIN/REPORTS.'
     )
 )
 def get_participant_stats_endpoint(
     group_by: StatsGroupBy = Query(
         ...,
-        description = 'Grouping dimension: department or company.'
+        description = 'Grouping dimension: department.'
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     _: str = Depends(require_roles(*REPORT_ROLES))

@@ -28,7 +28,8 @@
     "attendancesExportPath": "/v1/mining-summit/reports/attendances.xlsx",
     "institutionsPath": "/v1/mining-summit/institutions",
     "mesasPath": "/v1/mining-summit/mesas",
-    "axesPath": "/v1/mining-summit/axes"
+    "axesPath": "/v1/mining-summit/axes",
+    "availabilityPath": "/v1/mining-summit/axes/availability"
   },
   "menu": [
     { "id": "registro",     "label": "Registro",     "icon": "fa-solid fa-user-plus",     "module": "registro",     "roles": ["ADMIN", "REGISTRATION"] },

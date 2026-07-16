@@ -70,10 +70,6 @@ export const AsistenciaPage = {
                                     ${departamentos}
                                 </select>
                             </div>
-                            <div class="form-field">
-                                <label for="company">Empresa</label>
-                                <input id="company" name="company" type="text" maxlength="120">
-                            </div>
                         </div>
                     </div>
 
@@ -203,7 +199,7 @@ function readFormPayload(form, ontheflyEl) {
     const ontheflyVisible = ontheflyEl.style.display !== 'none';
     for (const [key, value] of data.entries()) {
         // Si el bloque on-the-fly no está visible, ignoramos sus campos vacíos.
-        const isOnTheFlyField = ['first_name','last_name','email','phone','department','company'].includes(key);
+        const isOnTheFlyField = ['first_name','last_name','email','phone','department'].includes(key);
         if (isOnTheFlyField && !ontheflyVisible) continue;
         const trimmed = String(value).trim();
         if (trimmed !== '') payload[key] = trimmed;

@@ -13,29 +13,42 @@ from moto import mock_aws
 from schemas.enums import ParticipantStatus
 from services.attendances import ATTENDANCES_TABLE
 from services.exports import export_attendances_xlsx, export_participants_xlsx
+from services.institutions import INSTITUTIONS_TABLE
 from services.participants import PARTICIPANTS_TABLE
+from services.registration import REGISTRATION_TABLE
 from tests.dynamo_helpers import build_resource
 
 
 @pytest.fixture(name = 'dynamodb')
 def dynamodb_fixture():
-    '''Provides moto DynamoDB with participants and attendances tables seeded.'''
+    '''Provides moto DynamoDB with persons, registrations, institutions, attendances.'''
     with mock_aws():
         resource = build_resource([
             (PARTICIPANTS_TABLE, 'ci'),
+            (REGISTRATION_TABLE, 'ci'),
+            (INSTITUTIONS_TABLE, 'id'),
             (ATTENDANCES_TABLE, 'ci')
         ])
-        participants = resource.Table(PARTICIPANTS_TABLE)
-        participants.put_item(Item = {
-            'ci': '111', 'first_name': 'Ana', 'last_name': 'Lopez',
-            'institution_name': 'Institución A', 'role': 'PARTICIPANTE',
-            'axis_label': 'Contratos Mineros', 'mesa_code': 'C1',
-            'department': 'La Paz', 'status': ParticipantStatus.ACTIVE.value,
-            'registered_at': '2026-07-14T09:00:00'
+        resource.Table(INSTITUTIONS_TABLE).put_item(Item = {
+            'id': 'inst-a', 'name': 'Institución A'
         })
-        participants.put_item(Item = {
+        persons = resource.Table(PARTICIPANTS_TABLE)
+        persons.put_item(Item = {
+            'ci': '111', 'first_name': 'Ana', 'last_name': 'Lopez',
+            'institution_id': 'inst-a', 'role': 'PARTICIPANTE',
+            'department': 'La Paz', 'created_at': '2026-07-14T09:00:00'
+        })
+        persons.put_item(Item = {
             'ci': '222', 'first_name': 'Beto', 'last_name': 'Ruiz',
-            'status': ParticipantStatus.CANCELLED.value,
+            'created_at': '2026-07-14T09:05:00'
+        })
+        registration = resource.Table(REGISTRATION_TABLE)
+        registration.put_item(Item = {
+            'ci': '111', 'axis_label': 'Contratos Mineros', 'mesa_code': 'C1',
+            'status': ParticipantStatus.ACTIVE.value, 'registered_at': '2026-07-14T09:00:00'
+        })
+        registration.put_item(Item = {
+            'ci': '222', 'status': ParticipantStatus.CANCELLED.value,
             'registered_at': '2026-07-14T09:05:00'
         })
         resource.Table(ATTENDANCES_TABLE).put_item(Item = {

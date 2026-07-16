@@ -86,3 +86,38 @@ class AxesListResponseSchema(BaseModel):
     items: List[AxisResponseSchema]
     total_mesas: int
     total_capacity: int
+
+
+class AulaAvailabilitySchema(BaseModel):
+    '''
+        Free-seat breakdown for a single aula.
+    '''
+    mesa_code: str
+    capacity: int
+    occupied: int
+    free: int
+
+    model_config = ConfigDict(extra = 'ignore')
+
+
+class AxisAvailabilitySchema(BaseModel):
+    '''
+        Free-seat availability for a thematic axis, broken down by its aulas.
+    '''
+    axis: ThematicAxis
+    number: int
+    label: str
+    capacity: int
+    occupied: int
+    free: int
+    aulas: List[AulaAvailabilitySchema]
+
+    model_config = ConfigDict(extra = 'ignore')
+
+
+class AvailabilityResponseSchema(BaseModel):
+    '''
+        Response wrapper for the seat availability across all thematic axes.
+    '''
+    items: List[AxisAvailabilitySchema]
+    total_free: int

@@ -12,8 +12,7 @@ let chartInstance = null;
 const VIEWS = {
     axis: { label: 'Por eje', icon: 'fa-diagram-project', seat: true },
     aula: { label: 'Por aula y eje', icon: 'fa-chalkboard', seat: true },
-    department: { label: 'Departamento', icon: 'fa-location-dot', seat: false },
-    company: { label: 'Empresa', icon: 'fa-building', seat: false }
+    department: { label: 'Departamento', icon: 'fa-location-dot', seat: false }
 };
 
 export const EstadisticasPage = {
@@ -241,12 +240,12 @@ function renderSeatTable(els, data) {
     }).join('');
 }
 
-/* ---------- Dimension distribution (departamento / empresa) ---------- */
+/* ---------- Dimension distribution (departamento) ---------- */
 
 async function loadDimension(groupBy, config, api, els) {
     els.aulaDetail.innerHTML = '';
     const data = await api.get(config.miningSummit.statsPath, { group_by: groupBy });
-    const dimensionLabel = groupBy === 'department' ? 'Departamentos' : 'Empresas';
+    const dimensionLabel = 'Departamentos';
     const top = data.items[0];
     els.statGrid.innerHTML = `
         <div class="stat-card"><div class="label">Participantes</div>

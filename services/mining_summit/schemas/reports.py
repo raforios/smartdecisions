@@ -11,7 +11,6 @@ class StatsGroupBy(str, Enum):
         Allowed group-by dimensions for the statistical report.
     '''
     DEPARTMENT = 'department'
-    COMPANY = 'company'
 
 
 class StatsItemSchema(BaseModel):

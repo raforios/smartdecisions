@@ -10,16 +10,18 @@ from schemas.participants import (
     ParticipantQuerySchema,
     ParticipantReplaceSchema,
     ParticipantResponseSchema,
-    ParticipantsListResponseSchema
+    ParticipantsListResponseSchema,
+    ParticipantUpdateSchema
 )
 from services.attendances import register_attendance
 from services.participants import (
     assert_cupo_available,
     create_participant,
     deactivate_participant,
-    get_participant_by_ci,
+    get_participant_view,
     list_participants,
-    replace_participant
+    replace_participant,
+    update_participant
 )
 from services.utils import handle_service_errors
 
@@ -61,7 +63,7 @@ def get_participant_controller(
     '''
         Controller to retrieve a single participant by CI.
     '''
-    item = get_participant_by_ci(dynamodb_resource = dynamodb_resource, ci = ci)
+    item = get_participant_view(dynamodb_resource = dynamodb_resource, ci = ci)
     return ParticipantResponseSchema(**item)
 
 
@@ -82,6 +84,24 @@ def list_participants_controller(
         items = [ParticipantResponseSchema(**record) for record in response['items']],
         last_evaluated_key = response.get('last_evaluated_key')
     )
+
+
+@handle_service_errors
+def update_participant_controller(
+    dynamodb_resource: ServiceResource,
+    ci: str,
+    payload: ParticipantUpdateSchema
+) -> ParticipantResponseSchema:
+    '''
+        Controller to edit a participant (accreditation): person fields,
+        institution (cupo-checked) and seat assignment by axis.
+    '''
+    updated = update_participant(
+        dynamodb_resource = dynamodb_resource,
+        ci = ci,
+        payload = payload.model_dump(exclude_none = True)
+    )
+    return ParticipantResponseSchema(**updated)
 
 
 @handle_service_errors
