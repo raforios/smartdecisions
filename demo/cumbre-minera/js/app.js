@@ -4,21 +4,23 @@
  * Bootstrap of the operator dashboard. Coordinates configuration, auth guard,
  * shell rendering and hash-based routing into the per-section page modules.
  */
-import { ConfigService } from './services/ConfigService.js';
-import { AuthService }   from './services/AuthService.js';
-import { ApiService }    from './services/ApiService.js';
-import { Header }        from './components/Header.js';
-import { Sidebar }       from './components/Sidebar.js';
-import { Footer }        from './components/Footer.js';
-import { Toast }         from './components/Toast.js';
+// Cache-busting version: bump on every deploy so browsers re-fetch the whole
+// module graph instead of serving stale ES modules from cache.
+import { ConfigService } from './services/ConfigService.js?v=20260715b';
+import { AuthService }   from './services/AuthService.js?v=20260715b';
+import { ApiService }    from './services/ApiService.js?v=20260715b';
+import { Header }        from './components/Header.js?v=20260715b';
+import { Sidebar }       from './components/Sidebar.js?v=20260715b';
+import { Footer }        from './components/Footer.js?v=20260715b';
+import { Toast }         from './components/Toast.js?v=20260715b';
 
-import { RegistroPage }     from './pages/registro.js';
-import { AsistenciaPage }   from './pages/asistencia.js';
-import { ReportesPage }     from './pages/reportes.js';
-import { AsistenciasPage }  from './pages/asistencias.js';
-import { EstadisticasPage } from './pages/estadisticas.js';
-import { AdminInstitucionesPage } from './pages/admin-instituciones.js';
-import { AdminAulasPage }         from './pages/admin-aulas.js';
+import { RegistroPage }     from './pages/registro.js?v=20260715b';
+import { AsistenciaPage }   from './pages/asistencia.js?v=20260715b';
+import { ReportesPage }     from './pages/reportes.js?v=20260715b';
+import { AsistenciasPage }  from './pages/asistencias.js?v=20260715b';
+import { EstadisticasPage } from './pages/estadisticas.js?v=20260715b';
+import { AdminInstitucionesPage } from './pages/admin-instituciones.js?v=20260715b';
+import { AdminAulasPage }         from './pages/admin-aulas.js?v=20260715b';
 
 const PAGE_FACTORIES = {
     registro:               RegistroPage,
