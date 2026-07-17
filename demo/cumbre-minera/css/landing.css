@@ -197,6 +197,7 @@
 .landing-section.alt > .obj-general,
 .landing-section.alt > .obj-specific-title,
 .landing-section.alt > .obj-list,
+.landing-section.alt > .metodologia-text,
 .landing-section.alt > .mesas-wrap,
 .landing-section.alt > .results-list,
 .landing-section.alt > .media-grid,
@@ -237,6 +238,17 @@
     box-shadow: var(--shadow);
     line-height: 1.7;
     margin-bottom: 2rem;
+}
+.metodologia-text {
+    background: var(--card-bg);
+    border-left: 4px solid var(--oro);
+    border-radius: 12px;
+    padding: 1.75rem 2rem;
+    box-shadow: var(--shadow);
+    color: var(--text-main);
+    line-height: 1.8;
+    text-align: justify;
+    font-size: 1rem;
 }
 .obj-specific-title {
     font-size: 1.15rem;
@@ -489,7 +501,7 @@
 }
 .apoyo-item:hover img { filter: grayscale(0); transform: scale(1.04); }
 
-/* Banner de apoyo técnico (PNUD · ONUDI · planetGOLD) con zonas clickeables */
+/* Banner de apoyo técnico (PNUD · ONUDI · planetGOLD). Toda la imagen enlaza al PNUD. */
 .apoyo-banner {
     max-width: 1100px;
     margin: 2rem auto 0;
@@ -498,24 +510,17 @@
     padding: 1.25rem 1.5rem;
     box-shadow: var(--shadow);
 }
-.apoyo-banner-inner {
-    position: relative;
+.apoyo-banner-link {
+    display: block;
     line-height: 0;
+    transition: transform 0.2s ease;
 }
-.apoyo-banner-inner img {
+.apoyo-banner-link:hover { transform: scale(1.01); }
+.apoyo-banner-link img {
     display: block;
     width: 100%;
     height: auto;
 }
-.apoyo-zone {
-    position: absolute;
-    top: 0;
-    height: 100%;
-    display: block;
-    border-radius: 6px;
-    transition: background 0.2s ease;
-}
-.apoyo-zone:hover { background: rgba(201, 167, 81, 0.12); }
 
 /* Imagen del hero como acceso al brochure (flipbook) */
 .brochure-trigger {
