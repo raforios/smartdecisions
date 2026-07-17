@@ -7,12 +7,14 @@
 from typing import Any, Dict, List, Optional
 from boto3.resources.base import ServiceResource
 
+from schemas.enums import ParticipantStatus
 from schemas.reports import StatsBasis, StatsGroupBy
 from services.crud import scan_all_items
 from services.environment import load_and_validate_env_vars
+from services.institutions import INSTITUTIONS_TABLE
 from services.logger_config import custom_logger as logger
 from services.mesas import list_mesas
-from services.participants import scan_all_participants
+from services.participants import PARTICIPANTS_TABLE, scan_all_participants
 from services.registration import is_active, scan_all_registrations
 from services.utils import get_current_time_gmt, handle_service_errors
 
@@ -215,3 +217,83 @@ def get_not_accredited_report(
                 'reason': rejected.get('reason')
             })
     return {'total': len(entries), 'items': entries}
+
+
+def _lifecycle_entry(
+    registration: Dict[str, Any],
+    persons: Dict[str, Dict[str, Any]],
+    institution_names: Dict[str, str]
+) -> Dict[str, Any]:
+    '''
+        Builds a lifecycle report row joining a retired registration with its
+        person, institution and (for replacements) the substitute's identity.
+    '''
+    person = persons.get(registration['ci'], {})
+    substitute_ci = registration.get('replaced_by_ci')
+    substitute = persons.get(substitute_ci, {}) if substitute_ci else {}
+    substitute_name = (
+        f'{substitute.get("first_name", "")} {substitute.get("last_name", "")}'.strip()
+        if substitute else None
+    )
+    return {
+        'ci': registration['ci'],
+        'first_name': person.get('first_name'),
+        'last_name': person.get('last_name'),
+        'institution_name': institution_names.get(person.get('institution_id')),
+        'role': person.get('role'),
+        'axis_label': registration.get('axis_label'),
+        'mesa_code': registration.get('mesa_code'),
+        'observation': registration.get('observation'),
+        'status_changed_by': registration.get('status_changed_by'),
+        'status_changed_at': registration.get('status_changed_at'),
+        'substitute_ci': substitute_ci,
+        'substitute_name': substitute_name or None
+    }
+
+
+@handle_service_errors
+def get_lifecycle_report(
+    dynamodb_resource: ServiceResource
+) -> Dict[str, Any]:
+    '''
+        Builds the retired-participants report: those whose registration is
+        REPLACED or CANCELLED, with the seat they held, the reason/justification
+        and the operator who performed the change. Replacements also carry the
+        substitute's name and CI.
+
+        Returns:
+            Dict[str, Any]: 'replaced' and 'cancelled' entry lists plus totals.
+    '''
+    message = 'Building lifecycle (replaced/cancelled) report.'
+    logger.info(message)
+
+    persons = {
+        person['ci']: person
+        for person in scan_all_items(dynamodb_resource, PARTICIPANTS_TABLE)
+    }
+    institution_names = {
+        institution['id']: institution.get('name')
+        for institution in scan_all_items(dynamodb_resource, INSTITUTIONS_TABLE)
+    }
+
+    replaced: List[Dict[str, Any]] = []
+    cancelled: List[Dict[str, Any]] = []
+    for registration in scan_all_registrations(dynamodb_resource):
+        status = registration.get('status')
+        if status == ParticipantStatus.REPLACED.value:
+            replaced.append(_lifecycle_entry(registration, persons, institution_names))
+        elif status == ParticipantStatus.CANCELLED.value:
+            cancelled.append(_lifecycle_entry(registration, persons, institution_names))
+
+    def _changed_at(entry: Dict[str, Any]) -> str:
+        '''Sort key: most recent lifecycle change first (empty sorts last).'''
+        return entry.get('status_changed_at') or ''
+
+    replaced.sort(key = _changed_at, reverse = True)
+    cancelled.sort(key = _changed_at, reverse = True)
+    return {
+        'replaced': replaced,
+        'cancelled': cancelled,
+        'total_replaced': len(replaced),
+        'total_cancelled': len(cancelled)
+    }

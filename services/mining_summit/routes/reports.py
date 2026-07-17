@@ -7,12 +7,14 @@ from boto3.resources.base import ServiceResource
 from controllers.reports import (
     export_attendances_controller,
     export_participants_controller,
+    get_lifecycle_report_controller,
     get_not_accredited_report_controller,
     get_participant_stats_controller,
     get_seat_distribution_controller
 )
 from schemas.enums import REPORT_ROLES
 from schemas.reports import (
+    LifecycleReportSchema,
     NotAccreditedReportSchema,
     SeatDistributionResponseSchema,
     StatsBasis,
@@ -100,6 +102,30 @@ def get_seat_distribution_endpoint(
         basis = basis,
         date = date
     )
+
+
+@router.get(
+    '/lifecycle',
+    response_model = LifecycleReportSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Replaced / cancelled participants report',
+    description = (
+        'Returns the retired participants split into REPLACED and CANCELLED, '
+        'each with the seat held, the reason/justification and the operator who '
+        'performed it. Replacements include the substitute name and CI. '
+        'Restricted to ADMIN/REPORTS.'
+    )
+)
+def get_lifecycle_report_endpoint(
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    _: str = Depends(require_roles(*REPORT_ROLES))
+):
+    '''
+        Endpoint to retrieve the replaced/cancelled participants report.
+    '''
+    message = 'Retrieving lifecycle (replaced/cancelled) report.'
+    logger.info(message)
+    return get_lifecycle_report_controller(dynamodb_resource = dynamodb_resource)
 
 
 @router.get(

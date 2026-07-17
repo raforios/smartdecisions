@@ -729,7 +729,7 @@ manage_api_gateway() {
             --name "$API_NAME" \
             --protocol-type HTTP \
             --target "$LAMBDA_ARN_TARGET" \
-            --cors-configuration "AllowOrigins=[\"*\"],AllowMethods=[\"GET\",\"POST\",\"OPTIONS\",\"PUT\",\"DELETE\"],AllowHeaders=[\"*\"],MaxAge=86400" \
+            --cors-configuration "AllowOrigins=[\"*\"],AllowMethods=[\"GET\",\"POST\",\"OPTIONS\",\"PUT\",\"PATCH\",\"DELETE\"],AllowHeaders=[\"*\"],MaxAge=86400" \
             --region "$REGION" \
             --profile "$PROFILE" \
             --query 'ApiId' --output text) || { echo "Error: Falló la creación de la API Gateway HTTP."; exit 1; }

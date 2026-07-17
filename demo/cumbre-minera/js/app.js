@@ -6,21 +6,22 @@
  */
 // Cache-busting version: bump on every deploy so browsers re-fetch the whole
 // module graph instead of serving stale ES modules from cache.
-import { ConfigService } from './services/ConfigService.js?v=20260716c';
-import { AuthService }   from './services/AuthService.js?v=20260716c';
-import { ApiService }    from './services/ApiService.js?v=20260716c';
-import { Header }        from './components/Header.js?v=20260716c';
-import { Sidebar }       from './components/Sidebar.js?v=20260716c';
-import { Footer }        from './components/Footer.js?v=20260716c';
-import { Toast }         from './components/Toast.js?v=20260716c';
+import { ConfigService } from './services/ConfigService.js?v=20260717c';
+import { AuthService }   from './services/AuthService.js?v=20260717c';
+import { ApiService }    from './services/ApiService.js?v=20260717c';
+import { Header }        from './components/Header.js?v=20260717c';
+import { Sidebar }       from './components/Sidebar.js?v=20260717c';
+import { Footer }        from './components/Footer.js?v=20260717c';
+import { Toast }         from './components/Toast.js?v=20260717c';
 
-import { RegistroPage }     from './pages/registro.js?v=20260716c';
-import { AsistenciaPage }   from './pages/asistencia.js?v=20260716c';
-import { ReportesPage }     from './pages/reportes.js?v=20260716c';
-import { AsistenciasPage }  from './pages/asistencias.js?v=20260716c';
-import { EstadisticasPage } from './pages/estadisticas.js?v=20260716c';
-import { AdminInstitucionesPage } from './pages/admin-instituciones.js?v=20260716c';
-import { AdminAulasPage }         from './pages/admin-aulas.js?v=20260716c';
+import { RegistroPage }     from './pages/registro.js?v=20260717c';
+import { AsistenciaPage }   from './pages/asistencia.js?v=20260717c';
+import { ReportesPage }     from './pages/reportes.js?v=20260717c';
+import { AsistenciasPage }  from './pages/asistencias.js?v=20260717c';
+import { EstadisticasPage } from './pages/estadisticas.js?v=20260717c';
+import { BajasPage } from './pages/bajas.js?v=20260717c';
+import { AdminInstitucionesPage } from './pages/admin-instituciones.js?v=20260717c';
+import { AdminAulasPage }         from './pages/admin-aulas.js?v=20260717c';
 
 const PAGE_FACTORIES = {
     registro:               RegistroPage,
@@ -28,6 +29,7 @@ const PAGE_FACTORIES = {
     reportes:               ReportesPage,
     asistencias:            AsistenciasPage,
     estadisticas:           EstadisticasPage,
+    bajas:                  BajasPage,
     'admin-instituciones':  AdminInstitucionesPage,
     'admin-aulas':          AdminAulasPage
 };

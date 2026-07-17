@@ -21,6 +21,7 @@ from services.filters import filter_items_by_date_range
 from services.institutions import INSTITUTIONS_TABLE, get_institution
 from services.logger_config import custom_logger as logger
 from services.registration import (
+    RegistrationMeta,
     assign_seat,
     create_registration,
     deactivate_registration,
@@ -41,7 +42,8 @@ PARTICIPANTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_PARTICIPANTS']
 # Registration fields surfaced in the joined participant view.
 _REGISTRATION_FIELDS = (
     'assignment_type', 'axis', 'axis_label', 'mesa_code', 'status',
-    'observation', 'replaces_ci', 'replaced_by_ci', 'registered_at'
+    'observation', 'replaces_ci', 'replaced_by_ci', 'registered_at',
+    'registered_by', 'status_changed_by', 'status_changed_at'
 )
 
 
@@ -146,7 +148,7 @@ def create_participant(
             dynamodb_resource = dynamodb_resource,
             ci = saved_person['ci'],
             seat = seat,
-            observation = payload.get('observation')
+            meta = RegistrationMeta(observation = payload.get('observation'))
         )
 
     institution_name = None
@@ -363,7 +365,8 @@ def deactivate_participant(
     dynamodb_resource: ServiceResource,
     ci: str,
     observation: Optional[str] = None,
-    new_status: str = ParticipantStatus.CANCELLED.value
+    new_status: str = ParticipantStatus.CANCELLED.value,
+    changed_by: Optional[str] = None
 ) -> Dict[str, Any]:
     '''
         Soft-deletes a participant's registration: flips its status to CANCELLED
@@ -384,7 +387,8 @@ def deactivate_participant(
         dynamodb_resource = dynamodb_resource,
         ci = ci,
         observation = observation,
-        new_status = new_status
+        new_status = new_status,
+        changed_by = changed_by
     )
     institution_name = None
     if person.get('institution_id'):
@@ -398,7 +402,8 @@ def deactivate_participant(
 def replace_participant(
     dynamodb_resource: ServiceResource,
     outgoing_ci: str,
-    payload: Dict[str, Any]
+    payload: Dict[str, Any],
+    changed_by: Optional[str] = None
 ) -> Dict[str, Any]:
     '''
         Replaces an accredited participant with a substitute authorized by the
@@ -457,16 +462,21 @@ def replace_participant(
         dynamodb_resource = dynamodb_resource,
         ci = saved_person['ci'],
         seat = inherited_seat,
-        observation = payload.get('observation'),
-        replaces_ci = outgoing_ci
+        meta = RegistrationMeta(
+            observation = payload.get('observation'),
+            replaces_ci = outgoing_ci,
+            registered_by = changed_by
+        )
     )
 
-    # Only after the substitute is safely persisted do we retire the outgoing one.
+    # Only after the substitute is safely persisted do we retire the outgoing one,
+    # recording the operator who authorized the replacement.
     deactivate_registration(
         dynamodb_resource = dynamodb_resource,
         ci = outgoing_ci,
         observation = payload.get('observation'),
-        new_status = ParticipantStatus.REPLACED.value
+        new_status = ParticipantStatus.REPLACED.value,
+        changed_by = changed_by
     )
     set_replaced_by(dynamodb_resource, outgoing_ci, saved_person['ci'])
 

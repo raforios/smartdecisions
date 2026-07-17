@@ -6,6 +6,7 @@ from typing import Optional
 from boto3.resources.base import ServiceResource
 
 from schemas.reports import (
+    LifecycleReportSchema,
     NotAccreditedReportSchema,
     SeatDistributionResponseSchema,
     StatsBasis,
@@ -14,11 +15,23 @@ from schemas.reports import (
 )
 from services.exports import export_attendances_xlsx, export_participants_xlsx
 from services.reports import (
+    get_lifecycle_report,
     get_not_accredited_report,
     get_participant_stats,
     get_seat_distribution
 )
 from services.utils import handle_service_errors
+
+
+@handle_service_errors
+def get_lifecycle_report_controller(
+    dynamodb_resource: ServiceResource
+) -> LifecycleReportSchema:
+    '''
+        Controller to build the retired-participants report (replaced/cancelled).
+    '''
+    payload = get_lifecycle_report(dynamodb_resource = dynamodb_resource)
+    return LifecycleReportSchema(**payload)
 
 
 @handle_service_errors

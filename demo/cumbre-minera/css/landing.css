@@ -279,7 +279,32 @@
     border-radius: 12px;
     padding: 1.5rem;
     box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
 }
+.eje-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 1rem;
+}
+.eje-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--oro-dark);
+    background: rgba(201, 167, 81, 0.1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+.eje-link:hover { background: rgba(201, 167, 81, 0.22); transform: translateY(-1px); color: var(--oro-dark); }
 .eje-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 0.8rem; }
 .eje-badge {
     background: var(--oro);

@@ -108,16 +108,18 @@ def update_participant_controller(
 def deactivate_participant_controller(
     dynamodb_resource: ServiceResource,
     ci: str,
-    payload: ParticipantDeactivateSchema
+    payload: ParticipantDeactivateSchema,
+    current_user: str
 ) -> ParticipantResponseSchema:
     '''
-        Controller to soft-delete (deactivate) an accredited participant.
-        Restricted to ADMIN at the route layer.
+        Controller to soft-delete (deactivate) an accredited participant,
+        recording the operator who cancelled it.
     '''
     updated = deactivate_participant(
         dynamodb_resource = dynamodb_resource,
         ci = ci,
-        observation = payload.observation
+        observation = payload.observation,
+        changed_by = current_user
     )
     return ParticipantResponseSchema(**updated)
 
@@ -126,15 +128,17 @@ def deactivate_participant_controller(
 def replace_participant_controller(
     dynamodb_resource: ServiceResource,
     outgoing_ci: str,
-    payload: ParticipantReplaceSchema
+    payload: ParticipantReplaceSchema,
+    current_user: str
 ) -> ParticipantResponseSchema:
     '''
         Controller to replace an accredited participant with a substitute that
-        inherits the outgoing seat. Restricted to ADMIN at the route layer.
+        inherits the outgoing seat, recording the operator who authorized it.
     '''
     saved = replace_participant(
         dynamodb_resource = dynamodb_resource,
         outgoing_ci = outgoing_ci,
-        payload = payload.model_dump(exclude_none = True)
+        payload = payload.model_dump(exclude_none = True),
+        changed_by = current_user
     )
     return ParticipantResponseSchema(**saved)

@@ -8,10 +8,13 @@ import { printCredential } from '../components/Credential.js';
 import { loadAvailability, buildAxisOptions, renderAvailabilityHint } from '../components/AxisPicker.js';
 
 export const ReportesPage = {
-    render(container, { config, api }) {
+    render(container, { config, api, auth }) {
         const departamentos = (config.departments || []).map(
             d => `<option value="${d}">${d}</option>`
         ).join('');
+        // Cancel/replace are limited to the registration desk (ADMIN/REGISTRATION).
+        const role = auth && auth.getUserRole ? auth.getUserRole() : '';
+        const canManage = role === 'ADMIN' || role === 'REGISTRATION';
 
         container.innerHTML = `
             <div class="page-header">
@@ -128,6 +131,52 @@ export const ReportesPage = {
                     </form>
                 </div>
             </div>
+
+            <div class="modal-overlay" id="replace-overlay">
+                <div class="modal-box modal-form" role="dialog" aria-modal="true">
+                    <button class="modal-close" id="replace-close" aria-label="Cerrar">&times;</button>
+                    <h3><i class="fa-solid fa-people-arrows" style="color:var(--oro)"></i> Reemplazar participante</h3>
+                    <div class="edit-subject" id="replace-subject"></div>
+                    <p class="avail-hint" style="margin-bottom:1rem;">
+                        El nuevo participante hereda el mismo eje, aula e institución.
+                        El saliente queda como <strong>REPLACED</strong>.
+                    </p>
+                    <form id="replace-form">
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="replace-ci">CI del sustituto <span class="req">*</span></label>
+                                <input id="replace-ci" name="ci" type="text" required minlength="4" maxlength="20" inputmode="numeric" pattern="[0-9]+">
+                            </div>
+                            <div class="form-field">
+                                <label for="replace-first">Nombre <span class="req">*</span></label>
+                                <input id="replace-first" name="first_name" type="text" required maxlength="80">
+                            </div>
+                            <div class="form-field">
+                                <label for="replace-last">Apellido <span class="req">*</span></label>
+                                <input id="replace-last" name="last_name" type="text" required maxlength="80">
+                            </div>
+                            <div class="form-field">
+                                <label for="replace-phone">Celular</label>
+                                <input id="replace-phone" name="phone" type="tel" maxlength="30">
+                            </div>
+                            <div class="form-field">
+                                <label for="replace-email">Correo</label>
+                                <input id="replace-email" name="email" type="email" maxlength="120">
+                            </div>
+                            <div class="form-field form-field-wide">
+                                <label for="replace-obs">Autorización / motivo</label>
+                                <input id="replace-obs" name="observation" type="text" maxlength="300" placeholder="Ej. autorizado por la institución">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="replace-save" class="btn btn-primary" type="submit">
+                                <i class="fa-solid fa-people-arrows"></i> Reemplazar
+                            </button>
+                            <button id="replace-cancel" class="btn btn-ghost" type="button">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         `;
 
         const state = {
@@ -143,22 +192,37 @@ export const ReportesPage = {
         const nextBtn = container.querySelector('#next-btn');
         let displayedItems = [];
 
-        // Row actions: reprint the QR credential or open the edit modal.
+        const findRow = (ci) => displayedItems.find(item => item.ci === ci);
+
+        // Row actions: reprint QR, edit, replace or decline.
         tbody.addEventListener('click', (event) => {
             const reprint = event.target.closest('button.reprint-btn');
             if (reprint) {
-                const participant = displayedItems.find(item => item.ci === reprint.dataset.ci);
+                const participant = findRow(reprint.dataset.ci);
                 if (participant) printCredential(participant);
                 return;
             }
             const edit = event.target.closest('button.edit-btn');
             if (edit) {
-                const participant = displayedItems.find(item => item.ci === edit.dataset.ci);
+                const participant = findRow(edit.dataset.ci);
                 if (participant) editModal.open(participant);
+                return;
+            }
+            const replace = event.target.closest('button.replace-btn');
+            if (replace) {
+                const participant = findRow(replace.dataset.ci);
+                if (participant) replaceModal.open(participant);
+                return;
+            }
+            const decline = event.target.closest('button.decline-btn');
+            if (decline) {
+                const participant = findRow(decline.dataset.ci);
+                if (participant) declineParticipant(participant, { config, api }, () => loadPage());
             }
         });
 
         const editModal = createEditModal(container, { config, api }, () => loadPage());
+        const replaceModal = createReplaceModal(container, { config, api }, () => loadPage());
 
         async function loadPage() {
             tbody.innerHTML = `<tr><td colspan="10"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
@@ -171,7 +235,7 @@ export const ReportesPage = {
             try {
                 const data = await api.get(config.miningSummit.participantsPath, queryParams);
                 displayedItems = data.items || [];
-                renderRows(tbody, displayedItems);
+                renderRows(tbody, displayedItems, canManage);
                 const nextKey = data.last_evaluated_key || null;
                 if (nextKey && state.keys[state.pageIndex + 1] !== nextKey) {
                     state.keys[state.pageIndex + 1] = nextKey;
@@ -248,13 +312,13 @@ export const ReportesPage = {
             try {
                 const item = await api.get(`${config.miningSummit.participantsPath}/${encodeURIComponent(ci)}`);
                 displayedItems = item ? [item] : [];
-                renderRows(tbody, displayedItems);
+                renderRows(tbody, displayedItems, canManage);
                 pageInfo.textContent = item ? '1 resultado' : '0 resultados';
                 prevBtn.disabled = true;
                 nextBtn.disabled = true;
             } catch (error) {
                 if (error.status === 404) {
-                    renderRows(tbody, []);
+                    renderRows(tbody, [], canManage);
                     pageInfo.textContent = '0 resultados';
                     Toast.info(`No se encontró participante con CI ${ci}.`);
                 } else {
@@ -267,7 +331,7 @@ export const ReportesPage = {
     }
 };
 
-function renderRows(tbody, items) {
+function renderRows(tbody, items, canManage) {
     if (!items || items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">
             <i class="fa-solid fa-folder-open"></i>
@@ -289,6 +353,13 @@ function renderRows(tbody, items) {
                 <button class="btn btn-ghost btn-sm edit-btn" data-ci="${escapeHtml(p.ci)}" title="Editar / acreditar">
                     <i class="fa-solid fa-pen"></i> Editar
                 </button>
+                ${canManage && p.registered ? `
+                <button class="btn btn-ghost btn-sm replace-btn" data-ci="${escapeHtml(p.ci)}" title="Reemplazar por otro participante">
+                    <i class="fa-solid fa-people-arrows"></i> Reemplazar
+                </button>
+                <button class="btn btn-ghost btn-sm decline-btn" data-ci="${escapeHtml(p.ci)}" title="Declinar participación (CANCELLED)">
+                    <i class="fa-solid fa-user-slash"></i> Declinar
+                </button>` : ''}
                 <button class="btn btn-ghost btn-sm reprint-btn" data-ci="${escapeHtml(p.ci)}" title="Reimprimir QR">
                     <i class="fa-solid fa-qrcode"></i> QR
                 </button>
@@ -390,6 +461,94 @@ function createEditModal(container, { config, api }, onSaved) {
             Toast.danger(`No se pudo guardar: ${error.message}`);
             // The chosen axis may be full: refresh and show the ejes with room.
             await refreshAvailability(axisSelect.value, payload.axis);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = original;
+        }
+    });
+
+    return { open };
+}
+
+async function declineParticipant(participant, { config, api }, onDone) {
+    const name = `${participant.first_name || ''} ${participant.last_name || ''}`.trim();
+    const observation = window.prompt(
+        `Declinar la participación de ${name} (CI ${participant.ci}).\n` +
+        'Esto libera su aula y el cupo de su institución.\n\n' +
+        'Motivo / autorización (opcional):', ''
+    );
+    if (observation === null) return; // operator cancelled the prompt
+    try {
+        await api.patch(
+            `${config.miningSummit.participantsPath}/${encodeURIComponent(participant.ci)}/deactivate`,
+            observation.trim() ? { observation: observation.trim() } : {}
+        );
+        Toast.success(`Participación declinada (CI ${participant.ci}). Cupo y aula liberados.`);
+        onDone();
+    } catch (error) {
+        Toast.danger(`No se pudo declinar: ${error.message}`);
+    }
+}
+
+function createReplaceModal(container, { config, api }, onSaved) {
+    const overlay = container.querySelector('#replace-overlay');
+    const form = container.querySelector('#replace-form');
+    const subject = container.querySelector('#replace-subject');
+    const saveBtn = container.querySelector('#replace-save');
+    let outgoing = null;
+
+    function close() {
+        overlay.classList.remove('is-open');
+        outgoing = null;
+    }
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    container.querySelector('#replace-close').addEventListener('click', close);
+    container.querySelector('#replace-cancel').addEventListener('click', close);
+
+    function open(participant) {
+        outgoing = participant;
+        const seat = participant.mesa_code
+            ? `${participant.axis_label || participant.axis || ''} · Aula ${participant.mesa_code}`
+            : 'Sin aula fija';
+        subject.innerHTML =
+            `Sale: <strong>${escapeHtml(participant.first_name || '')} ${escapeHtml(participant.last_name || '')}</strong>
+             · CI ${escapeHtml(participant.ci)} · ${escapeHtml(seat)}`;
+        form.reset();
+        overlay.classList.add('is-open');
+    }
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!outgoing) return;
+        const payload = {
+            ci: form.querySelector('#replace-ci').value.trim(),
+            first_name: form.querySelector('#replace-first').value.trim(),
+            last_name: form.querySelector('#replace-last').value.trim()
+        };
+        if (!payload.ci || !payload.first_name || !payload.last_name) {
+            Toast.danger('CI, nombre y apellido del sustituto son obligatorios.');
+            return;
+        }
+        const phone = form.querySelector('#replace-phone').value.trim();
+        const email = form.querySelector('#replace-email').value.trim();
+        const observation = form.querySelector('#replace-obs').value.trim();
+        if (phone) payload.phone = phone;
+        if (email) payload.email = email;
+        if (observation) payload.observation = observation;
+
+        const original = saveBtn.innerHTML;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Reemplazando...';
+        try {
+            const saved = await api.post(
+                `${config.miningSummit.participantsPath}/${encodeURIComponent(outgoing.ci)}/replace`,
+                payload
+            );
+            Toast.success(`Reemplazo hecho: ${saved.first_name} ${saved.last_name} (CI ${saved.ci}).`);
+            close();
+            onSaved();
+        } catch (error) {
+            Toast.danger(`No se pudo reemplazar: ${error.message}`);
         } finally {
             saveBtn.disabled = false;
             saveBtn.innerHTML = original;

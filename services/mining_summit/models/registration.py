@@ -25,3 +25,8 @@ class Registration(TypedDict, total = False):
     # Lifecycle: ACTIVE by default; REPLACED/CANCELLED for soft-deleted seats.
     status: str
     registered_at: str
+    # Audit: operator (email) who created this registration and who last changed
+    # its lifecycle (cancellation / replacement), so the action is never anonymous.
+    registered_by: Optional[str]
+    status_changed_by: Optional[str]
+    status_changed_at: Optional[str]

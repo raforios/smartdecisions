@@ -37,14 +37,15 @@ def _aula_items():
     return items
 
 
-# Two SEGURIDAD_JURIDICA seats (A3, A7), one CONTRATOS seat (A9) and one CANCELLED
-# registration (A3) that must be excluded from every basis.
+# Two SEGURIDAD_JURIDICA seats (A3, A7), one CONTRATOS seat (A10) and one CANCELLED
+# registration (A3) that must be excluded from every basis. Seats match the
+# 4/4/4/3/3/3 allocation: SEGURIDAD=A3,A7,A8,A9 · CONTRATOS=A10,A11,A12,A13.
 _REGISTRATIONS = [
     {'ci': '1', 'axis': ThematicAxis.SEGURIDAD_JURIDICA.value, 'mesa_code': 'A3',
      'status': ParticipantStatus.ACTIVE.value},
     {'ci': '2', 'axis': ThematicAxis.SEGURIDAD_JURIDICA.value, 'mesa_code': 'A7',
      'status': ParticipantStatus.ACTIVE.value},
-    {'ci': '3', 'axis': ThematicAxis.CONTRATOS.value, 'mesa_code': 'A9',
+    {'ci': '3', 'axis': ThematicAxis.CONTRATOS.value, 'mesa_code': 'A10',
      'status': ParticipantStatus.ACTIVE.value},
     {'ci': '5', 'axis': ThematicAxis.SEGURIDAD_JURIDICA.value, 'mesa_code': 'A3',
      'status': ParticipantStatus.CANCELLED.value}

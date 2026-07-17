@@ -15,6 +15,7 @@ TABLES=(
     "audit_records:id:S"
     "usage_logs:id:S"
     "mining_summit_participants:ci:S"
+    "mining_summit_registration:ci:S"
     "mining_summit_attendances:id:S"
     "mining_summit_institutions:id:S"
     "mining_summit_aulas:code:S"

@@ -29,7 +29,8 @@
     "institutionsPath": "/v1/mining-summit/institutions",
     "mesasPath": "/v1/mining-summit/mesas",
     "axesPath": "/v1/mining-summit/axes",
-    "availabilityPath": "/v1/mining-summit/axes/availability"
+    "availabilityPath": "/v1/mining-summit/axes/availability",
+    "lifecyclePath": "/v1/mining-summit/reports/lifecycle"
   },
   "menu": [
     { "id": "registro",     "label": "Registro",     "icon": "fa-solid fa-user-plus",     "module": "registro",     "roles": ["ADMIN", "REGISTRATION"] },
@@ -37,6 +38,7 @@
     { "id": "reportes",     "label": "Participantes","icon": "fa-solid fa-users",         "module": "reportes",     "roles": ["ADMIN", "REPORTS"] },
     { "id": "asistencias",  "label": "Asistencias",  "icon": "fa-solid fa-calendar-check","module": "asistencias",  "roles": ["ADMIN", "REPORTS"] },
     { "id": "estadisticas", "label": "Estadísticas", "icon": "fa-solid fa-chart-pie",     "module": "estadisticas", "roles": ["ADMIN", "REPORTS"] },
+    { "id": "bajas",        "label": "Bajas y Reemplazos", "icon": "fa-solid fa-user-xmark", "module": "bajas",     "roles": ["ADMIN", "REPORTS"] },
     { "id": "admin-instituciones", "label": "Instituciones", "icon": "fa-solid fa-building", "module": "admin-instituciones", "roles": ["ADMIN"] },
     { "id": "admin-aulas",         "label": "Aulas",         "icon": "fa-solid fa-chalkboard", "module": "admin-aulas",       "roles": ["ADMIN"] }
   ],

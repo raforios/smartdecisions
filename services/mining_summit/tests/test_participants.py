@@ -137,6 +137,38 @@ def test_cupo_available_blocks_when_full(dynamodb):
         assert_cupo_available(dynamodb, 'inst-a')
 
 
+def test_deactivate_frees_institution_cupo_and_records_operator(dynamodb):
+    '''
+        Cancelling frees the institution cupo (a new participant fits again) and
+        the operator who cancelled is recorded on the registration.
+    '''
+    _new_participant(dynamodb, '111')  # consumes the single inst-a cupo
+    updated = deactivate_participant(
+        dynamodb, '111', observation = 'declina', changed_by = 'op@min.gob.bo'
+    )
+    assert updated['status_changed_by'] == 'op@min.gob.bo'
+    assert updated['status_changed_at']
+    # Cupo is free again: a replacement person can now take the slot.
+    assert_cupo_available(dynamodb, 'inst-a')
+    assert count_active_by_institution(dynamodb, 'inst-a') == 0
+
+
+def test_replace_records_operator_on_both_sides(dynamodb):
+    '''
+        The operator who authorized the replacement is stamped on the retired
+        (REPLACED) registration and on the substitute's new registration.
+    '''
+    _new_participant(dynamodb, '111')
+    replace_participant(dynamodb, '111', {
+        'ci': '222', 'first_name': 'Sub', 'last_name': 'Stitute'
+    }, changed_by = 'acred@min.gob.bo')
+
+    outgoing = dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '111'})['Item']
+    assert outgoing['status_changed_by'] == 'acred@min.gob.bo'
+    substitute = dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '222'})['Item']
+    assert substitute['registered_by'] == 'acred@min.gob.bo'
+
+
 def test_update_accredits_bare_person_with_department_institution_and_seat(dynamodb):
     '''
         Editing a bare person (no institution, no seat) assigns the department,

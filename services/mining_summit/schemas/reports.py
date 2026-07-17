@@ -102,3 +102,38 @@ class NotAccreditedReportSchema(BaseModel):
     '''
     total: int = Field(..., ge = 0)
     items: List[NotAccreditedItemSchema]
+
+
+class LifecycleEntrySchema(BaseModel):
+    '''
+        A single participant whose registration was cancelled (declined) or
+        replaced, with the seat it held, the reason/justification and the
+        operator who performed the change. For replacements, the substitute's
+        name and CI are included.
+    '''
+    ci: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    institution_name: Optional[str] = None
+    role: Optional[str] = None
+    axis_label: Optional[str] = None
+    mesa_code: Optional[str] = None
+    observation: Optional[str] = Field(None, description = 'Reason / justification.')
+    status_changed_by: Optional[str] = Field(None, description = 'Operator who did it.')
+    status_changed_at: Optional[str] = None
+    # Populated only for replacements: the substitute that took the seat.
+    substitute_ci: Optional[str] = None
+    substitute_name: Optional[str] = None
+
+    model_config = ConfigDict(extra = 'ignore')
+
+
+class LifecycleReportSchema(BaseModel):
+    '''
+        Report of retired participants split into those replaced (REPLACED) and
+        those who fully declined (CANCELLED).
+    '''
+    replaced: List[LifecycleEntrySchema]
+    cancelled: List[LifecycleEntrySchema]
+    total_replaced: int = Field(..., ge = 0)
+    total_cancelled: int = Field(..., ge = 0)

@@ -17,8 +17,10 @@ from services.mesas import (
     list_mesas,
     update_mesa
 )
-from services.summit_rules import AULAS_SEED, AXIS_METADATA, MESA_ALLOCATION, MESA_CAPACITY
+from services.summit_rules import AULAS_SEED, AXIS_METADATA, MESA_ALLOCATION
 from tests.dynamo_helpers import build_resource
+
+_TOTAL_CAPACITY = sum(aula['capacity'] for aula in AULAS_SEED)
 
 
 def _seed_items():
@@ -52,12 +54,12 @@ def dynamodb_fixture():
 
 def test_list_mesas_returns_all_rooms_with_full_capacity(dynamodb):
     '''
-        All 17 aulas must be listed, each carrying axis metadata, summing to the
-        510 default seats (17 x 30).
+        Every seeded aula must be listed, each carrying axis metadata, summing to
+        the aggregated seat capacity of AULAS_SEED.
     '''
     mesas = list_mesas(dynamodb)
     assert len(mesas) == len(AULAS_SEED)
-    assert sum(mesa['capacity'] for mesa in mesas) == len(AULAS_SEED) * MESA_CAPACITY
+    assert sum(mesa['capacity'] for mesa in mesas) == _TOTAL_CAPACITY
     assert all(mesa['axis'] and mesa['axis_number'] for mesa in mesas)
 
 
@@ -79,7 +81,7 @@ def test_list_axes_totals_are_consistent(dynamodb):
     axes = list_axes(dynamodb)
     assert len(axes) == len(ThematicAxis)
     assert sum(item['mesas'] for item in axes) == len(AULAS_SEED)
-    assert sum(item['capacity'] for item in axes) == len(AULAS_SEED) * MESA_CAPACITY
+    assert sum(item['capacity'] for item in axes) == _TOTAL_CAPACITY
     assert [item['number'] for item in axes] == list(range(1, len(ThematicAxis) + 1))
 
 

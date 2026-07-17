@@ -108,6 +108,11 @@ class ParticipantResponseSchema(BaseModel):
     replaces_ci: Optional[str] = None
     replaced_by_ci: Optional[str] = None
     registered_at: Optional[str] = None
+    registered_by: Optional[str] = None
+    status_changed_by: Optional[str] = Field(
+        None, description = 'Operator who cancelled/replaced this registration.'
+    )
+    status_changed_at: Optional[str] = None
     registered: bool = Field(
         False, description = 'True when the person has an active event registration.'
     )

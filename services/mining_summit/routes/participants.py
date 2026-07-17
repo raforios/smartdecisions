@@ -12,7 +12,7 @@ from controllers.participants import (
     replace_participant_controller,
     update_participant_controller
 )
-from schemas.enums import REGISTRATION_ROLES, VIEW_ROLES, RoleEnum
+from schemas.enums import REGISTRATION_ROLES, VIEW_ROLES
 from schemas.participants import (
     ParticipantCreateSchema,
     ParticipantDeactivateSchema,
@@ -139,26 +139,27 @@ def update_participant_endpoint(
     status_code = status.HTTP_200_OK,
     summary = 'Deactivate (soft-delete) a participant',
     description = (
-        'Marks an accredited participant as CANCELLED. Data is retained but the '
-        'participant is removed from the initial reports and frees the seat. '
-        'Restricted to ADMIN.'
+        'Marks an accredited participant as CANCELLED, freeing both the aula seat '
+        'and the institution cupo. Data is retained; the operator who cancelled '
+        'it is recorded. Restricted to the registration desk (ADMIN/REGISTRATION).'
     )
 )
 def deactivate_participant_endpoint(
     payload: ParticipantDeactivateSchema,
     ci: str = Path(..., min_length = 4, max_length = 20),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(require_roles(RoleEnum.ADMIN.value))
+    current_user: str = Depends(require_roles(*REGISTRATION_ROLES))
 ):
     '''
         Endpoint to deactivate an accredited participant.
     '''
-    message = f'Deactivating participant ci={ci}'
+    message = f'Deactivating participant ci={ci} by {current_user}'
     logger.info(message)
     return deactivate_participant_controller(
         dynamodb_resource = dynamodb_resource,
         ci = ci,
-        payload = payload
+        payload = payload,
+        current_user = current_user
     )
 
 
@@ -170,22 +171,24 @@ def deactivate_participant_endpoint(
     description = (
         'Replaces an accredited participant with an institution-authorized '
         'substitute that inherits the outgoing seat (axis/mesa). The outgoing '
-        'participant is marked REPLACED. Restricted to ADMIN.'
+        'participant is marked REPLACED and the operator who authorized it is '
+        'recorded. Restricted to the registration desk (ADMIN/REGISTRATION).'
     )
 )
 def replace_participant_endpoint(
     payload: ParticipantReplaceSchema,
     ci: str = Path(..., min_length = 4, max_length = 20),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(require_roles(RoleEnum.ADMIN.value))
+    current_user: str = Depends(require_roles(*REGISTRATION_ROLES))
 ):
     '''
         Endpoint to replace an accredited participant.
     '''
-    message = f'Replacing participant ci={ci}'
+    message = f'Replacing participant ci={ci} by {current_user}'
     logger.info(message)
     return replace_participant_controller(
         dynamodb_resource = dynamodb_resource,
         outgoing_ci = ci,
-        payload = payload
+        payload = payload,
+        current_user = current_user
     )

@@ -70,43 +70,43 @@ def resolve_axis_by_number(number: int) -> ThematicAxis:
     '''
     return AXIS_BY_NUMBER[number]
 
-# Every classroom-table (aula ≡ mesa) seats the same number of people.
-MESA_CAPACITY = 30
-
-# The 17 campus rooms assigned to the summit (the non-highlighted rooms in
-# aulas.jpeg), all with a 30-seat capacity: 17 x 30 = 510 fixed seats. Order is
+# The 21 campus rooms assigned to the summit (updated list, 2026-07-17), with
+# per-aula capacities: 15 x 35 + 32 + 24 + 25 + 22 + 20 + 21 = 669 seats. Order is
 # preserved from the source layout and drives the axis allocation below.
 AULAS_SEED: tuple[dict[str, str | int], ...] = (
-    {'code': 'A3', 'block': 'A', 'location': 'Planta Baja', 'capacity': MESA_CAPACITY},
-    {'code': 'A7', 'block': 'A', 'location': 'Primer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A8', 'block': 'A', 'location': 'Primer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A9', 'block': 'A', 'location': 'Primer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A10', 'block': 'A', 'location': 'Primer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A11', 'block': 'A', 'location': 'Primer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A12', 'block': 'A', 'location': 'Segundo Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A13', 'block': 'A', 'location': 'Segundo Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A14', 'block': 'A', 'location': 'Segundo Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A15', 'block': 'A', 'location': 'Segundo Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A16', 'block': 'A', 'location': 'Segundo Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'L11', 'block': 'L', 'location': 'Tercer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'L12', 'block': 'L', 'location': 'Tercer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'L13', 'block': 'L', 'location': 'Tercer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'L15', 'block': 'L', 'location': 'Tercer Piso', 'capacity': MESA_CAPACITY},
-    {'code': 'A5', 'block': 'A', 'location': 'Planta Baja', 'capacity': MESA_CAPACITY},
-    {'code': 'A6', 'block': 'A', 'location': 'Planta Baja', 'capacity': MESA_CAPACITY}
+    {'code': 'A3', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A7', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A8', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A9', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A10', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A11', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A12', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A13', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A14', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A15', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'A16', 'block': 'A', 'location': '', 'capacity': 35},
+    {'code': 'L11', 'block': 'L', 'location': '', 'capacity': 35},
+    {'code': 'L12', 'block': 'L', 'location': '', 'capacity': 35},
+    {'code': 'L13', 'block': 'L', 'location': '', 'capacity': 35},
+    {'code': 'L15', 'block': 'L', 'location': '', 'capacity': 35},
+    {'code': 'A5', 'block': 'A', 'location': '', 'capacity': 32},
+    {'code': 'A6', 'block': 'A', 'location': '', 'capacity': 24},
+    {'code': 'C2', 'block': 'C', 'location': '', 'capacity': 25},
+    {'code': 'L14', 'block': 'L', 'location': '', 'capacity': 22},
+    {'code': 'L10', 'block': 'L', 'location': '', 'capacity': 20},
+    {'code': 'PRISMA', 'block': 'PRISMA', 'location': '', 'capacity': 21}
 )
 
-# Fixed number of mesas (tables) allocated to each thematic axis. Option A chosen
-# by the event owner (2026-07-10): allocation is set by axis importance, not by
-# live demand. ADJUST these counts by importance; they MUST sum to the number of
-# aulas (len(AULAS_SEED) = 17). The allocation is validated at runtime.
+# Fixed number of mesas (aulas) allocated to each thematic axis. Balanced split
+# chosen by the event owner (2026-07-17): 4/4/4/3/3/3. They MUST sum to the number
+# of aulas (len(AULAS_SEED) = 21). The allocation is validated at runtime.
 MESA_ALLOCATION: dict[ThematicAxis, int] = {
-    ThematicAxis.SEGURIDAD_JURIDICA: 3,
-    ThematicAxis.CONTRATOS: 3,
-    ThematicAxis.INSTITUCIONALIDAD: 3,
+    ThematicAxis.SEGURIDAD_JURIDICA: 4,
+    ThematicAxis.CONTRATOS: 4,
+    ThematicAxis.INSTITUCIONALIDAD: 4,
     ThematicAxis.MEDIO_AMBIENTE: 3,
     ThematicAxis.COMERCIALIZACION: 3,
-    ThematicAxis.DESARROLLO_PRODUCTIVO: 2
+    ThematicAxis.DESARROLLO_PRODUCTIVO: 3
 }
 
 

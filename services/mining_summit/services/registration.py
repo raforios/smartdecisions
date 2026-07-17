@@ -6,6 +6,7 @@
     from the person master data (participants) and joined by `ci`, so a person
     can exist without a registration (loaded but not yet seated).
 '''
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from boto3.resources.base import ServiceResource
 
@@ -26,6 +27,17 @@ ENV_VARS = load_and_validate_env_vars({
 })
 
 REGISTRATION_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_REGISTRATION']
+
+
+@dataclass
+class RegistrationMeta:
+    '''
+        Optional metadata attached to a new registration: the free-form note, the
+        CI it substitutes (replacement chain) and the operator who created it.
+    '''
+    observation: Optional[str] = None
+    replaces_ci: Optional[str] = None
+    registered_by: Optional[str] = None
 
 
 def is_active(registration: Optional[Dict[str, Any]]) -> bool:
@@ -133,24 +145,26 @@ def resolve_seat(
 def build_registration_item(
     ci: str,
     seat: Dict[str, Any],
-    observation: Optional[str] = None,
-    replaces_ci: Optional[str] = None
+    meta: Optional[RegistrationMeta] = None
 ) -> Dict[str, Any]:
     '''
         Builds the DynamoDB item shape for a new registration, stamping the
-        timestamp and defaulting the lifecycle status to ACTIVE.
+        timestamp, the operator who registered it and defaulting the lifecycle
+        status to ACTIVE.
     '''
+    meta = meta or RegistrationMeta()
     return {
         'ci': ci.strip(),
         'assignment_type': seat.get('assignment_type'),
         'axis': seat.get('axis'),
         'axis_label': seat.get('axis_label'),
         'mesa_code': seat.get('mesa_code'),
-        'observation': observation,
-        'replaces_ci': replaces_ci,
+        'observation': meta.observation,
+        'replaces_ci': meta.replaces_ci,
         'replaced_by_ci': None,
         'status': ParticipantStatus.ACTIVE.value,
-        'registered_at': get_current_time_gmt().isoformat()
+        'registered_at': get_current_time_gmt().isoformat(),
+        'registered_by': meta.registered_by
     }
 
 
@@ -159,8 +173,7 @@ def create_registration(
     dynamodb_resource: ServiceResource,
     ci: str,
     seat: Dict[str, Any],
-    observation: Optional[str] = None,
-    replaces_ci: Optional[str] = None
+    meta: Optional[RegistrationMeta] = None
 ) -> Dict[str, Any]:
     '''
         Persists a new registration ensuring the CI is unique in the table.
@@ -169,13 +182,12 @@ def create_registration(
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             ci (str): CI of the person being registered.
             seat (Dict[str, Any]): Resolved seat (axis/mesa/assignment_type).
-            observation (Optional[str]): Free-form note.
-            replaces_ci (Optional[str]): CI this registration substitutes, if any.
+            meta (Optional[RegistrationMeta]): Note, replacement CI and operator.
 
         Returns:
             Dict[str, Any]: The persisted registration item.
     '''
-    item = build_registration_item(ci, seat, observation, replaces_ci)
+    item = build_registration_item(ci, seat, meta)
     message = f'Creating registration ci={item["ci"]} axis={item.get("axis")}'
     logger.info(message)
     return create_item(
@@ -208,8 +220,11 @@ def assign_seat(
             Dict[str, Any]: The persisted registration item.
     '''
     existing = find_registration_by_ci(dynamodb_resource, ci)
-    replaces_ci = existing.get('replaces_ci') if existing else None
-    item = build_registration_item(ci, seat, observation, replaces_ci)
+    meta = RegistrationMeta(
+        observation = observation,
+        replaces_ci = existing.get('replaces_ci') if existing else None
+    )
+    item = build_registration_item(ci, seat, meta)
     dynamodb_resource.Table(REGISTRATION_TABLE).put_item(Item = item)
     message = f'Seat assigned ci={ci} axis={item.get("axis")} mesa={item.get("mesa_code")}'
     logger.info(message)
@@ -221,17 +236,20 @@ def deactivate_registration(
     dynamodb_resource: ServiceResource,
     ci: str,
     observation: Optional[str] = None,
-    new_status: str = ParticipantStatus.CANCELLED.value
+    new_status: str = ParticipantStatus.CANCELLED.value,
+    changed_by: Optional[str] = None
 ) -> Dict[str, Any]:
     '''
         Soft-deletes a registration: flips the status to CANCELLED (or REPLACED)
-        and stores the observation, freeing the seat. The record is retained.
+        and stores the observation, freeing the seat. Records the operator who
+        performed the change for audit. The record is retained.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             ci (str): CI of the registration to deactivate.
             observation (Optional[str]): Reason / authorization note.
             new_status (str): Target inactive status (CANCELLED or REPLACED).
+            changed_by (Optional[str]): Operator email performing the change.
 
         Returns:
             Dict[str, Any]: The updated registration item.
@@ -243,8 +261,11 @@ def deactivate_registration(
     registration['status'] = new_status
     if observation is not None:
         registration['observation'] = observation
+    if changed_by is not None:
+        registration['status_changed_by'] = changed_by
+        registration['status_changed_at'] = get_current_time_gmt().isoformat()
     dynamodb_resource.Table(REGISTRATION_TABLE).put_item(Item = registration)
-    message = f'Registration ci={ci} deactivated with status={new_status}.'
+    message = f'Registration ci={ci} set to {new_status} by {changed_by or "system"}.'
     logger.info(message)
     return registration
 
