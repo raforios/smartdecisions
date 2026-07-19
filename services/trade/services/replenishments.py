@@ -16,7 +16,7 @@
 from typing import List, Tuple
 from datetime import datetime
 from sqlalchemy import desc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from services.products import (
     get_product_id_by_sku,
     validate_product_assigned_to_pos
@@ -40,13 +40,17 @@ from models.replenishments import (
     ReplenishmentReportDetail,
 )
 from models.trade import Attendance
+from models.impulses import TradePromotion  # Binaria 2026-07-17
 from schemas.replenishments import (
     ReplenishmentInventoryCreateSchema,       # Binaria 2026-07-08
     ReplenishmentInventoryQuerySchema,        # Binaria 2026-07-08
     ReplenishmentReceptionCreateSchema,
+    ReplenishmentReceptionGlobalQuerySchema,
     ReplenishmentReceptionQuerySchema,
     ReplenishmentReportCreateSchema,
     ReplenishmentReportQuerySchema,
+    ComplementaryBandeoGlobalQuerySchema,     # Binaria 2026-07-17
+    ComplementaryBandeoPlanSchema,            # Binaria 2026-07-17
     ComplementaryBandeoReceiveSchema,    # iter6
     ComplementaryBandeoReturnSchema,     # iter6
     ComplementaryCompetitionCreateSchema,
@@ -55,6 +59,7 @@ from schemas.replenishments import (
     ComplementaryPromoPointQuerySchema,       # Binaria 2026-07-07
 )
 from .trade_utils import (
+    attach_visit_fields,
     create_visit_items,
     filter_query_by_attendance,
     validate_active_attendance,
@@ -131,7 +136,11 @@ async def list_replenishment_reports_service(
     message = f'Listing replenishment reports with filters: {query.model_dump(exclude_none=True)}'
     logger.info(message)
 
-    base_query = db.query(ReplenishmentReport)
+    # Binaria 2026-07-08: always join the visit attendance so pos_id / user_id
+    # can both filter and be exposed in the response.
+    base_query = db.query(ReplenishmentReport, Attendance).join(
+        Attendance, ReplenishmentReport.attendance_id == Attendance.id
+    )
     if query.company_id is not None:
         base_query = base_query.filter(ReplenishmentReport.company_id == query.company_id)
     if query.client_company_id is not None:
@@ -148,24 +157,20 @@ async def list_replenishment_reports_service(
         base_query = base_query.filter(ReplenishmentReport.created_at >= query.date_from)
     if query.date_to is not None:
         base_query = base_query.filter(ReplenishmentReport.created_at <= query.date_to)
-    # Binaria, 2026-07-07: pos_id / user_id live on the visit attendance.
-    if query.pos_id is not None or query.user_id is not None:
-        base_query = base_query.join(
-            Attendance, ReplenishmentReport.attendance_id == Attendance.id
-        )
-        if query.pos_id is not None:
-            base_query = base_query.filter(Attendance.point_of_sale_id == query.pos_id)
-        if query.user_id is not None:
-            base_query = base_query.filter(Attendance.user_id == query.user_id)
+    if query.pos_id is not None:
+        base_query = base_query.filter(Attendance.point_of_sale_id == query.pos_id)
+    if query.user_id is not None:
+        base_query = base_query.filter(Attendance.user_id == query.user_id)
 
     total = base_query.count()
-    items = (
+    rows = (
         base_query
             .order_by(ReplenishmentReport.created_at.desc())
             .offset(query.offset)
             .limit(query.limit)
             .all()
     )
+    items = [attach_visit_fields(report, attendance) for report, attendance in rows]
     return items, total
 
 # iter5 (Binaria, 2026-06-20): Replenishment inventory services removed.
@@ -190,7 +195,7 @@ async def create_replenishment_reception_service(
     message = f'Creating Replenishment Reception for attendance ID: {attendance_id}'
     logger.info(message)
 
-    return await create_visit_items(
+    created = await create_visit_items(
         db = db,
         attendance_id = attendance_id,
         payload = reception_data,
@@ -199,6 +204,9 @@ async def create_replenishment_reception_service(
             'client_company_id': reception_data.client_company_id
         }
     )
+    # Binaria 2026-07-08: expose company/pos/user (via attendance) in the response.
+    attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    return [attach_visit_fields(row, attendance) for row in created]
 
 @handle_service_errors('TRADE')
 async def list_replenishment_reception_service(
@@ -216,9 +224,9 @@ async def list_replenishment_reception_service(
     )
     logger.info(message)
 
-    base_query = db.query(ReplenishmentReception).filter(
-        ReplenishmentReception.attendance_id == attendance_id
-    )
+    base_query = db.query(ReplenishmentReception, Attendance).join(
+        Attendance, ReplenishmentReception.attendance_id == Attendance.id
+    ).filter(ReplenishmentReception.attendance_id == attendance_id)
     if query.client_company_id is not None:
         base_query = base_query.filter(
             ReplenishmentReception.client_company_id == query.client_company_id
@@ -232,13 +240,55 @@ async def list_replenishment_reception_service(
             ReplenishmentReception.batch_number == query.batch_number
         )
     total = base_query.count()
-    items = (
+    rows = (
         base_query
             .order_by(ReplenishmentReception.created_at.desc())
             .offset(query.offset)
             .limit(query.limit)
             .all()
     )
+    items = [attach_visit_fields(row, attendance) for row, attendance in rows]
+    return items, total
+
+
+@handle_service_errors('TRADE')
+async def list_all_replenishment_receptions_service(
+    db: Session,
+    query: ReplenishmentReceptionGlobalQuerySchema
+) -> Tuple[List[ReplenishmentReception], int]:
+    '''
+        Binaria 2026-07-08: paginated listing of supplier reception rows across
+        all visits, filtered by company_id / client_company_id / pos_id /
+        user_id (via the visit attendance) and a created_at range.
+    '''
+    message = (
+        f'Listing all replenishment receptions with filters '
+        f'{query.model_dump(exclude_none = True)}'
+    )
+    logger.info(message)
+
+    base_query = db.query(ReplenishmentReception, Attendance).join(
+        Attendance, ReplenishmentReception.attendance_id == Attendance.id
+    )
+    base_query = filter_query_by_attendance(base_query, query)
+    if query.client_company_id is not None:
+        base_query = base_query.filter(
+            ReplenishmentReception.client_company_id == query.client_company_id
+        )
+    if query.date_from is not None:
+        base_query = base_query.filter(ReplenishmentReception.created_at >= query.date_from)
+    if query.date_to is not None:
+        base_query = base_query.filter(ReplenishmentReception.created_at <= query.date_to)
+
+    total = base_query.count()
+    rows = (
+        base_query
+        .order_by(desc(ReplenishmentReception.created_at))
+        .offset(query.offset)
+        .limit(query.limit)
+        .all()
+    )
+    items = [attach_visit_fields(row, attendance) for row, attendance in rows]
     return items, total
 
 # --- Replenishment Inventory services (Binaria, 2026-07-08, line-free) ---
@@ -258,13 +308,16 @@ async def create_replenishment_inventory_service(
     message = f'Creating Replenishment Inventory for attendance ID: {attendance_id}'
     logger.info(message)
 
-    return await create_visit_items(
+    created = await create_visit_items(
         db = db,
         attendance_id = attendance_id,
         payload = inventory_data,
         model_class = ReplenishmentInventory,
         extra_fields = {'client_company_id': inventory_data.client_company_id}
     )
+    # Binaria 2026-07-08: expose company/pos/user (via attendance) in the response.
+    attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    return [attach_visit_fields(row, attendance) for row in created]
 
 @handle_service_errors('TRADE')
 async def get_latest_replenishment_inventory_service(
@@ -286,12 +339,16 @@ async def get_latest_replenishment_inventory_service(
         raise RegisterNotFoundError(
             detail = f'No replenishment inventory registered for POS {pos_id}.'
         )
+    attendance = db.query(Attendance).filter(
+        Attendance.id == latest.attendance_id
+    ).first()
     items = (
         db.query(ReplenishmentInventory)
         .filter(ReplenishmentInventory.attendance_id == latest.attendance_id)
         .order_by(ReplenishmentInventory.id.asc())
         .all()
     )
+    items = [attach_visit_fields(row, attendance) for row in items]
     return items, len(items)
 
 @handle_service_errors('TRADE')
@@ -310,7 +367,7 @@ async def list_replenishment_inventory_service(
     )
     logger.info(message)
 
-    base_query = db.query(ReplenishmentInventory).join(
+    base_query = db.query(ReplenishmentInventory, Attendance).join(
         Attendance, ReplenishmentInventory.attendance_id == Attendance.id
     )
     base_query = filter_query_by_attendance(base_query, query)
@@ -324,13 +381,14 @@ async def list_replenishment_inventory_service(
         base_query = base_query.filter(ReplenishmentInventory.created_at <= query.date_to)
 
     total = base_query.count()
-    items = (
+    rows = (
         base_query
         .order_by(desc(ReplenishmentInventory.created_at))
         .offset(query.offset)
         .limit(query.limit)
         .all()
     )
+    items = [attach_visit_fields(row, attendance) for row, attendance in rows]
     return items, total
 
 # --- B.3. COMPLEMENTARY ACTIVITIES SERVICES ---
@@ -343,25 +401,130 @@ async def list_replenishment_inventory_service(
 #   * list_complementary_bandeos_for_visit_service
 #   * get_complementary_bandeo_by_id_service
 
+def _attach_bandeo_skus(header: ComplementaryBandeo) -> ComplementaryBandeo:
+    '''
+        Binaria 2026-07-17: exposes each detail's product_sku (from the linked
+        Product) so the bandeo response carries the SKU per line.
+    '''
+    for detail in header.details:
+        detail.product_sku = detail.product.sku if detail.product else None
+    return header
+
+
+@handle_service_errors('TRADE')
+@audit_event('TRADE', 'ComplementaryBandeo', 'PLAN')
+async def plan_complementary_bandeo_service(
+    db: Session,
+    plan_data: ComplementaryBandeoPlanSchema
+) -> ComplementaryBandeo:
+    '''
+        Plan step (Binaria 2026-07-17): assigns a promotion to a POS for a
+        planned visit date. Creates the header with status=PENDING and one
+        detail per SKU, where quantity_planned = promotion_quantity *
+        sku_quantity (from the promotion definition). attendance_id is filled
+        later at the Receive step. Uniqueness: (pos_id, planned_date, promotion).
+    '''
+    message = (
+        f'Planning Bandeo (pos {plan_data.pos_id}, promotion '
+        f'{plan_data.promotion_id}, date {plan_data.planned_date}).'
+    )
+    logger.info(message)
+
+    promotion = db.query(TradePromotion).options(
+        joinedload(TradePromotion.details)
+    ).filter(
+        TradePromotion.id == plan_data.promotion_id,
+        TradePromotion.company_id == plan_data.company_id,
+    ).first()
+    if not promotion:
+        raise RegisterNotFoundError(
+            detail = (
+                f'Promotion {plan_data.promotion_id} not found for company '
+                f'{plan_data.company_id}.'
+            )
+        )
+    sku_quantity_by_product = {
+        detail.product_id: detail.sku_quantity for detail in promotion.details
+    }
+
+    existing = db.query(ComplementaryBandeo).filter(
+        ComplementaryBandeo.pos_id == plan_data.pos_id,
+        ComplementaryBandeo.planned_date == plan_data.planned_date,
+        ComplementaryBandeo.promotion_id == plan_data.promotion_id,
+    ).first()
+    if existing:
+        raise RegisterAlreadyExistsError(
+            detail = (
+                f'A bandeo is already planned for POS {plan_data.pos_id}, '
+                f'promotion {plan_data.promotion_id} on {plan_data.planned_date}.'
+            )
+        )
+
+    db_header = ComplementaryBandeo(
+        company_id = plan_data.company_id,
+        client_company_id = plan_data.client_company_id,
+        pos_id = plan_data.pos_id,
+        planned_date = plan_data.planned_date,
+        promotion_id = plan_data.promotion_id,
+        promotion_quantity = plan_data.promotion_quantity,
+        status = 'PENDING',
+        comments = plan_data.comments,
+    )
+    db.add(db_header)
+    db.flush()
+
+    for item in plan_data.details:
+        product_id = get_product_id_by_sku(db, plan_data.company_id, item.product_sku)
+        validate_product_assigned_to_pos(
+            db, plan_data.company_id, plan_data.pos_id, product_id
+        )
+        sku_quantity = sku_quantity_by_product.get(product_id)
+        if sku_quantity is None:
+            raise InvalidInputError(
+                detail = (
+                    f'SKU {item.product_sku} is not part of promotion '
+                    f'{plan_data.promotion_id}.'
+                )
+            )
+        db.add(ComplementaryBandeoDetail(
+            bandeo_header_id = db_header.id,
+            product_id = product_id,
+            quantity_planned = plan_data.promotion_quantity * sku_quantity,
+            quantity_received = 0,
+            unit_of_measure = item.unit_of_measure,
+        ))
+
+    db.commit()
+    db.refresh(db_header)
+    return _attach_bandeo_skus(db_header)
+
+
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ComplementaryBandeo', 'RECEIVE')
 async def receive_complementary_bandeo_service(
     db: Session,
     attendance_id: int,
+    bandeo_id: int,
     bandeo_data: ComplementaryBandeoReceiveSchema
 ) -> ComplementaryBandeo:
     '''
-        Recibir step: registers the products received for one planned
-        bandeo in the visit and flips the header to status=RECEIVED.
-
-        A single visit may register multiple bandeos, one per planned
-        promotion; uniqueness is enforced on (attendance_id, promotion_id).
+        Recibir step (Binaria 2026-07-17): links a PLANNED bandeo to the visit
+        and persists the quantity received per SKU, flipping status to RECEIVED.
+        quantity_planned is NOT touched (fixed at the Plan step).
     '''
-    message = (
-        f'Receiving Bandeo (attendance {attendance_id}, '
-        f'promotion {bandeo_data.promotion_id}).'
-    )
+    message = f'Receiving Bandeo {bandeo_id} on visit {attendance_id}.'
     logger.info(message)
+
+    db_header = db.query(ComplementaryBandeo).filter_by(id = bandeo_id).first()
+    if not db_header:
+        raise RegisterNotFoundError(detail = f'Bandeo {bandeo_id} not found.')
+    if db_header.status != 'PENDING':
+        raise InvalidInputError(
+            detail = (
+                f'Bandeo {bandeo_id} cannot be received from status '
+                f'{db_header.status!r}; expected PENDING.'
+            )
+        )
 
     validate_active_attendance(
         db = db,
@@ -370,70 +533,46 @@ async def receive_complementary_bandeo_service(
         pos_id = bandeo_data.pos_id
     )
 
-    existing = db.query(ComplementaryBandeo).filter(
-        ComplementaryBandeo.attendance_id == attendance_id,
-        ComplementaryBandeo.promotion_id == bandeo_data.promotion_id,
-    ).first()
-    if existing:
-        raise RegisterAlreadyExistsError(
-            detail = (
-                f'Bandeo already registered for visit {attendance_id} and '
-                f'promotion {bandeo_data.promotion_id}.'
-            )
-        )
-
-    now = datetime.utcnow()
-    db_header = ComplementaryBandeo(
-        attendance_id = attendance_id,
-        company_id = bandeo_data.company_id,
-        client_company_id = bandeo_data.client_company_id,
-        promotion_id = bandeo_data.promotion_id,
-        status = 'RECEIVED',
-        received_at = now,
-        comments = bandeo_data.comments,
-    )
-    db.add(db_header)
-    db.flush()
-
-    pos_id = bandeo_data.pos_id
+    details_by_product = {detail.product_id: detail for detail in db_header.details}
     for item in bandeo_data.details:
-        product_id = get_product_id_by_sku(
-            db, bandeo_data.company_id, item.product_sku
-        )
-        validate_product_assigned_to_pos(
-            db, bandeo_data.company_id, pos_id, product_id
-        )
-        db.add(ComplementaryBandeoDetail(
-            bandeo_header_id = db_header.id,
-            product_id = product_id,
-            quantity_planned = item.quantity_planned,
-            quantity_received = item.quantity_received,
-            unit_of_measure = item.unit_of_measure,
-        ))
+        product_id = get_product_id_by_sku(db, bandeo_data.company_id, item.product_sku)
+        detail = details_by_product.get(product_id)
+        if detail is None:
+            raise InvalidInputError(
+                detail = (
+                    f'SKU {item.product_sku} is not part of the planned bandeo '
+                    f'{bandeo_id}.'
+                )
+            )
+        detail.quantity_received = item.quantity_received
+
+    db_header.attendance_id = attendance_id
+    db_header.status = 'RECEIVED'
+    db_header.received_at = datetime.utcnow()
 
     db.commit()
     db.refresh(db_header)
-    return db_header
+    return _attach_bandeo_skus(db_header)
 
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ComplementaryBandeo', 'RETURN')
 async def return_complementary_bandeo_service(
     db: Session,
+    attendance_id: int,
     bandeo_id: int,
     return_data: ComplementaryBandeoReturnSchema
 ) -> ComplementaryBandeo:
     '''
-        Devolver step: persists quantity_used / quantity_returned /
-        observations per detail row and flips the header to
-        status=RETURNED. Enforces the per-row controls demanded by req
-        7.3.4.1 (qty_used <= qty_received, qty_returned <= qty_received,
+        Devolver step (Binaria 2026-07-17): persists quantity_used /
+        quantity_returned / observations per SKU and flips the header to
+        status=RETURNED. Rows are matched by product_sku. Enforces the per-row
+        controls (qty_used <= qty_received, qty_returned <= qty_received,
         observations mandatory when overriding the default).
     '''
     db_header = db.query(ComplementaryBandeo).filter_by(id = bandeo_id).first()
     if not db_header:
         raise RegisterNotFoundError(detail = f'Bandeo {bandeo_id} not found.')
-
     if db_header.status != 'RECEIVED':
         raise InvalidInputError(
             detail = (
@@ -441,54 +580,74 @@ async def return_complementary_bandeo_service(
                 f'{db_header.status!r}; expected RECEIVED.'
             )
         )
-
-    details_by_id = {d.id: d for d in db_header.details}
-    payload_ids = {row.id for row in return_data.details}
-    if payload_ids != set(details_by_id):
+    if db_header.attendance_id != attendance_id:
         raise InvalidInputError(
             detail = (
-                'Return payload must include every detail row of the '
-                'bandeo header exactly once.'
+                f'Bandeo {bandeo_id} was received in visit '
+                f'{db_header.attendance_id}, not {attendance_id}.'
             )
         )
 
+    details_by_product = {detail.product_id: detail for detail in db_header.details}
+    seen_products = set()
     for row in return_data.details:
-        detail = details_by_id[row.id]
+        product_id = get_product_id_by_sku(db, db_header.company_id, row.product_sku)
+        detail = details_by_product.get(product_id)
+        if detail is None:
+            raise InvalidInputError(
+                detail = (
+                    f'SKU {row.product_sku} is not part of bandeo {bandeo_id}.'
+                )
+            )
+        seen_products.add(product_id)
         if row.quantity_used > detail.quantity_received:
             raise InvalidInputError(
                 detail = (
                     f'quantity_used ({row.quantity_used}) exceeds '
-                    f'quantity_received ({detail.quantity_received}) on '
-                    f'detail {row.id}.'
+                    f'quantity_received ({detail.quantity_received}) on SKU '
+                    f'{row.product_sku}.'
                 )
             )
         if row.quantity_returned > detail.quantity_received:
             raise InvalidInputError(
                 detail = (
                     f'quantity_returned ({row.quantity_returned}) exceeds '
-                    f'quantity_received ({detail.quantity_received}) on '
-                    f'detail {row.id}.'
+                    f'quantity_received ({detail.quantity_received}) on SKU '
+                    f'{row.product_sku}.'
                 )
             )
         default_returned = detail.quantity_received - row.quantity_used
         if row.quantity_returned != default_returned and not row.observations:
             raise InvalidInputError(
                 detail = (
-                    f'observations is required on detail {row.id} when '
-                    f'quantity_returned ({row.quantity_returned}) differs '
-                    f'from the calculated default ({default_returned}).'
+                    f'observations is required on SKU {row.product_sku} when '
+                    f'quantity_returned ({row.quantity_returned}) differs from '
+                    f'the calculated default ({default_returned}).'
                 )
             )
         detail.quantity_used = row.quantity_used
         detail.quantity_returned = row.quantity_returned
         detail.observations = row.observations
 
+    if seen_products != set(details_by_product):
+        raise InvalidInputError(
+            detail = 'Return payload must include every SKU of the bandeo exactly once.'
+        )
+
     db_header.status = 'RETURNED'
     db_header.returned_at = datetime.utcnow()
 
     db.commit()
     db.refresh(db_header)
-    return db_header
+    return _attach_bandeo_skus(db_header)
+
+
+def _bandeo_query_with_details(db: Session):
+    '''Base ComplementaryBandeo query eager-loading details+product and photos.'''
+    return db.query(ComplementaryBandeo).options(
+        joinedload(ComplementaryBandeo.details).joinedload(ComplementaryBandeoDetail.product),
+        joinedload(ComplementaryBandeo.photos),
+    )
 
 
 @handle_service_errors('TRADE')
@@ -498,13 +657,14 @@ async def list_complementary_bandeos_for_visit_service(
 ) -> Tuple[List[ComplementaryBandeo], int]:
     '''
         Returns every bandeo header registered for one visit, ordered
-        oldest-first so the frontend can render them in execution order.
+        oldest-first, with its details (all four quantities) and photos.
     '''
-    query = db.query(ComplementaryBandeo).filter_by(
-        attendance_id = attendance_id
+    query = _bandeo_query_with_details(db).filter(
+        ComplementaryBandeo.attendance_id == attendance_id
     )
     total = query.count()
     items = query.order_by(ComplementaryBandeo.created_at.asc()).all()
+    items = [_attach_bandeo_skus(header) for header in items]
     return items, total
 
 
@@ -514,14 +674,65 @@ async def get_complementary_bandeo_by_id_service(
     bandeo_id: int
 ) -> ComplementaryBandeo:
     '''
-        Fetches one bandeo header with its details, used by the frontend
-        when the operator re-enters the screen to keep editing while the
-        visit remains open.
+        Fetches one bandeo header with its details and photos. Works whether or
+        not a visit is open (usable both for in-field editing and later
+        consultation).
     '''
-    db_header = db.query(ComplementaryBandeo).filter_by(id = bandeo_id).first()
+    db_header = _bandeo_query_with_details(db).filter(
+        ComplementaryBandeo.id == bandeo_id
+    ).first()
     if not db_header:
         raise RegisterNotFoundError(detail = f'Bandeo {bandeo_id} not found.')
-    return db_header
+    return _attach_bandeo_skus(db_header)
+
+
+@handle_service_errors('TRADE')
+async def list_all_complementary_bandeos_service(
+    db: Session,
+    query: ComplementaryBandeoGlobalQuerySchema
+) -> Tuple[List[ComplementaryBandeo], int]:
+    '''
+        Binaria 2026-07-17: paginated listing of complete bandeo records across
+        POS / visits, filtered by company / client / pos / user / status and a
+        created_at range. pos_id lives on the header; user_id is resolved
+        through the visit attendance (planned bandeos with no visit are excluded
+        only when user_id is supplied).
+    '''
+    message = (
+        f'Listing all bandeos with filters {query.model_dump(exclude_none = True)}'
+    )
+    logger.info(message)
+
+    base_query = _bandeo_query_with_details(db).outerjoin(
+        Attendance, ComplementaryBandeo.attendance_id == Attendance.id
+    )
+    if query.company_id is not None:
+        base_query = base_query.filter(ComplementaryBandeo.company_id == query.company_id)
+    if query.client_company_id is not None:
+        base_query = base_query.filter(
+            ComplementaryBandeo.client_company_id == query.client_company_id
+        )
+    if query.pos_id is not None:
+        base_query = base_query.filter(ComplementaryBandeo.pos_id == query.pos_id)
+    if query.user_id is not None:
+        base_query = base_query.filter(Attendance.user_id == query.user_id)
+    if query.status is not None:
+        base_query = base_query.filter(ComplementaryBandeo.status == query.status)
+    if query.date_from is not None:
+        base_query = base_query.filter(ComplementaryBandeo.created_at >= query.date_from)
+    if query.date_to is not None:
+        base_query = base_query.filter(ComplementaryBandeo.created_at <= query.date_to)
+
+    total = base_query.count()
+    items = (
+        base_query
+        .order_by(desc(ComplementaryBandeo.created_at))
+        .offset(query.offset)
+        .limit(query.limit)
+        .all()
+    )
+    items = [_attach_bandeo_skus(header) for header in items]
+    return items, total
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'ComplementaryPromoPoint', 'CREATE')
@@ -580,7 +791,11 @@ async def list_complementary_promo_points_service(
     message = f'Listing promo points with filters {query.model_dump(exclude_none=True)}'
     logger.info(message)
 
-    base_query = db.query(ComplementaryPromoPoint)
+    # Binaria 2026-07-08: always join the visit attendance so pos_id / user_id
+    # can both filter and be exposed in the response.
+    base_query = db.query(ComplementaryPromoPoint, Attendance).join(
+        Attendance, ComplementaryPromoPoint.attendance_id == Attendance.id
+    )
     if query.company_id is not None:
         base_query = base_query.filter(ComplementaryPromoPoint.company_id == query.company_id)
     if query.client_company_id is not None:
@@ -591,23 +806,20 @@ async def list_complementary_promo_points_service(
         base_query = base_query.filter(ComplementaryPromoPoint.created_at >= query.date_from)
     if query.date_to is not None:
         base_query = base_query.filter(ComplementaryPromoPoint.created_at <= query.date_to)
-    if query.pos_id is not None or query.user_id is not None:
-        base_query = base_query.join(
-            Attendance, ComplementaryPromoPoint.attendance_id == Attendance.id
-        )
-        if query.pos_id is not None:
-            base_query = base_query.filter(Attendance.point_of_sale_id == query.pos_id)
-        if query.user_id is not None:
-            base_query = base_query.filter(Attendance.user_id == query.user_id)
+    if query.pos_id is not None:
+        base_query = base_query.filter(Attendance.point_of_sale_id == query.pos_id)
+    if query.user_id is not None:
+        base_query = base_query.filter(Attendance.user_id == query.user_id)
 
     total = base_query.count()
-    items = (
+    rows = (
         base_query
         .order_by(ComplementaryPromoPoint.created_at.desc())
         .offset(query.offset)
         .limit(query.limit)
         .all()
     )
+    items = [attach_visit_fields(row, attendance) for row, attendance in rows]
     return items, total
 
 @handle_service_errors('TRADE')

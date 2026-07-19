@@ -16,13 +16,18 @@ from services.replenishments import (
     list_complementary_competitions_service,   # Binaria 2026-07-07
     list_complementary_promo_points_service,   # Binaria 2026-07-07
     list_replenishment_inventory_service,      # Binaria 2026-07-08
+    list_all_complementary_bandeos_service,   # Binaria 2026-07-17
+    list_all_replenishment_receptions_service,   # Binaria 2026-07-08
     list_replenishment_reception_service,   # iter5
     list_replenishment_reports_service,     # iter5
+    plan_complementary_bandeo_service,      # Binaria 2026-07-17
     receive_complementary_bandeo_service,   # iter6
     return_complementary_bandeo_service,    # iter6
 )
 from schemas.replenishments import (
+    ComplementaryBandeoGlobalQuerySchema,     # Binaria 2026-07-17
     ComplementaryBandeoListResponseSchema,    # iter6
+    ComplementaryBandeoPlanSchema,            # Binaria 2026-07-17
     ComplementaryBandeoReceiveSchema,         # iter6
     ComplementaryBandeoResponseSchema,
     ComplementaryBandeoReturnSchema,          # iter6
@@ -39,6 +44,7 @@ from schemas.replenishments import (
     ReplenishmentInventoryQuerySchema,            # Binaria 2026-07-08
     ReplenishmentReceptionCreateSchema,
     ReplenishmentReceptionListResponseSchema,
+    ReplenishmentReceptionGlobalQuerySchema,  # Binaria 2026-07-08
     ReplenishmentReceptionQuerySchema,        # iter5
     ReplenishmentReportCreateSchema,
     ReplenishmentReportListResponseSchema,    # iter5
@@ -139,6 +145,26 @@ async def list_replenishment_reception_controller(
         total = total
     )
 
+
+@handle_service_errors('TRADE')
+async def list_all_replenishment_receptions_controller(
+    query: ReplenishmentReceptionGlobalQuerySchema,
+    db: Session,
+    request: Request,  # pylint: disable=unused-argument
+    current_user: str  # pylint: disable=unused-argument
+) -> ReplenishmentReceptionListResponseSchema:
+    '''
+        Binaria 2026-07-08: controller for the global supplier-reception listing
+        across visits, filterable by company / client / pos / user / date range.
+    '''
+    items, total = await list_all_replenishment_receptions_service(
+        db = db, query = query
+    )
+    return ReplenishmentReceptionListResponseSchema(
+        items = items,
+        total = total
+    )
+
 # --- B.3. COMPLEMENTARY ACTIVITIES Controllers ---
 
 # iter6 (Binaria, 2026-06-22): the legacy single-shot
@@ -146,8 +172,29 @@ async def list_replenishment_reception_controller(
 # below (Recibir + Devolver) plus listing/lookup controllers.
 
 @handle_service_errors('TRADE')
+async def plan_complementary_bandeo_controller(
+    plan_data: ComplementaryBandeoPlanSchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ComplementaryBandeoResponseSchema:
+    '''
+        Binaria 2026-07-17: controller for the Plan step of a Bandeo (pre-visit).
+    '''
+    db_bandeo = await plan_complementary_bandeo_service(
+        db = db,
+        plan_data = plan_data
+    )
+    return ComplementaryBandeoResponseSchema.model_validate(
+        db_bandeo, from_attributes = True
+    )
+
+
+@handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def receive_complementary_bandeo_controller(
     attendance_id: int,
+    bandeo_id: int,
     bandeo_data: ComplementaryBandeoReceiveSchema,
     db: Session,
     request: Request, # pylint: disable=unused-argument
@@ -159,6 +206,7 @@ async def receive_complementary_bandeo_controller(
     db_bandeo = await receive_complementary_bandeo_service(
         db = db,
         attendance_id = attendance_id,
+        bandeo_id = bandeo_id,
         bandeo_data = bandeo_data
     )
     return ComplementaryBandeoResponseSchema.model_validate(
@@ -167,7 +215,9 @@ async def receive_complementary_bandeo_controller(
 
 
 @handle_service_errors('TRADE')
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def return_complementary_bandeo_controller(
+    attendance_id: int,
     bandeo_id: int,
     return_data: ComplementaryBandeoReturnSchema,
     db: Session,
@@ -179,6 +229,7 @@ async def return_complementary_bandeo_controller(
     '''
     db_bandeo = await return_complementary_bandeo_service(
         db = db,
+        attendance_id = attendance_id,
         bandeo_id = bandeo_id,
         return_data = return_data
     )
@@ -224,6 +275,29 @@ async def get_complementary_bandeo_by_id_controller(
     )
     return ComplementaryBandeoResponseSchema.model_validate(
         db_bandeo, from_attributes = True
+    )
+
+
+@handle_service_errors('TRADE')
+async def list_all_complementary_bandeos_controller(
+    query: ComplementaryBandeoGlobalQuerySchema,
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> ComplementaryBandeoListResponseSchema:
+    '''
+        Binaria 2026-07-17: controller for the global bandeo listing across POS
+        and visits, filterable by company / client / pos / user / status / date.
+    '''
+    items, total = await list_all_complementary_bandeos_service(
+        db = db, query = query
+    )
+    return ComplementaryBandeoListResponseSchema(
+        items = [
+            ComplementaryBandeoResponseSchema.model_validate(b, from_attributes = True)
+            for b in items
+        ],
+        total = total
     )
 
 @handle_service_errors('TRADE')

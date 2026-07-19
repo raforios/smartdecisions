@@ -184,9 +184,17 @@ class ComplementaryBandeo(Base):  # pylint: disable=too-few-public-methods
     company_id = Column(Integer, nullable = False, index = True)
     client_company_id = Column(Integer, nullable = True, index = True)
 
-    # Foreign Key to LOCALIZATION.t_attendances (The Visit ID).
-    # iter6: dropped the unique constraint — a visit can have several bandeos.
-    attendance_id = Column(Integer, nullable = False, index = True)
+    # Binaria 2026-07-17: the bandeo is now PLANNED before the visit, keyed by
+    # pos + planned_date, so pos_id lives on the header and attendance_id is
+    # NULL until the Receive step links the actual visit.
+    pos_id = Column(Integer, nullable = True, index = True)
+    planned_date = Column(DateTime, nullable = True, index = True)
+    # How many units of the promotion are assigned to this pos + planned_date.
+    promotion_quantity = Column(Integer, nullable = True)
+
+    # Foreign Key to LOCALIZATION.t_attendances (The Visit ID). Nullable since
+    # planning happens pre-visit; set when the bandeo is received in a visit.
+    attendance_id = Column(Integer, nullable = True, index = True)
 
     # iter6: which planned bandeo (promotion) this header belongs to.
     promotion_id = Column(
@@ -195,7 +203,8 @@ class ComplementaryBandeo(Base):  # pylint: disable=too-few-public-methods
     )
     promotion = relationship('TradePromotion')
 
-    # iter6: lifecycle of the in-field bandeo activity.
+    # iter6: lifecycle of the in-field bandeo activity. Binaria 2026-07-17:
+    # PLANNED starts as PENDING (created at planning, not yet used).
     status = Column(String(20), nullable = False, default = 'PENDING', index = True)
     received_at = Column(DateTime, nullable = True)
     returned_at = Column(DateTime, nullable = True)
@@ -219,10 +228,12 @@ class ComplementaryBandeo(Base):  # pylint: disable=too-few-public-methods
     )
 
     __table_args__ = (
-        # iter6: one header per planned bandeo per visit.
+        # Binaria 2026-07-17: one planned bandeo per POS + planned date +
+        # promotion (planning key). Replaces the iter6 (attendance, promotion)
+        # unique, which no longer holds because attendance_id is NULL at plan.
         UniqueConstraint(
-            'attendance_id', 'promotion_id',
-            name = 'uc_bandeo_attendance_promotion'
+            'pos_id', 'planned_date', 'promotion_id',
+            name = 'uc_bandeo_pos_date_promotion'
         ),
     )
 
@@ -261,7 +272,9 @@ class ComplementaryBandeoDetail(Base):  # pylint: disable=too-few-public-methods
     # therefore nullable until the operator confirms it.
     quantity_returned = Column(Integer, nullable = True)
 
-    unit_of_measure = Column(String(20), nullable = True)
+    # Binaria 2026-07-17: unit_of_measure is now an ID sent in the request
+    # (it comes from an external catalog), not a free-text string.
+    unit_of_measure = Column(Integer, nullable = True)
     observations = Column(Text, nullable = True)
 
     __table_args__ = (

@@ -90,6 +90,8 @@ class ReplenishmentReportResponseSchema(BaseSchema):
     id: int
     company_id: Optional[int] = None
     client_company_id: Optional[int] = None  # iter5
+    pos_id: Optional[int] = None      # Binaria 2026-07-08: resolved via attendance
+    user_id: Optional[int] = None     # Binaria 2026-07-08: resolved via attendance
     attendance_id: int
     comments: Optional[str]
     reviewed: bool = False  # iter5
@@ -195,6 +197,9 @@ class ReplenishmentReceptionResponseItemSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
+    company_id: Optional[int] = None  # Binaria 2026-07-08: resolved via attendance
+    pos_id: Optional[int] = None      # Binaria 2026-07-08: resolved via attendance
+    user_id: Optional[int] = None     # Binaria 2026-07-08: resolved via attendance
     product_id: int
     client_company_id: Optional[int] = None  # iter5
     quantity_received: int
@@ -219,6 +224,25 @@ class ReplenishmentReceptionQuerySchema(BaseSchema):
     product_id: Optional[int] = Field(None)
     batch_number: Optional[str] = Field(None, max_length = 50)
     limit: int = Field(200, ge = 1, le = 1000)
+    offset: int = Field(0, ge = 0)
+
+
+# Binaria 2026-07-08: filters for the new global GET /v1/replenishment/reception.
+class ReplenishmentReceptionGlobalQuerySchema(BaseSchema):
+    '''
+        Filters for the global supplier-reception listing. company_id / pos_id /
+        user_id are resolved through the visit attendance; client_company_id and
+        the created_at range filter the reception row.
+    '''
+    company_id: Optional[int] = Field(None, description = 'Operator company filter.')
+    client_company_id: Optional[int] = Field(None, description = 'Brand / client filter.')
+    pos_id: Optional[int] = Field(None, description = 'POS filter (via the visit attendance).')
+    user_id: Optional[int] = Field(
+        None, description = 'Operator filter (via the visit attendance).'
+    )
+    date_from: Optional[datetime] = Field(None, description = 'created_at >= this datetime.')
+    date_to: Optional[datetime] = Field(None, description = 'created_at <= this datetime.')
+    limit: int = Field(100, ge = 1, le = 1000)
     offset: int = Field(0, ge = 0)
 
 # --- Schemas for Replenishment Inventory (Binaria, 2026-07-08, line-free) ---
@@ -282,6 +306,9 @@ class ReplenishmentInventoryResponseItemSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
+    company_id: Optional[int] = None  # Binaria 2026-07-08: resolved via attendance
+    pos_id: Optional[int] = None      # Binaria 2026-07-08: resolved via attendance
+    user_id: Optional[int] = None     # Binaria 2026-07-08: resolved via attendance
     product_id: int
     client_company_id: Optional[int] = None
     quantity: int
@@ -332,50 +359,77 @@ class ReplenishmentInventoryQuerySchema(BaseSchema):
 BandeoStatus = Literal['PENDING', 'RECEIVED', 'RETURNED']
 
 
-class ComplementaryBandeoReceiveDetailSchema(BaseSchema):
+# --- Plan step (Binaria 2026-07-17): a bandeo is PLANNED before the visit. ---
+
+class ComplementaryBandeoPlanDetailSchema(BaseSchema):
     '''
-        Item line registered when the operator confirms the products
-        received for the bandeo (Recibir step).
+        Per-SKU line of a planned bandeo. quantity_planned is NOT sent: it is
+        computed server-side as promotion_quantity * sku_quantity (from the
+        promotion definition). unit_of_measure is the ID from the external
+        catalog, supplied in the request.
     '''
     product_sku: str = Field(
         ...,
         description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) of the bandeo product.'
     )
-    quantity_planned: int = Field(
-        ..., ge = 0,
-        description = 'Q plan: qty of this SKU prescribed by the planned bandeo.'
+    unit_of_measure: Optional[int] = Field(
+        None,
+        description = 'Unit-of-measure ID (from the external catalog).'
+    )
+
+
+class ComplementaryBandeoPlanSchema(BaseSchema):
+    '''
+        Plan step: assigns a promotion (bandeo) to a POS for a planned visit
+        date, with a planned quantity. Creates the header with status=PENDING
+        and one detail per SKU; attendance_id is filled later at Receive.
+    '''
+    company_id: int = Field(..., description = 'Executor company (SKU lookup).')
+    client_company_id: Optional[int] = Field(
+        None, description = 'Client company (brand / product owner).'
+    )
+    pos_id: int = Field(..., description = 'POS the bandeo is planned for.')
+    planned_date: datetime = Field(..., description = 'Planned visit date/time.')
+    promotion_id: int = Field(..., description = 'Promotion (bandeo) being planned.')
+    promotion_quantity: int = Field(
+        ..., gt = 0,
+        description = 'How many units of the promotion are assigned to this POS + date.'
+    )
+    comments: Optional[str] = Field(None, description = 'Optional header comments.')
+    details: List[ComplementaryBandeoPlanDetailSchema] = Field(
+        ..., min_length = 1,
+        description = 'One row per SKU of the promotion (with its unit_of_measure ID).'
+    )
+
+
+class ComplementaryBandeoReceiveDetailSchema(BaseSchema):
+    '''
+        Item line registered when the operator confirms the products
+        received for the bandeo (Recibir step). quantity_planned is NOT sent:
+        it was fixed at the Plan step.
+    '''
+    product_sku: str = Field(
+        ...,
+        description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) of the bandeo product.'
     )
     quantity_received: int = Field(
         ..., ge = 0,
         description = 'Q recibida: qty actually delivered to the operator.'
     )
-    unit_of_measure: Optional[str] = Field(
-        None, max_length = 20,
-        description = 'UM tomada de la planificacion del bandeo.'
-    )
 
 
 class ComplementaryBandeoReceiveSchema(BaseSchema):
     '''
-        Schema for the Receive step. Creates a bandeo header bound to a
-        planned promotion, with status=RECEIVED and one detail row per SKU
-        of the bandeo.
+        Schema for the Receive step. Links a PLANNED bandeo to the visit and
+        persists the quantity received per SKU, flipping status to RECEIVED.
     '''
     company_id: int = Field(
         ...,
         description = 'Executor company (needed for SKU lookup).'
     )
-    client_company_id: Optional[int] = Field(
-        None,
-        description = 'Client company (brand / product owner).'
-    )
     pos_id: int = Field(
         ...,
         description = 'POS where the bandeo is being assembled.'
-    )
-    promotion_id: int = Field(
-        ...,
-        description = 'Planned bandeo (TradePromotion.id) being executed.'
     )
     comments: Optional[str] = Field(
         None,
@@ -392,11 +446,12 @@ class ComplementaryBandeoReturnDetailSchema(BaseSchema):
     '''
         Item line registered on the Devolver step. quantity_returned
         defaults to (quantity_received - quantity_used) and is editable;
-        if the operator overrides it, observations is required.
+        if the operator overrides it, observations is required. Binaria
+        2026-07-17: rows are matched by product_sku (not detail id).
     '''
-    id: int = Field(
+    product_sku: str = Field(
         ...,
-        description = 'Detail row id returned by the Receive step.'
+        description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) of the bandeo product.'
     )
     quantity_used: int = Field(
         ..., ge = 0,
@@ -429,28 +484,35 @@ class ComplementaryBandeoReturnSchema(BaseSchema):
 
 class ComplementaryBandeoDetailResponseSchema(BaseSchema):
     '''
-        Response schema for a single bandeo detail row.
+        Response schema for a single bandeo detail row. Carries the four
+        in-field quantities (planned / received / used / returned).
     '''
     id: int
     bandeo_header_id: int
     product_id: int
+    product_sku: Optional[str] = None    # Binaria 2026-07-17
     quantity_planned: int
     quantity_received: int
     quantity_used: Optional[int] = None
     quantity_returned: Optional[int] = None
-    unit_of_measure: Optional[str] = None
+    unit_of_measure: Optional[int] = None   # Binaria 2026-07-17: ID, not string
     observations: Optional[str] = None
 
 
 class ComplementaryBandeoResponseSchema(BaseSchema):
     '''
-        Response schema for a bandeo header with its details.
+        Response schema for a bandeo header with its details. Binaria
+        2026-07-17: exposes pos_id, promotion_quantity and planned_date so the
+        full plan -> receive -> return sequence is visible.
     '''
     id: int
     company_id: Optional[int] = None
     client_company_id: Optional[int] = None
-    attendance_id: int
+    pos_id: Optional[int] = None            # Binaria 2026-07-17
+    attendance_id: Optional[int] = None     # nullable: NULL until received
     promotion_id: Optional[int] = None
+    promotion_quantity: Optional[int] = None  # Binaria 2026-07-17
+    planned_date: Optional[datetime] = None   # Binaria 2026-07-17 (planned_at)
     status: BandeoStatus
     received_at: Optional[datetime] = None
     returned_at: Optional[datetime] = None
@@ -466,6 +528,25 @@ class ComplementaryBandeoListResponseSchema(BaseSchema):
     '''
     items: List[ComplementaryBandeoResponseSchema]
     total: int
+
+
+# Binaria 2026-07-17: filters for the global bandeos listing.
+class ComplementaryBandeoGlobalQuerySchema(BaseSchema):
+    '''
+        Filters for GET /v1/replenishment/complementary/bandeos. pos_id lives on
+        the header; user_id is resolved through the visit attendance.
+    '''
+    company_id: Optional[int] = Field(None, description = 'Operator company filter.')
+    client_company_id: Optional[int] = Field(None, description = 'Brand / client filter.')
+    pos_id: Optional[int] = Field(None, description = 'POS filter (planned POS).')
+    user_id: Optional[int] = Field(
+        None, description = 'Operator filter (via the visit attendance).'
+    )
+    status: Optional[BandeoStatus] = Field(None, description = 'Lifecycle status filter.')
+    date_from: Optional[datetime] = Field(None, description = 'created_at >= this datetime.')
+    date_to: Optional[datetime] = Field(None, description = 'created_at <= this datetime.')
+    limit: int = Field(100, ge = 1, le = 1000)
+    offset: int = Field(0, ge = 0)
 
 # --- Schemas for Promotional Point Report (iter6, req 7.3.4.2) ---
 
@@ -517,6 +598,8 @@ class ComplementaryPromoPointResponseSchema(BaseSchema):
     attendance_id: int
     company_id: Optional[int] = None
     client_company_id: Optional[int] = None
+    pos_id: Optional[int] = None      # Binaria 2026-07-08: resolved via attendance
+    user_id: Optional[int] = None     # Binaria 2026-07-08: resolved via attendance
     opening_time: Optional[time] = None
     closing_time: Optional[time] = None
     description: Optional[str] = None

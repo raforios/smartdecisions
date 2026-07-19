@@ -17,6 +17,11 @@ class TradePromotionDetailBaseSchema(BaseSchema):
         ...,
         description = 'Internal SKU code (XXX.YYY.ZZZ.WWW.SEC) included in the promotion.'
     )
+    sku_quantity: int = Field(  # Binaria 2026-07-08
+        1,
+        gt = 0,
+        description = 'Quantity of this SKU that makes up one unit of the promotion.'
+    )
 
 class TradePromotionDetailResponseSchema(BaseSchema):
     '''
@@ -25,6 +30,8 @@ class TradePromotionDetailResponseSchema(BaseSchema):
     id: int
     promotion_id: int
     product_id: int # Returns the internal ID
+    product_sku: Optional[str] = None  # Binaria 2026-07-08
+    sku_quantity: int = 1              # Binaria 2026-07-08
 
 class TradePromotionBaseSchema(BaseSchema):
     '''
@@ -186,6 +193,11 @@ class ImpulseInventoryResponseItemSchema(BaseSchema):
     '''
     id: int
     attendance_id: int
+    # Binaria 2026-07-08: resolved from the visit attendance so the listing
+    # carries the operator company, POS and user without a second lookup.
+    company_id: Optional[int] = None
+    pos_id: Optional[int] = None
+    user_id: Optional[int] = None
     product_id: int
     client_company_id: Optional[int] = None    # iter5
     batch_number: Optional[str] = None         # iter5
@@ -245,6 +257,10 @@ class LatestInventoryItemSchema(BaseSchema):
     product_id: int
     product_sku: Optional[str] = None
     product_name: Optional[str] = None
+    batch_number: Optional[str] = None          # iter5 / Binaria 2026-07-08
+    expiration_date: Optional[datetime] = None  # iter5 / Binaria 2026-07-08
+    quantity_in_room: int = 0                   # iter5 / Binaria 2026-07-08
+    quantity_in_warehouse: int = 0              # iter5 / Binaria 2026-07-08
     quantity: int
     observations: Optional[str] = None
 

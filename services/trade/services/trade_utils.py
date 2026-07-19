@@ -151,3 +151,18 @@ def filter_query_by_attendance(query, filters):
     if filters.user_id is not None:
         query = query.filter(Attendance.user_id == filters.user_id)
     return query
+
+
+def attach_visit_fields(row, attendance: Attendance | None):
+    '''
+        Binaria 2026-07-08: attaches the company_id / pos_id / user_id that live
+        on a visit Attendance onto an ORM row instance, so Pydantic
+        `from_attributes` exposes them in the response without dropping the
+        row's own relationships (details / photos). company_id is only filled
+        when the row does not already carry its own (e.g. reports keep theirs).
+    '''
+    row.pos_id = attendance.point_of_sale_id if attendance else None
+    row.user_id = attendance.user_id if attendance else None
+    if getattr(row, 'company_id', None) is None:
+        row.company_id = attendance.company_id if attendance else None
+    return row

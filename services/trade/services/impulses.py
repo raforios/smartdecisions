@@ -46,6 +46,7 @@ from schemas.impulses import (
     TradePromotionUpdateSchema,
 )
 from .trade_utils import (
+    attach_visit_fields,
     create_visit_items,
     filter_query_by_attendance,
     validate_active_attendance,
@@ -92,12 +93,23 @@ async def create_promotion_service(
         )
         db.add(TradePromotionDetail(
             promotion_id = db_promotion.id,
-            product_id = product_id
+            product_id = product_id,
+            sku_quantity = detail_item.sku_quantity  # Binaria 2026-07-08
         ))
 
     db.commit()
     db.refresh(db_promotion)
-    return db_promotion
+    return _attach_promotion_skus(db_promotion)
+
+
+def _attach_promotion_skus(promotion: TradePromotion) -> TradePromotion:
+    '''
+        Binaria 2026-07-08: exposes each detail's product_sku (from the linked
+        Product) so the promotion response carries SKU + sku_quantity per line.
+    '''
+    for detail in promotion.details:
+        detail.product_sku = detail.product.sku if detail.product else None
+    return promotion
 
 @handle_service_errors('TRADE')
 async def get_promotion_by_id_service(
@@ -107,10 +119,13 @@ async def get_promotion_by_id_service(
     '''
         Retrieves a single Promotion by its ID.
     '''
-    return get_record(
+    promotion = get_record(
         db, TradePromotion, promotion_id,
-        eager_load_options=[joinedload(TradePromotion.details)]
+        eager_load_options=[
+            joinedload(TradePromotion.details).joinedload(TradePromotionDetail.product)
+        ]
     )
+    return _attach_promotion_skus(promotion)
 
 @handle_service_errors('TRADE')
 async def get_promotions_list_service(
@@ -119,7 +134,9 @@ async def get_promotions_list_service(
     '''
         Retrieves a paginated list of Promotions.
     '''
-    query = db.query(TradePromotion).options(joinedload(TradePromotion.details))
+    query = db.query(TradePromotion).options(
+        joinedload(TradePromotion.details).joinedload(TradePromotionDetail.product)
+    )
     conditions = [TradePromotion.company_id == filters.company_id]
 
     if filters.name:
@@ -128,7 +145,10 @@ async def get_promotions_list_service(
         conditions.append(TradePromotion.status == filters.status)
 
     query = query.filter(and_(*conditions))
-    return query.offset(skip).limit(limit).all(), query.count()
+    promotions = query.offset(skip).limit(limit).all()
+    for promotion in promotions:
+        _attach_promotion_skus(promotion)
+    return promotions, query.count()
 
 @handle_service_errors('TRADE')
 @audit_event('TRADE', 'TradePromotion', 'UPDATE')
@@ -360,7 +380,7 @@ async def list_impulse_inventory_service(
         ImpulseInventoryStart if query.inventory_type == 'START'
         else ImpulseInventoryEnd
     )
-    base_query = db.query(model).join(
+    base_query = db.query(model, Attendance).join(
         Attendance, model.attendance_id == Attendance.id
     )
     base_query = filter_query_by_attendance(base_query, query)
@@ -372,13 +392,16 @@ async def list_impulse_inventory_service(
         base_query = base_query.filter(model.created_at <= query.date_to)
 
     total = base_query.count()
-    items = (
+    rows = (
         base_query
         .order_by(desc(model.created_at))
         .offset(query.offset)
         .limit(query.limit)
         .all()
     )
+    # Binaria 2026-07-08: enrich each line with company/pos/user resolved from
+    # the visit attendance so the listing is self-contained.
+    items = [attach_visit_fields(inv, attendance) for inv, attendance in rows]
     return items, total
 
 
@@ -455,6 +478,10 @@ async def get_impulse_inventory_start_by_attendance_service(
                 'product_id': inv.product_id,
                 'product_sku': product.sku,
                 'product_name': product.name,
+                'batch_number': inv.batch_number,
+                'expiration_date': inv.expiration_date,
+                'quantity_in_room': inv.quantity_in_room,
+                'quantity_in_warehouse': inv.quantity_in_warehouse,
                 'quantity': inv.quantity,
                 'observations': inv.observations,
             }
@@ -494,6 +521,10 @@ async def get_impulse_inventory_end_by_attendance_service(
                 'product_id': inv.product_id,
                 'product_sku': product.sku,
                 'product_name': product.name,
+                'batch_number': inv.batch_number,
+                'expiration_date': inv.expiration_date,
+                'quantity_in_room': inv.quantity_in_room,
+                'quantity_in_warehouse': inv.quantity_in_warehouse,
                 'quantity': inv.quantity,
                 'observations': inv.observations,
             }

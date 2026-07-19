@@ -69,6 +69,11 @@ class TradePromotionDetail(Base):  # pylint: disable=too-few-public-methods
     )
     product = relationship('Product')
 
+    # Binaria 2026-07-08: quantity of this SKU that makes up one unit of the
+    # promotion (e.g. 12 sausages per "san juanero" pack). Drives the planned
+    # bandeo demand: qty_planned = promotion_quantity * sku_quantity.
+    sku_quantity = Column(Integer, nullable = False, default = 1)
+
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
 
     __table_args__ = (

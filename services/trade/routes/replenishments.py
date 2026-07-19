@@ -28,13 +28,18 @@ from controllers.replenishments import (
     list_complementary_competitions_controller,       # Binaria 2026-07-07
     list_complementary_promo_points_controller,       # Binaria 2026-07-07
     list_replenishment_inventory_controller,          # Binaria 2026-07-08
+    list_all_complementary_bandeos_controller,   # Binaria 2026-07-17
+    list_all_replenishment_receptions_controller,   # Binaria 2026-07-08
     list_replenishment_reception_controller,   # iter5
     list_replenishment_reports_controller,     # iter5
+    plan_complementary_bandeo_controller,      # Binaria 2026-07-17
     receive_complementary_bandeo_controller,   # iter6
     return_complementary_bandeo_controller,    # iter6
 )
 from schemas.replenishments import (
+    ComplementaryBandeoGlobalQuerySchema,      # Binaria 2026-07-17
     ComplementaryBandeoListResponseSchema,     # iter6
+    ComplementaryBandeoPlanSchema,             # Binaria 2026-07-17
     ComplementaryBandeoReceiveSchema,          # iter6
     ComplementaryBandeoResponseSchema,
     ComplementaryBandeoReturnSchema,           # iter6
@@ -50,6 +55,7 @@ from schemas.replenishments import (
     ReplenishmentInventoryListResponseSchema,      # Binaria 2026-07-08
     ReplenishmentInventoryQuerySchema,             # Binaria 2026-07-08
     ReplenishmentReceptionCreateSchema,
+    ReplenishmentReceptionGlobalQuerySchema,   # Binaria 2026-07-08
     ReplenishmentReceptionListResponseSchema,
     ReplenishmentReceptionQuerySchema,         # iter5
     ReplenishmentReportCreateSchema,
@@ -163,30 +169,64 @@ async def create_replenishment_reception_endpoint(
 # (status RETURNED). Two GETs back the listing and re-entry use cases.
 
 @router.post(
-    '/complementary/visit/{attendance_id}/bandeo/receive',
+    '/complementary/bandeo/plan',
     response_model = ComplementaryBandeoResponseSchema,
     status_code = status.HTTP_201_CREATED,
+    summary = 'Plan a bandeo (Planificar step)'
+)
+async def plan_complementary_bandeo_endpoint(
+    plan_data: ComplementaryBandeoPlanSchema,
+    request: Request,
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Planificar step (Binaria 2026-07-17): assigns a promotion to a POS for a
+        planned date, creating the bandeo (status=PENDING) with qty_planned per
+        SKU. Runs before the visit; returns the new bandeo_id.
+    '''
+    message = (
+        f'User: {current_user}. Plan bandeo pos {plan_data.pos_id}, '
+        f'promotion {plan_data.promotion_id}.'
+    )
+    logger.info(message)
+
+    return await plan_complementary_bandeo_controller(
+        plan_data = plan_data,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+
+@router.post(
+    '/complementary/visit/{attendance_id}/bandeo/{bandeo_id}/receive',
+    response_model = ComplementaryBandeoResponseSchema,
+    status_code = status.HTTP_200_OK,
     summary = 'Receive a planned bandeo (Recibir step)'
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def receive_complementary_bandeo_endpoint(
     attendance_id: int,
+    bandeo_id: int,
     bandeo_data: ComplementaryBandeoReceiveSchema,
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
     '''
-        Recibir step: persists qty_planned + qty_received per SKU of the
-        planned bandeo and flips the header to status=RECEIVED.
+        Recibir step: links the planned bandeo to the visit and persists
+        qty_received per SKU, flipping the header to status=RECEIVED.
     '''
     message = (
-        f'User: {current_user}. Receive bandeo for attendance '
-        f'{attendance_id}, promotion {bandeo_data.promotion_id}.'
+        f'User: {current_user}. Receive bandeo {bandeo_id} on attendance '
+        f'{attendance_id}.'
     )
     logger.info(message)
 
     return await receive_complementary_bandeo_controller(
         attendance_id = attendance_id,
+        bandeo_id = bandeo_id,
         bandeo_data = bandeo_data,
         db = db,
         request = request,
@@ -195,12 +235,14 @@ async def receive_complementary_bandeo_endpoint(
 
 
 @router.patch(
-    '/complementary/bandeo/{bandeo_id}/return',
+    '/complementary/visit/{attendance_id}/bandeo/{bandeo_id}/return',
     response_model = ComplementaryBandeoResponseSchema,
     status_code = status.HTTP_200_OK,
     summary = 'Return a received bandeo (Devolver step)'
 )
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def return_complementary_bandeo_endpoint(
+    attendance_id: int,
     bandeo_id: int,
     return_data: ComplementaryBandeoReturnSchema,
     request: Request,
@@ -209,12 +251,16 @@ async def return_complementary_bandeo_endpoint(
 ):
     '''
         Devolver step: registers qty_used / qty_returned / observations
-        per detail row and flips the header to status=RETURNED.
+        per SKU and flips the header to status=RETURNED.
     '''
-    message = f'User: {current_user}. Return bandeo {bandeo_id}.'
+    message = (
+        f'User: {current_user}. Return bandeo {bandeo_id} on attendance '
+        f'{attendance_id}.'
+    )
     logger.info(message)
 
     return await return_complementary_bandeo_controller(
+        attendance_id = attendance_id,
         bandeo_id = bandeo_id,
         return_data = return_data,
         db = db,
@@ -274,6 +320,37 @@ async def get_complementary_bandeo_by_id_endpoint(
 
     return await get_complementary_bandeo_by_id_controller(
         bandeo_id = bandeo_id,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+
+@router.get(
+    '/complementary/bandeos',
+    response_model = ComplementaryBandeoListResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'List bandeos (paginated, filterable)'
+)
+async def list_all_complementary_bandeos_endpoint(
+    request: Request,
+    query: ComplementaryBandeoGlobalQuerySchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Binaria 2026-07-17: global listing of complete bandeo records across POS
+        and visits, filtered by company_id, client_company_id, pos_id, user_id,
+        status and a created_at range.
+    '''
+    message = (
+        f'User: {current_user}. Listing all bandeos with filters '
+        f'{query.model_dump(exclude_none=True)}.'
+    )
+    logger.info(message)
+
+    return await list_all_complementary_bandeos_controller(
+        query = query,
         db = db,
         request = request,
         current_user = current_user
@@ -508,6 +585,36 @@ async def list_replenishment_inventory_endpoint(
     )
     logger.info(message)
     return await list_replenishment_inventory_controller(
+        query = query,
+        db = db,
+        request = request,
+        current_user = current_user
+    )
+
+
+@router.get(
+    '/reception',
+    response_model = ReplenishmentReceptionListResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'List supplier reception rows (paginated, filterable)'
+)
+async def list_all_replenishment_receptions_endpoint(
+    request: Request,
+    query: ReplenishmentReceptionGlobalQuerySchema = Depends(),
+    db: Session = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Binaria 2026-07-08: global listing of supplier reception rows across
+        visits, filtered by company_id, client_company_id, pos_id, user_id and
+        a created_at range.
+    '''
+    message = (
+        f'User: {current_user}. Listing all replenishment receptions with '
+        f'filters {query.model_dump(exclude_none=True)}.'
+    )
+    logger.info(message)
+    return await list_all_replenishment_receptions_controller(
         query = query,
         db = db,
         request = request,
