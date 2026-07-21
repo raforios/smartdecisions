@@ -35,8 +35,7 @@ router = APIRouter(prefix = '/v1/mining-summit/institutions', tags = ['Instituti
     summary = 'List reference institutions',
     description = (
         'Returns the reference catalog of institutions from the official '
-        'participation matrix, with the role and seat-assignment type derived '
-        'from each category. Supports optional category/role filters.'
+        'participation matrix. Supports an optional category filter.'
     )
 )
 def list_institutions_endpoint(

@@ -8,7 +8,7 @@
 import pytest
 from moto import mock_aws
 
-from schemas.enums import ParticipantStatus, ThematicAxis
+from schemas.enums import ParticipantRole, ParticipantStatus, ThematicAxis
 from services.exceptions import InvalidInputError
 from services.institutions import INSTITUTIONS_TABLE
 from services.mesas import AULAS_TABLE
@@ -52,11 +52,12 @@ def dynamodb_fixture():
 
 
 def _new_participant(dynamodb, ci):
-    '''Creates an ACTIVE seated participant of inst-a in the CONTRATOS axis.'''
+    '''Creates an ACTIVE seated PARTICIPANTE of inst-a in the CONTRATOS axis.'''
     return create_participant(dynamodb, {
         'ci': ci, 'first_name': 'N', 'last_name': 'A',
         'department': 'La Paz', 'phone': '700',
-        'institution_id': 'inst-a', 'axis': _AXIS.value
+        'institution_id': 'inst-a', 'role': ParticipantRole.PARTICIPANTE.value,
+        'axis': _AXIS.value
     })
 
 
@@ -70,7 +71,7 @@ def test_create_assigns_seat_and_active(dynamodb):
     # The person master data has no seat/status fields.
     person = dynamodb.Table(PARTICIPANTS_TABLE).get_item(Key = {'ci': '111'})['Item']
     assert 'axis' not in person and 'status' not in person
-    assert person['role']  # resolved from the institution category
+    assert person['role'] == ParticipantRole.PARTICIPANTE.value  # supplied explicitly
 
 
 def test_create_without_axis_leaves_person_unregistered(dynamodb):
@@ -81,6 +82,20 @@ def test_create_without_axis_leaves_person_unregistered(dynamodb):
     assert saved['registered'] is False
     assert saved['axis'] is None and saved['status'] is None
     assert dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '900'}).get('Item') is None
+
+
+def test_create_sin_rol_registers_person_without_seat(dynamodb):
+    '''A SIN_ROL person is stored as master data but takes no aula seat, even
+    when an axis is provided, until a real role is assigned.'''
+    saved = create_participant(dynamodb, {
+        'ci': '950', 'first_name': 'Sin', 'last_name': 'Rol',
+        'institution_id': 'inst-a', 'axis': _AXIS.value,
+        'role': ParticipantRole.SIN_ROL.value
+    })
+    assert saved['role'] == ParticipantRole.SIN_ROL.value
+    assert saved['registered'] is False
+    assert saved['axis'] is None and saved['mesa_code'] is None
+    assert dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '950'}).get('Item') is None
 
 
 def test_deactivate_frees_seat_and_hides_from_list(dynamodb):
@@ -172,16 +187,17 @@ def test_replace_records_operator_on_both_sides(dynamodb):
 def test_update_accredits_bare_person_with_department_institution_and_seat(dynamodb):
     '''
         Editing a bare person (no institution, no seat) assigns the department,
-        the institution (deriving the role) and seats it in the chosen axis.
+        the institution, the explicit role and seats it in the chosen axis.
     '''
     create_participant(dynamodb, {'ci': '500', 'first_name': 'Sin', 'last_name': 'Datos'})
 
     updated = update_participant(dynamodb, '500', {
-        'department': 'Oruro', 'institution_id': 'inst-a', 'axis': _AXIS.value
+        'department': 'Oruro', 'institution_id': 'inst-a',
+        'role': ParticipantRole.PARTICIPANTE.value, 'axis': _AXIS.value
     })
     assert updated['department'] == 'Oruro'
     assert updated['institution_id'] == 'inst-a'
-    assert updated['role']  # derived from the institution category
+    assert updated['role'] == ParticipantRole.PARTICIPANTE.value  # supplied explicitly
     assert updated['registered'] is True
     assert updated['axis'] == _AXIS.value
     assert updated['mesa_code'] == 'C1'

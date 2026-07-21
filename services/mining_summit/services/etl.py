@@ -18,6 +18,7 @@ import openpyxl
 from boto3.resources.base import ServiceResource
 from fastapi import HTTPException
 
+from schemas.enums import ParticipantRole
 from services.crud import create_item
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError
@@ -41,11 +42,54 @@ COLUMN_ALIASES: Dict[str, set] = {
     'email': {'email', 'correo', 'correo_electronico', 'e_mail', 'mail'},
     'phone': {'phone', 'celular', 'telefono', 'movil', 'tel'},
     'department': {'department', 'departamento', 'depto'},
-    'axis': {'axis', 'eje', 'eje_tematico', 'eje_de_preferencia'}
+    'axis': {'axis', 'eje', 'eje_tematico', 'eje_de_preferencia'},
+    'role': {'role', 'rol', 'rol_participante', 'funcion', 'cargo'}
 }
 
 # Fields required for a row to be accredited (email is the only optional one).
 REQUIRED_FIELDS: Tuple[str, ...] = ('ci', 'first_name', 'last_name', 'phone', 'department', 'axis')
+
+# Accepted spellings for the per-row role: Spanish labels (accent/case-insensitive)
+# and the enum codes both map to a ParticipantRole value. A blank cell means the
+# person has no role yet (SIN_ROL): registered without an aula.
+ROLE_ALIASES: Dict[str, str] = {
+    'participante': ParticipantRole.PARTICIPANTE.value,
+    'moderador': ParticipantRole.MODERADOR.value,
+    'veedor': ParticipantRole.VEEDOR.value,
+    'invitado': ParticipantRole.INVITADO.value,
+    'organizador': ParticipantRole.ORGANIZADOR.value,
+    'prensa': ParticipantRole.PRENSA.value,
+    'facilitador': ParticipantRole.FACILITADOR.value,
+    'sistematizador': ParticipantRole.SISTEMATIZADOR.value,
+    'comunicacion': ParticipantRole.COMUNICACION.value,
+    'comunicaciones': ParticipantRole.COMUNICACION.value,
+    'sistemas': ParticipantRole.SISTEMAS.value,
+    'sin rol': ParticipantRole.SIN_ROL.value,
+    'sin': ParticipantRole.SIN_ROL.value
+}
+
+
+def _parse_role(raw: Any, default: str) -> Optional[str]:
+    '''
+        Resolves the per-row role cell into a ParticipantRole value.
+
+        A blank cell falls back to `default`. A non-blank cell is matched
+        (accent/case-insensitive) against the Spanish labels or the enum codes.
+
+        Returns:
+            Optional[str]: The resolved role value, or None if the cell holds an
+                unrecognized role (the row is rejected so a typo is not silent).
+    '''
+    if raw is None or str(raw).strip() == '':
+        return default
+    key = _normalize(raw)
+    if key in ROLE_ALIASES:
+        return ROLE_ALIASES[key]
+    # Also accept the exact enum code (e.g. 'SIN_ROL').
+    code = str(raw).strip().upper()
+    if code in ParticipantRole.__members__ or code in {role.value for role in ParticipantRole}:
+        return ParticipantRole(code).value
+    return None
 
 
 def _normalize(text: Any) -> str:
@@ -129,10 +173,19 @@ def _extract_rows(file_bytes: bytes) -> List[Tuple[int, Dict[str, Any]]]:
     return extracted
 
 
-def _validate_row(fields: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def _validate_row(
+    fields: Dict[str, Any],
+    require_axis: bool = True
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     '''
         Validates a raw row and returns a (clean_payload, error) tuple. Exactly
         one of the two is not None.
+
+        Args:
+            fields (Dict[str, Any]): Raw row values keyed by logical field.
+            require_axis (bool): Whether the thematic axis is mandatory. It is
+                relaxed for SIN_ROL loads, where the person is registered without
+                an aula seat.
     '''
     clean: Dict[str, Any] = {}
     for field in ('ci', 'first_name', 'last_name', 'email', 'phone', 'department'):
@@ -142,10 +195,10 @@ def _validate_row(fields: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Opt
     axis = _parse_axis(fields.get('axis'))
     clean['axis'] = axis
 
-    missing = [
-        field for field in REQUIRED_FIELDS
-        if not clean.get(field)
-    ]
+    required = REQUIRED_FIELDS if require_axis else tuple(
+        field for field in REQUIRED_FIELDS if field != 'axis'
+    )
+    missing = [field for field in required if not clean.get(field)]
     if missing:
         if 'axis' in missing and fields.get('axis') not in (None, ''):
             return None, 'Invalid axis: must be a number from 1 to 6.'
@@ -187,20 +240,23 @@ def load_participants_from_excel(
     file_bytes: bytes,
     institution_id: str,
     responsible: Dict[str, str],
-    role: str
+    role: Optional[str] = None
 ) -> Dict[str, Any]:
     '''
         Loads participants from an institution's Excel file, enforcing the
         institution cupo and assigning each accepted participant a stable
-        eje/mesa seat. Every participant in the file is stamped with the given
-        role. Records the outcome as a load batch.
+        eje/mesa seat. The role belongs to each person: it is read from the row's
+        'Rol' column; a blank cell falls back to the file-level `role` default (or
+        SIN_ROL when none is given), and a SIN_ROL row is registered without an
+        aula. Records the outcome as a load batch.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             file_bytes (bytes): The raw .xlsx content.
             institution_id (str): Institution the whole file belongs to.
             responsible (Dict[str, str]): {'name', 'phone'} of the responsible.
-            role (str): Participant role assigned to every row of the file.
+            role (Optional[str]): Default role for rows with a blank role cell.
+                Defaults to SIN_ROL when not provided.
 
         Returns:
             Dict[str, Any]: The load summary (accepted + not-accredited report).
@@ -210,11 +266,22 @@ def load_participants_from_excel(
     already = count_active_by_institution(dynamodb_resource, institution_id)
     remaining = max(0, cupos - already)
 
+    default_role = role or ParticipantRole.SIN_ROL.value
+
     accepted: List[Dict[str, Any]] = []
     rejected: List[Dict[str, Any]] = []
 
     for row_number, fields in _extract_rows(file_bytes):
-        clean, error = _validate_row(fields)
+        row_role = _parse_role(fields.get('role'), default_role)
+        if row_role is None:
+            rejected.append({
+                'row': row_number, 'ci': _safe_ci(fields),
+                'reason': f'Rol no reconocido: {str(fields.get("role")).strip()}.'
+            })
+            continue
+        # SIN_ROL people are registered without an aula, so the axis is optional.
+        require_axis = row_role != ParticipantRole.SIN_ROL.value
+        clean, error = _validate_row(fields, require_axis = require_axis)
         if error:
             rejected.append({'row': row_number, 'ci': _safe_ci(fields), 'reason': error})
             continue
@@ -227,12 +294,13 @@ def load_participants_from_excel(
         try:
             saved = create_participant(
                 dynamodb_resource = dynamodb_resource,
-                payload = {**clean, 'institution_id': institution_id, 'role': role}
+                payload = {**clean, 'institution_id': institution_id, 'role': row_role}
             )
             accepted.append({
                 'ci': saved['ci'],
                 'first_name': saved['first_name'],
                 'last_name': saved['last_name'],
+                'role': saved['role'],
                 'axis': saved['axis'],
                 'axis_label': saved['axis_label'],
                 'mesa_code': saved['mesa_code']
@@ -244,7 +312,7 @@ def load_participants_from_excel(
         'batch_id': str(uuid.uuid4()),
         'institution_id': institution_id,
         'institution_name': institution['name'],
-        'role': role,
+        'role': role or 'PER_ROW',
         'cupos': cupos,
         'already_accredited': already,
         'accepted_count': len(accepted),

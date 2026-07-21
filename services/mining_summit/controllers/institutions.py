@@ -29,15 +29,13 @@ def list_institutions_controller(
     query_params: InstitutionQuerySchema
 ) -> InstitutionsListResponseSchema:
     '''
-        Controller to retrieve the institutions catalog with optional
-        category/role filters, plus the summed planned cupos.
+        Controller to retrieve the institutions catalog with an optional
+        category filter, plus the summed planned cupos.
     '''
     category = query_params.category.value if query_params.category else None
-    role = query_params.role.value if query_params.role else None
     records = list_institutions(
         dynamodb_resource = dynamodb_resource,
-        category = category,
-        role = role
+        category = category
     )
     return InstitutionsListResponseSchema(
         items = [InstitutionResponseSchema(**record) for record in records],

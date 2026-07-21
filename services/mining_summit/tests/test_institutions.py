@@ -1,18 +1,14 @@
 '''
     services/mining_summit/tests/test_institutions.py
 
-    Unit tests for the DynamoDB-backed institutions catalog and the
-    category-to-role resolution rules. DynamoDB is mocked with moto.
+    Unit tests for the DynamoDB-backed institutions catalog. The participant role
+    no longer belongs to the institution. DynamoDB is mocked with moto.
 '''
 import boto3
 import pytest
 from moto import mock_aws
 
-from schemas.enums import (
-    AssignmentType,
-    InstitutionCategory,
-    ParticipantRole
-)
+from schemas.enums import InstitutionCategory
 from services.exceptions import RegisterAlreadyExistsError, RegisterNotFoundError
 from services.institutions import (
     INSTITUTIONS_TABLE,
@@ -21,12 +17,6 @@ from services.institutions import (
     get_institution,
     list_institutions,
     update_institution
-)
-from services.summit_rules import (
-    CATEGORY_ROLE_MAP,
-    ROLE_ASSIGNMENT_MAP,
-    resolve_assignment_type,
-    resolve_role
 )
 
 # Representative seed covering every role/assignment case.
@@ -61,16 +51,16 @@ def dynamodb_fixture():
         yield resource
 
 
-def test_list_returns_all_enriched_and_sorted(dynamodb):
+def test_list_returns_all_sorted(dynamodb):
     '''
-        Listing returns every seeded institution enriched with role and
-        assignment, ordered alphabetically by name.
+        Listing returns every seeded institution, ordered alphabetically by name,
+        and no longer carries a derived role/assignment.
     '''
     items = list_institutions(dynamodb)
     assert len(items) == len(SEED_INSTITUTIONS)
     names = [item['name'].lower() for item in items]
     assert names == sorted(names)
-    assert all(item['role'] and item['assignment_type'] for item in items)
+    assert all('role' not in item and 'assignment_type' not in item for item in items)
 
 
 def test_create_update_delete_institution(dynamodb):
@@ -84,7 +74,7 @@ def test_create_update_delete_institution(dynamodb):
     })
     assert created['id'] == 'nueva-minera-andina'
     assert created['cupos'] == 10
-    assert created['role']  # derived from category
+    assert 'role' not in created  # role is no longer derived from the institution
 
     updated = update_institution(dynamodb, created['id'], {'cupos': 25, 'abbreviation': 'NMA'})
     assert updated['cupos'] == 25
@@ -114,20 +104,6 @@ def test_numeric_fields_are_int_not_decimal(dynamodb):
     assert fencomin['cupos'] == 150
 
 
-def test_role_and_assignment_derivation(dynamodb):
-    '''
-        A productive-actor institution is PARTICIPANTE/FIJO; academia is
-        VEEDOR/ROTATIVO.
-    '''
-    fencomin = get_institution(dynamodb, 'fencomin')
-    assert fencomin['role'] == ParticipantRole.PARTICIPANTE.value
-    assert fencomin['assignment_type'] == AssignmentType.FIJO.value
-
-    umsa = get_institution(dynamodb, 'umsa')
-    assert umsa['role'] == ParticipantRole.VEEDOR.value
-    assert umsa['assignment_type'] == AssignmentType.ROTATIVO.value
-
-
 def test_filter_by_category(dynamodb):
     '''Filtering by category returns only that category's institutions.'''
     category = InstitutionCategory.ACTORES_PRODUCTIVOS.value
@@ -136,30 +112,7 @@ def test_filter_by_category(dynamodb):
     assert all(item['category'] == category for item in items)
 
 
-def test_filter_by_role(dynamodb):
-    '''Filtering by role returns only institutions with that derived role.'''
-    items = list_institutions(dynamodb, role = ParticipantRole.ORGANIZADOR.value)
-    assert items
-    assert all(item['role'] == ParticipantRole.ORGANIZADOR.value for item in items)
-
-
 def test_get_unknown_id_raises_not_found(dynamodb):
     '''An unknown institution id must raise RegisterNotFoundError (HTTP 404).'''
     with pytest.raises(RegisterNotFoundError):
         get_institution(dynamodb, 'this-institution-does-not-exist')
-
-
-def test_every_category_maps_to_a_role_and_assignment():
-    '''
-        The rule maps must be exhaustive over categories and roles so no
-        institution can end up without a resolved role/assignment.
-    '''
-    assert set(CATEGORY_ROLE_MAP) == set(InstitutionCategory)
-    assert set(ROLE_ASSIGNMENT_MAP) == set(ParticipantRole)
-
-
-def test_resolvers_are_consistent_with_maps():
-    '''The resolver helpers must agree with the underlying reference maps.'''
-    role = resolve_role(InstitutionCategory.ORGANO_LEGISLATIVO)
-    assert role is ParticipantRole.MODERADOR
-    assert resolve_assignment_type(role) is AssignmentType.FIJO

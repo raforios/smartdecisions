@@ -1,89 +1,147 @@
 /**
- * Credencial de participante (QR imprimible).
+ * Credencial de participante (sticker QR imprimible).
  *
- * Reutilizable desde Registro (al crear) y desde Participantes (reimpresión).
- * El QR codifica todos los datos del participante en JSON; el lector de
- * asistencia extrae el `ci` de ahí (ver asistencia.js#extractCi).
+ * Genera una IMAGEN PNG de 6 cm x 7 cm lista para la impresora de stickers
+ * (INNOVATE DP30S). Muestra solo nombre, eje temático, rol y aula, con un QR
+ * grande. El QR codifica UNICAMENTE el CI: menos módulos → módulos más grandes
+ * y gruesos, que es lo que permite que la térmica los imprima legibles (el
+ * lector de asistencia acepta tanto CI plano como el JSON antiguo, ver
+ * asistencia.js#extractCi).
  */
 
-/** Construye el contenido JSON del QR con los datos del participante. */
-export function buildQrValue(participant) {
-    return JSON.stringify({
-        ci: participant.ci,
-        nombre: `${participant.first_name || ''} ${participant.last_name || ''}`.trim(),
-        institucion: participant.institution_name || participant.company || '',
-        rol: participant.role || '',
-        eje: participant.axis_label || participant.axis || '',
-        aula: participant.mesa_code || ''
-    });
+// ~305 DPI (12 px/mm): resolución alta para que la térmica tenga módulos nítidos.
+const PX_PER_MM = 12;
+const STICKER_W_MM = 60;
+const STICKER_H_MM = 70;
+
+const GOLD = '#8B6914';
+const INK = '#242732';
+
+/** Milímetros → píxeles del lienzo. */
+function mm(value) {
+    return Math.round(value * PX_PER_MM);
 }
 
-/** Dibuja el QR del participante en el canvas dado (usa QRious global). */
-export function renderQr(canvas, participant) {
-    if (typeof QRious === 'undefined' || !canvas) return;
-    // Nivel 'M' mantiene legible el (mayor) payload JSON a un tamaño razonable.
-    // eslint-disable-next-line no-new
-    new QRious({ element: canvas, value: buildQrValue(participant), size: 200, level: 'M' });
+/** Valor codificado en el QR: solo el CI (máxima legibilidad en térmica). */
+export function buildQrValue(participant) {
+    return String(participant.ci || '').trim();
 }
 
 /**
- * Abre la ventana de impresión de la credencial (96mm x 150mm) para un
- * participante. Genera el QR en un canvas temporal, así funciona tanto al
- * registrar como al reimprimir desde el listado.
+ * Dibuja el QR del participante en el canvas dado (usa QRious global).
+ * Nivel 'H' (máxima corrección de error) para tolerar la impresión térmica.
  */
-export function printCredential(participant) {
-    const canvas = document.createElement('canvas');
-    renderQr(canvas, participant);
-    const qrDataUrl = (typeof QRious !== 'undefined') ? canvas.toDataURL('image/png') : '';
-
-    const seated = participant.mesa_code;
-    const seat = seated
-        ? `<div class="seat">
-               <div class="eje">${escapeHtml(participant.axis_label || participant.axis || '')}</div>
-               <div class="aula"><span>Aula</span> ${escapeHtml(participant.mesa_code)}</div>
-           </div>`
-        : '<p class="rotativa"><strong>Asistencia rotativa</strong> — sin mesa fija</p>';
-    const institution = participant.institution_name || participant.company || '';
-
-    const win = window.open('', '_blank', 'width=420,height=640');
-    if (!win) return;
-    win.document.write(`
-        <html><head><title>Credencial ${escapeHtml(participant.ci)}</title>
-        <style>
-            @page { size: 96mm 150mm; margin: 0; }
-            * { box-sizing: border-box; }
-            html, body { margin:0; padding:0; }
-            body { width:96mm; min-height:150mm; font-family: Arial, sans-serif;
-                   text-align:center; padding:8mm 6mm; color:#242732; }
-            h1 { font-size:13px; margin:0 0 8px; color:#8B6914; }
-            .name { font-size:18px; font-weight:bold; margin:4px 0 2px; }
-            p { margin:2px 0; font-size:12px; }
-            .inst { font-size:12px; font-weight:bold; }
-            .seat { margin:8px auto; padding:6px 8px; border:1px solid #C9A751;
-                    border-radius:8px; background:rgba(201,167,81,0.12); }
-            .seat .eje { font-size:13px; font-weight:bold; line-height:1.25; }
-            .seat .aula { margin-top:4px; font-size:13px; font-weight:bold; color:#8B6914; }
-            .seat .aula span { display:block; font-size:8px; letter-spacing:1px;
-                    text-transform:uppercase; font-weight:500; }
-            .rotativa { color:#666; font-style:italic; }
-            img.qr { margin-top:8px; width:30mm; height:30mm; }
-            .cap { font-size:10px; color:#666; margin-top:3px; }
-        </style></head><body onload="window.print()">
-            <h1>Cumbre Minera 2026</h1>
-            <div class="name">${escapeHtml(participant.first_name)} ${escapeHtml(participant.last_name)}</div>
-            <p><strong>CI:</strong> ${escapeHtml(participant.ci)}</p>
-            ${institution ? `<p class="inst">${escapeHtml(institution)}</p>` : ''}
-            ${participant.role ? `<p><strong>Rol:</strong> ${escapeHtml(participant.role)}</p>` : ''}
-            ${seat}
-            <img class="qr" src="${qrDataUrl}" alt="QR">
-            <div class="cap">Escanea para registrar asistencia</div>
-        </body></html>
-    `);
-    win.document.close();
+export function renderQr(canvas, participant, size = 220) {
+    if (typeof QRious === 'undefined' || !canvas) return;
+    // eslint-disable-next-line no-new
+    new QRious({ element: canvas, value: buildQrValue(participant), size, level: 'H' });
 }
 
-function escapeHtml(str) {
-    return String(str == null ? '' : str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+/** Fija la fuente Arial del contexto en milímetros. */
+function setFont(ctx, sizeMm, weight = '') {
+    ctx.font = `${weight ? weight + ' ' : ''}${mm(sizeMm)}px Arial, sans-serif`;
+}
+
+/** Parte un texto en líneas que caben en maxWidth con la fuente actual. */
+function wrapLines(ctx, text, maxWidth) {
+    const words = String(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(candidate).width > maxWidth) {
+            lines.push(line);
+            line = word;
+        } else {
+            line = candidate;
+        }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+}
+
+/** Dibuja líneas centradas y devuelve la Y siguiente. */
+function drawLines(ctx, lines, centerX, top, lineHeightMm) {
+    let cursor = top;
+    for (const line of lines) {
+        ctx.fillText(line, centerX, cursor);
+        cursor += mm(lineHeightMm);
+    }
+    return cursor;
+}
+
+/**
+ * Construye el lienzo del sticker (6x7 cm) con nombre, eje, rol, aula y el QR.
+ */
+export function buildCredentialCanvas(participant) {
+    const canvas = document.createElement('canvas');
+    canvas.width = mm(STICKER_W_MM);
+    canvas.height = mm(STICKER_H_MM);
+    const ctx = canvas.getContext('2d');
+
+    // Fondo blanco (la térmica imprime negro sobre blanco).
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Borde tenue como guía de recorte.
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = mm(0.4);
+    ctx.strokeRect(mm(1), mm(1), canvas.width - mm(2), canvas.height - mm(2));
+
+    const centerX = canvas.width / 2;
+    const contentWidth = canvas.width - mm(4) * 2;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    let cursor = mm(4);
+
+    // Nombre (hasta 2 líneas).
+    const name = `${participant.first_name || ''} ${participant.last_name || ''}`
+        .trim().toUpperCase();
+    ctx.fillStyle = INK;
+    setFont(ctx, 5, 'bold');
+    cursor = drawLines(ctx, wrapLines(ctx, name, contentWidth).slice(0, 2), centerX, cursor, 6);
+    cursor += mm(2);
+
+    // Eje / Rol / Aula. El eje puede ocupar 2 líneas; aula resaltada en dorado.
+    const eje = participant.axis_label || participant.axis || '—';
+    const rol = participant.role || '—';
+    const aula = participant.mesa_code || 'Sin aula';
+
+    setFont(ctx, 3.4);
+    ctx.fillStyle = INK;
+    cursor = drawLines(ctx, wrapLines(ctx, `Eje: ${eje}`, contentWidth).slice(0, 2), centerX, cursor, 4.4);
+    cursor = drawLines(ctx, [`Rol: ${rol}`], centerX, cursor, 4.4);
+
+    setFont(ctx, 4, 'bold');
+    ctx.fillStyle = GOLD;
+    cursor = drawLines(ctx, [`Aula: ${aula}`], centerX, cursor, 5);
+    cursor += mm(2);
+
+    // QR (solo CI): ocupa todo el ancho/alto útil restante para ser bien legible.
+    if (typeof QRious !== 'undefined') {
+        const bottomPad = mm(4);
+        const qrSize = Math.max(mm(20), Math.min(contentWidth, canvas.height - bottomPad - cursor));
+        const qrCanvas = document.createElement('canvas');
+        // eslint-disable-next-line no-new
+        new QRious({ element: qrCanvas, value: buildQrValue(participant), size: qrSize, level: 'H' });
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(qrCanvas, centerX - qrSize / 2, cursor, qrSize, qrSize);
+    }
+
+    return canvas;
+}
+
+/**
+ * Genera la credencial como imagen PNG (6x7 cm) y dispara su descarga, lista
+ * para cargarse en el software de la impresora de stickers.
+ */
+export function printCredential(participant) {
+    const canvas = buildCredentialCanvas(participant);
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = `credencial_${String(participant.ci || 'sticker').trim()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }

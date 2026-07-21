@@ -76,8 +76,17 @@ control de acceso se basa en el claim **`role`** del token emitido por AUTH.
 
 Independientes de los roles de acceso, describen la función del asistente y se
 imprimen en su credencial: `PARTICIPANTE`, `MODERADOR`, `VEEDOR`, `INVITADO`,
-`ORGANIZADOR`, `PRENSA` y `FACILITADOR`. El ETL asigna uno a todo el archivo que
-carga.
+`ORGANIZADOR`, `PRENSA`, `FACILITADOR`, `SISTEMATIZADOR`, `COMUNICACION`,
+`SISTEMAS` y `SIN_ROL`.
+
+El rol **pertenece a la persona**, no a la institución: se elige en el formulario
+de registro o se carga **por fila** en la columna `Rol` del Excel del ETL (acepta
+etiquetas en español o los códigos, sin distinguir mayúsculas/acentos). La
+institución ya **no** deriva ni impone rol.
+
+**`SIN_ROL`** es el rol de las filas sin `Rol` asignado: la persona se registra
+como dato maestro pero **no toma aula** (aunque traiga eje) hasta que se le asigne
+un rol real. Para esas filas el eje deja de ser obligatorio.
 
 ---
 
@@ -219,29 +228,36 @@ python tools/mining_summit/seed_aulas.py            # aulas: capacidad + eje por
 ### 8.2 Carga de participantes (ETL)
 
 Cada institución completa la plantilla
-`templates/plantilla_registro_cumbre_minera.xlsx` y la remite junto con los
-datos de un **responsable**. La carga se realiza contra el endpoint del ETL
-(rol `ADMIN`). La institución y el rol de participante se pasan como parámetros,
-por lo que la columna «Institución» de la planilla es meramente informativa.
+`templates/plantilla_registro_cumbre_minera.xlsx` (con la columna `Rol` por
+persona) y la remite junto con los datos de un **responsable**. La carga se hace
+contra el endpoint del ETL (rol `ADMIN`); la institución es un parámetro, por lo
+que la columna «Institución» de la planilla es meramente informativa.
 
 ```bash
 curl -X POST "$BASE_URL/v1/mining-summit/etl/participants" \
   -H "Authorization: Bearer $ADMIN_JWT" \
   -F "institution_id=fencomin" \
-  -F "role=PARTICIPANTE" \
   -F "responsible_name=Juana Perez" \
   -F "responsible_phone=70000000" \
   -F "file=@fencomin.xlsx"
 ```
 
+El **rol va por fila** en la columna `Rol` del Excel (etiqueta en español o
+código; p. ej. `Moderador` o `MODERADOR`). Una celda `Rol` vacía deja a la
+persona en `SIN_ROL` (registrada sin aula). El campo `role` del `curl` es
+**opcional** y solo actúa como valor por defecto para las filas con `Rol` vacía.
+
 El proceso, fila por fila:
 
-1. Valida los campos obligatorios (todos excepto el correo).
-2. Respeta el cupo de la institución: acredita solo a los que caben; el resto se
+1. Resuelve el rol de la columna `Rol` (vacío → `SIN_ROL`; rol no reconocido →
+   fila rechazada).
+2. Valida los campos obligatorios (todos excepto el correo; el eje además es
+   opcional cuando el rol es `SIN_ROL`).
+3. Respeta el cupo de la institución: acredita solo a los que caben; el resto se
    reporta como no acreditado.
-3. Resuelve el eje elegido (columna 1–6), asigna el aula menos ocupada de ese
-   eje y estampa el rol recibido.
-4. Registra el lote (responsable y resultado) y devuelve un resumen con los
+4. Resuelve el eje elegido (columna 1–6) y asigna el aula menos ocupada de ese
+   eje. Con `SIN_ROL` no se asigna aula.
+5. Registra el lote (responsable y resultado) y devuelve un resumen con los
    `accepted` y `rejected`.
 
 La constancia consolidada de no acreditados está en

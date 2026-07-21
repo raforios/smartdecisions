@@ -3,9 +3,8 @@
 
     The catalog lives in the DynamoDB table `mining_summit_institutions` (seeded
     from the official participation matrix by tools/mining_summit/
-    import_institutions.py). It is served read-only; the role and seat-assignment
-    type are derived per entry from the category so the rules stay single-sourced
-    in summit_rules.
+    import_institutions.py). It is served read-only. The participant role is no
+    longer derived here: it belongs to each person (ETL row or registration form).
 '''
 import re
 import unicodedata
@@ -13,12 +12,10 @@ from typing import Any, Dict, List, Optional
 
 from boto3.resources.base import ServiceResource
 
-from schemas.enums import InstitutionCategory
 from services.crud import create_item, get_all_records_paginated, get_item_by_key
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.summit_rules import resolve_assignment_type, resolve_role
 from services.utils import handle_service_errors
 
 ENV_VARS = load_and_validate_env_vars({
@@ -30,43 +27,37 @@ INSTITUTIONS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INSTITUTIONS']
 
 def _enrich(institution: Dict[str, Any]) -> Dict[str, Any]:
     '''
-        Adds the derived role and seat-assignment type to a catalog entry and
-        normalizes DynamoDB numeric types (Decimal) to int.
+        Normalizes DynamoDB numeric types (Decimal) to int.
 
         Args:
             institution (Dict[str, Any]): Raw catalog item from DynamoDB.
 
         Returns:
-            Dict[str, Any]: Entry including 'role' and 'assignment_type'.
+            Dict[str, Any]: The institution with normalized numeric fields.
     '''
-    role = resolve_role(InstitutionCategory(institution['category']))
     return {
         **institution,
         # 'number' is legacy (row in the official matrix); optional going forward.
         'number': int(institution['number']) if institution.get('number') is not None else None,
-        'cupos': int(institution['cupos']),
-        'role': role.value,
-        'assignment_type': resolve_assignment_type(role).value
+        'cupos': int(institution['cupos'])
     }
 
 
 @handle_service_errors
 def list_institutions(
     dynamodb_resource: ServiceResource,
-    category: Optional[str] = None,
-    role: Optional[str] = None
+    category: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     '''
-        Returns the enriched catalog, optionally filtered by category and role,
-        ordered alphabetically by name.
+        Returns the catalog, optionally filtered by category, ordered
+        alphabetically by name.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             category (Optional[str]): Category value to filter by.
-            role (Optional[str]): Derived role value to filter by.
 
         Returns:
-            List[Dict[str, Any]]: Matching enriched institutions.
+            List[Dict[str, Any]]: Matching institutions.
     '''
     response = get_all_records_paginated(
         dynamodb_resource = dynamodb_resource,
@@ -76,8 +67,6 @@ def list_institutions(
     items = [_enrich(item) for item in response['items']]
     if category:
         items = [item for item in items if item['category'] == category]
-    if role:
-        items = [item for item in items if item['role'] == role]
     return sorted(items, key = lambda item: (item.get('name') or '').lower())
 
 

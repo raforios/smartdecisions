@@ -31,6 +31,7 @@ from services.registration import (
     scan_all_registrations,
     set_replaced_by
 )
+from services.summit_rules import UNSEATED_ROLES
 from services.utils import get_current_time_gmt, handle_service_errors
 
 ENV_VARS = load_and_validate_env_vars({
@@ -66,21 +67,25 @@ def _build_person_item(payload: Dict[str, Any], role: Optional[str]) -> Dict[str
     }
 
 
-def _resolve_role(
-    dynamodb_resource: ServiceResource,
-    payload: Dict[str, Any]
-) -> Optional[str]:
+def _resolve_role(payload: Dict[str, Any]) -> Optional[str]:
     '''
-        Resolves the person's functional role: an explicit role in the payload
-        (e.g. supplied by the ETL) wins; otherwise it is derived from the
-        institution category. Returns None when neither is available.
+        Resolves the person's functional role. The role belongs to the person and
+        is supplied explicitly (ETL row or registration form); it is no longer
+        derived from the institution. Accepts a ParticipantRole enum or its string
+        value and returns the string value, or None when not provided.
     '''
-    if payload.get('role'):
-        return payload['role']
-    institution_id = payload.get('institution_id')
-    if not institution_id:
+    role = payload.get('role')
+    if not role:
         return None
-    return get_institution(dynamodb_resource, institution_id)['role']
+    return getattr(role, 'value', role)
+
+
+def _is_seatable_role(role: Optional[str]) -> bool:
+    '''
+        Tells whether a role may take an aula seat. A missing role or a SIN_ROL
+        person is registered without an aula until a real role is assigned.
+    '''
+    return bool(role) and role not in UNSEATED_ROLES
 
 
 def _institution_name_map(dynamodb_resource: ServiceResource) -> Dict[str, str]:
@@ -130,7 +135,7 @@ def create_participant(
         Returns:
             Dict[str, Any]: The joined participant view (person + registration).
     '''
-    role = _resolve_role(dynamodb_resource, payload)
+    role = _resolve_role(payload)
     person = _build_person_item(payload, role)
     message = f'Creating person ci={person["ci"]}'
     logger.info(message)
@@ -141,8 +146,10 @@ def create_participant(
         unique_key_attribute = 'ci'
     )
 
+    # A person without a real role (none or SIN_ROL) is registered as master data
+    # but is NOT seated in an aula until a real role is assigned.
     registration = None
-    if payload.get('axis'):
+    if payload.get('axis') and _is_seatable_role(role):
         seat = resolve_seat(dynamodb_resource, payload['axis'])
         registration = create_registration(
             dynamodb_resource = dynamodb_resource,
@@ -289,8 +296,9 @@ def _apply_person_edits(
     payload: Dict[str, Any]
 ) -> Dict[str, Any]:
     '''
-        Applies the editable person fields onto the loaded person. Changing the
-        institution re-derives the role and is validated against the new
+        Applies the editable person fields onto the loaded person. The role
+        belongs to the person, so it is edited directly (not derived from the
+        institution). Changing the institution is validated against the new
         institution cupo (a person that moves in must have a free slot).
 
         Returns:
@@ -299,12 +307,15 @@ def _apply_person_edits(
     for field in ('first_name', 'last_name', 'email', 'phone', 'department'):
         if payload.get(field) is not None:
             person[field] = payload[field]
+    if payload.get('role') is not None:
+        # Normalize a ParticipantRole enum (from the form) to its string value;
+        # an empty role clears it (person becomes role-less, no aula).
+        person['role'] = getattr(payload['role'], 'value', payload['role']) or None
 
     new_institution = payload.get('institution_id')
     if new_institution is not None and new_institution != person.get('institution_id'):
         assert_cupo_available(dynamodb_resource, new_institution)
         person['institution_id'] = new_institution
-        person['role'] = get_institution(dynamodb_resource, new_institution)['role']
     return person
 
 
@@ -341,7 +352,9 @@ def update_participant(
 
     registration = find_registration_by_ci(dynamodb_resource, ci)
     axis = payload.get('axis')
-    if axis is not None:
+    # Only seat when the (post-edit) role is a real, seatable role; SIN_ROL and
+    # role-less people stay registered without an aula.
+    if axis is not None and _is_seatable_role(person.get('role')):
         current_axis = registration.get('axis') if is_active(registration) else None
         if current_axis != axis:
             seat = resolve_seat(dynamodb_resource, axis)

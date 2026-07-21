@@ -119,6 +119,86 @@ def test_invalid_axis_number_is_rejected(dynamodb):
     assert 'axis' in summary['rejected'][0]['reason'].lower()
 
 
+def test_sin_rol_load_accepts_rows_without_axis_and_leaves_no_seat(dynamodb):
+    '''
+        A SIN_ROL load does not require the axis: rows without an eje are still
+        accredited as master data, but no aula seat (registration) is created.
+    '''
+    file_bytes = _build_workbook([
+        ['111', 'Ana', 'Lopez', '', '701', 'La Paz', ''],   # no eje
+    ])
+    summary = load_participants_from_excel(
+        dynamodb, file_bytes, 'inst-a', _RESPONSIBLE, ParticipantRole.SIN_ROL.value
+    )
+
+    assert summary['accepted_count'] == 1
+    assert summary['rejected_count'] == 0
+    person = dynamodb.Table(PARTICIPANTS_TABLE).get_item(Key = {'ci': '111'})['Item']
+    assert person['role'] == ParticipantRole.SIN_ROL.value
+    assert dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '111'}).get('Item') is None
+
+
+_HEADERS_ROLE = _HEADERS + ['Rol']
+
+
+def _build_workbook_role(rows):
+    '''Builds an in-memory .xlsx that also carries a per-row 'Rol' column.'''
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = 'Registro'
+    worksheet.append(_HEADERS_ROLE)
+    for row in rows:
+        worksheet.append(row)
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def test_per_row_role_from_spanish_label_seats_participant(dynamodb):
+    '''
+        A per-row 'Rol' column in Spanish is mapped to the ParticipantRole and
+        the person is seated (no file-level role needed).
+    '''
+    file_bytes = _build_workbook_role([
+        ['111', 'Ana', 'Lopez', '', '701', 'La Paz', 1, 'Moderador'],
+    ])
+    summary = load_participants_from_excel(dynamodb, file_bytes, 'inst-a', _RESPONSIBLE)
+
+    assert summary['accepted_count'] == 1
+    person = dynamodb.Table(PARTICIPANTS_TABLE).get_item(Key = {'ci': '111'})['Item']
+    assert person['role'] == ParticipantRole.MODERADOR.value
+    registration = dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '111'})['Item']
+    assert registration['mesa_code'] == 'A1'
+
+
+def test_blank_role_defaults_to_sin_rol_without_seat(dynamodb):
+    '''
+        A blank 'Rol' cell (and no file-level default) makes the person SIN_ROL:
+        accredited without an aula, even without an eje.
+    '''
+    file_bytes = _build_workbook_role([
+        ['222', 'Beto', 'Ruiz', '', '702', 'Oruro', '', ''],
+    ])
+    summary = load_participants_from_excel(dynamodb, file_bytes, 'inst-a', _RESPONSIBLE)
+
+    assert summary['accepted_count'] == 1
+    person = dynamodb.Table(PARTICIPANTS_TABLE).get_item(Key = {'ci': '222'})['Item']
+    assert person['role'] == ParticipantRole.SIN_ROL.value
+    assert dynamodb.Table(REGISTRATION_TABLE).get_item(Key = {'ci': '222'}).get('Item') is None
+
+
+def test_unrecognized_role_is_rejected(dynamodb):
+    '''A 'Rol' cell that is neither a known label nor code rejects the row.'''
+    file_bytes = _build_workbook_role([
+        ['333', 'Cira', 'Diaz', '', '703', 'Potosí', 1, 'Astronauta'],
+    ])
+    summary = load_participants_from_excel(dynamodb, file_bytes, 'inst-a', _RESPONSIBLE)
+
+    assert summary['accepted_count'] == 0
+    assert summary['rejected_count'] == 1
+    assert 'rol' in summary['rejected'][0]['reason'].lower()
+
+
 def test_batch_and_participants_persisted_active(dynamodb):
     '''
         Accepted participants are persisted as ACTIVE with the institution, and a

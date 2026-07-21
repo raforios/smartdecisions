@@ -4,13 +4,12 @@
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from schemas.enums import AssignmentType, InstitutionCategory, ParticipantRole
+from schemas.enums import InstitutionCategory
 
 
 class InstitutionResponseSchema(BaseModel):
     '''
-        Pydantic schema for a reference institution, enriched with the role and
-        seat-assignment type derived from its category.
+        Pydantic schema for a reference institution.
     '''
     id: str
     number: Optional[int] = None
@@ -18,8 +17,6 @@ class InstitutionResponseSchema(BaseModel):
     abbreviation: Optional[str] = None
     category: InstitutionCategory
     cupos: int
-    role: ParticipantRole
-    assignment_type: AssignmentType
     # Live occupancy, populated on the single-institution detail endpoint.
     accredited_count: Optional[int] = Field(
         None, description = 'ACTIVE participants already accredited for this institution.'
@@ -46,9 +43,6 @@ class InstitutionQuerySchema(BaseModel):
     '''
     category: Optional[InstitutionCategory] = Field(
         None, description = 'Filter by institutional category.'
-    )
-    role: Optional[ParticipantRole] = Field(
-        None, description = 'Filter by derived participant role.'
     )
 
 

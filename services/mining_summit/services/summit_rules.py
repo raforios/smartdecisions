@@ -1,42 +1,16 @@
 '''
     Business reference rules for the Mining Summit.
 
-    Single source of truth for how an institution's category maps to a
-    participant role, and how that role maps to a seat-assignment type. Kept
-    here (not in schemas) because these are business rules, not data shapes.
+    Single source of truth for the thematic axes, the campus aulas and their
+    allocation. The participant role is no longer derived from the institution:
+    it belongs to each person and is supplied per row in the ETL or picked in
+    the registration form.
 '''
-from schemas.enums import (
-    AssignmentType,
-    InstitutionCategory,
-    ParticipantRole,
-    ThematicAxis
-)
+from schemas.enums import ParticipantRole, ThematicAxis
 
-# Each institutional category determines the functional role its members play
-# at the working tables. Confirmed by the event owner (2026-07-10).
-CATEGORY_ROLE_MAP: dict[InstitutionCategory, ParticipantRole] = {
-    InstitutionCategory.ACTORES_PRODUCTIVOS: ParticipantRole.PARTICIPANTE,
-    InstitutionCategory.INSTITUCIONES_AFINES: ParticipantRole.PARTICIPANTE,
-    InstitutionCategory.PUBLICAS_NIVEL_CENTRAL: ParticipantRole.MODERADOR,
-    InstitutionCategory.ORGANO_LEGISLATIVO: ParticipantRole.MODERADOR,
-    InstitutionCategory.SECTOR_ACADEMICO: ParticipantRole.VEEDOR,
-    InstitutionCategory.GOBIERNOS_DEPARTAMENTALES: ParticipantRole.INVITADO,
-    InstitutionCategory.COOPERACION_LOGISTICA: ParticipantRole.ORGANIZADOR,
-    InstitutionCategory.CAMARAS: ParticipantRole.ORGANIZADOR,
-    InstitutionCategory.ORGANIZADOR_ENTE_RECTOR: ParticipantRole.ORGANIZADOR
-}
-
-# Participants and moderators hold a permanent seat; observers and guests rotate
-# in temporarily; organizers do not take a table seat at all.
-ROLE_ASSIGNMENT_MAP: dict[ParticipantRole, AssignmentType] = {
-    ParticipantRole.PARTICIPANTE: AssignmentType.FIJO,
-    ParticipantRole.MODERADOR: AssignmentType.FIJO,
-    ParticipantRole.VEEDOR: AssignmentType.ROTATIVO,
-    ParticipantRole.INVITADO: AssignmentType.ROTATIVO,
-    ParticipantRole.ORGANIZADOR: AssignmentType.ROTATIVO,
-    ParticipantRole.PRENSA: AssignmentType.ROTATIVO,
-    ParticipantRole.FACILITADOR: AssignmentType.ROTATIVO
-}
+# Roles that are registered but never take an aula seat until a real role is
+# assigned. Used to gate seat assignment (see participants.create_participant).
+UNSEATED_ROLES: frozenset[str] = frozenset({ParticipantRole.SIN_ROL.value})
 
 # Display metadata for the six thematic axes: (official number, human label).
 AXIS_METADATA: dict[ThematicAxis, tuple[int, str]] = {
@@ -108,29 +82,3 @@ MESA_ALLOCATION: dict[ThematicAxis, int] = {
     ThematicAxis.COMERCIALIZACION: 3,
     ThematicAxis.DESARROLLO_PRODUCTIVO: 3
 }
-
-
-def resolve_role(category: InstitutionCategory) -> ParticipantRole:
-    '''
-        Resolves the participant role for a given institutional category.
-
-        Args:
-            category (InstitutionCategory): The institution's category.
-
-        Returns:
-            ParticipantRole: The functional role for that category.
-    '''
-    return CATEGORY_ROLE_MAP[category]
-
-
-def resolve_assignment_type(role: ParticipantRole) -> AssignmentType:
-    '''
-        Resolves the seat-assignment type for a given participant role.
-
-        Args:
-            role (ParticipantRole): The participant's functional role.
-
-        Returns:
-            AssignmentType: FIJO for seated roles, ROTATIVO otherwise.
-    '''
-    return ROLE_ASSIGNMENT_MAP[role]

@@ -2,14 +2,30 @@
  * Registro de Participante.
  * POST /v1/mining-summit/participants
  *
- * Al elegir una institución se envía institution_id: el backend deriva el rol
- * y (para roles FIJO) asienta al participante en un eje y mesa estables. Tras
- * registrar se muestra una credencial imprimible con QR (codifica el CI para
- * el marcado de asistencia).
+ * El rol pertenece a la persona: se elige en el formulario (ya no se deriva de
+ * la institución). Si se envía un eje y el rol no es "Sin rol", el backend
+ * asienta al participante en un eje y mesa estables. Tras registrar se muestra
+ * la credencial/sticker con QR (codifica el CI para el marcado de asistencia).
  */
 import { Toast } from '../components/Toast.js';
-import { renderQr, printCredential } from '../components/Credential.js';
+import { renderQr, printCredential } from '../components/Credential.js?v=20260721e';
 import { loadAvailability, buildAxisOptions, renderAvailabilityHint } from '../components/AxisPicker.js';
+
+// Roles de participante (value = código del backend, label = etiqueta en español).
+// "Sin rol" (value vacío) registra a la persona sin aula hasta asignarle un rol.
+const ROLE_OPTIONS = [
+    ['', '— Sin rol (registrado sin aula) —'],
+    ['PARTICIPANTE', 'Participante'],
+    ['MODERADOR', 'Moderador'],
+    ['VEEDOR', 'Veedor'],
+    ['INVITADO', 'Invitado'],
+    ['ORGANIZADOR', 'Organizador'],
+    ['PRENSA', 'Prensa'],
+    ['FACILITADOR', 'Facilitador'],
+    ['SISTEMATIZADOR', 'Sistematizador'],
+    ['COMUNICACION', 'Comunicación'],
+    ['SISTEMAS', 'Sistemas']
+].map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
 
 export const RegistroPage = {
     async render(container, { config, api }) {
@@ -46,7 +62,13 @@ export const RegistroPage = {
                             <select id="institution_id" name="institution_id">
                                 <option value="">— Cargando instituciones… —</option>
                             </select>
-                            <div id="role-hint" class="role-hint"></div>
+                        </div>
+                        <div class="form-field form-field-wide">
+                            <label for="role">Rol</label>
+                            <select id="role" name="role">
+                                ${ROLE_OPTIONS}
+                            </select>
+                            <div class="role-hint">El rol define su función; "Sin rol" queda registrado sin aula.</div>
                         </div>
                         <div class="form-field">
                             <label for="email">Correo electrónico</label>
@@ -89,12 +111,11 @@ export const RegistroPage = {
         const submitBtn = container.querySelector('#submit-btn');
         const resetBtn = container.querySelector('#reset-btn');
         const institutionSelect = container.querySelector('#institution_id');
-        const roleHint = container.querySelector('#role-hint');
         const axisSelect = container.querySelector('#axis');
         const axisHint = container.querySelector('#axis-availability');
         const resultBox = container.querySelector('#registro-result');
 
-        const institutions = await loadInstitutions(api, config, institutionSelect);
+        await loadInstitutions(api, config, institutionSelect);
 
         async function refreshAvailability() {
             const availability = await loadAvailability(api, config);
@@ -104,13 +125,8 @@ export const RegistroPage = {
         }
         await refreshAvailability();
 
-        institutionSelect.addEventListener('change', () => {
-            renderRoleHint(roleHint, institutions.get(institutionSelect.value));
-        });
-
         resetBtn.addEventListener('click', () => {
             form.reset();
-            roleHint.innerHTML = '';
             refreshAvailability();
         });
 
@@ -131,7 +147,6 @@ export const RegistroPage = {
                 );
                 renderCredential(resultBox, saved);
                 form.reset();
-                roleHint.innerHTML = '';
                 await refreshAvailability();
             } catch (error) {
                 Toast.danger(`No se pudo registrar: ${error.message}`);
@@ -177,21 +192,6 @@ function buildInstitutionOptions(items) {
     return html;
 }
 
-function renderRoleHint(hintEl, institution) {
-    if (!institution) {
-        hintEl.innerHTML = '';
-        return;
-    }
-    const seated = institution.assignment_type === 'FIJO';
-    const icon = seated ? 'fa-chair' : 'fa-people-arrows';
-    const seatText = seated
-        ? 'Asiento fijo: se le asignará un eje y una mesa.'
-        : 'Asistencia rotativa: sin mesa fija.';
-    hintEl.innerHTML = `
-        <i class="fa-solid ${icon}" style="color:var(--oro)"></i>
-        Rol: <strong>${institution.role}</strong> · ${seatText}
-    `;
-}
 
 function renderCredential(resultBox, participant) {
     const seated = participant.mesa_code;
@@ -232,7 +232,7 @@ function renderCredential(resultBox, participant) {
             </div>
             <div class="form-actions">
                 <button id="print-credential" class="btn btn-primary" type="button">
-                    <i class="fa-solid fa-print"></i> Imprimir credencial
+                    <i class="fa-solid fa-download"></i> Descargar sticker (PNG)
                 </button>
             </div>
         </div>

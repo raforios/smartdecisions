@@ -25,7 +25,11 @@ class ParticipantCreateSchema(OptionalContactSchema):
                     description = 'Carnet de Identidad. Unique identifier per participant.')
     institution_id: Optional[str] = Field(
         None, max_length = 120,
-        description = 'Reference institution slug; drives role and institution data.'
+        description = 'Reference institution slug for the person and cupo check.'
+    )
+    role: Optional[ParticipantRole] = Field(
+        None, description = 'Functional role of the participant. Omit for no role '
+                            '(the person is registered without an aula).'
     )
     axis: Optional[ThematicAxis] = Field(
         None, description = 'Thematic axis chosen by the participant; drives seat assignment.'
@@ -37,15 +41,19 @@ class ParticipantUpdateSchema(OptionalContactSchema):
     '''
         Pydantic schema for editing an existing participant so it can be fully
         accredited. Every field is optional; only the provided ones change.
-        Setting 'institution_id' re-derives the role and is validated against the
-        institution cupo. Setting 'axis' assigns (or reassigns) a stable eje/mesa
-        seat, validated against the axis aula availability.
+        Setting 'institution_id' is validated against the institution cupo.
+        Setting 'role' changes the person's functional role. Setting 'axis'
+        assigns (or reassigns) a stable eje/mesa seat, validated against the axis
+        aula availability.
     '''
     first_name: Optional[str] = Field(None, min_length = 1, max_length = 80)
     last_name: Optional[str] = Field(None, min_length = 1, max_length = 80)
     institution_id: Optional[str] = Field(
         None, max_length = 120,
-        description = 'Reference institution slug; drives role and cupo check.'
+        description = 'Reference institution slug; validated against the cupo.'
+    )
+    role: Optional[ParticipantRole] = Field(
+        None, description = 'New functional role for the participant.'
     )
     axis: Optional[ThematicAxis] = Field(
         None, description = 'Thematic axis to seat the participant in.'

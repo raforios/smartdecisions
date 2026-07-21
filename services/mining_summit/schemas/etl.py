@@ -22,14 +22,17 @@ class ResponsibleSchema(BaseModel):
 
 class EtlAcceptedSchema(BaseModel):
     '''
-        A participant successfully accredited by the load.
+        A participant successfully accredited by the load. Seat fields (axis,
+        axis_label, mesa_code) are null for a SIN_ROL person, who is registered
+        without an aula.
     '''
     ci: str
     first_name: str
     last_name: str
-    axis: str
-    axis_label: str
-    mesa_code: str
+    role: Optional[str] = None
+    axis: Optional[str] = None
+    axis_label: Optional[str] = None
+    mesa_code: Optional[str] = None
 
 
 class EtlRejectedSchema(BaseModel):

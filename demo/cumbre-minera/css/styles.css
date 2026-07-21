@@ -818,6 +818,25 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
     color: var(--text-muted);
 }
 
+/* Aula pivote (disposición libre) y ayudas de formulario */
+.pivote-badge {
+    display: inline-block;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--oro);
+    color: var(--oro-dark);
+    background: rgba(201, 167, 81, 0.12);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+.field-hint {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
 /* Lector QR con cámara (página de Asistencia) */
 .qr-scan {
     margin-top: 1rem;

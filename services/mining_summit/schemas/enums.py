@@ -56,6 +56,13 @@ class ParticipantRole(str, Enum):
     ORGANIZADOR = 'ORGANIZADOR'
     PRENSA = 'PRENSA'
     FACILITADOR = 'FACILITADOR'
+    SISTEMATIZADOR = 'SISTEMATIZADOR'
+    TECNICOS = 'TECNICOS'
+    COMUNICACION = 'COMUNICACION'
+    SISTEMAS = 'SISTEMAS'
+    # Placeholder role for people loaded without a role yet: they are registered
+    # but do NOT take an aula seat until a real role is assigned (see summit_rules).
+    SIN_ROL = 'SIN_ROL'
 
 
 class AssignmentType(str, Enum):

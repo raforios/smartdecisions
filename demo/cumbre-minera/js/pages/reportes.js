@@ -4,8 +4,23 @@
  * GET /v1/mining-summit/participants/{ci}  (búsqueda directa)
  */
 import { Toast } from '../components/Toast.js';
-import { printCredential } from '../components/Credential.js';
+import { printCredential } from '../components/Credential.js?v=20260721e';
 import { loadAvailability, buildAxisOptions, renderAvailabilityHint } from '../components/AxisPicker.js';
+
+// Roles de participante (value = código del backend, label = etiqueta en español).
+const ROLE_OPTIONS = [
+    ['', '— Sin rol (registrado sin aula) —'],
+    ['PARTICIPANTE', 'Participante'],
+    ['MODERADOR', 'Moderador'],
+    ['VEEDOR', 'Veedor'],
+    ['INVITADO', 'Invitado'],
+    ['ORGANIZADOR', 'Organizador'],
+    ['PRENSA', 'Prensa'],
+    ['FACILITADOR', 'Facilitador'],
+    ['SISTEMATIZADOR', 'Sistematizador'],
+    ['COMUNICACION', 'Comunicación'],
+    ['SISTEMAS', 'Sistemas']
+].map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
 
 export const ReportesPage = {
     render(container, { config, api, auth }) {
@@ -113,6 +128,13 @@ export const ReportesPage = {
                                 <select id="edit-institution" name="institution_id">
                                     <option value="">— Cargando… —</option>
                                 </select>
+                            </div>
+                            <div class="form-field form-field-wide">
+                                <label for="edit-role">Rol</label>
+                                <select id="edit-role" name="role">
+                                    ${ROLE_OPTIONS}
+                                </select>
+                                <div class="role-hint">Asigna un rol real (con un eje) para darle aula a un participante "Sin rol".</div>
                             </div>
                             <div class="form-field form-field-wide">
                                 <label for="edit-axis">Eje temático</label>
@@ -360,8 +382,8 @@ function renderRows(tbody, items, canManage) {
                 <button class="btn btn-ghost btn-sm decline-btn" data-ci="${escapeHtml(p.ci)}" title="Declinar participación (CANCELLED)">
                     <i class="fa-solid fa-user-slash"></i> Declinar
                 </button>` : ''}
-                <button class="btn btn-ghost btn-sm reprint-btn" data-ci="${escapeHtml(p.ci)}" title="Reimprimir QR">
-                    <i class="fa-solid fa-qrcode"></i> QR
+                <button class="btn btn-ghost btn-sm reprint-btn" data-ci="${escapeHtml(p.ci)}" title="Descargar sticker (PNG)">
+                    <i class="fa-solid fa-download"></i> Sticker
                 </button>
             </td>
         </tr>
@@ -425,6 +447,7 @@ function createEditModal(container, { config, api }, onSaved) {
         form.querySelector('#edit-last').value = participant.last_name || '';
         form.querySelector('#edit-department').value = participant.department || '';
         form.querySelector('#edit-phone').value = participant.phone || '';
+        form.querySelector('#edit-role').value = participant.role || '';
         overlay.classList.add('is-open');
         await ensureInstitutions();
         institutionSelect.value = participant.institution_id || '';
@@ -444,6 +467,8 @@ function createEditModal(container, { config, api }, onSaved) {
         const phone = form.querySelector('#edit-phone').value.trim();
         if (phone) payload.phone = phone;
         if (institutionSelect.value) payload.institution_id = institutionSelect.value;
+        const roleValue = form.querySelector('#edit-role').value;
+        if (roleValue) payload.role = roleValue;
         if (axisSelect.value) payload.axis = axisSelect.value;
 
         const original = saveBtn.innerHTML;

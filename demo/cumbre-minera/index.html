@@ -8,8 +8,8 @@
     <link rel="icon" type="image/png" href="assets/favicon-64.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20260717d">
-    <link rel="stylesheet" href="css/landing.css?v=20260717d">
+    <link rel="stylesheet" href="css/styles.css?v=20260721e">
+    <link rel="stylesheet" href="css/landing.css?v=20260721e">
 </head>
 <body class="landing">
     <header class="landing-nav">
@@ -84,6 +84,23 @@
             <div class="obj-item"><i class="fa-solid fa-check"></i><span>Formular propuestas y recomendaciones sectoriales mediante la deliberación en mesas temáticas de trabajo.</span></div>
             <div class="obj-item"><i class="fa-solid fa-check"></i><span>Elaborar un documento final de consensos y lineamientos, columna vertebral del nuevo Código Minero.</span></div>
             <div class="obj-item"><i class="fa-solid fa-check"></i><span>Definir la metodología de trabajo para la redacción detallada del nuevo Código Minero de Bolivia.</span></div>
+        </div>
+    </section>
+
+    <section class="landing-section alt" id="programa">
+        <div class="section-head">
+            <h2>Programa</h2>
+            <p>Consulta la agenda oficial de los tres días de la Cumbre.</p>
+        </div>
+        <div class="programa-wrap">
+            <button type="button" class="brochure-trigger programa-trigger" id="programa-trigger" aria-label="Ver el programa del evento">
+                <span class="programa-cover">
+                    <i class="fa-solid fa-calendar-days programa-cover-icon"></i>
+                    <span class="programa-cover-title">Programa Oficial</span>
+                    <span class="programa-cover-sub">22 · 23 · 24 de Julio, 2026</span>
+                </span>
+                <span class="brochure-hint"><i class="fa-solid fa-book-open"></i> Ver programa</span>
+            </button>
         </div>
     </section>
 
@@ -200,20 +217,32 @@
     <section class="landing-section alt" id="mesas">
         <div class="section-head">
             <h2>Mesas de Trabajo</h2>
-            <p>Cada eje temático se desarrolla en dos mesas simultáneas.</p>
+            <p>18 aulas de trabajo distribuidas en los seis ejes temáticos, con capacidad para 30 personas cada una.</p>
         </div>
         <div class="mesas-wrap">
             <table class="mesas-table">
                 <thead>
-                    <tr><th>Eje Temático</th><th>N.º de Mesa</th><th>Capacidad máx.</th></tr>
+                    <tr><th>Código</th><th>Bloque</th><th>Ubicación</th><th>Capacidad</th><th>Eje Temático</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td class="eje-name"><strong>EJE 1:</strong> Seguridad Jurídica Minera</td><td>Mesa 1 y 2</td><td class="cap">120</td></tr>
-                    <tr><td class="eje-name"><strong>EJE 2:</strong> Contratos Mineros</td><td>Mesa 3 y 4</td><td class="cap">120</td></tr>
-                    <tr><td class="eje-name"><strong>EJE 3:</strong> Institucionalidad y Organización del Sector Minero</td><td>Mesa 5 y 6</td><td class="cap">120</td></tr>
-                    <tr><td class="eje-name"><strong>EJE 4:</strong> Medio Ambiente y Minería Responsable</td><td>Mesa 7 y 8</td><td class="cap">120</td></tr>
-                    <tr><td class="eje-name"><strong>EJE 5:</strong> Comercialización, Trazabilidad y Minería Ilegal</td><td>Mesa 9 y 10</td><td class="cap">120</td></tr>
-                    <tr><td class="eje-name"><strong>EJE 6:</strong> Desarrollo Productivo, Inversiones e Incentivos</td><td>Mesa 11 y 12</td><td class="cap">120</td></tr>
+                    <tr><td><strong>A3</strong></td><td>A</td><td>Planta Baja</td><td class="cap">30</td><td class="eje-name"><strong>Seguridad Jurídica Minera</strong></td></tr>
+                    <tr><td><strong>A5</strong></td><td>A</td><td>Planta Baja</td><td class="cap">30</td><td class="eje-name"><strong>Seguridad Jurídica Minera</strong></td></tr>
+                    <tr><td><strong>A6</strong></td><td>A</td><td>Planta Baja</td><td class="cap">30</td><td class="eje-name"><strong>Seguridad Jurídica Minera</strong></td></tr>
+                    <tr><td><strong>A7</strong></td><td>A</td><td>Primer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Contratos Mineros</strong></td></tr>
+                    <tr><td><strong>A8</strong></td><td>A</td><td>Primer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Contratos Mineros</strong></td></tr>
+                    <tr><td><strong>A9</strong></td><td>A</td><td>Primer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Contratos Mineros</strong></td></tr>
+                    <tr><td><strong>A13</strong></td><td>A</td><td>Segundo Piso</td><td class="cap">30</td><td class="eje-name"><strong>Institucionalidad y Organización del Sector Minero</strong></td></tr>
+                    <tr><td><strong>A14</strong></td><td>A</td><td>Segundo Piso</td><td class="cap">30</td><td class="eje-name"><strong>Institucionalidad y Organización del Sector Minero</strong></td></tr>
+                    <tr><td><strong>A15</strong></td><td>A</td><td>Segundo Piso</td><td class="cap">30</td><td class="eje-name"><strong>Institucionalidad y Organización del Sector Minero</strong></td></tr>
+                    <tr><td><strong>L12</strong></td><td>L</td><td>Tercer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Medio Ambiente</strong></td></tr>
+                    <tr><td><strong>L13</strong></td><td>L</td><td>Tercer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Medio Ambiente</strong></td></tr>
+                    <tr><td><strong>L15</strong></td><td>L</td><td>Tercer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Medio Ambiente</strong></td></tr>
+                    <tr><td><strong>C1</strong></td><td>COL</td><td>Coliseo</td><td class="cap">30</td><td class="eje-name"><strong>Comercialización, Trazabilidad y Minería Ilegal</strong></td></tr>
+                    <tr><td><strong>C2</strong></td><td>COL</td><td>Coliseo</td><td class="cap">30</td><td class="eje-name"><strong>Comercialización, Trazabilidad y Minería Ilegal</strong></td></tr>
+                    <tr><td><strong>C3</strong></td><td>COL</td><td>Coliseo</td><td class="cap">30</td><td class="eje-name"><strong>Comercialización, Trazabilidad y Minería Ilegal</strong></td></tr>
+                    <tr><td><strong>A10</strong></td><td>A</td><td>Primer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Desarrollo Productivo, Inversiones e Incentivos</strong></td></tr>
+                    <tr><td><strong>A11</strong></td><td>A</td><td>Primer Piso</td><td class="cap">30</td><td class="eje-name"><strong>Desarrollo Productivo, Inversiones e Incentivos</strong></td></tr>
+                    <tr><td><strong>A12</strong></td><td>A</td><td>Segundo Piso</td><td class="cap">30</td><td class="eje-name"><strong>Desarrollo Productivo, Inversiones e Incentivos</strong></td></tr>
                 </tbody>
             </table>
         </div>
@@ -355,7 +384,7 @@
                 <button class="flip-arrow flip-prev" id="flip-prev" aria-label="Página anterior">
                     <i class="fa-solid fa-chevron-left"></i>
                 </button>
-                <div id="flipbook"></div>
+                <div class="flipbook-book" id="flipbook"></div>
                 <button class="flip-arrow flip-next" id="flip-next" aria-label="Página siguiente">
                     <i class="fa-solid fa-chevron-right"></i>
                 </button>
@@ -364,9 +393,34 @@
         </div>
     </div>
 
+    <div class="flipbook-modal" id="programa-modal" hidden>
+        <div class="flipbook-backdrop"></div>
+        <div class="flipbook-dialog">
+            <a class="flipbook-download" href="assets/PROGRAMA.pdf" download="Programa-Cumbre-Minera-2026.pdf">
+                <i class="fa-solid fa-file-arrow-down"></i> Descargar PDF
+            </a>
+            <button class="flipbook-close" aria-label="Cerrar">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flipbook-loading">
+                <div class="spinner"></div> Cargando programa…
+            </div>
+            <div class="flipbook-viewport" hidden>
+                <button class="flip-arrow flip-prev" aria-label="Página anterior">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <div class="flipbook-book"></div>
+                <button class="flip-arrow flip-next" aria-label="Página siguiente">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+            <div class="flip-page-indicator"></div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.min.js"></script>
-    <script src="js/brochure-flip.js"></script>
-    <script src="js/landing-modals.js"></script>
+    <script src="js/brochure-flip.js?v=20260721e"></script>
+    <script src="js/landing-modals.js?v=20260721e"></script>
 </body>
 </html>

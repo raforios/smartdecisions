@@ -1,6 +1,8 @@
 '''
     ETL (participant batch load): routes handler.
 '''
+from typing import Optional
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from boto3.resources.base import ServiceResource
 
@@ -36,10 +38,13 @@ _ALLOWED_SUFFIX = '.xlsx'
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 async def load_participants_endpoint(
     institution_id: str = Form(..., min_length = 1, max_length = 120),
-    role: ParticipantRole = Form(..., description = 'Role assigned to every participant.'),
     responsible_name: str = Form(..., min_length = 1, max_length = 120),
     responsible_phone: str = Form(..., min_length = 1, max_length = 30),
     file: UploadFile = File(...),
+    role: Optional[ParticipantRole] = Form(
+        None, description = 'Default role for rows with a blank "Rol" cell. The '
+                            'per-row column wins; omit to default blanks to SIN_ROL.'
+    ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value))
 ):
@@ -51,7 +56,7 @@ async def load_participants_endpoint(
 
     file_bytes = await file.read()
     message = (
-        f'ETL upload for institution={institution_id} role={role.value} '
+        f'ETL upload for institution={institution_id} role={role.value if role else None} '
         f'file={file.filename} size={len(file_bytes)}B'
     )
     logger.info(message)
@@ -60,5 +65,5 @@ async def load_participants_endpoint(
         file_bytes = file_bytes,
         institution_id = institution_id,
         responsible = ResponsibleSchema(name = responsible_name, phone = responsible_phone),
-        role = role.value
+        role = role.value if role else None
     )

@@ -56,10 +56,10 @@ export const AdminInstitucionesPage = {
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Nombre</th><th>Sigla</th><th>Categoría</th><th>Rol</th><th>Cupo</th><th></th></tr>
+                        <tr><th>Nombre</th><th>Sigla</th><th>Categoría</th><th>Cupo</th><th></th></tr>
                     </thead>
                     <tbody id="inst-tbody">
-                        <tr><td colspan="6"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>
+                        <tr><td colspan="5"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -98,13 +98,13 @@ export const AdminInstitucionesPage = {
         }
 
         async function load() {
-            tbody.innerHTML = `<tr><td colspan="6"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
             try {
                 const data = await api.get(path);
                 cache = data.items || [];
                 renderRows(tbody, cache);
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>${escapeHtml(error.message)}</p></div></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>${escapeHtml(error.message)}</p></div></td></tr>`;
             }
         }
 
@@ -164,7 +164,7 @@ export const AdminInstitucionesPage = {
 
 function renderRows(tbody, items) {
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-folder-open"></i><p>Sin instituciones.</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="fa-solid fa-folder-open"></i><p>Sin instituciones.</p></div></td></tr>`;
         return;
     }
     tbody.innerHTML = items.map(inst => `
@@ -172,7 +172,6 @@ function renderRows(tbody, items) {
             <td><strong>${escapeHtml(inst.name)}</strong></td>
             <td>${escapeHtml(inst.abbreviation || '—')}</td>
             <td><small>${escapeHtml(inst.category)}</small></td>
-            <td>${escapeHtml(inst.role || '—')}</td>
             <td>${inst.cupos}</td>
             <td class="row-actions">
                 <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${escapeHtml(inst.id)}" title="Editar"><i class="fa-solid fa-pen"></i></button>

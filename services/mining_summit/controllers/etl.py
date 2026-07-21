@@ -1,6 +1,8 @@
 '''
     ETL controllers.
 '''
+from typing import Optional
+
 from boto3.resources.base import ServiceResource
 
 from schemas.etl import EtlLoadResponseSchema, ResponsibleSchema
@@ -14,12 +16,13 @@ def load_participants_controller(
     file_bytes: bytes,
     institution_id: str,
     responsible: ResponsibleSchema,
-    role: str
+    role: Optional[str] = None
 ) -> EtlLoadResponseSchema:
     '''
         Controller that runs the participant batch load for a single institution
-        file and returns the accreditation summary. Restricted to ADMIN at the
-        route layer.
+        file and returns the accreditation summary. The per-row 'Rol' column wins;
+        `role` is only the default for rows with a blank role cell. Restricted to
+        ADMIN at the route layer.
     '''
     summary = load_participants_from_excel(
         dynamodb_resource = dynamodb_resource,

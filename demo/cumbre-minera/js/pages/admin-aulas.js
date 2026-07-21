@@ -52,11 +52,12 @@ export const AdminAulasPage = {
                             <input id="aula-capacity" type="number" min="1" required>
                         </div>
                         <div class="form-field form-field-wide">
-                            <label for="aula-axis">Eje temático <span class="req">*</span></label>
-                            <select id="aula-axis" required>
-                                <option value="">— Seleccionar —</option>
+                            <label for="aula-axis">Eje temático</label>
+                            <select id="aula-axis">
+                                <option value="">— Pivote (disposición libre) —</option>
                                 ${axisOptions}
                             </select>
+                            <small class="field-hint">Elige “Pivote” para dejar el aula de disposición libre; puedes asignarle un eje —o quitárselo— cuando lo necesites.</small>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -99,10 +100,11 @@ export const AdminAulasPage = {
             fields.location.value = item ? (item.location || '') : '';
             fields.capacity.value = item ? item.capacity : '';
             fields.axis.value = item ? (item.axis || '') : '';
-            // On edit only capacity and axis change; identity fields stay fixed.
+            // Only the code is the identity key and stays fixed on edit; block,
+            // location, capacity and axis remain editable.
             fields.code.readOnly = Boolean(item);
-            fields.block.readOnly = Boolean(item);
-            fields.location.readOnly = Boolean(item);
+            fields.block.readOnly = false;
+            fields.location.readOnly = false;
             formTitle.innerHTML = item
                 ? '<i class="fa-solid fa-pen" style="color:var(--oro)"></i> Editar aula'
                 : '<i class="fa-solid fa-chalkboard" style="color:var(--oro)"></i> Nueva aula';
@@ -134,22 +136,31 @@ export const AdminAulasPage = {
             event.preventDefault();
             const capacity = Number(fields.capacity.value);
             const axis = fields.axis.value;
-            if (Number.isNaN(capacity) || capacity < 1 || !axis) {
-                Toast.danger('Capacidad (≥1) y eje son obligatorios.');
+            if (Number.isNaN(capacity) || capacity < 1) {
+                Toast.danger('La capacidad debe ser un número ≥ 1.');
                 return;
             }
             try {
                 if (editingCode) {
-                    await api.patch(`${path}/${encodeURIComponent(editingCode)}`, { capacity, axis });
-                    Toast.success('Aula actualizada.');
-                } else {
-                    await api.post(path, {
-                        code: fields.code.value.trim(),
+                    const body = {
                         block: fields.block.value.trim(),
                         location: fields.location.value.trim(),
                         capacity,
-                        axis
-                    });
+                        // Send the axis explicitly: an eje assigns it, null (Pivote)
+                        // de-allocates the aula back to free disposition.
+                        axis: axis || null
+                    };
+                    await api.patch(`${path}/${encodeURIComponent(editingCode)}`, body);
+                    Toast.success('Aula actualizada.');
+                } else {
+                    const body = {
+                        code: fields.code.value.trim(),
+                        block: fields.block.value.trim(),
+                        location: fields.location.value.trim(),
+                        capacity
+                    };
+                    if (axis) body.axis = axis;
+                    await api.post(path, body);
                     Toast.success('Aula creada.');
                 }
                 closeForm();
@@ -193,7 +204,9 @@ function renderRows(tbody, items) {
             <td>${escapeHtml(aula.block || '—')}</td>
             <td>${escapeHtml(aula.location || '—')}</td>
             <td>${aula.capacity}</td>
-            <td><small>${escapeHtml(aula.axis_label || aula.axis || '—')}</small></td>
+            <td>${aula.axis
+                ? `<small>${escapeHtml(aula.axis_label || aula.axis)}</small>`
+                : '<small class="pivote-badge">Pivote (libre)</small>'}</td>
             <td class="row-actions">
                 <button class="btn btn-ghost btn-sm" data-action="edit" data-code="${escapeHtml(aula.code)}" title="Editar"><i class="fa-solid fa-pen"></i></button>
                 <button class="btn btn-ghost btn-sm" data-action="delete" data-code="${escapeHtml(aula.code)}" title="Eliminar"><i class="fa-solid fa-trash"></i></button>

@@ -555,6 +555,28 @@
 .brochure-hint i { color: var(--oro); }
 .brochure-trigger:hover .brochure-hint { opacity: 1; transform: translateX(-50%) translateY(-3px); }
 
+/* Gadget del programa: portada tipo documento que abre el flipbook */
+.programa-wrap { max-width: 340px; margin: 0 auto; }
+.programa-cover {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    aspect-ratio: 3 / 4;
+    padding: 32px 24px;
+    text-align: center;
+    border: 2px solid var(--oro);
+    border-radius: 14px;
+    background: linear-gradient(160deg, var(--card-bg), rgba(201, 167, 81, 0.12));
+    box-shadow: var(--shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.brochure-trigger:hover .programa-cover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(20, 22, 30, 0.28); }
+.programa-cover-icon { font-size: 3.2rem; color: var(--oro); }
+.programa-cover-title { font-size: 1.35rem; font-weight: 800; color: var(--oro-dark); letter-spacing: 0.3px; }
+.programa-cover-sub { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
+
 /* Modal del flipbook */
 .flipbook-modal {
     position: fixed;
