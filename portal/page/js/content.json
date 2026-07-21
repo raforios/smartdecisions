@@ -1,0 +1,158 @@
+{
+  "general": {
+    "siteTitle": "Rafael Ríos Bascón - Desarrollador & Data Scientist",
+    "brandName": "Rafael Ríos Bascón",
+    "cvPath": "docs/cv.pdf",
+    "linkedinUser": "raforios",
+    "githubUser": "raforios",
+    "whatsappNumber": "+59177781631"
+  },
+  "hero": {
+    "tagline": "Transformando Datos en Soluciones Inteligentes",
+    "subtitle": "Desarrollador Backend, DevOps y Analista de Datos con Experiencia en Machine Learning",
+    "ctaText": "Explora mis Servicios",
+    "ctaLink": "#services"
+  },
+  "about": {
+    "title": "Acerca de mi...",
+    "intro": "Con más de 20 años de trayectoria impecable, soy un Ingeniero de Sistemas experto en transformar desafíos tecnológicos en soluciones innovadoras. Mi sólida formación académica, que incluye una Maestría en Sistemas Flexibles Inteligentes, se complementa con una constante actualización en las últimas tendencias. Soy un desarrollador backend de alto calibre, dominando lenguajes como Java, Python y JavaScript, y con una profunda experiencia en DevOps y Cloud Computing en AWS. He orquestado infraestructura robusta con Docker, optimizado operaciones en Linux y gestionado bases de datos críticas como MySQL y PostgreSQL. Mi versatilidad abarca desde la automatización con Shell Scripting hasta la docencia universitaria, formando a la próxima generación de talentos tecnológicos. Estoy listo para impulsar tu próximo proyecto con mi visión estratégica y ejecución impecable.",
+    "points": [
+        {"icon": "fas fa-server", "text": "Construcción de APIs robustas y escalables con énfasis en el rendimiento y la seguridad."},
+        {"icon": "fas fa-cloud", "text": "Automatización de flujos de trabajo (CI/CD) y despliegues eficientes en entornos cloud, optimizando la infraestructura y la velocidad."},
+        {"icon": "fas fa-chart-line", "text": "Extracción de insights valiosos a partir de datos para una toma de decisiones estratégica y basada en evidencia."},
+        {"icon": "fas fa-brain", "text": "Desarrollo e implementación de modelos de Machine Learning e IA para soluciones inteligentes y predictivas."},
+        {"icon": "fas fa-chalkboard-teacher", "text": "Capacitación y Enseñanza: Comparto mi experiencia en tecnologías de desarrollo y datos a través de workshops y mentorías."}
+    ],
+    "cvButtonText": "Descargar Currículum",
+    "carouselImages": [
+        "./img/about.png",
+        "./img/about2.png",
+        "./img/about3.png"
+    ]
+  },
+  "expertise": {
+    "title": "Áreas de Especialización",
+    "areas": [
+        {
+            "icon": "fas fa-code",
+            "name": "Desarrollo Backend",
+            "description": "Diseño y construcción de arquitecturas de sistemas, APIs RESTful/GraphQL, bases de datos y microservicios escalables, garantizando rendimiento y seguridad.",
+            "tech": "Python (FastAPI, Flask), Node.js (Express), Java (Spring Boot), PostgreSQL, MySQL, MongoDB, SQLite, Docker, Kubernetes."
+        },
+        {
+            "icon": "fas fa-cogs",
+            "name": "DevOps & Cloud",
+            "description": "Implementación de CI/CD, infraestructura como código (IaC), monitoreo y optimización de despliegues en la nube, reduciendo tiempos y mejorando la confiabilidad.",
+            "tech": "AWS, GCP, Terraform, Ansible, Jenkins, GitHub, Circle CI."
+        },
+        {
+            "icon": "fas fa-database",
+            "name": "Análisis de Datos & BI",
+            "description": "Transformación de datos crudos en información accionable, creación de dashboards y reportes interactivos, desbloqueando insights críticos para el negocio.",
+            "tech": "Python (Pandas, NumPy), SQL, Power BI, Jupyter, Data Warehousing."
+        },
+        {
+            "icon": "fas fa-robot",
+            "name": "Machine Learning & IA",
+            "description": "Desarrollo e implementación de modelos de ML para predicción, clasificación y optimización de procesos de negocio, transformando datos en ventaja competitiva.",
+            "tech": "Scikit-learn, TensorFlow, PyTorch, Keras, FastAPI para MLOps, NLP, Visión por Computador."
+        },
+        {
+            "icon": "fas fa-graduation-cap",
+            "name": "Capacitación y Enseñanza",
+            "description": "Comparto mi conocimiento y experiencia a través de talleres, cursos y mentorías, ayudando a otros a crecer en el mundo del desarrollo y la ciencia de datos.",
+            "tech": "Diseño de currículos técnicos, facilitación de workshops interactivos, mentoría personalizada, creación de contenido educativo."
+        },
+        {
+            "icon": "fas fa-laptop-code",
+            "name": "Desarrollo y Gestión de Proyectos de Software",
+            "description": "Desde la concepción hasta el despliegue, lidero y participo en el desarrollo de soluciones de software innovadoras, aplicando metodologías ágiles y las mejores prácticas de ingeniería.",
+            "tech": "Gestión de requisitos, diseño de arquitecturas, desarrollo full-stack, pruebas unitarias e integración, despliegue y mantenimiento."
+        }
+    ]
+  },
+  "mlApp": {
+    "title": "SmartDecisions: Decisiones inteligentes para tu fuerza de ventas",
+    "intro": "SmartDecisions es la plataforma SaaS de BearSoft que convierte tu historial de ventas en acciones concretas en terreno. Arquitectura serverless de microservicios sobre AWS: escala con tu operación y pagas solo por lo que usas. Con SmartDecisions puedes:",
+    "features": [
+        {"icon": "fas fa-handshake-angle", "text": "Afinidad × Drop Size: descubrir qué producto ofrecer a cada punto de venta y cuánto puede crecer su pedido, priorizado por impacto monetario real."},
+        {"icon": "fas fa-route", "text": "Optimizar las rutas de tus equipos de reparto y mercadeo sobre la red vial real, minimizando tiempos y costos de operación."},
+        {"icon": "fas fa-file-import", "text": "Ingerir y validar tu data de ventas (Excel/CSV) de forma automática, sin planillas manuales ni errores de captura."},
+        {"icon": "fas fa-shield-halved", "text": "Operar de forma segura y multiempresa: autenticación JWT, auditoría de uso y almacenamiento en la nube aislado por cliente."}
+    ],
+    "ctaText": "Probar demo",
+    "carouselImages": [
+        "./img/ml.png",
+        "./img/ml2.png",
+        "./img/ml3.png"
+    ],
+    "ctaLink": "https://smartdecisions.bearsoft.com.bo"
+  },
+  "smartDecisions": {
+    "title": "El producto en una frase",
+    "intro": "Una plataforma SaaS que convierte tus ventas en recomendaciones accionables: qué producto ofrecer a cada punto de venta, qué ruta optimizar y qué cliente está cayendo. Sin ERP, sin instaladores, sin contratos.",
+    "formula": {
+        "left": "Afinidad",
+        "middle": "Drop Size",
+        "result": "Oportunidad Comercial Real"
+    },
+    "formulaNote": "No medimos solo 'qué se vende junto'; lo ponderamos por el tamaño esperado del pedido para que veas oportunidades en dólares, no en porcentajes abstractos.",
+    "benefitsTitle": "Qué hace por tu negocio",
+    "benefits": [
+        {"icon": "fas fa-chart-line", "name": "Predicción de ventas", "description": "Forecast por SKU y zona. Anticipa demanda y detecta caídas para reactivar a tiempo."},
+        {"icon": "fas fa-link", "name": "Afinidad de productos", "description": "Quién compra A tiende a comprar B. Reglas de asociación con soporte, confianza y lift."},
+        {"icon": "fas fa-hand-holding-dollar", "name": "Drop Size en dólares", "description": "Cada recomendación viene con un valor monetario esperado. Decides por impacto real."},
+        {"icon": "fas fa-route", "name": "Optimización de rutas", "description": "Recorridos óptimos sobre la red vial real. Reduce kilómetros y tiempo muerto de tu equipo."},
+        {"icon": "fas fa-users", "name": "Filtrado colaborativo", "description": "Puntos de venta parecidos al tuyo venden bien X — descubre productos que aún no ofreces."},
+        {"icon": "fas fa-compass", "name": "Capa de decisión", "description": "No es un dashboard más: es una lista priorizada de acciones con valor estimado."}
+    ],
+    "stepsTitle": "En 3 pasos",
+    "steps": [
+        {"num": "1", "name": "Descarga la plantilla", "description": "Un Excel con las columnas mínimas: pedido, fecha, punto de venta, producto, cantidad."},
+        {"num": "2", "name": "Sube tu archivo", "description": "Soporta .xlsx y .csv. Validamos y te avisamos errores claros al instante."},
+        {"num": "3", "name": "Recibe decisiones", "description": "Recomendaciones priorizadas por impacto en dólares. Descárgalas o úsalas en pantalla."}
+    ],
+    "pillarsTitle": "Por dentro: tres microservicios",
+    "pillars": [
+        {
+            "icon": "fas fa-file-import",
+            "name": "Ingesta",
+            "description": "Sube tu historial de ventas en Excel o CSV. Validamos, normalizamos y almacenamos los datos en la nube, listos para analizar.",
+            "tag": "Ingest Service"
+        },
+        {
+            "icon": "fas fa-handshake-angle",
+            "name": "Analítica de Afinidad × Drop Size",
+            "description": "El motor diferenciador: identifica qué productos se compran juntos y recomienda, por punto de venta, la próxima venta de mayor impacto monetario.",
+            "tag": "Analytics Service"
+        },
+        {
+            "icon": "fas fa-route",
+            "name": "Optimización de Rutas",
+            "description": "Ordena las visitas y proyecta el recorrido sobre calles reales, entregando rutas óptimas por cercanía, tiempo y distancia.",
+            "tag": "Optimization Service"
+        }
+    ],
+    "ctaText": "Probar demo en vivo",
+    "ctaLink": "https://smartdecisions.bearsoft.com.bo"
+  },
+  "services": {
+    "title": "Mis Servicios",
+    "list": [
+        {"icon": "fas fa-laptop-code", "text": "Desarrollo de Soluciones Backend a Medida: Construya el núcleo digital robusto y escalable que su negocio necesita para crecer sin límites."},
+        {"icon": "fas fa-project-diagram", "text": "Consultoría en Arquitectura Cloud y DevOps: Estrategias personalizadas para optimizar su infraestructura y procesos de despliegue en la nube."},
+        {"icon": "fas fa-hand-holding-usd", "text": "Optimización de Costos en Infraestructura Cloud: Reduzca sus gastos operativos en la nube sin comprometer rendimiento ni seguridad."},
+        {"icon": "fas fa-lightbulb", "text": "Implementación de Modelos de Machine Learning e IA: Integre soluciones inteligentes que aprenden y se adaptan a sus necesidades empresariales."},
+        {"icon": "fas fa-poll", "text": "Business Intelligence (BI) y Análisis de Datos: Desbloquee insights críticos de sus datos para una toma de decisiones informada y ágil, impulsando el valor de su negocio."},
+        {"icon": "fas fa-shield-alt", "text": "Auditorías de Seguridad y Rendimiento de Sistemas: Identifique vulnerabilidades y cuellos de botella para garantizar la robustez y eficiencia de sus aplicaciones."},
+        {"icon": "fas fa-graduation-cap", "text": "Capacitación en Tecnologías de Datos y Nube: Empodere a su equipo con los conocimientos más actuales en Machine Learning, Big Data y plataformas Cloud."},
+        {"icon": "fas fa-sync-alt", "text": "Modernización de Aplicaciones Legadas: Transforme sus sistemas antiguos en soluciones modernas, escalables y mantenibles."}
+    ]
+  },
+  "contact": {
+    "mainTitle": "Hablemos de Tu Proyecto",
+    "intro": "Estoy siempre dispuesto a colaborar en proyectos innovadores y a compartir mi experiencia para impulsar el éxito de su visión. ¡Espero su mensaje!",
+    "formSubmitText": "Enviar Mensaje",
+    "copyrightText": "Rafael Ríos Bascón. Todos los derechos reservados."
+  }
+}

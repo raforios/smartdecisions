@@ -19,9 +19,9 @@ window.SD_CONFIG = {
     ML_FUNCTIONS_URL:  'https://g7o9aq6cf6.execute-api.us-east-1.amazonaws.com',
 
     // --- Pending deploy (TODO: replace with API Gateway URLs once deployed) ---
-    INGEST_URL:        'http://localhost:3110',
-    OPTIMIZATION_URL:  'http://localhost:3120',
-    ANALYTICS_URL:     'http://localhost:3130',
+    INGEST_URL:        'https://544nho7nk4.execute-api.us-east-1.amazonaws.com',
+    OPTIMIZATION_URL:  'https://yejyqw3716.execute-api.us-east-1.amazonaws.com',
+    ANALYTICS_URL:     'https://u0prf8qr12.execute-api.us-east-1.amazonaws.com',
 
     // Storage keys used by sessionStorage (kept here so module pages
     // don't reinvent constants).
@@ -31,5 +31,5 @@ window.SD_CONFIG = {
     // Absolute path to the login page, used by auth/api helpers when they
     // need to bounce the user back. Adjust if the demo is mounted under
     // a different prefix (e.g. '/portal/demo/index.html').
-    LOGIN_PATH:         '/demo/index.html'
+    LOGIN_PATH:         '/index.html'
 };
