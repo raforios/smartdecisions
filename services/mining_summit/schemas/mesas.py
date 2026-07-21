@@ -16,9 +16,10 @@ class MesaResponseSchema(BaseModel):
     block: str
     location: str
     capacity: int
-    axis: ThematicAxis
-    axis_number: int
-    axis_label: str
+    # A pivot aula (free disposition) carries no axis until it is allocated.
+    axis: Optional[ThematicAxis] = None
+    axis_number: Optional[int] = None
+    axis_label: Optional[str] = None
 
     model_config = ConfigDict(extra = 'ignore')
 
@@ -42,9 +43,18 @@ class MesaQuerySchema(BaseModel):
 
 class MesaUpdateSchema(BaseModel):
     '''
-        Parametric update for an aula: change its seat capacity and/or the
-        thematic axis it is allocated to. At least one field must be provided.
+        Parametric update for an aula: change its descriptive location fields
+        (block/location), its seat capacity and/or the thematic axis it is
+        allocated to. At least one field must be provided.
     '''
+    block: Optional[str] = Field(
+        None, min_length = 1, max_length = 40,
+        description = 'New campus block the aula belongs to.'
+    )
+    location: Optional[str] = Field(
+        None, min_length = 1, max_length = 60,
+        description = 'New human-readable location (floor/wing).'
+    )
     capacity: Optional[int] = Field(
         None, gt = 0, description = 'New seat capacity for the aula.'
     )
@@ -64,7 +74,11 @@ class MesaCreateSchema(BaseModel):
     location: str = Field(..., min_length = 1, max_length = 60,
                           description = 'Human-readable location (floor/wing).')
     capacity: int = Field(..., gt = 0, description = 'Seat capacity of the aula.')
-    axis: ThematicAxis = Field(..., description = 'Thematic axis the aula is allocated to.')
+    axis: Optional[ThematicAxis] = Field(
+        None,
+        description = ('Thematic axis the aula is allocated to. Omit for a pivot '
+                       '(free disposition) aula that can be assigned to any axis later.')
+    )
 
 
 class AxisResponseSchema(BaseModel):

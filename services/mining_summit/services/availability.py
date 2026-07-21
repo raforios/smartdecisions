@@ -30,6 +30,9 @@ def get_axis_availability(dynamodb_resource: ServiceResource) -> List[Dict[str, 
     occupancy = compute_mesa_occupancy(dynamodb_resource)
     axes: Dict[str, Dict[str, Any]] = {}
     for mesa in list_mesas(dynamodb_resource = dynamodb_resource):
+        # Pivot aulas are not bound to any axis yet, so they hold no availability.
+        if not mesa.get('axis'):
+            continue
         occupied = occupancy.get(mesa['code'], 0)
         free = max(0, mesa['capacity'] - occupied)
         axis = axes.setdefault(mesa['axis'], {

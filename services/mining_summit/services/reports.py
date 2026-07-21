@@ -105,6 +105,9 @@ def _build_axis_skeleton(aulas: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
     '''
     skeleton: Dict[str, Dict[str, Any]] = {}
     for aula in aulas:
+        # Pivot aulas carry no axis, so they do not seed any distribution bucket.
+        if not aula.get('axis'):
+            continue
         axis = skeleton.setdefault(aula['axis'], {
             'axis': aula['axis'],
             'number': aula['axis_number'],

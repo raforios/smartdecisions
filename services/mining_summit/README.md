@@ -51,7 +51,7 @@ se calculan en la zona horaria configurada (`America/La_Paz`).
 | `mining_summit_participants` | `ci` | — | Participante acreditado. Incluye estado de ciclo de vida (`ACTIVE` / `REPLACED` / `CANCELLED`). |
 | `mining_summit_attendances` | `ci` | `attendance_date` | Asistencia diaria. La clave compuesta garantiza **una asistencia por persona por día**. |
 | `mining_summit_institutions` | `id` | — | Catálogo oficial de instituciones, con su cupo asignado. |
-| `mining_summit_aulas` | `code` | — | Aulas del campus. Cada aula guarda su capacidad y el eje temático al que está asignada. |
+| `mining_summit_aulas` | `code` | — | Aulas del campus. Cada aula guarda su capacidad y, opcionalmente, el eje temático al que está asignada. Un aula **pivote** (sin eje) queda de disposición libre hasta asignarse. |
 | `mining_summit_load_batches` | `batch_id` | — | Bitácora de cada archivo cargado por el ETL (responsable + resultado). |
 
 Las cinco tablas se aprovisionan por infraestructura, fuera del ciclo de vida de
@@ -126,8 +126,8 @@ invocar cada endpoint (además de `ADMIN`, que siempre tiene acceso).
 | Método | Ruta | Roles | Descripción |
 |--------|------|-------|-------------|
 | `GET` | `/mesas` | autenticado | Aulas con su capacidad y eje, filtrable por eje. |
-| `POST` | `/mesas` | — | Registra un aula nueva (código, bloque, ubicación, capacidad, eje). |
-| `PATCH` | `/mesas/{code}` | — | Ajusta la capacidad y/o el eje de un aula. |
+| `POST` | `/mesas` | — | Registra un aula nueva (código, bloque, ubicación, capacidad y **eje opcional**). Sin eje se crea como pivote (disposición libre). |
+| `PATCH` | `/mesas/{code}` | — | Ajusta bloque, ubicación, capacidad y/o el eje de un aula (asignar una pivote a un eje). El código es fijo. |
 | `DELETE` | `/mesas/{code}` | — | Elimina un aula de la asignación. |
 | `GET` | `/axes` | autenticado | Ejes con su número de aulas y capacidad agregada. |
 

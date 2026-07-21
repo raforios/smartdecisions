@@ -49,14 +49,19 @@ def update_mesa_controller(
     payload: MesaUpdateSchema
 ) -> MesaResponseSchema:
     '''
-        Controller to update the parametric attributes (capacity/axis) of an
-        aula. Restricted to ADMIN at the route layer.
+        Controller to update the parametric attributes (block/location/capacity/
+        axis) of an aula. Restricted to ADMIN at the route layer.
     '''
+    # Only the fields the client actually sent are applied (PATCH semantics).
+    # A field sent explicitly as null (e.g. axis) is kept so the aula can be
+    # de-allocated back to a pivot; omitted fields are left untouched.
+    changes = payload.model_dump(exclude_unset = True)
+    if 'axis' in changes:
+        changes['axis'] = payload.axis.value if payload.axis else None
     record = update_mesa(
         dynamodb_resource = dynamodb_resource,
         code = code,
-        capacity = payload.capacity,
-        axis = payload.axis.value if payload.axis else None
+        changes = changes
     )
     return MesaResponseSchema(**record)
 
@@ -71,7 +76,10 @@ def create_mesa_controller(
     '''
     record = create_mesa(
         dynamodb_resource = dynamodb_resource,
-        payload = {**payload.model_dump(), 'axis': payload.axis.value}
+        payload = {
+            **payload.model_dump(),
+            'axis': payload.axis.value if payload.axis else None
+        }
     )
     return MesaResponseSchema(**record)
 

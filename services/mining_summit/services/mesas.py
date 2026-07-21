@@ -30,15 +30,23 @@ def _enrich_aula(aula: Dict[str, Any]) -> Dict[str, Any]:
     '''
         Normalizes numeric types and attaches the axis number/label metadata.
 
+        A pivot aula (free disposition) has no axis yet, so its axis metadata is
+        left as None until an admin allocates it to a thematic axis.
+
         Args:
             aula (Dict[str, Any]): Raw aula item from DynamoDB.
 
         Returns:
-            Dict[str, Any]: Aula including 'axis_number' and 'axis_label'.
+            Dict[str, Any]: Aula including 'axis_number' and 'axis_label'
+                (None for pivot aulas).
     '''
-    number, label = AXIS_METADATA[ThematicAxis(aula['axis'])]
+    raw_axis = aula.get('axis')
+    number, label = (
+        AXIS_METADATA[ThematicAxis(raw_axis)] if raw_axis else (None, None)
+    )
     return {
         **aula,
+        'axis': raw_axis or None,
         'capacity': int(aula['capacity']),
         'axis_number': number,
         'axis_label': label
@@ -74,7 +82,12 @@ def list_mesas(
     mesas = [_enrich_aula(item) for item in _scan_aulas(dynamodb_resource)]
     if axis:
         mesas = [mesa for mesa in mesas if mesa['axis'] == axis]
-    return sorted(mesas, key = lambda mesa: (mesa['axis_number'], mesa['code']))
+    # Pivot aulas (axis_number is None) are listed last, after the six axes.
+    max_number = len(ThematicAxis) + 1
+    return sorted(
+        mesas,
+        key = lambda mesa: (mesa['axis_number'] or max_number, mesa['code'])
+    )
 
 
 @handle_service_errors
@@ -97,20 +110,21 @@ def get_mesa(dynamodb_resource: ServiceResource, code: str) -> Dict[str, Any]:
 def update_mesa(
     dynamodb_resource: ServiceResource,
     code: str,
-    capacity: Optional[int] = None,
-    axis: Optional[str] = None
+    changes: Dict[str, Any]
 ) -> Dict[str, Any]:
     '''
-        Updates the parametric attributes of an aula (capacity and/or axis).
+        Updates the parametric attributes of an aula (block, location, capacity
+        and/or axis).
 
-        Only the supplied attributes are changed. Enforces that the aula exists
-        before writing, so a typo does not silently create a new record.
+        Only the supplied keys of `changes` are applied. Enforces that the aula
+        exists before writing, so a typo does not silently create a new record.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             code (str): Aula code (partition key).
-            capacity (Optional[int]): New seat capacity (must be positive).
-            axis (Optional[str]): New thematic axis value.
+            changes (Dict[str, Any]): Any of 'block', 'location', 'capacity',
+                'axis' to overwrite. Missing keys are left untouched. An 'axis'
+                key set to None de-allocates the aula back to a pivot.
 
         Returns:
             Dict[str, Any]: The updated, enriched aula.
@@ -119,8 +133,9 @@ def update_mesa(
             InvalidInputError: If nothing is provided to update or capacity <= 0.
             RegisterNotFoundError: If the aula does not exist.
     '''
-    if capacity is None and axis is None:
-        raise InvalidInputError(detail = 'Provide at least capacity or axis to update.')
+    if not changes:
+        raise InvalidInputError(detail = 'Provide at least one field to update.')
+    capacity = changes.get('capacity')
     if capacity is not None and capacity <= 0:
         raise InvalidInputError(detail = 'Aula capacity must be a positive integer.')
 
@@ -130,13 +145,20 @@ def update_mesa(
         table_name = AULAS_TABLE,
         key = {'code': code.strip()}
     )
-    updated = {
-        **current,
-        'capacity': int(capacity) if capacity is not None else int(current['capacity']),
-        'axis': axis if axis is not None else current['axis']
-    }
+    updated = {**current}
+    for text_field in ('block', 'location'):
+        if changes.get(text_field) is not None:
+            updated[text_field] = changes[text_field].strip()
+    if capacity is not None:
+        updated['capacity'] = int(capacity)
+    if 'axis' in changes:
+        # An explicit None de-allocates the aula (drops the axis attribute).
+        if changes['axis']:
+            updated['axis'] = changes['axis']
+        else:
+            updated.pop('axis', None)
     dynamodb_resource.Table(AULAS_TABLE).put_item(Item = updated)
-    message = f'Aula {code} updated (capacity={updated["capacity"]}, axis={updated["axis"]}).'
+    message = f'Aula {code} updated (capacity={updated["capacity"]}, axis={updated.get("axis")}).'
     logger.info(message)
     return _enrich_aula(updated)
 
@@ -148,11 +170,14 @@ def create_mesa(
 ) -> Dict[str, Any]:
     '''
         Registers a new aula (e.g. an extra classroom assigned to the summit)
-        with its capacity and thematic axis. The code must be unique.
+        with its capacity and, optionally, a thematic axis. Omitting the axis
+        creates a pivot aula (free disposition) to be allocated later. The code
+        must be unique.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
-            payload (Dict[str, Any]): code, block, location, capacity, axis.
+            payload (Dict[str, Any]): code, block, location, capacity and an
+                optional axis (None for a pivot aula).
 
         Returns:
             Dict[str, Any]: The persisted, enriched aula.
@@ -167,16 +192,19 @@ def create_mesa(
         'code': payload['code'].strip(),
         'block': payload['block'].strip(),
         'location': payload['location'].strip(),
-        'capacity': int(payload['capacity']),
-        'axis': payload['axis']
+        'capacity': int(payload['capacity'])
     }
+    # A pivot aula is stored without an axis attribute (free disposition).
+    if payload.get('axis'):
+        item['axis'] = payload['axis']
     saved = create_item(
         dynamodb_resource = dynamodb_resource,
         table_name = AULAS_TABLE,
         item_data = item,
         unique_key_attribute = 'code'
     )
-    message = f'Aula {saved["code"]} created (capacity={saved["capacity"]}, axis={saved["axis"]}).'
+    message = (f'Aula {saved["code"]} created '
+               f'(capacity={saved["capacity"]}, axis={saved.get("axis")}).')
     logger.info(message)
     return _enrich_aula(saved)
 

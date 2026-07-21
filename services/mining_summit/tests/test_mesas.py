@@ -93,7 +93,7 @@ def test_update_mesa_changes_capacity_and_axis(dynamodb):
     code = AULAS_SEED[0]['code']
     target_axis = ThematicAxis.DESARROLLO_PRODUCTIVO
     updated = update_mesa(
-        dynamodb, code = code, capacity = 50, axis = target_axis.value
+        dynamodb, code = code, changes = {'capacity': 50, 'axis': target_axis.value}
     )
     assert updated['capacity'] == 50
     assert updated['axis'] == target_axis.value
@@ -102,6 +102,67 @@ def test_update_mesa_changes_capacity_and_axis(dynamodb):
     refetched = [mesa for mesa in list_mesas(dynamodb) if mesa['code'] == code][0]
     assert refetched['capacity'] == 50
     assert refetched['axis'] == target_axis.value
+
+
+def test_update_mesa_changes_location_fields(dynamodb):
+    '''
+        Editing an aula must persist new block/location values (descriptive
+        fields), leaving the axis untouched when it is not supplied.
+    '''
+    code = AULAS_SEED[0]['code']
+    updated = update_mesa(
+        dynamodb, code = code,
+        changes = {'block': 'Bloque Nuevo', 'location': 'Segundo Piso'}
+    )
+    assert updated['block'] == 'Bloque Nuevo'
+    assert updated['location'] == 'Segundo Piso'
+    assert updated['axis'] is not None
+
+
+def test_create_pivot_aula_without_axis(dynamodb):
+    '''
+        A pivot aula (free disposition) is created without an axis and carries no
+        axis metadata until it is allocated to a thematic axis.
+    '''
+    created = create_mesa(dynamodb, {
+        'code': 'PIV1', 'block': 'P', 'location': 'Libre', 'capacity': 30
+    })
+    assert created['axis'] is None
+    assert created['axis_number'] is None
+    assert created['axis_label'] is None
+
+    listed = [mesa for mesa in list_mesas(dynamodb) if mesa['code'] == 'PIV1'][0]
+    assert listed['axis'] is None
+
+
+def test_allocate_pivot_aula_to_axis(dynamodb):
+    '''
+        A pivot aula can later be assigned to a thematic axis via update, which
+        then attaches its axis metadata and counts toward that axis.
+    '''
+    create_mesa(dynamodb, {
+        'code': 'PIV2', 'block': 'P', 'location': 'Libre', 'capacity': 25
+    })
+    updated = update_mesa(
+        dynamodb, code = 'PIV2',
+        changes = {'axis': ThematicAxis.CONTRATOS.value}
+    )
+    assert updated['axis'] == ThematicAxis.CONTRATOS.value
+    assert updated['axis_number'] == AXIS_METADATA[ThematicAxis.CONTRATOS][0]
+
+
+def test_deallocate_aula_back_to_pivot(dynamodb):
+    '''
+        Passing an explicit None axis de-allocates an allocated aula, turning it
+        back into a pivot (its axis metadata is cleared).
+    '''
+    code = AULAS_SEED[0]['code']
+    updated = update_mesa(dynamodb, code = code, changes = {'axis': None})
+    assert updated['axis'] is None
+    assert updated['axis_number'] is None
+
+    refetched = [mesa for mesa in list_mesas(dynamodb) if mesa['code'] == code][0]
+    assert refetched['axis'] is None
 
 
 def test_create_mesa_adds_a_new_aula(dynamodb):
