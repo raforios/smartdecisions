@@ -87,12 +87,12 @@ img { max-width: 100%; }
     align-items: center;
     gap: 1.4rem;
 }
-.nav-links a {
+.nav-links a:not(.btn) {
     color: var(--muted);
     font-size: 0.95rem;
     font-weight: 600;
 }
-.nav-links a:hover { color: var(--accent); }
+.nav-links a:not(.btn):hover { color: var(--accent); }
 
 /* ============ Buttons ============ */
 .btn {

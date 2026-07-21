@@ -1,53 +1,37 @@
-# SmartDecisions — Portal Landing
+# Portal — BearSoft / SmartDecisions
 
-Landing page estática del producto **SmartDecisions** (BearSoft).
-
-## Stack
-
-HTML5 + CSS3 + JavaScript vanilla. **Cero dependencias**, cero build step.
+Sitios estáticos del portal. **HTML5 + CSS3 + JavaScript vanilla**, cero
+dependencias, cero build step.
 
 ## Estructura
 
 ```
 portal/
-├── index.html
-├── style.css
-├── script.js
-├── assets/
-│   ├── favicon.svg
-│   └── logo-bear.svg
+├── page/     # Landing OFICIAL de la empresa (BearSoft) → bearsoft.com.bo
+│              #   incluye la sección de producto SmartDecisions (data-driven,
+│              #   contenido en page/js/content.json). Ver page/DEPLOY.md.
+├── demo/     # App demo de SmartDecisions (login + módulos) → smartdecisions.bearsoft.com.bo
+├── assets/   # Imágenes/íconos compartidos (referenciados por la demo vía ../assets/)
 └── README.md
 ```
+
+> Hay **un solo landing**: `page/`. El antiguo landing de producto en la raíz
+> (`portal/index.html`) se eliminó porque su contenido ya está —y más completo—
+> en la sección SmartDecisions del landing de BearSoft (`page/`).
 
 ## Desarrollo local
 
 ```bash
-cd app/portal
+cd app/portal/page   # o app/portal/demo
 python3 -m http.server 8080
 # Abrir http://localhost:8080
 ```
 
-## Despliegue (presupuesto $0)
+## Despliegue
 
-Subir el contenido de `portal/` a un bucket S3 estático servido por CloudFront:
+- **Landing** (`page/`): ver `page/DEPLOY.md`. Bucket `bearsoft.com.bo` (S3 static
+  website) — lo despliega Rafael en su propio S3.
+- **Demo** (`demo/`): bucket `bearsoft-smartdecisions-landing` + CloudFront
+  `EXP60FDO0MJVI` (perfil `deploy_ml`, us-east-1). Ver `page/DEPLOY.md`.
 
-```bash
-aws s3 sync portal/ s3://<bucket-smartdecisions-portal>/ --delete
-aws cloudfront create-invalidation --distribution-id <DIST_ID> --paths "/*"
-```
-
-Alternativas equivalentes en costo: GitHub Pages, Cloudflare Pages, Netlify.
-
-## Decisiones de diseño
-
-- **Oso reinterpretado** como símbolo de "decisiones firmes" (no más asociación con la
-  marca antigua SmartBear; el oso ahora porta una curva ascendente).
-- Paleta dark theme con acentos teal (`#5ad6c2`) y azul (`#7aa2ff`) para evocar datos
-  y confianza.
-- Formulario de contacto **sin backend**: usa `mailto:` (alineado con `SMARTDECISIONS.md §8`).
-
-## Pendiente
-
-- [ ] Conectar botón "Probar demo" al flujo real cuando exista (paso 4 del POC).
-- [ ] Sustituir SVG inline del oso por una versión ilustrada cuando se defina arte definitivo.
-- [ ] Añadir Open Graph / Twitter cards para compartir en redes.
+Alternativas equivalentes en costo $0: GitHub Pages, Cloudflare Pages, Netlify.
