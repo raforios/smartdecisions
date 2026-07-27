@@ -132,16 +132,80 @@ export function buildCredentialCanvas(participant) {
     return canvas;
 }
 
+/** Detecta iOS/iPadOS (Safari ignora el atributo download de un enlace). */
+function isIOS() {
+    const ua = navigator.userAgent || '';
+    return /iP(ad|hone|od)/.test(ua) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/** Convierte un dataURL en Blob de forma síncrona (mantiene el gesto del usuario). */
+function dataUrlToBlob(dataUrl) {
+    const [head, body] = dataUrl.split(',');
+    const mime = (head.match(/:(.*?);/) || [null, 'image/png'])[1];
+    const binary = atob(body);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+}
+
+/** Abre la imagen en una pestaña para que en iOS se guarde con "mantener presionado". */
+function openImageTab(dataUrl) {
+    const win = window.open('', '_blank');
+    if (!win) {
+        window.location.href = dataUrl;
+        return;
+    }
+    win.document.write(
+        '<!doctype html><html><head><meta name="viewport" ' +
+        'content="width=device-width,initial-scale=1"><title>Credencial</title></head>' +
+        '<body style="margin:0;background:#111;color:#fff;font-family:Arial;text-align:center">' +
+        '<p style="padding:12px;font-size:15px">Mantén presionada la imagen y elige ' +
+        '<b>Guardar en Fotos</b>.</p>' +
+        '<img src="' + dataUrl + '" style="max-width:100%;height:auto"></body></html>'
+    );
+    win.document.close();
+}
+
 /**
- * Genera la credencial como imagen PNG (6x7 cm) y dispara su descarga, lista
- * para cargarse en el software de la impresora de stickers.
+ * Genera la credencial como imagen PNG (6x7 cm) y la entrega según la plataforma:
+ * Web Share (iOS/Android → Fotos/Archivos), o descarga directa (desktop/Android),
+ * o apertura para guardar manualmente en iOS antiguos. Evita el bug de iOS donde
+ * el atributo `download` no descarga la imagen.
  */
 export function printCredential(participant) {
     const canvas = buildCredentialCanvas(participant);
+    const dataUrl = canvas.toDataURL('image/png');
+    const filename = `credencial_${String(participant.ci || 'sticker').trim()}.png`;
+    const blob = dataUrlToBlob(dataUrl);
+
+    // 1) Web Share con archivo: mejor experiencia en móvil (guarda en Fotos/Archivos).
+    if (navigator.canShare) {
+        try {
+            const file = new File([blob], filename, { type: 'image/png' });
+            if (navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: filename })
+                    .catch(() => openImageTab(dataUrl));
+                return;
+            }
+        } catch (_) { /* sin soporte de compartir archivos: seguir */ }
+    }
+
+    // 2) iOS sin Web Share: abrir la imagen para guardarla manualmente.
+    if (isIOS()) {
+        openImageTab(dataUrl);
+        return;
+    }
+
+    // 3) Desktop / Android: descarga directa.
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = `credencial_${String(participant.ci || 'sticker').trim()}.png`;
+    link.href = url;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
 }

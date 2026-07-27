@@ -4,12 +4,11 @@
  * GET /v1/mining-summit/participants/{ci}  (búsqueda directa)
  */
 import { Toast } from '../components/Toast.js';
-import { printCredential } from '../components/Credential.js?v=20260721e';
+import { printCredential } from '../components/Credential.js?v=20260722c';
 import { loadAvailability, buildAxisOptions, renderAvailabilityHint } from '../components/AxisPicker.js';
 
 // Roles de participante (value = código del backend, label = etiqueta en español).
-const ROLE_OPTIONS = [
-    ['', '— Sin rol (registrado sin aula) —'],
+const ROLES = [
     ['PARTICIPANTE', 'Participante'],
     ['MODERADOR', 'Moderador'],
     ['VEEDOR', 'Veedor'],
@@ -20,7 +19,12 @@ const ROLE_OPTIONS = [
     ['SISTEMATIZADOR', 'Sistematizador'],
     ['COMUNICACION', 'Comunicación'],
     ['SISTEMAS', 'Sistemas']
-].map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+];
+const ROLE_OPTIONS = [['', '— Sin rol (registrado sin aula) —'], ...ROLES]
+    .map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+// Opciones para el filtro de rol del reporte (sin la opción "sin rol").
+const ROLE_FILTER_OPTIONS = ROLES
+    .map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
 
 export const ReportesPage = {
     render(container, { config, api, auth }) {
@@ -35,7 +39,7 @@ export const ReportesPage = {
             <div class="page-header">
                 <div>
                     <h2>Participantes Registrados</h2>
-                    <div class="subtitle">Lista paginada con filtros y búsqueda directa por CI.</div>
+                    <div class="subtitle">Búsqueda por nombre/CI y filtros por rol, institución, aula y departamento (en vivo).</div>
                 </div>
                 <button id="export-btn" class="btn btn-primary">
                     <i class="fa-solid fa-file-excel"></i> Descargar Excel
@@ -44,27 +48,27 @@ export const ReportesPage = {
 
             <div class="card">
                 <div class="table-toolbar">
-                    <div class="form-field" style="flex: 1; min-width: 200px;">
-                        <label for="ci-search">Búsqueda por CI</label>
-                        <input id="ci-search" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="Buscar CI exacto…">
+                    <div class="form-field" style="flex:2; min-width:220px;">
+                        <label for="q-search">Buscar (nombre completo o CI)</label>
+                        <input id="q-search" type="text" placeholder="Filtra por nombre o CI…" autocomplete="off">
+                    </div>
+                    <div class="form-field">
+                        <label for="filter-rol">Rol</label>
+                        <select id="filter-rol"><option value="">— Todos —</option>${ROLE_FILTER_OPTIONS}</select>
+                    </div>
+                    <div class="form-field">
+                        <label for="filter-institution">Institución</label>
+                        <input id="filter-institution" type="text" placeholder="Institución…" autocomplete="off">
+                    </div>
+                    <div class="form-field">
+                        <label for="filter-aula">Aula</label>
+                        <input id="filter-aula" type="text" placeholder="Ej. A7" autocomplete="off">
                     </div>
                     <div class="form-field">
                         <label for="filter-department">Departamento</label>
-                        <select id="filter-department">
-                            <option value="">— Todos —</option>
-                            ${departamentos}
-                        </select>
+                        <select id="filter-department"><option value="">— Todos —</option>${departamentos}</select>
                     </div>
-                    <div class="form-field">
-                        <label for="filter-from">Registrados desde</label>
-                        <input id="filter-from" type="date">
-                    </div>
-                    <div class="form-field">
-                        <label for="filter-to">Hasta</label>
-                        <input id="filter-to" type="date">
-                    </div>
-                    <div style="display:flex; gap:8px;">
-                        <button id="apply-btn" class="btn btn-primary"><i class="fa-solid fa-filter"></i> Aplicar</button>
+                    <div class="form-field" style="align-self:flex-end;">
                         <button id="clear-btn" class="btn btn-ghost"><i class="fa-solid fa-xmark"></i> Limpiar</button>
                     </div>
                 </div>
@@ -167,7 +171,7 @@ export const ReportesPage = {
                         <div class="form-grid">
                             <div class="form-field">
                                 <label for="replace-ci">CI del sustituto <span class="req">*</span></label>
-                                <input id="replace-ci" name="ci" type="text" required minlength="4" maxlength="20" inputmode="numeric" pattern="[0-9]+">
+                                <input id="replace-ci" name="ci" type="text" required minlength="4" maxlength="20" inputmode="text" pattern="[A-Za-z0-9\-]+">
                             </div>
                             <div class="form-field">
                                 <label for="replace-first">Nombre <span class="req">*</span></label>
@@ -202,10 +206,10 @@ export const ReportesPage = {
         `;
 
         const state = {
-            keys: [null],
             pageIndex: 0,
             limit: config.ui.pageSize || 25,
-            filters: {}
+            all: [],        // todos los participantes (se traen una vez, paginando el backend)
+            filtered: []    // resultado tras aplicar filtros client-side
         };
 
         const tbody = container.querySelector('#participants-tbody');
@@ -239,32 +243,30 @@ export const ReportesPage = {
             const decline = event.target.closest('button.decline-btn');
             if (decline) {
                 const participant = findRow(decline.dataset.ci);
-                if (participant) declineParticipant(participant, { config, api }, () => loadPage());
+                if (participant) declineParticipant(participant, { config, api }, () => fetchAll());
             }
         });
 
-        const editModal = createEditModal(container, { config, api }, () => loadPage());
-        const replaceModal = createReplaceModal(container, { config, api }, () => loadPage());
+        const editModal = createEditModal(container, { config, api }, () => fetchAll());
+        const replaceModal = createReplaceModal(container, { config, api }, () => fetchAll());
 
-        async function loadPage() {
+        // Trae TODOS los participantes recorriendo las páginas del backend, una
+        // sola vez; luego el filtrado y la paginación son client-side (instantáneos).
+        async function fetchAll() {
             tbody.innerHTML = `<tr><td colspan="10"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
-            const queryParams = {
-                limit: state.limit,
-                ...state.filters
-            };
-            const lastKey = state.keys[state.pageIndex];
-            if (lastKey) queryParams.last_evaluated_key = lastKey;
             try {
-                const data = await api.get(config.miningSummit.participantsPath, queryParams);
-                displayedItems = data.items || [];
-                renderRows(tbody, displayedItems, canManage);
-                const nextKey = data.last_evaluated_key || null;
-                if (nextKey && state.keys[state.pageIndex + 1] !== nextKey) {
-                    state.keys[state.pageIndex + 1] = nextKey;
+                const all = [];
+                let offset = null;
+                for (let guard = 0; guard < 200; guard += 1) {
+                    const params = { limit: 100 };
+                    if (offset) params.last_evaluated_key = offset;
+                    const data = await api.get(config.miningSummit.participantsPath, params);
+                    all.push(...(data.items || []));
+                    offset = data.last_evaluated_key || null;
+                    if (!offset) break;
                 }
-                prevBtn.disabled = state.pageIndex === 0;
-                nextBtn.disabled = !nextKey;
-                pageInfo.textContent = `Página ${state.pageIndex + 1} · ${data.items.length} resultados`;
+                state.all = all;
+                applyFilters();
             } catch (error) {
                 tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">
                     <i class="fa-solid fa-triangle-exclamation"></i>
@@ -273,31 +275,51 @@ export const ReportesPage = {
             }
         }
 
-        container.querySelector('#apply-btn').addEventListener('click', () => {
-            const ciSearch = container.querySelector('#ci-search').value.trim();
-            if (ciSearch) {
-                searchByCi(ciSearch);
-                return;
-            }
-            state.filters = {
-                department:      container.querySelector('#filter-department').value || undefined,
-                registered_from: container.querySelector('#filter-from').value || undefined,
-                registered_to:   container.querySelector('#filter-to').value || undefined
-            };
-            state.keys = [null];
+        const norm = (s) => String(s == null ? '' : s).toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+        function applyFilters() {
+            const q = norm(container.querySelector('#q-search').value.trim());
+            const rol = container.querySelector('#filter-rol').value;
+            const inst = norm(container.querySelector('#filter-institution').value.trim());
+            const aula = norm(container.querySelector('#filter-aula').value.trim());
+            const dep = container.querySelector('#filter-department').value;
+            state.filtered = state.all.filter((p) => {
+                if (q && !norm(`${p.first_name || ''} ${p.last_name || ''} ${p.ci || ''}`).includes(q)) return false;
+                if (rol && p.role !== rol) return false;
+                if (inst && !norm(p.institution_name || p.institution_id || '').includes(inst)) return false;
+                if (aula && !norm(p.mesa_code || '').includes(aula)) return false;
+                if (dep && p.department !== dep) return false;
+                return true;
+            });
             state.pageIndex = 0;
-            loadPage();
-        });
+            renderPage();
+        }
+
+        function renderPage() {
+            const total = state.filtered.length;
+            const pages = Math.max(1, Math.ceil(total / state.limit));
+            if (state.pageIndex >= pages) state.pageIndex = pages - 1;
+            const start = state.pageIndex * state.limit;
+            displayedItems = state.filtered.slice(start, start + state.limit);
+            renderRows(tbody, displayedItems, canManage);
+            prevBtn.disabled = state.pageIndex === 0;
+            nextBtn.disabled = state.pageIndex >= pages - 1;
+            pageInfo.textContent = `Página ${state.pageIndex + 1} de ${pages} · ${total} resultados`;
+        }
+
+        ['#q-search', '#filter-institution', '#filter-aula'].forEach((sel) =>
+            container.querySelector(sel).addEventListener('input', applyFilters));
+        ['#filter-rol', '#filter-department'].forEach((sel) =>
+            container.querySelector(sel).addEventListener('change', applyFilters));
 
         container.querySelector('#clear-btn').addEventListener('click', () => {
-            container.querySelector('#ci-search').value = '';
+            ['#q-search', '#filter-institution', '#filter-aula'].forEach((sel) => {
+                container.querySelector(sel).value = '';
+            });
+            container.querySelector('#filter-rol').value = '';
             container.querySelector('#filter-department').value = '';
-            container.querySelector('#filter-from').value = '';
-            container.querySelector('#filter-to').value = '';
-            state.filters = {};
-            state.keys = [null];
-            state.pageIndex = 0;
-            loadPage();
+            applyFilters();
         });
 
         const exportBtn = container.querySelector('#export-btn');
@@ -319,37 +341,15 @@ export const ReportesPage = {
         prevBtn.addEventListener('click', () => {
             if (state.pageIndex > 0) {
                 state.pageIndex -= 1;
-                loadPage();
+                renderPage();
             }
         });
         nextBtn.addEventListener('click', () => {
-            if (state.keys[state.pageIndex + 1]) {
-                state.pageIndex += 1;
-                loadPage();
-            }
+            state.pageIndex += 1;
+            renderPage();
         });
 
-        async function searchByCi(ci) {
-            tbody.innerHTML = `<tr><td colspan="10"><div class="loading"><div class="spinner"></div> Buscando...</div></td></tr>`;
-            try {
-                const item = await api.get(`${config.miningSummit.participantsPath}/${encodeURIComponent(ci)}`);
-                displayedItems = item ? [item] : [];
-                renderRows(tbody, displayedItems, canManage);
-                pageInfo.textContent = item ? '1 resultado' : '0 resultados';
-                prevBtn.disabled = true;
-                nextBtn.disabled = true;
-            } catch (error) {
-                if (error.status === 404) {
-                    renderRows(tbody, [], canManage);
-                    pageInfo.textContent = '0 resultados';
-                    Toast.info(`No se encontró participante con CI ${ci}.`);
-                } else {
-                    Toast.danger(`Error en búsqueda: ${error.message}`);
-                }
-            }
-        }
-
-        loadPage();
+        fetchAll();
     }
 };
 

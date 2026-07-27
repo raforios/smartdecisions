@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from boto3.resources.base import ServiceResource
 
-from services.crud import create_item, get_all_records_paginated, get_item_by_key
+from services.crud import create_item, get_item_by_key, scan_all_items
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
@@ -59,12 +59,9 @@ def list_institutions(
         Returns:
             List[Dict[str, Any]]: Matching institutions.
     '''
-    response = get_all_records_paginated(
-        dynamodb_resource = dynamodb_resource,
-        table_name = INSTITUTIONS_TABLE,
-        query_params = {}
-    )
-    items = [_enrich(item) for item in response['items']]
+    # Return the whole catalog (small reference set) so the UI can page it
+    # client-side; the previous single-scan Limit dropped items beyond the page.
+    items = [_enrich(item) for item in scan_all_items(dynamodb_resource, INSTITUTIONS_TABLE)]
     if category:
         items = [item for item in items if item['category'] == category]
     return sorted(items, key = lambda item: (item.get('name') or '').lower())

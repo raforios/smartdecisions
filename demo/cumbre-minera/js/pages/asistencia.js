@@ -10,6 +10,7 @@
  *   4. Si ya marcó hoy (409), informamos.
  */
 import { Toast } from '../components/Toast.js';
+import { mountParticipantSearch } from '../components/ParticipantSearch.js?v=20260722c';
 
 export const AsistenciaPage = {
     render(container, { config, api }) {
@@ -29,9 +30,14 @@ export const AsistenciaPage = {
                 <h3><i class="fa-solid fa-clipboard-check" style="color:var(--oro)"></i> Check-in por CI</h3>
                 <form id="asistencia-form">
                     <div class="form-grid">
+                        <div class="form-field form-field-wide combo">
+                            <label for="part-search">Buscar participante (nombre o CI)</label>
+                            <input id="part-search" type="text" placeholder="Escribe el nombre o el CI…" autocomplete="off">
+                            <div id="part-search-list" class="combo-list" hidden></div>
+                        </div>
                         <div class="form-field">
                             <label for="ci">Carnet de Identidad <span class="req">*</span></label>
-                            <input id="ci" name="ci" type="text" required minlength="4" maxlength="20" inputmode="numeric" pattern="[0-9]+" placeholder="Ej. 1234567" autofocus>
+                            <input id="ci" name="ci" type="text" required minlength="4" maxlength="20" inputmode="text" pattern="[A-Za-z0-9\-]+" placeholder="Ej. 1234567 o 1234567-1A" autofocus>
                         </div>
                     </div>
 
@@ -100,6 +106,17 @@ export const AsistenciaPage = {
         const readerWrap = container.querySelector('#qr-reader-wrap');
         const scanClose = container.querySelector('#scan-close');
         let qrScanner = null;
+
+        // Buscador por nombre/CI: al elegir, coloca el CI y enfoca "Registrar".
+        mountParticipantSearch(
+            container.querySelector('#part-search'),
+            container.querySelector('#part-search-list'),
+            { api, config, onPick: (p) => {
+                ciInput.value = p.ci;
+                submitBtn.focus();
+                Toast.info(`Seleccionado: ${p.first_name} ${p.last_name} (CI ${p.ci}).`);
+            } }
+        );
 
         async function stopScan() {
             readerWrap.hidden = true;

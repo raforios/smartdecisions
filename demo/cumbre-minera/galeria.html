@@ -7,8 +7,8 @@
     <link rel="icon" type="image/png" href="assets/favicon-64.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20260721e">
-    <link rel="stylesheet" href="css/landing.css?v=20260721e">
+    <link rel="stylesheet" href="css/styles.css?v=20260727b">
+    <link rel="stylesheet" href="css/landing.css?v=20260727b">
 </head>
 <body class="landing">
     <header class="landing-nav">
@@ -28,24 +28,38 @@
             <p>Momentos de la Cumbre Nacional Minera 2026.</p>
         </div>
 
-        <!-- Estado vacío: se muestra mientras no haya fotografías cargadas. -->
-        <div class="media-empty">
+        <!-- Estado vacío: visible solo si el manifest no trae fotografías. -->
+        <div class="media-empty" id="galleryEmpty" hidden>
             <i class="fa-solid fa-images"></i>
             <h3>Próximamente</h3>
             <p>Las fotografías tomadas durante el evento se publicarán aquí.</p>
         </div>
 
-        <!-- Cuando se suban fotos, reemplazar el bloque anterior por una grilla:
-        <div class="gallery-grid">
-            <a class="gallery-item" href="assets/fotos/foto-01.jpg" target="_blank" rel="noopener">
-                <img src="assets/fotos/foto-01.jpg" alt="Cumbre Nacional Minera - foto 1">
-            </a>
-            <a class="gallery-item" href="assets/fotos/foto-02.jpg" target="_blank" rel="noopener">
-                <img src="assets/fotos/foto-02.jpg" alt="Cumbre Nacional Minera - foto 2">
+        <!-- Bloques por día (encabezado + grid): se llenan desde js/galeria-manifest.js. -->
+        <div class="gallery-days" id="galleryGrid"></div>
+    </section>
+
+    <!-- Lightbox: visor ampliado con navegación y descarga del original. -->
+    <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Foto ampliada">
+        <button class="lightbox-close" type="button" data-action="close" aria-label="Cerrar">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <button class="lightbox-nav lightbox-prev" type="button" data-action="prev" aria-label="Anterior">
+            <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <div class="lightbox-stage">
+            <img id="lightboxImage" src="" alt="">
+        </div>
+        <button class="lightbox-nav lightbox-next" type="button" data-action="next" aria-label="Siguiente">
+            <i class="fa-solid fa-chevron-right"></i>
+        </button>
+        <div class="lightbox-bar">
+            <span class="lightbox-counter" id="lightboxCounter"></span>
+            <a class="btn btn-primary lightbox-download" id="lightboxDownload" href="" download>
+                <i class="fa-solid fa-download"></i> Descargar
             </a>
         </div>
-        -->
-    </section>
+    </div>
 
     <footer class="landing-footer">
         <img src="assets/logo_oficial.png" alt="Cumbre Nacional Minera">
@@ -56,5 +70,8 @@
         </div>
         <p class="footer-hashtag">#SiempreBolivia</p>
     </footer>
+
+    <script src="js/galeria-manifest.js?v=20260727b"></script>
+    <script src="js/galeria.js?v=20260727b"></script>
 </body>
 </html>

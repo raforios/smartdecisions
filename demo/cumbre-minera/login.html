@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="assets/favicon-64.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20260721e">
+    <link rel="stylesheet" href="css/styles.css?v=20260722c">
 </head>
 <body class="login-page">
 
@@ -31,7 +31,12 @@
                 </div>
                 <div class="form-field" style="margin-bottom: 1.5rem;">
                     <label for="password">Contraseña <span class="req">*</span></label>
-                    <input id="password" name="password" type="password" required>
+                    <div class="pass-wrap">
+                        <input id="password" name="password" type="password" required>
+                        <button type="button" id="toggle-pass" class="pass-toggle" aria-label="Mostrar contraseña" title="Mostrar u ocultar la contraseña">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-actions" style="margin-top: 0;">
                     <button id="login-btn" class="btn btn-primary" type="submit" style="width: 100%; justify-content: center;">
@@ -45,6 +50,6 @@
         </div>
     </main>
 
-    <script type="module" src="js/login.js"></script>
+    <script type="module" src="js/login.js?v=20260722c"></script>
 </body>
 </html>

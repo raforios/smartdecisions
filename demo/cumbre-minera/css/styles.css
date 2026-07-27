@@ -837,6 +837,44 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
     font-size: 0.75rem;
 }
 
+/* Mostrar/ocultar contraseña */
+.pass-wrap { position: relative; }
+.pass-wrap input { width: 100%; padding-right: 42px; }
+.pass-toggle {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 6px 8px;
+    font-size: 1rem;
+    line-height: 1;
+}
+.pass-toggle:hover { color: var(--oro); }
+
+/* Combobox con búsqueda (registro) y filtros de reportes */
+.combo { position: relative; }
+.combo-list {
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    top: calc(100% + 2px);
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+.combo-list[hidden] { display: none; }
+.combo-option { padding: 8px 12px; cursor: pointer; font-size: 0.9rem; }
+.combo-option:hover, .combo-option.active { background: rgba(201, 167, 81, 0.15); }
+.combo-empty { padding: 8px 12px; color: var(--text-muted); font-size: 0.85rem; }
+
 /* Lector QR con cámara (página de Asistencia) */
 .qr-scan {
     margin-top: 1rem;

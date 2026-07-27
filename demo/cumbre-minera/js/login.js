@@ -39,6 +39,18 @@ import { Toast } from './components/Toast.js';
     const emailEl = document.getElementById('email');
     const passEl  = document.getElementById('password');
 
+    // Mostrar/ocultar la contraseña.
+    const togglePass = document.getElementById('toggle-pass');
+    if (togglePass) {
+        togglePass.addEventListener('click', () => {
+            const show = passEl.type === 'password';
+            passEl.type = show ? 'text' : 'password';
+            togglePass.querySelector('i').className = show ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+            togglePass.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+            passEl.focus();
+        });
+    }
+
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const email    = emailEl.value.trim();

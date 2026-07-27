@@ -8,8 +8,9 @@
  * la credencial/sticker con QR (codifica el CI para el marcado de asistencia).
  */
 import { Toast } from '../components/Toast.js';
-import { renderQr, printCredential } from '../components/Credential.js?v=20260721e';
+import { renderQr, printCredential } from '../components/Credential.js?v=20260722c';
 import { loadAvailability, buildAxisOptions, renderAvailabilityHint } from '../components/AxisPicker.js';
+import { enhanceSelect } from '../components/SearchableSelect.js?v=20260722c';
 
 // Roles de participante (value = código del backend, label = etiqueta en español).
 // "Sin rol" (value vacío) registra a la persona sin aula hasta asignarle un rol.
@@ -47,7 +48,7 @@ export const RegistroPage = {
                     <div class="form-grid">
                         <div class="form-field">
                             <label for="ci">Carnet de Identidad <span class="req">*</span></label>
-                            <input id="ci" name="ci" type="text" required minlength="4" maxlength="20" inputmode="numeric" pattern="[0-9]+" placeholder="Ej. 1234567">
+                            <input id="ci" name="ci" type="text" required minlength="4" maxlength="20" inputmode="text" pattern="[A-Za-z0-9\-]+" placeholder="Ej. 1234567 o 1234567-1A">
                         </div>
                         <div class="form-field">
                             <label for="first_name">Nombre <span class="req">*</span></label>
@@ -124,6 +125,12 @@ export const RegistroPage = {
             return availability;
         }
         await refreshAvailability();
+
+        // Combos con buscador (institución, eje, rol, departamento).
+        enhanceSelect(institutionSelect, 'Buscar institución…');
+        enhanceSelect(axisSelect, 'Buscar eje…');
+        enhanceSelect(container.querySelector('#role'), 'Buscar rol…');
+        enhanceSelect(container.querySelector('#department'), 'Buscar departamento…');
 
         resetBtn.addEventListener('click', () => {
             form.reset();

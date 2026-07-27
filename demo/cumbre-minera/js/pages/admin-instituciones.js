@@ -53,6 +53,18 @@ export const AdminInstitucionesPage = {
                 </form>
             </div>
 
+            <div class="card">
+                <div class="table-toolbar">
+                    <div class="form-field" style="flex:1;min-width:220px;">
+                        <label for="inst-search">Filtrar</label>
+                        <input id="inst-search" type="text" placeholder="Escribe nombre, sigla o categoría…" autocomplete="off">
+                    </div>
+                    <div class="form-field" style="align-self:flex-end;">
+                        <span id="inst-count" class="field-hint"></span>
+                    </div>
+                </div>
+            </div>
+
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
@@ -76,7 +88,19 @@ export const AdminInstitucionesPage = {
             category: container.querySelector('#inst-category'),
             cupos: container.querySelector('#inst-cupos')
         };
+        const searchEl = container.querySelector('#inst-search');
+        const countEl = container.querySelector('#inst-count');
         let cache = [];
+
+        function applyFilter() {
+            const needle = (searchEl.value || '').trim().toLowerCase();
+            const rows = !needle ? cache : cache.filter(inst =>
+                [inst.name, inst.abbreviation, inst.category]
+                    .some(v => (v || '').toLowerCase().includes(needle)));
+            renderRows(tbody, rows);
+            countEl.textContent = `${rows.length} de ${cache.length}`;
+        }
+        searchEl.addEventListener('input', applyFilter);
 
         function openForm(item) {
             fields.id.value = item ? item.id : '';
@@ -102,7 +126,7 @@ export const AdminInstitucionesPage = {
             try {
                 const data = await api.get(path);
                 cache = data.items || [];
-                renderRows(tbody, cache);
+                applyFilter();
             } catch (error) {
                 tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>${escapeHtml(error.message)}</p></div></td></tr>`;
             }

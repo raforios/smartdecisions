@@ -14,7 +14,7 @@ export const AsistenciasPage = {
             <div class="page-header">
                 <div>
                     <h2>Reporte de Asistencias</h2>
-                    <div class="subtitle">Filtra por CI y/o rango de fechas. Usa los filtros para acotar la consulta.</div>
+                    <div class="subtitle">Busca por nombre o CI (en vivo) y acota por rango de fechas.</div>
                 </div>
                 <button id="export-btn" class="btn btn-primary">
                     <i class="fa-solid fa-file-excel"></i> Descargar Excel
@@ -23,9 +23,9 @@ export const AsistenciasPage = {
 
             <div class="card">
                 <div class="table-toolbar">
-                    <div class="form-field" style="flex: 1; min-width: 200px;">
-                        <label for="filter-ci">CI</label>
-                        <input id="filter-ci" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="CI exacto (opcional)">
+                    <div class="form-field" style="flex:2; min-width:220px;">
+                        <label for="att-search">Buscar (nombre o CI)</label>
+                        <input id="att-search" type="text" placeholder="Filtra por nombre o CI…" autocomplete="off">
                     </div>
                     <div class="form-field">
                         <label for="date-from">Desde</label>
@@ -35,8 +35,7 @@ export const AsistenciasPage = {
                         <label for="date-to">Hasta</label>
                         <input id="date-to" type="date">
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button id="apply-btn" class="btn btn-primary"><i class="fa-solid fa-filter"></i> Aplicar</button>
+                    <div class="form-field" style="align-self:flex-end;">
                         <button id="clear-btn" class="btn btn-ghost"><i class="fa-solid fa-xmark"></i> Limpiar</button>
                     </div>
                 </div>
@@ -97,29 +96,47 @@ export const AsistenciasPage = {
             return participantsByCi;
         }
 
+        let allRows = [];
+        const norm = (s) => String(s == null ? '' : s).toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+        // Trae todas las asistencias (con el rango de fechas, si se puso) y las
+        // guarda; el filtro por nombre/CI es client-side (instantáneo).
         async function loadAttendances() {
-            const queryParams = {
-                ci:        container.querySelector('#filter-ci').value.trim() || undefined,
-                date_from: container.querySelector('#date-from').value || undefined,
-                date_to:   container.querySelector('#date-to').value || undefined,
-                limit:     config.ui.pageSize || 25
-            };
+            const dateFrom = container.querySelector('#date-from').value || undefined;
+            const dateTo = container.querySelector('#date-to').value || undefined;
             tbody.innerHTML = `<tr><td colspan="7"><div class="loading"><div class="spinner"></div> Cargando...</div></td></tr>`;
             try {
-                const [attendancesData, participantsMap] = await Promise.all([
-                    api.get(config.miningSummit.attendancesPath, queryParams),
-                    ensureParticipantsLoaded()
-                ]);
-                const items = attendancesData.items || [];
-                renderRows(tbody, items, participantsMap);
-                renderStats(statGrid, items);
-                pageInfo.textContent = `${items.length} asistencias`;
+                await ensureParticipantsLoaded();
+                const rows = [];
+                let lastKey = null;
+                do {
+                    const params = { limit: 100 };
+                    if (dateFrom) params.date_from = dateFrom;
+                    if (dateTo) params.date_to = dateTo;
+                    if (lastKey) params.last_evaluated_key = lastKey;
+                    const data = await api.get(config.miningSummit.attendancesPath, params);
+                    rows.push(...(data.items || []));
+                    lastKey = data.last_evaluated_key || null;
+                } while (lastKey);
+                allRows = rows;
+                applySearch();
             } catch (error) {
                 tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
                     <i class="fa-solid fa-triangle-exclamation"></i>
                     <p>${error.message}</p></div></td></tr>`;
                 Toast.danger(`No se pudo cargar: ${error.message}`);
             }
+        }
+
+        function applySearch() {
+            const pmap = participantsByCi || new Map();
+            const q = norm(container.querySelector('#att-search').value.trim());
+            const filtered = !q ? allRows : allRows.filter((a) =>
+                norm(`${a.ci} ${(pmap.get(a.ci) || {}).name || ''}`).includes(q));
+            renderRows(tbody, filtered, pmap);
+            renderStats(statGrid, filtered);
+            pageInfo.textContent = `${filtered.length} asistencias`;
         }
 
         const exportBtn = container.querySelector('#export-btn');
@@ -138,9 +155,11 @@ export const AsistenciasPage = {
             }
         });
 
-        container.querySelector('#apply-btn').addEventListener('click', loadAttendances);
+        container.querySelector('#att-search').addEventListener('input', applySearch);
+        container.querySelector('#date-from').addEventListener('change', loadAttendances);
+        container.querySelector('#date-to').addEventListener('change', loadAttendances);
         container.querySelector('#clear-btn').addEventListener('click', () => {
-            container.querySelector('#filter-ci').value = '';
+            container.querySelector('#att-search').value = '';
             container.querySelector('#date-from').value = '';
             container.querySelector('#date-to').value = '';
             loadAttendances();

@@ -238,6 +238,14 @@ def _passes_filters(view: Dict[str, Any], filters: Dict[str, Any]) -> bool:
     return status in (None, ParticipantStatus.ACTIVE.value)
 
 
+def _to_offset(raw: Any) -> int:
+    '''Parses the pagination token (a stringified offset) into a non-negative int.'''
+    try:
+        return max(0, int(raw)) if raw else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 @handle_service_errors
 def list_participants(
     dynamodb_resource: ServiceResource,
@@ -252,7 +260,9 @@ def list_participants(
     date_from = query_params.pop('registered_from', None)
     date_to = query_params.pop('registered_to', None)
     limit = query_params.pop('limit', 50)
-    query_params.pop('last_evaluated_key', None)
+    # The full filtered set is built in memory, so the pagination token is simply
+    # the next offset into the sorted list (kept stable by the deterministic sort).
+    offset = _to_offset(query_params.pop('last_evaluated_key', None))
 
     registrations = {
         registration['ci']: registration
@@ -276,7 +286,11 @@ def list_participants(
         date_to = date_to
     )
     views.sort(key = lambda view: (view.get('last_name') or '', view.get('first_name') or ''))
-    return {'items': views[:limit], 'last_evaluated_key': None}
+    next_offset = offset + limit
+    return {
+        'items': views[offset:next_offset],
+        'last_evaluated_key': str(next_offset) if next_offset < len(views) else None
+    }
 
 
 @handle_service_errors
