@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from dotenv import dotenv_values
 
 BASEDIR = os.path.dirname(os.path.abspath(__file__))
-PARAMETERS = dotenv_values(os.path.join(os.path.dirname(os.path.dirname(BASEDIR)), 'api', '.env'))
+PARAMETERS = dotenv_values(os.path.join(os.path.dirname(os.path.dirname(BASEDIR)), 'notebooks', '.env'))
 
 engine = sa.create_engine(PARAMETERS.get('DATABASE_URL'))
 

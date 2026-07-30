@@ -107,7 +107,7 @@ def _call_api(
 
     return response
 
-def login(url: str, email: str = None, password: str = None) -> str:
+def login(url: str) -> str:
     '''
         Login into SmartDecisions API.
 
@@ -128,8 +128,8 @@ def login(url: str, email: str = None, password: str = None) -> str:
     message = f'BASEDIR:  {os.path.join(os.path.dirname(os.path.dirname(BASEDIR)),
             'notebooks', '.env')}'
     logging.info(message)
-    login_email = email if email is not None else PARAMETERS.get('EMAIL')
-    login_password = password if password is not None else PARAMETERS.get('PASSWORD')
+    login_email = PARAMETERS.get('EMAIL')
+    login_password = PARAMETERS.get('PASSWORD')
 
     data = {
         'email': login_email,
