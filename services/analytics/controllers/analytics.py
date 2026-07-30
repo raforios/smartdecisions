@@ -45,14 +45,19 @@ def _read_float_setting(name: str, default: float) -> float:
         return default
 
 
-def _engine_parameters() -> Dict[str, float]:
+def _engine_parameters() -> Dict[str, Any]:
     '''
         Reads the affinity-engine tuning parameters from the environment.
+
+        item_level defaults to 'categoria': at SKU level real mass-consumption
+        baskets are too sparse to yield rules, while category-level affinity is
+        dense and interpretable. Override with AFFINITY_ITEM_LEVEL=producto.
     '''
     return {
         'min_support': _read_float_setting('AFFINITY_MIN_SUPPORT', 0.01),
         'min_lift': _read_float_setting('AFFINITY_MIN_LIFT', 1.0),
-        'top_n_per_pdv': _read_int_setting('AFFINITY_TOP_N_PER_PDV', 10)
+        'top_n_per_pdv': _read_int_setting('AFFINITY_TOP_N_PER_PDV', 10),
+        'item_level': (os.getenv('AFFINITY_ITEM_LEVEL') or 'categoria').strip().lower()
     }
 
 
@@ -96,7 +101,8 @@ async def run_analytics_controller(
         dataframe = dataframe,
         min_support = parameters['min_support'],
         min_lift = parameters['min_lift'],
-        top_n_per_pdv = parameters['top_n_per_pdv']
+        top_n_per_pdv = parameters['top_n_per_pdv'],
+        item_level = parameters['item_level']
     )
 
     persisted = persist_run(

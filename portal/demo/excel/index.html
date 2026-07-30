@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel → Oportunidades — SmartDecisions Demo</title>
     <link rel="stylesheet" href="../styles/demo.css?v=4">
-    <link rel="stylesheet" href="excel.css?v=4">
-    <link rel="icon" href="../../assets/favicon.svg?v=4" type="image/svg+xml">
-    <script src="../js/config.js"></script>
+    <link rel="stylesheet" href="excel.css?v=6">
+    <link rel="icon" type="image/png" sizes="64x64" href="../../assets/favicon-bear-64.png?v=5">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../assets/favicon-bear-32.png?v=5">
+    <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png?v=5">
+    <script src="../js/config.js?v=2"></script>
     <script src="../js/auth.js" defer></script>
     <script src="../js/api.js" defer></script>
     <script src="../js/ui.js" defer></script>
-    <script src="excel.js" defer></script>
+    <script src="excel.js?v=7" defer></script>
 </head>
 <body>
 
@@ -35,7 +37,7 @@
         <p class="page-subtitle">
             Sube tu archivo de ventas, valídalo contra el contrato y ejecuta el motor
             <strong>Afinidad × Drop Size</strong>. El resultado es una lista de
-            acciones comerciales priorizadas por impacto en dólares.
+            acciones comerciales priorizadas por su venta potencial en bolivianos.
         </p>
 
         <!-- ===================== Step 1+2: Template + Upload ===================== -->
@@ -97,9 +99,10 @@
 
             <div id="validatedBlock" hidden>
                 <h3 class="block-title">Archivo validado ✓</h3>
+                <div id="rejectedNotice" class="rejected-notice" hidden></div>
                 <p class="page-subtitle">
                     Ejecuta el motor de afinidad × drop size para obtener las
-                    oportunidades comerciales priorizadas por impacto en $.
+                    oportunidades comerciales priorizadas por su venta potencial en bolivianos.
                 </p>
                 <button id="runAnalyticsButton" class="btn btn-primary">
                     Ejecutar análisis
@@ -111,6 +114,17 @@
         <!-- ===================== Step 4: Opportunities ===================== -->
         <section id="stepOpportunities" class="step-section" hidden>
             <h2 class="section-title">Oportunidades comerciales</h2>
+
+            <div class="insight-panel">
+                <p class="insight-objective">
+                    <strong>¿Qué es esto?</strong> Analizamos qué productos se compran juntos en
+                    todos tus puntos de venta y detectamos, para cada uno, <strong>qué categoría
+                    que todavía no compra deberías ofrecerle</strong> — priorizado por la venta
+                    potencial en bolivianos. Cada fila es una <strong>acción de venta concreta</strong>.
+                </p>
+                <div id="opportunityHeadline" class="insight-headline"></div>
+            </div>
+
             <div class="metric-grid" id="opportunitySummary"></div>
 
             <div class="filters-row">
@@ -125,14 +139,14 @@
                 <table class="data-table sortable" id="opportunitiesTable">
                     <thead>
                         <tr>
-                            <th data-sort="pdv">PdV</th>
-                            <th data-sort="product">Producto recomendado</th>
-                            <th data-sort="based_on">Basado en</th>
-                            <th data-sort="lift" class="numeric">Lift</th>
-                            <th data-sort="confidence" class="numeric">Confianza</th>
-                            <th data-sort="units" class="numeric">Drop (u)</th>
-                            <th data-sort="amount" class="numeric">$ esperado</th>
-                            <th data-sort="score" class="numeric">Score</th>
+                            <th data-sort="pdv">Punto de venta</th>
+                            <th data-sort="product">Ofrecerle</th>
+                            <th data-sort="based_on">Porque ya compra</th>
+                            <th data-sort="amount" class="numeric">Venta potencial</th>
+                            <th data-sort="units" class="numeric">Unid. esperadas</th>
+                            <th data-sort="confidence" class="numeric" title="Probabilidad de que compre la recomendación">Probabilidad</th>
+                            <th data-sort="lift" class="numeric" title="Cuánto más probable es esta combinación vs. el azar">Afinidad</th>
+                            <th data-sort="score" class="numeric" title="Ranking de prioridad (afinidad × probabilidad × impacto)">Prioridad</th>
                         </tr>
                     </thead>
                     <tbody></tbody>

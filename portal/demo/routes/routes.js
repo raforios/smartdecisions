@@ -35,11 +35,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // CartoDB Voyager tiles — light + color, matches the corporate theme.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/voyager/{z}/{x}/{y}{r}.png', {
+    const baseTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 19
     }).addTo(map);
+
+    // Tile fallback: if the CartoDB CDN is unreachable, swap to the standard OSM
+    // tiles once so the map never renders as a blank grey canvas.
+    let tilesFellBack = false;
+    baseTiles.on('tileerror', () => {
+        if (tilesFellBack) return;
+        tilesFellBack = true;
+        map.removeLayer(baseTiles);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+    });
+
+    // Leaflet miscomputes its size when the map div is laid out (flex/grid) after
+    // init, which shows as a grey box with the markers/lines piled up. Force a
+    // recalculation once the layout settles and on every resize.
+    function refreshMapSize() { map.invalidateSize(false); }
+    requestAnimationFrame(refreshMapSize);
+    setTimeout(refreshMapSize, 300);
+    window.addEventListener('resize', refreshMapSize);
 
     const layers = {
         points: L.layerGroup().addTo(map),

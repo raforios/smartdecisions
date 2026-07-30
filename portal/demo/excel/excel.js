@@ -118,7 +118,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
-    // ---------- Step 2b: upload + validate ----------
+    const FILES_URL = window.SD_CONFIG.FILES_URL;
+    const INGEST_BUCKET = window.SD_CONFIG.INGEST_BUCKET;
+
+    function contentTypeFor(fileName) {
+        return fileName.toLowerCase().endsWith('.csv')
+            ? 'text/csv'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+
+    // ---------- Step 2b: direct-to-S3 upload (pre-signed) + validate ----------
+    // Real sales exports easily exceed the ~10 MB API Gateway limit, so the file
+    // is uploaded straight to S3 and only its key travels through the API.
     uploadButton.addEventListener('click', async () => {
         if (!state.selectedFile) return;
         const note = qs('#uploadNote');
@@ -126,13 +137,41 @@ document.addEventListener('DOMContentLoaded', () => {
         note.textContent = '';
         const done = setButtonBusy(uploadButton, 'Subiendo…');
         try {
-            const formData = new FormData();
-            formData.append('file', state.selectedFile);
-            const response = await window.SD_API.postFormData(
-                `${INGEST_URL}/v1/ingest/excel`,
-                formData
-            );
-            handleIngestResponse(response);
+            const file = state.selectedFile;
+            const contentType = contentTypeFor(file.name);
+            const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+
+            // 1) Ask FILES for a pre-signed PUT URL.
+            note.textContent = 'Preparando la subida…';
+            const presign = await window.SD_API.post(`${FILES_URL}/v1/s3/upload-presigned`, {
+                bucket_name: INGEST_BUCKET,
+                file_path: 'ingest/raw',
+                file_name: `${Date.now()}_${safeName}`,
+                validation: false,
+                content_type: contentType
+            });
+
+            // 2) Upload the bytes straight to S3 (no API Gateway limit).
+            note.textContent = `Subiendo ${formatBytes(file.size)} a almacenamiento seguro…`;
+            const putResponse = await fetch(presign.presigned_url, {
+                method: 'PUT',
+                headers: { 'Content-Type': contentType },
+                body: file
+            });
+            if (!putResponse.ok) {
+                throw new Error(`Fallo al subir a S3 (${putResponse.status}).`);
+            }
+
+            // 3) Ask ingest to process it in the background (returns 202 + id).
+            note.textContent = 'Encolando el procesamiento…';
+            const accepted = await window.SD_API.post(`${INGEST_URL}/v1/ingest/excel-from-s3`, {
+                file_key: presign.file_key,
+                file_name: file.name
+            });
+
+            // 4) Poll for the outcome (large files take minutes to normalize).
+            const result = await pollDatasetStatus(accepted.dataset_id, note);
+            handleIngestResponse(result);
         } catch (error) {
             note.classList.add('error');
             note.textContent = error.message || 'No se pudo subir el archivo.';
@@ -141,6 +180,25 @@ document.addEventListener('DOMContentLoaded', () => {
             done();
         }
     });
+
+    // Polls the dataset until the async job finishes (validated/failed).
+    async function pollDatasetStatus(datasetId, note) {
+        const intervalMs = 2500;
+        const maxTries = 240; // ~10 min ceiling
+        for (let attempt = 1; attempt <= maxTries; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+            const data = await window.SD_API.get(
+                `${INGEST_URL}/v1/ingest/${encodeURIComponent(datasetId)}`
+            );
+            if (data.status && data.status !== 'processing') {
+                return data;
+            }
+            if (note) {
+                note.textContent = `Procesando el archivo… (${Math.round(attempt * intervalMs / 1000)} s)`;
+            }
+        }
+        throw new Error('El procesamiento está tardando demasiado. Volvé a intentarlo en unos minutos.');
+    }
 
     function handleIngestResponse(response) {
         state.datasetId = response.dataset_id;
@@ -152,14 +210,65 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#validatedBlock').hidden = !isValid;
         qs('#errorsBlock').hidden = isValid;
 
+        const rejected = (response.summary && response.summary.error_rows) || 0;
         if (isValid) {
-            toast('Archivo validado. Listo para analizar.', 'success');
+            renderRejectedNotice(response.dataset_id, response.summary);
+            toast(rejected > 0
+                ? `${response.summary.valid_rows} filas cargadas · ${rejected} quedaron fuera.`
+                : 'Archivo validado. Listo para analizar.', 'success');
         } else {
             renderErrors(response.errors || []);
-            toast(`Validación falló: ${(response.errors || []).length} error(es).`, 'error');
+            toast('No se pudo cargar el archivo. Revisa los errores.', 'error');
         }
 
         qs('#stepValidation').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Shows how many rows were left out and offers the "fix & re-upload" file.
+    function renderRejectedNotice(datasetId, summary) {
+        const el = qs('#rejectedNotice');
+        const rejected = (summary && summary.error_rows) || 0;
+        if (rejected <= 0) {
+            el.hidden = true;
+            el.innerHTML = '';
+            return;
+        }
+        el.hidden = false;
+        el.innerHTML = `
+            <p><strong>${(summary.valid_rows || 0).toLocaleString('es-BO')}</strong> filas se cargaron.
+            <strong>${rejected.toLocaleString('es-BO')}</strong> quedaron fuera por datos incompletos —
+            descargalas, completalas y volvé a subirlas.</p>
+            <button type="button" class="btn btn-ghost btn-small" id="downloadRejectedButton">
+                Descargar filas no cargadas (.csv)
+            </button>`;
+        qs('#downloadRejectedButton').addEventListener('click', () => downloadRejected(datasetId));
+    }
+
+    async function downloadRejected(datasetId) {
+        const button = qs('#downloadRejectedButton');
+        const done = setButtonBusy(button, 'Descargando…');
+        try {
+            const response = await fetch(
+                `${INGEST_URL}/v1/ingest/${encodeURIComponent(datasetId)}/rejected`,
+                { headers: { 'Authorization': `Bearer ${window.SD_AUTH.getToken()}` } }
+            );
+            if (!response.ok) {
+                throw new Error(`Error ${response.status} al descargar.`);
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = 'filas_no_cargadas.csv';
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            toast(error.message || 'No se pudo descargar el archivo.', 'error');
+        } finally {
+            done();
+        }
     }
 
     function renderIngestSummary(summary, status) {
@@ -232,24 +341,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleAnalyticsResponse(response) {
         state.opportunities = response.opportunities || [];
-        renderOpportunitySummary(response.summary);
+        const insight = deriveInsight(response.summary, state.opportunities);
+        renderOpportunityHeadline(insight);
+        renderOpportunitySummary(response.summary, insight);
         renderOpportunitiesTable();
         qs('#stepOpportunities').hidden = false;
         qs('#stepOpportunities').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function renderOpportunitySummary(summary) {
+    // Aggregates the raw opportunities into the plain-language story the manager
+    // needs: how much, where, and which categories to push first.
+    function deriveInsight(summary, opportunities) {
+        const byCategory = new Map();
+        opportunities.forEach((opp) => {
+            const name = opp.recommended_product_name || opp.recommended_product_id || '—';
+            const entry = byCategory.get(name) || { name, value: 0, count: 0 };
+            entry.value += Number(opp.expected_drop_size_amount) || 0;
+            entry.count += 1;
+            byCategory.set(name, entry);
+        });
+        const ranking = [...byCategory.values()].sort((a, b) => b.value - a.value);
+        return {
+            count: summary.total_opportunities || 0,
+            pdvs: summary.total_pdvs_with_opportunities || 0,
+            totalValue: summary.total_expected_value,
+            topCategory: ranking[0] || null,
+            top3: ranking.slice(0, 3)
+        };
+    }
+
+    function renderOpportunityHeadline(insight) {
+        const el = qs('#opportunityHeadline');
+        if (!insight.count) {
+            el.innerHTML =
+                '<p class="insight-empty">No se encontraron oportunidades con los datos ' +
+                'actuales. Probá con un período más amplio o un catálogo con más variedad.</p>';
+            return;
+        }
+        const count = insight.count.toLocaleString('es-BO');
+        const pdvs = insight.pdvs.toLocaleString('es-BO');
+        const valueText = insight.totalValue == null ? null : formatCurrency(insight.totalValue);
+        const lead = valueText
+            ? `Detectamos <strong>${count} acciones de venta</strong> en <strong>${pdvs} ` +
+              `puntos de venta</strong>, con una venta potencial de <strong>${valueText}</strong>.`
+            : `Detectamos <strong>${count} acciones de venta</strong> en <strong>${pdvs} ` +
+              'puntos de venta</strong>.';
+        const top = insight.topCategory
+            ? ` La mayor oportunidad está en <strong>${escapeHtml(insight.topCategory.name)}</strong>.`
+            : '';
+        const chips = insight.top3.map((cat, index) =>
+            `<span class="insight-chip"><span class="chip-rank">${index + 1}</span> ` +
+            `${escapeHtml(cat.name)} · <strong>${formatCurrency(cat.value)}</strong></span>`
+        ).join('');
+        el.innerHTML = `
+            <p class="insight-lead">${lead}${top}</p>
+            <p class="insight-action">👉 Acción sugerida: prioriza ofrecer estas categorías en la
+             próxima visita a cada punto de venta.</p>
+            ${chips ? `<div class="insight-topcats">
+                <span class="insight-topcats-label">Top categorías por venta potencial:</span>
+                ${chips}</div>` : ''}
+        `;
+    }
+
+    function renderOpportunitySummary(summary, insight) {
         const totalValue = summary.total_expected_value;
         const cards = [
-            { label: 'Oportunidades', value: String(summary.total_opportunities || 0), variant: 'accent' },
-            { label: 'PdVs con acciones', value: String(summary.total_pdvs_with_opportunities || 0) },
             {
-                label: 'Impacto esperado',
+                label: 'Acciones sugeridas', value: String(summary.total_opportunities || 0),
+                variant: 'accent', hint: 'Recomendaciones de venta cruzada'
+            },
+            {
+                label: 'Puntos de venta', value: String(summary.total_pdvs_with_opportunities || 0),
+                hint: 'Con al menos una recomendación'
+            },
+            {
+                label: 'Venta potencial',
                 value: totalValue == null ? '—' : formatCurrency(totalValue),
                 variant: totalValue == null ? '' : 'success',
-                hint: totalValue == null ? 'Faltan precios en el dataset.' : 'Suma de drop size $ esperado.'
+                hint: totalValue == null ? 'Faltan precios en el archivo.' : 'Impacto esperado en Bs'
             },
-            { label: 'Reglas evaluadas', value: String(summary.affinity_rules_evaluated || 0) }
+            {
+                label: 'Categoría estrella',
+                value: insight.topCategory ? insight.topCategory.name : '—',
+                hint: 'Mayor venta potencial'
+            }
         ];
         const container = qs('#opportunitySummary');
         container.innerHTML = '';
@@ -345,12 +520,12 @@ document.addEventListener('DOMContentLoaded', () => {
             : '—';
         row.innerHTML = `
             <td>${pdvLabel}</td>
-            <td>${productLabel}</td>
+            <td><strong>${productLabel}</strong></td>
             <td class="based-on">${escapeHtml(basedOn)}</td>
-            <td class="numeric">${formatNumber(opp.lift, 2)}</td>
-            <td class="numeric">${formatPercent(opp.confidence)}</td>
+            <td class="numeric strong">${amount}</td>
             <td class="numeric">${formatNumber(opp.expected_drop_size_units, 1)}</td>
-            <td class="numeric">${amount}</td>
+            <td class="numeric">${formatPercent(opp.confidence)}</td>
+            <td class="numeric">${formatNumber(opp.lift, 2)}</td>
             <td class="numeric">${formatNumber(opp.opportunity_score, 2)}</td>
         `;
         return row;
@@ -383,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatCurrency(value) {
         if (value == null || isNaN(value)) return '—';
-        return `$ ${Number(value).toLocaleString('es-BO', {
+        return `Bs ${Number(value).toLocaleString('es-BO', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         })}`;

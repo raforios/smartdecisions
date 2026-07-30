@@ -102,6 +102,72 @@
 .metric-value.warning { color: var(--warning); }
 .metric-hint { color: var(--muted); font-size: 0.8rem; margin: 0.25rem 0 0; }
 
+/* --- Orientation / insight panel (makes the result self-explanatory) --- */
+.insight-panel {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent-2);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+.insight-objective { color: var(--text); margin: 0; font-size: 0.92rem; line-height: 1.5; }
+.insight-headline { margin-top: 0.85rem; }
+.insight-lead {
+    color: var(--text-strong);
+    font-size: 1.12rem;
+    line-height: 1.5;
+    margin: 0 0 0.5rem;
+}
+.insight-action {
+    color: var(--accent-2-strong);
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+}
+.insight-empty { color: var(--muted); margin: 0.5rem 0 0; }
+.insight-topcats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.insight-topcats-label { color: var(--muted); font-size: 0.85rem; margin-right: 0.25rem; }
+.insight-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+.insight-chip .chip-rank {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+/* Hero cell: the money column stands out over the technical metrics. */
+.data-table td.numeric.strong { color: var(--success); font-weight: 700; }
+
+/* Partial-load notice: some rows accepted, the rest offered for fix & re-upload. */
+.rejected-notice {
+    background: #fdf6e6;
+    border: 1px solid var(--accent-3);
+    border-left: 4px solid var(--warning, #b8860b);
+    border-radius: 10px;
+    padding: 0.85rem 1.1rem;
+    margin: 0 0 1rem;
+}
+.rejected-notice p { margin: 0 0 0.6rem; color: var(--text); }
+
 /* ============ Filters ============ */
 .filters-row {
     display: flex;

@@ -488,11 +488,34 @@ def _build_summary(
     }
 
 
+def _apply_item_level(dataframe: pd.DataFrame, item_level: str) -> pd.DataFrame:
+    '''
+        Chooses the granularity of the market-basket item. At SKU level ('producto')
+        real retail baskets are too sparse to yield rules (thousands of unique SKUs
+        across mostly-singleton invoices), so 'categoria' aliases the product
+        identity to the product category — far denser and more interpretable
+        ('recommend Chocolates'). Returns the frame the engine analyzes.
+
+        Args:
+            dataframe (pd.DataFrame): Normalized sales rows.
+            item_level (str): 'categoria' or 'producto'.
+
+        Returns:
+            pd.DataFrame: The frame to analyze (a category-aliased copy, or the
+                input unchanged for SKU level / when no category column exists).
+    '''
+    if item_level != 'categoria' or 'categoria' not in dataframe.columns:
+        return dataframe
+    category = dataframe['categoria'].fillna('Sin categoría').astype(str)
+    return dataframe.assign(id_producto = category, nombre_producto = category)
+
+
 def compute_opportunities(
     dataframe: pd.DataFrame,
     min_support: float = 0.01,
     min_lift: float = 1.0,
-    top_n_per_pdv: int = 10
+    top_n_per_pdv: int = 10,
+    item_level: str = 'producto'
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     '''
         End-to-end orchestration. Returns the opportunity list + summary stats.
@@ -502,26 +525,30 @@ def compute_opportunities(
             min_support (float): Apriori minimum support (0..1).
             min_lift (float): association_rules lift threshold (>= 1 = no anti-correlation).
             top_n_per_pdv (int): Max opportunities returned per PdV.
+            item_level (str): Basket granularity — 'categoria' (default in the
+                controller for mass-consumption data) or 'producto' (SKU).
 
         Returns:
             Tuple[List[Dict[str, Any]], Dict[str, Any]]:
                 - Flat list of Opportunity dicts (ready to wrap in the schema).
                 - Summary dict with run-level stats and the parameters used.
     '''
-    transactions = _build_transactions(dataframe)
+    working = _apply_item_level(dataframe, item_level)
+    transactions = _build_transactions(working)
     rules = _compute_affinity_rules(transactions, min_support, min_lift)
-    avg_units, avg_amount = _compute_drop_size(dataframe)
+    avg_units, avg_amount = _compute_drop_size(working)
     data = _EngineData(
         rules = rules,
         avg_units = avg_units,
         avg_amount = avg_amount,
-        product_names = _build_product_name_index(dataframe),
-        pdv_names = _build_pdv_name_index(dataframe)
+        product_names = _build_product_name_index(working),
+        pdv_names = _build_pdv_name_index(working)
     )
     parameters = {
         'min_support': min_support,
         'min_lift': min_lift,
-        'top_n_per_pdv': top_n_per_pdv
+        'top_n_per_pdv': top_n_per_pdv,
+        'item_level': item_level
     }
 
     if rules.empty:
@@ -529,7 +556,7 @@ def compute_opportunities(
         logger.info(message)
         return [], _build_summary([], 0, parameters)
 
-    opportunities = _collect_opportunities(dataframe, data, top_n_per_pdv)
+    opportunities = _collect_opportunities(working, data, top_n_per_pdv)
     summary = _build_summary(opportunities, len(rules), parameters)
 
     message = (

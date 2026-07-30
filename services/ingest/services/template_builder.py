@@ -1,106 +1,117 @@
 '''
-    Canonical sales Excel template builder (template_ventas_v1.xlsx).
+    Canonical sales Excel template builder (plantilla de ventas).
 
     Produces the workbook the INGEST service serves via
-    `GET /v1/ingest/template/file`:
-      - A 'Ventas' sheet with the v1 contract headers and 3 example rows.
-      - An 'Instrucciones' sheet documenting required vs optional columns.
+    `GET /v1/ingest/template/file`. The headers are **friendly Spanish names**
+    (Fecha, Nro Factura, Cliente, Producto, …) so a Bolivian sales center can
+    fill it without any technical knowledge. On upload, `column_mapper`
+    translates these headers to the internal canonical names the engine uses.
 
-    The service pre-generates the file on startup (see main._ensure_template_present)
-    so the download endpoint always has a file to stream.
+    The workbook has:
+      - A 'Ventas' sheet with the friendly headers and example rows (two
+        invoices forming baskets, so the affinity engine has signal).
+      - An 'Instrucciones' sheet documenting each column and whether it is
+        required.
 '''
+import tempfile
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 import pandas as pd
 
-from services.excel_validator import REQUIRED_COLUMNS
+
+# The template lives in the OS temp dir because the Lambda package (/var/task)
+# is a read-only filesystem. /tmp is the only writable path at runtime and is
+# also writable in local dev, so a single location works everywhere.
+TEMPLATE_FILENAME = 'template_ventas_v1.xlsx'
+TEMPLATE_PATH = Path(tempfile.gettempdir()) / TEMPLATE_FILENAME
 
 
-EXAMPLE_ROWS = [
-    {
-        'id_pedido': 'P-0001',
-        'fecha': date(2026, 1, 12),
-        'id_punto_venta': 'PDV-007',
-        'nombre_pdv': 'Tienda Doña Rosa',
-        'zona': 'Sur',
-        'id_producto': 'SKU-A100',
-        'nombre_producto': 'Galleta Integral 200g',
-        'cantidad': 12,
-        'precio_unitario': 8.5,
-        'monto_total': 102.0,
-    },
-    {
-        'id_pedido': 'P-0001',
-        'fecha': date(2026, 1, 12),
-        'id_punto_venta': 'PDV-007',
-        'nombre_pdv': 'Tienda Doña Rosa',
-        'zona': 'Sur',
-        'id_producto': 'SKU-B200',
-        'nombre_producto': 'Yogurt Natural 1L',
-        'cantidad': 6,
-        'precio_unitario': 15.0,
-        'monto_total': 90.0,
-    },
-    {
-        'id_pedido': 'P-0002',
-        'fecha': date(2026, 1, 13),
-        'id_punto_venta': 'PDV-012',
-        'nombre_pdv': 'Mini-market El Sol',
-        'zona': 'Centro',
-        'id_producto': 'SKU-A100',
-        'nombre_producto': 'Galleta Integral 200g',
-        'cantidad': 24,
-        'precio_unitario': 8.5,
-        'monto_total': 204.0,
-    },
+@dataclass(frozen = True)
+class TemplateColumn:
+    '''One column of the downloadable template: friendly header + metadata.'''
+    header: str          # Friendly Spanish header shown to the client.
+    required: bool
+    description: str
+
+
+# Order + contract of the client-facing template. Required columns are the
+# minimum the analysis needs; the rest enrich the dashboard and route module.
+TEMPLATE_COLUMNS: list[TemplateColumn] = [
+    TemplateColumn('Fecha', True,
+                   'Fecha de la venta. Formato dd/mm/aaaa.'),
+    TemplateColumn('Nro Factura', True,
+                   'Número de factura o venta. Agrupa los productos comprados juntos.'),
+    TemplateColumn('Cliente', True,
+                   'Nombre del cliente o punto de venta.'),
+    TemplateColumn('Zona', False,
+                   'Zona o barrio del cliente (para análisis por sector).'),
+    TemplateColumn('Ciudad', False,
+                   'Ciudad del cliente.'),
+    TemplateColumn('Vendedor', False,
+                   'Vendedor o preventista que realizó la venta.'),
+    TemplateColumn('Latitud', False,
+                   'Latitud del cliente (opcional; habilita la optimización de rutas).'),
+    TemplateColumn('Longitud', False,
+                   'Longitud del cliente (opcional; habilita la optimización de rutas).'),
+    TemplateColumn('Producto', True,
+                   'Nombre del producto vendido.'),
+    TemplateColumn('Categoria', False,
+                   'Categoría o línea del producto (ej. Galletas, Lácteos).'),
+    TemplateColumn('Cantidad', True,
+                   'Unidades vendidas. Debe ser mayor que 0.'),
+    TemplateColumn('Precio Unitario', False,
+                   'Precio por unidad. Ayuda a valorar las oportunidades en Bs.'),
+    TemplateColumn('Monto Total', False,
+                   'Monto total de la línea (Cantidad × Precio Unitario).'),
 ]
 
-COLUMN_ORDER = [
-    'id_pedido', 'fecha', 'id_punto_venta', 'nombre_pdv', 'zona',
-    'id_producto', 'nombre_producto', 'cantidad', 'precio_unitario', 'monto_total',
-]
+HEADERS: list[str] = [column.header for column in TEMPLATE_COLUMNS]
 
 
-def _description_for(column: str) -> str:
-    '''
-        Returns the canonical Spanish description for a template column.
-    '''
-    descriptions = {
-        'id_pedido': 'Identificador del pedido. Agrupa los productos de una misma venta.',
-        'fecha': 'Fecha de la venta. Acepta formato ISO (aaaa-mm-dd) o dd/mm/aaaa.',
-        'id_punto_venta': 'Identificador del punto de venta o cliente.',
-        'nombre_pdv': 'Nombre legible del PdV (solo para la interfaz).',
-        'zona': 'Zona geográfica del PdV (para análisis y rutas).',
-        'id_producto': 'SKU o código del producto.',
-        'nombre_producto': 'Nombre legible del producto (solo para la interfaz).',
-        'cantidad': 'Unidades vendidas. Debe ser mayor que 0.',
-        'precio_unitario': 'Precio por unidad. Necesario para calcular Drop Size en moneda.',
-        'monto_total': 'Monto total de la línea. Se calcula como cantidad × precio_unitario.',
+def _example_line(factura, cliente, zona, ciudad, vendedor, lat, lng,
+                  producto, categoria, cantidad, precio) -> dict:
+    '''Builds one example row keyed by the friendly headers.'''
+    return {
+        'Fecha': date(2026, 1, 12), 'Nro Factura': factura, 'Cliente': cliente,
+        'Zona': zona, 'Ciudad': ciudad, 'Vendedor': vendedor,
+        'Latitud': lat, 'Longitud': lng, 'Producto': producto,
+        'Categoria': categoria, 'Cantidad': cantidad,
+        'Precio Unitario': precio, 'Monto Total': round(cantidad * precio, 2),
     }
-    return descriptions.get(column, '')
+
+
+# Two invoices (Nro Factura) forming baskets, so the affinity engine has signal.
+EXAMPLE_ROWS: list[dict] = [
+    _example_line('F-1001', 'Tienda Doña Rosa', 'Sur', 'La Paz', 'Juan Pérez',
+                  -16.5450, -68.1200, 'Galleta Integral 200g', 'Galletas', 12, 8.5),
+    _example_line('F-1001', 'Tienda Doña Rosa', 'Sur', 'La Paz', 'Juan Pérez',
+                  -16.5450, -68.1200, 'Chocolate Barra 90g', 'Chocolates', 8, 6.0),
+    _example_line('F-1002', 'Mini-market El Sol', 'Centro', 'La Paz', 'Ana Vargas',
+                  -16.4980, -68.1330, 'Galleta Integral 200g', 'Galletas', 24, 8.5),
+    _example_line('F-1002', 'Mini-market El Sol', 'Centro', 'La Paz', 'Ana Vargas',
+                  -16.4980, -68.1330, 'Yogurt Natural 1L', 'Lácteos', 6, 15.0),
+]
 
 
 def build_instructions_dataframe() -> pd.DataFrame:
     '''
-        Builds the 'Instrucciones' sheet content from the v1 contract.
-
-        Returns:
-            pd.DataFrame: One row per column, describing its requirement and use.
+        Builds the 'Instrucciones' sheet: one row per column with its
+        requirement and description, in Spanish.
     '''
-    rows = []
-    for col in COLUMN_ORDER:
-        required = col in REQUIRED_COLUMNS
-        rows.append({
-            'Columna': col,
-            'Obligatoria': 'Sí' if required else 'No',
-            'Descripción': _description_for(col),
-        })
-    return pd.DataFrame(rows)
+    return pd.DataFrame([
+        {
+            'Columna': column.header,
+            'Obligatoria': 'Sí' if column.required else 'No',
+            'Descripción': column.description,
+        }
+        for column in TEMPLATE_COLUMNS
+    ])
 
 
 def generate(output_path: Path) -> Path:
     '''
-        Generates the v1 template at the given path.
+        Generates the sales template at the given path.
 
         Args:
             output_path (Path): Destination .xlsx file.
@@ -110,7 +121,7 @@ def generate(output_path: Path) -> Path:
     '''
     output_path.parent.mkdir(parents = True, exist_ok = True)
 
-    ventas = pd.DataFrame(EXAMPLE_ROWS, columns = COLUMN_ORDER)
+    ventas = pd.DataFrame(EXAMPLE_ROWS, columns = HEADERS)
     instrucciones = build_instructions_dataframe()
 
     with pd.ExcelWriter(output_path, engine = 'openpyxl') as writer:
@@ -124,3 +135,17 @@ def generate(output_path: Path) -> Path:
                 min(max_length + 2, 28)
 
     return output_path
+
+
+def ensure_template() -> Path:
+    '''
+        Returns the path to the downloadable template, generating it in the
+        writable temp dir on first use. Idempotent and self-healing: if the
+        Lambda's /tmp was cleared between invocations, the next call rebuilds it.
+
+        Returns:
+            Path: The ready-to-stream template file.
+    '''
+    if not TEMPLATE_PATH.exists():
+        generate(TEMPLATE_PATH)
+    return TEMPLATE_PATH

@@ -17,7 +17,7 @@ from pandera.errors import SchemaErrors
 from services.logger_config import custom_logger as logger
 
 
-TEMPLATE_VERSION: Final[str] = 'v1'
+TEMPLATE_VERSION: Final[str] = 'v2'
 
 REQUIRED_COLUMNS: Final[list[str]] = [
     'id_pedido',
@@ -33,6 +33,14 @@ OPTIONAL_COLUMNS: Final[list[str]] = [
     'nombre_producto',
     'precio_unitario',
     'monto_total',
+    # v2 enriching columns: power the commercial dashboard and route module.
+    'categoria',
+    'canal',
+    'region',
+    'ciudad',
+    'vendedor',
+    'latitud',
+    'longitud',
 ]
 
 
@@ -111,6 +119,37 @@ SCHEMA: Final[pa.DataFrameSchema] = pa.DataFrameSchema(
                 'Monto total de la línea '
                 '(si falta, se calcula cantidad * precio_unitario).'
             )
+        ),
+        # --- v2 enriching columns (optional): commercial dashboard + routes ---
+        'categoria': pa.Column(
+            dtype = 'object', nullable = True, required = False, coerce = True,
+            description = 'Categoría / línea del producto (para análisis por rubro).'
+        ),
+        'canal': pa.Column(
+            dtype = 'object', nullable = True, required = False, coerce = True,
+            description = 'Canal comercial (mayorista, detalle, HORECA, etc.).'
+        ),
+        'region': pa.Column(
+            dtype = 'object', nullable = True, required = False, coerce = True,
+            description = 'Región o departamento del punto de venta.'
+        ),
+        'ciudad': pa.Column(
+            dtype = 'object', nullable = True, required = False, coerce = True,
+            description = 'Ciudad del punto de venta.'
+        ),
+        'vendedor': pa.Column(
+            dtype = 'object', nullable = True, required = False, coerce = True,
+            description = 'Vendedor / preventista responsable de la venta.'
+        ),
+        'latitud': pa.Column(
+            dtype = 'float64', nullable = True, required = False, coerce = True,
+            checks = pa.Check.in_range(-90, 90),
+            description = 'Latitud del punto de venta (para optimización de rutas).'
+        ),
+        'longitud': pa.Column(
+            dtype = 'float64', nullable = True, required = False, coerce = True,
+            checks = pa.Check.in_range(-180, 180),
+            description = 'Longitud del punto de venta (para optimización de rutas).'
         ),
     },
     strict = 'filter',

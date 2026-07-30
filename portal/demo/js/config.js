@@ -23,6 +23,10 @@ window.SD_CONFIG = {
     OPTIMIZATION_URL:  'https://yejyqw3716.execute-api.us-east-1.amazonaws.com',
     ANALYTICS_URL:     'https://u0prf8qr12.execute-api.us-east-1.amazonaws.com',
 
+    // S3 bucket where large sales files are staged (direct-to-S3 upload via
+    // pre-signed URL, bypassing the ~10 MB API Gateway limit).
+    INGEST_BUCKET:     'ml-data-file-handler',
+
     // Storage keys used by sessionStorage (kept here so module pages
     // don't reinvent constants).
     STORAGE_TOKEN_KEY:  'sd_token',

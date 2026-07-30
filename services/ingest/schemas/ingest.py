@@ -72,16 +72,43 @@ class IngestResponse(BaseModel):
     created_at: datetime
 
 
+class IngestAcceptedResponse(BaseModel):
+    '''
+        Response for an accepted async ingest: the file is being processed in
+        the background. The client polls `GET /ingest/{dataset_id}` for the
+        outcome. Used for large files whose processing exceeds the API Gateway
+        29 s synchronous timeout.
+    '''
+    dataset_id: str
+    status: str = Field('processing', description = "Always 'processing' on accept.")
+
+
 class IngestStatusResponse(BaseModel):
     '''
-        Compact metadata for `GET /ingest/{dataset_id}`.
+        Compact metadata for `GET /ingest/{dataset_id}`. `status` is
+        'processing' while the async job runs, then 'validated' or 'failed'.
     '''
     dataset_id: str
     status: str
     owner_email: str
     file_s3_key: str
     summary: IngestSummary
+    errors: list[IngestColumnError] = Field(default_factory = list)
     created_at: datetime
+
+
+class IngestFromS3Request(BaseModel):
+    '''
+        Request for ingesting a file already uploaded to S3 via a pre-signed URL.
+
+        Large files (real sales exports easily exceed the 10 MB API Gateway limit)
+        are uploaded directly to S3 by the browser; the service then reads them
+        from S3 by key, so no big binary ever transits API Gateway / Lambda.
+    '''
+    file_key: str = Field(..., min_length = 1,
+                description = 'S3 object key of the raw uploaded file.')
+    file_name: str = Field(..., min_length = 1,
+                description = 'Original filename (drives format detection: .xlsx/.csv).')
 
 
 class TemplateInfo(BaseModel):

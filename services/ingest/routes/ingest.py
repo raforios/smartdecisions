@@ -3,18 +3,23 @@
 '''
 from pathlib import Path
 from fastapi import (
-    APIRouter, Depends, File, Header, Path as PathParam, Request, UploadFile, status
+    APIRouter, Depends, File, Header, Path as PathParam, Request, Response,
+    UploadFile, status
 )
 from fastapi.responses import FileResponse
 from boto3.resources.base import ServiceResource
 
 from controllers.ingest import (
+    download_rejected_controller,
     download_template_controller,
     get_dataset_status_controller,
     get_template_info_controller,
-    ingest_excel_controller
+    ingest_excel_controller,
+    ingest_excel_from_s3_controller
 )
 from schemas.ingest import (
+    IngestAcceptedResponse,
+    IngestFromS3Request,
     IngestResponse,
     IngestStatusResponse,
     TemplateInfo
@@ -136,6 +141,74 @@ async def ingest_excel_endpoint(
         bearer_token = _extract_bearer(authorization),
         current_user = current_user,
         request = request
+    )
+
+
+@router.post(
+    '/excel-from-s3',
+    response_model = IngestAcceptedResponse,
+    status_code = status.HTTP_202_ACCEPTED,
+    summary = 'Ingest a large sales file already uploaded to S3 (async)',
+    description = (
+        'Accepts a file previously uploaded to S3 via a pre-signed URL and '
+        'processes it in the background (validate + normalize). Returns a '
+        'dataset_id immediately; poll GET /v1/ingest/{dataset_id} for the '
+        'outcome. Used for files that exceed the API Gateway payload (~10 MB) '
+        'and/or the 29 s synchronous timeout.'
+    )
+)
+async def ingest_excel_from_s3_endpoint(
+    request: Request,
+    payload: IngestFromS3Request,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to ingest a sales file already staged in S3 by key.
+    '''
+    lower = payload.file_name.lower()
+    if not lower.endswith(SUPPORTED_EXTENSIONS):
+        raise InvalidInputError(
+            detail = f'Formato no soportado. Use uno de: {", ".join(SUPPORTED_EXTENSIONS)}.'
+        )
+    message = f'Ingesting from S3 key "{payload.file_key}" for {current_user}.'
+    logger.info(message)
+    return await ingest_excel_from_s3_controller(
+        dynamodb_resource = dynamodb_resource,
+        file_key = payload.file_key,
+        file_name = payload.file_name,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/{dataset_id}/rejected',
+    summary = 'Download the rows that could not be loaded',
+    description = (
+        'Streams a CSV with the rejected rows and a "motivo" column explaining '
+        'why each failed, so the client can fix and re-upload them.'
+    )
+)
+async def download_rejected_endpoint(
+    request: Request,
+    dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint that streams the rejected-rows CSV for a dataset.
+    '''
+    content = await download_rejected_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        request = request,
+        current_user = current_user
+    )
+    return Response(
+        content = content,
+        media_type = 'text/csv',
+        headers = {'Content-Disposition': 'attachment; filename="filas_no_cargadas.csv"'}
     )
 
 

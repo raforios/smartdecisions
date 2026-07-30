@@ -2,7 +2,6 @@
     Ingest Microservice Main Handler
 '''
 import socket
-from pathlib import Path
 from datetime import date, datetime
 from typing import Any, AsyncIterator, Dict
 from contextlib import asynccontextmanager
@@ -19,7 +18,7 @@ from routes.ingest import router as ingest_router
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
-from services.template_builder import generate
+from services.template_builder import ensure_template
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
@@ -61,22 +60,17 @@ CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT
 
 def _ensure_template_present() -> None:
     '''
-        Generates `assets/template_ventas_v1.xlsx` if it is not already on
-        disk. The Dockerfile bakes it at build time, but `python main.py`
-        in local dev does not — without this step `GET /template/file`
-        would 400 with "plantilla aún no disponible".
+        Warms up the downloadable template in the writable temp dir at startup.
+        The Lambda package (/var/task) is read-only, so the template must live
+        in /tmp; `ensure_template()` also regenerates it on demand per request,
+        making this a best-effort warm-up rather than a hard requirement.
     '''
-    target = (
-        Path(__file__).resolve().parent / 'assets' / 'template_ventas_v1.xlsx'
-    )
-    if target.exists():
-        return
     try:
-        generate(target)
-        message = f'Generated v1 template at {target}.'
+        path = ensure_template()
+        message = f'Template ready at {path}.'
         logger.info(message)
     except Exception as e: # pylint: disable=broad-exception-caught
-        error_msg = f'Could not pre-generate v1 template: {e}'
+        error_msg = f'Could not pre-generate template: {e}'
         logger.warning(error_msg)
 
 
@@ -180,4 +174,19 @@ if __name__ == '__main__':
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 
-handler = Mangum(app)
+_asgi_handler = Mangum(app)
+
+
+def handler(event, context):
+    '''
+        Lambda entry point. Async self-invocations (background ingest jobs)
+        carry an 'ingest_async' key and run the heavy validate/normalize work
+        directly; every other event is a normal API Gateway request handled by
+        Mangum.
+    '''
+    if isinstance(event, dict) and 'ingest_async' in event:
+        # Imported here so the ASGI cold-start path stays lean.
+        from services.async_processor import process_dataset # pylint: disable=import-outside-toplevel
+        process_dataset(event['ingest_async'])
+        return {'ok': True}
+    return _asgi_handler(event, context)
