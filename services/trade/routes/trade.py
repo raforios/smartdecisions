@@ -445,7 +445,8 @@ async def list_attendances_endpoint(
     current_user: str = Depends(get_current_user)
 ) -> AttendanceListResponseSchema:
     '''
-        Paginated list of attendances filtered by `pos_id` and/or `user_id`
+        Paginated list of attendances filtered by `client_company_id`, `pos_id`
+        and/or `user_id` (all optional)
         inside a company. Optional `date_from` / `date_to` bound the search by
         the attendance check-in date.
     '''

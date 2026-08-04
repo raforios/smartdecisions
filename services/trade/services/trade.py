@@ -904,13 +904,12 @@ async def get_attendances_list_service(
             Tuple[List[Attendance], int]: Page of attendances + total count.
 
         Raises:
-            InvalidInputError: When neither `pos_id` nor `user_id` is provided,
-                or when the supplied date range is inverted.
+            InvalidInputError: When the supplied date range is inverted.
     '''
-    if filters.pos_id is None and filters.user_id is None:
-        raise InvalidInputError(
-            detail = 'At least one of `pos_id` or `user_id` must be supplied.'
-        )
+    # Binaria 2026-08-03: pos_id / user_id are now optional so a full attendance
+    # listing can be pulled per company (e.g. executed-routes report) without
+    # calling the endpoint N times. The tenant `company_id` still scopes the
+    # result; `client_company_id` narrows it to a client company.
     if (
         filters.date_from is not None
         and filters.date_to is not None
@@ -926,6 +925,8 @@ async def get_attendances_list_service(
         .filter(Attendance.company_id == filters.company_id)
     )
 
+    if filters.client_company_id is not None:
+        query = query.filter(Attendance.client_company_id == filters.client_company_id)
     if filters.pos_id is not None:
         query = query.filter(PlannedPoint.point_of_sale_id == filters.pos_id)
     if filters.user_id is not None:

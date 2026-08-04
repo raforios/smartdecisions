@@ -460,15 +460,20 @@ class AttendanceResponseSchema(BaseSchema):
 
 class AttendanceLookupFilterSchema(BaseModel):
     '''
-        Filter schema for the attendances lookup endpoint. Returns the list
-        of attendances matching `pos_id` and/or `user_id` inside a company,
-        optionally bound by a date range applied to `check_in_time`.
+        Filter schema for the attendances lookup endpoint. Returns the list of
+        attendances inside a company, optionally narrowed by `client_company_id`,
+        `pos_id` and/or `user_id` (all optional) and bound by a date range
+        applied to `check_in_time`.
         - Without dates: every attendance is returned.
         - With both dates: results are restricted to the inclusive range.
         - With only `date_from`: results equal or later than that date.
         - With only `date_to`: results equal or earlier than that date.
     '''
-    company_id: int = Query(..., description = 'Company ID (mandatory).')
+    company_id: int = Query(..., description = 'Executor company ID (mandatory tenant).')
+    client_company_id: Optional[int] = Query(
+        None,
+        description = 'Client company ID. Narrows the listing to one client company.'
+    )
     pos_id: Optional[int] = Query(
         None,
         description = 'POS ID. Returns attendances whose planned point targets this POS.'

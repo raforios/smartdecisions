@@ -103,10 +103,13 @@ async def create_replenishment_report_service(
     # Binaria, 2026-07-07: per-product replaced yes/no detail. Each SKU is
     # resolved to its product_id and validated against the POS assortment,
     # mirroring the reception flow.
+    # Binaria 2026-08-03: SKUs belong to the CLIENT company (owner of the
+    # products/POS); the executor company is only the fallback for legacy payloads.
+    catalog_company_id = report_data.client_company_id or report_data.company_id
     for item in report_data.details:
-        product_id = get_product_id_by_sku(db, report_data.company_id, item.product_sku)
+        product_id = get_product_id_by_sku(db, catalog_company_id, item.product_sku)
         validate_product_assigned_to_pos(
-            db, report_data.company_id, report_data.pos_id, product_id
+            db, catalog_company_id, report_data.pos_id, product_id
         )
         db.add(ReplenishmentReportDetail(
             report_id = db_report.id,
@@ -430,17 +433,21 @@ async def plan_complementary_bandeo_service(
     )
     logger.info(message)
 
+    # Binaria 2026-08-03: the promotion (and its products) belong to the CLIENT
+    # company that owns the POS. Resolve it against client_company_id, falling
+    # back to the executor company for legacy payloads.
+    catalog_company_id = plan_data.client_company_id or plan_data.company_id
     promotion = db.query(TradePromotion).options(
         joinedload(TradePromotion.details)
     ).filter(
         TradePromotion.id == plan_data.promotion_id,
-        TradePromotion.company_id == plan_data.company_id,
+        TradePromotion.company_id == catalog_company_id,
     ).first()
     if not promotion:
         raise RegisterNotFoundError(
             detail = (
                 f'Promotion {plan_data.promotion_id} not found for company '
-                f'{plan_data.company_id}.'
+                f'{catalog_company_id}.'
             )
         )
     sku_quantity_by_product = {
@@ -474,9 +481,9 @@ async def plan_complementary_bandeo_service(
     db.flush()
 
     for item in plan_data.details:
-        product_id = get_product_id_by_sku(db, plan_data.company_id, item.product_sku)
+        product_id = get_product_id_by_sku(db, catalog_company_id, item.product_sku)
         validate_product_assigned_to_pos(
-            db, plan_data.company_id, plan_data.pos_id, product_id
+            db, catalog_company_id, plan_data.pos_id, product_id
         )
         sku_quantity = sku_quantity_by_product.get(product_id)
         if sku_quantity is None:
@@ -533,9 +540,13 @@ async def receive_complementary_bandeo_service(
         pos_id = bandeo_data.pos_id
     )
 
+    # Binaria 2026-08-03: SKUs belong to the CLIENT company. The header already
+    # carries the client_company_id fixed at the Plan step, so we resolve the
+    # SKU against it (fallback to the executor company for legacy records).
+    catalog_company_id = db_header.client_company_id or db_header.company_id
     details_by_product = {detail.product_id: detail for detail in db_header.details}
     for item in bandeo_data.details:
-        product_id = get_product_id_by_sku(db, bandeo_data.company_id, item.product_sku)
+        product_id = get_product_id_by_sku(db, catalog_company_id, item.product_sku)
         detail = details_by_product.get(product_id)
         if detail is None:
             raise InvalidInputError(
@@ -588,10 +599,13 @@ async def return_complementary_bandeo_service(
             )
         )
 
+    # Binaria 2026-08-03: resolve SKUs against the CLIENT company recorded on
+    # the header at Plan time (fallback to the executor company for legacy rows).
+    catalog_company_id = db_header.client_company_id or db_header.company_id
     details_by_product = {detail.product_id: detail for detail in db_header.details}
     seen_products = set()
     for row in return_data.details:
-        product_id = get_product_id_by_sku(db, db_header.company_id, row.product_sku)
+        product_id = get_product_id_by_sku(db, catalog_company_id, row.product_sku)
         detail = details_by_product.get(product_id)
         if detail is None:
             raise InvalidInputError(

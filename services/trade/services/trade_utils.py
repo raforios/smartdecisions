@@ -123,10 +123,14 @@ async def create_visit_items(
         company_id = payload.company_id,
         pos_id = payload.pos_id
     )
+    # Binaria 2026-08-03: SKU + POS-assortment ownership live on the CLIENT
+    # company side (owner of the products/POS). The executor `company_id` is the
+    # fallback for legacy payloads that only ship the executor tenant.
+    catalog_company_id = getattr(payload, 'client_company_id', None) or payload.company_id
     for item in payload.items:
-        product_id = get_product_id_by_sku(db, payload.company_id, item.product_sku)
+        product_id = get_product_id_by_sku(db, catalog_company_id, item.product_sku)
         validate_product_assigned_to_pos(
-            db, payload.company_id, payload.pos_id, product_id
+            db, catalog_company_id, payload.pos_id, product_id
         )
     return await create_bulk_items_from_skus(
         db = db,
