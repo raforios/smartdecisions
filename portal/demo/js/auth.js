@@ -22,6 +22,26 @@
         return !!getToken();
     }
 
+    /**
+     * Reads the `exp` claim of the stored JWT and returns it as a Date, so the
+     * UI can tell the user how long the session lasts instead of letting it die
+     * silently mid-analysis. Returns null when unknown — callers must treat
+     * that as "no information", never as "expired".
+     */
+    function getSessionExpiry() {
+        const token = getToken();
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        try {
+            let base64 = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+            while (base64.length % 4 !== 0) base64 += '=';
+            const payload = JSON.parse(atob(base64));
+            return payload.exp ? new Date(payload.exp * 1000) : null;
+        } catch (decodeError) {
+            return null;
+        }
+    }
+
     function clearSession() {
         sessionStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(EMAIL_KEY);
@@ -86,6 +106,7 @@
     window.SD_AUTH = {
         getToken,
         getEmail,
+        getSessionExpiry,
         isAuthenticated,
         clearSession,
         login,

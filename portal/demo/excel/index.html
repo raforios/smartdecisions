@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel → Oportunidades — SmartDecisions Demo</title>
     <link rel="stylesheet" href="../styles/demo.css?v=4">
-    <link rel="stylesheet" href="excel.css?v=6">
+    <link rel="stylesheet" href="excel.css?v=12">
     <link rel="icon" type="image/png" sizes="64x64" href="../../assets/favicon-bear-64.png?v=5">
     <link rel="icon" type="image/png" sizes="32x32" href="../../assets/favicon-bear-32.png?v=5">
     <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png?v=5">
     <script src="../js/config.js?v=2"></script>
-    <script src="../js/auth.js" defer></script>
-    <script src="../js/api.js" defer></script>
+    <script src="../js/auth.js?v=2" defer></script>
+    <script src="../js/api.js?v=2" defer></script>
     <script src="../js/ui.js" defer></script>
-    <script src="excel.js?v=7" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="excel.js?v=13" defer></script>
 </head>
 <body>
 
@@ -25,6 +26,7 @@
         </a>
         <div class="demo-nav-actions">
             <a href="../home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <span class="session-chip" id="sessionChip" hidden></span>
             <span class="user-chip" id="userChip">…</span>
             <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
         </div>
@@ -101,26 +103,213 @@
                 <h3 class="block-title">Archivo validado ✓</h3>
                 <div id="rejectedNotice" class="rejected-notice" hidden></div>
                 <p class="page-subtitle">
-                    Ejecuta el motor de afinidad × drop size para obtener las
-                    oportunidades comerciales priorizadas por su venta potencial en bolivianos.
+                    Elige el análisis que quieres ver sobre estos datos. Puedes probar
+                    varios sin volver a subir el archivo.
                 </p>
-                <button id="runAnalyticsButton" class="btn btn-primary">
-                    Ejecutar análisis
-                </button>
+                <div class="analysis-menu" id="analysisMenu">
+                    <button type="button" class="analysis-card" data-analysis="summary">
+                        <span class="analysis-icon">📊</span>
+                        <span class="analysis-title">Resumen Comercial</span>
+                        <span class="analysis-desc">Ventas totales, mejor cliente, productos más y
+                            menos vendidos, por categoría, canal y mes.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="opportunities">
+                        <span class="analysis-icon">🎯</span>
+                        <span class="analysis-title">Oportunidades de Venta</span>
+                        <span class="analysis-desc">Qué producto ofrecerle a cada cliente
+                            (afinidad × drop size), priorizado por venta potencial.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="forecast">
+                        <span class="analysis-icon">📈</span>
+                        <span class="analysis-title">Pronóstico de Demanda</span>
+                        <span class="analysis-desc">Proyección de ventas de los próximos meses,
+                            total o por categoría, con distintos métodos.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="segmentation">
+                        <span class="analysis-icon">👥</span>
+                        <span class="analysis-title">Segmentación de Clientes</span>
+                        <span class="analysis-desc">Clasifica a tus clientes por valor (alto,
+                            medio, bajo) para priorizar.</span>
+                    </button>
+                </div>
                 <p class="form-note" id="runNote" aria-live="polite"></p>
+            </div>
+        </section>
+
+        <!-- ===================== Resumen Comercial (dashboard) ===================== -->
+        <section id="stepDashboard" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Resumen Comercial</h2>
+                <span class="cache-stamp" id="stampSummary"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="summary">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle">
+                Panorama de ventas del periodo cargado. Pasa el cursor sobre los gráficos
+                para ver los valores exactos.
+            </p>
+            <div class="metric-grid" id="dashboardKpis"></div>
+
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3 class="chart-title">Venta por mes</h3>
+                    <canvas id="chartTrend"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Venta por categoría</h3>
+                    <canvas id="chartCategoria"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Top 10 productos más vendidos</h3>
+                    <canvas id="chartTopProductos"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Top 10 mejores clientes</h3>
+                    <canvas id="chartTopClientes"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Venta por vendedor</h3>
+                    <canvas id="chartVendedor"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Productos menos vendidos</h3>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="bottomProductosTable">
+                            <thead><tr><th>Producto</th><th class="numeric">Venta (Bs)</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== Pronóstico de Demanda ===================== -->
+        <section id="stepForecast" class="step-section" hidden>
+            <h2 class="section-title">Pronóstico de Demanda</h2>
+            <div class="insight-panel">
+                <p class="insight-objective">
+                    <strong>¿Cómo leer el gráfico?</strong> La línea <strong>sólida azul</strong> es
+                    la venta real de cada mes (historial); la línea <strong>punteada</strong> es la
+                    proyección hacia adelante. <br>
+                    <strong>Tendencia lineal:</strong> continúa la dirección del historial (si venía
+                    subiendo, sigue subiendo). <strong>Media móvil:</strong> proyecta el promedio de
+                    los últimos meses (más estable, sin tendencia). Prueba ambos para comparar un
+                    escenario optimista/pesimista con uno conservador.
+                </p>
+            </div>
+            <p class="page-subtitle">
+                Cambia el método, el horizonte y el detalle para comparar escenarios.
+            </p>
+            <div class="forecast-controls">
+                <label class="filter-label">
+                    <span>Método</span>
+                    <select id="forecastMethod">
+                        <option value="linear">Tendencia lineal</option>
+                        <option value="moving_average">Media móvil</option>
+                    </select>
+                </label>
+                <label class="filter-label">
+                    <span>Meses a proyectar</span>
+                    <select id="forecastMonths">
+                        <option value="3">3 meses</option>
+                        <option value="6">6 meses</option>
+                        <option value="12">12 meses</option>
+                    </select>
+                </label>
+                <label class="filter-label">
+                    <span>Detalle</span>
+                    <select id="forecastGroup">
+                        <option value="">Total</option>
+                        <option value="categoria">Por categoría</option>
+                    </select>
+                </label>
+                <button type="button" class="btn btn-primary btn-small" id="forecastRun">
+                    Actualizar
+                </button>
+            </div>
+            <p class="forecast-note" id="forecastNote"></p>
+            <div class="chart-grid" id="forecastCharts"></div>
+        </section>
+
+        <!-- ===================== Segmentación de Clientes ===================== -->
+        <section id="stepSegmentation" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Segmentación de Clientes</h2>
+                <span class="cache-stamp" id="stampSegmentation"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="segmentation">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle">
+                Clientes clasificados por su valor de compra. Los clientes "Alto" son pocos
+                pero concentran la mayor parte de la venta: priorízalos.
+            </p>
+            <div class="metric-grid" id="segmentKpis"></div>
+            <!-- Narrow chart + wide table: the client list needs the full width,
+                 otherwise it reads as an endless thin list on a wide monitor. -->
+            <div class="segment-layout">
+                <div class="chart-card">
+                    <h3 class="chart-title">Participación de la venta por segmento</h3>
+                    <canvas id="chartSegmentos"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Clientes por segmento</h3>
+                    <div class="filters-row">
+                        <label class="filter-label filter-label-inline">
+                            <span>Filtrar segmento</span>
+                            <select id="segmentFilter">
+                                <option value="">Todos</option>
+                                <option value="Alto">Alto</option>
+                                <option value="Medio">Medio</option>
+                                <option value="Bajo">Bajo</option>
+                            </select>
+                        </label>
+                        <label class="filter-label filter-label-inline">
+                            <span>Buscar cliente</span>
+                            <input type="text" id="segmentSearch" placeholder="Nombre del cliente…">
+                        </label>
+                        <span class="filter-count" id="segmentCount"></span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table table-roomy" id="segmentTable">
+                            <thead><tr>
+                                <th>#</th>
+                                <th>Cliente</th><th>Segmento</th>
+                                <th class="numeric">Compras</th>
+                                <th class="numeric">Venta (Bs)</th>
+                                <th class="numeric">Ticket promedio</th>
+                                <th class="numeric">% de la venta</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="pager">
+                        <button type="button" class="btn btn-ghost btn-small" id="segmentPrev">‹ Anterior</button>
+                        <span class="filter-count" id="segmentPageInfo"></span>
+                        <button type="button" class="btn btn-ghost btn-small" id="segmentNext">Siguiente ›</button>
+                    </div>
+                </div>
             </div>
         </section>
 
         <!-- ===================== Step 4: Opportunities ===================== -->
         <section id="stepOpportunities" class="step-section" hidden>
-            <h2 class="section-title">Oportunidades comerciales</h2>
+            <div class="section-head">
+                <h2 class="section-title">Oportunidades comerciales</h2>
+                <span class="cache-stamp" id="stampOpportunities"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="opportunities">
+                    ↻ Recalcular
+                </button>
+            </div>
 
             <div class="insight-panel">
                 <p class="insight-objective">
-                    <strong>¿Qué es esto?</strong> Analizamos qué productos se compran juntos en
-                    todos tus puntos de venta y detectamos, para cada uno, <strong>qué categoría
-                    que todavía no compra deberías ofrecerle</strong> — priorizado por la venta
-                    potencial en bolivianos. Cada fila es una <strong>acción de venta concreta</strong>.
+                    <strong>¿Qué es esto?</strong> Analizamos qué productos se compran juntos y
+                    detectamos, para cada producto, <strong>a qué comercios conviene ofrecérselo</strong>
+                    (porque compran cosas afines) — priorizado por la venta potencial en bolivianos.
+                    La tabla muestra un <strong>resumen por producto</strong>; haz clic en
+                    <strong>▸</strong> para ver los comercios interesados.
                 </p>
                 <div id="opportunityHeadline" class="insight-headline"></div>
             </div>
@@ -129,32 +318,28 @@
 
             <div class="filters-row">
                 <label class="filter-label">
-                    <span>Filtrar por PdV</span>
-                    <input type="text" id="pdvFilter" placeholder="Ej: PDV-007 o Tienda Doña Rosa">
+                    <span>Filtrar por producto</span>
+                    <input type="text" id="pdvFilter" placeholder="Ej: Chocolates, Cafés…">
                 </label>
                 <span class="filter-count" id="filterCount"></span>
             </div>
 
             <div class="table-wrapper">
-                <table class="data-table sortable" id="opportunitiesTable">
+                <table class="data-table" id="opportunitiesTable">
                     <thead>
                         <tr>
-                            <th data-sort="pdv">Punto de venta</th>
-                            <th data-sort="product">Ofrecerle</th>
-                            <th data-sort="based_on">Porque ya compra</th>
-                            <th data-sort="amount" class="numeric">Venta potencial</th>
-                            <th data-sort="units" class="numeric">Unid. esperadas</th>
-                            <th data-sort="confidence" class="numeric" title="Probabilidad de que compre la recomendación">Probabilidad</th>
-                            <th data-sort="lift" class="numeric" title="Cuánto más probable es esta combinación vs. el azar">Afinidad</th>
-                            <th data-sort="score" class="numeric" title="Ranking de prioridad (afinidad × probabilidad × impacto)">Prioridad</th>
+                            <th>Producto a ofrecer</th>
+                            <th class="numeric">Comercios interesados</th>
+                            <th class="numeric">Venta potencial total</th>
+                            <th>Acción</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
             </div>
             <p class="page-subtitle" style="margin-top: 1rem;">
-                Tip: pasa el cursor sobre una fila para ver la explicación en español de
-                por qué se recomienda esa acción comercial.
+                Tip: expande un producto para ver los comercios a los que conviene ofrecérselo,
+                con la probabilidad de compra y la venta potencial de cada uno.
             </p>
         </section>
     </div>

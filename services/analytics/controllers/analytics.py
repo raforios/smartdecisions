@@ -12,15 +12,45 @@ from schemas.analytics import (
     AnalyticsResultsResponse,
     AnalyticsRunResponse,
     AnalyticsSummary,
-    Opportunity
+    CommercialSummaryResponse,
+    ForecastResponse,
+    Opportunity,
+    SegmentationResponse
 )
 from services.affinity_engine import compute_opportunities
 from services.analytics_runs import get_latest_run_for_dataset, persist_run
+from services.commercial_summary import build_commercial_summary
 from services.dataset_loader import get_dataset_metadata, load_dataframe_from_s3
+from services.forecast_engine import build_forecast
+from services.segmentation_engine import build_segmentation
 from services.utils import handle_service_errors
 
 
 _LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
+
+# Caps on opportunities kept in the run (DynamoDB item limit + usable table).
+_MAX_PER_PRODUCT = 60      # top stores kept per recommended product
+_MAX_OPPORTUNITIES = 800   # overall safety cap
+
+
+def _top_opportunities_per_product(opportunities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    '''
+        Keeps the top-scoring stores for each recommended product, so the
+        product summary lists every recommendation instead of only the single
+        highest-scoring product. Bounded by _MAX_PER_PRODUCT and _MAX_OPPORTUNITIES.
+    '''
+    from collections import defaultdict # pylint: disable=import-outside-toplevel
+    ranked = sorted(opportunities, key = lambda opp: opp.get('opportunity_score', 0), reverse = True)
+    per_product: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
+    kept: List[Dict[str, Any]] = []
+    for opp in ranked:
+        product = opp.get('recommended_product_id') or opp.get('recommended_product_name')
+        if len(per_product[product]) < _MAX_PER_PRODUCT:
+            per_product[product].append(opp)
+            kept.append(opp)
+        if len(kept) >= _MAX_OPPORTUNITIES:
+            break
+    return kept
 
 
 def _read_int_setting(name: str, default: int) -> int:
@@ -76,6 +106,74 @@ def _summary_to_schema(summary: Dict[str, Any]) -> AnalyticsSummary:
 
 
 @handle_service_errors('ANALYTICS')
+async def commercial_summary_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> CommercialSummaryResponse:
+    '''
+        Loads the normalized dataset and builds the general commercial summary
+        (KPIs, best/worst client, top/bottom products, distributions and the
+        monthly trend). Read-only: it derives everything from the dataset on the
+        fly, so it is not persisted as a run.
+    '''
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    summary = build_commercial_summary(dataframe)
+    return CommercialSummaryResponse(dataset_id = dataset_id, **summary)
+
+
+@handle_service_errors('ANALYTICS')
+async def forecast_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: Dict[str, Any],
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> ForecastResponse:
+    '''
+        Loads the normalized dataset and builds the demand forecast with the
+        requested method / horizon / grouping. Read-only.
+    '''
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    result = build_forecast(
+        dataframe = dataframe,
+        months_ahead = params.get('months_ahead', 3),
+        method = params.get('method', 'linear'),
+        group_by = params.get('group_by')
+    )
+    return ForecastResponse(dataset_id = dataset_id, **result)
+
+
+@handle_service_errors('ANALYTICS')
+async def segmentation_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> SegmentationResponse:
+    '''
+        Loads the normalized dataset and builds the customer value segmentation
+        (Alto/Medio/Bajo). Read-only.
+    '''
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    result = build_segmentation(dataframe)
+    return SegmentationResponse(dataset_id = dataset_id, **result)
+
+
+@handle_service_errors('ANALYTICS')
 async def run_analytics_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -105,6 +203,12 @@ async def run_analytics_controller(
         item_level = parameters['item_level']
     )
 
+    # A large dataset yields tens of thousands of opportunities — too big for one
+    # DynamoDB item (400 KB). Keep the top stores PER recommended product (not the
+    # global top, which would all be the single dominant product), so the
+    # product-level summary shows every recommendation. `summary` keeps the total.
+    top_opportunities = _top_opportunities_per_product(opportunities)
+
     persisted = persist_run(
         dynamodb_resource = dynamodb_resource,
         payload = {
@@ -112,7 +216,7 @@ async def run_analytics_controller(
             'status': 'completed',
             'owner_email': current_user,
             'summary': summary,
-            'opportunities': opportunities,
+            'opportunities': top_opportunities,
             'parameters': parameters
         }
     )

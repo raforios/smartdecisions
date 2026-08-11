@@ -18,7 +18,6 @@ from controllers.ingest import (
     ingest_excel_from_s3_controller
 )
 from schemas.ingest import (
-    IngestAcceptedResponse,
     IngestFromS3Request,
     IngestResponse,
     IngestStatusResponse,
@@ -146,15 +145,15 @@ async def ingest_excel_endpoint(
 
 @router.post(
     '/excel-from-s3',
-    response_model = IngestAcceptedResponse,
-    status_code = status.HTTP_202_ACCEPTED,
-    summary = 'Ingest a large sales file already uploaded to S3 (async)',
+    response_model = IngestResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Ingest a large sales file already uploaded to S3',
     description = (
-        'Accepts a file previously uploaded to S3 via a pre-signed URL and '
-        'processes it in the background (validate + normalize). Returns a '
-        'dataset_id immediately; poll GET /v1/ingest/{dataset_id} for the '
-        'outcome. Used for files that exceed the API Gateway payload (~10 MB) '
-        'and/or the 29 s synchronous timeout.'
+        'Validates and normalizes a file previously uploaded to S3 via a '
+        'pre-signed URL, addressed by its object key, and returns the outcome '
+        'synchronously. Used for files that exceed the API Gateway payload '
+        '(~10 MB), so the binary never transits API Gateway. Invalid rows are '
+        'accepted partially and offered via GET /v1/ingest/{dataset_id}/rejected.'
     )
 )
 async def ingest_excel_from_s3_endpoint(

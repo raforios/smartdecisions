@@ -68,50 +68,6 @@ def persist_dataset(
     return persisted
 
 
-def update_dataset_result(
-    dynamodb_resource: ServiceResource,
-    dataset_id: str,
-    payload: Dict[str, Any]
-) -> None:
-    '''
-        Updates a dataset record with the outcome of async processing: final
-        status, normalized file key, summary metrics and per-row errors. The
-        immutable fields (id, owner, created_at) are left untouched.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset_id (str): Primary key of the record to update.
-            payload (Dict[str, Any]): status, file_s3_key, the summary metrics
-                and errors to store.
-    '''
-    table = dynamodb_resource.Table(DATASETS_TABLE)
-    table.update_item(
-        Key = {'id': dataset_id},
-        UpdateExpression = (
-            'SET #st = :st, file_s3_key = :fk, rejected_s3_key = :rk, '
-            'total_rows = :tr, valid_rows = :vr, '
-            'error_rows = :er, unique_points_of_sale = :pv, unique_products = :up, '
-            'date_range_start = :ds, date_range_end = :de, errors = :errs'
-        ),
-        ExpressionAttributeNames = {'#st': 'status'},
-        ExpressionAttributeValues = {
-            ':st': payload['status'],
-            ':fk': payload.get('file_s3_key'),
-            ':rk': payload.get('rejected_s3_key'),
-            ':tr': int(payload.get('total_rows', 0)),
-            ':vr': int(payload.get('valid_rows', 0)),
-            ':er': int(payload.get('error_rows', 0)),
-            ':pv': int(payload.get('unique_points_of_sale', 0)),
-            ':up': int(payload.get('unique_products', 0)),
-            ':ds': payload.get('date_range_start'),
-            ':de': payload.get('date_range_end'),
-            ':errs': payload.get('errors', [])
-        }
-    )
-    message = f'Updated ingest dataset {dataset_id} (status={payload["status"]}).'
-    logger.info(message)
-
-
 def get_dataset_by_id(
     dynamodb_resource: ServiceResource,
     dataset_id: str

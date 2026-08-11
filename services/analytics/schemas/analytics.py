@@ -105,3 +105,114 @@ class AnalyticsPdvResponse(BaseModel):
     dataset_id: str
     pdv_id: str
     opportunities: list[Opportunity]
+
+
+# --- Commercial summary (general sales dashboard) ---
+
+class KpiCard(BaseModel):
+    '''
+        A single headline KPI. `format` tells the UI how to render `value`
+        ('money' -> Bs with 2 decimals, 'int' -> thousands-grouped integer).
+    '''
+    label: str
+    value: float
+    format: str
+    hint: Optional[str] = None
+
+
+class RankRow(BaseModel):
+    '''One row of a best/worst ranking: a readable label and its amount (Bs).'''
+    label: str
+    monto: float
+
+
+class DistRow(BaseModel):
+    '''
+        One slice of a categorical distribution: label, amount (Bs) and its
+        share of the total.
+    '''
+    label: str
+    monto: float
+    porcentaje: float
+
+
+class TrendPoint(BaseModel):
+    '''One point of the monthly sales trend.'''
+    mes: str
+    monto: float
+
+
+class CommercialSummaryResponse(BaseModel):
+    '''
+        Full commercial summary for GET /v1/analytics/summary/{dataset_id}.
+        Every section is pre-labeled and pre-aggregated for tables + charts.
+    '''
+    dataset_id: str
+    kpis: list[KpiCard]
+    mejor_cliente: list[RankRow]
+    peor_cliente: list[RankRow]
+    top_productos: list[RankRow]
+    bottom_productos: list[RankRow]
+    por_categoria: list[DistRow]
+    por_canal: list[DistRow]
+    por_region: list[DistRow]
+    por_vendedor: list[DistRow]
+    tendencia_mensual: list[TrendPoint]
+
+
+# --- Demand forecast ---
+
+class ForecastPoint(BaseModel):
+    '''One month of a forecast series (historical or projected).'''
+    mes: str
+    monto: float
+
+
+class ForecastSeries(BaseModel):
+    '''
+        A named forecast series: its historical months and the projected ones,
+        plus the projected total for the horizon.
+    '''
+    nombre: str
+    historico: list[ForecastPoint]
+    pronostico: list[ForecastPoint]
+    total_pronosticado: float
+
+
+class ForecastResponse(BaseModel):
+    '''
+        Demand forecast for GET /v1/analytics/forecast/{dataset_id}.
+    '''
+    dataset_id: str
+    method: str
+    method_label: str
+    months_ahead: int
+    series: list[ForecastSeries]
+
+
+# --- Customer segmentation ---
+
+class SegmentTier(BaseModel):
+    '''A value tier (Alto/Medio/Bajo) with its client count and sales share.'''
+    tier: str
+    clientes: int
+    monto: float
+    porcentaje: float
+
+
+class SegmentClient(BaseModel):
+    '''One client row: label, tier, total amount and number of purchases.'''
+    cliente: str
+    tier: str
+    monto: float
+    compras: int
+
+
+class SegmentationResponse(BaseModel):
+    '''
+        Customer value segmentation for GET /v1/analytics/segmentation/{dataset_id}.
+    '''
+    dataset_id: str
+    total_clientes: int
+    tiers: list[SegmentTier]
+    clientes: list[SegmentClient]

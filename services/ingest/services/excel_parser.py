@@ -7,6 +7,7 @@
     the rule documented in SMARTDECISIONS.md §5.
 '''
 import csv
+import re
 from io import BytesIO
 from typing import Final
 import pandas as pd
@@ -24,23 +25,37 @@ SUPPORTED_EXTENSIONS: Final[tuple[str, ...]] = ('.xlsx', '.csv')
 _CSV_DELIMITERS: Final[str] = ',;\t|'
 
 
+def _detect_decimal(sample: str, delimiter: str) -> str:
+    '''
+        Detects the decimal separator FROM THE DATA (not from the delimiter): a
+        ';'-delimited file may still use '.' decimals (e.g. an ERP export) or ','
+        decimals (Excel es-locale). When the delimiter is ',' the decimal must be
+        '.'; otherwise we compare how often digits are separated by ',' vs '.'.
+    '''
+    if delimiter == ',':
+        return '.'
+    comma_decimals = len(re.findall(r'\d,\d', sample))
+    dot_decimals = len(re.findall(r'\d\.\d', sample))
+    return ',' if comma_decimals > dot_decimals else '.'
+
+
 def _read_csv(file_bytes: bytes) -> pd.DataFrame:
     '''
-        Reads a CSV auto-detecting its delimiter (comma, semicolon, tab or pipe)
-        so es-locale exports work without the user picking one. When the
-        delimiter is ';' the decimal separator is assumed to be ',' (the typical
-        Excel-in-Spanish combination), so numbers like "10,89" parse correctly.
+        Reads a CSV robustly: strips the BOM, auto-detects the delimiter (comma,
+        semicolon, tab or pipe) and the decimal separator from the data, and
+        skips the odd malformed line instead of failing the whole file.
     '''
     sample = file_bytes[:65536].decode('utf-8-sig', errors = 'replace')
     try:
         delimiter = csv.Sniffer().sniff(sample, delimiters = _CSV_DELIMITERS).delimiter
     except csv.Error:
         delimiter = ','
-    decimal = ',' if delimiter == ';' else '.'
+    decimal = _detect_decimal(sample, delimiter)
     message = f'CSV delimiter detected: {delimiter!r} (decimal={decimal!r}).'
     logger.info(message)
     return pd.read_csv(
-        BytesIO(file_bytes), sep = delimiter, decimal = decimal, encoding = 'utf-8-sig'
+        BytesIO(file_bytes), sep = delimiter, decimal = decimal,
+        encoding = 'utf-8-sig', on_bad_lines = 'skip'
     )
 
 

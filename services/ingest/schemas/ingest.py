@@ -72,21 +72,10 @@ class IngestResponse(BaseModel):
     created_at: datetime
 
 
-class IngestAcceptedResponse(BaseModel):
-    '''
-        Response for an accepted async ingest: the file is being processed in
-        the background. The client polls `GET /ingest/{dataset_id}` for the
-        outcome. Used for large files whose processing exceeds the API Gateway
-        29 s synchronous timeout.
-    '''
-    dataset_id: str
-    status: str = Field('processing', description = "Always 'processing' on accept.")
-
-
 class IngestStatusResponse(BaseModel):
     '''
         Compact metadata for `GET /ingest/{dataset_id}`. `status` is
-        'processing' while the async job runs, then 'validated' or 'failed'.
+        'validated' or 'failed'.
     '''
     dataset_id: str
     status: str

@@ -1,5 +1,9 @@
 /* Module-specific styles for /demo/excel/. Continues the shared demo.css palette. */
 
+/* This module renders wide analytical tables and chart grids, so it uses more
+   of the screen than the marketing-oriented pages of the demo. */
+.container { max-width: 1400px; }
+
 .step-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -92,10 +96,13 @@
     margin: 0 0 0.4rem;
 }
 .metric-value {
-    font-size: 1.7rem;
+    font-size: clamp(1.05rem, 1.6vw, 1.35rem);
     font-weight: 700;
     margin: 0;
     letter-spacing: -0.02em;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .metric-value.accent { color: var(--accent); }
 .metric-value.success { color: var(--success); }
@@ -245,4 +252,173 @@
 @media (max-width: 720px) {
     .step-grid { grid-template-columns: 1fr; }
     .demo-nav-actions .user-chip { display: none; }
+}
+
+/* --- Analysis menu (choose which analysis to run) --- */
+.analysis-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+.analysis-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    text-align: left;
+    padding: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.analysis-card:hover:not([disabled]) {
+    border-color: var(--accent);
+    box-shadow: var(--shadow, 0 4px 14px rgba(13,30,76,0.1));
+    transform: translateY(-2px);
+}
+.analysis-card[disabled] { opacity: 0.55; cursor: not-allowed; }
+.analysis-icon { font-size: 1.6rem; }
+.analysis-title { font-weight: 700; color: var(--text-strong); }
+.analysis-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.35; }
+.analysis-soon {
+    position: absolute; top: 0.6rem; right: 0.6rem;
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    color: var(--accent-2); background: var(--bg-alt);
+    padding: 0.15rem 0.45rem; border-radius: 999px;
+}
+
+/* --- Dashboard chart grid --- */
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+}
+.chart-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+}
+.chart-title {
+    margin: 0 0 0.75rem;
+    font-size: 0.98rem;
+    color: var(--text-strong);
+}
+.chart-card canvas { max-height: 300px; }
+
+/* --- Forecast controls --- */
+.forecast-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+.forecast-controls .filter-label { min-width: 160px; }
+.forecast-controls select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+.forecast-note { color: var(--muted); font-size: 0.9rem; margin: 0.3rem 0 0.5rem; }
+.forecast-note.error { color: var(--danger); }
+.chart-sub { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+
+/* --- Segmentation tier badges --- */
+.tier-badge {
+    display: inline-block;
+    padding: 0.12rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #fff;
+}
+.tier-badge.tier-Alto { background: #2d7d46; }
+.tier-badge.tier-Medio { background: #b8860b; }
+.tier-badge.tier-Bajo { background: #c0392b; }
+
+/* --- Opportunity product drill-down --- */
+.expand-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--accent); font-size: 0.9rem; font-weight: 700;
+    margin-right: 0.4rem; padding: 0;
+}
+.product-row td { vertical-align: middle; }
+.detail-row .detail-cell { background: var(--bg-alt); padding: 0.6rem 1rem; }
+.detail-table { font-size: 0.86rem; background: var(--panel); }
+.detail-table thead th { background: transparent; }
+
+/* --- Pager (segmentation etc.) --- */
+.pager {
+    display: flex; align-items: center; justify-content: center;
+    gap: 1rem; margin-top: 0.8rem;
+}
+
+/* --- Section header: title + "recalculate" action on the same line --- */
+.section-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.4rem;
+}
+.section-head .section-title { margin: 0; flex: 0 0 auto; }
+.section-head .cache-stamp {
+    color: var(--muted);
+    font-size: 0.82rem;
+    flex: 1 1 auto;
+}
+.section-head .btn { flex: 0 0 auto; }
+
+/* --- Segmentation: narrow doughnut + wide client table --- */
+.segment-layout {
+    display: grid;
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+    align-items: start;
+}
+@media (max-width: 900px) {
+    .segment-layout { grid-template-columns: 1fr; }
+}
+.filter-label-inline { min-width: 200px; }
+.filter-label-inline select,
+.filter-label-inline input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+/* Roomier rows for the long client list — it fills the width now, so the
+   vertical rhythm is what keeps it readable. */
+.table-roomy tbody td { padding: 0.75rem 1rem; vertical-align: middle; }
+.table-roomy .rank-cell { color: var(--muted); font-variant-numeric: tabular-nums; width: 3rem; }
+
+/* --- Session countdown chip in the top nav --- */
+.session-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+.session-chip.warning { color: var(--warning, #b8860b); border-color: var(--accent-3, #b8860b); }
+@media (max-width: 900px) {
+    .session-chip { display: none; }
 }

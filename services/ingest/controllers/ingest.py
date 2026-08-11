@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from uuid import uuid4
+
 from schemas.ingest import (
     IngestColumnError,
     IngestResponse,
@@ -13,15 +15,19 @@ from schemas.ingest import (
     IngestSummary,
     TemplateInfo
 )
-from services.async_processor import dispatch_processing
 from services.datasets import get_dataset_by_id, persist_dataset
-from services.excel_parser import parse_and_validate, serialize_dataframe
+from services.excel_parser import parse_and_validate, parse_and_validate_partial, serialize_dataframe
 from services.excel_validator import OPTIONAL_COLUMNS, REQUIRED_COLUMNS, TEMPLATE_VERSION
 from services.exceptions import ResourceNotFoundError
 from services.file_storage import upload_excel
-from services.s3_storage import download_bytes
+from services.s3_storage import download_bytes, upload_bytes
 from services.template_builder import ensure_template
 from services.utils import handle_service_errors
+
+_CSV_CONTENT_TYPE = 'text/csv'
+# Only a slice of the rejected-row errors travels in the JSON response / DynamoDB
+# item (400 KB limit); the full set lives in the rejected CSV in S3.
+_MAX_ERRORS_ON_RESPONSE = 100
 
 
 def _to_response(item: Dict[str, Any]) -> IngestResponse:
@@ -107,17 +113,22 @@ async def ingest_excel_from_s3_controller(
     file_name: str,
     current_user: str,
     request: Request # pylint: disable=unused-argument
-) -> Dict[str, str]:
+) -> IngestResponse:
     '''
-        Accepts a large file already uploaded to S3 for ASYNC processing:
-            1. Record a 'processing' dataset immediately.
-            2. Dispatch the heavy download/validate/normalize work in the
-               background (self-invoked Lambda in AWS, inline in local dev).
-            3. Return the dataset id so the client can poll
-               `GET /v1/ingest/{dataset_id}` until it is validated/failed.
+        Synchronously processes a file already uploaded to S3 (via a pre-signed
+        URL) and returns the outcome in the same response — mirroring the TRADE
+        bulk pattern (upload to S3, read from S3, process, return). No async job
+        and no polling: if it fails, it fails visibly.
 
-        This keeps the HTTP request well under the API Gateway 29 s timeout for
-        files that take minutes to process.
+            1. Download the raw file from S3 with boto3 (no API Gateway limit).
+            2. Validate + normalize with partial acceptance: valid rows are kept,
+               invalid rows go to a separate 'rejected' CSV with a reason.
+            3. Store the normalized rows (CSV) and the rejected rows in S3.
+            4. Persist the dataset metadata and return the public response.
+
+        Processing a CSV of ~120k rows takes ~2 s, well under the API Gateway
+        29 s timeout; the multi-minute part is the S3 upload, which already
+        happened before this call.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
@@ -126,24 +137,43 @@ async def ingest_excel_from_s3_controller(
             current_user (str): Authenticated user email (dataset owner).
 
         Returns:
-            Dict[str, str]: The new dataset_id and its 'processing' status.
+            IngestResponse: Public payload with summary + per-row errors.
     '''
+    file_bytes = download_bytes(file_key)
+
+    valid_df, rejected_df, errors, summary = parse_and_validate_partial(file_bytes, file_name)
+    has_valid_rows = len(valid_df) > 0
+
+    # Accepted rows -> normalized CSV (feeds analytics/forecast/routes).
+    normalized_key: Optional[str] = None
+    if has_valid_rows:
+        normalized_key = upload_bytes(
+            file_key = f'ingest/normalized/{uuid4().hex}.csv',
+            data = serialize_dataframe(valid_df, 'normalized.csv'),
+            content_type = _CSV_CONTENT_TYPE
+        )
+    # Rejected rows -> separate CSV the client can fix and re-upload.
+    rejected_key: Optional[str] = None
+    if len(rejected_df) > 0:
+        rejected_key = upload_bytes(
+            file_key = f'ingest/rejected/{uuid4().hex}.csv',
+            data = serialize_dataframe(rejected_df, 'rejected.csv'),
+            content_type = _CSV_CONTENT_TYPE
+        )
+
     persisted = persist_dataset(
         dynamodb_resource = dynamodb_resource,
         payload = {
             'owner_email': current_user,
-            'status': 'processing',
-            'file_s3_key': None,
-            'template_version': TEMPLATE_VERSION
+            'status': 'validated' if has_valid_rows else 'failed',
+            'file_s3_key': normalized_key,
+            'rejected_s3_key': rejected_key,
+            'template_version': TEMPLATE_VERSION,
+            **summary,
+            'errors': errors[:_MAX_ERRORS_ON_RESPONSE]
         }
     )
-    dispatch_processing({
-        'dataset_id': persisted['dataset_id'],
-        'file_key': file_key,
-        'file_name': file_name,
-        'owner_email': current_user
-    })
-    return {'dataset_id': persisted['dataset_id'], 'status': 'processing'}
+    return _to_response(persisted)
 
 
 @handle_service_errors('INGEST', with_log = False)

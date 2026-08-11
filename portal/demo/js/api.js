@@ -19,7 +19,10 @@
     async function _handleResponse(response) {
         if (response.status === 401) {
             window.SD_AUTH.clearSession();
-            window.location.href = window.SD_CONFIG.LOGIN_PATH;
+            // Keep the intended destination so re-login lands back on the module
+            // the user was working on instead of dropping them at the home page.
+            const next = encodeURIComponent(window.location.pathname);
+            window.location.href = `${window.SD_CONFIG.LOGIN_PATH}?next=${next}`;
             throw new Error('Sesión expirada. Vuelve a iniciar sesión.');
         }
 

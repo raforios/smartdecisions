@@ -174,19 +174,4 @@ if __name__ == '__main__':
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 
-_asgi_handler = Mangum(app)
-
-
-def handler(event, context):
-    '''
-        Lambda entry point. Async self-invocations (background ingest jobs)
-        carry an 'ingest_async' key and run the heavy validate/normalize work
-        directly; every other event is a normal API Gateway request handled by
-        Mangum.
-    '''
-    if isinstance(event, dict) and 'ingest_async' in event:
-        # Imported here so the ASGI cold-start path stays lean.
-        from services.async_processor import process_dataset # pylint: disable=import-outside-toplevel
-        process_dataset(event['ingest_async'])
-        return {'ok': True}
-    return _asgi_handler(event, context)
+handler = Mangum(app)

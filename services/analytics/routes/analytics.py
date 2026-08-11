@@ -1,24 +1,123 @@
 '''
     Analytics: routes handler.
 '''
-from fastapi import APIRouter, Depends, Path, Request, status
+from fastapi import APIRouter, Depends, Path, Query, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.analytics import (
+    commercial_summary_controller,
+    forecast_controller,
     get_pdv_opportunities_controller,
     get_results_controller,
-    run_analytics_controller
+    run_analytics_controller,
+    segmentation_controller
 )
 from schemas.analytics import (
     AnalyticsPdvResponse,
     AnalyticsResultsResponse,
-    AnalyticsRunResponse
+    AnalyticsRunResponse,
+    CommercialSummaryResponse,
+    ForecastResponse,
+    SegmentationResponse
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
 
 router = APIRouter(prefix = '/v1/analytics', tags = ['Analytics'])
+
+
+@router.get(
+    '/summary/{dataset_id}',
+    response_model = CommercialSummaryResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Commercial summary (KPIs, rankings, distributions, trend)',
+    description = (
+        'Reads the normalized dataset and returns the general sales dashboard: '
+        'headline KPIs, best/worst client, top/bottom products, breakdowns by '
+        'category/channel/region/seller and the monthly trend. Read-only.'
+    )
+)
+async def commercial_summary_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint returning the commercial summary for a dataset_id.
+    '''
+    message = f'Commercial summary for dataset {dataset_id} requested by {current_user}.'
+    logger.info(message)
+    return await commercial_summary_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/forecast/{dataset_id}',
+    response_model = ForecastResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Demand forecast (linear trend / moving average, total or by category)',
+    description = (
+        'Projects future monthly sales from the normalized dataset. Choose the '
+        'method (linear / moving_average), the horizon in months and whether to '
+        'split by category. Read-only.'
+    )
+)
+async def forecast_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    method: str = Query('linear', pattern = '^(linear|moving_average)$'),
+    months_ahead: int = Query(3, ge = 1, le = 12),
+    group_by: str = Query(None, pattern = '^(categoria)$'),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint returning the demand forecast for a dataset_id.
+    '''
+    message = f'Forecast for dataset {dataset_id} ({method}, {months_ahead}m) by {current_user}.'
+    logger.info(message)
+    return await forecast_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        params = {'method': method, 'months_ahead': months_ahead, 'group_by': group_by},
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/segmentation/{dataset_id}',
+    response_model = SegmentationResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Customer value segmentation (Alto / Medio / Bajo)',
+    description = (
+        'Reads the normalized dataset and classifies clients into value tiers '
+        'by their total purchases, so the team can prioritize. Read-only.'
+    )
+)
+async def segmentation_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint returning the customer segmentation for a dataset_id.
+    '''
+    message = f'Segmentation for dataset {dataset_id} requested by {current_user}.'
+    logger.info(message)
+    return await segmentation_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        current_user = current_user,
+        request = request
+    )
 
 
 @router.post(
