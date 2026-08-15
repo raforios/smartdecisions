@@ -1,5 +1,5 @@
 '''
-    Controllers for the catalog (categories, units, items, system parameters).
+    Controllers for the catalog (categories, units, items).
 
     Routes delegate to these functions; business validation lives here and in
     services.supplies_logic when shared across modules.
@@ -9,17 +9,16 @@ from typing import List
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from models.supplies import Category, Item, SystemParameter, Unit
+from models.supplies import Category, Item, Unit
 from schemas.catalog import (
     CategoryCreateSchema,
     CategoryResponseSchema,
     CategoryUpdateSchema,
     ItemCreateSchema,
+    ItemFilterSchema,
     ItemParametersUpdateSchema,
     ItemResponseSchema,
     ItemUpdateSchema,
-    SystemParameterResponseSchema,
-    SystemParameterUpsertSchema,
     UnitCreateSchema,
     UnitResponseSchema,
     UnitUpdateSchema,
@@ -31,9 +30,7 @@ from services.crud import (
     get_record,
     update_record,
 )
-from services.exceptions import RegisterAlreadyExistsError, RegisterNotFoundError
-from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
+from services.exceptions import RegisterAlreadyExistsError
 
 
 # --------------------------------------------------------------------------- #
@@ -164,27 +161,35 @@ async def create_item_controller(
 
 
 async def list_items_controller(
-    db: Session,
-    skip: int = 0,
-    limit: int = 100,
-    search: str | None = None,
-    only_available: bool = False,
+    db: Session, filters: ItemFilterSchema
 ) -> List[ItemResponseSchema]:
     '''
-        Lists items, optionally filtered by free-text search on code/name
-        and a flag to exclude items that are at or below the minimum stock.
+        Lists items for the catalog screen, applying the free-text search on
+        code/name, the accounting-group filter and the availability flag.
+
+        Args:
+            db (Session): Active database session.
+            filters (ItemFilterSchema): Search, group, availability and paging.
+
+        Returns:
+            List[ItemResponseSchema]: Matching items ordered by code, which is
+                how the warehouse staff reads the catalog.
     '''
     query = db.query(Item)
-    if search:
-        like_pattern = f'%{search}%'
+    if filters.search:
+        like_pattern = f'%{filters.search}%'
         query = query.filter(
             (Item.code.ilike(like_pattern)) | (Item.name.ilike(like_pattern))
         )
-    if only_available:
-        query = query.filter(Item.current_stock > Item.min_stock,
+    if filters.category_id:
+        query = query.filter(Item.category_id == filters.category_id)
+    if filters.only_available:
+        # Availability is what is left after other open requests reserved
+        # their share, otherwise the picker would offer units already promised.
+        query = query.filter(Item.current_stock - Item.reserved_stock > Item.min_stock,
                              Item.is_active.is_(True))
 
-    rows = query.offset(skip).limit(limit).all()
+    rows = query.order_by(Item.code.asc()).offset(filters.skip).limit(filters.limit).all()
     return [ItemResponseSchema.model_validate(row) for row in rows]
 
 
@@ -235,53 +240,3 @@ async def delete_item_controller(db: Session, item_id: int) -> int:
     db.add(record)
     db.commit()
     return item_id
-
-
-# --------------------------------------------------------------------------- #
-# System parameter                                                            #
-# --------------------------------------------------------------------------- #
-async def upsert_parameter_controller(
-    db: Session, payload: SystemParameterUpsertSchema, updated_by: str
-) -> SystemParameterResponseSchema:
-    '''
-        Creates or updates a system parameter keyed by `key`.
-    '''
-    existing = db.query(SystemParameter).filter(SystemParameter.key == payload.key).first()
-    if existing:
-        existing.value = payload.value
-        existing.description = payload.description
-        existing.updated_by = updated_by
-        existing.updated_at = get_current_time_gmt()
-        db.add(existing)
-        db.commit()
-        return SystemParameterResponseSchema.model_validate(existing)
-
-    record = SystemParameter(
-        key = payload.key,
-        value = payload.value,
-        description = payload.description,
-        updated_by = updated_by,
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
-    return SystemParameterResponseSchema.model_validate(record)
-
-
-async def list_parameters_controller(db: Session) -> List[SystemParameterResponseSchema]:
-    '''
-        Returns all system parameters.
-    '''
-    rows = db.query(SystemParameter).order_by(SystemParameter.key.asc()).all()
-    return [SystemParameterResponseSchema.model_validate(row) for row in rows]
-
-
-async def get_parameter_controller(db: Session, key: str) -> SystemParameterResponseSchema:
-    '''
-        Returns a single parameter by key.
-    '''
-    record = db.query(SystemParameter).filter(SystemParameter.key == key).first()
-    if not record:
-        raise RegisterNotFoundError(detail = f'System parameter "{key}" not found.')
-    logger.debug(f'Parameter {key} = {record.value}')
-    return SystemParameterResponseSchema.model_validate(record)

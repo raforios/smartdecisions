@@ -63,6 +63,7 @@ class UnauthorizedError(HTTPException):
         Exception thrown when a user attempts to access a protected resource without
         valid or required authentication credentials.
         Returns HTTP 401 Unauthorized.
+        This means that authentication is required and has failed or has not been provided.
     '''
     def __init__(self, detail: str = 'Unauthorized',
                 headers: Optional[Dict[str, Any]] = None):
@@ -77,6 +78,7 @@ class ForbiddenError(HTTPException):
         Exception thrown when a user is authenticated but does not have
         permission to access a specific resource or perform an action.
         Returns HTTP 403 Forbidden.
+        This means the server refuses to authorize the request.
     '''
     def __init__(self, detail: str = 'Access Forbidden',
                 headers: Optional[Dict[str, Any]] = None):
@@ -88,7 +90,7 @@ class ForbiddenError(HTTPException):
 
 class ServiceUnavailableError(HTTPException):
     '''
-        Exception raised when an external service required for an operation is unavailable.
+        Exception raised when an external service required for an operation is unavailable or fails.
         Returns HTTP 503 Service Unavailable.
     '''
     def __init__(self, detail: str = 'Service is currently unavailable. Please try again later.',

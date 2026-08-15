@@ -86,6 +86,7 @@ def setup_exception_handlers(app):
         '''
         message = f'Unauthorized access: {exc.detail} for path: {request.url.path}'
         logger.warning(message)
+
         return JSONResponse(
             status_code = exc.status_code,
             content = {'detail': exc.detail}
@@ -100,6 +101,7 @@ def setup_exception_handlers(app):
         '''
         message = f'Forbidden access: {exc.detail} for path: {request.url.path}'
         logger.warning(message)
+
         return JSONResponse(
             status_code = exc.status_code,
             content = {'detail': exc.detail}
@@ -114,6 +116,7 @@ def setup_exception_handlers(app):
         '''
         error_msg = f'Service unavailable: {exc.detail} for path: {request.url.path}'
         logger.error(error_msg, exc_info = True)
+
         return JSONResponse(
             status_code = exc.status_code,
             content = {'detail': exc.detail}
@@ -128,6 +131,7 @@ def setup_exception_handlers(app):
         '''
         error_msg = f'Unhandled exception: {exc} for path: {request.url.path}'
         logger.critical(error_msg)
+
         return JSONResponse(
             status_code = 500,
             content = {'detail': 'An unexpected internal server error occurred.'}

@@ -32,8 +32,11 @@
             <button class="sup-nav-item" data-route="requests">
                 <i class="fa-solid fa-clipboard-list"></i><span>Solicitudes</span>
             </button>
-            <button class="sup-nav-item" data-route="replenishments" data-roles="ADMIN,WAREHOUSE_MANAGER">
-                <i class="fa-solid fa-truck-ramp-box"></i><span>Reposiciones</span>
+            <button class="sup-nav-item" data-route="entries" data-roles="ADMIN,WAREHOUSE_MANAGER">
+                <i class="fa-solid fa-truck-ramp-box"></i><span>Notas de Ingreso</span>
+            </button>
+            <button class="sup-nav-item" data-route="suppliers" data-roles="ADMIN,WAREHOUSE_MANAGER">
+                <i class="fa-solid fa-building"></i><span>Proveedores</span>
             </button>
             <button class="sup-nav-item" data-route="kardex" data-roles="ADMIN,WAREHOUSE_MANAGER">
                 <i class="fa-solid fa-book-open"></i><span>Kárdex</span>
@@ -60,6 +63,10 @@
 
     <main class="sup-main">
         <header class="sup-topbar">
+            <button id="sidebar-collapse" class="sup-icon-btn sup-collapse-btn"
+                    data-tip="Ocultar/mostrar el menú" aria-label="Ocultar o mostrar el menú">
+                <i class="fa-solid fa-bars"></i>
+            </button>
             <h2 id="page-title">—</h2>
             <div class="sup-topbar-actions" id="page-actions"></div>
         </header>
@@ -84,6 +91,7 @@
 
     <div class="sup-toast-host" id="toast-host" aria-live="polite"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script type="module" src="js/app.js"></script>
 </body>
 </html>

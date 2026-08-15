@@ -17,7 +17,8 @@ import { initModalBindings, showSessionExpiredModal } from './ui.js';
 import { mountDashboard } from './pages/DashboardPage.js';
 import { mountCatalog } from './pages/CatalogPage.js';
 import { mountRequests } from './pages/RequestsPage.js';
-import { mountReplenishments } from './pages/ReplenishmentsPage.js';
+import { mountEntries } from './pages/EntriesPage.js';
+import { mountSuppliers } from './pages/SuppliersPage.js';
 import { mountKardex } from './pages/KardexPage.js';
 import { mountReports } from './pages/ReportsPage.js';
 
@@ -81,9 +82,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         mount: mountRequests,
         requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER, ROLES.REQUESTER],
     });
-    router.register('replenishments', {
-        title: 'Reposiciones',
-        mount: mountReplenishments,
+    router.register('entries', {
+        title: 'Notas de Ingreso',
+        mount: mountEntries,
+        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER],
+    });
+    router.register('suppliers', {
+        title: 'Proveedores',
+        mount: mountSuppliers,
         requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER],
     });
     router.register('kardex', {
@@ -129,12 +135,26 @@ function _wireLogout(auth) {
     });
 }
 
+const COLLAPSE_KEY = 'supplies_sidebar_collapsed';
+
 function _wireSidebarToggle() {
     const shell = document.querySelector('.sup-shell');
     const toggle = document.getElementById('sidebar-toggle');
     const backdrop = document.getElementById('sup-sidebar-backdrop');
     toggle.addEventListener('click', () => shell.classList.toggle('sidebar-open'));
     backdrop.addEventListener('click', () => shell.classList.remove('sidebar-open'));
+
+    // Desktop: fold the menu away for more table width, and remember the
+    // choice — someone who works on reports all day should not re-hide it
+    // on every page load.
+    const collapse = document.getElementById('sidebar-collapse');
+    if (localStorage.getItem(COLLAPSE_KEY) === '1') {
+        shell.classList.add('sidebar-collapsed');
+    }
+    collapse.addEventListener('click', () => {
+        const collapsed = shell.classList.toggle('sidebar-collapsed');
+        localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+    });
 }
 
 function _closeSidebarOnMobile() {

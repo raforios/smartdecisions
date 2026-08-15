@@ -52,7 +52,10 @@
 html, body {
     margin: 0;
     padding: 0;
-    height: 100%;
+    /* min-height, not height: the shell is the body, and a fixed 100% height
+     * capped the grid row at one viewport. The sidebar then had no room to
+     * scroll within its own area and sticky positioning did nothing. */
+    min-height: 100%;
     background: var(--sup-bg);
     color: var(--sup-text);
     font-family: var(--sup-font);
@@ -114,6 +117,24 @@ html, body {
     min-height: 100vh;
     display: grid;
     grid-template-columns: var(--sup-sidebar-width) 1fr;
+    /* Faux column: the sidebar is sticky and only 100vh tall, so on a long
+     * page its dark background would stop mid-screen and leave a white strip
+     * underneath. Painting the stripe on the shell keeps the column solid all
+     * the way down whatever the content height. */
+    background:
+        linear-gradient(to right,
+            var(--sup-text) 0 var(--sup-sidebar-width),
+            var(--sup-bg) var(--sup-sidebar-width));
+}
+/* Desktop: the menu folds away to give the tables the full width. */
+.sup-shell.sidebar-collapsed {
+    grid-template-columns: 0 1fr;
+    background: var(--sup-bg);
+}
+.sup-shell.sidebar-collapsed .sup-sidebar {
+    width: 0;
+    overflow: hidden;
+    border: 0;
 }
 
 .sup-sidebar {
@@ -124,6 +145,10 @@ html, body {
     position: sticky;
     top: 0;
     height: 100vh;
+    /* Grid items stretch by default, which makes the box as tall as its own
+     * containing block and leaves sticky nothing to move within — the menu
+     * scrolled off the top on every long page. */
+    align-self: start;
 }
 
 .sup-sidebar-brand {
@@ -258,6 +283,13 @@ html, body {
     z-index: 50;
 }
 
+/* Collapse control: lives in the topbar on desktop, where the floating
+ * hamburger would sit on top of the sidebar brand. */
+.sup-collapse-btn {
+    flex: 0 0 auto;
+    margin-right: 4px;
+}
+
 /* --------------------------------------------------------------------- */
 /* Main / topbar / page host                                              */
 /* --------------------------------------------------------------------- */
@@ -282,6 +314,9 @@ html, body {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+    /* Takes the slack so the actions stay pinned right once the collapse
+     * button joined the row and space-between has three children. */
+    flex: 1;
 }
 .sup-topbar-actions {
     display: flex;
@@ -384,6 +419,26 @@ html, body {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 12px;
 }
+/* Checkbox filters sit inline with their label instead of stacking, and align
+   with the bottom of the adjacent date/select fields. */
+.sup-field-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: end;
+    padding-bottom: 9px;
+}
+.sup-field-check input {
+    width: auto;
+    margin: 0;
+    accent-color: var(--sup-primary);
+}
+.sup-field-check > span { font-weight: 500; color: var(--sup-text-muted); }
+
+/* Item identity card above its ledger in the kardex screen. */
+.sup-kardex-head { margin-bottom: 14px; }
+.sup-kardex-head h3 { margin: 0 0 4px; }
+.sup-kardex-head p { margin: 0; }
 
 .sup-form-error {
     color: var(--sup-danger);
@@ -417,9 +472,21 @@ html, body {
 
 .sup-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(12, 1fr);
     gap: 14px;
     margin-bottom: 22px;
+}
+/* Four cards on top, three centred below — the "triangle" reads faster than a
+   single uneven row. Each top card spans 3 of 12 columns, each bottom one 4. */
+.sup-kpi-grid > .sup-kpi { grid-column: span 3; }
+.sup-kpi-grid > .sup-kpi:nth-child(n + 5) { grid-column: span 4; }
+@media (max-width: 1100px) {
+    .sup-kpi-grid > .sup-kpi,
+    .sup-kpi-grid > .sup-kpi:nth-child(n + 5) { grid-column: span 6; }
+}
+@media (max-width: 620px) {
+    .sup-kpi-grid > .sup-kpi,
+    .sup-kpi-grid > .sup-kpi:nth-child(n + 5) { grid-column: span 12; }
 }
 .sup-kpi {
     background: var(--sup-surface);
@@ -483,6 +550,7 @@ table.sup-table {
     width: 100%;
     border-collapse: collapse;
     min-width: 640px;
+    font-size: 12.5px;
 }
 .sup-table thead th {
     text-align: left;
@@ -492,13 +560,13 @@ table.sup-table {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.4px;
-    padding: 10px 14px;
+    padding: 7px 10px;
     border-bottom: 1px solid var(--sup-border);
     position: sticky;
     top: 0;
 }
 .sup-table tbody td {
-    padding: 10px 14px;
+    padding: 7px 10px;
     border-bottom: 1px solid var(--sup-border);
     vertical-align: middle;
 }
@@ -671,7 +739,15 @@ table.sup-table {
 /* Responsive                                                             */
 /* --------------------------------------------------------------------- */
 @media (max-width: 900px) {
-    .sup-shell { grid-template-columns: 1fr; }
+    .sup-shell {
+        grid-template-columns: 1fr;
+        /* The drawer floats over the content here, so the faux column would
+         * paint a dark stripe across the page. */
+        background: var(--sup-bg);
+    }
+    /* The floating hamburger already covers this case. */
+    .sup-collapse-btn { display: none; }
+    .sup-topbar h2 { margin-left: 8px; }
     .sup-sidebar {
         position: fixed;
         top: 0;
@@ -694,4 +770,208 @@ table.sup-table {
     .sup-kpi-value { font-size: 24px; }
     .sup-modal-footer { flex-direction: column-reverse; }
     .sup-modal-footer .sup-btn { width: 100%; justify-content: center; }
+}
+
+/* Nota de Ingreso — totals block */
+.sup-totals {
+    align-items: flex-end;
+    gap: 24px;
+    margin-top: 12px;
+}
+.sup-totals-box {
+    min-width: 220px;
+    padding: 12px 16px;
+    border: 1px solid var(--sup-border, #e2e8f0);
+    border-radius: 8px;
+    background: var(--sup-surface-2, #f8fafc);
+}
+.sup-totals-box p { margin: 2px 0; text-align: right; }
+.sup-total-strong { font-weight: 700; font-size: 15px; }
+
+/* --------------------------------------------------------------------- */
+/* Collapsible table sections                                             */
+/* --------------------------------------------------------------------- */
+.sup-collapsible {
+    background: var(--sup-surface);
+    border: 1px solid var(--sup-border);
+    border-radius: var(--sup-radius-md);
+    box-shadow: var(--sup-shadow-sm);
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+.sup-collapsible-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--sup-surface-alt);
+}
+.sup-collapsible-head:hover { background: var(--sup-primary-soft); }
+.sup-collapsible-head:focus-visible {
+    outline: 2px solid var(--sup-primary);
+    outline-offset: -2px;
+}
+.sup-collapsible-chevron {
+    color: var(--sup-text-soft);
+    font-size: 12px;
+    transition: transform 0.18s ease;
+}
+/* Direct child only: a report nests one collapsible per accounting group
+ * inside the detail section, and a descendant selector would rotate every
+ * chevron below an open parent. */
+.sup-collapsible.is-open > .sup-collapsible-head > .sup-collapsible-chevron {
+    transform: rotate(90deg);
+}
+.sup-collapsible-title { font-weight: 600; font-size: 13.5px; }
+.sup-collapsible-sub {
+    color: var(--sup-text-soft);
+    font-size: 12px;
+}
+.sup-collapsible-actions { margin-left: auto; display: flex; gap: 8px; }
+/* Closed by default: the body only exists visually once expanded. */
+.sup-collapsible-body { display: none; padding: 0 14px 14px; }
+/* Direct child again: nested group sections manage their own visibility. */
+.sup-collapsible.is-open > .sup-collapsible-body { display: block; }
+.sup-collapsible-body > .sup-table-wrap { margin-top: 12px; }
+
+/* --------------------------------------------------------------------- */
+/* Item picker (type to filter)                                           */
+/* --------------------------------------------------------------------- */
+.sup-picker { position: relative; }
+.sup-picker input { width: 100%; }
+.sup-picker-list {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--sup-surface);
+    border: 1px solid var(--sup-border-strong);
+    border-radius: var(--sup-radius-sm);
+    box-shadow: var(--sup-shadow-md);
+}
+.sup-picker-option {
+    display: grid;
+    /* Code | description | availability: the third column tells the user how
+     * many units they may actually ask for. */
+    grid-template-columns: 90px 1fr auto;
+    gap: 8px;
+    align-items: baseline;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+    border-bottom: 1px solid var(--sup-border);
+}
+.sup-picker-option:last-child { border-bottom: 0; }
+.sup-picker-option:hover { background: var(--sup-primary-soft); }
+.sup-picker-option strong { color: var(--sup-primary); }
+.sup-picker-option span {
+    color: var(--sup-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sup-picker-stock {
+    font-style: normal;
+    font-size: 11.5px;
+    white-space: nowrap;
+    color: var(--sup-success);
+    font-weight: 600;
+}
+.sup-picker-stock.is-empty { color: var(--sup-danger); }
+.sup-picker-empty {
+    margin: 0;
+    padding: 10px 12px;
+    color: var(--sup-text-soft);
+    font-size: 12.5px;
+}
+
+/* --------------------------------------------------------------------- */
+/* Pager                                                                  */
+/* --------------------------------------------------------------------- */
+.sup-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px 0 2px;
+}
+.sup-pager-info { color: var(--sup-text-muted); font-size: 12px; }
+.sup-btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* --------------------------------------------------------------------- */
+/* Tooltips on icon-only actions                                          */
+/* --------------------------------------------------------------------- */
+.sup-icon-btn[data-tip] { position: relative; }
+.sup-icon-btn[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: var(--sup-text);
+    color: #fff;
+    font-size: 11px;
+    white-space: nowrap;
+    border-radius: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 40;
+}
+.sup-icon-btn[data-tip]:hover::after,
+.sup-icon-btn[data-tip]:focus-visible::after { opacity: 1; }
+
+/* --------------------------------------------------------------------- */
+/* Back link (kardex opened from the catalog)                             */
+/* --------------------------------------------------------------------- */
+.sup-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 6px 12px;
+    border: 1px solid var(--sup-border-strong);
+    border-radius: var(--sup-radius-sm);
+    background: var(--sup-surface);
+    color: var(--sup-text-muted);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+.sup-back-link:hover { background: var(--sup-primary-soft); color: var(--sup-primary); }
+
+/* --------------------------------------------------------------------- */
+/* Report charts                                                          */
+/* --------------------------------------------------------------------- */
+.sup-chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+.sup-chart-card { min-width: 0; }
+.sup-chart-title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sup-text);
+}
+/* Chart.js sizes to its container; without a cap a single canvas can take
+   over the whole viewport on wide screens. */
+.sup-chart-card canvas { max-height: 280px; }
+.sup-kpi-help {
+    margin: 4px 0 0;
+    color: var(--sup-text-soft);
+    font-size: 11px;
 }

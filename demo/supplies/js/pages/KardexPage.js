@@ -8,14 +8,17 @@
 import {
     clear,
     closeModal,
+    collapsible,
     el,
     formatDate,
+    formatMoney,
     formatNumber,
+    itemPicker,
     openModal,
     showToast,
 } from '../ui.js';
 
-export async function mountKardex({ host, actions, api }) {
+export async function mountKardex({ host, actions, api, router, params = [] }) {
     clear(host);
     actions.innerHTML = '';
 
@@ -25,7 +28,10 @@ export async function mountKardex({ host, actions, api }) {
         onClick: () => _openAdjustmentModal(api, () => state.itemId && _loadKardex(state)),
     }));
 
-    const state = { api, host, itemId: null, items: [], dateFrom: '', dateTo: '' };
+    // `#/kardex/<id>` arrives from the catalog's "Ver movimiento del artículo",
+    // so the page opens already focused on that item.
+    const preselectedId = params[0] ? String(Number(params[0])) : null;
+    const state = { api, host, itemId: preselectedId, items: [], dateFrom: '', dateTo: '' };
 
     try {
         state.items = await api.listItems({ limit: 500 });
@@ -34,15 +40,28 @@ export async function mountKardex({ host, actions, api }) {
         return;
     }
 
-    const itemSel = el('select', { name: 'item_id' });
-    itemSel.appendChild(el('option', { value: '', text: '— Selecciona un ítem —' }));
-    state.items.forEach(it => {
-        itemSel.appendChild(el('option', {
-            value: it.id,
-            text: `${it.code} — ${it.name} (stock ${formatNumber(it.current_stock)})`,
+    // Arriving from the catalog: offer the way back, otherwise the only exit
+    // is the main menu, which loses the list the user was looking at.
+    if (preselectedId && router) {
+        host.appendChild(el('button', {
+            class: 'sup-back-link',
+            html: '<i class="fa-solid fa-arrow-left"></i> Volver al catálogo',
+            onClick: () => router.go('catalog'),
         }));
+    }
+
+    const picker = itemPicker({
+        items: state.items,
+        placeholder: 'Buscar por código o descripción…',
+        onSelect: item => {
+            state.itemId = item ? item.id : null;
+            _renderItemHeader(state);
+            if (item) _loadKardex(state);
+        },
     });
-    itemSel.onchange = () => { state.itemId = itemSel.value || null; _loadKardex(state); };
+    const preselected = state.items.find(it => String(it.id) === String(preselectedId));
+    if (preselected) picker.el.querySelector('input').value =
+        `${preselected.code} — ${preselected.name}`;
 
     const fromIn = el('input', { type: 'date' });
     fromIn.onchange = () => { state.dateFrom = fromIn.value; _loadKardex(state); };
@@ -50,15 +69,39 @@ export async function mountKardex({ host, actions, api }) {
     toIn.onchange = () => { state.dateTo = toIn.value; _loadKardex(state); };
 
     const filters = el('div', { class: 'sup-filters' }, [
-        el('label', { class: 'sup-field' }, [el('span', { text: 'Ítem' }), itemSel]),
+        el('label', { class: 'sup-field' }, [el('span', { text: 'Ítem' }), picker.el]),
         el('label', { class: 'sup-field' }, [el('span', { text: 'Desde' }), fromIn]),
         el('label', { class: 'sup-field' }, [el('span', { text: 'Hasta' }), toIn]),
     ]);
     host.appendChild(filters);
 
+    state.headerHost = el('div', {});
+    host.appendChild(state.headerHost);
     state.ledgerHost = el('div', {});
     host.appendChild(state.ledgerHost);
-    state.ledgerHost.appendChild(el('p', { class: 'sup-placeholder', text: 'Selecciona un ítem para ver su kárdex.' }));
+
+    if (state.itemId) {
+        _renderItemHeader(state);
+        await _loadKardex(state);
+    } else {
+        state.ledgerHost.appendChild(el('p', {
+            class: 'sup-placeholder', text: 'Selecciona un ítem para ver su kárdex.',
+        }));
+    }
+}
+
+/**
+ * Identity card of the selected item above its ledger, so a kardex opened
+ * from the catalog is self-explanatory instead of a bare table of numbers.
+ */
+function _renderItemHeader(state) {
+    clear(state.headerHost);
+    const item = state.items.find(it => String(it.id) === String(state.itemId));
+    if (!item) return;
+    state.headerHost.appendChild(el('div', { class: 'sup-card sup-card-padded sup-kardex-head' }, [
+        el('h3', { text: `${item.code} — ${item.name}` }),
+        el('p', { class: 'sup-muted', text: `Stock actual: ${formatNumber(item.current_stock)}` }),
+    ]));
 }
 
 async function _loadKardex(state) {
@@ -80,9 +123,11 @@ async function _loadKardex(state) {
             el('th', { text: 'Tipo' }),
             el('th', { text: 'Origen' }),
             el('th', { text: 'Cantidad' }),
+            el('th', { text: 'Costo unitario' }),
+            el('th', { text: 'Costo total' }),
+            el('th', { text: 'N° ingreso' }),
             el('th', { text: 'Balance antes' }),
             el('th', { text: 'Balance después' }),
-            el('th', { text: 'Lote' }),
             el('th', { text: 'Usuario' }),
             el('th', { text: 'Notas' }),
         ])]);
@@ -91,15 +136,24 @@ async function _loadKardex(state) {
             el('td', {}, [_movementBadge(m.movement_type)]),
             el('td', { text: `${m.reference_type}${m.reference_id ? '#' + m.reference_id : ''}` }),
             el('td', { text: formatNumber(m.quantity) }),
+            el('td', { text: m.unit_cost != null ? formatMoney(m.unit_cost) : '—' }),
+            el('td', { text: m.total_cost != null ? formatMoney(m.total_cost) : '—' }),
+            el('td', { text: m.source_entry_id ? `#${m.source_entry_id}` : '—' }),
             el('td', { text: formatNumber(m.balance_before) }),
             el('td', { text: formatNumber(m.balance_after) }),
-            el('td', { text: m.batch_code || '—' }),
             el('td', { text: m.created_by }),
             el('td', { text: m.notes || '—' }),
         ])));
-        state.ledgerHost.appendChild(el('div', { class: 'sup-table-wrap' }, [
+        const box = collapsible({
+            title: 'Movimientos del ítem',
+            subtitle: `${rows.length} movimiento(s)`,
+            open: true,
+            stateKey: 'kardex.ledger',
+        });
+        box.body.appendChild(el('div', { class: 'sup-table-wrap' }, [
             el('table', { class: 'sup-table' }, [thead, tbody]),
         ]));
+        state.ledgerHost.appendChild(box.section);
     } catch (err) {
         clear(state.ledgerHost);
         state.ledgerHost.appendChild(el('p', { class: 'sup-form-error', text: err.message }));
@@ -118,16 +172,10 @@ function _movementBadge(type) {
 
 function _openAdjustmentModal(api, onSuccess) {
     api.listItems({ limit: 500 }).then(items => {
-        const itemSel = el('select', { name: 'item_id', required: true });
-        itemSel.appendChild(el('option', { value: '', text: '— Elegir ítem —' }));
-        items.forEach(it => {
-            itemSel.appendChild(el('option', {
-                value: it.id, text: `${it.code} — ${it.name}`,
-            }));
-        });
+        const picker = itemPicker({ items, placeholder: 'Buscar el ítem a ajustar…' });
 
         const form = el('form', { class: 'sup-stack' }, [
-            el('label', { class: 'sup-field' }, [el('span', { text: 'Ítem' }), itemSel]),
+            el('label', { class: 'sup-field' }, [el('span', { text: 'Ítem' }), picker.el]),
             el('label', { class: 'sup-field' }, [
                 el('span', { text: 'Cantidad (positiva añade, negativa resta)' }),
                 el('input', { type: 'number', step: '0.01', name: 'quantity', required: true }),
@@ -146,8 +194,13 @@ function _openAdjustmentModal(api, onSuccess) {
                 errEl.hidden = true;
                 const fd = new FormData(form);
                 try {
+                    if (!picker.value()) {
+                        errEl.textContent = 'Elige un ítem.';
+                        errEl.hidden = false;
+                        return;
+                    }
                     await api.createKardexAdjustment({
-                        item_id: Number(fd.get('item_id')),
+                        item_id: picker.value(),
                         quantity: Number(fd.get('quantity')),
                         notes: fd.get('notes') || null,
                     });

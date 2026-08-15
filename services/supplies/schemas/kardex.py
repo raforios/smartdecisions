@@ -7,7 +7,12 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from schemas.enums import MovementTypeEnum, ReferenceTypeEnum, RequestStatusEnum
+from schemas.enums import (
+    EntryTypeEnum,
+    MovementTypeEnum,
+    ReferenceTypeEnum,
+    RequestStatusEnum,
+)
 
 
 class _Base(BaseModel):
@@ -30,9 +35,21 @@ class KardexAdjustmentSchema(BaseModel):
     notes: Optional[str] = Field(None, max_length = 500)
 
 
+class KardexFilterSchema(BaseModel):
+    '''
+        Date range and paging accepted by the per-item kardex listing, grouped
+        so the controller keeps a readable signature.
+    '''
+    date_from: Optional[datetime] = None
+    date_to: Optional[datetime] = None
+    skip: int = Field(0, ge = 0)
+    limit: int = Field(200, ge = 1, le = 1000)
+
+
 class KardexMovementResponseSchema(_Base):
     '''
-        Single kardex row.
+        Single valued kardex row. unit_cost/total_cost and source_entry_id
+        carry the PEPS/FIFO cost and the lote (Nota de Ingreso) it came from.
     '''
     id: int
     item_id: int
@@ -42,6 +59,10 @@ class KardexMovementResponseSchema(_Base):
     quantity: Decimal
     balance_before: Decimal
     balance_after: Decimal
+    unit_cost: Optional[Decimal]
+    total_cost: Optional[Decimal]
+    source_entry_id: Optional[int]
+    source_entry_detail_id: Optional[int]
     batch_code: Optional[str]
     notes: Optional[str]
     created_by: str
@@ -63,19 +84,19 @@ class LowStockItemSchema(_Base):
     deficit: Decimal
 
 
-class ReplenishmentReportRowSchema(_Base):
+class EntryReportRowSchema(_Base):
     '''
-        Aggregated row for the replenishments report.
+        Aggregated row for the entries (Notas de Ingreso) report.
     '''
-    replenishment_id: int
+    entry_id: int
     code: str
-    item_id: int
-    item_code: str
-    requested_qty: Decimal
-    received_qty: Decimal
-    status: str
+    entry_type: EntryTypeEnum
+    supplier: Optional[str]
+    total_lines: int
+    subtotal: Decimal
+    discount: Decimal
+    total: Decimal
     created_at: datetime
-    completed_at: Optional[datetime]
 
 
 class RequestReportRowSchema(_Base):
@@ -104,8 +125,8 @@ class DashboardSummarySchema(_Base):
     open_requests: int
     requests_in_process: int
     requests_delivered_pending_close: int
-    pending_replenishments: int
-    in_reception_replenishments: int
+    total_entries: int
+    entries_last_30_days: int
 
 
 class DashboardRecentActivitySchema(_Base):
@@ -113,5 +134,5 @@ class DashboardRecentActivitySchema(_Base):
         Latest events to render the activity feed.
     '''
     recent_requests: List[RequestReportRowSchema]
-    recent_replenishments: List[ReplenishmentReportRowSchema]
+    recent_entries: List[EntryReportRowSchema]
     recent_movements: List[KardexMovementResponseSchema]

@@ -1,10 +1,9 @@
 '''
     Routes for supply requests (flow 1: REQUESTER, flow 2: WAREHOUSE_MANAGER).
 '''
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from controllers.request import (
@@ -18,7 +17,7 @@ from controllers.request import (
     process_request_controller,
     reject_request_controller,
 )
-from schemas.enums import RequestStatusEnum, RoleEnum
+from schemas.enums import RoleEnum
 from schemas.request import (
     RequestCreateSchema,
     RequestDeliverSchema,
@@ -67,12 +66,7 @@ async def create_request(
     summary = 'List supply requests',
 )
 async def list_requests(
-    status_filter: Optional[RequestStatusEnum] = Query(None, alias = 'status'),
-    requester_email: Optional[str] = Query(None),
-    date_from: Optional[datetime] = Query(None),
-    date_to: Optional[datetime] = Query(None),
-    skip: int = Query(0, ge = 0),
-    limit: int = Query(100, ge = 1, le = 500),
+    filters: RequestFilterSchema = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
     jwt_payload: Dict[str, str] = Depends(get_current_payload),
 ):
@@ -82,14 +76,8 @@ async def list_requests(
         see everything.
     '''
     email, role = _payload_email_role(jwt_payload)
-    filters = RequestFilterSchema(
-        status = status_filter,
-        requester_email = requester_email,
-        date_from = date_from,
-        date_to = date_to,
-    )
     return await list_requests_controller(
-        db, filters, current_role = role, current_email = email, skip = skip, limit = limit,
+        db, filters, current_role = role, current_email = email,
     )
 
 

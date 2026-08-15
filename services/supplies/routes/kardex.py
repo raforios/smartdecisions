@@ -9,17 +9,18 @@ from sqlalchemy.orm import Session
 
 from controllers.kardex import (
     create_manual_adjustment_controller,
+    entries_report_controller,
     list_kardex_for_item_controller,
     list_low_stock_controller,
-    replenishment_report_controller,
     request_report_controller,
 )
 from schemas.enums import RequestStatusEnum, RoleEnum
 from schemas.kardex import (
+    KardexFilterSchema,
+    EntryReportRowSchema,
     KardexAdjustmentSchema,
     KardexMovementResponseSchema,
     LowStockItemSchema,
-    ReplenishmentReportRowSchema,
     RequestReportRowSchema,
 )
 from services.db_connection import GET_DB_DEPENDENCY
@@ -36,20 +37,14 @@ router = APIRouter(prefix = '/v1/supplies', tags = ['Kardex'])
 )
 async def list_kardex(
     item_id: int,
-    date_from: Optional[datetime] = Query(None),
-    date_to: Optional[datetime] = Query(None),
-    skip: int = Query(0, ge = 0),
-    limit: int = Query(200, ge = 1, le = 1000),
+    filters: KardexFilterSchema = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
 ):
     '''
         Returns the kardex ledger for a single item, ordered by most recent.
     '''
-    return await list_kardex_for_item_controller(
-        db, item_id, date_from = date_from, date_to = date_to,
-        skip = skip, limit = limit,
-    )
+    return await list_kardex_for_item_controller(db, item_id, filters)
 
 
 @router.post(
@@ -93,20 +88,20 @@ async def report_low_stock(
 
 
 @router.get(
-    '/reports/replenishments',
-    response_model = List[ReplenishmentReportRowSchema],
-    summary = 'Replenishments report bounded by date range',
+    '/reports/entries',
+    response_model = List[EntryReportRowSchema],
+    summary = 'Entries (Notas de Ingreso) report bounded by date range',
 )
-async def report_replenishments(
+async def report_entries(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
     db: Session = Depends(GET_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
 ):
     '''
-        Returns replenishments enriched with item code, totals and status.
+        Returns Notas de Ingreso with line counts and valued totals.
     '''
-    return await replenishment_report_controller(
+    return await entries_report_controller(
         db, date_from = date_from, date_to = date_to,
     )
 

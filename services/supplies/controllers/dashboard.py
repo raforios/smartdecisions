@@ -1,26 +1,24 @@
 '''
     Dashboard controller. Aggregates KPIs and recent-activity feeds.
 '''
+from datetime import timedelta
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models.supplies import (
-    Item,
-    KardexMovement,
-    Replenishment,
-    Request,
-    RequestDetail,
-)
-from schemas.enums import (
-    ReplenishmentStatusEnum,
-    RequestStatusEnum,
-)
+from models.supplies import Entry, Item, KardexMovement, Request
+from schemas.enums import RequestStatusEnum
 from schemas.kardex import (
+    DashboardRecentActivitySchema,
+    DashboardSummarySchema,
     KardexMovementResponseSchema,
-    ReplenishmentReportRowSchema,
-    RequestReportRowSchema,
 )
-from schemas.kardex import DashboardRecentActivitySchema, DashboardSummarySchema
+from services.report_rows import build_entry_rows, build_request_rows
+from services.utils import get_current_time_gmt
+
+# SQLAlchemy builds `func.count` dynamically, which Pylint cannot resolve and
+# reports as not-callable. The call is correct; the checker is not.
+# pylint: disable=not-callable
 
 
 async def dashboard_summary_controller(db: Session) -> DashboardSummarySchema:
@@ -59,14 +57,11 @@ async def dashboard_summary_controller(db: Session) -> DashboardSummarySchema:
         .scalar() or 0
     )
 
-    pending_replenishments = (
-        db.query(func.count(Replenishment.id))
-        .filter(Replenishment.status == ReplenishmentStatusEnum.REQUESTED)
-        .scalar() or 0
-    )
-    in_reception_replenishments = (
-        db.query(func.count(Replenishment.id))
-        .filter(Replenishment.status == ReplenishmentStatusEnum.IN_RECEPTION)
+    total_entries = db.query(func.count(Entry.id)).scalar() or 0
+    since = get_current_time_gmt() - timedelta(days = 30)
+    entries_last_30_days = (
+        db.query(func.count(Entry.id))
+        .filter(Entry.created_at >= since)
         .scalar() or 0
     )
 
@@ -77,8 +72,8 @@ async def dashboard_summary_controller(db: Session) -> DashboardSummarySchema:
         open_requests = open_requests,
         requests_in_process = requests_in_process,
         requests_delivered_pending_close = requests_delivered_pending_close,
-        pending_replenishments = pending_replenishments,
-        in_reception_replenishments = in_reception_replenishments,
+        total_entries = total_entries,
+        entries_last_30_days = entries_last_30_days,
     )
 
 
@@ -86,8 +81,8 @@ async def dashboard_recent_activity_controller(
     db: Session, limit: int = 10
 ) -> DashboardRecentActivitySchema:
     '''
-        Returns the most recent requests, replenishments and kardex
-        movements. Useful for the operations feed on the dashboard.
+        Returns the most recent requests, entries and kardex movements.
+        Useful for the operations feed on the dashboard.
     '''
     requests = (
         db.query(Request)
@@ -95,26 +90,12 @@ async def dashboard_recent_activity_controller(
         .limit(limit)
         .all()
     )
-    # Counts of detail lines per recent request for the report row schema.
-    request_ids = [r.id for r in requests]
-    counts: dict[int, int] = {}
-    if request_ids:
-        for request_id, count in (
-            db.query(RequestDetail.request_id, func.count(RequestDetail.id))
-            .filter(RequestDetail.request_id.in_(request_ids))
-            .group_by(RequestDetail.request_id)
-            .all()
-        ):
-            counts[request_id] = count
-
-    replenishments = (
-        db.query(Replenishment, Item)
-        .join(Item, Replenishment.item_id == Item.id)
-        .order_by(Replenishment.created_at.desc())
+    entries = (
+        db.query(Entry)
+        .order_by(Entry.created_at.desc())
         .limit(limit)
         .all()
     )
-
     movements = (
         db.query(KardexMovement)
         .order_by(KardexMovement.created_at.desc())
@@ -123,32 +104,8 @@ async def dashboard_recent_activity_controller(
     )
 
     return DashboardRecentActivitySchema(
-        recent_requests = [
-            RequestReportRowSchema(
-                request_id = r.id,
-                code = r.code,
-                requester_email = r.requester_email,
-                status = r.status,
-                total_items = counts.get(r.id, 0),
-                requested_at = r.requested_at,
-                closed_at = r.closed_at,
-            )
-            for r in requests
-        ],
-        recent_replenishments = [
-            ReplenishmentReportRowSchema(
-                replenishment_id = rep.id,
-                code = rep.code,
-                item_id = item.id,
-                item_code = item.code,
-                requested_qty = rep.requested_qty,
-                received_qty = rep.received_qty,
-                status = rep.status.value if hasattr(rep.status, 'value') else str(rep.status),
-                created_at = rep.created_at,
-                completed_at = rep.completed_at,
-            )
-            for rep, item in replenishments
-        ],
+        recent_requests = build_request_rows(db, requests),
+        recent_entries = build_entry_rows(db, entries),
         recent_movements = [
             KardexMovementResponseSchema.model_validate(m) for m in movements
         ],

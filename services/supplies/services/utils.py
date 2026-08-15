@@ -6,8 +6,9 @@ import mimetypes
 import time
 import decimal
 import asyncio
+import enum
 import json
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
@@ -29,6 +30,7 @@ from services.exceptions import (
 
 from services.environment import load_and_validate_env_vars
 
+# Carga las variables de entorno necesarias
 ENV_VARS = load_and_validate_env_vars(
     {
         'EVENTS_SERVICE_URL': str,
@@ -53,22 +55,29 @@ EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_U
 def get_current_time_gmt() -> datetime:
     '''
         Returns the current datetime object aware of the target timezone.
-        Used as the default for all SQLAlchemy DateTime columns to keep
-        the database time-zone consistent across rows.
+        This function should be used as the default value for all SQLAlchemy 
+        DateTime columns to ensure database consistency.
     '''
     tz = ZoneInfo(TARGET_TIMEZONE)
     return datetime.now(tz = tz)
 
-
 def sqlalchemy_object_as_dict(obj):
     '''
-        Helper function to serialize a SQLAlchemy object to a dictionary.
+        Helper function to serialize a SQLAlchemy object to a dictionary,
+        converting complex types like datetime and Decimal to simple types.
     '''
-    return {
-        c.key: getattr(obj, c.key)
-        for c in sa_inspect(obj).mapper.column_attrs
-    }
+    data = {}
+    for c in sa_inspect(obj).mapper.column_attrs:
+        value = getattr(obj, c.key)
 
+        if isinstance(value, (date, datetime)):
+            data[c.key] = value.isoformat()
+        elif isinstance(value, decimal.Decimal):
+            data[c.key] = float(value)
+        else:
+            data[c.key] = value
+
+    return data
 
 async def _perform_request(
     method: str,
@@ -94,6 +103,7 @@ async def _perform_request(
                         headers = headers,
                         timeout = 600
                     )
+
                 return req.post(url, json = payload, headers = headers, timeout = 600)
 
             if method == 'DELETE':
@@ -107,20 +117,28 @@ async def _perform_request(
         error_msg = f'An error occurred while using _perform_request function: {e}'
         logger.error(error_msg, exc_info = True)
 
-
 class CustomJSONEncoder(json.JSONEncoder):
     '''
-        JSON encoder to handle date and datetime objects.
+        JSON encoder to handle date, datetime and time objects, Pydantic
+        models, Decimals and custom Enums.
     '''
     def default(self, o):
         if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        # datetime.time is not a subclass of date, so it must be handled
+        # explicitly or json.dumps in the audit / usage-log path raises
+        # "Object of type time is not JSON serializable" and the endpoint 500s.
+        if isinstance(o, dt_time):
             return o.isoformat()
         if isinstance(o, BaseModel):
             return o.model_dump()
         if isinstance(o, decimal.Decimal):
             return float(o)
+        # Models expose their state as Enum columns; the audit payload needs
+        # the underlying value, not the member's repr.
+        if isinstance(o, enum.Enum):
+            return o.value
         return super().default(o)
-
 
 class UsageLogData(BaseModel):
     '''
@@ -136,8 +154,9 @@ class UsageLogData(BaseModel):
     response_body: dict | list | None = None
     response_time_ms: int
 
-
-async def _process_and_send_usage_log(log_data: UsageLogData):
+async def _process_and_send_usage_log(
+    log_data: UsageLogData
+):
     '''
        Processes and sends a usage log to the event service.
     '''
@@ -153,7 +172,6 @@ async def _process_and_send_usage_log(log_data: UsageLogData):
     except (TypeError) as e:
         error_msg = f'Error serializing log data: {e}'
         logger.error(error_msg, exc_info = True)
-
 
 async def _get_request_body_for_logging(request: Request) -> dict | None:
     '''
@@ -175,7 +193,6 @@ async def _get_request_body_for_logging(request: Request) -> dict | None:
         return {'detail': 'Multipart form data (file upload) not logged.'}
 
     return {'detail': f'Content-Type {content_type} not logged.'}
-
 
 def handle_service_errors(microservice_name: str, with_log: bool = True):
     '''
@@ -304,10 +321,10 @@ def audit_event(
                 error_msg = f'Error serializing audit data: {e}'
                 logger.error(error_msg, exc_info = True)
 
+            # Retornar el resultado final para que el controlador lo use.
             return final_result
         return wrapper
     return decorator
-
 
 async def send_audit_event(audit_data: dict):
     '''
@@ -323,7 +340,6 @@ async def send_audit_event(audit_data: dict):
     message = f'Audit event sent successfully. Status: {response.status_code}'
     logger.info(message)
 
-
 async def send_usage_log(log_data: dict):
     '''
         Asynchronous function to send a usage log to the EVENTS microservice.
@@ -337,3 +353,157 @@ async def send_usage_log(log_data: dict):
     response.raise_for_status()
     message = f'Usage log sent successfully. Status: {response.status_code}'
     logger.info(message)
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+async def _handle_files_service(
+    action: str,
+    file_name: str,
+    auth_token: str,
+    delimiter: Optional[str] = None,
+    uploaded_file: Optional[UploadFile] = None,
+    dynamic_path: Optional[str] = None
+) -> Optional[str]:
+    '''
+        Handles communication with the FILES microservice for reading and deleting files.
+        This function standardizes file service interactions.
+    '''
+    try:
+        if not FILES_SERVICE_URL or not BUCKET_NAME:
+            raise ServiceUnavailableError(
+                detail = 'FILES_SERVICE_URL or BUCKET_NAME environment variables are not set.'
+            )
+
+        headers = {
+            'Authorization': f'{auth_token}',
+            'Content-Type': 'application/json'
+        }
+
+        if action == 'read':
+            query_string = f'?delimiter={delimiter}' if delimiter else ''
+            url = f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_name}{query_string}'
+            response = await _perform_request('GET', url, headers)
+            response.raise_for_status()
+            return response.text
+
+        if action == 'create':
+            upload_endpoint = f'{FILES_SERVICE_URL}/v1/s3/upload'
+
+            mime_type, _ = mimetypes.guess_type(uploaded_file.filename)
+            if not mime_type:
+                mime_type = 'application/octet-stream'
+
+            file_content_bytes = await uploaded_file.read()
+
+            headers = {
+                'Authorization': f'{auth_token}'
+            }
+
+            path_to_use = dynamic_path or BUCKET_PATH
+
+            if path_to_use and not path_to_use.endswith('/'):
+                path_to_use += '/'
+
+            response = await _perform_request(
+                method = 'POST',
+                url = upload_endpoint,
+                headers = headers,
+                payload = {
+                    'bucket_name': BUCKET_NAME,
+                    'file_path': path_to_use if path_to_use else BUCKET_PATH
+                },
+                files = {
+                    'file': (uploaded_file.filename, file_content_bytes, mime_type)
+                }
+            )
+
+            response.raise_for_status()
+
+            return response.json()
+
+        if action == 'delete':
+            url = f'{FILES_SERVICE_URL}/v1/s3/delete'
+            payload = {
+                'bucket_name': BUCKET_NAME,
+                'file_name': file_name,
+                'file_path': BUCKET_PATH
+            }
+            response = await _perform_request('DELETE', url, headers, payload)
+            response.raise_for_status()
+            message = f'File {file_name} successfully deleted from FILES service.'
+            logger.info(message)
+            return None
+
+        raise ValueError(f'Invalid action: {action}')
+    except req.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            raise ResourceNotFoundError(
+                detail = f'File \'{file_name}\' not found in FILES microservice.'
+            ) from e
+        raise ServiceUnavailableError(
+            detail = f'Failed to communicate with FILES microservice: {e}'
+        ) from e
+    except Exception as e:
+        raise ServiceUnavailableError(
+            detail = f'Unexpected error during file communication with FILES service: {e}'
+        ) from e
+
+async def _read_and_parse_file_content(
+    file_name: str,
+    auth_token: str,
+    delimiter: Optional[str] = ','
+) -> List[Dict[str, Any]]:
+    '''
+        Reads and parses the file content from the FILES microservice.
+    '''
+    file_content = await _handle_files_service(
+        action = 'read',
+        file_name = file_name,
+        auth_token = auth_token,
+        delimiter = delimiter
+    )
+    if not file_content:
+        raise InvalidInputError(
+            detail = 'File content is empty or could not be retrieved.'
+        )
+    try:
+        file_data = json.loads(file_content)
+        return file_data.get('data', [])
+    except json.JSONDecodeError as e:
+        raise InvalidInputError(
+            detail = f'Invalid JSON format in file content. Error: {e}'
+        ) from e
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+async def perform_bulk_upload(
+    db: Session,
+    file_name: str,
+    auth_token: str,
+    bulk_schema: BaseModel,
+    processor_func: Callable,
+    inserter_func: Callable,
+    delimiter: Optional[str] = ','
+) -> Dict[str, Any]:
+    '''
+        Generic bulk upload processor.
+    '''
+    rows = await _read_and_parse_file_content(file_name, auth_token, delimiter)
+
+    if not rows:
+        return {'message': 'No valid data found in the file.',
+                'created_records': 0}
+
+    processed_data = processor_func(rows, bulk_schema)
+
+    if not processed_data:
+        raise InvalidInputError('The processed data is empty.')
+
+    stats = await inserter_func(db, processed_data, file_name, auth_token)
+
+    db.commit()
+
+    await _handle_files_service('delete', file_name, auth_token)
+
+    return {
+        'message': 'Bulk upload successful.',
+        **stats
+    }

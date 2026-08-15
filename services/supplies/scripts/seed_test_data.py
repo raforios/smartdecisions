@@ -63,50 +63,63 @@ UNITS = [
 
 
 @dataclass
+class SeedStock:
+    '''
+        Opening figures of a demo item: its minimum, its replenishment size,
+        the quantity it starts with and the cost of that first PEPS layer.
+    '''
+    min_stock: float
+    default_replenishment_qty: float
+    initial_stock: float
+    unit_cost: float = 2.0
+
+
+@dataclass
 class SeedItem:
+    '''
+        One catalog item of the demo dataset, with its opening stock figures.
+    '''
     code: str
     name: str
     category_code: str
     unit_code: str
-    min_stock: float
-    default_replenishment_qty: float
-    initial_stock: float
+    stock: SeedStock
     description: Optional[str] = None
 
 
 ITEMS: List[SeedItem] = [
     SeedItem('ESCR-001', 'Lapiceros azules x 12',
-             'ESCR', 'UND', 20, 100, 80,
+             'ESCR', 'UND', SeedStock(20, 100, 80),
              description='Caja de 12 lapiceros tinta azul punta media.'),
     SeedItem('ESCR-002', 'Borradores blancos',
-             'ESCR', 'UND', 10, 50, 35),
+             'ESCR', 'UND', SeedStock(10, 50, 35)),
     SeedItem('ESCR-003', 'Reglas 30cm acrilicas',
-             'ESCR', 'UND', 5, 25, 18),
+             'ESCR', 'UND', SeedStock(5, 25, 18)),
     SeedItem('ESCR-004', 'Tijeras de oficina',
-             'ESCR', 'UND', 5, 15, 12),
+             'ESCR', 'UND', SeedStock(5, 15, 12)),
     SeedItem('LIMP-001', 'Detergente liquido 1L',
-             'LIMP', 'UND', 5, 20, 16),
+             'LIMP', 'UND', SeedStock(5, 20, 16)),
     SeedItem('LIMP-002', 'Escobas industriales',
-             'LIMP', 'UND', 3, 10, 7),
+             'LIMP', 'UND', SeedStock(3, 10, 7)),
     SeedItem('LIMP-003', 'Trapeadores microfibra',
-             'LIMP', 'UND', 5, 15, 11),
+             'LIMP', 'UND', SeedStock(5, 15, 11)),
     SeedItem('LIMP-004', 'Papel higienico jumbo',
-             'LIMP', 'PAQ', 8, 40, 28),
+             'LIMP', 'PAQ', SeedStock(8, 40, 28)),
     SeedItem('COMP-001', 'Mouse USB optico',
-             'COMP', 'UND', 5, 20, 14),
+             'COMP', 'UND', SeedStock(5, 20, 14)),
     SeedItem('COMP-002', 'Teclado USB en espanol',
-             'COMP', 'UND', 5, 15, 9),
+             'COMP', 'UND', SeedStock(5, 15, 9)),
     SeedItem('COMP-003', 'Cables HDMI 1.5m',
-             'COMP', 'UND', 3, 12, 6),
+             'COMP', 'UND', SeedStock(3, 12, 6)),
     SeedItem('PAPL-001', 'Papel bond A4 75g',
-             'PAPL', 'PAQ', 10, 50, 35,
+             'PAPL', 'PAQ', SeedStock(10, 50, 35),
              description='Resma de 500 hojas.'),
     SeedItem('PAPL-002', 'Sobres carta blancos',
-             'PAPL', 'CAJA', 5, 20, 13),
+             'PAPL', 'CAJA', SeedStock(5, 20, 13)),
     SeedItem('PAPL-003', 'Folders manila tamano carta',
-             'PAPL', 'PAQ', 10, 40, 25),
+             'PAPL', 'PAQ', SeedStock(10, 40, 25)),
     SeedItem('SEGU-001', 'Mascarillas N95',
-             'SEGU', 'CAJA', 5, 30, 18),
+             'SEGU', 'CAJA', SeedStock(5, 30, 18)),
 ]
 
 
@@ -114,11 +127,17 @@ ITEMS: List[SeedItem] = [
 # HTTP helpers                                                          #
 # --------------------------------------------------------------------- #
 class ApiError(Exception):
-    pass
+    '''
+        Raised when the Supplies or AUTH API answers with an unexpected status.
+    '''
 
 
 def _request(method: str, url: str, token: Optional[str] = None,
              payload: Optional[Dict[str, Any]] = None) -> requests.Response:
+    '''
+        Issues an HTTP request against the API, attaching the bearer token and
+        the JSON content type when they apply.
+    '''
     headers: Dict[str, str] = {}
     if token:
         headers['Authorization'] = f'Bearer {token}'
@@ -128,6 +147,9 @@ def _request(method: str, url: str, token: Optional[str] = None,
 
 
 def login(auth_url: str, email: str, password: str) -> str:
+    '''
+        Authenticates against AUTH and returns the bearer access token.
+    '''
     response = _request('POST', f'{auth_url}/login',
                         payload={'email': email, 'password': password})
     if not response.ok:
@@ -193,6 +215,9 @@ def seed_categories(base_url: str, token: str) -> Dict[str, int]:
 
 
 def seed_units(base_url: str, token: str) -> Dict[str, int]:
+    '''
+        Creates the demo units of measure and returns their code -> id map.
+    '''
     print('-- Unidades')
     for entry in UNITS:
         created = _post(base_url, '/units', token, entry)
@@ -207,6 +232,9 @@ def seed_units(base_url: str, token: str) -> Dict[str, int]:
 
 def seed_items(base_url: str, token: str,
                cat_ids: Dict[str, int], unit_ids: Dict[str, int]) -> Dict[str, int]:
+    '''
+        Creates the demo catalog items and returns their code -> id map.
+    '''
     print('-- Items')
     for item in ITEMS:
         payload = {
@@ -215,8 +243,8 @@ def seed_items(base_url: str, token: str,
             'description': item.description,
             'category_id': cat_ids[item.category_code],
             'unit_id': unit_ids[item.unit_code],
-            'min_stock': item.min_stock,
-            'default_replenishment_qty': item.default_replenishment_qty,
+            'min_stock': item.stock.min_stock,
+            'default_replenishment_qty': item.stock.default_replenishment_qty,
         }
         created = _post(base_url, '/items', token, payload)
         if created is None:
@@ -230,20 +258,31 @@ def seed_items(base_url: str, token: str,
 
 def seed_stock(base_url: str, token: str, item_ids: Dict[str, int]) -> None:
     '''
-        Posts a manual ADJUSTMENT per item to bring stock from 0 to
-        item.initial_stock. Always positive; the kardex picks up the
-        movement and updates Item.current_stock.
+        Registers a single opening Nota de Ingreso whose detail lines create
+        one PEPS/FIFO cost layer per item, bringing stock from 0 to
+        item.stock.initial_stock. A cost layer (not a bare adjustment) is required
+        so later deliveries have something to consume under FIFO.
+
+        Not idempotent: re-running adds a second entry and compounds stock;
+        only call it once per fresh database (or pass --skip-stock).
     '''
-    print('-- Stock inicial via ajustes manuales')
-    for item in ITEMS:
-        item_id = item_ids[item.code]
-        payload = {
-            'item_id': item_id,
-            'quantity': item.initial_stock,
-            'notes': f'Seed inicial de pruebas - {item.code}',
+    print('-- Stock inicial via Nota de Ingreso')
+    details = [
+        {
+            'item_id': item_ids[item.code],
+            'quantity': item.stock.initial_stock,
+            'unit_cost': item.stock.unit_cost,
         }
-        _post(base_url, '/kardex/adjustments', token, payload)
-        print(f'   + {item.code} -> {item.initial_stock}')
+        for item in ITEMS if item.stock.initial_stock > 0
+    ]
+    payload = {
+        'entry_type': 'COMPRA',
+        'supplier': 'Proveedor demo inicial',
+        'observations': 'Carga inicial de stock para pruebas (seed).',
+        'details': details,
+    }
+    _post(base_url, '/entries', token, payload)
+    print(f'   + Nota de Ingreso con {len(details)} items')
 
 
 # --------------------------------------------------------------------- #
@@ -354,6 +393,9 @@ def _apply_transition(base_url: str, token: str, request_id: int,
 # Entry point                                                           #
 # --------------------------------------------------------------------- #
 def main() -> int:
+    '''
+        Parses the CLI arguments and runs the full seeding sequence.
+    '''
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--admin-email', required=True)
     parser.add_argument('--admin-password', required=True)

@@ -2,12 +2,12 @@
     Supplies Models.
 
     Captures the full inventory domain:
-        - Catalog: categories, units, items.
-        - Replenishments: orders against an external purchasing system and
-          their physical receptions.
+        - Catalog: categories (accounting groups), units, items.
+        - Suppliers: the registered vendors a Nota de Ingreso can point to.
+        - Entries: warehouse intake documents (Nota de Ingreso) whose detail
+          lines are the PEPS/FIFO cost layers consumed on delivery.
         - Requests: end-user requests for materials, with full state history.
-        - Kardex: append-only ledger of stock movements.
-        - System parameters: tunable values (e.g. default replenishment qty).
+        - Kardex: append-only, valued ledger of stock movements.
 '''
 from sqlalchemy import (
     Boolean,
@@ -27,9 +27,9 @@ from sqlalchemy.orm import relationship
 from services.db_connection import Base
 from services.utils import get_current_time_gmt
 from schemas.enums import (
+    EntryTypeEnum,
     MovementTypeEnum,
     ReferenceTypeEnum,
-    ReplenishmentStatusEnum,
     RequestStatusEnum,
 )
 
@@ -77,7 +77,9 @@ class Item(Base):  # pylint: disable=too-few-public-methods
 
     id = Column(Integer, primary_key = True, index = True)
     code = Column(String(50), nullable = False, unique = True, index = True)
-    name = Column(String(200), nullable = False)
+    # Holds the full article description (single descriptive text, no legacy
+    # "old code"); the source catalog carries descriptions up to ~250 chars.
+    name = Column(String(500), nullable = False)
     description = Column(String(500), nullable = True)
     category_id = Column(Integer, ForeignKey('t_supplies_category.id'),
                          nullable = False, index = True)
@@ -85,6 +87,10 @@ class Item(Base):  # pylint: disable=too-few-public-methods
                      nullable = False, index = True)
     min_stock = Column(Numeric(14, 4), nullable = False, default = 0)
     current_stock = Column(Numeric(14, 4), nullable = False, default = 0)
+    # Units committed to open requests (CREATED / IN_PROCESS) but not yet
+    # delivered. Held so two requests cannot promise the same physical units;
+    # released when the request is rejected, cancelled, deleted or delivered.
+    reserved_stock = Column(Numeric(14, 4), nullable = False, default = 0)
     default_replenishment_qty = Column(Numeric(14, 4), nullable = False, default = 0)
     is_active = Column(Boolean, nullable = False, default = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
@@ -93,68 +99,106 @@ class Item(Base):  # pylint: disable=too-few-public-methods
 
     category = relationship('Category', back_populates = 'items')
     unit = relationship('Unit', back_populates = 'items')
-    replenishments = relationship('Replenishment', back_populates = 'item')
+    entry_details = relationship('EntryDetail', back_populates = 'item')
     kardex_movements = relationship('KardexMovement', back_populates = 'item')
 
 
-class Replenishment(Base):  # pylint: disable=too-few-public-methods
+class Supplier(Base):  # pylint: disable=too-few-public-methods
     '''
-        Replenishment order header.
+        Registered vendor a Nota de Ingreso can be issued against.
 
-        Each row is independent even for the same item, so dates, suppliers,
-        and batches can be traced back to a specific purchase event.
+        Deactivation is soft (is_active) because entries keep pointing at the
+        supplier that issued them; a vendor that stops working with the
+        warehouse must disappear from the pickers without breaking history.
     '''
-    __tablename__ = 't_supplies_replenishment'
+    __tablename__ = 't_supplies_supplier'
+
+    id = Column(Integer, primary_key = True, index = True)
+    name = Column(String(200), nullable = False, index = True)
+    nit = Column(String(50), nullable = False, unique = True, index = True)
+    contact_person = Column(String(200), nullable = False)
+    address = Column(String(300), nullable = False)
+    email = Column(String(150), nullable = True)
+    phone = Column(String(50), nullable = False)
+    is_active = Column(Boolean, nullable = False, default = True)
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+    updated_at = Column(DateTime, nullable = False, default = get_current_time_gmt,
+                        onupdate = get_current_time_gmt)
+
+    entries = relationship('Entry', back_populates = 'supplier_record')
+
+
+class Entry(Base):  # pylint: disable=too-few-public-methods
+    '''
+        Warehouse entry document (Nota de Ingreso).
+
+        Groups several items received under a single supplier / invoice /
+        requirement event. Each detail line is an independent PEPS/FIFO cost
+        layer, so the exact cost and source document of every unit in stock
+        can always be reconstructed.
+    '''
+    __tablename__ = 't_supplies_entry'
 
     id = Column(Integer, primary_key = True, index = True)
     code = Column(String(50), nullable = False, unique = True, index = True)
-    item_id = Column(Integer, ForeignKey('t_supplies_item.id'),
-                     nullable = False, index = True)
-    requested_qty = Column(Numeric(14, 4), nullable = False)
-    received_qty = Column(Numeric(14, 4), nullable = False, default = 0)
-    status = Column(
-        Enum(ReplenishmentStatusEnum),
+    entry_type = Column(
+        Enum(EntryTypeEnum),
         nullable = False,
-        default = ReplenishmentStatusEnum.REQUESTED,
+        default = EntryTypeEnum.COMPRA,
         index = True,
     )
-    supplier_hint = Column(String(200), nullable = True)
-    notes = Column(Text, nullable = True)
+    supplier_id = Column(Integer, ForeignKey('t_supplies_supplier.id'),
+                         nullable = True, index = True)
+    # Denormalized supplier name captured when the note was issued: renaming a
+    # supplier must not rewrite the documents already printed and signed.
+    supplier = Column(String(200), nullable = True)
+    requirement_no = Column(String(100), nullable = True)
+    requirement_date = Column(Date, nullable = True)
+    delivery_note = Column(String(100), nullable = True)
+    delivery_note_date = Column(Date, nullable = True)
+    invoice_no = Column(String(100), nullable = True)
+    authorization = Column(String(100), nullable = True)
+    invoice_date = Column(Date, nullable = True)
+    observations = Column(Text, nullable = True)
+    # Discount applies to the whole note; total = subtotal - discount.
+    discount = Column(Numeric(14, 4), nullable = False, default = 0)
+    subtotal = Column(Numeric(14, 4), nullable = False, default = 0)
+    total = Column(Numeric(14, 4), nullable = False, default = 0)
     created_by = Column(String(150), nullable = False)
-    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
-    completed_at = Column(DateTime, nullable = True)
+    created_at = Column(DateTime, nullable = False, default = get_current_time_gmt, index = True)
 
-    item = relationship('Item', back_populates = 'replenishments')
-    receptions = relationship(
-        'Reception',
-        back_populates = 'replenishment',
+    details = relationship(
+        'EntryDetail',
+        back_populates = 'entry',
         cascade = 'all, delete-orphan',
+        order_by = 'EntryDetail.id',
     )
+    supplier_record = relationship('Supplier', back_populates = 'entries')
 
 
-class Reception(Base):  # pylint: disable=too-few-public-methods
+class EntryDetail(Base):  # pylint: disable=too-few-public-methods
     '''
-        Physical reception of replenishment goods.
+        A single line of a Nota de Ingreso and, at the same time, a PEPS/FIFO
+        cost layer.
 
-        Multiple receptions per replenishment are supported, each carrying
-        its own batch, expiration, supplier, and invoice metadata.
+        qty_remaining starts equal to qty_initial and is decremented as
+        deliveries consume the layer oldest-first. When it reaches zero the
+        layer is exhausted and consumption moves to the next entry.
     '''
-    __tablename__ = 't_supplies_replenishment_reception'
+    __tablename__ = 't_supplies_entry_detail'
 
     id = Column(Integer, primary_key = True, index = True)
-    replenishment_id = Column(Integer, ForeignKey('t_supplies_replenishment.id'),
-                              nullable = False, index = True)
-    received_qty = Column(Numeric(14, 4), nullable = False)
-    batch_code = Column(String(100), nullable = True)
-    expiration_date = Column(Date, nullable = True)
-    supplier_name = Column(String(200), nullable = False)
-    invoice_number = Column(String(100), nullable = True)
-    file_key = Column(String(500), nullable = True)
-    notes = Column(Text, nullable = True)
-    received_by = Column(String(150), nullable = False)
-    received_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
+    entry_id = Column(Integer, ForeignKey('t_supplies_entry.id'),
+                      nullable = False, index = True)
+    item_id = Column(Integer, ForeignKey('t_supplies_item.id'),
+                     nullable = False, index = True)
+    qty_initial = Column(Numeric(14, 4), nullable = False)
+    qty_remaining = Column(Numeric(14, 4), nullable = False)
+    unit_cost = Column(Numeric(14, 4), nullable = False)
+    total_cost = Column(Numeric(14, 4), nullable = False)
 
-    replenishment = relationship('Replenishment', back_populates = 'receptions')
+    entry = relationship('Entry', back_populates = 'details')
+    item = relationship('Item', back_populates = 'entry_details')
 
 
 class Request(Base):  # pylint: disable=too-few-public-methods
@@ -168,6 +212,11 @@ class Request(Base):  # pylint: disable=too-few-public-methods
     id = Column(Integer, primary_key = True, index = True)
     code = Column(String(50), nullable = False, unique = True, index = True)
     requester_email = Column(String(150), nullable = False, index = True)
+    # Printed on the SOLICITUD / ENTREGA forms, which are signed on paper and
+    # need a person, a job title and a unit, not just a login address.
+    requester_name = Column(String(200), nullable = True)
+    requester_position = Column(String(200), nullable = True)
+    requester_unit = Column(String(200), nullable = True)
     status = Column(
         Enum(RequestStatusEnum),
         nullable = False,
@@ -250,25 +299,17 @@ class KardexMovement(Base):  # pylint: disable=too-few-public-methods
     quantity = Column(Numeric(14, 4), nullable = False)
     balance_before = Column(Numeric(14, 4), nullable = False)
     balance_after = Column(Numeric(14, 4), nullable = False)
+    # PEPS/FIFO valuation: cost of this movement and the entry (lote) it came
+    # from. For OUT rows these identify the exact cost layer consumed.
+    unit_cost = Column(Numeric(14, 4), nullable = True)
+    total_cost = Column(Numeric(14, 4), nullable = True)
+    source_entry_id = Column(
+        Integer, ForeignKey('t_supplies_entry.id'), nullable = True, index = True)
+    source_entry_detail_id = Column(
+        Integer, ForeignKey('t_supplies_entry_detail.id'), nullable = True)
     batch_code = Column(String(100), nullable = True)
     notes = Column(Text, nullable = True)
     created_by = Column(String(150), nullable = False)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt, index = True)
 
     item = relationship('Item', back_populates = 'kardex_movements')
-
-
-class SystemParameter(Base):  # pylint: disable=too-few-public-methods
-    '''
-        Tunable system-wide parameters (e.g. default replenishment buffer).
-        Kept generic so new knobs can be added without schema changes.
-    '''
-    __tablename__ = 't_supplies_parameter'
-
-    id = Column(Integer, primary_key = True, index = True)
-    key = Column(String(100), nullable = False, unique = True, index = True)
-    value = Column(String(500), nullable = False)
-    description = Column(String(500), nullable = True)
-    updated_by = Column(String(150), nullable = True)
-    updated_at = Column(DateTime, nullable = False, default = get_current_time_gmt,
-                        onupdate = get_current_time_gmt)

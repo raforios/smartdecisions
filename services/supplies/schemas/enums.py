@@ -33,15 +33,14 @@ class RequestStatusEnum(str, Enum):
     CANCELLED = 'CANCELLED'
 
 
-class ReplenishmentStatusEnum(str, Enum):
+class EntryTypeEnum(str, Enum):
     '''
-        Lifecycle of a replenishment order placed against an external
-        purchasing system.
+        Type of a warehouse entry (Nota de Ingreso). Mirrors the three intake
+        channels of the legacy system.
     '''
-    REQUESTED = 'REQUESTED'
-    IN_RECEPTION = 'IN_RECEPTION'
-    COMPLETED = 'COMPLETED'
-    CANCELLED = 'CANCELLED'
+    COMPRA = 'COMPRA'
+    DONACION_TRANSFERENCIA = 'DONACION_TRANSFERENCIA'
+    REINGRESO = 'REINGRESO'
 
 
 class MovementTypeEnum(str, Enum):
@@ -58,6 +57,6 @@ class ReferenceTypeEnum(str, Enum):
         Origin of a kardex movement, used together with reference_id to
         reconstruct the source document of any stock change.
     '''
-    REPLENISHMENT = 'REPLENISHMENT'
+    ENTRY = 'ENTRY'
     REQUEST = 'REQUEST'
     MANUAL = 'MANUAL'

@@ -1,34 +1,34 @@
 /**
  * Catalog page.
  *
- * Four tabs that share the same modal helper:
+ * Three tabs that share the same modal helper:
  *   - Items
- *   - Categorías
+ *   - Grupos contables (accounting groups; backed by /categories)
  *   - Unidades
- *   - Parámetros del sistema (key/value)
  *
- * Items are the only entity whose CRUD touches Foreign Keys (category, unit),
+ * Items are the only entity whose CRUD touches Foreign Keys (group, unit),
  * so before showing the modal we lazy-load the dependent lookups once.
  */
 import { hasRole, ROLES } from '../auth.js';
 import {
     clear,
     closeModal,
+    collapsible,
     el,
     formatDate,
     formatNumber,
     openModal,
+    pager,
     showToast,
 } from '../ui.js';
 
 const TABS = [
     { key: 'items',       label: 'Ítems' },
-    { key: 'categories',  label: 'Categorías' },
+    { key: 'categories',  label: 'Grupos contables' },
     { key: 'units',       label: 'Unidades' },
-    { key: 'parameters',  label: 'Parámetros' },
 ];
 
-export async function mountCatalog({ host, actions, api }) {
+export async function mountCatalog({ host, actions, api, router }) {
     clear(host);
     actions.innerHTML = '';
 
@@ -41,6 +41,7 @@ export async function mountCatalog({ host, actions, api }) {
         activeTab: 'items',
         actions,
         api,
+        router,
         host: panelEl,
         // cached lookups
         categories: null,
@@ -66,7 +67,6 @@ export async function mountCatalog({ host, actions, api }) {
             case 'items': return _renderItems(state);
             case 'categories': return _renderCategories(state);
             case 'units': return _renderUnits(state);
-            case 'parameters': return _renderParameters(state);
         }
     }
 
@@ -88,20 +88,90 @@ async function _renderItems(state) {
 
     clear(state.host);
     state.host.appendChild(el('p', { class: 'sup-placeholder', text: 'Cargando ítems…' }));
+    let categories;
+    let units;
     try {
-        const [items, categories, units] = await Promise.all([
-            state.api.listItems({ limit: 500 }),
-            _ensureCategories(state),
-            _ensureUnits(state),
-        ]);
-        const catById = new Map(categories.map(c => [c.id, c]));
-        const unitById = new Map(units.map(u => [u.id, u]));
-
-        clear(state.host);
-        state.host.appendChild(_itemsTable(items, catById, unitById, state));
+        [categories, units] = await Promise.all([_ensureCategories(state), _ensureUnits(state)]);
     } catch (err) {
         clear(state.host);
         state.host.appendChild(el('p', { class: 'sup-form-error', text: err.message }));
+        return;
+    }
+
+    // Search + accounting group, filtered server-side: the catalog holds
+    // hundreds of items and the warehouse looks them up by code or description.
+    const searchIn = el('input', {
+        type: 'search', placeholder: 'Código o descripción…',
+    });
+    const groupSel = el('select', {}, [el('option', { value: '', text: 'TODOS' })]);
+    categories.forEach(cat => groupSel.appendChild(el('option', {
+        value: cat.id, text: `${cat.code} — ${cat.name}`,
+    })));
+
+    const listHost = el('div', {});
+    const reload = () => _loadItems(state, { searchIn, groupSel, listHost, categories, units });
+
+    let searchTimer = null;
+    searchIn.oninput = () => {
+        // Debounced so typing a code does not fire one request per keystroke.
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(reload, 300);
+    };
+    groupSel.onchange = reload;
+
+    clear(state.host);
+    state.host.appendChild(el('div', { class: 'sup-filters' }, [
+        el('label', { class: 'sup-field' }, [el('span', { text: 'Buscar' }), searchIn]),
+        el('label', { class: 'sup-field' }, [el('span', { text: 'Grupo contable' }), groupSel]),
+    ]));
+    state.host.appendChild(listHost);
+    await reload();
+}
+
+async function _loadItems(state, { searchIn, groupSel, listHost, categories, units }) {
+    clear(listHost);
+    listHost.appendChild(el('p', { class: 'sup-placeholder', text: 'Cargando ítems…' }));
+    try {
+        const params = { limit: 500 };
+        if (searchIn.value.trim()) params.search = searchIn.value.trim();
+        if (groupSel.value) params.category_id = Number(groupSel.value);
+        const items = await state.api.listItems(params);
+        clear(listHost);
+        if (items.length === 0) {
+            listHost.appendChild(el('div', {
+                class: 'sup-empty',
+                text: (params.search || params.category_id)
+                    ? 'Ningún ítem coincide con la búsqueda.'
+                    : 'Aún no hay ítems en el catálogo.',
+            }));
+            return;
+        }
+        const catById = new Map(categories.map(c => [c.id, c]));
+        const unitById = new Map(units.map(u => [u.id, u]));
+
+        // The catalog holds hundreds of articles: paginated inside a section
+        // that starts collapsed, so the page opens readable.
+        const box = collapsible({
+            title: 'Ítems del catálogo',
+            subtitle: `${items.length} artículo(s)`,
+            stateKey: 'catalog.items',
+        });
+        const tableHost = el('div', {});
+        const pagination = pager({
+            pageSize: 10,
+            render: rows => {
+                clear(tableHost);
+                tableHost.appendChild(_itemsTable(rows, catById, unitById, state));
+            },
+        });
+        box.body.appendChild(tableHost);
+        box.body.appendChild(pagination.el);
+        pagination.setRows(items);
+        listHost.appendChild(box.section);
+        return;
+    } catch (err) {
+        clear(listHost);
+        listHost.appendChild(el('p', { class: 'sup-form-error', text: err.message }));
     }
 }
 
@@ -111,8 +181,8 @@ function _itemsTable(items, catById, unitById, state) {
     }
     const thead = el('thead', {}, [el('tr', {}, [
         el('th', { text: 'Código' }),
-        el('th', { text: 'Nombre' }),
-        el('th', { text: 'Categoría' }),
+        el('th', { text: 'Descripción' }),
+        el('th', { text: 'Grupo contable' }),
         el('th', { text: 'Unidad' }),
         el('th', { text: 'Stock' }),
         el('th', { text: 'Mínimo' }),
@@ -131,10 +201,20 @@ function _itemsTable(items, catById, unitById, state) {
             text: item.is_active ? 'Activo' : 'Inactivo',
         });
         const actionsTd = el('td', { class: 'sup-row-actions' });
+        // Every role may audit an item: the kardex opens as its own screen
+        // (#/kardex/<id>) already focused on this item.
+        actionsTd.appendChild(el('button', {
+            class: 'sup-icon-btn',
+            title: 'Ver movimiento del artículo',
+            dataset: { tip: 'Movimientos' },
+            html: '<i class="fa-solid fa-list-ul"></i>',
+            onClick: () => state.router.go('kardex', item.id),
+        }));
         if (hasRole(ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER)) {
             actionsTd.appendChild(el('button', {
                 class: 'sup-icon-btn',
-                title: 'Parámetros',
+                title: 'Parámetros de reposición',
+                dataset: { tip: 'Parámetros' },
                 html: '<i class="fa-solid fa-sliders"></i>',
                 onClick: () => _openItemParametersModal(state, item),
             }));
@@ -143,12 +223,14 @@ function _itemsTable(items, catById, unitById, state) {
             actionsTd.appendChild(el('button', {
                 class: 'sup-icon-btn',
                 title: 'Editar',
+                dataset: { tip: 'Editar' },
                 html: '<i class="fa-solid fa-pen"></i>',
                 onClick: () => _openItemModal(state, item),
             }));
             actionsTd.appendChild(el('button', {
                 class: 'sup-icon-btn',
                 title: 'Desactivar',
+                dataset: { tip: 'Desactivar' },
                 html: '<i class="fa-solid fa-trash"></i>',
                 onClick: () => _confirmDeleteItem(state, item),
             }));
@@ -176,7 +258,7 @@ function _openItemModal(state, item) {
         ]),
         _field('description', 'Descripción', { value: item?.description, textarea: true }),
         el('div', { class: 'sup-field-row' }, [
-            _select('category_id', 'Categoría', state.categories, item?.category_id,
+            _select('category_id', 'Grupo contable', state.categories, item?.category_id,
                 c => `${c.code} — ${c.name}`),
             _select('unit_id', 'Unidad', state.units, item?.unit_id, u => `${u.code} (${u.abbreviation})`),
         ]),
@@ -309,8 +391,8 @@ async function _ensureUnits(state) {
 // --------------------------------------------------------------------- //
 async function _renderCategories(state) {
     await _renderSimpleEntity(state, {
-        title: 'Categorías',
-        newLabel: 'Nueva categoría',
+        title: 'Grupos contables',
+        newLabel: 'Nuevo grupo contable',
         loader: () => state.api.listCategories({ limit: 500 }),
         columns: [
             { header: 'Código', key: 'code' },
@@ -487,106 +569,6 @@ function _openSimpleEntityModal(state, cfg, row) {
 
     openModal({
         title: isEdit ? `Editar` : cfg.newLabel,
-        body: form,
-        footer: [
-            el('button', { class: 'sup-btn sup-btn-ghost', text: 'Cancelar', onClick: closeModal }),
-            submitBtn,
-        ],
-    });
-}
-
-// --------------------------------------------------------------------- //
-// PARAMETERS                                                             //
-// --------------------------------------------------------------------- //
-async function _renderParameters(state) {
-    state.actions.innerHTML = '';
-    if (hasRole(ROLES.ADMIN)) {
-        state.actions.appendChild(el('button', {
-            class: 'sup-btn sup-btn-primary',
-            html: '<i class="fa-solid fa-plus"></i> Nuevo parámetro',
-            onClick: () => _openParameterModal(state, null),
-        }));
-    }
-
-    clear(state.host);
-    state.host.appendChild(el('p', { class: 'sup-placeholder', text: 'Cargando parámetros…' }));
-    try {
-        const rows = await state.api.listParameters();
-        clear(state.host);
-        if (rows.length === 0) {
-            state.host.appendChild(el('div', {
-                class: 'sup-empty', text: 'Sin parámetros definidos.',
-            }));
-            return;
-        }
-        const thead = el('thead', {}, [el('tr', {}, [
-            el('th', { text: 'Clave' }),
-            el('th', { text: 'Valor' }),
-            el('th', { text: 'Descripción' }),
-            el('th', { text: 'Actualizado por' }),
-            el('th', { text: 'Fecha' }),
-            el('th', { text: '' }),
-        ])]);
-        const tbody = el('tbody', {}, rows.map(p => {
-            const actionsTd = el('td', { class: 'sup-row-actions' });
-            if (hasRole(ROLES.ADMIN)) {
-                actionsTd.appendChild(el('button', {
-                    class: 'sup-icon-btn', title: 'Editar',
-                    html: '<i class="fa-solid fa-pen"></i>',
-                    onClick: () => _openParameterModal(state, p),
-                }));
-            }
-            return el('tr', {}, [
-                el('td', { text: p.key }),
-                el('td', { text: p.value }),
-                el('td', { text: p.description || '—' }),
-                el('td', { text: p.updated_by || '—' }),
-                el('td', { text: formatDate(p.updated_at, true) }),
-                actionsTd,
-            ]);
-        }));
-        state.host.appendChild(el('div', { class: 'sup-table-wrap' }, [
-            el('table', { class: 'sup-table' }, [thead, tbody]),
-        ]));
-    } catch (err) {
-        clear(state.host);
-        state.host.appendChild(el('p', { class: 'sup-form-error', text: err.message }));
-    }
-}
-
-function _openParameterModal(state, param) {
-    const isEdit = Boolean(param);
-    const form = el('form', { class: 'sup-stack' }, [
-        _field('key', 'Clave', { value: param?.key, required: true, disabled: isEdit }),
-        _field('value', 'Valor', { value: param?.value, required: true }),
-        _field('description', 'Descripción', { value: param?.description, textarea: true }),
-    ]);
-    const errEl = el('p', { class: 'sup-form-error', hidden: true });
-    form.appendChild(errEl);
-
-    const submitBtn = el('button', {
-        class: 'sup-btn sup-btn-primary', text: 'Guardar',
-        onClick: async () => {
-            errEl.hidden = true;
-            const fd = new FormData(form);
-            try {
-                await state.api.upsertParameter({
-                    key: fd.get('key'),
-                    value: fd.get('value'),
-                    description: fd.get('description') || null,
-                });
-                showToast('Parámetro guardado', 'success');
-                closeModal();
-                _renderParameters(state);
-            } catch (err) {
-                errEl.textContent = err.message;
-                errEl.hidden = false;
-            }
-        },
-    });
-
-    openModal({
-        title: isEdit ? `Editar parámetro: ${param.key}` : 'Nuevo parámetro',
         body: form,
         footer: [
             el('button', { class: 'sup-btn sup-btn-ghost', text: 'Cancelar', onClick: closeModal }),

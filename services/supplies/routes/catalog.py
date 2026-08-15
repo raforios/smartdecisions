@@ -1,7 +1,7 @@
 '''
-    Routes for the catalog (categories, units, items, system parameters).
+    Routes for the catalog (categories, units, items).
 '''
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -14,27 +14,23 @@ from controllers.catalog import (
     delete_item_controller,
     delete_unit_controller,
     get_item_controller,
-    get_parameter_controller,
     list_categories_controller,
     list_items_controller,
-    list_parameters_controller,
     list_units_controller,
     update_category_controller,
     update_item_controller,
     update_item_parameters_controller,
     update_unit_controller,
-    upsert_parameter_controller,
 )
 from schemas.catalog import (
     CategoryCreateSchema,
     CategoryResponseSchema,
     CategoryUpdateSchema,
     ItemCreateSchema,
+    ItemFilterSchema,
     ItemParametersUpdateSchema,
     ItemResponseSchema,
     ItemUpdateSchema,
-    SystemParameterResponseSchema,
-    SystemParameterUpsertSchema,
     UnitCreateSchema,
     UnitResponseSchema,
     UnitUpdateSchema,
@@ -215,20 +211,14 @@ async def create_item(
     summary = 'List supply items',
 )
 async def list_items(
-    skip: int = Query(0, ge = 0),
-    limit: int = Query(100, ge = 1, le = 500),
-    search: Optional[str] = Query(None, description = 'Free-text filter on code or name.'),
-    only_available: bool = Query(False,
-                                 description = 'Exclude items at or below the minimum.'),
+    filters: ItemFilterSchema = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
 ):
     '''
-        Lists supply items with optional search and availability filter.
+        Lists supply items filtered by text, accounting group and availability.
     '''
-    return await list_items_controller(
-        db, skip = skip, limit = limit, search = search, only_available = only_available,
-    )
+    return await list_items_controller(db, filters = filters)
 
 
 @router.get(
@@ -298,53 +288,3 @@ async def delete_item(
     '''
     deleted = await delete_item_controller(db, item_id)
     return {'deactivated_id': deleted}
-
-
-# --------------------------------------------------------------------------- #
-# System parameters                                                           #
-# --------------------------------------------------------------------------- #
-@router.put(
-    '/parameters',
-    response_model = SystemParameterResponseSchema,
-    summary = 'Create or update a system parameter',
-)
-async def upsert_parameter(
-    payload: SystemParameterUpsertSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
-    '''
-        Creates or updates a system parameter keyed by `key`. Restricted to ADMIN.
-    '''
-    return await upsert_parameter_controller(db, payload, updated_by = current_user)
-
-
-@router.get(
-    '/parameters',
-    response_model = List[SystemParameterResponseSchema],
-    summary = 'List system parameters',
-)
-async def list_parameters(
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(get_current_user),
-):
-    '''
-        Returns all system parameters. Available to any authenticated user.
-    '''
-    return await list_parameters_controller(db)
-
-
-@router.get(
-    '/parameters/{key}',
-    response_model = SystemParameterResponseSchema,
-    summary = 'Get a system parameter by key',
-)
-async def get_parameter(
-    key: str,
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(get_current_user),
-):
-    '''
-        Returns a single system parameter by key.
-    '''
-    return await get_parameter_controller(db, key)

@@ -10,14 +10,12 @@
 '''
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from models.supplies import Item, Request, RequestDetail
 from schemas.enums import (
-    MovementTypeEnum,
     ReferenceTypeEnum,
     RequestStatusEnum,
     RoleEnum,
@@ -35,17 +33,23 @@ from schemas.request import (
 from services.exceptions import (
     ForbiddenError,
     InvalidInputError,
-    RegisterAlreadyExistsError,
     RegisterNotFoundError,
 )
 from services.logger_config import custom_logger as logger
 from services.supplies_logic import (
+    MovementReference,
+    OutflowSpec,
     assert_can_delete_request,
+    assert_item_deliverable,
     assert_item_requestable,
     assert_role_in,
     assert_transition_allowed,
-    post_kardex_movement,
+    commit_or_conflict,
+    consume_stock_fifo,
     record_status_change,
+    release_request_reservations,
+    release_stock,
+    reserve_stock,
 )
 
 
@@ -66,6 +70,23 @@ def _serialize_request(record: Request) -> RequestResponseSchema:
     return RequestResponseSchema.model_validate(record)
 
 
+def _serialize_line(detail: RequestDetail) -> RequestDetailResponseSchema:
+    '''
+        Line of a request, resolving the item identity the printable forms
+        need (code, description and unit).
+    '''
+    item = detail.item
+    return RequestDetailResponseSchema(
+        id = detail.id,
+        item_id = detail.item_id,
+        item_code = item.code if item else None,
+        item_name = item.name if item else None,
+        unit = item.unit.abbreviation if item and item.unit else None,
+        requested_qty = detail.requested_qty,
+        delivered_qty = detail.delivered_qty,
+    )
+
+
 def _serialize_detailed(record: Request) -> RequestDetailedResponseSchema:
     '''
         Includes line items and the full status history.
@@ -74,6 +95,9 @@ def _serialize_detailed(record: Request) -> RequestDetailedResponseSchema:
         id = record.id,
         code = record.code,
         requester_email = record.requester_email,
+        requester_name = record.requester_name,
+        requester_position = record.requester_position,
+        requester_unit = record.requester_unit,
         status = record.status,
         notes = record.notes,
         requested_at = record.requested_at,
@@ -82,11 +106,33 @@ def _serialize_detailed(record: Request) -> RequestDetailedResponseSchema:
         delivered_at = record.delivered_at,
         delivered_by = record.delivered_by,
         closed_at = record.closed_at,
-        details = [RequestDetailResponseSchema.model_validate(d) for d in record.details],
+        details = [_serialize_line(d) for d in record.details],
         status_history = [
             RequestStatusHistorySchema.model_validate(h) for h in record.status_history
         ],
     )
+
+
+def _delivery_note(record: Request) -> str:
+    '''
+        Builds the kardex note for a delivery.
+
+        Names the person and unit that received the material, the way the
+        legacy NSIAF kardex did, falling back to the request code alone for
+        older requests that carry no requester identity.
+
+        Args:
+            record (Request): Request being delivered.
+
+        Returns:
+            str: Note stored on every OUT movement of this delivery.
+    '''
+    who = ' - '.join(part for part in (
+        record.requester_name, record.requester_position, record.requester_unit,
+    ) if part)
+    if not who:
+        return f'Entrega de solicitud {record.code}'
+    return f'Entrega {record.code} · {who}'
 
 
 # --------------------------------------------------------------------------- #
@@ -118,6 +164,9 @@ async def create_request_controller(
     record = Request(
         code = _generate_request_code(db),
         requester_email = requester_email,
+        requester_name = payload.requester_name,
+        requester_position = payload.requester_position,
+        requester_unit = payload.requester_unit,
         status = RequestStatusEnum.CREATED,
         notes = payload.notes,
     )
@@ -133,6 +182,11 @@ async def create_request_controller(
             requested_qty = detail.requested_qty,
         ))
 
+    # Hold the units from this moment on: the next request must see them gone.
+    for item_id, total_qty in aggregated.items():
+        reserve_stock(items_by_id[item_id], total_qty)
+        db.add(items_by_id[item_id])
+
     record_status_change(
         db = db,
         request = record,
@@ -140,16 +194,11 @@ async def create_request_controller(
         changed_by = requester_email,
     )
 
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise RegisterAlreadyExistsError(
-            detail = 'Request detail collision (duplicated item lines).'
-        ) from exc
+    commit_or_conflict(db, 'Request detail collision (duplicated item lines).')
 
     db.refresh(record)
-    logger.info(f'Request {record.code} created by {requester_email}.')
+    message = f'Request {record.code} created by {requester_email}.'
+    logger.info(message)
     return _serialize_detailed(record)
 
 
@@ -157,12 +206,7 @@ async def create_request_controller(
 # Read                                                                        #
 # --------------------------------------------------------------------------- #
 async def list_requests_controller(
-    db: Session,
-    filters: RequestFilterSchema,
-    current_role: str,
-    current_email: str,
-    skip: int = 0,
-    limit: int = 100,
+    db: Session, filters: RequestFilterSchema, current_role: str, current_email: str
 ) -> List[RequestResponseSchema]:
     '''
         Lists requests.
@@ -185,8 +229,8 @@ async def list_requests_controller(
 
     rows = (
         query.order_by(Request.requested_at.desc())
-        .offset(skip)
-        .limit(limit)
+        .offset(filters.skip)
+        .limit(filters.limit)
         .all()
     )
     return [_serialize_request(row) for row in rows]
@@ -229,6 +273,8 @@ async def delete_request_controller(
         raise RegisterNotFoundError(detail = f'Request {request_id} not found.')
 
     assert_can_delete_request(record, current_email, current_role)
+    # Give the held units back before the lines disappear with the request.
+    release_request_reservations(db, record)
     db.delete(record)
     db.commit()
     return request_id
@@ -241,8 +287,8 @@ async def process_request_controller(
     db: Session, request_id: int, current_role: str, current_email: str
 ) -> RequestDetailedResponseSchema:
     '''
-        CREATED -> IN_PROCESS. Re-validates stock to guarantee none of the
-        requested items has dropped below the minimum since creation.
+        CREATED -> IN_PROCESS. Re-validates that the physical stock still
+        covers every line; the reservation taken at creation stays in place.
     '''
     record = (
         db.query(Request)
@@ -259,7 +305,7 @@ async def process_request_controller(
         item = db.query(Item).filter(Item.id == detail.item_id).first()
         if item is None:
             raise RegisterNotFoundError(detail = f'Item {detail.item_id} not found.')
-        assert_item_requestable(item, Decimal(detail.requested_qty))
+        assert_item_deliverable(item, Decimal(detail.requested_qty))
 
     record_status_change(
         db = db,
@@ -321,16 +367,22 @@ async def deliver_request_controller(
         item = db.query(Item).filter(Item.id == detail.item_id).first()
         if item is None:
             raise RegisterNotFoundError(detail = f'Item {detail.item_id} not found.')
-        post_kardex_movement(
-            db = db,
-            item = item,
-            movement_type = MovementTypeEnum.OUT,
-            reference_type = ReferenceTypeEnum.REQUEST,
-            reference_id = record.id,
-            quantity = delivered_qty,
+        # PEPS/FIFO: the delivery consumes cost layers oldest-first, so a
+        # single line may produce several valued OUT rows in the kardex.
+        consume_stock_fifo(db, item, delivered_qty, OutflowSpec(
             created_by = current_email,
-            notes = f'Delivery for request {record.code}',
-        )
+            reference = MovementReference(
+                kind = ReferenceTypeEnum.REQUEST, identifier = record.id),
+            # Spanish on purpose: this note is shown verbatim in the kardex UI
+            # and printed in the "Detalle" column of the valued kardex, where
+            # the legacy system named the person who received the material.
+            notes = _delivery_note(record),
+        ))
+        # The units left the warehouse, so the whole line stops being a
+        # promise: what was delivered turned into an outflow and the
+        # undelivered remainder goes back to the available pool.
+        release_stock(item, Decimal(detail.requested_qty))
+        db.add(item)
         detail.delivered_qty = delivered_qty
         db.add(detail)
 
@@ -400,6 +452,7 @@ async def reject_request_controller(
         raise RegisterNotFoundError(detail = f'Request {request_id} not found.')
 
     assert_transition_allowed(record.status, RequestStatusEnum.REJECTED, current_role)
+    release_request_reservations(db, record)
     record_status_change(
         db = db,
         request = record,
@@ -434,6 +487,7 @@ async def cancel_request_controller(
         raise RegisterNotFoundError(detail = f'Request {request_id} not found.')
 
     assert_transition_allowed(record.status, RequestStatusEnum.CANCELLED, current_role)
+    release_request_reservations(db, record)
     record_status_change(
         db = db,
         request = record,

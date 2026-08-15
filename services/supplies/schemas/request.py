@@ -31,7 +31,14 @@ class RequestDetailCreateSchema(BaseModel):
 class RequestCreateSchema(BaseModel):
     '''
         Payload to create a supply request (flow 1: REQUESTER).
+
+        The requester identity fields are printed on the SOLICITUD and ENTREGA
+        forms that get signed on paper, so they are captured with the request
+        instead of being derived from the login address.
     '''
+    requester_name: str = Field(..., min_length = 3, max_length = 200)
+    requester_position: str = Field(..., min_length = 2, max_length = 200)
+    requester_unit: str = Field(..., min_length = 2, max_length = 200)
     notes: Optional[str] = Field(None, max_length = 1000)
     details: List[RequestDetailCreateSchema] = Field(..., min_length = 1)
 
@@ -76,6 +83,8 @@ class RequestFilterSchema(BaseModel):
     requester_email: Optional[str] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
+    skip: int = Field(0, ge = 0)
+    limit: int = Field(100, ge = 1, le = 500)
 
 
 # --------------------------------------------------------------------------- #
@@ -83,10 +92,14 @@ class RequestFilterSchema(BaseModel):
 # --------------------------------------------------------------------------- #
 class RequestDetailResponseSchema(_Base):
     '''
-        Line of a request as returned by the API.
+        Line of a request as returned by the API. The item identity travels
+        with the line so the printable forms do not need a second round-trip.
     '''
     id: int
     item_id: int
+    item_code: Optional[str] = None
+    item_name: Optional[str] = None
+    unit: Optional[str] = None
     requested_qty: Decimal
     delivered_qty: Decimal
 
@@ -110,6 +123,9 @@ class RequestResponseSchema(_Base):
     id: int
     code: str
     requester_email: str
+    requester_name: Optional[str]
+    requester_position: Optional[str]
+    requester_unit: Optional[str]
     status: RequestStatusEnum
     notes: Optional[str]
     requested_at: datetime

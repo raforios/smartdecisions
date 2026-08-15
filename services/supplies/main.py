@@ -2,8 +2,8 @@
     Supplies Microservice Main Handler.
 
     Inventory management for materials and supplies. Wires the router for
-    catalog, replenishments, requests, kardex and dashboard endpoints, and
-    exposes the Lambda-friendly ASGI handler via Mangum.
+    catalog, entries (Nota de Ingreso), requests, kardex and dashboard
+    endpoints, and exposes the Lambda-friendly ASGI handler via Mangum.
 '''
 import socket
 from datetime import date, datetime
@@ -19,9 +19,11 @@ import uvicorn
 
 from routes.catalog import router as catalog_router
 from routes.dashboard import router as dashboard_router
+from routes.entry import router as entry_router
 from routes.kardex import router as kardex_router
-from routes.replenishment import router as replenishment_router
+from routes.reports import router as reports_router
 from routes.request import router as request_router
+from routes.supplier import router as supplier_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
@@ -81,15 +83,15 @@ APP_CONFIG = {
     'description': '''
         Inventory microservice for the Ministry. Covers two main processes:
 
-        1. **Replenishments**: detect items below the configured minimum,
-           generate orders aimed at an external purchasing system, register
-           physical receptions and update the kardex.
+        1. **Entries (Nota de Ingreso)**: register warehouse intake documents
+           whose detail lines are PEPS/FIFO cost layers, feeding a valued
+           kardex IN movement per line.
         2. **Requests**: end-user supply requests with a full state machine,
            stock validation against the minimum, role-based transitions and
-           automatic kardex OUT movements on delivery.
+           PEPS/FIFO kardex OUT movements on delivery.
 
-        Includes reports (low-stock, replenishments, requests) and a
-        dashboard summary.''',
+        Includes reports (low-stock, entries, requests) and a dashboard
+        summary.''',
     'version': '1.0.0',
     'contact': {
         'name': 'API Support',
@@ -170,9 +172,11 @@ app.add_middleware(
 )
 
 app.include_router(catalog_router)
-app.include_router(replenishment_router)
+app.include_router(supplier_router)
+app.include_router(entry_router)
 app.include_router(request_router)
 app.include_router(kardex_router)
+app.include_router(reports_router)
 app.include_router(dashboard_router)
 
 

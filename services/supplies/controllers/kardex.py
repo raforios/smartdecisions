@@ -4,43 +4,32 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models.supplies import (
-    Item,
-    KardexMovement,
-    Replenishment,
-    Request,
-    RequestDetail,
-)
+from models.supplies import Entry, Item, KardexMovement, Request
 from schemas.enums import (
     MovementTypeEnum,
     ReferenceTypeEnum,
     RequestStatusEnum,
 )
 from schemas.kardex import (
+    EntryReportRowSchema,
     KardexAdjustmentSchema,
+    KardexFilterSchema,
     KardexMovementResponseSchema,
     LowStockItemSchema,
-    ReplenishmentReportRowSchema,
     RequestReportRowSchema,
 )
 from services.crud import get_record
-from services.exceptions import RegisterNotFoundError
-from services.supplies_logic import post_kardex_movement
+from services.report_rows import build_entry_rows, build_request_rows
+from services.supplies_logic import MovementReference, MovementSpec, post_kardex_movement
 
 
 # --------------------------------------------------------------------------- #
 # Kardex queries                                                              #
 # --------------------------------------------------------------------------- #
 async def list_kardex_for_item_controller(
-    db: Session,
-    item_id: int,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-    skip: int = 0,
-    limit: int = 200,
+    db: Session, item_id: int, filters: KardexFilterSchema
 ) -> List[KardexMovementResponseSchema]:
     '''
         Returns the kardex movements for a single item, optionally bounded by
@@ -48,15 +37,15 @@ async def list_kardex_for_item_controller(
     '''
     get_record(db, Item, item_id)
     query = db.query(KardexMovement).filter(KardexMovement.item_id == item_id)
-    if date_from:
-        query = query.filter(KardexMovement.created_at >= date_from)
-    if date_to:
-        query = query.filter(KardexMovement.created_at <= date_to)
+    if filters.date_from:
+        query = query.filter(KardexMovement.created_at >= filters.date_from)
+    if filters.date_to:
+        query = query.filter(KardexMovement.created_at <= filters.date_to)
 
     rows = (
         query.order_by(KardexMovement.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+        .offset(filters.skip)
+        .limit(filters.limit)
         .all()
     )
     return [KardexMovementResponseSchema.model_validate(r) for r in rows]
@@ -70,16 +59,13 @@ async def create_manual_adjustment_controller(
         stock, negative deltas subtract; both produce a new append-only row.
     '''
     item = get_record(db, Item, payload.item_id)
-    movement = post_kardex_movement(
-        db = db,
-        item = item,
+    movement = post_kardex_movement(db, item, MovementSpec(
         movement_type = MovementTypeEnum.ADJUSTMENT,
-        reference_type = ReferenceTypeEnum.MANUAL,
-        reference_id = None,
+        reference = MovementReference(kind = ReferenceTypeEnum.MANUAL),
         quantity = payload.quantity,
         created_by = created_by,
         notes = payload.notes,
-    )
+    ))
     db.commit()
     db.refresh(movement)
     return KardexMovementResponseSchema.model_validate(movement)
@@ -113,35 +99,22 @@ async def list_low_stock_controller(db: Session) -> List[LowStockItemSchema]:
     ]
 
 
-async def replenishment_report_controller(
+async def entries_report_controller(
     db: Session,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
-) -> List[ReplenishmentReportRowSchema]:
+) -> List[EntryReportRowSchema]:
     '''
-        Aggregated replenishments report optionally bounded by created_at.
+        Aggregated entries (Notas de Ingreso) report optionally bounded by
+        created_at, with the number of lines per entry.
     '''
-    query = db.query(Replenishment, Item).join(Item, Replenishment.item_id == Item.id)
+    query = db.query(Entry)
     if date_from:
-        query = query.filter(Replenishment.created_at >= date_from)
+        query = query.filter(Entry.created_at >= date_from)
     if date_to:
-        query = query.filter(Replenishment.created_at <= date_to)
+        query = query.filter(Entry.created_at <= date_to)
 
-    rows = query.order_by(Replenishment.created_at.desc()).all()
-    return [
-        ReplenishmentReportRowSchema(
-            replenishment_id = rep.id,
-            code = rep.code,
-            item_id = item.id,
-            item_code = item.code,
-            requested_qty = rep.requested_qty,
-            received_qty = rep.received_qty,
-            status = rep.status.value if hasattr(rep.status, 'value') else str(rep.status),
-            created_at = rep.created_at,
-            completed_at = rep.completed_at,
-        )
-        for rep, item in rows
-    ]
+    return build_entry_rows(db, query.order_by(Entry.created_at.desc()).all())
 
 
 async def request_report_controller(
@@ -161,29 +134,4 @@ async def request_report_controller(
     if status:
         query = query.filter(Request.status == status)
 
-    rows = query.order_by(Request.requested_at.desc()).all()
-
-    # Count details per request in one query to avoid N+1 lookups.
-    request_ids = [r.id for r in rows]
-    counts: dict[int, int] = {}
-    if request_ids:
-        for request_id, count in (
-            db.query(RequestDetail.request_id, func.count(RequestDetail.id))
-            .filter(RequestDetail.request_id.in_(request_ids))
-            .group_by(RequestDetail.request_id)
-            .all()
-        ):
-            counts[request_id] = count
-
-    return [
-        RequestReportRowSchema(
-            request_id = r.id,
-            code = r.code,
-            requester_email = r.requester_email,
-            status = r.status,
-            total_items = counts.get(r.id, 0),
-            requested_at = r.requested_at,
-            closed_at = r.closed_at,
-        )
-        for r in rows
-    ]
+    return build_request_rows(db, query.order_by(Request.requested_at.desc()).all())

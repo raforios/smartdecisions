@@ -27,7 +27,7 @@ async def dashboard_summary(
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
 ):
     '''
-        Returns the dashboard KPIs (items, requests, replenishments).
+        Returns the dashboard KPIs (items, requests, entries).
     '''
     return await dashboard_summary_controller(db)
 
@@ -35,7 +35,7 @@ async def dashboard_summary(
 @router.get(
     '/dashboard/recent-activity',
     response_model = DashboardRecentActivitySchema,
-    summary = 'Most recent requests, replenishments and kardex movements',
+    summary = 'Most recent requests, entries and kardex movements',
 )
 async def dashboard_recent_activity(
     limit: int = Query(10, ge = 1, le = 50),

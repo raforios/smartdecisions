@@ -14,14 +14,32 @@ import { hasRole, ROLES } from '../auth.js';
 import {
     clear,
     closeModal,
+    collapsible,
     el,
     formatDate,
     formatNumber,
+    itemPicker,
     openModal,
     showToast,
     statusBadge,
 } from '../ui.js';
 import { openRequestDetailModal } from './RequestDetailModal.js';
+
+// The requester types the same name, position and unit on every request; the
+// browser remembers them so only the articles change from one form to the next.
+const IDENTITY_KEY = 'supplies_requester_identity';
+
+function _rememberedIdentity() {
+    try {
+        return JSON.parse(localStorage.getItem(IDENTITY_KEY)) || {};
+    } catch (err) {
+        return {};
+    }
+}
+
+function _rememberIdentity(identity) {
+    localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
+}
 
 const STATUS_OPTIONS = [
     { value: '', label: 'Todos' },
@@ -161,9 +179,15 @@ function _renderTable(state, rows) {
             ]),
         ]),
     ));
-    return el('div', { class: 'sup-table-wrap' }, [
+    const box = collapsible({
+        title: 'Solicitudes',
+        subtitle: `${rows.length} registro(s)`,
+        stateKey: 'requests.list',
+    });
+    box.body.appendChild(el('div', { class: 'sup-table-wrap' }, [
         el('table', { class: 'sup-table' }, [thead, tbody]),
-    ]);
+    ]));
+    return box.section;
 }
 
 // --------------------------------------------------------------------- //
@@ -186,37 +210,81 @@ async function _openCreateModal(api, onSuccess) {
     const linesHost = el('div', { class: 'sup-stack' });
     const errEl = el('p', { class: 'sup-form-error', hidden: true });
 
-    const itemPicker = (() => {
-        const select = el('select', { name: 'item_id' });
-        select.appendChild(el('option', { value: '', text: '— Elegir ítem —' }));
-        availableItems.forEach(it => {
-            select.appendChild(el('option', {
-                value: it.id,
-                text: `${it.code} — ${it.name} (disponible ${formatNumber(
-                    Number(it.current_stock) - Number(it.min_stock))})`,
-            }));
-        });
-        return select;
-    })();
+    /**
+     * Shows a validation message. The error line sits at the bottom of a
+     * scrollable modal, so it is scrolled into view — otherwise pressing
+     * "Agregar línea" with a bad quantity looks like nothing happened.
+     */
+    function _fail(message) {
+        errEl.textContent = message;
+        errEl.hidden = false;
+        errEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    // Type-to-filter instead of a 380-option select: the requester knows the
+    // article by name or code, not by its position in a dropdown.
+    const picker = itemPicker({
+        items: availableItems,
+        placeholder: 'Buscar artículo por código o descripción…',
+        onSelect: item => _showAvailability(item),
+    });
 
     const qtyInput = el('input', { type: 'number', step: '0.01', min: '0.01', name: 'qty' });
+    const availabilityEl = el('p', { class: 'sup-muted sup-availability', text: '' });
+
+    /**
+     * States the ceiling explicitly when an article is picked: the requester
+     * should not have to submit the form to learn how many units are left.
+     * Declared as a function so the picker callback can reach it before the
+     * consts above it are initialized.
+     */
+    function _showAvailability(item) {
+        if (!item) {
+            availabilityEl.textContent = '';
+            qtyInput.removeAttribute('max');
+            return;
+        }
+        const left = _remainingFor(item);
+        qtyInput.max = String(left);
+        availabilityEl.textContent =
+            `Disponible para solicitar: ${formatNumber(left)}`
+            + (_takenFor(item) ? ` (ya pediste ${formatNumber(_takenFor(item))} aquí)` : '');
+    }
+
+    function _takenFor(item) {
+        return lines
+            .filter(line => line.item.id === item.id)
+            .reduce((acc, line) => acc + Number(line.requested_qty), 0);
+    }
+
+    function _remainingFor(item) {
+        const left = Number(item.available_stock ?? 0) - _takenFor(item);
+        return left > 0 ? left : 0;
+    }
 
     const addBtn = el('button', {
         class: 'sup-btn sup-btn-ghost',
         type: 'button',
         text: 'Agregar línea',
         onClick: () => {
-            const item = availableItems.find(i => Number(i.id) === Number(itemPicker.value));
+            const item = picker.selected();
             const qty = Number(qtyInput.value);
             if (!item || !qty || qty <= 0) {
-                errEl.textContent = 'Selecciona ítem y cantidad mayor a cero.';
-                errEl.hidden = false;
+                _fail('Selecciona ítem y cantidad mayor a cero.');
+                return;
+            }
+            // Catch it here rather than letting the backend reject the whole
+            // request after the user filled every line.
+            if (qty > _remainingFor(item)) {
+                _fail(`Solo hay ${formatNumber(_remainingFor(item))} unidad(es) disponibles `
+                      + `de ${item.code}. Ajusta la cantidad.`);
                 return;
             }
             errEl.hidden = true;
             lines.push({ item, requested_qty: qty });
-            itemPicker.value = '';
+            picker.reset();
             qtyInput.value = '';
+            availabilityEl.textContent = '';
             _renderLines();
         },
     });
@@ -250,17 +318,41 @@ async function _openCreateModal(api, onSuccess) {
 
     _renderLines();
 
-    const notesIn = el('textarea', { name: 'notes', placeholder: 'Notas opcionales' });
+    const notesIn = el('textarea', {
+        name: 'notes', placeholder: 'Justificación de la solicitud',
+    });
+
+    // These three are printed on the FORMULARIO - SOLICITUD DE ALMACENES and
+    // signed on paper, so they are captured with the request.
+    const nameIn = el('input', { name: 'requester_name', required: true });
+    const positionIn = el('input', { name: 'requester_position', required: true });
+    const unitIn = el('input', { name: 'requester_unit', required: true });
+    const remembered = _rememberedIdentity();
+    nameIn.value = remembered.requester_name || '';
+    positionIn.value = remembered.requester_position || '';
+    unitIn.value = remembered.requester_unit || '';
 
     const body = el('div', { class: 'sup-stack' }, [
         el('div', { class: 'sup-field-row' }, [
             el('label', { class: 'sup-field' }, [
-                el('span', { text: 'Ítem disponible' }), itemPicker,
+                el('span', { text: 'Solicitado por (nombre completo)' }), nameIn,
+            ]),
+            el('label', { class: 'sup-field' }, [
+                el('span', { text: 'Cargo' }), positionIn,
+            ]),
+        ]),
+        el('label', { class: 'sup-field' }, [
+            el('span', { text: 'Dirección / Unidad' }), unitIn,
+        ]),
+        el('div', { class: 'sup-field-row' }, [
+            el('label', { class: 'sup-field' }, [
+                el('span', { text: 'Ítem disponible' }), picker.el,
             ]),
             el('label', { class: 'sup-field' }, [
                 el('span', { text: 'Cantidad' }), qtyInput,
             ]),
         ]),
+        availabilityEl,
         el('div', {}, [addBtn]),
         el('div', { class: 'sup-mt-md' }, [linesHost]),
         el('label', { class: 'sup-field sup-mt-md' }, [
@@ -274,24 +366,35 @@ async function _openCreateModal(api, onSuccess) {
         onClick: async () => {
             errEl.hidden = true;
             if (lines.length === 0) {
-                errEl.textContent = 'Agrega al menos una línea.';
-                errEl.hidden = false;
+                _fail('Agrega al menos una línea.');
+                return;
+            }
+            const identity = {
+                requester_name: nameIn.value.trim(),
+                requester_position: positionIn.value.trim(),
+                requester_unit: unitIn.value.trim(),
+            };
+            if (!identity.requester_name || !identity.requester_position
+                || !identity.requester_unit) {
+                _fail('Completa nombre, cargo y dirección/unidad: '
+                      + 'se imprimen en el formulario de solicitud.');
                 return;
             }
             try {
                 await api.createRequest({
+                    ...identity,
                     notes: notesIn.value || null,
                     details: lines.map(l => ({
                         item_id: Number(l.item.id),
                         requested_qty: Number(l.requested_qty),
                     })),
                 });
+                _rememberIdentity(identity);
                 showToast('Solicitud creada', 'success');
                 closeModal();
                 onSuccess();
             } catch (err) {
-                errEl.textContent = err.message;
-                errEl.hidden = false;
+                _fail(err.message);
             }
         },
     });

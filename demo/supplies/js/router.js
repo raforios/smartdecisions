@@ -33,12 +33,18 @@ export class Router {
         this._handle();
     }
 
-    go(key) {
-        window.location.hash = `#/${key}`;
+    /**
+     * Navigates to a route. Extra segments travel in the hash and reach the
+     * page as `params`, which is how the catalog opens the kardex already
+     * focused on one item (`#/kardex/12`).
+     */
+    go(key, ...params) {
+        window.location.hash = `#/${[key, ...params].join('/')}`;
     }
 
     async _handle() {
-        const key = (window.location.hash.replace(/^#\/?/, '') || this.defaultRoute).split('/')[0];
+        const path = window.location.hash.replace(/^#\/?/, '') || this.defaultRoute;
+        const [key, ...params] = path.split('/');
         const route = this.routes.get(key);
         if (!route) {
             window.location.hash = `#/${this.defaultRoute}`;
@@ -60,6 +66,7 @@ export class Router {
                 host: this.hostEl,
                 title: this.titleEl,
                 actions: this.actionsEl,
+                params,
                 ...this.context,
             });
         } catch (err) {

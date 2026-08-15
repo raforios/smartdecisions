@@ -53,10 +53,11 @@ def get_database_engine(db_dialect: str) -> Engine:
         Creates and returns a generic SQLAlchemy database engine.
 
         Args:
-            db_dialect (str): The database dialect (e.g., 'mysql+pymysql').
+        db_dialect (str): The database dialect (e.g., 'mysql+pymysql',
+        'postgresql+psycopg2').
 
         Returns:
-            sqlalchemy.engine.base.Engine: The configured database engine.
+        sqlalchemy.engine.base.Engine: The configured database engine.
     '''
     try:
         url_database = URL.create(
@@ -88,6 +89,12 @@ def get_database_engine(db_dialect: str) -> Engine:
 def get_db_session(engine: Engine) -> Callable:
     '''
         Returns a generator function that provides a database session.
+
+        Args:
+        engine (sqlalchemy.engine.base.Engine): The database engine to use.
+
+        Returns:
+        Callable: A generator function to obtain a DB session.
     '''
     session_factory = sessionmaker(autocommit = False, autoflush = False, bind = engine)
 

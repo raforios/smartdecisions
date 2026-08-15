@@ -3,8 +3,8 @@
  * backend so pages can call it as a flat, typed-looking object.
  *
  * Endpoint groups:
- *   - Catalog: categories, units, items, parameters.
- *   - Replenishments: suggestions, CRUD, receptions.
+ *   - Catalog: categories (accounting groups), units, items.
+ *   - Suppliers: the vendors a Nota de Ingreso is issued against.
  *   - Requests: lifecycle (create/list/get/delete + transitions).
  *   - Kardex: per-item ledger, manual adjustments.
  *   - Reports & Dashboard.
@@ -91,45 +91,32 @@ export class SuppliesService {
         return this._send(`/items/${id}`, { method: 'DELETE' });
     }
 
-    // ----------------------- Parameters ----------------------- //
-    listParameters() {
-        return this._send('/parameters');
+    // ----------------------- Suppliers ------------------------ //
+    listSuppliers(params = {}) {
+        return this._send('/suppliers', { query: params });
     }
-    upsertParameter(payload) {
-        return this._send('/parameters', { method: 'PUT', body: payload });
+    getSupplier(id) {
+        return this._send(`/suppliers/${id}`);
     }
-    getParameter(key) {
-        return this._send(`/parameters/${encodeURIComponent(key)}`);
+    createSupplier(payload) {
+        return this._send('/suppliers', { method: 'POST', body: payload });
+    }
+    updateSupplier(id, payload) {
+        return this._send(`/suppliers/${id}`, { method: 'PUT', body: payload });
+    }
+    deleteSupplier(id) {
+        return this._send(`/suppliers/${id}`, { method: 'DELETE' });
     }
 
-    // ----------------------- Replenishments ------------------- //
-    listPendingReplenishments() {
-        return this._send('/replenishments/pending');
+    // ----------------------- Entries (Nota de Ingreso) -------- //
+    listEntries(params = {}) {
+        return this._send('/entries', { query: params });
     }
-    listReplenishments(params = {}) {
-        return this._send('/replenishments', { query: params });
+    getEntry(id) {
+        return this._send(`/entries/${id}`);
     }
-    getReplenishment(id) {
-        return this._send(`/replenishments/${id}`);
-    }
-    createReplenishment(payload) {
-        return this._send('/replenishments', { method: 'POST', body: payload });
-    }
-    createReplenishmentsBulk(items) {
-        return this._send('/replenishments/bulk', { method: 'POST', body: { items } });
-    }
-    cancelReplenishment(id, reason) {
-        return this._send(`/replenishments/${id}/cancel`, {
-            method: 'PATCH', body: { reason: reason || null },
-        });
-    }
-    createReception(replenishmentId, payload) {
-        return this._send(`/replenishments/${replenishmentId}/receptions`, {
-            method: 'POST', body: payload,
-        });
-    }
-    listReceptions(replenishmentId) {
-        return this._send(`/replenishments/${replenishmentId}/receptions`);
+    createEntry(payload) {
+        return this._send('/entries', { method: 'POST', body: payload });
     }
 
     // ----------------------- Requests ------------------------- //
@@ -179,11 +166,26 @@ export class SuppliesService {
     reportLowStock() {
         return this._send('/reports/low-stock');
     }
-    reportReplenishments(params = {}) {
-        return this._send('/reports/replenishments', { query: params });
+    reportEntries(params = {}) {
+        return this._send('/reports/entries', { query: params });
     }
     reportRequests(params = {}) {
         return this._send('/reports/requests', { query: params });
+    }
+    reportPhysicalValued(params = {}) {
+        return this._send('/reports/inventory/physical-valued', { query: params });
+    }
+    reportStockOnHand(params = {}) {
+        return this._send('/reports/inventory/stock-on-hand', { query: params });
+    }
+    reportInOutByGroup(params = {}) {
+        return this._send('/reports/inventory/in-out-by-group', { query: params });
+    }
+    reportKardexValued(params = {}) {
+        return this._send('/reports/kardex-valued', { query: params });
+    }
+    reportOutflowStats(params = {}) {
+        return this._send('/reports/outflow-stats', { query: params });
     }
     dashboardSummary() {
         return this._send('/dashboard/summary');

@@ -6,7 +6,7 @@ import logging
 import sys
 
 def setup_logger(name):
-    '''
+    ''' 
         Logger Config
     '''
     log_level_str = os.environ.get('LOG_LEVEL', 'INFO').upper()
@@ -22,6 +22,9 @@ def setup_logger(name):
 
     if not logger.handlers:
         logger.addHandler(stream_handler)
+        # error_handler = logging.StreamHandler(sys.stderr)
+        # error_handler.setFormatter(formatter)
+        # logger.addHandler(error_handler)
 
     logger.propagate = False
 

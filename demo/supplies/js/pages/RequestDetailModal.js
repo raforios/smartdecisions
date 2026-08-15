@@ -13,6 +13,7 @@
  * the caller can refresh whatever list/aggregation it is rendering.
  */
 import { getEmail, hasRole, ROLES } from '../auth.js';
+import { printDeliveryForm, printRequestForm } from './RequestForms.js';
 import {
     closeModal,
     el,
@@ -49,19 +50,30 @@ function _renderDetail(ctx, detail) {
             el('span', { class: 'sup-muted', text: detail.code }),
         ]),
         el('p', { class: 'sup-muted', text: `Solicitante: ${detail.requester_email}` }),
-        detail.notes ? el('p', { text: `Notas: ${detail.notes}` }) : null,
+        detail.requester_name
+            ? el('p', {
+                class: 'sup-muted',
+                text: `${detail.requester_name} · ${detail.requester_position || '—'}`
+                    + ` · ${detail.requester_unit || '—'}`,
+            })
+            : null,
+        detail.notes ? el('p', { text: `Justificación: ${detail.notes}` }) : null,
     ].filter(Boolean));
 
     const linesTable = el('div', { class: 'sup-table-wrap' }, [
         el('table', { class: 'sup-table' }, [
             el('thead', {}, [el('tr', {}, [
-                el('th', { text: 'Ítem' }),
+                el('th', { text: 'Código' }),
+                el('th', { text: 'Descripción' }),
+                el('th', { text: 'Unidad' }),
                 el('th', { text: 'Solicitado' }),
                 el('th', { text: 'Entregado' }),
             ])]),
             el('tbody', {}, detail.details.map(d =>
                 el('tr', {}, [
-                    el('td', { text: `#${d.item_id}` }),
+                    el('td', { text: d.item_code || `#${d.item_id}` }),
+                    el('td', { text: d.item_name || '—' }),
+                    el('td', { text: d.unit || '—' }),
                     el('td', { text: formatNumber(d.requested_qty) }),
                     el('td', { text: formatNumber(d.delivered_qty) }),
                 ]),
@@ -146,6 +158,15 @@ function _buildTransitionButtons(ctx, request) {
             () => _runAndReopen(ctx, request.id,
                 () => ctx.api.closeRequest(request.id),
                 'Solicitud cerrada')));
+    }
+
+    buttons.push(_actionBtn('Formulario de solicitud', 'sup-btn-ghost', 'fa-print',
+        () => printRequestForm(request)));
+    // The delivery form states what was actually handed over, so it only makes
+    // sense once the warehouse moved the stock.
+    if (request.status === 'DELIVERED' || request.status === 'CLOSED') {
+        buttons.push(_actionBtn('Formulario de entrega', 'sup-btn-ghost', 'fa-file-signature',
+            () => printDeliveryForm(request)));
     }
 
     buttons.push(el('button', {

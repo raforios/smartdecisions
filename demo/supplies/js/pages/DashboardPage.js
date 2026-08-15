@@ -9,8 +9,22 @@
  *     KPIs and the list of own requests with click-to-detail.
  */
 import { getEmail, hasRole, ROLES } from '../auth.js';
-import { clear, el, formatDate, formatNumber, showToast, statusBadge } from '../ui.js';
+import {
+    clear,
+    collapsible,
+    el,
+    formatDate,
+    formatNumber,
+    showToast,
+    statusBadge,
+} from '../ui.js';
 import { openRequestDetailModal } from './RequestDetailModal.js';
+
+const ENTRY_TYPE_LABEL = {
+    COMPRA: 'Compra',
+    DONACION_TRANSFERENCIA: 'Donación y/o Transferencia',
+    REINGRESO: 'Reingreso',
+};
 
 export async function mountDashboard({ host, actions, api, router }) {
     clear(host);
@@ -73,10 +87,10 @@ function _renderKpis(summary) {
         { label: 'Pendientes de cierre', value: summary.requests_delivered_pending_close,
           help: 'esperan conformidad', variant: summary.requests_delivered_pending_close > 0
               ? 'is-success' : '' },
-        { label: 'Reposiciones pendientes', value: summary.pending_replenishments,
-          help: 'enviadas a compras' },
-        { label: 'En recepción', value: summary.in_reception_replenishments,
-          help: 'recibiéndose parcialmente' },
+        { label: 'Notas de ingreso', value: summary.total_entries,
+          help: 'registradas en total' },
+        { label: 'Ingresos (30 días)', value: summary.entries_last_30_days,
+          help: 'notas del último mes' },
     ];
     items.forEach(kpi => grid.appendChild(_kpiCard(kpi)));
     return grid;
@@ -106,21 +120,23 @@ function _renderActivity(activity) {
                 r.closed_at ? formatDate(r.closed_at, true) : '—',
             ],
         ),
+        activity.recent_requests.length,
     ));
 
-    wrap.appendChild(_section('Reposiciones recientes',
+    wrap.appendChild(_section('Notas de ingreso recientes',
         _table(
-            ['Código', 'Item', 'Solicitado', 'Recibido', 'Estado', 'Creado'],
-            activity.recent_replenishments,
+            ['Código', 'Tipo', 'Proveedor', 'Líneas', 'Total', 'Creado'],
+            activity.recent_entries,
             r => [
                 r.code,
-                r.item_code,
-                formatNumber(r.requested_qty),
-                formatNumber(r.received_qty),
-                statusBadge(r.status),
+                ENTRY_TYPE_LABEL[r.entry_type] || r.entry_type,
+                r.supplier || '—',
+                formatNumber(r.total_lines, 0),
+                formatNumber(r.total),
                 formatDate(r.created_at, true),
             ],
         ),
+        activity.recent_entries.length,
     ));
 
     wrap.appendChild(_section('Movimientos de kárdex',
@@ -136,18 +152,22 @@ function _renderActivity(activity) {
                 formatDate(m.created_at, true),
             ],
         ),
+        activity.recent_movements.length,
     ));
 
     return wrap;
 }
 
-function _section(title, content) {
-    return el('div', { class: 'sup-card' }, [
-        el('header', { class: 'sup-card-header' }, [
-            el('h3', { text: title }),
-        ]),
-        content,
-    ]);
+function _section(title, content, count = null) {
+    // Collapsed by default: the dashboard is meant to be read at a glance, and
+    // three stacked tables push the KPIs off screen.
+    const box = collapsible({
+        title,
+        subtitle: count === null ? '' : `${count} registro(s)`,
+        stateKey: `dashboard.${title}`,
+    });
+    box.body.appendChild(content);
+    return box.section;
 }
 
 function _table(headers, rows, mapper) {
@@ -285,13 +305,7 @@ function _renderMyRequestsTable(rows, api) {
         ]),
     ));
 
-    return el('div', { class: 'sup-card' }, [
-        el('header', { class: 'sup-card-header' }, [
-            el('h3', { text: 'Mis solicitudes' }),
-            el('span', { class: 'sup-muted', text: `${rows.length} en total` }),
-        ]),
-        el('div', { class: 'sup-table-wrap' }, [
-            el('table', { class: 'sup-table' }, [thead, tbody]),
-        ]),
-    ]);
+    return _section('Mis solicitudes', el('div', { class: 'sup-table-wrap' }, [
+        el('table', { class: 'sup-table' }, [thead, tbody]),
+    ]), rows.length);
 }
