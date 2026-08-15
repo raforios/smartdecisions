@@ -6,8 +6,8 @@ import mimetypes
 import time
 import decimal
 import asyncio
-import json
 import enum
+import json
 from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo
 from functools import wraps
@@ -53,8 +53,6 @@ EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL
 EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
 
 
-if FILES_SERVICE_URL:
-    UPLOAD_ENDPOINT = f'{FILES_SERVICE_URL}/v1/s3/upload'
 
 
 def get_current_time_gmt() -> datetime:
@@ -130,17 +128,18 @@ class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
-        # datetime.time (e.g. promo-point opening_time / closing_time) is not
-        # a subclass of date; it must be handled explicitly or json.dumps in
-        # the audit / usage-log path raises "Object of type time is not JSON
-        # serializable" and the endpoint 500s.
+        # datetime.time is not a subclass of date, so it must be handled
+        # explicitly or json.dumps in the audit / usage-log path raises
+        # "Object of type time is not JSON serializable" and the endpoint 500s.
         if isinstance(o, dt_time):
             return o.isoformat()
         if isinstance(o, BaseModel):
             return o.model_dump()
         if isinstance(o, decimal.Decimal):
             return float(o)
-        if isinstance(o, enum.Enum): # New condition for Enums
+        # Models expose their state as Enum columns; the audit payload needs
+        # the underlying value, not the member's repr.
+        if isinstance(o, enum.Enum):
             return o.value
         return super().default(o)
 

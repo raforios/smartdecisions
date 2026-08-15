@@ -65,7 +65,7 @@ from schemas.products import (
 async def create_bulk_items_from_skus(
     db: Session,
     attendance_id: int,
-    company_id: int,
+    catalog_company_id: int,
     items_list: List[BaseModel],
     model_class: Type[DeclarativeBase],
     extra_fields: dict = None
@@ -73,6 +73,11 @@ async def create_bulk_items_from_skus(
     '''
         Generic helper to create multiple inventory/reception items.
         Handles SKU-to-ID translation and bulk commit.
+
+        `catalog_company_id` is the company that OWNS the products — the client
+        company on a visit flow, not the executor running it. Named explicitly
+        because passing the executor tenant here resolves no SKU and fails the
+        write after the caller already validated the items.
 
         `extra_fields` lets the caller inject column values that live on
         the parent payload (e.g. client_company_id from the Create schema,
@@ -83,7 +88,7 @@ async def create_bulk_items_from_skus(
     base_extras = dict(extra_fields or {})
     for item in items_list:
         product_id = get_product_id_by_sku(
-            db, company_id, item.product_sku
+            db, catalog_company_id, item.product_sku
         )
 
         item_data = item.model_dump(exclude={'product_sku'})

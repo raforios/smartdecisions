@@ -132,10 +132,14 @@ async def create_visit_items(
         validate_product_assigned_to_pos(
             db, catalog_company_id, payload.pos_id, product_id
         )
+    # Binaria 2026-08-13: the bulk helper resolves every SKU a second time to
+    # get its product_id, so it must look in the same catalog the validation
+    # loop above used. Passing the executor here made the checks pass and the
+    # write fail with "SKU not found for company <executor>".
     return await create_bulk_items_from_skus(
         db = db,
         attendance_id = attendance_id,
-        company_id = payload.company_id,
+        catalog_company_id = catalog_company_id,
         items_list = payload.items,
         model_class = model_class,
         extra_fields = extra_fields
