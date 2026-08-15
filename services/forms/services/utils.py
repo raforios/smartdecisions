@@ -6,15 +6,14 @@ import mimetypes
 import time
 import decimal
 import asyncio
-import json
 import enum
-from datetime import date, datetime
+import json
+from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Type, Tuple
 import requests as req
 from fastapi import HTTPException, Request, UploadFile, status
-
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
@@ -53,8 +52,6 @@ EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL
 EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
 
 
-if FILES_SERVICE_URL:
-    UPLOAD_ENDPOINT = f'{FILES_SERVICE_URL}/v1/s3/upload'
 
 
 def get_current_time_gmt() -> datetime:
@@ -124,16 +121,24 @@ async def _perform_request(
 
 class CustomJSONEncoder(json.JSONEncoder):
     '''
-        JSON encoder to handle date and datetime objects, Pydantic models, and custom Enums.
+        JSON encoder to handle date, datetime and time objects, Pydantic
+        models, Decimals and custom Enums.
     '''
     def default(self, o):
         if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        # datetime.time is not a subclass of date, so it must be handled
+        # explicitly or json.dumps in the audit / usage-log path raises
+        # "Object of type time is not JSON serializable" and the endpoint 500s.
+        if isinstance(o, dt_time):
             return o.isoformat()
         if isinstance(o, BaseModel):
             return o.model_dump()
         if isinstance(o, decimal.Decimal):
             return float(o)
-        if isinstance(o, enum.Enum): # New condition for Enums
+        # Models expose their state as Enum columns; the audit payload needs
+        # the underlying value, not the member's repr.
+        if isinstance(o, enum.Enum):
             return o.value
         return super().default(o)
 

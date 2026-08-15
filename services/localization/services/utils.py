@@ -6,8 +6,9 @@ import mimetypes
 import time
 import decimal
 import asyncio
+import enum
 import json
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
@@ -62,12 +63,21 @@ def get_current_time_gmt() -> datetime:
 
 def sqlalchemy_object_as_dict(obj):
     '''
-        Helper function to serialize a SQLAlchemy object to a dictionary.
+        Helper function to serialize a SQLAlchemy object to a dictionary,
+        converting complex types like datetime and Decimal to simple types.
     '''
-    return {
-        c.key: getattr(obj, c.key)
-        for c in sa_inspect(obj).mapper.column_attrs
-    }
+    data = {}
+    for c in sa_inspect(obj).mapper.column_attrs:
+        value = getattr(obj, c.key)
+
+        if isinstance(value, (date, datetime)):
+            data[c.key] = value.isoformat()
+        elif isinstance(value, decimal.Decimal):
+            data[c.key] = float(value)
+        else:
+            data[c.key] = value
+
+    return data
 
 async def _perform_request(
     method: str,
@@ -109,15 +119,25 @@ async def _perform_request(
 
 class CustomJSONEncoder(json.JSONEncoder):
     '''
-        JSON encoder to handle date and datetime objects.
+        JSON encoder to handle date, datetime and time objects, Pydantic
+        models, Decimals and custom Enums.
     '''
     def default(self, o):
         if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        # datetime.time is not a subclass of date, so it must be handled
+        # explicitly or json.dumps in the audit / usage-log path raises
+        # "Object of type time is not JSON serializable" and the endpoint 500s.
+        if isinstance(o, dt_time):
             return o.isoformat()
         if isinstance(o, BaseModel):
             return o.model_dump()
         if isinstance(o, decimal.Decimal):
             return float(o)
+        # Models expose their state as Enum columns; the audit payload needs
+        # the underlying value, not the member's repr.
+        if isinstance(o, enum.Enum):
+            return o.value
         return super().default(o)
 
 class UsageLogData(BaseModel):
