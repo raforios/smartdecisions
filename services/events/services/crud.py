@@ -3,6 +3,7 @@
 '''
 import json
 import decimal
+import time
 from typing import Any, Dict, List, Optional
 from boto3.resources.base import ServiceResource
 from boto3.dynamodb.conditions import Attr, Key
@@ -99,42 +100,263 @@ def get_item_by_id(
     logger.info(message)
     return item
 
+# Query parameters that describe a date RANGE instead of an exact value, and
+# the item attribute they are matched against.
+DATE_RANGE_PARAMS = ('start_date', 'end_date')
+DEFAULT_DATE_ATTRIBUTE = 'timestamp'
+# A filtered Scan reads before it filters, so filling one page can take several
+# reads. The budget is in seconds, not pages: the service runs in a Lambda with
+# a 30 s timeout and a read page can be slow on a large, low-capacity table.
+# Returning a partial page with a cursor beats dying on timeout.
+SCAN_TIME_BUDGET_SECONDS = 18
+
+
+def _build_filter_expression(filters: Dict[str, Any], date_attribute: str):
+    '''
+        Turns the query parameters into a DynamoDB FilterExpression.
+
+        Ordinary parameters match by equality. `start_date` / `end_date` are
+        NOT item attributes: they describe a range over `date_attribute`, and
+        matching them by equality is what made every dated query come back
+        empty.
+
+        Args:
+            filters (Dict[str, Any]): Query parameters, without paging keys.
+            date_attribute (str): Item attribute holding the ISO timestamp.
+
+        Returns:
+            The combined condition, or None when there is nothing to filter.
+    '''
+    start_date = filters.get('start_date')
+    end_date = filters.get('end_date')
+    conditions = [
+        Attr(key).eq(value)
+        for key, value in filters.items()
+        if key not in DATE_RANGE_PARAMS
+    ]
+
+    if start_date and end_date:
+        conditions.append(Attr(date_attribute).between(start_date, end_date))
+    elif start_date:
+        conditions.append(Attr(date_attribute).gte(start_date))
+    elif end_date:
+        conditions.append(Attr(date_attribute).lte(end_date))
+
+    if not conditions:
+        return None
+    combined = conditions[0]
+    for condition in conditions[1:]:
+        combined &= condition
+    return combined
+
+
+def _find_usable_index(
+    table, filters: Dict[str, Any], partition_attribute: Optional[str]
+) -> Optional[Dict[str, str]]:
+    '''
+        Looks for a secondary index that can answer this query as a Query
+        instead of a Scan.
+
+        Usable means the caller both declared which attribute its index is
+        partitioned by AND filtered by it; the date range then rides on the
+        index sort key. Which attribute that is belongs to the service, not
+        here, so it travels as an argument.
+
+        Args:
+            table: boto3 Table resource.
+            filters (Dict[str, Any]): Query parameters, without paging keys.
+            partition_attribute (Optional[str]): Attribute the service's index
+                is partitioned by. None means "always Scan".
+
+        Returns:
+            Optional[Dict[str, str]]: {'name', 'partition', 'sort'} or None to
+                fall back to Scan.
+    '''
+    if not partition_attribute or not filters.get(partition_attribute):
+        return None
+    try:
+        indexes = table.global_secondary_indexes or []
+    except AWSClientError:
+        return None
+
+    for index in indexes:
+        keys = {k['KeyType']: k['AttributeName'] for k in index['KeySchema']}
+        if keys.get('HASH') == partition_attribute:
+            return {
+                'name': index['IndexName'],
+                'partition': keys['HASH'],
+                'sort': keys.get('RANGE'),
+            }
+    return None
+
+
+def _index_key_condition(index: Dict[str, str], filters: Dict[str, Any]):
+    '''
+        Builds the KeyConditionExpression for an index-backed listing: the
+        partition value plus, when the index is sorted by date, the requested
+        range.
+    '''
+    condition = Key(index['partition']).eq(filters[index['partition']])
+    sort_key = index.get('sort')
+    if not sort_key:
+        return condition
+
+    start_date = filters.get('start_date')
+    end_date = filters.get('end_date')
+    if start_date and end_date:
+        condition &= Key(sort_key).between(start_date, end_date)
+    elif start_date:
+        condition &= Key(sort_key).gte(start_date)
+    elif end_date:
+        condition &= Key(sort_key).lte(end_date)
+    return condition
+
+
+def _cursor_from_item(item: Dict[str, Any], key_schema: List[Dict[str, str]]) -> Dict[str, Any]:
+    '''
+        Builds the pagination cursor pointing at a specific item, so the next
+        page resumes exactly where this one stopped.
+
+        Args:
+            item (Dict[str, Any]): Last item actually returned to the caller.
+            key_schema (List[Dict[str, str]]): Table key schema from boto3.
+
+        Returns:
+            Dict[str, Any]: ExclusiveStartKey for the following request.
+    '''
+    return {key['AttributeName']: item[key['AttributeName']] for key in key_schema}
+
+
+def _build_read_plan(table, filters: Dict[str, Any], limit: int, options: Dict[str, Any]):
+    '''
+        Decides how the listing will be read and with which arguments.
+
+        Uses a Query against a secondary index when one can answer the filter,
+        because that reads only matching items; otherwise falls back to a Scan,
+        which reads the table and discards what does not match.
+
+        Args:
+            table: boto3 Table resource.
+            filters (Dict[str, Any]): Query parameters, without paging keys.
+            limit (int): Page size requested by the caller.
+            options (Dict[str, Any]): 'date_attribute' and, optionally,
+                'index_partition_attribute'.
+
+        Returns:
+            tuple: (callable that reads one page, kwargs for it).
+    '''
+    date_attribute = options['date_attribute']
+    read_kwargs: Dict[str, Any] = {'Limit': limit}
+    index = _find_usable_index(table, filters, options.get('index_partition_attribute'))
+
+    if not index:
+        filter_expression = _build_filter_expression(filters, date_attribute)
+        if filter_expression is not None:
+            read_kwargs['FilterExpression'] = filter_expression
+        return table.scan, read_kwargs
+
+    read_kwargs['IndexName'] = index['name']
+    read_kwargs['KeyConditionExpression'] = _index_key_condition(index, filters)
+    # Whatever the key condition already covers must not be filtered again.
+    consumed = {index['partition'], *(DATE_RANGE_PARAMS if index.get('sort') else ())}
+    leftover = {k: v for k, v in filters.items() if k not in consumed}
+    residual = _build_filter_expression(leftover, date_attribute)
+    if residual is not None:
+        read_kwargs['FilterExpression'] = residual
+    return table.query, read_kwargs
+
+
+def _read_until_full(read_page, read_kwargs: Dict[str, Any], limit: int):
+    '''
+        Reads pages until `limit` items are gathered, the data runs out or the
+        time budget expires.
+
+        A filtered read returns only what matched the page it read, so one call
+        can legitimately come back empty while matches remain further along.
+        Looping here is what turns an empty response into a truthful "no more
+        matches" instead of "nothing on this page".
+
+        Args:
+            read_page: Bound table.query or table.scan.
+            read_kwargs (Dict[str, Any]): Arguments for it; mutated per page.
+            limit (int): Items the caller asked for.
+
+        Returns:
+            tuple: (items gathered, cursor to continue or None).
+    '''
+    items: List[Dict[str, Any]] = []
+    cursor = None
+    deadline = time.monotonic() + SCAN_TIME_BUDGET_SECONDS
+    while True:
+        response = read_page(**read_kwargs)
+        items.extend(response.get('Items', []))
+        cursor = response.get('LastEvaluatedKey')
+        if len(items) >= limit or not cursor or time.monotonic() > deadline:
+            return items, cursor
+        read_kwargs['ExclusiveStartKey'] = cursor
+
+
 def get_all_records_paginated(
     dynamodb_resource: ServiceResource,
     table_name: str,
     query_params: Dict[str, Any],
+    date_attribute: str = DEFAULT_DATE_ATTRIBUTE,
+    index_partition_attribute: Optional[str] = None,
 ) -> Dict[str, Any]:
     '''
-        Retrieves all items from a DynamoDB table with optional pagination and filters.
+        Retrieves items from a DynamoDB table with optional pagination and
+        filters.
+
+        DynamoDB applies `Limit` to the items it READS, before the filter runs,
+        so a single scan can return an empty page while the table still holds
+        matches further along. This keeps reading until the page is full, the
+        table is exhausted or the read budget runs out, so an empty `records`
+        list now really means "no more matches".
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            table_name (str): Table to read.
+            query_params (Dict[str, Any]): Filters plus `limit` and
+                `last_evaluated_key`.
+            date_attribute (str): Item attribute the date range applies to.
+            index_partition_attribute (Optional[str]): Attribute the service's
+                secondary index is partitioned by. When given and present in
+                the filters, the listing is served by a Query instead of a
+                Scan. Omit it and the behaviour is the previous Scan.
+
+        Returns:
+            Dict[str, Any]: 'items' and the 'last_evaluated_key' to continue.
     '''
     try:
         table = dynamodb_resource.Table(table_name)
-        scan_kwargs = {'Limit': query_params.get('limit', 100)}
+        limit = query_params.get('limit', 100)
 
         filters = {k: v for k, v in query_params.items() if v is not None and k \
             not in ['limit', 'last_evaluated_key']}
 
-        if filters:
-            filter_expressions = [Attr(key).eq(value) for key, value in filters.items()]
-            combined_expression = filter_expressions[0]
-            for expr in filter_expressions[1:]:
-                combined_expression &= expr
-            scan_kwargs['FilterExpression'] = combined_expression
+        read_page, read_kwargs = _build_read_plan(table, filters, limit, {
+            'date_attribute': date_attribute,
+            'index_partition_attribute': index_partition_attribute,
+        })
 
         if 'last_evaluated_key' in query_params and query_params['last_evaluated_key']:
-            scan_kwargs['ExclusiveStartKey'] = json.loads(query_params['last_evaluated_key'])
+            read_kwargs['ExclusiveStartKey'] = json.loads(query_params['last_evaluated_key'])
 
-        response = table.scan(**scan_kwargs)
+        items, cursor = _read_until_full(read_page, read_kwargs, limit)
 
-        last_evaluated_key_json = json.dumps(response.get('LastEvaluatedKey'),
-                    separators=(',', ':')) if response.get('LastEvaluatedKey') else None
+        # More matches than the caller asked for: hand back exactly `limit` and
+        # point the cursor at the last one returned, so nothing is skipped.
+        if len(items) > limit:
+            items = items[:limit]
+            cursor = _cursor_from_item(items[-1], table.key_schema)
 
-        message = f'Retrieved {len(response.get("Items", []))} records from {table_name}.'
+        message = f'Retrieved {len(items)} records from {table_name}.'
         logger.info(message)
 
         return {
-            'items': response.get('Items', []),
-            'last_evaluated_key': last_evaluated_key_json
+            'items': items,
+            'last_evaluated_key': json.dumps(
+                cursor, separators = (',', ':'), default = str) if cursor else None
         }
 
     except AWSClientError as e:

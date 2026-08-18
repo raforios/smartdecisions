@@ -49,5 +49,8 @@ def get_audit_records(
     return get_all_records_paginated(
         dynamodb_resource = dynamodb_resource,
         table_name = AUDIT_TABLE_NAME,
-        query_params = processed_params
+        query_params = processed_params,
+        # Estas tablas tienen un índice por microservicio + fecha:
+        # declararlo convierte el listado en consulta directa.
+        index_partition_attribute = 'microservice'
     )

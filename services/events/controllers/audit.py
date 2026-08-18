@@ -9,6 +9,7 @@ from schemas.audit import (
     AuditRecordResponseSchema,
     AuditRecordQuerySchema
 )
+from services.payload_limits import cap_log_bodies
 from services.utils import get_current_time_gmt, handle_service_errors
 from services.audit import create_audit_record, get_audit_records
 
@@ -25,6 +26,9 @@ def create_audit_record_controller(
     record_dict['id'] = str(uuid.uuid4())
     timestamp = get_current_time_gmt()
     record_dict['timestamp'] = timestamp.isoformat()
+    # Los bodies completos son lo que infla cada registro y encarece
+    # toda lectura de la tabla; se acotan antes de persistir.
+    record_dict = cap_log_bodies(record_dict)
 
     # Llama al servicio para crear el registro
     audit_record = create_audit_record(

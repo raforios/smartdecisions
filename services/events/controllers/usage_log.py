@@ -9,6 +9,7 @@ from schemas.usage_log import (
     UsageLogResponseSchema,
     UsageLogQuerySchema
 )
+from services.payload_limits import cap_log_bodies
 from services.utils import get_current_time_gmt, handle_service_errors
 from services.usage_log import create_usage_log, get_usage_logs
 
@@ -25,6 +26,9 @@ def create_usage_log_controller(
     log_dict['id'] = str(uuid.uuid4())
     timestamp = get_current_time_gmt()
     log_dict['timestamp'] = timestamp.isoformat()
+    # Los bodies completos son lo que infla cada registro y encarece
+    # toda lectura de la tabla; se acotan antes de persistir.
+    log_dict = cap_log_bodies(log_dict)
 
     # Llama al servicio para crear el registro
     usage_log = create_usage_log(
