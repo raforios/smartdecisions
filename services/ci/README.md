@@ -4,6 +4,74 @@
 
 ---
 
+---
+
+## 0. ESTADO ACTUAL DE LA INFRAESTRUCTURA
+
+Inventario verificado directamente contra la cuenta de AWS el **18 de agosto de 2026**
+(región `us-east-1`, perfil `deploy_binaria`).
+
+### 0.1. Microservicios (AWS Lambda)
+
+Los siete microservicios corren como funciones Lambda con **Python 3.13**, expuestas cada
+una por su propio HTTP API Gateway.
+
+| Microservicio | Función Lambda | Memoria | Timeout | API Gateway |
+|---|---|---|---|---|
+| AUTH | `binaria-auth-handler-service` | 256 MB | 30 s | `v65w34fghh` |
+| EVENTS | `binaria-events-handler-service` | 256 MB | 30 s | `ozg7itcrvg` |
+| FILES | `binaria-file-handler-service` | 256 MB | 30 s | `mijwvdu4g6` |
+| FORMS | `binaria-forms-handler-service` | 256 MB | 120 s | `vk22i8orck` |
+| LOCALIZATION | `binaria-localization-handler-service` | 256 MB | 120 s | `yvivgga9i8` |
+| PLANNING | `binaria-planning-handler-service` | 256 MB | 300 s | `9bdyb0z3ol` |
+| TRADE | `binaria-trade-handler-service` | **1024 MB** | 120 s | `z4utb6z4le` |
+
+La URL de cada servicio es `https://<API_ID>.execute-api.us-east-1.amazonaws.com`.
+
+TRADE lleva 1 GB de memoria por sus cargas masivas y la generación de reportes, que usan
+`pandas`; el resto opera con 256 MB.
+
+### 0.2. Base de datos relacional (RDS)
+
+| Parámetro | Valor |
+|---|---|
+| Identificador | `api-binaria-mysql-db` |
+| Motor | MySQL **8.4.9** |
+| Clase | `db.t4g.small` |
+| Almacenamiento | 20 GB |
+| Multi-AZ | No |
+| Acceso público | Sí |
+
+La usan **FORMS, LOCALIZATION, PLANNING y TRADE** (base `binaria`). Estos cuatro
+microservicios requieren la configuración de VPC descrita en el paso 3 para alcanzarla.
+
+### 0.3. Bases de datos NoSQL (DynamoDB)
+
+| Tabla | Uso | Registros | Tamaño | Capacidad | Índice secundario |
+|---|---|---|---|---|---|
+| `usage_logs` | Logs de uso (EVENTS) | 827.474 | 10,4 GB | Bajo demanda | `microservice-timestamp-index` |
+| `audit_records` | Auditoría (EVENTS) | 162.553 | 0,05 GB | Bajo demanda | `microservice-timestamp-index` |
+
+Ambas tablas se particionan por `id` y cuentan con un índice secundario global por
+`microservice` + `timestamp`, que es el que permite filtrar los logs por microservicio y
+rango de fechas sin recorrer la tabla completa.
+
+### 0.4. Servidor de aplicación (EC2)
+
+| Parámetro | Valor |
+|---|---|
+| Nombre | `API_BINARIA-Frontend-EC2` |
+| Tipo | `t3.medium` |
+| IP pública (Elastic IP) | `54.204.190.209` |
+| Estado | En ejecución |
+
+### 0.5. Almacenamiento de archivos (S3)
+
+El microservicio FILES administra el bucket configurado en su `.env` (`BUCKET_NAME`), a
+través del cual el resto de los servicios sube y recupera archivos y fotografías.
+
+---
+
 ## 1. PRE-REQUISITOS
 
 Antes de comenzar, asegurarse de que los siguientes componentes estén instalados y configurados:
@@ -128,6 +196,7 @@ BUCKET_PATH=""
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/localization --skip-table-creation
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/planning --skip-table-creation
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/forms 
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/trade --skip-table-creation
 
 ./create_dynamodb_tables.sh
 
@@ -141,7 +210,7 @@ BUCKET_PATH=""
 VPC_ID=vpc-00e5c84e1400a916f
 PRIVATE_SUBNET_IDS=subnet-07c1a8b67d2047ec3,subnet-07c7eeb3c2e5be2e0,subnet-007d8f014baf297ef,subnet-02403fd7434746c2d
 INTERNAL_SG_ID=sg-07495e1628e67b466
-# Esta configuración debe ser para los microservicios LOCALIZATION, FORMS, PLANNING
+# Esta configuración debe ser para los microservicios LOCALIZATION, FORMS, PLANNING, TRADE
 
 # --- PASO 4 ---
 # Modificar el archivo ".env" con los valores del RDS
@@ -217,6 +286,7 @@ API_MAPPINGS=(
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/localization --skip-table-creation  --skip-code-update
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/planning --skip-table-creation  --skip-code-update
 ./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/forms --skip-table-creation  --skip-code-update
+./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/trade --skip-table-creation  --skip-code-update
 
 # --- PASO 6 ---
 # Configuración del HTTPS
