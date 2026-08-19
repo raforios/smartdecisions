@@ -11,7 +11,7 @@
     mistakes a truncated body for the real payload.
 '''
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
@@ -19,6 +19,10 @@ from services.logger_config import custom_logger as logger
 DEFAULT_MAX_BODY_CHARS = 2000
 TRUNCATION_MARKER = '…[truncado por EVENTS]'
 BODY_FIELDS = ('request_body', 'response_body')
+# Audit records carry the entity state instead of HTTP bodies; they grow the
+# same way and are capped with the same rule.
+AUDIT_BODY_FIELDS = ('old_values', 'new_values')
+ALL_BODY_FIELDS = BODY_FIELDS + AUDIT_BODY_FIELDS
 
 # Overridable per environment; the default keeps a log entry near 1 KB.
 ENV_VARS = load_and_validate_env_vars({}, {'MAX_BODY_CHARS': int})
@@ -66,22 +70,43 @@ def truncate_body(value: Any, max_chars: int = None) -> Any:
 
 def cap_log_bodies(record: Dict[str, Any], max_chars: int = None) -> Dict[str, Any]:
     '''
-        Caps every body field of a log record before it is persisted.
+        Caps every body field of a log record.
+
+        Applied on write so new records stay small, and on read so a page of
+        historical records — written before the cap existed — cannot blow past
+        the 6 MB response limit of Lambda.
 
         Args:
-            record (Dict[str, Any]): Record about to be written.
+            record (Dict[str, Any]): Record to cap, in place.
             max_chars (int): Override for the cap.
 
         Returns:
             Dict[str, Any]: The same record, with oversized bodies truncated.
     '''
-    for field in BODY_FIELDS:
+    for field in ALL_BODY_FIELDS:
         if field not in record:
             continue
         original = record[field]
         capped = truncate_body(original, max_chars)
         if capped is not original:
             record[field] = capped
-            message = f'Body "{field}" truncated before storing the log record.'
+            message = f'Body "{field}" truncated.'
             logger.debug(message)
     return record
+
+
+def cap_many(records: List[Dict[str, Any]], max_chars: int = None) -> List[Dict[str, Any]]:
+    '''
+        Caps the bodies of a whole page of records before returning them.
+
+        A listing of 100 historical records, each carrying a full response
+        body, exceeded the 6 MB Lambda response limit and turned into a 500.
+
+        Args:
+            records (List[Dict[str, Any]]): Page about to be returned.
+            max_chars (int): Override for the cap.
+
+        Returns:
+            List[Dict[str, Any]]: The same records, capped.
+    '''
+    return [cap_log_bodies(record, max_chars) for record in records]

@@ -9,7 +9,7 @@ from schemas.audit import (
     AuditRecordResponseSchema,
     AuditRecordQuerySchema
 )
-from services.payload_limits import cap_log_bodies
+from services.payload_limits import cap_log_bodies, cap_many
 from services.utils import get_current_time_gmt, handle_service_errors
 from services.audit import create_audit_record, get_audit_records
 
@@ -51,7 +51,9 @@ def get_audit_records_controller(
         query_params = query_params.model_dump(exclude_none=True)
     )
 
-    records = response['items']
+    # Los registros anteriores al truncado conservan sus bodies completos:
+    # una página de 100 superaba el límite de 6 MB de respuesta del Lambda.
+    records = cap_many(response['items'])
     last_key = response['last_evaluated_key']
 
     return {
