@@ -141,6 +141,30 @@ retención, la tabla seguirá aumentando aunque cada registro ahora pese menos. 
 (`audit_records`) conviene evaluarla por separado, ya que puede tener requisitos de
 conservación distintos.
 
+
+### 3.4. Límite de tamaño de respuesta (detectado al verificar en producción)
+
+Una vez activo el índice, las consultas empezaron a devolver realmente sus 100 registros y
+apareció un efecto secundario: la respuesta superaba el **límite de 6 MB** de AWS Lambda y
+el endpoint respondía error 500.
+
+```
+Exceeded maximum allowed payload size (6291556 bytes)
+```
+
+La causa es la misma de fondo: los registros anteriores conservan sus cuerpos completos.
+Medido en producción, **21 registros de LOCALIZATION en julio pesaban 3,38 MB**; una página
+de 100 superaba ampliamente el límite.
+
+Corregido aplicando el recorte de cuerpos **también en la lectura**, no solo al almacenar.
+Los registros históricos no se modifican; se recortan al devolverlos.
+
+| Consulta | Sin recorte | Con recorte |
+|---|---|---|
+| LOCALIZATION julio (21 registros) | 3,38 MB → error 500 | 38 KB |
+| LOCALIZATION junio (100 registros) | 1,31 MB | 181 KB |
+| TRADE agosto (100 registros) | 0,39 MB | 101 KB |
+
 ---
 
 ## 4. Compatibilidad con FORMS y LOCALIZATION
@@ -180,6 +204,7 @@ entorno con `build_infra.sh` y `docker-compose.yml`.
 | Capacidad de las tablas de Events | Pasadas a bajo demanda (§3.3) |
 | Tamaño de los registros de Events | Cuerpos acotados a 2.000 caracteres (§3.3) |
 | Política de retención (TTL) | A definir por BINARIA (§3.3) |
+| Tamaño de respuesta (error 500) | Corregido (§3.4) |
 | Código fuente | Entregado en Drive |
 | Documento de despliegue | Se entrega con este informe |
 | Documento de infraestructura AWS | Actualizado y entregado |

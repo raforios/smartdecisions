@@ -10,10 +10,12 @@ import enum
 import json
 from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo
+from contextvars import ContextVar
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Type, Tuple
 import requests as req
 from fastapi import HTTPException, Request, UploadFile, status
+
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
@@ -152,6 +154,9 @@ class UsageLogData(BaseModel):
     status_code: int
     ip_address: str
     user_app: str
+    # End user inside the client's application, sent in the 'user_id' header.
+    # Distinct from user_app, which identifies the client consuming the service.
+    user_id: str | None = None
     request_body: dict | None = None
     response_body: dict | list | None = None
     response_time_ms: int
@@ -222,6 +227,7 @@ async def _finalize_and_log(
             status_code = status_code,
             ip_address = request.client.host,
             user_app = user_app,
+            user_id = get_request_user_id(),
             request_body = request_body,
             response_time_ms = int((end_time - start_time) * 1000)
         )
@@ -281,6 +287,47 @@ def _handle_exception(
 
     return status_code, detail
 
+# --------------------------------------------------------------------------- #
+# End-user identity carried by the client application                         #
+# --------------------------------------------------------------------------- #
+# `current_user` identifies the CLIENT consuming the microservice; this is the
+# END USER inside that client's own application, which the client sends in the
+# 'user_id' request header.
+#
+# It travels in a ContextVar and not in kwargs because the audited service
+# functions never receive the request: they only get `db` and their payload
+# schema, so there is nowhere for the decorator to read it from.
+USER_ID_HEADER = 'user_id'
+# HTTP header names are case-insensitive but '-' and '_' are different names:
+# 'User-Id' would NOT match 'user_id'. The hyphenated spelling is the HTTP
+# convention, so it is accepted as an alias to avoid a silent miss.
+USER_ID_HEADER_ALIAS = 'user-id'
+_request_user_id: ContextVar[Optional[str]] = ContextVar('request_user_id', default = None)
+
+
+def set_request_user_id(request: Optional[Request]) -> None:
+    '''
+        Captures the end-user id sent by the client for the rest of the request.
+
+        Args:
+            request (Optional[Request]): Incoming request, when the endpoint
+                declares one.
+    '''
+    if request is None:
+        return
+    _request_user_id.set(
+        request.headers.get(USER_ID_HEADER) or request.headers.get(USER_ID_HEADER_ALIAS)
+    )
+
+
+def get_request_user_id() -> Optional[str]:
+    '''
+        Returns the end-user id of the request in progress, or None when the
+        client did not send the header.
+    '''
+    return _request_user_id.get()
+
+
 def handle_service_errors(microservice_name: str, with_log: bool = True):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
@@ -290,6 +337,7 @@ def handle_service_errors(microservice_name: str, with_log: bool = True):
         async def wrapper(*args, **kwargs):
             db: Session = kwargs.get('db')
             request: Request = kwargs.get('request')
+            set_request_user_id(request)
             current_user: Optional[str] = kwargs.get('current_user')
 
             start_time = time.perf_counter()
@@ -373,7 +421,11 @@ def audit_event(
         async def wrapper(*args, **kwargs):
             # The current_user/user_id is often an email or a string identifier.
             # Do not force conversion to int to avoid errors in the audit service.
-            user_id = kwargs.get('current_user') or kwargs.get('user_id', '1001')
+            # El header identifica al usuario final del cliente; si no viene,
+            # se mantiene el comportamiento previo.
+            user_id = (get_request_user_id()
+                       or kwargs.get('current_user')
+                       or kwargs.get('user_id', '1001'))
 
             result = await func(*args, **kwargs)
 
