@@ -9,6 +9,8 @@ class UsageLogCreateSchema(BaseModel):
         Pydantic schema for creating a new usage log record.
     '''
     user_app: str = Field(..., max_length = 50)
+    user_id: Optional[str] = Field(None, max_length = 50,
+                description = 'End user inside the client application.')
     microservice: str = Field(..., max_length = 50)
     endpoint: str
     method: str = Field(..., max_length = 10)
