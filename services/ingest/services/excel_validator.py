@@ -33,6 +33,8 @@ OPTIONAL_COLUMNS: Final[list[str]] = [
     'nombre_producto',
     'precio_unitario',
     'monto_total',
+    # Unlocks gross-margin KPIs; absent in most ERP exports, hence optional.
+    'costo_unitario',
     # v2 enriching columns: power the commercial dashboard and route module.
     'categoria',
     'canal',
@@ -118,6 +120,17 @@ SCHEMA: Final[pa.DataFrameSchema] = pa.DataFrameSchema(
             description = (
                 'Monto total de la línea '
                 '(si falta, se calcula cantidad * precio_unitario).'
+            )
+        ),
+        'costo_unitario': pa.Column(
+            dtype = 'float64',
+            nullable = True,
+            required = False,
+            coerce = True,
+            checks = pa.Check.greater_than_or_equal_to(0),
+            description = (
+                'Costo unitario del producto '
+                '(habilita margen bruto por producto, cliente y vendedor).'
             )
         ),
         # --- v2 enriching columns (optional): commercial dashboard + routes ---

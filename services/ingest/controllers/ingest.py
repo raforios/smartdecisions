@@ -3,10 +3,10 @@
 '''
 from pathlib import Path
 from typing import Any, Dict, Optional
+from uuid import uuid4
+
 from boto3.resources.base import ServiceResource
 from fastapi import Request
-
-from uuid import uuid4
 
 from schemas.ingest import (
     IngestColumnError,
@@ -16,7 +16,11 @@ from schemas.ingest import (
     TemplateInfo
 )
 from services.datasets import get_dataset_by_id, persist_dataset
-from services.excel_parser import parse_and_validate, parse_and_validate_partial, serialize_dataframe
+from services.excel_parser import (
+    parse_and_validate,
+    parse_and_validate_partial,
+    serialize_dataframe
+)
 from services.excel_validator import OPTIONAL_COLUMNS, REQUIRED_COLUMNS, TEMPLATE_VERSION
 from services.exceptions import ResourceNotFoundError
 from services.file_storage import upload_excel

@@ -62,35 +62,86 @@ TEMPLATE_COLUMNS: list[TemplateColumn] = [
                    'Unidades vendidas. Debe ser mayor que 0.'),
     TemplateColumn('Precio Unitario', False,
                    'Precio por unidad. Ayuda a valorar las oportunidades en Bs.'),
+    TemplateColumn('Costo Unitario', False,
+                   'Costo por unidad. Habilita los indicadores de margen y rentabilidad.'),
     TemplateColumn('Monto Total', False,
                    'Monto total de la línea (Cantidad × Precio Unitario).'),
 ]
 
+# Gross margin used only to fill the example rows, so the downloaded template
+# shows a coherent Precio/Costo pair instead of an empty column.
+_EXAMPLE_MARGIN: float = 0.28
+
 HEADERS: list[str] = [column.header for column in TEMPLATE_COLUMNS]
 
 
-def _example_line(factura, cliente, zona, ciudad, vendedor, lat, lng,
-                  producto, categoria, cantidad, precio) -> dict:
-    '''Builds one example row keyed by the friendly headers.'''
+@dataclass(frozen = True)
+class ExampleClient:
+    '''One example buyer: the fields repeated across every line of its invoice.'''
+    invoice: str
+    name: str
+    zone: str
+    city: str
+    seller: str
+    latitude: float
+    longitude: float
+
+
+@dataclass(frozen = True)
+class ExampleItem:
+    '''One example product line within an invoice.'''
+    product: str
+    category: str
+    quantity: int
+    price: float
+
+
+def _example_line(client: ExampleClient, item: ExampleItem) -> dict:
+    '''
+        Builds one example row keyed by the friendly headers.
+
+        Args:
+            client (ExampleClient): Buyer repeated across the invoice's lines.
+            item (ExampleItem): Product line being written.
+
+        Returns:
+            dict: One row of the 'Ventas' sheet.
+    '''
     return {
-        'Fecha': date(2026, 1, 12), 'Nro Factura': factura, 'Cliente': cliente,
-        'Zona': zona, 'Ciudad': ciudad, 'Vendedor': vendedor,
-        'Latitud': lat, 'Longitud': lng, 'Producto': producto,
-        'Categoria': categoria, 'Cantidad': cantidad,
-        'Precio Unitario': precio, 'Monto Total': round(cantidad * precio, 2),
+        'Fecha': date(2026, 1, 12), 'Nro Factura': client.invoice,
+        'Cliente': client.name, 'Zona': client.zone, 'Ciudad': client.city,
+        'Vendedor': client.seller, 'Latitud': client.latitude,
+        'Longitud': client.longitude, 'Producto': item.product,
+        'Categoria': item.category, 'Cantidad': item.quantity,
+        'Precio Unitario': item.price,
+        'Costo Unitario': round(item.price * (1 - _EXAMPLE_MARGIN), 2),
+        'Monto Total': round(item.quantity * item.price, 2),
     }
 
 
 # Two invoices (Nro Factura) forming baskets, so the affinity engine has signal.
+_EXAMPLE_BASKETS: list[tuple[ExampleClient, list[ExampleItem]]] = [
+    (
+        ExampleClient('F-1001', 'Tienda Doña Rosa', 'Sur', 'La Paz',
+                      'Juan Pérez', -16.5450, -68.1200),
+        [
+            ExampleItem('Galleta Integral 200g', 'Galletas', 12, 8.5),
+            ExampleItem('Chocolate Barra 90g', 'Chocolates', 8, 6.0),
+        ],
+    ),
+    (
+        ExampleClient('F-1002', 'Mini-market El Sol', 'Centro', 'La Paz',
+                      'Ana Vargas', -16.4980, -68.1330),
+        [
+            ExampleItem('Galleta Integral 200g', 'Galletas', 24, 8.5),
+            ExampleItem('Yogurt Natural 1L', 'Lácteos', 6, 15.0),
+        ],
+    ),
+]
+
 EXAMPLE_ROWS: list[dict] = [
-    _example_line('F-1001', 'Tienda Doña Rosa', 'Sur', 'La Paz', 'Juan Pérez',
-                  -16.5450, -68.1200, 'Galleta Integral 200g', 'Galletas', 12, 8.5),
-    _example_line('F-1001', 'Tienda Doña Rosa', 'Sur', 'La Paz', 'Juan Pérez',
-                  -16.5450, -68.1200, 'Chocolate Barra 90g', 'Chocolates', 8, 6.0),
-    _example_line('F-1002', 'Mini-market El Sol', 'Centro', 'La Paz', 'Ana Vargas',
-                  -16.4980, -68.1330, 'Galleta Integral 200g', 'Galletas', 24, 8.5),
-    _example_line('F-1002', 'Mini-market El Sol', 'Centro', 'La Paz', 'Ana Vargas',
-                  -16.4980, -68.1330, 'Yogurt Natural 1L', 'Lácteos', 6, 15.0),
+    _example_line(client, item)
+    for client, items in _EXAMPLE_BASKETS for item in items
 ]
 
 

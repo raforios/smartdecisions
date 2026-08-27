@@ -116,18 +116,49 @@ def _stringify_ids(dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe
 
 
+def _coerce_dates(values: pd.Series) -> pd.Series:
+    '''
+        Converts a date column to datetime, choosing between ISO and day-first
+        parsing by which one actually reads the data.
+
+        Both conventions reach us: Excel exports write real datetimes or
+        dd/mm/aaaa (Bolivia), while a CSV produced by any system writes
+        aaaa-mm-dd. Forcing day-first on ISO text is not merely ambiguous — it
+        makes pandas infer '%Y-%d-%m' from the first value, so every date past
+        the 12th of the month silently becomes NaT and the row is rejected.
+        Whichever parse resolves more dates wins; ISO breaks the tie because a
+        string starting with a 4-digit year is not a day-first date.
+
+        Args:
+            values (pd.Series): Raw date column (text or datetime).
+
+        Returns:
+            pd.Series: Parsed datetimes, NaT where genuinely unreadable.
+    '''
+    if pd.api.types.is_datetime64_any_dtype(values):
+        return values
+
+    iso = pd.to_datetime(values, format = 'ISO8601', errors = 'coerce')
+    if iso.notna().all():
+        return iso
+
+    day_first = pd.to_datetime(values, dayfirst = True, errors = 'coerce')
+    return day_first if day_first.notna().sum() > iso.notna().sum() else iso
+
+
 def _parse_dates(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
-        Coerces the 'fecha' column to datetime using day-first parsing (Bolivia
-        writes dd/mm/aaaa). CSV dates arrive as strings; without this they stay
-        text and, worse, ambiguous dates like 12/01/2026 would be misread as
-        December instead of January. Unparseable dates become NaT so the
-        validator flags (and the partial pipeline rejects) those rows.
+        Coerces the 'fecha' column to datetime. Unparseable dates become NaT so
+        the validator flags (and the partial pipeline rejects) those rows.
+
+        Args:
+            dataframe (pd.DataFrame): Mapped DataFrame.
+
+        Returns:
+            pd.DataFrame: Same frame with 'fecha' as datetime64.
     '''
     if 'fecha' in dataframe.columns:
-        dataframe['fecha'] = pd.to_datetime(
-            dataframe['fecha'], dayfirst = True, errors = 'coerce'
-        )
+        dataframe['fecha'] = _coerce_dates(dataframe['fecha'])
     return dataframe
 
 
@@ -156,6 +187,47 @@ def _fill_ids_from_names(dataframe: pd.DataFrame) -> pd.DataFrame:
         else:
             missing = dataframe[id_column].isna()
             dataframe.loc[missing, id_column] = dataframe.loc[missing, name_column]
+    return dataframe
+
+
+_GEO_COLUMNS: Final[tuple[str, str]] = ('latitud', 'longitud')
+
+
+def _sanitize_geo(dataframe: pd.DataFrame) -> pd.DataFrame:
+    '''
+        Nulls out unusable coordinate pairs so the route map never plots a
+        placeholder as a real location.
+
+        ERP exports fill missing GPS readings with a literal 0, which would
+        otherwise render as a valid point off the coast of Africa and drag the
+        whole map away from the client's city. An exact 0 is treated as "no
+        data" because a genuine reading always carries decimals. Both members
+        of the pair are cleared together: half a coordinate is not a location.
+
+        Args:
+            dataframe (pd.DataFrame): Mapped DataFrame, before validation.
+
+        Returns:
+            pd.DataFrame: Same frame with unusable coordinates set to NA.
+    '''
+    if not all(column in dataframe.columns for column in _GEO_COLUMNS):
+        return dataframe
+
+    latitude = pd.to_numeric(dataframe['latitud'], errors = 'coerce')
+    longitude = pd.to_numeric(dataframe['longitud'], errors = 'coerce')
+    unusable = (
+        latitude.isna() | longitude.isna()
+        | (latitude == 0) | (longitude == 0)
+        | ~latitude.between(-90, 90) | ~longitude.between(-180, 180)
+    )
+
+    dataframe['latitud'] = latitude.mask(unusable)
+    dataframe['longitud'] = longitude.mask(unusable)
+
+    dropped = int(unusable.sum())
+    if dropped:
+        message = f'Sanitized {dropped} row(s) with unusable coordinates.'
+        logger.info(message)
     return dataframe
 
 
@@ -271,6 +343,7 @@ def parse_and_validate(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, 
     mapped = _stringify_ids(mapped)
     mapped = _fill_ids_from_names(mapped)
     mapped = _parse_dates(mapped)
+    mapped = _sanitize_geo(mapped)
     validated, errors = validate_schema(mapped)
 
     if not errors:
@@ -315,7 +388,7 @@ def parse_and_validate_partial(
                 - summary: IngestSummary over the whole file (total/valid/error).
     '''
     raw = _read_dataframe(file_bytes, filename)
-    mapped = _parse_dates(_fill_ids_from_names(_stringify_ids(map_columns(raw))))
+    mapped = _sanitize_geo(_parse_dates(_fill_ids_from_names(_stringify_ids(map_columns(raw)))))
     _, errors = validate_schema(mapped)
 
     # A missing required column means the whole file cannot be processed.

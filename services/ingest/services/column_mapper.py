@@ -43,6 +43,10 @@ COLUMN_ALIASES: Final[dict[str, set[str]]] = {
     'nombre_producto': {'nombre producto', 'producto', 'descripcion', 'articulo'},
     'cantidad': {'cantidad', 'unidades', 'qty', 'cant', 'volumen'},
     'precio_unitario': {'precio unitario', 'precio', 'precio unit', 'pu'},
+    'costo_unitario': {
+        'costo unitario', 'costo', 'costo unit', 'cu', 'costo compra',
+        'precio costo', 'costo producto'
+    },
     'monto_total': {
         'monto total', 'monto final', 'monto', 'importe', 'total', 'venta',
         'valor'
