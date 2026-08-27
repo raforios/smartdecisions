@@ -13,7 +13,7 @@
         id_producto, nombre_producto, categoria, canal, region, ciudad,
         vendedor, fecha
 '''
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 

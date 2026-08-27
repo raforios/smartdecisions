@@ -11,7 +11,7 @@
         3. The category mix shift between the last month and the previous one —
            what is gaining and losing weight inside the same total.
 '''
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -129,22 +129,39 @@ def _category_mix(dataframe: pd.DataFrame, parsed_dates: pd.Series,
     previous = labelled.loc[labelled['_mes'] == previous_key].groupby('_cat')[MONTO].sum()
     current_total, previous_total = current.sum(), previous.sum()
 
-    rows: List[Dict[str, Any]] = []
-    for category in sorted(set(current.index) | set(previous.index)):
-        current_amount = float(current.get(category, 0.0))
-        previous_amount = float(previous.get(category, 0.0))
-        current_share = round(ratio(current_amount, current_total) * 100, 1)
-        previous_share = round(ratio(previous_amount, previous_total) * 100, 1)
-        rows.append({
-            'label': str(category),
-            'monto_actual': money(current_amount),
-            'monto_anterior': money(previous_amount),
-            'variacion': percent_change(current_amount, previous_amount),
-            'participacion_actual': current_share,
-            'participacion_anterior': previous_share,
-            'cambio_participacion': round(current_share - previous_share, 1)
-        })
+    rows = [
+        _mix_row(category, (current, previous), (current_total, previous_total))
+        for category in sorted(set(current.index) | set(previous.index))
+    ]
     return sorted(rows, key = lambda row: row['cambio_participacion'], reverse = True)
+
+
+def _mix_row(category: str, amounts: Tuple[pd.Series, pd.Series],
+             totals: Tuple[float, float]) -> Dict[str, Any]:
+    '''
+        Builds one category row of the mix comparison.
+
+        Args:
+            category (str): Category being described.
+            amounts (tuple): (current month series, previous month series).
+            totals (tuple): (current month total, previous month total).
+
+        Returns:
+            Dict[str, Any]: Amounts, shares and the share change in points.
+    '''
+    current_amount = float(amounts[0].get(category, 0.0))
+    previous_amount = float(amounts[1].get(category, 0.0))
+    current_share = round(ratio(current_amount, totals[0]) * 100, 1)
+    previous_share = round(ratio(previous_amount, totals[1]) * 100, 1)
+    return {
+        'label': str(category),
+        'monto_actual': money(current_amount),
+        'monto_anterior': money(previous_amount),
+        'variacion': percent_change(current_amount, previous_amount),
+        'participacion_actual': current_share,
+        'participacion_anterior': previous_share,
+        'cambio_participacion': round(current_share - previous_share, 1)
+    }
 
 
 def _growth_kpis(monthly: pd.Series) -> List[Dict[str, Any]]:

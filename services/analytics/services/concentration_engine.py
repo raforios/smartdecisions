@@ -11,7 +11,7 @@
         * ABC classification of products (A = first 80% of sales, B = next 15%,
           C = the long tail) to separate the core catalogue from the noise.
 '''
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 

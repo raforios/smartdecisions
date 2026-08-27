@@ -2,7 +2,7 @@
     Analytics controllers.
 '''
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 from boto3.resources.base import ServiceResource
 from dotenv import dotenv_values
 from fastapi import Request
@@ -15,13 +15,20 @@ from schemas.analytics import (
     CommercialSummaryResponse,
     ForecastResponse,
     Opportunity,
+    PortfolioResponse,
     SegmentationResponse
 )
 from services.affinity_engine import compute_opportunities
 from services.analytics_runs import get_latest_run_for_dataset, persist_run
 from services.commercial_summary import build_commercial_summary
+from services.concentration_engine import build_concentration
 from services.dataset_loader import get_dataset_metadata, load_dataframe_from_s3
+from services.date_filter import apply_date_range
+from services.efficiency_engine import build_efficiency
 from services.forecast_engine import build_forecast
+from services.growth_engine import build_growth
+from services.margin_engine import build_margin
+from services.portfolio_engine import build_portfolio
 from services.segmentation_engine import build_segmentation
 from services.utils import handle_service_errors
 
@@ -40,7 +47,11 @@ def _top_opportunities_per_product(opportunities: List[Dict[str, Any]]) -> List[
         highest-scoring product. Bounded by _MAX_PER_PRODUCT and _MAX_OPPORTUNITIES.
     '''
     from collections import defaultdict # pylint: disable=import-outside-toplevel
-    ranked = sorted(opportunities, key = lambda opp: opp.get('opportunity_score', 0), reverse = True)
+    ranked = sorted(
+        opportunities,
+        key = lambda opp: opp.get('opportunity_score', 0),
+        reverse = True
+    )
     per_product: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
     kept: List[Dict[str, Any]] = []
     for opp in ranked:
@@ -105,26 +116,90 @@ def _summary_to_schema(summary: Dict[str, Any]) -> AnalyticsSummary:
     return AnalyticsSummary(**summary)
 
 
-@handle_service_errors('ANALYTICS')
-async def commercial_summary_controller(
+def _scoped_dataframe(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    current_user: str, # pylint: disable=unused-argument
-    request: Request # pylint: disable=unused-argument
-) -> CommercialSummaryResponse:
+    params: Optional[Dict[str, Any]] = None
+) -> Tuple[Any, Dict[str, Any]]:
     '''
-        Loads the normalized dataset and builds the general commercial summary
-        (KPIs, best/worst client, top/bottom products, distributions and the
-        monthly trend). Read-only: it derives everything from the dataset on the
-        fly, so it is not persisted as a run.
+        Loads the normalized dataset from S3 and narrows it to the requested
+        date window.
+
+        Every analysis endpoint scopes its data the same way, so the window is
+        resolved once here and reported back with the result: a manager reading
+        a number needs to know which period produced it.
+
+        Args:
+            dynamodb_resource (ServiceResource): Injected DynamoDB resource.
+            dataset_id (str): Dataset to load.
+            params (dict | None): May carry 'date_from' and 'date_to'.
+
+        Returns:
+            Tuple[Any, Dict[str, Any]]: The scoped DataFrame and the period
+                descriptor.
+
+        Raises:
+            InvalidInputError: If the requested window leaves no rows.
     '''
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id
     )
     dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    options = params or {}
+    return apply_date_range(
+        dataframe = dataframe,
+        date_from = options.get('date_from'),
+        date_to = options.get('date_to')
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def commercial_summary_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: Dict[str, Any],
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> CommercialSummaryResponse:
+    '''
+        Loads the normalized dataset and builds the full commercial summary:
+        the sales picture plus growth, concentration, efficiency and gross
+        margin. Read-only: everything is derived on the fly from the dataset,
+        so nothing is persisted as a run.
+    '''
+    dataframe, periodo = _scoped_dataframe(dynamodb_resource, dataset_id, params)
     summary = build_commercial_summary(dataframe)
-    return CommercialSummaryResponse(dataset_id = dataset_id, **summary)
+    return CommercialSummaryResponse(
+        dataset_id = dataset_id,
+        periodo = periodo,
+        crecimiento = build_growth(dataframe),
+        concentracion = build_concentration(dataframe),
+        eficiencia = build_efficiency(dataframe),
+        margen = build_margin(dataframe),
+        **summary
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def portfolio_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: Dict[str, Any],
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> PortfolioResponse:
+    '''
+        Loads the normalized dataset and builds the portfolio-health view:
+        coverage, churn, month-by-month client movement and the actionable list
+        of clients at risk of being lost. Read-only.
+    '''
+    dataframe, periodo = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    return PortfolioResponse(
+        dataset_id = dataset_id,
+        periodo = periodo,
+        **build_portfolio(dataframe)
+    )
 
 
 @handle_service_errors('ANALYTICS')
@@ -139,11 +214,7 @@ async def forecast_controller(
         Loads the normalized dataset and builds the demand forecast with the
         requested method / horizon / grouping. Read-only.
     '''
-    metadata = get_dataset_metadata(
-        dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
-    )
-    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, params)
     result = build_forecast(
         dataframe = dataframe,
         months_ahead = params.get('months_ahead', 3),
@@ -157,6 +228,7 @@ async def forecast_controller(
 async def segmentation_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
+    params: Dict[str, Any],
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> SegmentationResponse:
@@ -164,11 +236,7 @@ async def segmentation_controller(
         Loads the normalized dataset and builds the customer value segmentation
         (Alto/Medio/Bajo). Read-only.
     '''
-    metadata = get_dataset_metadata(
-        dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
-    )
-    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, params)
     result = build_segmentation(dataframe)
     return SegmentationResponse(dataset_id = dataset_id, **result)
 
@@ -177,6 +245,7 @@ async def segmentation_controller(
 async def run_analytics_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
+    params: Dict[str, Any],
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> AnalyticsRunResponse:
@@ -188,11 +257,7 @@ async def run_analytics_controller(
           4. Persist the run.
           5. Return the public response.
     '''
-    metadata = get_dataset_metadata(
-        dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
-    )
-    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, params)
 
     parameters = _engine_parameters()
     opportunities, summary = compute_opportunities(

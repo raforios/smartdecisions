@@ -19,7 +19,6 @@ from services.frame_utils import (
     CANTIDAD,
     CLIENTE_ID,
     MONTO,
-    PEDIDO,
     PRODUCTO_ID,
     PRODUCTO_NOMBRE,
     VENDEDOR,

@@ -46,5 +46,5 @@ def test_tier_shares_sum_to_100():
 def test_missing_columns_returns_empty():
     '''Without monto/cliente columns the result is empty, not an error.'''
     result = build_segmentation(pd.DataFrame([{'foo': 1}]))
-    assert result['tiers'] == []
+    assert not result['tiers']
     assert result['total_clientes'] == 0

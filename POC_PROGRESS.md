@@ -1,10 +1,122 @@
 # POC_PROGRESS.md — SmartDecisions POC
 
-> Bitácora de trabajo del POC de **SmartDecisions** (empresa: **BearSoft**).
+> Bitácora de trabajo de **SmartDecisions** (empresa: **BearSoft**).
 > Mantenido por Claude entre sesiones para no perder contexto.
-> Fuentes asociadas: `SMARTDECISIONS.md` (visión), `CLAUDE.md` (estándares).
+> Fuentes asociadas: `SMARTDECISIONS.md` (visión), `POC_EVALUATION.md` (cómo
+> probarlo), `CLAUDE.md` (estándares).
+>
+> **Lectura del archivo:** lo primero es el estado actual; después viene el
+> historial del POC de junio, conservado como registro. Donde el historial
+> contradice al estado actual, manda el estado actual.
 
 ---
+
+# ESTADO ACTUAL — Ronda MVP vendible (ago 2026)
+
+**Contexto:** hay compradores potenciales y contactos que pueden abrir puertas
+institucionales. El objetivo dejó de ser "cerrar el POC" y pasó a ser **un
+producto que se pueda vender a una gerencia**.
+
+## El diagnóstico que abrió esta ronda
+
+La revisión del usuario fue dura y acertada:
+
+- **Playground ML era irrelevante.** Exponía `compute_cost_logistic`,
+  `compute_gradient`, "Z-Score sobre una matriz" y "Sigmoid en batch": un
+  laboratorio del curso de ML, no un producto. Agregarle datasets bonitos no lo
+  arreglaba.
+- **Rutas era el módulo peor construido.** No cargaba el mapa, y cuando cargaba
+  mostraba un diagrama de líneas cruzadas sin calles.
+- **No había coherencia.** Ventas, predicciones y rutas no compartían datos.
+
+Causas raíz encontradas en el código (2026-08-26), no supuestas:
+
+1. El módulo de rutas pide `route_id` y `day` como enteros crudos y lee de una
+   tabla DynamoDB propia sembrada aparte: **cero relación con el archivo de
+   ventas**.
+2. Las líneas cruzadas son el algoritmo, no el dibujo: `optimal_route()` es un
+   vecino más cercano voraz.
+3. El mapa depende del servidor público de demostración de OSRM, **una llamada
+   por tramo**; con 30 paradas son 30 llamadas encadenadas contra un servidor con
+   límite de tasa.
+4. **1.401 filas del archivo real traen coordenada (0,0)** → el mapa se iba al
+   Golfo de Guinea.
+5. El archivo real tiene solo **4 meses**, el último **incompleto** (corta el 20
+   de febrero) → la tendencia mostraba un derrumbe de ventas inexistente. Una
+   sola ciudad, una región, un canal.
+6. **La coherencia ya estaba en los datos:** el export trae Latitud, Longitud,
+   Cliente, Vendedor y Fecha. Nunca se cableó.
+
+## Decisiones tomadas (2026-08-26, autorizadas por el usuario)
+
+| # | Decisión |
+|---|---|
+| 1 | **Costo unitario sintético.** El archivo real no lo trae; se deriva por margen de categoría y se declara como simulado. |
+| 2 | **Rutas: se abandonan `route_id`/`day` y la tabla DynamoDB aparte.** Día y ruta se derivan **por proximidad geográfica**, de modo que el módulo funciona con el archivo de cualquier cliente. |
+| 3 | **Playground se retira** y se reconvierte en "Predicciones". `ml_functions` queda como motor, no como pantalla. |
+| 4 | **El historial se extiende sintéticamente.** Los datos reales son de otro encargo y no habrá un archivo nuevo. |
+| 5 | **`mining_analysis` (cotizaciones) queda libre de compromiso** tras el cierre con el Ministerio; entra como módulo de un segundo vertical bajo la misma marca. |
+| 6 | **OSRM:** primero optimizar el uso del servidor público (`/table` en una sola llamada); servidor propio solo si hay uso real. |
+
+## Fase A — Cimiento de coherencia (✅ 2026-08-26)
+
+- **`tools/build_sample_dataset.py`** (Pylint 10.00). Muestrea **por cliente,
+  nunca por fila** — un muestreo aleatorio rompe las canastas y la afinidad da
+  cero reglas. Anonimiza cliente/vendedor/factura, quita marcas del producto,
+  limpia geo, corta el mes parcial, extiende el historial con
+  tendencia + estacionalidad + ruido y deriva el costo por margen de categoría.
+  Escribe una hoja **"Origen de los datos"** que declara qué es real y qué
+  simulado.
+- Genera `tools/samples/ventas_muestra_2k.xlsx` (1.978 filas / 3 meses / 130
+  clientes) y `tools/samples/ventas_demo.xlsx` (23.250 filas / **24 meses** /
+  204 clientes / 9.050 facturas).
+- **`costo_unitario`** agregado a `column_mapper`, `excel_validator` y a la
+  plantilla descargable, **como columna opcional**.
+- **`_sanitize_geo`** en `excel_parser`: coordenada exactamente 0 = "sin dato";
+  se anula el par completo. Cableado en los dos pipelines.
+- **`template_builder._example_line`** refactorizado a dataclasses (tenía 11
+  argumentos, R0913 pre-existente) → ingest vuelve a **10.00/10**.
+- **Bug encontrado y corregido:** el mismo contenido cargaba 23.250 filas en XLSX
+  pero **solo 9.064 en CSV**. Causa: `_parse_dates` forzaba `dayfirst=True`, y
+  con fechas ISO pandas deducía `%Y-%d-%m` del primer valor, convirtiendo en NaT
+  toda fecha posterior al día 12 — el 61% de las filas. Nuevo `_coerce_dates`
+  elige entre ISO y day-first por cuál resuelve más fechas. Cubierto por
+  `tests/test_excel_parser.py` (5 tests nuevos, ingest 14/14).
+
+## Fase B — Rentabilidad y cableado (✅ backend, 2026-08-27)
+
+Los cinco motores escritos en agosto (`growth`, `concentration`, `efficiency`,
+`portfolio`, `date_filter`) estaban **sin cablear: 0 referencias en routes/,
+controllers/ y schemas/. Eran código muerto.** Ahora:
+
+- **Nuevo `services/margin_engine.py`**: margen bruto por categoría, producto,
+  cliente y vendedor, más alertas de productos vendidos bajo costo. Degrada a
+  `disponible: false` cuando el archivo no trae costo — nunca muestra ceros.
+- **`GET /summary/{id}`** incorpora `periodo`, `crecimiento`, `concentracion`,
+  `eficiencia` y `margen`.
+- **`GET /portfolio/{id}`** nuevo: cobertura, churn, movimiento mensual y lista
+  accionable de clientes en riesgo.
+- **`date_from` / `date_to`** en summary, forecast, segmentation, run y portfolio,
+  agrupados en una dependencia `DateWindow` (y `ForecastOptions` que la compone).
+- **`KpiCard.value` pasa a `Optional[float]`**: una variación porcentual sin
+  período base es indefinida, no cero.
+- **Tests:** 5 archivos nuevos (margen, crecimiento, concentración, eficiencia,
+  cartera, filtro de fechas) → analytics **48/48, Pylint 10.00/10**.
+- Verificado contra el archivo de demo: resumen completo en 0,26 s / 46 KB.
+
+## Pendiente
+
+| Fase | Trabajo |
+|---|---|
+| **B (frontend)** | Dibujar los bloques nuevos: margen, crecimiento, concentración, eficiencia, "Salud de Cartera" y la barra de período. |
+| **C** | Rutas coherentes: clustering por proximidad + 2-opt + OSRM `/table`, alimentado por el `dataset_id`. |
+| **D** | "Predicciones" reemplazando Playground. |
+| **E** | Cotizaciones (`mining_analysis`) como segundo vertical. |
+| — | Exportador `.xlsx` de resultados; RFM en segmentación. |
+
+---
+
+# HISTORIAL — POC de junio 2026
 
 ## Plan maestro — 5 pasos del POC
 
@@ -463,7 +575,14 @@ no técnico) reproduzca el POC end-to-end en 20 minutos:
 
 ---
 
-## 🎉 POC — SmartDecisions COMPLETO al 100%
+## 🎉 POC — los 5 pasos del plan original, cerrados (jun 2026)
+
+> ⚠️ **Nota retrospectiva (2026-08-27):** el título original de esta sección era
+> "POC COMPLETO al 100%". Era cierto contra el plan de junio, pero engañoso como
+> lectura del producto. La revisión del usuario dejó claro que el POC **no era un
+> MVP**: Playground era un laboratorio sin propósito comercial, Rutas no cargaba
+> el mapa ni guardaba coherencia con las ventas, y los tres módulos no compartían
+> datos. El estado real del producto está en "RONDA MVP VENDIBLE" (arriba).
 
 Los 5 pasos del plan original cerrados:
 
@@ -709,13 +828,16 @@ Migración completa a light corporate basada en los assets que pasó el usuario.
 - Polylines/markers del módulo Rutas con paleta corporativa (rojo profesional, verde corporativo, brown punteada para original, navy sólida para optimizada).
 - Cache-bust `?v=4` y `?v=5` en CSS/JS para forzar reload sin hard refresh por archivo.
 
-### Próximos pasos del usuario (anotados, no son trabajo de Claude todavía)
+### Próximos pasos del usuario (anotados en junio — ✅ TODOS CUMPLIDOS)
 
-- Prueba E2E del módulo Rutas (no validada visualmente todavía).
-- Deploy de los 3 microservicios nuevos (`ingest`, `optimization`, `analytics`) a AWS Lambda + API Gateway.
-- Deploy del frontend estático a S3 + CloudFront.
-- DNS vía CloudFlare → `smartdecisions.bearsoft.com.bo` o `smartdecisions.raforios.com`.
-- Una vez deployado, actualizar `portal/demo/js/config.js` con las URLs reales de los 3 nuevos servicios.
+- ~~Prueba E2E del módulo Rutas~~ → hecha; reveló los bugs que abrieron la ronda MVP.
+- ~~Deploy de `ingest`, `optimization`, `analytics` a Lambda + API Gateway~~ → desplegados.
+- ~~Deploy del frontend estático a S3 + CloudFront~~ → desplegado.
+- ~~DNS vía CloudFlare~~ → `smartdecisions.bearsoft.com.bo` en línea.
+- ~~Actualizar `portal/demo/js/config.js` con las URLs reales~~ → hecho.
+
+> El comentario "pending deploy" que aún aparece en `config.js` quedó obsoleto:
+> los tres servicios tienen URL productiva.
 
 ---
 
@@ -724,7 +846,11 @@ Migración completa a light corporate basada en los assets que pasó el usuario.
 - `project_naming.md` — empresa BearSoft / producto SmartDecisions / TRADE-FORMS son Binaria
 - `project_deployment_strategy.md` — sin RDS; default DynamoDB+Lambda+S3/CloudFront
 - `reference_deployed_services.md` — AUTH/FILES/EVENTS en API Gateway/Lambda
-- `project_notebooks_as_frontend_spec.md` — frontend.ipynb + routes.ipynb son spec del frontend, no scratch pads
+- ~~`project_notebooks_as_frontend_spec.md`~~ — **obsoleto: `frontend.ipynb` y
+  `routes.ipynb` ya no existen en el repo.** La referencia viva para rutas es
+  `notebooks/rutas_optimizadas.ipynb`
+- `project_smartdecisions_mvp_overhaul.md` — la ronda MVP descrita arriba
+- `project_lambda_lightweight_deps.md` — el set de dependencias que cabe en 250 MB
 - `project_demo_portal_roadmap.md` — portal demo, CMS público en Dynamo
 
 ---

@@ -1,311 +1,234 @@
 # POC_EVALUATION.md — Cómo evaluar SmartDecisions
 
-> Guía corta para que cualquier persona (técnica o no técnica) reproduzca
-> el POC end-to-end y juzgue si vale la pena llevarlo a la siguiente
-> fase. **Tiempo estimado: 20 minutos** la primera vez, 2 minutos a
-> partir de la segunda.
+> Guía para reproducir el producto end-to-end y juzgar si está listo para
+> ponerlo delante de un comprador. **Tiempo estimado: 15 minutos.**
+>
+> **Última revisión: 2026-08-27.** Reescrito tras el giro a MVP vendible: los
+> tres servicios ya están desplegados, el dataset de prueba cambió y el módulo
+> Playground se está retirando.
+>
+> Documentos hermanos: `SMARTDECISIONS.md` (visión), `POC_PROGRESS.md`
+> (bitácora), `CLAUDE.md` (estándares).
 
 ---
 
 ## 1. ¿Qué se está evaluando?
 
-Una **plataforma SaaS de inteligencia comercial** para micro y pequeñas
-empresas, construida como un conjunto de microservicios serverless sobre
-AWS. El producto **toma un Excel de ventas y devuelve una lista priorizada
-de acciones comerciales con su impacto monetario esperado**, sin
-requerir ERP, instalación ni configuración previa.
+Una **plataforma SaaS de inteligencia comercial**: toma un archivo de ventas y
+devuelve un dashboard de gerencia, recomendaciones de venta cruzada valorizadas
+en Bs, un pronóstico, una segmentación de clientes, el margen real por categoría
+y la lista de clientes que estás por perder.
 
-El POC cubre 4 escenarios:
-
-| Módulo | Servicio que prueba | Pregunta que responde |
-|---|---|---|
-| Excel → Oportunidades | `ingest` + `analytics` | ¿El motor afinidad × drop size produce recomendaciones accionables? |
-| Playground ML | `ml_functions` | ¿Los algoritmos crudos (regresión, gradient descent, Z-score) están disponibles como API? |
-| Rutas | `optimization` | ¿La heurística de orden óptimo + proyección a red vial funciona? |
-| Auditoría | `events` | ¿Cada acción queda registrada para trazabilidad? |
+La prueba de fuego no es que cada módulo funcione por separado. Es que **un solo
+archivo alimente todos los módulos**. Si tienes que cargar datos aparte para ver
+las rutas, el producto todavía no está.
 
 ---
 
 ## 2. Arquitectura en 30 segundos
 
 ```
-                       ┌───────────────────────────────────┐
-                       │   Browser (S3 + CloudFront)       │
-                       │   app/portal/demo/* — Vanilla JS  │
-                       └─────────────┬─────────────────────┘
-                                     │  HTTPS + JWT
-                                     ▼
-        ┌──────────────────────────────────────────────────────┐
-        │  AWS API Gateway → 8 Lambdas (FastAPI + Mangum)      │
-        ├──────────────────────────────────────────────────────┤
-        │  AUTH (JWT)        EVENTS (audit/log)                │
-        │  FILES (S3)        ML_FUNCTIONS (regression)         │
-        │  INGEST (Excel→S3) ANALYTICS (afinidad×drop size)    │
-        │  OPTIMIZATION (routes)  LOCALIZATION (cliente only)  │
-        └─────────────┬───────────────────────┬────────────────┘
-                      │                       │
-                      ▼                       ▼
-              ┌──────────────┐         ┌──────────────┐
-              │  DynamoDB    │         │   AWS S3     │
-              │  (NoSQL)     │         │   bucket     │
-              └──────────────┘         └──────────────┘
-```
+                  ┌────────────────────────────────────────┐
+                  │  Navegador — S3 + CloudFront           │
+                  │  app/portal/demo/* — Vanilla JS        │
+                  └───────────────┬────────────────────────┘
+                                  │ HTTPS + JWT (30 min)
+                                  ▼
+      ┌──────────────────────────────────────────────────────────┐
+      │      API Gateway → Lambdas (FastAPI + Mangum)            │
+      ├──────────────────────────────────────────────────────────┤
+      │  BASE          AUTH · EVENTS · FILES                     │
+      │  SMARTDECISIONS  INGEST · ANALYTICS · OPTIMIZATION       │
+      │                  ML_FUNCTIONS · MINING_ANALYSIS          │
+      └───────┬──────────────────────┬──────────────┬────────────┘
+              ▼                      ▼              ▼
+        ┌───────────┐          ┌───────────┐  ┌───────────┐
+        │ DynamoDB  │          │    S3     │  │   MySQL   │
+        └───────────┘          └───────────┘  └───────────┘
 
-**$0 de infraestructura productiva** mientras el POC no se publica:
-todo el plano de datos vive en free-tier o en cuenta personal.
+  Archivos grandes: navegador ──URL pre-firmada──▶ S3  (sin pasar por API GW)
+```
 
 ---
 
-## 3. Requisitos previos
+## 3. Camino rápido: evaluar contra producción (5 min)
 
-| Cosa | Mínimo |
+Todo está desplegado. No hace falta levantar nada.
+
+1. Abre el demo y entra con tus credenciales de AUTH.
+2. **Módulo Excel → Descargar plantilla.** Verifica que trae las 14 columnas,
+   incluida `Costo Unitario`, y la hoja "Instrucciones".
+3. Sube `tools/samples/ventas_demo.xlsx`.
+4. Recorre las tarjetas de análisis.
+
+**Qué medir en el archivo de demo (23.250 filas, 24 meses, 204 clientes):**
+
+| Módulo | Qué debe salir |
 |---|---|
-| Python | 3.14 |
-| Docker | Cualquier versión reciente (solo para DynamoDB local) |
-| Node.js | No requerido (Vanilla JS, sin build) |
-| AWS CLI | Solo si querés deployar; para evaluar local NO hace falta |
-| Cuenta AWS | NO requerida para la evaluación local |
+| Carga | 23.250 / 23.250 filas válidas, 0 rechazadas |
+| Resumen | Bs 1.145.657 de venta, 9.050 ventas, 24 meses en la tendencia |
+| Margen | Margen bruto 22,2%; CAFES primero por margen |
+| Oportunidades | ~600 acciones en ~192 puntos de venta, ~Bs 39.400 de venta potencial |
+| Pronóstico | 24 puntos históricos + el horizonte elegido |
+| Segmentación | Alto = 41 clientes concentrando ~61% de la venta |
+| Cartera | 56 clientes en riesgo |
+
+Si algún número se aleja mucho, el dataset o el motor cambiaron: revisa antes de
+salir a mostrar.
 
 ---
 
-## 4. Setup en local — paso a paso
+## 4. Camino completo: levantar en local
 
-### 4.1 Clonar y crear venv
-
-```bash
-git clone <repo>
-cd app
-python -m venv .venv
-source .venv/bin/activate
-```
-
-### 4.2 Levantar DynamoDB local
+### 4.1 Entorno
 
 ```bash
+python -m venv .venv && source .venv/bin/activate
 docker run -d --name dynamodb-local-container -p 3100:8000 amazon/dynamodb-local
-```
-
-### 4.3 Crear las tablas (las 3 que el POC necesita)
-
-```bash
-cd services/ingest        && ./dynamodb.sh
-cd ../optimization        && ./dynamodb.sh
-cd ../analytics           && ./dynamodb.sh
-```
-
-Cada script verifica si la tabla ya existe; es idempotente.
-
-### 4.4 Instalar dependencias por servicio
-
-> **Atajo:** para evaluar end-to-end alcanza con instalar los 3 servicios
-> nuevos. Los 4 servicios productivos (AUTH/EVENTS/FILES/ML_FUNCTIONS)
-> ya están en AWS — no hace falta levantarlos en local.
-
-```bash
 for svc in ingest optimization analytics; do
-    (cd services/$svc && pip install -r requirements.txt)
+    (cd services/$svc && ./dynamodb.sh && pip install -r requirements.txt)
 done
 ```
 
-### 4.5 Configurar variables de entorno
+Los `.env` de cada servicio ya apuntan a las URLs productivas de AUTH/EVENTS/FILES
+y a DynamoDB local en `http://localhost:3100`. Si nadie los tocó, no hay nada que
+configurar.
 
-Cada servicio ya trae un `.env` listo apuntando a las URLs productivas
-de AUTH/EVENTS/FILES y a DynamoDB local en `http://localhost:3100`.
-**Si nadie tocó el `.env`, no hay que hacer nada en este paso.**
-
-### 4.6 Generar el dataset sintético
+### 4.2 Generar los archivos de muestra
 
 ```bash
-python tools/synthesize_sales.py --output tools/samples/ventas_demo.xlsx --seed 42
+# Fixture rápido: ~2.000 filas, 3 meses
+python tools/build_sample_dataset.py --rows 2000 --months 3 \
+    --output tools/samples/ventas_muestra_2k.xlsx
+
+# Archivo de demo: ~23.000 filas, 24 meses
+python tools/build_sample_dataset.py --rows 24000 --months 24 \
+    --output tools/samples/ventas_demo.xlsx
 ```
 
-Output esperado:
-```
-  rows                    : 4478
-  unique orders           : 1200
-  unique PdVs             : 5
-  unique products         : 12
-  date range              : 2026-04-01 → 2026-05-30
-  total monto             : 565,521.50
-```
+Requiere `data/DetalleVentas.csv` (el export real del distribuidor).
 
-### 4.7 Sembrar datos de rutas en DynamoDB local
+> **Importante:** el muestreo es **por cliente**, nunca por fila. Un muestreo
+> aleatorio de filas parte las facturas y la afinidad deja de encontrar reglas.
+
+### 4.3 Arrancar los servicios y el demo
 
 ```bash
-cd services/optimization
-PYTHONPATH=. python scripts/seed_from_csv.py \
-    --csv scripts/sample_routes.csv \
-    --endpoint-url http://localhost:3100
+cd services/ingest        && python main.py   # :3110
+cd services/optimization  && python main.py   # :3120
+cd services/analytics     && python main.py   # :3130
+cd portal && python -m http.server 8000       # http://localhost:8000/demo/
 ```
 
-### 4.8 Arrancar los 3 servicios
-
-En 3 terminales distintas:
-
-```bash
-# Terminal 1 — ingest (port 3110)
-cd services/ingest && python main.py
-
-# Terminal 2 — optimization (port 3120)
-cd services/optimization && python main.py
-
-# Terminal 3 — analytics (port 3130)
-cd services/analytics && python main.py
-```
-
-Cada uno expone Swagger UI en `http://localhost:31X0/docs`.
-
-### 4.9 Servir el demo estático
-
-```bash
-cd portal && python -m http.server 8000
-```
-
-Abrir `http://localhost:8000/demo/` en el browser.
+Cada servicio expone Swagger en `http://localhost:31X0/docs`.
 
 ---
 
-## 5. Recorrido recomendado (15 minutos)
+## 5. Batería de verificación técnica
 
-### Paso 1: login
+### 5.1 Tests y calidad
 
-URL: `http://localhost:8000/demo/`
+```bash
+(cd services/ingest    && pytest tests/ -q && pylint services/ controllers/ routes/ schemas/ tests/)
+(cd services/analytics && pytest tests/ -q && pylint services/ controllers/ routes/ schemas/ tests/)
+```
 
-Loguearse con un usuario válido del servicio AUTH productivo. Si no
-tenés credenciales, pedírmelas o crear uno con
-`POST ${AUTH_URL}/v1/auth/users` (ver Swagger del AUTH).
+**Umbral:** todos los tests en verde y Pylint 10.00/10. Al 2026-08-27:
+ingest 14/14, analytics 48/48, ambos 10.00.
 
-**Qué evaluar:** UX limpia, dark theme, redirección al home.
+### 5.2 Equivalencia XLSX / CSV
 
-### Paso 2: módulo Excel (5 min)
+El mismo contenido debe ingresar idéntico en los dos formatos. Lo cubre
+`services/ingest/tests/test_excel_parser.py::test_xlsx_and_csv_yield_the_same_rows`.
 
-1. Click **Descargar plantilla**. → llega `template_ventas_v1.xlsx`.
-2. Subir `tools/samples/ventas_demo.xlsx`.
-3. Click **Subir y validar**.
+Regresión que cubre ese test: con fechas ISO, el parseo day-first hacía que
+pandas dedujera `%Y-%d-%m` y **perdiera el 61% de las filas** en CSV mientras el
+XLSX cargaba entero.
 
-   **Qué medir:**
-   - `valid_rows / total_rows = 4478 / 4478` (sin errores).
-   - 5 PdVs detectados, 12 productos.
+### 5.3 Degradación sin columnas opcionales
 
-4. Click **Ejecutar análisis**.
+Sube un archivo sin `Costo Unitario`. **El bloque de margen debe desaparecer**,
+no mostrar ceros. Igual sin `Latitud`/`Longitud`: el módulo de rutas se
+deshabilita en vez de dibujar un mapa vacío.
 
-   **Qué medir:**
-   - 16 oportunidades.
-   - 5/5 PdVs con acciones.
-   - **`Impacto esperado ≈ $2,525.48`** → este número es **EL KPI** del POC.
-   - 342 reglas evaluadas.
+### 5.4 Ventana de fechas
 
-5. Ordenar la tabla por **Score** descendente.
-
-   **Qué medir:**
-   - El top 3 deberían ser cervezas (`SKU-C300/SKU-C301`) con lift > 9.
-   - El rationale en español por fila es legible para un dueño de PyME.
-
-### Paso 3: módulo Playground (5 min)
-
-1. Tab **Lineal** → click **Entrenar** con el ejemplo pre-cargado.
-
-   **Qué medir:**
-   - Chart de costo se anima.
-   - `w_final ≈ 2.0`, `b_final ≈ 0`, `costo_final < 0.001`.
-
-2. Click **Usar pesos entrenados** → click **Predecir**.
-
-   **Qué medir:** predicciones cercanas a la recta `y = 2x` para los
-   x_test ingresados.
-
-3. Tab **Z-Score + Sigmoid** → click **Normalizar**.
-
-   **Qué medir:** μ y σ se calculan; la matriz `x_norm` tiene media 0 y
-   varianza unitaria por columna.
-
-### Paso 4: módulo Rutas (3 min)
-
-1. `route_id = 2`, `day = 1`, `dist = 1500` (valores por defecto).
-2. Click **Cargar puntos**.
-
-   **Qué medir:** mapa centrado en La Paz, 5 markers (rojo=inicio,
-   verde=fin, amarillos=intermedios), polyline azul punteada con el
-   orden client_id.
-
-3. Click **Optimizar**.
-
-   **Qué medir:** spinner ~5-15 s (`osmnx` golpea OSM); aparece
-   polyline teal y card de resumen con `paradas`, `segmentos`,
-   `distancia total`, `radio OSM`.
-
-### Paso 5: trazabilidad (2 min)
-
-Cada acción que disparaste debió enviar **dos eventos** al servicio
-EVENTS productivo:
-- Una entrada de audit (creación de dataset, run de analytics, etc.).
-- Una entrada de usage_log (endpoint + IP + ms + status).
-
-Si tenés credenciales del EVENTS productivo:
+Todos los endpoints de análisis aceptan `date_from` y `date_to` (`YYYY-MM-DD`):
 
 ```bash
 curl -H "Authorization: Bearer <token>" \
-     https://uyrs6ucto3.execute-api.us-east-1.amazonaws.com/v1/events/audit?microservice=INGEST
+  "$ANALYTICS_URL/v1/analytics/summary/<dataset_id>?date_from=2023-06-01&date_to=2023-12-31"
 ```
 
-**Qué medir:** aparece tu dataset_id, action=CREATE, entity=IngestDataset.
+La respuesta trae un bloque `periodo` que declara el rango disponible y el
+aplicado. Un rango sin ventas devuelve un error explícito, **no un informe en
+cero** (un informe en cero se lee como "no vendiste nada", que es otra cosa).
+
+### 5.5 Trazabilidad
+
+Cada acción emite dos eventos a EVENTS: uno de auditoría y uno de usage_log.
+
+```bash
+curl -H "Authorization: Bearer <token>" \
+     "$EVENTS_URL/v1/events/audit?microservice=INGEST"
+```
 
 ---
 
-## 6. KPIs del POC (qué juzgar)
+## 6. KPIs de aceptación
 
-| Categoría | Métrica | Umbral mínimo aceptable |
+| Categoría | Métrica | Umbral |
 |---|---|---|
-| Validación | Filas válidas / total | 100 % en archivo sintético |
-| Negocio | Oportunidades detectadas | ≥ 10 |
-| Negocio | Impacto monetario esperado | > $1,000 en el dataset demo |
-| Negocio | PdVs con al menos una acción | 5/5 |
-| Estadístico | Lift máximo de la top-1 | > 5 |
-| Performance | Validación (4500 filas) | < 5 s |
-| Performance | Run analytics (4500 filas) | < 20 s |
-| Performance | Optimal route (10 puntos) | < 30 s |
-| Operación | Sin errores 5xx en flujo happy path | 0 |
-| Trazabilidad | Audit en EVENTS por cada CREATE | 100 % |
-| UX | Idioma del rationale | Español para usuario no técnico |
-| UX | Errores de validación legibles | Sí, sin jerga técnica |
+| Validación | Filas válidas en el archivo de demo | 100% |
+| Validación | Paridad XLSX vs CSV | Idéntica |
+| Negocio | Oportunidades detectadas | ≥ 100 |
+| Negocio | Venta potencial identificada | > Bs 10.000 |
+| Negocio | Margen bruto reportado | Coherente con el costo cargado |
+| Estadístico | Meses de histórico para el pronóstico | ≥ 12 |
+| Performance | Ingesta de 23k filas | < 3 s |
+| Performance | Resumen completo (5 motores) | < 1 s |
+| Performance | Afinidad | < 5 s |
+| Operación | 5xx en el camino feliz | 0 |
+| Trazabilidad | Audit en EVENTS por cada CREATE | 100% |
+| UX | Idioma | Español neutro, sin voseo |
 
-Si **todos** los umbrales se cumplen, el POC es promovible a una fase
-siguiente (piloto con 1-2 clientes reales).
+> El umbral de performance de la afinidad es el que más ha dolido: con el archivo
+> real de 121k filas tardaba ~28 s contra un timeout de API Gateway de 29 s, y
+> devolvía 503. Con el archivo de demo baja a 0,3 s.
 
 ---
 
-## 7. Limitaciones conocidas
+## 7. Limitaciones conocidas (al 2026-08-27)
 
-| # | Limitación | Mitigación / próximo paso |
+| # | Limitación | Estado / mitigación |
 |---|---|---|
-| 1 | INGEST/OPTIMIZATION/ANALYTICS no están deployados a AWS aún | Levantar local; deploy a Lambda es el paso siguiente al POC. |
-| 2 | Optimization dibuja segmentos lineales, no polyline OSM road-aligned | Backend retorna node IDs; resolver lat/lng requiere extensión menor del servicio. |
-| 3 | Demo solo en español | i18n queda para fase 2. |
-| 4 | Sin filtrado colaborativo de PdV ni grafo de afinidad | Roadmap §9 — fase 2. |
-| 5 | Forecast / Prophet aún no integrado | Roadmap §9 — capa predictiva, fase 2. |
-| 6 | Sin multi-tenancy (un solo bucket S3 compartido) | Fase 3, cuando haya tracción. |
-| 7 | LOCALIZATION no expuesto al producto SmartDecisions (solo a Binaria) | Decisión consciente; rutas usa OPTIMIZATION. |
+| 1 | **Módulo Rutas incoherente**: pide `route_id` y `day` como enteros y lee de una tabla DynamoDB propia, sin relación con el archivo de ventas | En reforma: pasa a derivar día y ruta por proximidad geográfica sobre el dataset cargado |
+| 2 | **Orden de visita con cruces**: el algoritmo es vecino más cercano voraz | Se reemplaza por 2-opt |
+| 3 | **OSRM público**: una llamada por tramo contra un servidor con límite de tasa | Pasa a una sola llamada `/table`; servidor propio si hay uso real |
+| 4 | **Playground ML sigue en el menú** | Se retira; se reemplaza por "Predicciones" |
+| 5 | **Bloques nuevos del Resumen sin UI**: crecimiento, concentración, eficiencia, margen y cartera existen en la API pero el frontend aún no los dibuja | Siguiente tarea |
+| 6 | **Costo unitario del demo es simulado** | Declarado en la hoja "Origen de los datos" del archivo |
+| 7 | **Dato base pobre**: 4 meses reales, 1 ciudad, 1 canal, 1 región | El archivo de demo extiende el historial; conseguir un export más rico sigue siendo deseable |
+| 8 | Sin multi-tenancy (un bucket S3 compartido) | Cuando haya tracción |
+| 9 | Sin exportación a Excel de los resultados | Pendiente; una gerencia siempre lo pide |
+| 10 | Token de 30 min; análisis largos pueden expirar la sesión | Mitigado con caché de resultados en `sessionStorage` |
 
 ---
 
-## 8. Próximos pasos sugeridos (si el POC pasa)
+## 8. Próximos pasos
 
-1. **Deploy de los 3 servicios nuevos** (ingest/optimization/analytics)
-   a AWS Lambda + API Gateway.
-2. **Migrar config.js a las URLs reales** de los 3 nuevos.
-3. **Piloto con 1 cliente** que tenga un Excel real de 6-12 meses.
-4. **Multi-tenancy** (prefijos S3 por tenant + claim en JWT).
-5. **Forecasting** con Prophet/statsmodels (paso natural sobre los
-   mismos datasets).
-6. **Filtrado colaborativo** PdV × producto (matriz coseno).
-7. **Dashboards prediseñados** además de la tabla cruda actual.
+1. Cablear al frontend los bloques nuevos (margen, crecimiento, concentración,
+   eficiencia, cartera) y la barra de período.
+2. Reformar el módulo de Rutas sobre el dataset de ventas.
+3. Reemplazar Playground por "Predicciones".
+4. Exportador a `.xlsx` de los resultados.
+5. Incorporar Cotizaciones (`mining_analysis`) como módulo del segundo vertical.
 
 ---
 
 ## 9. Soporte
 
-- **Bitácora de desarrollo del POC:** `POC_PROGRESS.md`
-- **Documentación del producto:** `SMARTDECISIONS.md`
-- **Estándares de código:** `CLAUDE.md`, `boilerplate.md`
-- **Guion para reuniones comerciales:** `docs/DEMO_SCRIPT.md`
+- **Bitácora:** `POC_PROGRESS.md` · **Visión:** `SMARTDECISIONS.md`
+- **Estándares:** `CLAUDE.md`, `boilerplate.md`
+- **Guion comercial:** `docs/DEMO_SCRIPT.md`
 - **Contacto:** raforios@gmail.com
