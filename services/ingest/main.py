@@ -18,7 +18,6 @@ from routes.ingest import router as ingest_router
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
-from services.template_builder import ensure_template
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
@@ -58,30 +57,13 @@ DEFAULT_CORS_ORIGIN_REGEX = (
 CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT_CORS_ORIGIN_REGEX
 
 
-def _ensure_template_present() -> None:
-    '''
-        Warms up the downloadable template in the writable temp dir at startup.
-        The Lambda package (/var/task) is read-only, so the template must live
-        in /tmp; `ensure_template()` also regenerates it on demand per request,
-        making this a best-effort warm-up rather than a hard requirement.
-    '''
-    try:
-        path = ensure_template()
-        message = f'Template ready at {path}.'
-        logger.info(message)
-    except Exception as e: # pylint: disable=broad-exception-caught
-        error_msg = f'Could not pre-generate template: {e}'
-        logger.warning(error_msg)
-
-
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     '''
         Handles startup/shutdown. DynamoDB tables are managed outside the app
-        lifecycle (via dynamodb.sh / IaC). Pre-generates the canonical v1
-        template if it is missing so `GET /template/file` always works.
+        lifecycle (via dynamodb.sh / IaC) and the downloadable template is a
+        static object in the default bucket, so there is nothing to prepare.
     '''
-    _ensure_template_present()
     message = 'Ingest startup: DynamoDB-backed service ready.'
     logger.info(message)
     yield

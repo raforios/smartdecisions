@@ -1,10 +1,8 @@
 '''
     Analytics controllers.
 '''
-import os
 from typing import Any, Dict, List, Optional, Tuple
 from boto3.resources.base import ServiceResource
-from dotenv import dotenv_values
 from fastapi import Request
 
 from schemas.analytics import (
@@ -18,44 +16,55 @@ from schemas.analytics import (
     PortfolioResponse,
     SegmentationResponse
 )
-from services.affinity_engine import compute_opportunities
-from services.analytics_runs import get_latest_run_for_dataset, persist_run
-from services.commercial_summary import build_commercial_summary
-from services.concentration_engine import build_concentration
-from services.dataset_loader import get_dataset_metadata, load_dataframe_from_s3
-from services.date_filter import apply_date_range
-from services.efficiency_engine import build_efficiency
-from services.forecast_engine import build_forecast
-from services.growth_engine import build_growth
-from services.margin_engine import build_margin
-from services.portfolio_engine import build_portfolio
-from services.segmentation_engine import build_segmentation
+from services.analytics import (
+    build_commercial_summary,
+    build_concentration,
+    build_efficiency,
+    build_forecast,
+    build_growth,
+    build_margin,
+    build_portfolio,
+    build_segmentation,
+    compute_opportunities
+)
+from services.analytics_utils import (
+    apply_date_range,
+    get_dataset_metadata,
+    get_latest_run_for_dataset,
+    load_dataframe_from_s3,
+    persist_run,
+    setting
+)
+from services.environment import load_and_validate_env_vars
 from services.utils import handle_service_errors
 
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
+# Caps on opportunities kept in the run (DynamoDB item limit + usable table)
+# and the affinity-engine tuning knobs. Configurable per deployment.
+_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+    'ANALYTICS_MAX_PER_PRODUCT': int,
+    'ANALYTICS_MAX_OPPORTUNITIES': int,
+    'AFFINITY_MIN_SUPPORT': float,
+    'AFFINITY_MIN_LIFT': float,
+    'AFFINITY_TOP_N_PER_PDV': int,
+    'AFFINITY_ITEM_LEVEL': str,
+})
+_MAX_PER_PRODUCT = setting(_SETTINGS, 'ANALYTICS_MAX_PER_PRODUCT', 60)
+_MAX_OPPORTUNITIES = setting(_SETTINGS, 'ANALYTICS_MAX_OPPORTUNITIES', 800)
 
-# Caps on opportunities kept in the run (DynamoDB item limit + usable table).
-_MAX_PER_PRODUCT = 60      # top stores kept per recommended product
-_MAX_OPPORTUNITIES = 800   # overall safety cap
 
-
-def _top_opportunities_per_product(opportunities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _top_opportunities_per_product(opportunities: List[Opportunity]) -> List[Opportunity]:
     '''
         Keeps the top-scoring stores for each recommended product, so the
         product summary lists every recommendation instead of only the single
         highest-scoring product. Bounded by _MAX_PER_PRODUCT and _MAX_OPPORTUNITIES.
     '''
     from collections import defaultdict # pylint: disable=import-outside-toplevel
-    ranked = sorted(
-        opportunities,
-        key = lambda opp: opp.get('opportunity_score', 0),
-        reverse = True
-    )
-    per_product: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
-    kept: List[Dict[str, Any]] = []
+    ranked = sorted(opportunities, key = lambda opp: opp.opportunity_score, reverse = True)
+    per_product: Dict[Any, List[Opportunity]] = defaultdict(list)
+    kept: List[Opportunity] = []
     for opp in ranked:
-        product = opp.get('recommended_product_id') or opp.get('recommended_product_name')
+        product = opp.recommended_product_id or opp.recommended_product_name
         if len(per_product[product]) < _MAX_PER_PRODUCT:
             per_product[product].append(opp)
             kept.append(opp)
@@ -64,56 +73,46 @@ def _top_opportunities_per_product(opportunities: List[Dict[str, Any]]) -> List[
     return kept
 
 
-def _read_int_setting(name: str, default: int) -> int:
-    '''
-        Reads an integer config knob from env / .env, with a fallback.
-    '''
-    raw = os.environ.get(name) or _LOCAL_ENV_PARAMS.get(name)
-    try:
-        return int(raw) if raw is not None and str(raw).strip() != '' else default
-    except (TypeError, ValueError):
-        return default
-
-
-def _read_float_setting(name: str, default: float) -> float:
-    '''
-        Reads a float config knob from env / .env, with a fallback.
-    '''
-    raw = os.environ.get(name) or _LOCAL_ENV_PARAMS.get(name)
-    try:
-        return float(raw) if raw is not None and str(raw).strip() != '' else default
-    except (TypeError, ValueError):
-        return default
-
-
 def _engine_parameters() -> Dict[str, Any]:
     '''
         Reads the affinity-engine tuning parameters from the environment.
 
-        item_level defaults to 'categoria': at SKU level real mass-consumption
+        item_level defaults to 'category': at SKU level real mass-consumption
         baskets are too sparse to yield rules, while category-level affinity is
-        dense and interpretable. Override with AFFINITY_ITEM_LEVEL=producto.
+        dense and interpretable. Override with AFFINITY_ITEM_LEVEL=product.
     '''
     return {
-        'min_support': _read_float_setting('AFFINITY_MIN_SUPPORT', 0.01),
-        'min_lift': _read_float_setting('AFFINITY_MIN_LIFT', 1.0),
-        'top_n_per_pdv': _read_int_setting('AFFINITY_TOP_N_PER_PDV', 10),
-        'item_level': (os.getenv('AFFINITY_ITEM_LEVEL') or 'categoria').strip().lower()
+        'min_support': setting(_SETTINGS, 'AFFINITY_MIN_SUPPORT', 0.01),
+        'min_lift': setting(_SETTINGS, 'AFFINITY_MIN_LIFT', 1.0),
+        'top_n_per_pdv': setting(_SETTINGS, 'AFFINITY_TOP_N_PER_PDV', 10),
+        'item_level': setting(_SETTINGS, 'AFFINITY_ITEM_LEVEL', 'category').strip().lower()
     }
 
 
-def _opportunities_to_schema(items: List[Dict[str, Any]]) -> List[Opportunity]:
+def _opportunities_from_item(items: List[Dict[str, Any]]) -> List[Opportunity]:
     '''
-        Maps raw dicts into Pydantic Opportunity instances.
+        Rebuilds the opportunity DTOs from a stored DynamoDB item.
+
+        Args:
+            items (List[Dict[str, Any]]): Opportunities as persisted.
+
+        Returns:
+            List[Opportunity]: Validated DTOs.
     '''
-    return [Opportunity(**item) for item in items]
+    return [Opportunity.model_validate(item) for item in items]
 
 
-def _summary_to_schema(summary: Dict[str, Any]) -> AnalyticsSummary:
+def _summary_from_item(summary: Dict[str, Any]) -> AnalyticsSummary:
     '''
-        Maps the engine summary dict into the Pydantic schema.
+        Rebuilds the run summary DTO from a stored DynamoDB item.
+
+        Args:
+            summary (Dict[str, Any]): Summary as persisted.
+
+        Returns:
+            AnalyticsSummary: Validated DTO.
     '''
-    return AnalyticsSummary(**summary)
+    return AnalyticsSummary.model_validate(summary)
 
 
 def _scoped_dataframe(
@@ -168,15 +167,15 @@ async def commercial_summary_controller(
         margin. Read-only: everything is derived on the fly from the dataset,
         so nothing is persisted as a run.
     '''
-    dataframe, periodo = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
     summary = build_commercial_summary(dataframe)
     return CommercialSummaryResponse(
         dataset_id = dataset_id,
-        periodo = periodo,
-        crecimiento = build_growth(dataframe),
-        concentracion = build_concentration(dataframe),
-        eficiencia = build_efficiency(dataframe),
-        margen = build_margin(dataframe),
+        period = period,
+        growth = build_growth(dataframe),
+        concentration = build_concentration(dataframe),
+        efficiency = build_efficiency(dataframe),
+        margin = build_margin(dataframe),
         **summary
     )
 
@@ -194,10 +193,10 @@ async def portfolio_controller(
         coverage, churn, month-by-month client movement and the actionable list
         of clients at risk of being lost. Read-only.
     '''
-    dataframe, periodo = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
     return PortfolioResponse(
         dataset_id = dataset_id,
-        periodo = periodo,
+        period = period,
         **build_portfolio(dataframe)
     )
 
@@ -280,8 +279,8 @@ async def run_analytics_controller(
             'dataset_id': dataset_id,
             'status': 'completed',
             'owner_email': current_user,
-            'summary': summary,
-            'opportunities': top_opportunities,
+            'summary': summary.model_dump(),
+            'opportunities': [opportunity.model_dump() for opportunity in top_opportunities],
             'parameters': parameters
         }
     )
@@ -289,8 +288,8 @@ async def run_analytics_controller(
         dataset_id = persisted['dataset_id'],
         run_id = persisted['run_id'],
         status = persisted['status'],
-        summary = _summary_to_schema(persisted['summary']),
-        opportunities = _opportunities_to_schema(persisted['opportunities']),
+        summary = _summary_from_item(persisted['summary']),
+        opportunities = _opportunities_from_item(persisted['opportunities']),
         created_at = persisted['created_at']
     )
 
@@ -313,8 +312,8 @@ async def get_results_controller(
         dataset_id = run['dataset_id'],
         run_id = run['run_id'],
         status = run['status'],
-        summary = _summary_to_schema(run['summary']),
-        opportunities = _opportunities_to_schema(run['opportunities']),
+        summary = _summary_from_item(run['summary']),
+        opportunities = _opportunities_from_item(run['opportunities']),
         created_at = run['created_at']
     )
 
@@ -341,5 +340,5 @@ async def get_pdv_opportunities_controller(
     return AnalyticsPdvResponse(
         dataset_id = run['dataset_id'],
         pdv_id = pdv_id,
-        opportunities = _opportunities_to_schema(pdv_opportunities)
+        opportunities = _opportunities_from_item(pdv_opportunities)
     )

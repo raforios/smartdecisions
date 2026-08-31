@@ -7,10 +7,11 @@
     frontend clients only need to swap the base URL.
 '''
 from typing import Dict, List
-from fastapi import APIRouter, Depends, File, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Path, Request, UploadFile, status
 from boto3.resources.base import ServiceResource
 
 from controllers.optimization import (
+    route_plan_controller,
     bulk_upload_routes_controller,
     data_ordered_controller,
     optimization_algorithm_controller,
@@ -18,6 +19,9 @@ from controllers.optimization import (
     simulation_algorithm_controller
 )
 from schemas.optimization import (
+    OptimizationError,
+    PlanQueryParams,
+    RoutePlanResponse,
     BulkUploadResponse,
     DataMapResponse,
     OptimizationQueryParams,
@@ -215,7 +219,7 @@ async def bulk_upload_routes_endpoint(
         raise InvalidInputError(detail = 'Solo se aceptan archivos .csv o .txt.')
     raw_bytes = await file.read()
     if not raw_bytes:
-        raise InvalidInputError(detail = 'El archivo subido está vacío.')
+        raise InvalidInputError(detail = OptimizationError.EMPTY_UPLOAD.value)
     try:
         csv_text = raw_bytes.decode('utf-8-sig')
     except UnicodeDecodeError as e:
@@ -227,6 +231,44 @@ async def bulk_upload_routes_endpoint(
     return await bulk_upload_routes_controller(
         dynamodb_resource = dynamodb_resource,
         csv_text = csv_text,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/plan/{dataset_id}',
+    response_model = RoutePlanResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Visit plan derived from an ingested sales dataset',
+    description = (
+        'Builds a week of visit routes from the sales file the user already '
+        'uploaded: the clients are the ones who bought in the period, the visit '
+        'days come from clustering them geographically, and each day is ordered '
+        'with a 2-opt tour projected onto real streets via OSRM. Every stop '
+        'carries its purchase value and segment, so the rep sees who they are '
+        'visiting and not just a pin on a map.'
+    )
+)
+async def route_plan_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    query_params: PlanQueryParams = Depends(),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint returning the visit plan for a dataset_id.
+    '''
+    message = (
+        f'User: {current_user}. Planning routes for dataset {dataset_id} '
+        f'({query_params.days} day(s), seller={query_params.seller}).'
+    )
+    logger.info(message)
+    return await route_plan_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        params = query_params.model_dump(),
         current_user = current_user,
         request = request
     )

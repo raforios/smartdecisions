@@ -7,34 +7,26 @@
     affinity rules with drop-size weighting is the differentiator of the SaaS.
 '''
 from datetime import datetime
+from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+
+class AnalyticsError(str, Enum):
+    '''
+        Why a request could not be served. Travels as the error `detail` so the
+        client renders its own wording, same contract as the rest of the API.
+    '''
+    INVALID_DATE = 'INVALID_DATE'
+    NO_DATE_COLUMN = 'NO_DATE_COLUMN'
+    EMPTY_PERIOD = 'EMPTY_PERIOD'
+    DATASET_UNREADABLE = 'DATASET_UNREADABLE'
 
 
 class Opportunity(BaseModel):
     '''
         A single actionable recommendation for a point of sale.
     '''
-    model_config = ConfigDict(json_schema_extra = {
-        'example': {
-            'pdv_id': 'PDV-007',
-            'pdv_name': 'Tienda Doña Rosa',
-            'recommended_product_id': 'SKU-B200',
-            'recommended_product_name': 'Yogurt Natural 1L',
-            'based_on_products': ['SKU-A100'],
-            'support': 0.18,
-            'confidence': 0.62,
-            'lift': 2.4,
-            'expected_drop_size_units': 6.0,
-            'expected_drop_size_amount': 90.0,
-            'opportunity_score': 133.92,
-            'rationale': (
-                'Quienes compran Galleta Integral 200g tienden a comprar Yogurt '
-                'Natural 1L (lift 2.4). Drop size esperado: 6 unidades / $90.'
-            )
-        }
-    })
-
     pdv_id: str
     pdv_name: Optional[str] = None
     recommended_product_id: str
@@ -42,28 +34,30 @@ class Opportunity(BaseModel):
     based_on_products: list[str] = Field(
         ..., description = 'Antecedent SKUs the PdV already purchases.'
     )
+    based_on_product_names: list[str] = Field(
+        default_factory = list,
+        description = 'Readable names of the antecedent SKUs, for display.'
+    )
     support: float = Field(..., ge = 0, le = 1)
     confidence: float = Field(..., ge = 0, le = 1)
     lift: float = Field(..., ge = 0)
     expected_drop_size_units: float = Field(..., ge = 0)
     expected_drop_size_amount: Optional[float] = Field(
         default = None, ge = 0,
-        description = 'Only present when precio_unitario is available in the source.'
+        description = 'Only present when unit_price is available in the source.'
     )
     opportunity_score: float = Field(
         ..., ge = 0,
         description = '''Ranking metric = lift * confidence * expected_drop_size_amount
         (or _units when amount missing).'''
     )
-    rationale: str = Field(...,
-        description = 'Human-readable Spanish explanation for the end user.')
 
 
 class AnalyticsSummary(BaseModel):
     '''
         High-level numbers describing an analytics run.
     '''
-    total_pdvs_with_opportunities: int = Field(..., ge = 0)
+    total_pos_with_opportunities: int = Field(..., ge = 0)
     total_opportunities: int = Field(..., ge = 0)
     total_expected_value: Optional[float] = Field(
         default = None,
@@ -109,6 +103,41 @@ class AnalyticsPdvResponse(BaseModel):
 
 # --- Commercial summary (general sales dashboard) ---
 
+class MetricCode(str, Enum):
+    '''
+        Identifier of a headline KPI.
+
+        The backend reports which metric it computed and its value; the label and
+        the explanation belong to whoever shows them (the frontend today, the
+        interpretation layer tomorrow).
+    '''
+    UNITS_PER_ORDER = 'UNITS_PER_ORDER'
+    PRODUCTS_PER_ORDER = 'PRODUCTS_PER_ORDER'
+    AMOUNT_PER_ORDER = 'AMOUNT_PER_ORDER'
+    ORDER_COUNT = 'ORDER_COUNT'
+    MOM_CHANGE = 'MOM_CHANGE'
+    YOY_CHANGE = 'YOY_CHANGE'
+    GROSS_MARGIN = 'GROSS_MARGIN'
+    GROSS_MARGIN_PERCENT = 'GROSS_MARGIN_PERCENT'
+    COST_OF_GOODS = 'COST_OF_GOODS'
+    MARGIN_PER_ORDER = 'MARGIN_PER_ORDER'
+    PORTFOLIO_CLIENTS = 'PORTFOLIO_CLIENTS'
+    ACTIVE_LAST_MONTH = 'ACTIVE_LAST_MONTH'
+    COVERAGE = 'COVERAGE'
+    CHURN_LAST_MONTH = 'CHURN_LAST_MONTH'
+    CLIENTS_AT_RISK = 'CLIENTS_AT_RISK'
+    CLIENTS_LOST = 'CLIENTS_LOST'
+    PURCHASE_FREQUENCY = 'PURCHASE_FREQUENCY'
+    TOTAL_SALES = 'TOTAL_SALES'
+    SALES_COUNT = 'SALES_COUNT'
+    AVERAGE_TICKET = 'AVERAGE_TICKET'
+    UNITS_SOLD = 'UNITS_SOLD'
+    CLIENT_COUNT = 'CLIENT_COUNT'
+    PRODUCT_COUNT = 'PRODUCT_COUNT'
+    LAST_MONTH_SALES = 'LAST_MONTH_SALES'
+    MONTHLY_AVERAGE = 'MONTHLY_AVERAGE'
+
+
 class KpiCard(BaseModel):
     '''
         A single headline KPI. `format` tells the UI how to render `value`
@@ -119,16 +148,17 @@ class KpiCard(BaseModel):
         period is undefined, not zero: growing from no sales at all has no
         percentage. The UI renders those as '—' instead of a misleading 0%.
     '''
-    label: str
+    metric_code: MetricCode
     value: Optional[float] = None
     format: str
-    hint: Optional[str] = None
+    reference: Optional[str] = Field(None,
+                description = "Period or entity the value refers to, e.g. '2026-05'.")
 
 
 class RankRow(BaseModel):
     '''One row of a best/worst ranking: a readable label and its amount (Bs).'''
     label: str
-    monto: float
+    amount: float
 
 
 class DistRow(BaseModel):
@@ -137,22 +167,22 @@ class DistRow(BaseModel):
         share of the total.
     '''
     label: str
-    monto: float
-    porcentaje: float
+    amount: float
+    percentage: float
 
 
 class TrendPoint(BaseModel):
     '''One point of the monthly sales trend.'''
-    mes: str
-    monto: float
+    month: str
+    amount: float
 
 
 # --- Demand forecast ---
 
 class ForecastPoint(BaseModel):
     '''One month of a forecast series (historical or projected).'''
-    mes: str
-    monto: float
+    month: str
+    amount: float
 
 
 class ForecastSeries(BaseModel):
@@ -160,50 +190,55 @@ class ForecastSeries(BaseModel):
         A named forecast series: its historical months and the projected ones,
         plus the projected total for the horizon.
     '''
-    nombre: str
-    historico: list[ForecastPoint]
-    pronostico: list[ForecastPoint]
-    total_pronosticado: float
+    name: str
+    history: list[ForecastPoint]
+    forecast: list[ForecastPoint]
+    total_forecast: float
 
 
-class ForecastResponse(BaseModel):
+class ForecastBlock(BaseModel):
+    '''What the forecast engine produces, independent of the HTTP envelope.'''
+    method: str
+    months_ahead: int
+    series: list[ForecastSeries] = []
+
+
+class ForecastResponse(ForecastBlock):
     '''
         Demand forecast for GET /v1/analytics/forecast/{dataset_id}.
     '''
     dataset_id: str
-    method: str
-    method_label: str
-    months_ahead: int
-    series: list[ForecastSeries]
-
 
 # --- Customer segmentation ---
 
 class SegmentTier(BaseModel):
     '''A value tier (Alto/Medio/Bajo) with its client count and sales share.'''
     tier: str
-    clientes: int
-    monto: float
-    porcentaje: float
+    clients: int
+    amount: float
+    percentage: float
 
 
 class SegmentClient(BaseModel):
     '''One client row: label, tier, total amount and number of purchases.'''
-    cliente: str
+    client: str
     tier: str
-    monto: float
-    compras: int
+    amount: float
+    purchases: int
 
 
-class SegmentationResponse(BaseModel):
+class SegmentationBlock(BaseModel):
+    '''What the segmentation engine produces, without the HTTP envelope.'''
+    total_clients: int = 0
+    tiers: list[SegmentTier] = []
+    clients: list[SegmentClient] = []
+
+
+class SegmentationResponse(SegmentationBlock):
     '''
         Customer value segmentation for GET /v1/analytics/segmentation/{dataset_id}.
     '''
     dataset_id: str
-    total_clientes: int
-    tiers: list[SegmentTier]
-    clientes: list[SegmentClient]
-
 
 # --- Period scoping (shared by every analysis endpoint) ---
 
@@ -213,21 +248,21 @@ class PeriodInfo(BaseModel):
         'Enero a Marzo de 2024' instead of leaving the user guessing whether a
         filter was applied.
     '''
-    disponible_desde: Optional[str] = None
-    disponible_hasta: Optional[str] = None
-    desde: Optional[str] = None
-    hasta: Optional[str] = None
-    filtrado: bool = False
-    filas: int = 0
+    available_from: Optional[str] = None
+    available_to: Optional[str] = None
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    filtered: bool = False
+    rows: int = 0
 
 
 # --- Growth (month-over-month, year-over-year, seasonality) ---
 
 class MonthlyChange(BaseModel):
     '''One month of the sales series with its variation against the previous one.'''
-    mes: str
-    monto: float
-    variacion: Optional[float] = None
+    month: str
+    amount: float
+    change: Optional[float] = None
 
 
 class SeasonIndex(BaseModel):
@@ -235,34 +270,45 @@ class SeasonIndex(BaseModel):
         Seasonality index of one calendar month: 100 is an average month, 130
         means that month historically sells 30% above average.
     '''
-    mes: str
-    indice: float
-    monto_promedio: float
+    month: int = Field(..., ge = 1, le = 12,
+                description = 'Calendar month number; the UI names it.')
+    index_value: float
+    average_amount: float
 
 
 class CategoryMix(BaseModel):
     '''
         How a category's share of total sales moved between the last month and
-        the one before it. `cambio_participacion` is in percentage points.
+        the one before it. `share_change` is in percentage points.
     '''
     label: str
-    monto_actual: float
-    monto_anterior: float
-    variacion: Optional[float] = None
-    participacion_actual: float
-    participacion_anterior: float
-    cambio_participacion: float
+    current_amount: float
+    previous_amount: float
+    change: Optional[float] = None
+    current_share: float
+    previous_share: float
+    share_change: float
 
 
 class GrowthBlock(BaseModel):
     '''Growth section of the commercial summary.'''
     kpis: list[KpiCard] = []
-    variacion_mensual: list[MonthlyChange] = []
-    estacionalidad: list[SeasonIndex] = []
-    mix_categoria: list[CategoryMix] = []
+    monthly_change: list[MonthlyChange] = []
+    seasonality: list[SeasonIndex] = []
+    category_mix: list[CategoryMix] = []
 
 
 # --- Concentration (dependency risk) ---
+
+class ConcentrationLevel(str, Enum):
+    '''
+        How concentrated the revenue is, read off the HHI. A code: the sentence
+        that explains it to a manager belongs to the frontend.
+    '''
+    HIGH = 'HIGH'
+    MODERATE = 'MODERATE'
+    LOW = 'LOW'
+
 
 class ClientConcentration(BaseModel):
     '''
@@ -270,42 +316,41 @@ class ClientConcentration(BaseModel):
         how many clients make up 80% of sales (Pareto) and the HHI index with a
         plain-language reading of it.
     '''
-    total_clientes: int = 0
-    top10_monto: float = 0.0
-    top10_porcentaje: float = 0.0
-    pareto_clientes: int = 0
-    pareto_porcentaje_clientes: float = 0.0
+    total_clients: int = 0
+    top10_amount: float = 0.0
+    top10_percentage: float = 0.0
+    pareto_clients: int = 0
+    pareto_client_percentage: float = 0.0
     hhi: float = 0.0
-    hhi_lectura: Optional[str] = None
-    top_clientes: list[RankRow] = []
+    hhi_level: Optional[str] = None
+    top_clients: list[DistRow] = []
 
 
 class AbcClass(BaseModel):
-    '''One ABC class with its product count, amount, share and what it means.'''
-    clase: str
-    productos: int
-    monto: float
-    porcentaje: float
-    descripcion: str
+    '''One ABC class with its product count, amount and share of sales.'''
+    abc_class: str
+    products: int
+    amount: float
+    percentage: float
 
 
 class AbcProduct(BaseModel):
     '''One product's ABC classification and its cumulative share of sales.'''
     label: str
-    monto: float
-    clase: str
-    acumulado: float
+    amount: float
+    abc_class: str
+    cumulative: float
 
 
 class AbcBlock(BaseModel):
     '''ABC classification of the product catalog.'''
-    resumen: list[AbcClass] = []
-    productos: list[AbcProduct] = []
+    summary: list[AbcClass] = []
+    products: list[AbcProduct] = []
 
 
 class ConcentrationBlock(BaseModel):
     '''Concentration section of the commercial summary.'''
-    clientes: ClientConcentration = ClientConcentration()
+    clients: ClientConcentration = ClientConcentration()
     abc: AbcBlock = AbcBlock()
 
 
@@ -313,13 +358,13 @@ class ConcentrationBlock(BaseModel):
 
 class SellerProductivity(BaseModel):
     '''Productivity of one salesperson.'''
-    vendedor: str
-    monto: float
-    pedidos: int
-    clientes: int
-    ticket_promedio: float
-    lineas_por_pedido: float
-    monto_por_cliente: float
+    seller: str
+    amount: float
+    orders: int
+    clients: int
+    average_ticket: float
+    lines_per_order: float
+    amount_per_client: float
 
 
 class PriceDrift(BaseModel):
@@ -327,17 +372,17 @@ class PriceDrift(BaseModel):
         Realized price of a product in the recent half of the period versus the
         earlier half. Catches discounting that never shows up in a price list.
     '''
-    producto: str
-    precio_actual: float
-    precio_anterior: float
-    variacion: Optional[float] = None
+    product: str
+    current_price: float
+    previous_price: float
+    change: Optional[float] = None
 
 
 class EfficiencyBlock(BaseModel):
     '''Efficiency section of the commercial summary.'''
     kpis: list[KpiCard] = []
-    vendedores: list[SellerProductivity] = []
-    precios: list[PriceDrift] = []
+    sellers: list[SellerProductivity] = []
+    prices: list[PriceDrift] = []
 
 
 # --- Gross margin (requires the optional unit-cost column) ---
@@ -345,47 +390,66 @@ class EfficiencyBlock(BaseModel):
 class MarginRow(BaseModel):
     '''Revenue, cost and gross margin of one category / product / client / seller.'''
     label: str
-    monto: float
-    costo: float
-    margen: float
-    margen_porcentaje: float
+    amount: float
+    cost: float
+    margin: float
+    margin_percentage: float
+
+
+class MarginAlertReason(str, Enum):
+    '''Why a product was flagged: sold below cost, or at a negligible margin.'''
+    BELOW_COST = 'BELOW_COST'
+    THIN_MARGIN = 'THIN_MARGIN'
 
 
 class MarginAlert(BaseModel):
     '''A product sold below cost or at a negligible margin, with the reason.'''
     label: str
-    monto: float
-    margen: float
-    margen_porcentaje: float
-    motivo: str
+    amount: float
+    margin: float
+    margin_percentage: float
+    reason_code: MarginAlertReason
 
 
 class MarginBlock(BaseModel):
     '''
-        Profitability section. `disponible` is False when the uploaded file had
-        no 'Costo Unitario' column, in which case every list is empty and the UI
+        Profitability section. `available` is False when the uploaded file had
+        no unit-cost column, in which case every list is empty and the UI
         hides the block instead of rendering zeros.
     '''
-    disponible: bool = False
+    available: bool = False
     kpis: list[KpiCard] = []
-    por_categoria: list[MarginRow] = []
-    por_producto: list[MarginRow] = []
-    por_cliente: list[MarginRow] = []
-    por_vendedor: list[MarginRow] = []
-    alertas: list[MarginAlert] = []
+    by_category: list[MarginRow] = []
+    by_product: list[MarginRow] = []
+    by_client: list[MarginRow] = []
+    by_seller: list[MarginRow] = []
+    alerts: list[MarginAlert] = []
 
 
 # --- Portfolio health ---
 
 class PortfolioMovement(BaseModel):
     '''Client movement in one month: new, recovered, retained and lost.'''
-    mes: str
-    activos: int
-    nuevos: int
-    recuperados: int
-    retenidos: int
-    perdidos: int
+    month: str
+    active: int
+    new_clients: int
+    recovered: int
+    retained: int
+    lost: int
     churn: Optional[float] = None
+
+
+class RiskReason(str, Enum):
+    '''
+        Why a client is listed as at risk or lost.
+
+        A stable code, never a sentence: the wording belongs to whoever shows it
+        (the frontend today, the interpretation layer tomorrow). The facts that
+        justify it travel in the same row (`days_without_purchase`, `change`).
+    '''
+    LONG_SILENCE = 'LONG_SILENCE'
+    SILENCE = 'SILENCE'
+    PURCHASE_DROP = 'PURCHASE_DROP'
 
 
 class ClientAtRisk(BaseModel):
@@ -394,30 +458,56 @@ class ClientAtRisk(BaseModel):
         Recency is measured against the newest date in the dataset, not today,
         so an old file does not report the whole portfolio as lost.
     '''
-    cliente: str
-    monto_promedio_mes: float
-    monto_ultimo_mes: float
-    variacion: Optional[float] = None
-    dias_sin_comprar: int
-    ultima_compra: Optional[str] = None
-    motivo: str
+    client: str
+    monthly_average_amount: float
+    last_month_amount: float
+    change: Optional[float] = None
+    days_without_purchase: int
+    last_purchase: Optional[str] = None
+    reason_code: Optional[RiskReason] = None
 
 
-class PortfolioResponse(BaseModel):
+class PortfolioBlock(BaseModel):
+    '''What the portfolio engine produces, without the HTTP envelope.'''
+    kpis: list[KpiCard] = []
+    movement: list[PortfolioMovement] = []
+    at_risk: list[ClientAtRisk] = []
+    total_at_risk: int = 0
+    lost: list[ClientAtRisk] = []
+    total_lost: int = 0
+
+
+class PortfolioResponse(PortfolioBlock):
     '''
         Portfolio health for GET /v1/analytics/portfolio/{dataset_id}.
+
+        `at_risk` and `lost` are deliberately separate lists: a client
+        who slipped this month is a visit, one who has been gone half a year is
+        a campaign. Merged, the short actionable list drowns in the long one.
     '''
     dataset_id: str
-    periodo: PeriodInfo = PeriodInfo()
-    kpis: list[KpiCard] = []
-    movimiento: list[PortfolioMovement] = []
-    en_riesgo: list[ClientAtRisk] = []
-    total_en_riesgo: int = 0
-
+    period: PeriodInfo = PeriodInfo()
 
 # --- Commercial summary (assembled last: it embeds every block above) ---
 
-class CommercialSummaryResponse(BaseModel):
+class CommercialSummaryBlock(BaseModel):
+    '''
+        The sales picture the summary engine derives from the dataset, without
+        the HTTP envelope and without the blocks assembled by the controller.
+    '''
+    kpis: list[KpiCard] = []
+    best_clients: list[RankRow] = []
+    worst_clients: list[RankRow] = []
+    top_products: list[RankRow] = []
+    bottom_products: list[RankRow] = []
+    by_category: list[DistRow] = []
+    by_channel: list[DistRow] = []
+    by_region: list[DistRow] = []
+    by_seller: list[DistRow] = []
+    monthly_trend: list[TrendPoint] = []
+
+
+class CommercialSummaryResponse(CommercialSummaryBlock):
     '''
         Full commercial summary for GET /v1/analytics/summary/{dataset_id}.
 
@@ -427,18 +517,8 @@ class CommercialSummaryResponse(BaseModel):
         Every section is pre-labeled and pre-aggregated for tables + charts.
     '''
     dataset_id: str
-    periodo: PeriodInfo = PeriodInfo()
-    kpis: list[KpiCard]
-    mejor_cliente: list[RankRow]
-    peor_cliente: list[RankRow]
-    top_productos: list[RankRow]
-    bottom_productos: list[RankRow]
-    por_categoria: list[DistRow]
-    por_canal: list[DistRow]
-    por_region: list[DistRow]
-    por_vendedor: list[DistRow]
-    tendencia_mensual: list[TrendPoint]
-    crecimiento: GrowthBlock = GrowthBlock()
-    concentracion: ConcentrationBlock = ConcentrationBlock()
-    eficiencia: EfficiencyBlock = EfficiencyBlock()
-    margen: MarginBlock = MarginBlock()
+    period: PeriodInfo = PeriodInfo()
+    growth: GrowthBlock = GrowthBlock()
+    concentration: ConcentrationBlock = ConcentrationBlock()
+    efficiency: EfficiencyBlock = EfficiencyBlock()
+    margin: MarginBlock = MarginBlock()

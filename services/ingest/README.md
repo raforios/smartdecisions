@@ -18,12 +18,12 @@ análisis (afinidad × drop size, predicción, rutas) lo consuman después.
 
 ```text
 ingest/
-├── assets/             # Plantilla .xlsx generada en build time.
 ├── controllers/        # Orquestación entre rutas y servicios.
 ├── models/             # TypedDict del item DynamoDB.
 ├── routes/             # Endpoints FastAPI.
 ├── schemas/            # Modelos Pydantic V2 (request / response).
-├── services/           # Lógica de negocio + helpers compartidos (incl. template_builder.py).
+├── services/           # ingest.py (dominio), ingest_utils.py (Dynamo/S3/FILES)
+│                       # y los componentes del boilerplate.
 ├── tests/              # Tests con pytest.
 ├── .env.example        # Plantilla de variables de entorno.
 ├── Dockerfile          # Build para Lambda.
@@ -56,6 +56,9 @@ ingest/
 | `AUTH_SERVICE_URL` | no | Para validaciones cruzadas (no usado aún). |
 | `EVENTS_SERVICE_URL` | no | Para auditoría futura. |
 | `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes exactos adicionales (terceros). Vacío por defecto. |
+| `MAX_ISSUES_ON_RESPONSE` | no | Cuántos errores viajan en la respuesta JSON. Default: `100`. |
+| `CSV_CONTENT_TYPE` | no | MIME de los CSV que escribe el servicio. Default: `text/csv`. |
+| `TEMPLATE_S3_KEY` | no | Key de la plantilla en el bucket. Default: `ingest/templates/template_ventas_v1.xlsx`. |
 | `CORS_ALLOWED_ORIGIN_REGEX` | no | Regex de orígenes permitidos. Default cubre `*.bearsoft.com.bo`, `*.cloudfront.net`, `*.mineria.gob.bo` y `localhost`. |
 
 ## Endpoints (todos requieren `Authorization: Bearer <jwt>`)
@@ -93,6 +96,22 @@ Reglas de validación (`pandera.DataFrameSchema`):
 Errores: respuesta con `status: 'failed'` + lista `errors[]` indicando `row`,
 `column`, `value`, `rule` y mensaje en español apto para usuario no técnico.
 
+## Contrato de columnas
+
+`schemas/ingest.py` → `SALES_COLUMNS` es la **única** definición del formato:
+nombre canónico, encabezado de la plantilla, si es obligatoria y sus reglas de
+valor. De ahí se derivan el mapeo de encabezados, el schema de pandera y las
+listas de obligatorias/opcionales. **No hay ningún otro lugar donde se declaren
+columnas**; agregar una es agregar una línea ahí.
+
+## Textos y configuración
+
+1. **El backend no devuelve texto.** Responde datos y códigos (`ValidationRule`,
+   `IngestError`); los interpreta el frontend o la capa de IA. El archivo de
+   filas rechazadas lleva una columna `rule_codes`, no frases.
+2. **Nada de valores mágicos.** Lo configurable se lee del entorno con
+   `load_and_validate_env_vars` del boilerplate, en el módulo que lo usa.
+
 ## Reglas de negocio relevantes
 
 1. La política de almacenamiento (S3) la dicta FILES; este servicio nunca
@@ -102,8 +121,10 @@ Errores: respuesta con `status: 'failed'` + lista `errors[]` indicando `row`,
    usuario pueda revisarlos sin re-subir.
 3. `monto_total` se deriva automáticamente cuando hay `cantidad` y
    `precio_unitario` pero falta el total.
-4. La plantilla `.xlsx` la genera el servicio (`services/template_builder.py`)
-   automáticamente al arrancar si falta en `assets/`, lista para descarga directa.
+4. La plantilla `.xlsx` es un **archivo estático** guardado en el bucket por
+   defecto (`TEMPLATE_S3_KEY`). El servicio no la genera: el formato está
+   definido y lo cumple el cliente. Si el formato cambia, cambian también la
+   lógica y las reglas de negocio, y el archivo se repone en el bucket.
 
 ## Ejecución local
 
@@ -119,8 +140,8 @@ pip install -r requirements.txt
 python main.py
 ```
 
-La plantilla `.xlsx` se genera automáticamente al iniciar el servicio
-(`services/template_builder.generate`); no requiere un paso manual.
+La plantilla `.xlsx` es un archivo estático en el bucket (`TEMPLATE_S3_KEY`);
+el servicio no la genera.
 
 Tests:
 

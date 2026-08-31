@@ -77,7 +77,7 @@ class ForecastOptions: # pylint: disable=too-few-public-methods
         window: DateWindow = Depends(),
         method: str = Query('linear', pattern = '^(linear|moving_average)$'),
         months_ahead: int = Query(3, ge = 1, le = 12),
-        group_by: str = Query(None, pattern = '^(categoria)$')
+        group_by: str = Query(None, pattern = '^(category)$')
     ):
         self.window = window
         self.method = method

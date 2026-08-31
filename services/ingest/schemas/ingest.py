@@ -1,25 +1,145 @@
 '''
     Pydantic V2 DTOs for the Ingest service.
 
-    Defines the request/response contracts for uploading and validating sales
-    Excel files. The DataFrame-level contract (column dtypes, nullability,
-    business rules) lives in services/excel_validator.py — these DTOs only
-    describe the HTTP envelope.
+    Holds two things: the sales format contract (SALES_COLUMNS — the single
+    definition of the columns, their template headers and their value rules,
+    from which the mapper, the DataFrame schema and the required/optional lists
+    are derived) and the DTOs that describe the HTTP envelope.
 '''
+from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
-class IngestColumnError(BaseModel):
+@dataclass(frozen = True)
+class ValueRules:
     '''
-        Detailed error for a single (row, column) in the uploaded Excel.
+        Value constraints of one contract column, grouped so the column itself
+        stays readable and within the attribute budget.
+    '''
+    max_length: Optional[int] = None
+    minimum: Optional[float] = None
+    exclusive_minimum: Optional[float] = None
+    value_range: Optional[tuple[float, float]] = None
+
+
+@dataclass(frozen = True)
+class SalesColumn:
+    '''
+        One column of the sales contract.
+
+        This is the single source of truth for the ingest format: the canonical
+        name the engine uses, the header the published template carries, whether
+        the analysis can run without it, and the value rules it must satisfy.
+        The header mapper, the required/optional lists and the DataFrame schema
+        are all derived from here, so the contract is stated once.
+    '''
+    canonical: str
+    header: str
+    # Required in the VALIDATED frame — what the engine cannot work without.
+    required: bool
+    dtype: str
+    rules: ValueRules = ValueRules()
+    # Required in the FILE THE CLIENT FILLS IN. Not the same thing: the client
+    # writes 'Cliente' and the service derives 'pos_id' from it, so the name is
+    # mandatory for them while the identifier is mandatory for the engine.
+    template_required: bool = False
+    # Identifiers the service derives on its own; the template never asks for
+    # them because the client has no such codes.
+    filled_by_service: bool = False
+
+
+# Order is the contract order: the template presents its columns like this.
+SALES_COLUMNS: tuple[SalesColumn, ...] = (
+    SalesColumn('date', 'Fecha', True, 'datetime64[ns]', template_required = True),
+    SalesColumn('order_id', 'Nro Factura', True, 'object',
+                rules = ValueRules(max_length = 64), template_required = True),
+    SalesColumn('pos_id', 'Cliente ID', True, 'object',
+                rules = ValueRules(max_length = 64), filled_by_service = True),
+    SalesColumn('pos_name', 'Cliente', False, 'object', template_required = True),
+    SalesColumn('zone', 'Zona', False, 'object'),
+    SalesColumn('city', 'Ciudad', False, 'object'),
+    SalesColumn('region', 'Region', False, 'object'),
+    SalesColumn('channel', 'Canal', False, 'object'),
+    SalesColumn('seller', 'Vendedor', False, 'object'),
+    SalesColumn('latitude', 'Latitud', False, 'float64',
+                rules = ValueRules(value_range = (-90.0, 90.0))),
+    SalesColumn('longitude', 'Longitud', False, 'float64',
+                rules = ValueRules(value_range = (-180.0, 180.0))),
+    SalesColumn('product_id', 'Producto ID', True, 'object',
+                rules = ValueRules(max_length = 64), filled_by_service = True),
+    SalesColumn('product_name', 'Producto', False, 'object', template_required = True),
+    SalesColumn('category', 'Categoria', False, 'object'),
+    SalesColumn('quantity', 'Cantidad', True, 'float64',
+                rules = ValueRules(exclusive_minimum = 0.0), template_required = True),
+    SalesColumn('unit_price', 'Precio Unitario', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+    SalesColumn('unit_cost', 'Costo Unitario', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+    SalesColumn('total_amount', 'Monto Total', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+)
+
+TEMPLATE_VERSION: str = 'v2'
+
+REQUIRED_COLUMNS: tuple[str, ...] = tuple(
+    column.canonical for column in SALES_COLUMNS if column.required
+)
+OPTIONAL_COLUMNS: tuple[str, ...] = tuple(
+    column.canonical for column in SALES_COLUMNS if not column.required
+)
+# What the published template asks for: everything except the identifiers the
+# service derives on its own.
+TEMPLATE_COLUMNS: tuple[SalesColumn, ...] = tuple(
+    column for column in SALES_COLUMNS if not column.filled_by_service
+)
+TEMPLATE_HEADERS: tuple[str, ...] = tuple(column.header for column in TEMPLATE_COLUMNS)
+
+
+class ValidationRule(str, Enum):
+    '''
+        Why a row failed validation.
+
+        A stable code, never a sentence: the wording belongs to whoever shows it
+        (today the frontend catalogue, tomorrow the interpretation layer), and
+        pinning prose here would leave both of them parsing text instead of
+        reading facts.
+    '''
+    REQUIRED_VALUE = 'REQUIRED_VALUE'
+    INVALID_TYPE = 'INVALID_TYPE'
+    TEXT_LENGTH = 'TEXT_LENGTH'
+    BELOW_MINIMUM = 'BELOW_MINIMUM'
+    OUT_OF_RANGE = 'OUT_OF_RANGE'
+    UNKNOWN_COLUMN = 'UNKNOWN_COLUMN'
+    MISSING_COLUMN = 'MISSING_COLUMN'
+    EMPTY_FILE = 'EMPTY_FILE'
+    INVALID_VALUE = 'INVALID_VALUE'
+
+
+class IngestError(str, Enum):
+    '''
+        Why a request could not be processed at all.
+
+        Travels as the error `detail`, so the client reads a stable code and
+        renders its own wording. Same reasoning as ValidationRule: prose in the
+        backend cannot be translated and cannot be interpreted.
+    '''
+    UNSUPPORTED_FILE_FORMAT = 'UNSUPPORTED_FILE_FORMAT'
+    EMPTY_UPLOAD = 'EMPTY_UPLOAD'
+    FILES_SERVICE_UNREACHABLE = 'FILES_SERVICE_UNREACHABLE'
+    FILES_SERVICE_REJECTED_UPLOAD = 'FILES_SERVICE_REJECTED_UPLOAD'
+
+
+class ValidationIssue(BaseModel):
+    '''
+        One cell (or one column) that failed the template contract.
     '''
     row: int = Field(..., description = 'Excel row number (1-based, header is row 1).')
-    column: str = Field(..., description = 'Column name where the error occurred.')
+    column: str = Field(..., description = 'Column name where the issue occurred.')
     value: Optional[str] = Field(None, description = 'Raw value that failed validation.')
-    rule: str = Field(..., description = 'Pandera check name or business rule violated.')
-    message: str = Field(..., description = 'Human-readable error in Spanish for the end user.')
+    rule_code: ValidationRule = Field(..., description = 'Why it failed.')
 
 
 class IngestSummary(BaseModel):
@@ -45,30 +165,11 @@ class IngestResponse(BaseModel):
         is ready for downstream analysis (paso 3 of the POC). `status = 'failed'`
         means the file was uploaded but rejected: `errors` lists per-row issues.
     '''
-    model_config = ConfigDict(json_schema_extra = {
-        'example': {
-            'dataset_id': '7c1a4f31-7c9f-4d63-8b9a-2c0f3a5b7e21',
-            'status': 'validated',
-            'file_s3_key': 'ingest/2026/06/12/7c1a4f31.xlsx',
-            'summary': {
-                'total_rows': 1843,
-                'valid_rows': 1843,
-                'error_rows': 0,
-                'unique_points_of_sale': 42,
-                'unique_products': 187,
-                'date_range_start': '2026-01-01',
-                'date_range_end': '2026-05-31'
-            },
-            'errors': [],
-            'created_at': '2026-06-12T15:42:01Z'
-        }
-    })
-
     dataset_id: str
     status: str = Field(..., description = "'validated' or 'failed'.")
     file_s3_key: str = Field(..., description = 'Object key in the S3 bucket managed by FILES.')
     summary: IngestSummary
-    errors: list[IngestColumnError] = Field(default_factory = list)
+    issues: list[ValidationIssue] = Field(default_factory = list)
     created_at: datetime
 
 
@@ -82,7 +183,7 @@ class IngestStatusResponse(BaseModel):
     owner_email: str
     file_s3_key: str
     summary: IngestSummary
-    errors: list[IngestColumnError] = Field(default_factory = list)
+    issues: list[ValidationIssue] = Field(default_factory = list)
     created_at: datetime
 
 

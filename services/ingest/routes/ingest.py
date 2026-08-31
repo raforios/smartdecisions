@@ -6,7 +6,6 @@ from fastapi import (
     APIRouter, Depends, File, Header, Path as PathParam, Request, Response,
     UploadFile, status
 )
-from fastapi.responses import FileResponse
 from boto3.resources.base import ServiceResource
 
 from controllers.ingest import (
@@ -18,6 +17,7 @@ from controllers.ingest import (
     ingest_excel_from_s3_controller
 )
 from schemas.ingest import (
+    IngestError,
     IngestFromS3Request,
     IngestResponse,
     IngestStatusResponse,
@@ -74,8 +74,8 @@ async def get_template_info_endpoint(
     '/template/file',
     status_code = status.HTTP_200_OK,
     summary = 'Download the sales Excel template',
-    description = 'Streams the canonical template_ventas_v1.xlsx file.',
-    response_class = FileResponse
+    description = 'Returns the canonical template_ventas_v1.xlsx stored in S3.',
+    response_class = Response
 )
 async def download_template_endpoint(
     request: Request,
@@ -86,15 +86,17 @@ async def download_template_endpoint(
     '''
     message = f'User: {current_user}. Downloading Excel template file.'
     logger.info(message)
-    template_path = await download_template_controller(
+    content = await download_template_controller(
         base_path = SERVICE_ROOT,
         request = request,
         current_user = current_user
     )
-    return FileResponse(
-        path = str(template_path),
-        filename = 'template_ventas_v1.xlsx',
-        media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    return Response(
+        content = content,
+        media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers = {
+            'Content-Disposition': 'attachment; filename="template_ventas_v1.xlsx"'
+        }
     )
 
 
@@ -122,13 +124,11 @@ async def ingest_excel_endpoint(
     filename = file.filename or ''
     lower = filename.lower()
     if not lower.endswith(SUPPORTED_EXTENSIONS):
-        raise InvalidInputError(
-            detail = f'Formato no soportado. Use uno de: {", ".join(SUPPORTED_EXTENSIONS)}.'
-        )
+        raise InvalidInputError(detail = IngestError.UNSUPPORTED_FILE_FORMAT.value)
 
     file_bytes = await file.read()
     if not file_bytes:
-        raise InvalidInputError(detail = 'El archivo subido está vacío.')
+        raise InvalidInputError(detail = IngestError.EMPTY_UPLOAD.value)
 
     message = f'Ingesting "{filename}" ({len(file_bytes)} bytes) from {current_user}.'
     logger.info(message)
@@ -167,9 +167,7 @@ async def ingest_excel_from_s3_endpoint(
     '''
     lower = payload.file_name.lower()
     if not lower.endswith(SUPPORTED_EXTENSIONS):
-        raise InvalidInputError(
-            detail = f'Formato no soportado. Use uno de: {", ".join(SUPPORTED_EXTENSIONS)}.'
-        )
+        raise InvalidInputError(detail = IngestError.UNSUPPORTED_FILE_FORMAT.value)
     message = f'Ingesting from S3 key "{payload.file_key}" for {current_user}.'
     logger.info(message)
     return await ingest_excel_from_s3_controller(

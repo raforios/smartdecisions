@@ -6,18 +6,23 @@
     package) with lightweight HTTP calls to OSRM. The package stays small
     while each route segment is still projected onto real street geometry.
 '''
-import os
 from typing import Any, Dict, Tuple
 
 import requests
 
+from schemas.optimization import OptimizationError
 from services.exceptions import ServiceUnavailableError
+from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
 
 # OSRM demo server by default; override with a self-hosted instance in prod.
-OSRM_BASE_URL = os.getenv('OSRM_BASE_URL', 'https://router.project-osrm.org')
-_REQUEST_TIMEOUT_SECONDS = 10
+_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+    'OSRM_BASE_URL': str,
+    'OSRM_REQUEST_TIMEOUT_SECONDS': int,
+})
+OSRM_BASE_URL = _SETTINGS['OSRM_BASE_URL'] or 'https://router.project-osrm.org'
+_REQUEST_TIMEOUT_SECONDS = _SETTINGS['OSRM_REQUEST_TIMEOUT_SECONDS'] or 10
 
 
 def _fetch_osrm_route(coordinates: str) -> Dict[str, Any]:
@@ -37,7 +42,7 @@ def _fetch_osrm_route(coordinates: str) -> Dict[str, Any]:
         error_msg = f'OSRM request failed for segment {coordinates}: {error}'
         logger.error(error_msg)
         raise ServiceUnavailableError(
-            detail = 'El servicio de ruteo vial (OSRM) no está disponible.'
+            detail = OptimizationError.ROUTING_SERVICE_UNAVAILABLE.value
         ) from error
 
 
@@ -72,7 +77,7 @@ def road_segment(
         error_msg = f'OSRM returned no route for segment {coordinates}.'
         logger.error(error_msg)
         raise ServiceUnavailableError(
-            detail = 'OSRM no devolvió una ruta para el segmento solicitado.'
+            detail = OptimizationError.ROUTING_SERVICE_NO_ROUTE.value
         )
 
     best_route = routes[0]
@@ -81,4 +86,48 @@ def road_segment(
         'distance': float(best_route.get('distance', 0.0)),
         'duration': float(best_route.get('duration', 0.0)),
         'geometry': geometry
+    }
+
+
+def road_trip(stops: list[tuple[float, float]]) -> Dict[str, Any]:
+    '''
+        Projects a whole ordered route onto the street network in ONE call.
+
+        The previous design asked OSRM for each leg separately, so a 30-stop
+        route meant 30 chained requests against a rate-limited public demo
+        server — slow, and the reason the map sometimes never finished loading.
+        OSRM accepts the full coordinate list and returns the complete geometry,
+        so the cost is a single request per day regardless of the stop count.
+
+        Args:
+            stops (list[tuple[float, float]]): Ordered (latitude, longitude)
+                pairs of the visit sequence.
+
+        Returns:
+            Dict[str, Any]: Keys `distance` (metres), `duration` (seconds) and
+                `geometry` (list of [longitude, latitude] pairs along the
+                streets). An empty geometry when there is nothing to draw.
+
+        Raises:
+            ServiceUnavailableError: If OSRM is unreachable.
+    '''
+    if len(stops) < 2:
+        return {'distance': 0.0, 'duration': 0.0, 'geometry': []}
+
+    coordinates = ';'.join(f'{lon},{lat}' for lat, lon in stops)
+    payload = _fetch_osrm_route(coordinates)
+
+    routes = payload.get('routes') or []
+    if not routes:
+        # A missing projection must not lose the plan: the stops and their order
+        # are still correct, the map just falls back to straight lines.
+        error_msg = f'OSRM returned no route for a trip of {len(stops)} stops.'
+        logger.warning(error_msg)
+        return {'distance': 0.0, 'duration': 0.0, 'geometry': []}
+
+    best = routes[0]
+    return {
+        'distance': float(best.get('distance', 0.0)),
+        'duration': float(best.get('duration', 0.0)),
+        'geometry': best.get('geometry', {}).get('coordinates', [])
     }

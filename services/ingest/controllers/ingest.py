@@ -9,29 +9,45 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from schemas.ingest import (
-    IngestColumnError,
+    OPTIONAL_COLUMNS,
+    REQUIRED_COLUMNS,
+    TEMPLATE_VERSION,
     IngestResponse,
     IngestStatusResponse,
     IngestSummary,
-    TemplateInfo
+    TemplateInfo,
+    ValidationIssue
 )
-from services.datasets import get_dataset_by_id, persist_dataset
-from services.excel_parser import (
+from services.exceptions import ResourceNotFoundError
+from services.ingest import (
     parse_and_validate,
     parse_and_validate_partial,
     serialize_dataframe
 )
-from services.excel_validator import OPTIONAL_COLUMNS, REQUIRED_COLUMNS, TEMPLATE_VERSION
-from services.exceptions import ResourceNotFoundError
-from services.file_storage import upload_excel
-from services.s3_storage import download_bytes, upload_bytes
-from services.template_builder import ensure_template
+from services.ingest_utils import (
+    download_bytes,
+    get_dataset_by_id,
+    persist_dataset,
+    upload_bytes,
+    upload_excel
+)
+from services.environment import load_and_validate_env_vars
 from services.utils import handle_service_errors
 
-_CSV_CONTENT_TYPE = 'text/csv'
-# Only a slice of the rejected-row errors travels in the JSON response / DynamoDB
-# item (400 KB limit); the full set lives in the rejected CSV in S3.
-_MAX_ERRORS_ON_RESPONSE = 100
+# Only a slice of the issues travels in the JSON response / DynamoDB item
+# (400 KB limit); the full set lives in the rejected CSV in S3.
+ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+    'MAX_ISSUES_ON_RESPONSE': int,
+    'CSV_CONTENT_TYPE': str,
+    'TEMPLATE_S3_KEY': str,
+})
+MAX_ISSUES_ON_RESPONSE = ENV_VARS['MAX_ISSUES_ON_RESPONSE'] or 100
+CSV_CONTENT_TYPE = ENV_VARS['CSV_CONTENT_TYPE'] or 'text/csv'
+# The template is a static object in the default bucket, not something the
+# service builds: the format is fixed and the client is the one who complies
+# with it. Changing it means changing business logic, so it moves over time and
+# never at runtime.
+TEMPLATE_S3_KEY = ENV_VARS['TEMPLATE_S3_KEY'] or 'ingest/templates/template_ventas_v1.xlsx'
 
 
 def _to_response(item: Dict[str, Any]) -> IngestResponse:
@@ -51,7 +67,7 @@ def _to_response(item: Dict[str, Any]) -> IngestResponse:
             date_range_start = item.get('date_range_start'),
             date_range_end = item.get('date_range_end')
         ),
-        errors = [IngestColumnError(**err) for err in item.get('errors', [])],
+        issues = [ValidationIssue(**issue) for issue in item.get('issues', [])],
         created_at = item['created_at']
     )
 
@@ -81,17 +97,17 @@ async def ingest_excel_controller(
             current_user (str): Authenticated user email (owner of the dataset).
 
         Returns:
-            IngestResponse: Public payload with summary + per-row errors.
+            IngestResponse: Public payload with the summary and per-row issues.
     '''
-    validated, errors, summary = parse_and_validate(file_bytes, filename)
-    is_valid = not errors
+    result = parse_and_validate(file_bytes, filename)
+    is_valid = not result.issues
 
     file_s3_key: Optional[str] = None
     if is_valid:
         # Store the NORMALIZED dataframe (canonical columns, ids filled) so every
         # downstream service reads a clean, uniform dataset without re-mapping.
         file_s3_key = upload_excel(
-            file_bytes = serialize_dataframe(validated, filename),
+            file_bytes = serialize_dataframe(result.accepted, filename),
             filename = filename,
             bearer_token = bearer_token
         )
@@ -103,8 +119,8 @@ async def ingest_excel_controller(
             'status': 'validated' if is_valid else 'failed',
             'file_s3_key': file_s3_key,
             'template_version': TEMPLATE_VERSION,
-            **summary,
-            'errors': errors
+            **result.summary.model_dump(),
+            'issues': [issue.model_dump(mode = 'json') for issue in result.issues]
         }
     )
     return _to_response(persisted)
@@ -141,28 +157,28 @@ async def ingest_excel_from_s3_controller(
             current_user (str): Authenticated user email (dataset owner).
 
         Returns:
-            IngestResponse: Public payload with summary + per-row errors.
+            IngestResponse: Public payload with the summary and per-row issues.
     '''
     file_bytes = download_bytes(file_key)
 
-    valid_df, rejected_df, errors, summary = parse_and_validate_partial(file_bytes, file_name)
-    has_valid_rows = len(valid_df) > 0
+    result = parse_and_validate_partial(file_bytes, file_name)
+    has_valid_rows = len(result.accepted) > 0
 
     # Accepted rows -> normalized CSV (feeds analytics/forecast/routes).
     normalized_key: Optional[str] = None
     if has_valid_rows:
         normalized_key = upload_bytes(
             file_key = f'ingest/normalized/{uuid4().hex}.csv',
-            data = serialize_dataframe(valid_df, 'normalized.csv'),
-            content_type = _CSV_CONTENT_TYPE
+            data = serialize_dataframe(result.accepted, 'normalized.csv'),
+            content_type = CSV_CONTENT_TYPE
         )
     # Rejected rows -> separate CSV the client can fix and re-upload.
     rejected_key: Optional[str] = None
-    if len(rejected_df) > 0:
+    if len(result.rejected) > 0:
         rejected_key = upload_bytes(
             file_key = f'ingest/rejected/{uuid4().hex}.csv',
-            data = serialize_dataframe(rejected_df, 'rejected.csv'),
-            content_type = _CSV_CONTENT_TYPE
+            data = serialize_dataframe(result.rejected, 'rejected.csv'),
+            content_type = CSV_CONTENT_TYPE
         )
 
     persisted = persist_dataset(
@@ -173,8 +189,11 @@ async def ingest_excel_from_s3_controller(
             'file_s3_key': normalized_key,
             'rejected_s3_key': rejected_key,
             'template_version': TEMPLATE_VERSION,
-            **summary,
-            'errors': errors[:_MAX_ERRORS_ON_RESPONSE]
+            **result.summary.model_dump(),
+            'issues': [
+                issue.model_dump(mode = 'json')
+                for issue in result.issues[:MAX_ISSUES_ON_RESPONSE]
+            ]
         }
     )
     return _to_response(persisted)
@@ -188,8 +207,8 @@ async def download_rejected_controller(
     current_user: str # pylint: disable=unused-argument
 ) -> bytes:
     '''
-        Returns the CSV of rows that could not be loaded (with a 'motivo'
-        column), so the client can fix them and re-upload.
+        Returns the CSV of rows that could not be loaded, each carrying the
+        reason in Spanish, so the client can fix them and re-upload.
 
         Raises:
             ResourceNotFoundError: If the dataset has no rejected-rows file.
@@ -231,7 +250,7 @@ async def get_dataset_status_controller(
             date_range_start = item.get('date_range_start'),
             date_range_end = item.get('date_range_end')
         ),
-        errors = [IngestColumnError(**err) for err in item.get('errors', [])],
+        issues = [ValidationIssue(**issue) for issue in item.get('issues', [])],
         created_at = item['created_at']
     )
 
@@ -241,14 +260,16 @@ async def download_template_controller(
     base_path: Path, # pylint: disable=unused-argument
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
-) -> Path:
+) -> bytes:
     '''
-        Returns the path to the downloadable template so the route can stream
-        it, generating it on demand in the writable temp dir (the Lambda package
-        is read-only). Decorated with `with_log = False`: the event is still
-        shipped to EVENTS, but the binary file body is not logged.
+        Reads the canonical template from the default bucket so the route can
+        return it. Decorated with `with_log = False`: the event is still shipped
+        to EVENTS, but the binary file body is not logged.
+
+        Returns:
+            bytes: Raw .xlsx content of the stored template.
     '''
-    return ensure_template()
+    return download_bytes(TEMPLATE_S3_KEY)
 
 
 @handle_service_errors('INGEST')
@@ -258,9 +279,8 @@ async def get_template_info_controller(
     current_user: str # pylint: disable=unused-argument
 ) -> TemplateInfo:
     '''
-        Controller returning the metadata of the canonical Excel template. The
-        template is always downloadable (generated on demand), so the URL is
-        unconditional.
+        Controller returning the metadata of the canonical Excel template,
+        served from the default bucket.
 
         Returns:
             TemplateInfo: Version + required/optional columns + relative URL.

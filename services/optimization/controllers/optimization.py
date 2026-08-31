@@ -6,30 +6,39 @@
     structural change is the data source: the monolith ran a raw SQL query
     against Postgres (`SELECT * FROM routes WHERE route_id = X AND day = Y`),
     while this microservice reads the same shape from DynamoDB via
-    `services.route_data.get_route_points`.
+    `services.optimization_utils.get_route_points`.
 '''
-import csv
-import io
-from typing import List, Optional, Tuple
+from typing import List, Optional
 import pandas as pd
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from schemas.optimization import (
     BulkUploadResponse,
+    RoutePlanResponse,
     DataMapResponse,
     OptimizationResponse,
     RouteResponse
 )
-from services.exceptions import InvalidInputError
-from services.ml_optimization import (
-    GeoAnalyzer,
-    distance_between_points,
-    fiter_order_df,
-    optimal_route
+from services.route_algorithm import GeoAnalyzer, filter_order_df
+from services.optimization import (
+    assign_days,
+    available_sellers,
+    build_client_points,
+    build_day,
+    build_distance_matrix,
+    order_route,
+    parse_route_csv,
+    resolve_road_route,
+    scope_to_period,
+    tag_map_colors
 )
-from services.route_data import bulk_upload_points, get_route_points
-from services.routing import road_segment
+from services.optimization_utils import (
+    bulk_upload_points,
+    get_dataset_metadata,
+    get_route_points,
+    load_dataframe_from_s3
+)
 from services.utils import audit_event, handle_service_errors
 
 
@@ -71,116 +80,6 @@ def _load_dataframe(
     return _route_points_to_df(items)
 
 
-# ---------------------------------------------------------------------------
-# Algorithm helpers (verbatim from monolith)
-# ---------------------------------------------------------------------------
-def _draw_map(dtf: pd.DataFrame) -> pd.DataFrame:
-    '''
-        Tags the first / last / middle points with their map color.
-    '''
-    data = dtf.copy()
-    size, _ = data.shape
-    data_order = data.sort_values(by = 'client_id', ascending = True)
-    data = data_order.reset_index(drop = True)
-    data.loc[0, 'color'] = 'red'
-    mask = (data.index >= 1) & (data.index < len(data) - 1)
-    data.loc[mask, 'color'] = 'black'
-    data.loc[size - 1, 'color'] = 'green'
-    return data
-
-
-def _distances(dtf: pd.DataFrame) -> pd.DataFrame:
-    '''
-        Creates the dataframe with linear distance calculations.
-    '''
-    dtf_distances = pd.DataFrame({
-        'origin': dtf.at[0, 'client_id'],
-        'target': dtf.at[0, 'client_id'],
-        'x': dtf.at[0, 'x'],
-        'y': dtf.at[0, 'y'],
-        'distance': 0
-    }, index = [0])
-    for i in range(len(dtf)):
-        for j in range(i + 1, len(dtf)):
-            node_1 = (dtf.at[i, 'x'], dtf.at[i, 'y'])
-            node_2 = (dtf.at[j, 'x'], dtf.at[j, 'y'])
-            distance = distance_between_points(node_1, node_2)
-            new_row = pd.DataFrame({
-                'origin': dtf.at[i, 'client_id'],
-                'target': dtf.at[j, 'client_id'],
-                'x': dtf.at[j, 'x'],
-                'y': dtf.at[j, 'y'],
-                'distance': distance
-            }, index = [i * j])
-            dtf_distances = pd.concat([dtf_distances, new_row], ignore_index = True)
-    return dtf_distances.reset_index(drop = True)
-
-
-def _final_data(dtf: pd.DataFrame, dtf_distances: pd.DataFrame) -> pd.DataFrame:
-    '''
-        Creates the dataframe with the optimized and organized route.
-    '''
-    dtf_final = pd.DataFrame({
-        'origin': dtf.at[0, 'target'],
-        'target': dtf.at[1, 'target'],
-        'distance': dtf.at[1, 'distance'],
-        'x': dtf.at[0, 'x'],
-        'y': dtf.at[0, 'y']
-    }, index = [0])
-
-    origin = dtf.at[0, 'target']
-    target = dtf.at[1, 'target']
-    dtf_final = optimal_route(len(dtf), origin, target, dtf_distances, dtf_final)
-
-    dtf_final = pd.merge(
-        dtf_final, dtf, left_on = 'origin', right_on = 'target', how = 'left'
-    )
-    dtf_final.drop(
-        columns = ['x_x', 'y_x', 'origin_y', 'target_y', 'distance_y'],
-        axis = 1, inplace = True
-    )
-    dtf_final = dtf_final.rename(columns = {
-        'origin_x': 'origin', 'distance_x': 'distance',
-        'y_y': 'y', 'x_y': 'x', 'target_x': 'target'
-    })
-    return dtf_final
-
-
-def _final_route(dtf: pd.DataFrame) -> pd.DataFrame:
-    '''
-        Projects the ordered route onto the real road network via OSRM and
-        returns it with per-segment linear time, real road distance/duration
-        and the street geometry (list of [longitude, latitude] points).
-    '''
-    df_route = dtf.copy()
-    df_route.index.name = 'visit_order'
-    df_route.drop(columns = ['target'], axis = 1, inplace = True)
-
-    df_route_segments = df_route.join(
-        df_route.shift(-1),
-        rsuffix = '_next'
-    ).dropna()
-    df_route_segments.drop(columns = ['distance_next'], axis = 1, inplace = True)
-    df_route_segments = df_route_segments.rename(columns = {'origin_next': 'target'})
-
-    df_route_segments['time_seg'] = df_route_segments.apply(
-        lambda stop: distance_between_points(
-            (stop.y, stop.x), (stop.y_next, stop.x_next)
-        ),
-        axis = 1
-    )
-
-    # Each segment is resolved against the OSRM road network (see services.routing).
-    segments = df_route_segments.apply(
-        lambda stop: road_segment((stop.y, stop.x), (stop.y_next, stop.x_next)),
-        axis = 1
-    )
-    df_route_segments['road_distance'] = segments.apply(lambda leg: leg['distance'])
-    df_route_segments['road_duration'] = segments.apply(lambda leg: leg['duration'])
-    df_route_segments['route'] = segments.apply(lambda leg: leg['geometry'])
-    return df_route_segments
-
-
 def _df_to_pydantic(df: pd.DataFrame, model) -> list:
     '''
         Transforms a dataframe into a list of Pydantic instances.
@@ -204,13 +103,13 @@ def _ordered_route_models(
         call a decorated controller.
     '''
     dtf = _load_dataframe(dynamodb_resource, route_id, day)
-    dtf_distances = _distances(dtf)
-    dtf_order = fiter_order_df(
+    dtf_distances = build_distance_matrix(dtf)
+    dtf_order = filter_order_df(
         dtf_distances['origin'] == int(dtf_distances['origin'].iloc[0]),
         'distance',
         dtf_distances
     )
-    dtf_final = _final_data(dtf_order, dtf_distances)
+    dtf_final = order_route(dtf_order, dtf_distances)
     return _df_to_pydantic(dtf_final, OptimizationResponse)
 
 
@@ -226,7 +125,7 @@ async def preparing_data_controller(
         Returns the base map data (geolocated client points tagged with color).
     '''
     dtf = _load_dataframe(dynamodb_resource, route_id, day)
-    data = _draw_map(dtf)
+    data = tag_map_colors(dtf)
     return _df_to_pydantic(data, DataMapResponse)
 
 
@@ -262,7 +161,7 @@ async def optimization_algorithm_controller(
     '''
     dtf_final_models = _ordered_route_models(dynamodb_resource, route_id, day)
     dtf_final = pd.DataFrame([m.model_dump() for m in dtf_final_models])
-    dtf_route = _final_route(dtf_final)
+    dtf_route = resolve_road_route(dtf_final)
     return _df_to_pydantic(dtf_route, RouteResponse)
 
 
@@ -279,7 +178,7 @@ async def simulation_algorithm_controller(
         (output of GeoAnalyzer.get_distance_matrix as a dict).
     '''
     dtf = _load_dataframe(dynamodb_resource, route_id, day)
-    data = _draw_map(dtf)
+    data = tag_map_colors(dtf)
 
     distance_matrix = data[data['day'] == day][['client_id', 'y', 'x']].reset_index(
         drop = True
@@ -297,126 +196,6 @@ async def simulation_algorithm_controller(
 # ---------------------------------------------------------------------------
 # Bulk upload — CSV → DynamoDB
 # ---------------------------------------------------------------------------
-_COLUMN_ALIASES = {
-    'route_id':  ['route_id', 'routeid', 'ruta', 'ruta_id', 'rutaid'],
-    'day':       ['day', 'dia', 'día', 'jornada'],
-    'client_id': ['client_id', 'clientid', 'cliente_id', 'cliente', 'id_cliente', 'id'],
-    'latitude':  ['latitude', 'lat', 'latitud', 'y'],
-    'longitude': ['longitude', 'lon', 'lng', 'longitud', 'x'],
-    'client':    ['client', 'cliente_nombre', 'nombre', 'name']
-}
-REQUIRED_COLUMNS = {'route_id', 'day', 'client_id', 'latitude', 'longitude'}
-
-
-def _resolve_header(raw_header: str) -> Optional[str]:
-    '''
-        Maps a CSV header column to its canonical name. Returns None when
-        the header is not part of the recognized set.
-    '''
-    norm = raw_header.strip().lower()
-    for canonical, aliases in _COLUMN_ALIASES.items():
-        if norm in aliases:
-            return canonical
-    return None
-
-
-def _resolve_and_validate_header(header: List[str]) -> List[Optional[str]]:
-    '''
-        Maps each raw header cell to its canonical name and ensures every
-        required column is present.
-
-        Raises:
-            InvalidInputError: If a mandatory column is missing.
-    '''
-    resolved = [_resolve_header(cell) for cell in header]
-    canonical_set = {col for col in resolved if col}
-    missing = REQUIRED_COLUMNS - canonical_set
-    if missing:
-        raise InvalidInputError(
-            detail = (
-                f'Faltan columnas obligatorias en el CSV: {sorted(missing)}. '
-                f'Columnas detectadas: {sorted(canonical_set)}.'
-            )
-        )
-    return resolved
-
-
-def _parse_csv_row(
-    raw_row: List[str],
-    resolved: List[Optional[str]],
-    line_no: int
-) -> dict:
-    '''
-        Builds a single canonical record from a raw CSV row, coercing the
-        numeric columns.
-
-        Raises:
-            InvalidInputError: If a row has non-numeric or missing values.
-    '''
-    record: dict = {}
-    for idx, value in enumerate(raw_row):
-        if idx >= len(resolved):
-            continue
-        col = resolved[idx]
-        if col is None:
-            continue
-        record[col] = (value or '').strip()
-    try:
-        record['route_id'] = int(record['route_id'])
-        record['day'] = int(record['day'])
-        record['client_id'] = int(record['client_id'])
-        record['latitude'] = float(record['latitude'])
-        record['longitude'] = float(record['longitude'])
-    except (KeyError, ValueError) as e:
-        raise InvalidInputError(
-            detail = f'Fila {line_no} con valores inválidos ({e}).'
-        ) from e
-    return record
-
-
-def _parse_csv_text(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
-    '''
-        Parses the CSV body. Returns:
-            - rows: list of dicts keyed by canonical column name
-            - detected_headers: canonical headers that appeared in the file
-            - route_id_detected
-            - day_detected
-        Raises InvalidInputError on missing required columns or mixed
-        (route_id, day) values across the file.
-    '''
-    reader = csv.reader(io.StringIO(raw_text))
-    rows_iter = iter(reader)
-    try:
-        header = next(rows_iter)
-    except StopIteration as e:
-        raise InvalidInputError(detail = 'El archivo CSV está vacío.') from e
-
-    resolved = _resolve_and_validate_header(header)
-
-    rows: List[dict] = []
-    for line_no, raw_row in enumerate(rows_iter, start = 2):
-        if not raw_row or all((cell or '').strip() == '' for cell in raw_row):
-            continue
-        rows.append(_parse_csv_row(raw_row, resolved, line_no))
-
-    if not rows:
-        raise InvalidInputError(detail = 'El CSV no contiene filas de datos.')
-
-    route_id_set = {record['route_id'] for record in rows}
-    day_set = {record['day'] for record in rows}
-    if len(route_id_set) != 1 or len(day_set) != 1:
-        raise InvalidInputError(
-            detail = (
-                'Todos los puntos del CSV deben compartir el mismo route_id y day. '
-                f'route_id encontrados: {sorted(route_id_set)}; '
-                f'day encontrados: {sorted(day_set)}.'
-            )
-        )
-
-    canonical_set = sorted({col for col in resolved if col})
-    return rows, canonical_set, next(iter(route_id_set)), next(iter(day_set))
-
-
 @handle_service_errors('OPTIMIZATION')
 @audit_event('OPTIMIZATION', 'RoutePoints', 'BULK_CREATE')
 async def bulk_upload_routes_controller(
@@ -434,7 +213,7 @@ async def bulk_upload_routes_controller(
         the event with the operator email; `request` is consumed by
         @handle_service_errors for the usage log.
     '''
-    rows, headers, route_id, day = _parse_csv_text(csv_text)
+    rows, headers, route_id, day = parse_route_csv(csv_text)
     written = bulk_upload_points(
         dynamodb_resource = dynamodb_resource,
         route_id = route_id,
@@ -446,4 +225,44 @@ async def bulk_upload_routes_controller(
         day = day,
         points_written = written,
         columns_detected = headers
+    )
+
+
+@handle_service_errors('OPTIMIZATION')
+async def route_plan_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: dict,
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> RoutePlanResponse:
+    '''
+        Builds a visit plan straight from an ingested sales dataset.
+
+        The clients are the ones who actually bought in the period, the visit
+        days come from clustering those clients geographically, and the order
+        within each day is the 2-opt tour projected onto real streets. Nothing
+        here is read from the legacy route table.
+    '''
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
+    dataframe = scope_to_period(dataframe, params)
+
+    sellers = available_sellers(dataframe)
+    clients = build_client_points(dataframe, seller = params.get('seller'))
+    clients = assign_days(clients, int(params.get('days') or 5))
+
+    days = [
+        build_day(clients, day)
+        for day in sorted(clients['day'].unique())
+    ]
+    return RoutePlanResponse(
+        dataset_id = dataset_id,
+        sellers = sellers,
+        seller = params.get('seller'),
+        total_clients = int(len(clients)),
+        days = [day for day in days if day.paradas]
     )
