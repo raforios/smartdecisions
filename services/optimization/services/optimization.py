@@ -726,12 +726,12 @@ def build_day(clients: pd.DataFrame, day: int) -> DayRoute:
     if not stops:
         return DayRoute(day = int(day))
 
-    trip = road_trip([(stop['latitude'], stop['longitude']) for stop in stops])
+    trip = road_trip([(stop.latitude, stop.longitude) for stop in stops])
     return DayRoute(
         day = int(day),
-        paradas = [RouteStop(**stop) for stop in stops],
-        distancia_km = round(trip['distance'] / 1000, 2),
-        duracion_min = round(trip['duration'] / 60, 1),
-        total_amount = round(sum(stop['amount'] for stop in stops), 2),
-        geometria = trip['geometry']
+        stops = stops,
+        distance_km = round(trip['distance'] / 1000, 2),
+        duration_min = round(trip['duration'] / 60, 1),
+        total_amount = round(sum(stop.amount for stop in stops), 2),
+        geometry = trip['geometry']
     )

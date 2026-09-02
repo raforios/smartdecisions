@@ -156,11 +156,11 @@ class DayRoute(BaseModel):
         joins them.
     '''
     day: int = Field(..., ge = 1)
-    paradas: list[RouteStop] = []
-    distancia_km: float = Field(default = 0.0, description = 'Real driving distance.')
-    duracion_min: float = Field(default = 0.0, description = 'Estimated driving time.')
+    stops: list[RouteStop] = []
+    distance_km: float = Field(default = 0.0, description = 'Real driving distance.')
+    duration_min: float = Field(default = 0.0, description = 'Estimated driving time.')
     total_amount: float = Field(default = 0.0, description = 'Value of the day (Bs).')
-    geometria: list[list[float]] = Field(
+    geometry: list[list[float]] = Field(
         default_factory = list,
         description = 'Street polyline as [longitude, latitude] pairs; empty when '
                       'the road service could not be reached (the map then draws '

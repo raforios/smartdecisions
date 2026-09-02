@@ -264,5 +264,5 @@ async def route_plan_controller(
         sellers = sellers,
         seller = params.get('seller'),
         total_clients = int(len(clients)),
-        days = [day for day in days if day.paradas]
+        days = [day for day in days if day.stops]
     )

@@ -176,7 +176,7 @@ async def commercial_summary_controller(
         concentration = build_concentration(dataframe),
         efficiency = build_efficiency(dataframe),
         margin = build_margin(dataframe),
-        **summary
+        **summary.model_dump()
     )
 
 
@@ -197,7 +197,7 @@ async def portfolio_controller(
     return PortfolioResponse(
         dataset_id = dataset_id,
         period = period,
-        **build_portfolio(dataframe)
+        **build_portfolio(dataframe).model_dump()
     )
 
 
@@ -220,7 +220,7 @@ async def forecast_controller(
         method = params.get('method', 'linear'),
         group_by = params.get('group_by')
     )
-    return ForecastResponse(dataset_id = dataset_id, **result)
+    return ForecastResponse(dataset_id = dataset_id, **result.model_dump())
 
 
 @handle_service_errors('ANALYTICS')
@@ -237,7 +237,7 @@ async def segmentation_controller(
     '''
     dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, params)
     result = build_segmentation(dataframe)
-    return SegmentationResponse(dataset_id = dataset_id, **result)
+    return SegmentationResponse(dataset_id = dataset_id, **result.model_dump())
 
 
 @handle_service_errors('ANALYTICS')
