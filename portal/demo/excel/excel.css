@@ -292,9 +292,12 @@
 }
 
 /* --- Dashboard chart grid --- */
+/* auto-fit, not auto-fill: a block with two charts must stretch them across the
+   row instead of squeezing both into 320px tracks and leaving half the row
+   empty. With a full row of cards the two behave identically. */
 .chart-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 1.25rem;
     margin-top: 1.5rem;
 }
@@ -342,9 +345,9 @@
     font-weight: 700;
     color: #fff;
 }
-.tier-badge.tier-Alto { background: #2d7d46; }
-.tier-badge.tier-Medio { background: #b8860b; }
-.tier-badge.tier-Bajo { background: #c0392b; }
+.tier-badge.tier-HIGH { background: #2d7d46; }
+.tier-badge.tier-MEDIUM { background: #b8860b; }
+.tier-badge.tier-LOW { background: #c0392b; }
 
 /* --- Opportunity product drill-down --- */
 .expand-btn {
@@ -407,18 +410,148 @@
 .table-roomy .rank-cell { color: var(--muted); font-variant-numeric: tabular-nums; width: 3rem; }
 
 /* --- Session countdown chip in the top nav --- */
-.session-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
+
+
+/* --- Reporting window bar --- */
+.period-bar {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.25rem;
+    background: var(--panel-elevated);
     border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.2rem 0.7rem;
-    font-size: 0.8rem;
+    border-radius: var(--radius-sm);
+}
+.period-label {
+    font-weight: 600;
+    color: var(--text-strong);
+    align-self: center;
+}
+.period-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.period-field span { font-size: 0.78rem; color: var(--muted); }
+.period-field input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.45rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+.period-note {
     color: var(--muted);
-    white-space: nowrap;
+    font-size: 0.82rem;
+    flex: 1 1 220px;
+    align-self: center;
 }
-.session-chip.warning { color: var(--warning, #b8860b); border-color: var(--accent-3, #b8860b); }
+@media (max-width: 700px) {
+    .period-bar { flex-direction: column; align-items: stretch; }
+    .period-note { flex: 1 1 auto; }
+}
+
+/* --- Analysis blocks stacked inside the commercial summary --- */
+.analysis-block {
+    margin-top: 2.5rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid var(--border);
+}
+.block-subtitle {
+    color: var(--muted);
+    margin: 0.15rem 0 1.1rem;
+    max-width: 70ch;
+}
+.chart-hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin: -0.2rem 0 0.7rem;
+}
+.insight-line {
+    background: var(--panel-elevated);
+    border-left: 3px solid var(--accent-3);
+    padding: 0.65rem 0.9rem;
+    border-radius: var(--radius-sm);
+    margin: 0 0 1.1rem;
+    color: var(--text-strong);
+}
+
+/* --- Loss-making products: this is the block a manager acts on first --- */
+.alert-panel {
+    margin-top: 1.5rem;
+    padding: 1rem 1.1rem;
+    background: var(--panel);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-sm);
+}
+.alert-title { margin: 0 0 0.7rem; color: var(--danger); font-size: 0.98rem; }
+
+/* --- Variation cells: direction has to be readable at a glance --- */
+.delta-up { color: var(--success); font-variant-numeric: tabular-nums; }
+.delta-down { color: var(--danger); font-variant-numeric: tabular-nums; }
+.data-table td.hero { font-weight: 600; color: var(--text-strong); }
+.cell-note { color: var(--muted); font-size: 0.85rem; }
+
+/* --- ABC class badges --- */
+.badge {
+    display: inline-block;
+    min-width: 1.6rem;
+    text-align: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fff;
+}
+.badge-a { background: var(--success); }
+.badge-b { background: var(--accent-3); color: var(--text-strong); }
+.badge-c { background: var(--muted); }
+
+/* --- Inline search inside a section header --- */
+.table-search {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.45rem 0.7rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.9rem;
+    margin-left: auto;
+    min-width: 200px;
+}
+.pager-info { color: var(--muted); font-size: 0.85rem; }
+
+/* Money never wraps: "Bs 278.288,75" split across two lines reads as two
+   different figures, and the column stops being scannable. */
+.data-table .numeric { white-space: nowrap; }
+
+/* A chart next to a table must not share the width evenly: the chart stays
+   readable when narrow, the table does not. */
+.split-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+    align-items: start;
+}
 @media (max-width: 900px) {
-    .session-chip { display: none; }
+    .split-layout { grid-template-columns: 1fr; }
 }
+
+/* Wide tables keep their natural column widths and scroll inside their wrapper
+   instead of squeezing every cell into a four-line stack on a phone. */
+#riskTable, #sellerTable, #marginAlertTable { min-width: 760px; }
+#marginCategoryTable, #mixTable, #priceTable, #abcTable { min-width: 520px; }
+.cell-note { min-width: 24ch; }
+
+/* A chart card has no height of its own: it takes it from the canvas. When
+   Chart.js measures a canvas inside a hidden section it writes height:0, and
+   the card then collapses to zero too — a feedback loop that leaves an empty
+   card even after the section becomes visible. A floor on the canvas breaks it. */
+.chart-card canvas { min-height: 240px; }
+
+/* The `hidden` attribute is only a default of display:none, and any rule that
+   sets `display` on the same element silently overrides it — the map overlay
+   stayed on top of the map, and the period bar showed before it had dates.
+   This makes hiding work regardless of what the layout rules say. */
+[hidden] { display: none !important; }

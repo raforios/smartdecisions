@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Excel → Oportunidades — module logic.
+ * Análisis Comercial — module logic.
  *
  * Flow:
  *   1. Download the v1 template (GET ingest/v1/ingest/template/file).
@@ -25,20 +25,56 @@ document.addEventListener('DOMContentLoaded', () => {
     const DATASET_KEY = 'sd_excel_dataset_id';
     const CACHE_KEY = 'sd_excel_results';
     const VIEW_KEY = 'sd_excel_view';
+    const PERIOD_KEY = 'sd_excel_period';
+    const MAX_ISSUES_SHOWN = 200;
+
+    function readStoredPeriod() {
+        try {
+            return JSON.parse(sessionStorage.getItem(PERIOD_KEY) || 'null') || {};
+        } catch (parseError) {
+            return {};
+        }
+    }
+
     const state = {
         selectedFile: null,
         datasetId: sessionStorage.getItem(DATASET_KEY) || null,
+        period: readStoredPeriod(),
+        available: {},
         opportunities: [],
         sortKey: 'score',
         sortDir: 'desc'
     };
 
     function setDataset(datasetId) {
-        // A different file invalidates every cached result of the previous one.
-        if (datasetId !== state.datasetId) sessionStorage.removeItem(CACHE_KEY);
+        // A different file invalidates every cached result of the previous one,
+        // and the window of the old file means nothing for the new one.
+        if (datasetId !== state.datasetId) {
+            sessionStorage.removeItem(CACHE_KEY);
+            setPeriod({});
+        }
         state.datasetId = datasetId;
         if (datasetId) sessionStorage.setItem(DATASET_KEY, datasetId);
         else sessionStorage.removeItem(DATASET_KEY);
+    }
+
+    /**
+     * Stores the reporting window and drops every cached result: a number
+     * computed over January cannot be shown as if it covered the whole year.
+     */
+    function setPeriod(period) {
+        state.period = period || {};
+        sessionStorage.setItem(PERIOD_KEY, JSON.stringify(state.period));
+        sessionStorage.removeItem(CACHE_KEY);
+    }
+
+    /** Builds the ?date_from=&date_to= suffix every analysis endpoint accepts. */
+    function analysisQuery() {
+        const params = new URLSearchParams();
+        if (state.period.from) params.set('date_from', state.period.from);
+        if (state.period.to) params.set('date_to', state.period.to);
+        const query = params.toString();
+        return query ? `?${query}` : '';
     }
 
     // ---------- Result cache ----------
@@ -75,7 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const STAMP_IDS = {
         summary: 'stampSummary',
         opportunities: 'stampOpportunities',
-        segmentation: 'stampSegmentation'
+        segmentation: 'stampSegmentation',
+        portfolio: 'stampPortfolio'
     };
 
     function markStamp(kind, timestamp) {
@@ -89,13 +126,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // The analysis sections are mutually exclusive views (tab-like): showing one
     // hides the others, so the page doesn't grow into a long vertical stack.
     const ANALYSIS_SECTIONS = ['stepDashboard', 'stepForecast', 'stepSegmentation',
-        'stepOpportunities'];
+        'stepOpportunities', 'stepPortfolio'];
     function showAnalysisView(sectionId, scroll = true) {
         ANALYSIS_SECTIONS.forEach((id) => { qs('#' + id).hidden = (id !== sectionId); });
         sessionStorage.setItem(VIEW_KEY, sectionId);
+        resizeChartsIn(sectionId);
         if (scroll) {
             qs('#' + sectionId).scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+    }
+
+    /**
+     * Chart.js measures the canvas at construction time, and every renderer
+     * builds its charts while the section is still `display:none` — which locks
+     * in a collapsed size and paints an apparently empty card. Re-measuring
+     * once the section is on screen is what makes them appear at full size.
+     *
+     * The deferral matters: unhiding the section does not lay it out
+     * synchronously, so resizing in the same tick reads the same zero size that
+     * caused the problem. A timeout rather than requestAnimationFrame, because
+     * rAF never fires while the tab is in the background — a demo opened in a
+     * background tab would show empty cards until the user resized the window.
+     */
+    function resizeChartsIn(sectionId) {
+        setTimeout(() => {
+            const section = qs('#' + sectionId);
+            Object.values(chartRegistry).forEach((chart) => {
+                if (chart && section.contains(chart.canvas)) chart.resize();
+            });
+        }, 0);
     }
 
     // ---------- Step 1: template download ----------
@@ -131,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
             note.textContent = 'Plantilla descargada.';
         } catch (error) {
             note.classList.add('error');
-            note.textContent = error.message || 'No se pudo descargar la plantilla.';
+            note.textContent = errorText(error, 'No se pudo descargar la plantilla.');
         } finally {
             done();
         }
@@ -262,8 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
             handleIngestResponse(result);
         } catch (error) {
             note.classList.add('error');
-            note.textContent = error.message || 'No se pudo subir el archivo.';
-            toast(error.message || 'Error al subir.', 'error');
+            note.textContent = errorText(error, 'No se pudo subir el archivo.');
+            toast(errorText(error, 'Error al subir.'), 'error');
         } finally {
             done();
         }
@@ -287,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   `${formatInt(rejected)} quedaron fuera.`
                 : 'Archivo validado. Listo para analizar.', 'success');
         } else {
-            renderErrors(response.errors || []);
+            renderIssues(response.issues || []);
             toast('No se pudo cargar el archivo. Revisa los errores.', 'error');
         }
 
@@ -335,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
             anchor.remove();
             URL.revokeObjectURL(url);
         } catch (error) {
-            toast(error.message || 'No se pudo descargar el archivo.', 'error');
+            toast(errorText(error, 'No se pudo descargar el archivo.'), 'error');
         } finally {
             done();
         }
@@ -363,46 +422,184 @@ document.addEventListener('DOMContentLoaded', () => {
         cards.forEach((card) => container.appendChild(metricCard(card)));
     }
 
-    function renderErrors(errors) {
+    // The backend reports WHY a row failed as a stable code; the wording lives
+    // here, in the layer that talks to the user. Keeping the sentence in the
+    // backend would leave the future interpretation layer parsing prose instead
+    // of reading facts — and would make translating the product impossible.
+    const VALIDATION_MESSAGES = {
+        REQUIRED_VALUE: 'Este campo es obligatorio y no puede estar vacío.',
+        INVALID_TYPE: 'El valor no tiene el formato esperado para esta columna.',
+        TEXT_LENGTH: 'El texto debe tener entre 1 y 64 caracteres.',
+        BELOW_MINIMUM: 'El valor debe ser mayor al mínimo permitido.',
+        OUT_OF_RANGE: 'El valor está fuera del rango permitido.',
+        UNKNOWN_COLUMN: 'Esta columna no forma parte de la plantilla.',
+        MISSING_COLUMN: 'Falta esta columna obligatoria en el archivo.',
+        EMPTY_FILE: 'El archivo no contiene filas de datos.',
+        INVALID_VALUE: 'El valor no es válido para esta columna.'
+    };
+
+    function validationMessage(code) {
+        return VALIDATION_MESSAGES[code] || VALIDATION_MESSAGES.INVALID_VALUE;
+    }
+
+    // Same contract for requests the service refuses outright: the backend
+    // sends the code, this catalogue owns the sentence.
+    const REQUEST_ERROR_MESSAGES = {
+        UNSUPPORTED_FILE_FORMAT: 'Formato no soportado. Sube un archivo .xlsx o .csv.',
+        EMPTY_UPLOAD: 'El archivo que subiste está vacío.',
+        FILES_SERVICE_UNREACHABLE: 'No se pudo contactar al servicio de archivos.',
+        FILES_SERVICE_REJECTED_UPLOAD: 'El servicio de archivos rechazó la subida.'
+    };
+
+    // Falls back to the raw message so services that still answer with prose
+    // keep working while they migrate to codes.
+    function errorText(error, fallback) {
+        const code = error && error.code;
+        return REQUEST_ERROR_MESSAGES[code]
+            || ANALYTICS_ERRORS[code]
+            || (error && error.message)
+            || fallback;
+    }
+
+    // Portfolio health: the backend says WHY with a code and ships the facts
+    // alongside it (dias_sin_comprar, variacion). The sentence is built here.
+    const RISK_REASONS = {
+        LONG_SILENCE: (row) =>
+            `Sin comprar hace ${formatInt(row.days_without_purchase)} días. ` +
+            'Campaña de reactivación.',
+        SILENCE: (row) => `No compra hace ${formatInt(row.days_without_purchase)} días.`,
+        PURCHASE_DROP: (row) =>
+            `Su última compra cayó ${formatDecimal(Math.abs(row.change || 0), 0)}% ` +
+            'frente a su promedio mensual.'
+    };
+
+    function riskReasonText(row) {
+        const build = RISK_REASONS[row && row.reason_code];
+        return build ? build(row) : '';
+    }
+
+    // Every headline KPI the API can report. The backend sends `metric_code`,
+    // `value` and, when the number refers to a period, `reference`.
+    const KPI_LABELS = {
+        TOTAL_SALES: ['Venta total', 'Suma de todas las ventas del periodo'],
+        SALES_COUNT: ['Número de ventas', 'Cantidad de pedidos/transacciones'],
+        AVERAGE_TICKET: ['Ticket promedio', 'Venta total ÷ número de ventas'],
+        UNITS_SOLD: ['Unidades vendidas', 'Suma de las cantidades vendidas'],
+        CLIENT_COUNT: ['Clientes', 'Puntos de venta distintos con compras'],
+        PRODUCT_COUNT: ['Productos', 'SKUs distintos vendidos'],
+        UNITS_PER_ORDER: ['Unidades por pedido', 'Drop size: unidades que salen en cada pedido'],
+        PRODUCTS_PER_ORDER: ['Productos por pedido',
+            'Líneas distintas por pedido — mide la venta cruzada'],
+        AMOUNT_PER_ORDER: ['Monto por pedido', 'Ticket promedio del período'],
+        ORDER_COUNT: ['Pedidos', 'Transacciones distintas en el período'],
+        MOM_CHANGE: ['Variación vs mes anterior', 'Crecimiento mes contra mes (MoM)'],
+        YOY_CHANGE: ['Variación vs año anterior', null],
+        LAST_MONTH_SALES: ['Venta del último mes', null],
+        MONTHLY_AVERAGE: ['Promedio mensual', 'Venta media por mes del período'],
+        GROSS_MARGIN: ['Margen bruto', 'Venta menos costo de la mercadería vendida'],
+        GROSS_MARGIN_PERCENT: ['Margen bruto %',
+            'Qué porcentaje de cada boliviano vendido queda'],
+        COST_OF_GOODS: ['Costo de la mercadería', 'Lo que costó comprar lo que se vendió'],
+        MARGIN_PER_ORDER: ['Margen por pedido', 'Ganancia bruta promedio de cada pedido'],
+        PORTFOLIO_CLIENTS: ['Clientes en la cartera',
+            'Clientes distintos que compraron en el período'],
+        ACTIVE_LAST_MONTH: ['Activos el último mes', 'Compraron en el mes más reciente'],
+        COVERAGE: ['Cobertura', 'Activos del último mes sobre la cartera total'],
+        CHURN_LAST_MONTH: ['Churn del último mes',
+            'Clientes que compraron el mes previo y dejaron de comprar'],
+        CLIENTS_AT_RISK: ['Clientes en riesgo',
+            'Cayeron fuerte o llevan 2 meses sin comprar — visitarlos ahora'],
+        CLIENTS_LOST: ['Clientes perdidos', 'Más de 6 meses sin comprar — campaña de reactivación'],
+        PURCHASE_FREQUENCY: ['Frecuencia de compra', 'Pedidos por cliente por mes']
+    };
+
+    // A few KPIs read better with the period the number belongs to.
+    function kpiLabel(card) {
+        const entry = KPI_LABELS[card && card.metric_code];
+        if (!entry) return card && card.metric_code ? String(card.metric_code) : '';
+        if (card.metric_code === 'LAST_MONTH_SALES' && card.reference) {
+            return `Venta de ${card.reference}`;
+        }
+        return entry[0];
+    }
+
+    // Codes the analytics engines report, worded here.
+    const MARGIN_ALERT_REASONS = {
+        BELOW_COST: 'Se vende por debajo del costo',
+        THIN_MARGIN: 'Margen casi nulo'
+    };
+
+    const ABC_DESCRIPTIONS = {
+        A: 'Núcleo del negocio: concentran el 80% de la venta. Nunca deben quebrar stock.',
+        B: 'Complementarios: aportan el siguiente 15%. Mantener con rotación controlada.',
+        C: 'Cola larga: el 5% restante. Candidatos a depurar o vender bajo pedido.'
+    };
+
+    const FORECAST_METHODS = {
+        linear: 'Tendencia lineal',
+        moving_average: 'Media móvil'
+    };
+
+    const ANALYTICS_ERRORS = {
+        INVALID_DATE: 'La fecha no es válida. Usa el formato AAAA-MM-DD.',
+        NO_DATE_COLUMN: 'El archivo no tiene una columna de fecha válida, ' +
+            'no se puede filtrar por período.',
+        EMPTY_PERIOD: 'No hay ventas en el período seleccionado. Elige otro rango.',
+        DATASET_UNREADABLE: 'No se pudo leer el archivo del bucket de FILES.'
+    };
+
+    const CONCENTRATION_LEVELS = {
+        HIGH: 'Alta: la venta depende de muy pocos clientes.',
+        MODERATE: 'Moderada: hay dependencia de algunos clientes clave.',
+        LOW: 'Baja: la venta está bien repartida entre los clientes.'
+    };
+
+    // A dimension the source file left blank still needs a row label.
+    function dimensionLabel(value) {
+        return value ? String(value) : 'Sin especificar';
+    }
+
+    function kpiHint(card) {
+        const entry = KPI_LABELS[card && card.metric_code];
+        if (card && card.metric_code === 'YOY_CHANGE') {
+            return card.reference
+                ? `Mismo mes de ${String(card.reference).slice(0, 4)} (YoY)`
+                : 'Se necesita un año de historial';
+        }
+        return entry ? entry[1] : null;
+    }
+
+    function renderIssues(issues) {
         const tbody = qs('#errorsTable tbody');
         tbody.innerHTML = '';
-        if (errors.length === 0) {
+        if (issues.length === 0) {
             const row = document.createElement('tr');
             row.className = 'empty-row';
-            row.innerHTML = '<td colspan="4">Sin detalles de error.</td>';
+            row.innerHTML = '<td colspan="4">Sin detalles del problema.</td>';
             tbody.appendChild(row);
             return;
         }
-        errors.slice(0, 200).forEach((err) => {
+        issues.slice(0, MAX_ISSUES_SHOWN).forEach((issue) => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${err.row ?? '-'}</td>
-                <td>${escapeHtml(err.column ?? '-')}</td>
-                <td>${err.value == null ? '<em>vacío</em>' : escapeHtml(String(err.value))}</td>
-                <td>${escapeHtml(err.message ?? '')}</td>
+                <td>${issue.row ?? '-'}</td>
+                <td>${escapeHtml(issue.column || '(archivo)')}</td>
+                <td>${issue.value == null ? '<em>vacío</em>' : escapeHtml(String(issue.value))}</td>
+                <td>${escapeHtml(validationMessage(issue.rule_code))}</td>
             `;
             tbody.appendChild(row);
         });
-        if (errors.length > 200) {
+        if (issues.length > MAX_ISSUES_SHOWN) {
             const row = document.createElement('tr');
             row.className = 'empty-row';
-            row.innerHTML = `<td colspan="4">… y ${errors.length - 200} errores adicionales.</td>`;
+            row.innerHTML = `<td colspan="4">… y ${formatInt(issues.length - MAX_ISSUES_SHOWN)} ` +
+                'problemas adicionales.</td>';
             tbody.appendChild(row);
         }
     }
 
-    // If a dataset was already ingested (persisted), skip the upload step and
-    // show the analysis menu directly — no need to re-upload after a reload.
-    if (state.datasetId) {
-        qs('#stepValidation').hidden = false;
-        qs('#validatedBlock').hidden = false;
-        const note = qs('#runNote');
-        note.className = 'form-note success';
-        note.textContent = 'Tu archivo sigue cargado. Elige un análisis (o sube otro archivo arriba).';
-    }
-
-    // Brings back the exact screen the user was reading before a reload or a
-    // re-login: the view only changes when they choose another analysis.
+    // Which cached analysis belongs to each section, so a reload lands the user
+    // back where they were instead of on an empty screen.
     const VIEW_TO_KIND = {
         stepDashboard: 'summary',
         stepOpportunities: 'opportunities',
@@ -433,25 +630,33 @@ document.addEventListener('DOMContentLoaded', () => {
         summary: {
             busy: 'Calculando…', running: 'Calculando el resumen comercial…',
             ready: 'Resumen comercial listo.', failed: 'No se pudo calcular el resumen.',
-            fetch: () => window.SD_API.get(
-                `${ANALYTICS_URL}/v1/analytics/summary/${encodeURIComponent(state.datasetId)}`),
+            fetch: () => window.SD_API.get(analysisUrl('summary')),
             render: renderCommercialSummary
         },
         opportunities: {
             busy: 'Analizando…', running: 'Ejecutando el motor de oportunidades…',
             ready: 'Oportunidades listas.', failed: 'El motor falló.',
-            fetch: () => window.SD_API.post(
-                `${ANALYTICS_URL}/v1/analytics/run/${encodeURIComponent(state.datasetId)}`),
+            fetch: () => window.SD_API.post(analysisUrl('run')),
             render: renderOpportunities
         },
         segmentation: {
             busy: 'Segmentando…', running: 'Segmentando clientes…',
             ready: 'Segmentación lista.', failed: 'No se pudo segmentar.',
-            fetch: () => window.SD_API.get(
-                `${ANALYTICS_URL}/v1/analytics/segmentation/${encodeURIComponent(state.datasetId)}`),
+            fetch: () => window.SD_API.get(analysisUrl('segmentation')),
             render: renderSegmentation
+        },
+        portfolio: {
+            busy: 'Revisando…', running: 'Revisando la salud de la cartera…',
+            ready: 'Salud de cartera lista.', failed: 'No se pudo revisar la cartera.',
+            fetch: () => window.SD_API.get(analysisUrl('portfolio')),
+            render: renderPortfolio
         }
     };
+
+    function analysisUrl(kind) {
+        return `${ANALYTICS_URL}/v1/analytics/${kind}/` +
+            `${encodeURIComponent(state.datasetId)}${analysisQuery()}`;
+    }
 
     /**
      * Shows an analysis, reusing the cached payload unless a recalculation is
@@ -501,36 +706,104 @@ document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', () => openAnalysis(button.dataset.recalc, button, true));
     });
 
+    // ---------- Reporting window ----------
+    // The bar stays hidden until an analysis reports which dates the file
+    // actually covers: offering a date picker before knowing the range invites
+    // the user to select a window with no sales in it.
+    function showPeriodBar(periodo) {
+        if (!periodo || !periodo.available_from) return;
+        state.available = periodo;
+        const bar = qs('#periodBar');
+        const from = qs('#periodFrom');
+        const to = qs('#periodTo');
+
+        [from, to].forEach((input) => {
+            input.min = periodo.available_from;
+            input.max = periodo.available_to;
+        });
+        from.value = state.period.from || '';
+        to.value = state.period.to || '';
+        bar.hidden = false;
+
+        qs('#periodNote').textContent = periodo.filtered
+            ? `Mostrando ${formatDateRange(periodo.from_date, periodo.to_date)} · ` +
+              `${formatInt(periodo.filas)} filas`
+            : `Datos disponibles: ${formatDateRange(periodo.available_from,
+                periodo.available_to)}`;
+    }
+
+    qs('#periodApply').addEventListener('click', () => {
+        const from = qs('#periodFrom').value;
+        const to = qs('#periodTo').value;
+        if (from && to && from > to) {
+            toast('La fecha "Desde" no puede ser posterior a "Hasta".', 'error');
+            return;
+        }
+        setPeriod({ from: from || null, to: to || null });
+        reopenCurrentAnalysis();
+    });
+
+    qs('#periodReset').addEventListener('click', () => {
+        qs('#periodFrom').value = '';
+        qs('#periodTo').value = '';
+        setPeriod({});
+        reopenCurrentAnalysis();
+    });
+
+    /**
+     * Recomputes whatever the user is looking at after the window changes. The
+     * cache was already dropped, so this always hits the API.
+     */
+    function reopenCurrentAnalysis() {
+        const kind = VIEW_TO_KIND[sessionStorage.getItem(VIEW_KEY)];
+        const trigger = qs('#periodApply');
+        if (!kind) {
+            toast('Período aplicado. Elige un análisis.', 'success');
+            return;
+        }
+        if (kind === 'forecast') loadForecast(trigger);
+        else openAnalysis(kind, trigger, true);
+    }
+
     // ---------- Segmentation ----------
-    const TIER_COLOR = { Alto: '#2d7d46', Medio: '#c4a378', Bajo: '#c0392b' };
+    // The backend reports the tier as a code; the colour and the Spanish
+    // wording live here, like every other label.
+    const TIER_COLOR = { HIGH: '#2d7d46', MEDIUM: '#c4a378', LOW: '#c0392b' };
+    const TIER_LABELS = { HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo' };
+
+    function tierLabel(code) {
+        return TIER_LABELS[code] || code || '';
+    }
     let segmentClients = [];
     let segmentTotal = 0;
     let segmentAllClients = 0;
 
     function renderSegmentation(data) {
         const tiers = data.tiers || [];
-        segmentClients = data.clientes || [];
-        segmentTotal = tiers.reduce((sum, tier) => sum + (Number(tier.monto) || 0), 0);
-        segmentAllClients = data.total_clientes || segmentClients.length;
+        segmentClients = data.clients || [];
+        segmentTotal = tiers.reduce((sum, tier) => sum + (Number(tier.amount) || 0), 0);
+        segmentAllClients = data.total_clients || segmentClients.length;
 
         // KPI per tier: client count + sales share.
         const kpiBox = qs('#segmentKpis');
         kpiBox.innerHTML = '';
         kpiBox.appendChild(metricCard({
-            label: 'Clientes totales', value: formatInt(data.total_clientes || 0)
+            label: 'Clientes totales', value: formatInt(data.total_clients || 0)
         }));
         tiers.forEach((tier) => kpiBox.appendChild(metricCard({
-            label: `Segmento ${tier.tier}`,
-            value: `${formatInt(tier.clientes)} · ${tier.porcentaje}%`,
-            hint: `${formatCurrency(tier.monto)} de venta`
+            label: `Segmento ${tierLabel(tier.tier)}`,
+            value: `${formatInt(tier.clients)} · ${formatDecimal(tier.percentage, 1)}%`,
+            hint: `${formatCurrency(tier.amount)} de venta`
         })));
 
         // Doughnut of sales share by tier.
         makeChart('chartSegmentos', {
             type: 'doughnut',
             data: {
-                labels: tiers.map((t) => `${t.tier} (${t.porcentaje}%)`),
-                datasets: [{ data: tiers.map((t) => t.monto),
+                labels: tiers.map(
+                    (t) => `${tierLabel(t.tier)} (${formatDecimal(t.percentage, 1)}%)`
+                ),
+                datasets: [{ data: tiers.map((t) => t.amount),
                     backgroundColor: tiers.map((t) => TIER_COLOR[t.tier] || BRAND[0]) }]
             },
             options: { responsive: true, plugins: { legend: { position: 'right' } } }
@@ -548,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const search = qs('#segmentSearch').value.trim().toLowerCase();
         return segmentClients.filter((client) =>
             (!tier || client.tier === tier) &&
-            (!search || String(client.cliente).toLowerCase().includes(search)));
+            (!search || String(client.client).toLowerCase().includes(search)));
     }
 
     function renderSegmentTable() {
@@ -565,22 +838,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 '<tr class="empty-row"><td colspan="7">Sin clientes para ese filtro.</td></tr>';
         }
         pageRows.forEach((client, index) => {
-            const compras = Number(client.compras) || 0;
-            const monto = Number(client.monto) || 0;
-            const ticket = compras ? monto / compras : 0;
-            const share = segmentTotal ? (monto / segmentTotal) * 100 : 0;
+            const purchases = Number(client.purchases) || 0;
+            const amount = Number(client.amount) || 0;
+            const ticket = purchases ? amount / purchases : 0;
+            const share = segmentTotal ? (amount / segmentTotal) * 100 : 0;
             const tr = document.createElement('tr');
             tr.innerHTML = `<td class="rank-cell">${start + index + 1}</td>` +
-                `<td>${escapeHtml(client.cliente)}</td>` +
-                `<td><span class="tier-badge tier-${client.tier}">${client.tier}</span></td>` +
-                `<td class="numeric">${formatInt(compras)}</td>` +
-                `<td class="numeric strong">${formatCurrency(monto)}</td>` +
+                `<td>${escapeHtml(client.client)}</td>` +
+                `<td><span class="tier-badge tier-${client.tier}">` +
+                `${escapeHtml(tierLabel(client.tier))}</span></td>` +
+                `<td class="numeric">${formatInt(purchases)}</td>` +
+                `<td class="numeric strong">${formatCurrency(amount)}</td>` +
                 `<td class="numeric">${formatCurrency(ticket)}</td>` +
                 `<td class="numeric">${share.toFixed(2)}%</td>`;
             tbody.appendChild(tr);
         });
         // The API caps the client list, so say so instead of letting the user
-        // wonder why the "Bajo" tier looks smaller than its KPI card.
+        // wonder why the lowest tier looks smaller than its KPI card.
         qs('#segmentCount').textContent = segmentClients.length < segmentAllClients
             ? `${formatInt(rows.length)} en pantalla · se listan los ` +
               `${formatInt(segmentClients.length)} clientes de mayor valor ` +
@@ -611,7 +885,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cached) {
             restoreForecastControls(cached.payload.params);
             renderForecast(cached.payload.data);
-            qs('#forecastNote').textContent = `Método: ${cached.payload.data.method_label} · ` +
+            qs('#forecastNote').textContent =
+                `Método: ${FORECAST_METHODS[cached.payload.data.method] || ''} · ` +
                 `${cached.payload.data.months_ahead} meses proyectados. ` +
                 'Pulsa "Actualizar" para recalcular.';
             return;
@@ -640,13 +915,16 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             const group = qs('#forecastGroup').value;
             if (group) params.group_by = group;
+            if (state.period.from) params.date_from = state.period.from;
+            if (state.period.to) params.date_to = state.period.to;
             const data = await window.SD_API.get(
                 `${ANALYTICS_URL}/v1/analytics/forecast/${encodeURIComponent(state.datasetId)}`,
                 params
             );
             cacheResult('forecast', { data, params });
             renderForecast(data);
-            note.textContent = `Método: ${data.method_label} · ${data.months_ahead} meses proyectados.`;
+            note.textContent = `Método: ${FORECAST_METHODS[data.method] || ''} · ` +
+                `${data.months_ahead} meses proyectados.`;
         } catch (error) {
             note.classList.add('error');
             note.textContent = error.message || 'No se pudo calcular el pronóstico.';
@@ -668,20 +946,20 @@ document.addEventListener('DOMContentLoaded', () => {
         series.forEach((serie, index) => {
             const card = document.createElement('div');
             card.className = 'chart-card';
-            const total = formatCurrency(serie.total_pronosticado);
-            card.innerHTML = `<h3 class="chart-title">${escapeHtml(serie.nombre)} ` +
+            const total = formatCurrency(serie.total_forecast);
+            card.innerHTML = `<h3 class="chart-title">${escapeHtml(serie.name || 'Total')} ` +
                 `<span class="chart-sub">· proyección ${escapeHtml(total)}</span></h3>` +
                 `<canvas id="forecast_${index}"></canvas>`;
             container.appendChild(card);
 
-            const hist = serie.historico || [];
-            const fore = serie.pronostico || [];
+            const hist = serie.history || [];
+            const fore = serie.forecast || [];
             // Continuous x-axis: historical months then projected months. The
             // forecast line starts from the last historical point for continuity.
-            const labels = hist.map((p) => p.mes).concat(fore.map((p) => p.mes));
-            const histData = hist.map((p) => p.monto).concat(fore.map(() => null));
-            const foreData = hist.map((p, i) => (i === hist.length - 1 ? p.monto : null))
-                .concat(fore.map((p) => p.monto));
+            const labels = hist.map((p) => p.month).concat(fore.map((p) => p.month));
+            const histData = hist.map((p) => p.amount).concat(fore.map(() => null));
+            const foreData = hist.map((p, i) => (i === hist.length - 1 ? p.amount : null))
+                .concat(fore.map((p) => p.amount));
             makeChart(`forecast_${index}`, {
                 type: 'line',
                 data: {
@@ -728,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ranking = [...byCategory.values()].sort((a, b) => b.value - a.value);
         return {
             count: summary.total_opportunities || 0,
-            pdvs: summary.total_pdvs_with_opportunities || 0,
+            pdvs: summary.total_pos_with_opportunities || 0,
             totalValue: summary.total_expected_value,
             topCategory: ranking[0] || null,
             top3: ranking.slice(0, 3)
@@ -777,7 +1055,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             {
                 label: 'Puntos de venta',
-                value: formatInt(summary.total_pdvs_with_opportunities || 0),
+                value: formatInt(summary.total_pos_with_opportunities || 0),
                 hint: 'Con al menos una recomendación'
             },
             {
@@ -808,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const byProduct = new Map();
         opportunities.forEach((opp) => {
             const key = opp.recommended_product_name || opp.recommended_product_id || '—';
-            const group = byProduct.get(key) || { producto: key, total: 0, stores: [] };
+            const group = byProduct.get(key) || { product: key, total: 0, stores: [] };
             group.total += Number(opp.expected_drop_size_amount) || 0;
             group.stores.push(opp);
             byProduct.set(key, group);
@@ -825,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const filterText = qs('#pdvFilter').value.trim().toLowerCase();
         let groups = groupOpportunitiesByProduct(state.opportunities);
         if (filterText) {
-            groups = groups.filter((g) => g.producto.toLowerCase().includes(filterText));
+            groups = groups.filter((g) => g.product.toLowerCase().includes(filterText));
         }
         qs('#filterCount').textContent =
             `${formatInt(groups.length)} producto(s) · ` +
@@ -840,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.className = 'product-row';
             row.innerHTML =
                 `<td><button type="button" class="expand-btn" data-idx="${index}">▸</button>
-                    <strong>${escapeHtml(group.producto)}</strong></td>
+                    <strong>${escapeHtml(group.product)}</strong></td>
                  <td class="numeric">${formatInt(group.stores.length)}</td>
                  <td class="numeric strong">${formatCurrency(group.total)}</td>
                  <td class="based-on">Ofrecer a estos comercios en la próxima visita</td>`;
@@ -882,9 +1160,57 @@ document.addEventListener('DOMContentLoaded', () => {
         '#5e6580', '#8a5a3a', '#3a5a8a', '#6a8a4a', '#a07040'];
     const chartRegistry = {};
 
+    // A KPI without a value is not zero: a percentage variation with no base
+    // period is undefined, and rendering it as 0% would state something false.
     function formatKpi(card) {
+        if (card.value == null || isNaN(card.value)) return '—';
         if (card.format === 'money') return formatCurrency(card.value);
+        if (card.format === 'percent') return `${formatDecimal(card.value, 1)}%`;
+        if (card.format === 'decimal') return formatDecimal(card.value, 2);
         return formatInt(card.value);
+    }
+
+    // es-BO writes 22,2 — not 22.2. Mixing separators inside the same dashboard
+    // ("Bs 254.641,43" next to "22.2%") reads as a bug to a Bolivian user.
+    function formatDecimal(value, decimals) {
+        return Number(value).toLocaleString('es-BO', {
+            minimumFractionDigits: decimals, maximumFractionDigits: decimals
+        });
+    }
+
+    /** Signed percentage with its direction, for variation cells. */
+    function formatDelta(value, suffix = '%') {
+        if (value == null || isNaN(value)) return '—';
+        const number = Number(value);
+        const sign = number > 0 ? '+' : '';
+        return `${sign}${formatDecimal(number, 1)}${suffix}`;
+    }
+
+    function deltaClass(value) {
+        if (value == null || isNaN(value)) return '';
+        return Number(value) >= 0 ? 'delta-up' : 'delta-down';
+    }
+
+    /** Fills a table body from rows, building each cell from `cells(row)`. */
+    function fillTable(tableId, rows, cells) {
+        const tbody = qs(`#${tableId} tbody`);
+        tbody.innerHTML = '';
+        (rows || []).forEach((row) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = cells(row);
+            tbody.appendChild(tr);
+        });
+    }
+
+    function fillKpis(containerId, cards, variantFor) {
+        const box = qs('#' + containerId);
+        box.innerHTML = '';
+        (cards || []).forEach((card) => box.appendChild(metricCard({
+            label: kpiLabel(card),
+            value: formatKpi(card),
+            hint: kpiHint(card),
+            variant: variantFor ? variantFor(card) : ''
+        })));
     }
 
     function makeChart(canvasId, config) {
@@ -898,18 +1224,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const kpiBox = qs('#dashboardKpis');
         kpiBox.innerHTML = '';
         (data.kpis || []).forEach((card) => kpiBox.appendChild(metricCard({
-            label: card.label, value: formatKpi(card), hint: card.hint,
-            variant: card.label === 'Venta total' ? 'success' : ''
+            label: kpiLabel(card), value: formatKpi(card), hint: kpiHint(card),
+            variant: card.metric_code === 'TOTAL_SALES' ? 'success' : ''
         })));
 
         // Monthly trend (line)
-        const trend = data.tendencia_mensual || [];
+        const trend = data.monthly_trend || [];
         makeChart('chartTrend', {
             type: 'line',
             data: {
-                labels: trend.map((p) => p.mes),
+                labels: trend.map((p) => p.month),
                 datasets: [{
-                    label: 'Venta (Bs)', data: trend.map((p) => p.monto),
+                    label: 'Venta (Bs)', data: trend.map((p) => p.amount),
                     borderColor: BRAND[0], backgroundColor: 'rgba(13,30,76,0.1)',
                     fill: true, tension: 0.3
                 }]
@@ -918,40 +1244,325 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Category distribution (doughnut)
-        const cat = data.por_categoria || [];
+        const cat = data.by_category || [];
         makeChart('chartCategoria', {
             type: 'doughnut',
             data: {
-                labels: cat.map((c) => c.label),
-                datasets: [{ data: cat.map((c) => c.monto), backgroundColor: BRAND }]
+                labels: cat.map((c) => dimensionLabel(c.label)),
+                datasets: [{ data: cat.map((c) => c.amount), backgroundColor: BRAND }]
             },
             options: { responsive: true, plugins: { legend: { position: 'right' } } }
         });
 
         // Top products / top clients / sellers (horizontal bars)
-        horizontalBar('chartTopProductos', data.top_productos, 'Venta (Bs)');
-        horizontalBar('chartTopClientes', data.mejor_cliente, 'Venta (Bs)');
-        horizontalBar('chartVendedor', (data.por_vendedor || []).slice(0, 10), 'Venta (Bs)', 'monto');
+        horizontalBar('chartTopProductos', data.top_products, 'Venta (Bs)');
+        horizontalBar('chartTopClientes', data.best_clients, 'Venta (Bs)');
+        horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), 'Venta (Bs)');
 
         // Bottom products (table)
-        const tbody = qs('#bottomProductosTable tbody');
-        tbody.innerHTML = '';
-        (data.bottom_productos || []).forEach((row) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${escapeHtml(row.label)}</td>` +
-                `<td class="numeric">${formatCurrency(row.monto)}</td>`;
-            tbody.appendChild(tr);
-        });
+        fillTable('bottomProductosTable', data.bottom_products, (row) =>
+            `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>`);
+
+        showPeriodBar(data.period);
+        renderMargin(data.margin);
+        renderGrowth(data.growth);
+        renderConcentration(data.concentration);
+        renderEfficiency(data.efficiency);
 
         showAnalysisView('stepDashboard');
     }
 
-    function horizontalBar(canvasId, rows, label, valueKey = 'monto') {
+    // ---------- Profitability ----------
+    function renderMargin(margen) {
+        // Hidden rather than zeroed: a file without unit costs has no margin,
+        // and "0%" would read as "you earn nothing".
+        const block = qs('#marginBlock');
+        if (!margen || !margen.available) {
+            block.hidden = true;
+            return;
+        }
+        block.hidden = false;
+
+        fillKpis('marginKpis', margen.kpis, (card) =>
+            card.metric_code === 'GROSS_MARGIN' ? 'success' : '');
+
+        const categories = margen.by_category || [];
+        makeChart('chartMargenCategoria', {
+            type: 'bar',
+            data: {
+                labels: categories.map((row) => dimensionLabel(row.label)),
+                datasets: [
+                    {
+                        label: 'Venta (Bs)', data: categories.map((row) => row.amount),
+                        backgroundColor: BRAND[5]
+                    },
+                    {
+                        label: 'Margen (Bs)', data: categories.map((row) => row.margin),
+                        backgroundColor: BRAND[3]
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: { x: { stacked: false } }
+            }
+        });
+
+        fillTable('marginCategoryTable', categories, (row) =>
+            `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric hero">${formatCurrency(row.margin)}</td>` +
+            `<td class="numeric">${formatDecimal(row.margin_percentage, 1)}%</td>`);
+
+        const alerts = margen.alerts || [];
+        qs('#marginAlerts').hidden = alerts.length === 0;
+        fillTable('marginAlertTable', alerts, (row) =>
+            `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric delta-down">${formatCurrency(row.margin)}</td>` +
+            `<td>${escapeHtml(MARGIN_ALERT_REASONS[row.reason_code] || '')}</td>`);
+    }
+
+    // ---------- Growth ----------
+    function renderGrowth(crecimiento) {
+        const block = qs('#growthBlock');
+        const series = (crecimiento && crecimiento.monthly_change) || [];
+        if (!series.length) {
+            block.hidden = true;
+            return;
+        }
+        block.hidden = false;
+
+        fillKpis('growthKpis', crecimiento.kpis, (card) => {
+            if (card.format !== 'percent' || card.value == null) return '';
+            return card.value >= 0 ? 'success' : 'warning';
+        });
+
+        makeChart('chartGrowth', {
+            type: 'bar',
+            data: {
+                labels: series.map((point) => point.month),
+                datasets: [{
+                    label: 'Variación (%)',
+                    data: series.map((point) => point.change),
+                    backgroundColor: series.map((point) =>
+                        (point.change || 0) >= 0 ? BRAND[3] : '#c0392b')
+                }]
+            },
+            options: chartOptions('percent')
+        });
+
+        // Seasonality needs a full year of history; without it the engine sends
+        // nothing and the card would otherwise render an empty canvas.
+        const seasonality = crecimiento.seasonality || [];
+        qs('#seasonalityCard').hidden = seasonality.length === 0;
+        if (seasonality.length) {
+            makeChart('chartSeasonality', {
+                type: 'line',
+                data: {
+                    labels: seasonality.map((row) => row.month),
+                    datasets: [{
+                        label: 'Índice', data: seasonality.map((row) => row.index_value),
+                        borderColor: BRAND[1], backgroundColor: 'rgba(122,74,42,0.12)',
+                        fill: true, tension: 0.35
+                    }]
+                },
+                options: chartOptions('decimal')
+            });
+        }
+
+        const mix = crecimiento.category_mix || [];
+        qs('#mixCard').hidden = mix.length === 0;
+        fillTable('mixTable', mix, (row) =>
+            `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
+            `<td class="numeric">${formatDecimal(row.current_share, 1)}%</td>` +
+            `<td class="numeric ${deltaClass(row.share_change)}">` +
+            `${formatDelta(row.share_change, ' pp')}</td>` +
+            `<td class="numeric">${formatCurrency(row.current_amount)}</td>`);
+    }
+
+    // ---------- Concentration ----------
+    function renderConcentration(concentracion) {
+        const block = qs('#concentrationBlock');
+        const clients = (concentracion && concentracion.clients) || {};
+        if (!clients.total_clients) {
+            block.hidden = true;
+            return;
+        }
+        block.hidden = false;
+
+        fillKpis('concentrationKpis', [
+            { label: 'Clientes', value: clients.total_clients, format: 'int' },
+            {
+                label: 'Peso del top 10', value: clients.top10_percentage, format: 'percent',
+                hint: 'Qué parte de la venta hacen tus 10 mayores clientes'
+            },
+            {
+                label: 'Clientes que hacen el 80%', value: clients.pareto_clients,
+                format: 'int',
+                hint: `El ${formatDecimal(clients.pareto_client_percentage, 1)}% de la cartera`
+            }
+        ]);
+
+        qs('#hhiReading').textContent = CONCENTRATION_LEVELS[clients.hhi_level] || '';
+
+        const abc = (concentracion.abc && concentracion.abc.summary) || [];
+        makeChart('chartAbc', {
+            type: 'doughnut',
+            data: {
+                labels: abc.map((row) => `Clase ${row.abc_class}`),
+                datasets: [{
+                    data: abc.map((row) => row.amount),
+                    backgroundColor: [BRAND[3], BRAND[2], BRAND[5]]
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'right' } } }
+        });
+
+        fillTable('abcTable', abc, (row) =>
+            `<td><span class="badge badge-${row.abc_class.toLowerCase()}">${row.abc_class}</span></td>` +
+            `<td class="numeric">${formatInt(row.products)}</td>` +
+            `<td class="numeric">${formatDecimal(row.percentage, 1)}%</td>` +
+            `<td class="cell-note">${escapeHtml(ABC_DESCRIPTIONS[row.abc_class] || '')}</td>`);
+    }
+
+    // ---------- Efficiency ----------
+    function renderEfficiency(eficiencia) {
+        const block = qs('#efficiencyBlock');
+        const kpis = (eficiencia && eficiencia.kpis) || [];
+        if (!kpis.length) {
+            block.hidden = true;
+            return;
+        }
+        block.hidden = false;
+        fillKpis('efficiencyKpis', kpis);
+
+        fillTable('sellerTable', eficiencia.sellers, (row) =>
+            `<td>${escapeHtml(row.seller)}</td>` +
+            `<td class="numeric hero">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric">${formatInt(row.orders)}</td>` +
+            `<td class="numeric">${formatInt(row.clients)}</td>` +
+            `<td class="numeric">${formatCurrency(row.average_ticket)}</td>`);
+
+        const prices = eficiencia.prices || [];
+        qs('#priceCard').hidden = prices.length === 0;
+        fillTable('priceTable', prices.slice(0, 15), (row) =>
+            `<td>${escapeHtml(row.product)}</td>` +
+            `<td class="numeric">${formatCurrency(row.previous_price)}</td>` +
+            `<td class="numeric">${formatCurrency(row.current_price)}</td>` +
+            `<td class="numeric ${deltaClass(row.change)}">${formatDelta(row.change)}</td>`);
+    }
+
+    // ---------- Portfolio health ----------
+    const RISK_PAGE_SIZE = 15;
+    let riskClients = [];
+    let riskPage = 0;
+
+    function renderPortfolio(data) {
+        fillKpis('portfolioKpis', data.kpis, (card) =>
+            card.metric_code === 'CLIENTS_AT_RISK' ? 'warning' : '');
+
+        const movement = data.movement || [];
+        makeChart('chartMovement', {
+            type: 'bar',
+            data: {
+                labels: movement.map((row) => row.month),
+                datasets: [
+                    {
+                        label: 'Nuevos', data: movement.map((row) => row.new_clients),
+                        backgroundColor: BRAND[3]
+                    },
+                    {
+                        label: 'Recuperados', data: movement.map((row) => row.recovered),
+                        backgroundColor: BRAND[2]
+                    },
+                    {
+                        label: 'Perdidos', data: movement.map((row) => -row.lost),
+                        backgroundColor: '#c0392b'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: { x: { stacked: true }, y: { stacked: true } }
+            }
+        });
+
+        makeChart('chartActive', {
+            type: 'line',
+            data: {
+                labels: movement.map((row) => row.month),
+                datasets: [{
+                    label: 'Clientes activos', data: movement.map((row) => row.active),
+                    borderColor: BRAND[0], backgroundColor: 'rgba(13,30,76,0.1)',
+                    fill: true, tension: 0.3
+                }]
+            },
+            // Counts are anchored at zero on purpose: letting Chart.js pick the
+            // range turned a 9-client change into a visual cliff, which reads as
+            // a collapse the data does not support.
+            options: {
+                ...chartOptions('int'),
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        riskClients = data.at_risk || [];
+        riskPage = 0;
+        renderRiskTable();
+
+        // Kept in its own table: a client gone half a year is a campaign, not a
+        // visit, and mixing them buries the names worth chasing this week.
+        const lost = data.lost || [];
+        qs('#lostCard').hidden = lost.length === 0;
+        fillTable('lostTable', lost, (row) =>
+            `<td>${escapeHtml(row.client)}</td>` +
+            `<td class="numeric">${formatCurrency(row.monthly_average_amount)}</td>` +
+            `<td class="numeric">${escapeHtml(row.last_purchase || '—')}</td>` +
+            `<td class="numeric">${formatInt(row.days_without_purchase)}</td>`);
+
+        showAnalysisView('stepPortfolio');
+    }
+
+    function renderRiskTable() {
+        const term = (qs('#riskSearch').value || '').trim().toLowerCase();
+        const rows = term
+            ? riskClients.filter((row) => (row.client || '').toLowerCase().includes(term))
+            : riskClients;
+        const pages = Math.max(Math.ceil(rows.length / RISK_PAGE_SIZE), 1);
+        riskPage = Math.min(Math.max(riskPage, 0), pages - 1);
+        const slice = rows.slice(riskPage * RISK_PAGE_SIZE, (riskPage + 1) * RISK_PAGE_SIZE);
+
+        fillTable('riskTable', slice, (row) =>
+            `<td>${escapeHtml(row.client)}</td>` +
+            `<td class="numeric">${formatCurrency(row.monthly_average_amount)}</td>` +
+            `<td class="numeric">${formatCurrency(row.last_month_amount)}</td>` +
+            `<td class="numeric ${deltaClass(row.change)}">${formatDelta(row.change)}</td>` +
+            `<td class="numeric">${formatInt(row.days_without_purchase)}</td>` +
+            `<td class="cell-note">${escapeHtml(riskReasonText(row))}</td>`);
+
+        qs('#riskPager').innerHTML =
+            `<button type="button" class="btn btn-ghost btn-small" id="riskPrev"` +
+            `${riskPage === 0 ? ' disabled' : ''}>‹ Anterior</button>` +
+            `<span class="pager-info">${formatInt(rows.length)} clientes · ` +
+            `página ${riskPage + 1} de ${pages}</span>` +
+            `<button type="button" class="btn btn-ghost btn-small" id="riskNext"` +
+            `${riskPage >= pages - 1 ? ' disabled' : ''}>Siguiente ›</button>`;
+        qs('#riskPrev').addEventListener('click', () => { riskPage -= 1; renderRiskTable(); });
+        qs('#riskNext').addEventListener('click', () => { riskPage += 1; renderRiskTable(); });
+    }
+
+    qs('#riskSearch').addEventListener('input', () => { riskPage = 0; renderRiskTable(); });
+
+    function horizontalBar(canvasId, rows, label, valueKey = 'amount') {
         const items = rows || [];
         makeChart(canvasId, {
             type: 'bar',
             data: {
-                labels: items.map((r) => r.label),
+                labels: items.map((r) => dimensionLabel(r.label)),
                 datasets: [{ label, data: items.map((r) => r[valueKey]), backgroundColor: BRAND[1] }]
             },
             options: { ...chartOptions('money'), indexAxis: 'y' }
@@ -965,9 +1576,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: (ctx) => format === 'money'
-                            ? formatCurrency(ctx.parsed.y ?? ctx.parsed.x ?? ctx.parsed)
-                            : String(ctx.parsed.y ?? ctx.parsed.x ?? ctx.parsed)
+                        label: (ctx) => {
+                            const value = ctx.parsed.y ?? ctx.parsed.x ?? ctx.parsed;
+                            if (format === 'money') return formatCurrency(value);
+                            if (format === 'percent') return formatDelta(value);
+                            if (format === 'int') return formatInt(value);
+                            return String(value);
+                        }
                     }
                 }
             }
@@ -1020,39 +1635,11 @@ document.addEventListener('DOMContentLoaded', () => {
             .replaceAll("'", '&#039;');
     }
 
-    // ---------- Session countdown ----------
-    // The session used to die silently and bounce the user to the login screen
-    // mid-analysis. Showing the remaining time makes that predictable.
-    const SESSION_WARNING_MINUTES = 10;
-    let sessionWarned = false;
-
-    function renderSessionChip() {
-        const chip = qs('#sessionChip');
-        const expiry = window.SD_AUTH.getSessionExpiry();
-        if (!expiry) {
-            chip.hidden = true;
-            return;
-        }
-        const minutes = Math.floor((expiry.getTime() - Date.now()) / 60000);
-        chip.hidden = false;
-        chip.classList.toggle('warning', minutes <= SESSION_WARNING_MINUTES);
-        if (minutes <= 0) {
-            chip.textContent = '⏱ Sesión expirada — vuelve a entrar';
-            return;
-        }
-        chip.textContent = minutes >= 60
-            ? `⏱ Sesión: ${Math.floor(minutes / 60)} h ${minutes % 60} min`
-            : `⏱ Sesión: ${minutes} min`;
-        if (minutes <= SESSION_WARNING_MINUTES && !sessionWarned) {
-            sessionWarned = true;
-            toast(`Tu sesión expira en ${minutes} min. Tus resultados quedan guardados: ` +
-                'vuelve a entrar y verás la misma pantalla.', 'info', 9000);
-        }
-    }
-
     // ---------- Init ----------
     // Runs last so every helper and configuration object above already exists.
-    renderSessionChip();
-    setInterval(renderSessionChip, 60000);
+    window.SD_SESSION.mountChip(
+        'sessionChip',
+        'Tus resultados quedan guardados: vuelve a entrar y verás la misma pantalla.'
+    );
     if (state.datasetId) restoreLastView();
 });

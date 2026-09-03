@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotizaciones y proyecciones — SmartDecisions Demo</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=6dea3d8c49">
+    <link rel="stylesheet" href="minerales.css?v=b31ac68a91">
+    <link rel="icon" type="image/png" sizes="64x64" href="../../assets/favicon-bear-64.png?v=5">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../assets/favicon-bear-32.png?v=5">
+    <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png?v=5">
+    <script src="../js/config.js?v=6f757ca564"></script>
+    <script src="../js/auth.js?v=ee49f43985" defer></script>
+    <script src="../js/api.js?v=3ed1e6bc89" defer></script>
+    <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=d7c1fcdca6" defer></script>
+    <script src="minerales.js?v=2bcd17e166" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="../home.html" class="brand">
+            <img src="../../assets/bear-face.jpg" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <a href="../home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <span class="session-chip" id="sessionChip" hidden></span>
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Cotizaciones y proyecciones</h1>
+        <p class="page-subtitle">
+            El mineral se cotiza en dólares y el dólar se cotiza en bolivianos.
+            Puedes mirar cada uno por separado o los dos juntos, al plazo que
+            decidas, para responder la pregunta de fondo: ¿vendes hoy o esperas?
+        </p>
+
+        <!-- Shared controls: everything below reacts to these two. -->
+        <section class="card controls-card">
+            <div class="controls-row">
+                <div class="control">
+                    <label for="scopeSelect">Qué proyectar</label>
+                    <select id="scopeSelect">
+                        <option value="BOTH" selected>Minerales y dólar</option>
+                        <option value="MINERALS">Solo minerales</option>
+                        <option value="RATE">Solo dólar</option>
+                    </select>
+                </div>
+                <div class="control">
+                    <label for="daysInput">Plazo (días)</label>
+                    <input type="number" id="daysInput" min="1" max="90" step="1" value="30">
+                </div>
+                <button class="btn btn-primary" id="runButton">Proyectar</button>
+            </div>
+            <p class="control-hint">
+                Hasta 90 días. Más allá de un trimestre la proyección habla más de
+                la recta ajustada que del mercado.
+            </p>
+        </section>
+
+        <!-- Minerals -->
+        <section class="card panel" id="mineralsPanel" hidden>
+            <div class="panel-head">
+                <h2>Minerales — cotización oficial</h2>
+                <span class="panel-meta" id="mineralsMeta"></span>
+                <span class="ai-slot" id="mineralsAi"></span>
+            </div>
+            <p class="control-hint rule-note">
+                En Bolivia el precio oficial de una quincena es el
+                <strong>promedio de la quincena anterior</strong>: la media del 1
+                al 15 rige del 16 al 30, y la del 16 a fin de mes rige del 1 al 15
+                del mes siguiente. Es el precio con el que se liquida, y no es la
+                última cotización del día.
+            </p>
+            <div class="table-scroll">
+                <table class="data-table" id="mineralsTable">
+                    <thead>
+                        <tr>
+                            <th>Mineral</th>
+                            <th class="num">Oficial vigente</th>
+                            <th class="num">Próxima oficial</th>
+                            <th class="num">Cambio</th>
+                            <th class="num">Última diaria</th>
+                            <th>Confianza</th>
+                            <th>Tendencia</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Exchange rate -->
+        <section class="card panel" id="ratePanel" hidden>
+            <div class="panel-head">
+                <h2>Dólar oficial</h2>
+                <span class="panel-meta" id="rateMeta"></span>
+                <span class="ai-slot" id="rateAi"></span>
+            </div>
+            <div class="rate-figures" id="rateFigures"></div>
+            <div class="chart-holder" id="rateChart"></div>
+            <p class="control-hint">
+                La serie arranca el 27/06/2026, cuando el tipo de cambio dejó de
+                estar fijo. Los años previos pertenecen a otro régimen y no son
+                comparables con lo que vino después.
+            </p>
+        </section>
+
+        <!-- Sale scenario -->
+        <section class="card panel" id="scenarioPanel" hidden>
+            <div class="panel-head">
+                <h2>¿Vendo hoy o espero?</h2>
+                <span class="ai-slot" id="scenarioAi"></span>
+            </div>
+            <div class="controls-row">
+                <div class="control">
+                    <label for="mineralSelect">Mineral</label>
+                    <select id="mineralSelect"></select>
+                </div>
+                <div class="control">
+                    <label for="quantityInput">Cantidad</label>
+                    <input type="number" id="quantityInput" min="0" step="any" value="100">
+                </div>
+                <div class="control">
+                    <label for="priceInput">Precio unitario (USD)</label>
+                    <input type="number" id="priceInput" min="0" step="any">
+                </div>
+                <button class="btn btn-primary" id="scenarioButton">Comparar</button>
+            </div>
+            <p class="control-hint" id="scenarioHint"></p>
+            <div id="scenarioResult"></div>
+        </section>
+
+        <section class="card empty-state" id="errorState" hidden>
+            <h3>No se pudo cargar</h3>
+            <p id="errorText"></p>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

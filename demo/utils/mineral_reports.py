@@ -10,6 +10,7 @@
 import io
 import os
 from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
@@ -67,6 +68,10 @@ def _draw_centered(
     draw.text(origin, text, font = font, fill = color)
 
 
+# Bulletins publish two decimals; the source keeps four.
+_PRICE_QUANTUM: Decimal = Decimal('0.01')
+
+
 def _format_price(value: float) -> str:
     '''
     Renders prices with two decimals when fractional, no decimals when integral.
@@ -74,12 +79,18 @@ def _format_price(value: float) -> str:
     Antimonio / Wolfram quotes arrive as whole numbers (27000, 116355) while
     Oro keeps two decimals (4710.55); this rule lets the same formatter handle
     both without padding zeros on integers.
+
+    Rounds HALF_UP through Decimal, never with float formatting: prices are
+    stored with four decimals, and `f'{12.825:.2f}'` yields 12.82 because the
+    binary float behind that literal is 12.8249999…. A published bulletin
+    cannot round a half down.
     '''
     if value is None:
         return '—'
-    if abs(value - round(value)) < 1e-9:
-        return f'{int(round(value)):,}'
-    return f'{value:,.2f}'
+    amount = Decimal(str(value)).quantize(_PRICE_QUANTUM, rounding = ROUND_HALF_UP)
+    if amount == amount.to_integral_value():
+        return f'{int(amount):,}'
+    return f'{amount:,.2f}'
 
 
 def _format_date(value: Any) -> str:

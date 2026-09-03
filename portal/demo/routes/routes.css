@@ -1,141 +1,195 @@
-/* Module-specific styles for /demo/routes/. */
+/* Module-specific styles for /demo/routes/. Continues the shared demo.css palette. */
 
-/* ============ Layout: sidebar + map ============ */
+.container { max-width: 1400px; }
+
 .routes-layout {
     display: grid;
-    grid-template-columns: 340px 1fr;
-    gap: 1.4rem;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    gap: 1.25rem;
     align-items: start;
+    margin-top: 1.5rem;
+}
+@media (max-width: 900px) {
+    .routes-layout { grid-template-columns: 1fr; }
 }
 
-.routes-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-.routes-sidebar .card { margin: 0; }
-.routes-sidebar h3 { margin: 0 0 0.6rem; font-size: 1.05rem; }
+.routes-sidebar { display: grid; gap: 1rem; }
+.routes-main { display: grid; gap: 1rem; }
 
-.routes-map-wrapper {
-    position: relative;
-    border-radius: var(--radius);
-    overflow: hidden;
+.form-stack { display: grid; gap: 0.9rem; }
+.form-stack label { display: grid; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+.form-stack select,
+.form-stack input {
+    background: var(--bg);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg);
-    background: var(--bg-alt);
-}
-
-.routes-map {
-    width: 100%;
-    height: 640px;
-}
-
-/* Leaflet dark-theme attribution tweaks so it doesn't clash with the dark UI. */
-.leaflet-control-attribution {
-    background: rgba(11, 16, 32, 0.7) !important;
-    color: var(--muted) !important;
-    font-size: 0.7rem !important;
-}
-.leaflet-control-attribution a { color: var(--accent) !important; }
-.leaflet-container { background: var(--bg-alt); }
-.leaflet-popup-content-wrapper, .leaflet-popup-tip {
-    background: var(--panel-elevated);
     color: var(--text);
-    border: 1px solid var(--border);
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+    /* Without these a select's intrinsic width plus its padding pushes past the
+       sidebar column and the control gets clipped by the map. */
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
-.leaflet-popup-content {
-    font-family: var(--font);
-    font-size: 0.88rem;
-    margin: 0.7rem 0.9rem;
-}
-
-/* ============ Form ============ */
 .grid-2 {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.6rem;
 }
+.form-actions { display: flex; gap: 0.6rem; }
 
-/* ============ Toggle rows ============ */
-.toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.4rem 0;
-    font-size: 0.92rem;
-    color: var(--text);
-    cursor: pointer;
-}
-.toggle-row input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--accent);
-}
-.swatch {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
-    border: 1px solid var(--border-strong);
-}
-.swatch-original { background: #7a4a2a; }
-.swatch-optimized { background: var(--accent); }
-.swatch-points { background: #c8941d; border-radius: 50%; }
+/* --- Empty state when no sales file has been uploaded --- */
+.empty-state { text-align: center; padding: 2.5rem 1.5rem; }
+.empty-state h3 { margin-top: 0; }
+.empty-state p { color: var(--muted); max-width: 52ch; margin: 0 auto 1.2rem; }
 
-/* ============ Metric grid (summary) ============ */
-.metric-grid {
+/* --- Day selector --- */
+.day-list { display: grid; gap: 0.5rem; }
+.day-chip {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.6rem;
-}
-.metric {
+    gap: 0.15rem;
+    text-align: left;
+    padding: 0.6rem 0.8rem;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 0.7rem 0.8rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
-.metric-label {
+.day-chip:hover { border-color: var(--border-strong); }
+.day-chip.is-active {
+    border-color: var(--accent);
+    background: var(--panel-elevated);
+}
+.day-chip-title { font-weight: 600; color: var(--text-strong); }
+.day-chip-meta { font-size: 0.8rem; color: var(--muted); }
+
+/* --- Day summary strip --- */
+.day-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+}
+.day-summary .metric {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+}
+.day-summary .metric-label {
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.74rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.11em;
     margin: 0 0 0.3rem;
 }
-.metric-value {
-    margin: 0;
-    font-size: 1.15rem;
+.day-summary .metric-value {
+    font-size: 1.2rem;
     font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
+    margin: 0;
+    color: var(--text-strong);
+    letter-spacing: -0.02em;
 }
-.metric-value.accent { color: var(--accent); }
 
-/* ============ Map loader overlay ============ */
-.map-loader {
+/* --- Map --- */
+.routes-map-wrapper {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--panel);
+}
+.routes-map { height: 540px; width: 100%; }
+@media (max-width: 900px) {
+    .routes-map { height: 380px; }
+}
+.map-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(11, 16, 32, 0.6);
-    backdrop-filter: blur(2px);
+    display: grid;
+    place-items: center;
+    background: var(--panel-elevated);
+    color: var(--muted);
+    z-index: 500;
+    text-align: center;
+    padding: 1.5rem;
+}
+
+/* Numbered pin coloured by client value: the order to follow and who matters,
+   in the same glance. */
+.stop-pin-wrapper { background: transparent; border: 0; }
+.stop-pin {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.74rem;
+    font-weight: 700;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* --- Legend --- */
+.legend-hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 0.7rem; }
+.legend-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.8rem;
-    color: var(--text);
-    z-index: 500;
-    pointer-events: none;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    padding: 0.15rem 0;
 }
-.spinner {
-    width: 24px;
-    height: 24px;
-    border: 3px solid rgba(90, 214, 194, 0.25);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+.swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+.tier-high { background: #2d7d46; }
+.tier-medium { background: #c4a378; }
+.tier-low { background: #5e6580; }
 
-/* ============ Responsive ============ */
-@media (max-width: 920px) {
-    .routes-layout { grid-template-columns: 1fr; }
-    .routes-map { height: 460px; }
+.tier-badge {
+    display: inline-block;
+    padding: 0.12rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #fff;
 }
+.tier-badge.tier-high { background: #2d7d46; }
+.tier-badge.tier-medium { background: #c4a378; color: var(--text-strong); }
+.tier-badge.tier-low { background: #5e6580; }
+
+/* --- Stops table --- */
+.stops-card h3 { margin-top: 0; }
+.table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 560px; }
+.data-table thead th {
+    text-align: left;
+    padding: 0.7rem 0.9rem;
+    background: var(--panel-elevated);
+    color: var(--muted);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+.data-table tbody td {
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table .numeric { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The `hidden` attribute is only a default of display:none, and any rule that
+   sets `display` on the same element silently overrides it — the map overlay
+   stayed on top of the map, and the period bar showed before it had dates.
+   This makes hiding work regardless of what the layout rules say. */
+[hidden] { display: none !important; }

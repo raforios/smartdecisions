@@ -40,6 +40,13 @@
             const error = new Error(message);
             error.status = response.status;
             error.payload = payload;
+            // Services that follow the code contract answer with a stable
+            // SCREAMING_SNAKE code instead of a sentence; modules look it up in
+            // their own wording catalogue. Legacy services still send prose,
+            // which keeps travelling as the message.
+            if (typeof detail === 'string' && /^[A-Z][A-Z0-9_]+$/.test(detail)) {
+                error.code = detail;
+            }
             throw error;
         }
         return payload;

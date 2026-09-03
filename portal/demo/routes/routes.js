@@ -1,418 +1,272 @@
 'use strict';
 
 /**
- * Optimización de rutas — Leaflet + OSM frontend module.
+ * Rutas de visita — module logic.
  *
- * Pipeline:
- *   1. Usuario ingresa route_id + day + radio.
- *   2. Click "Cargar puntos" → GET /v1/optimization/data_model → markers + ruta
- *      original (polyline en orden client_id).
- *   3. Click "Optimizar"     → GET /v1/optimization/optimal_route → polyline
- *      con el orden propuesto por la heurística + métricas (paradas, distancia
- *      total, distancia promedio por segmento).
- *
- * El backend (services/optimization/) ya proyecta la ruta sobre el grafo OSM
- * usando osmnx; aquí dibujamos los segmentos lineales (origin→target con sus
- * coords) por simplicidad y costo cero de tiles. Para el road-aligned exacto
- * habría que extender el backend para retornar lat/lng de cada OSM node.
+ * The plan comes from the sales dataset the user already uploaded in the Excel
+ * module: same `dataset_id`, read from sessionStorage. There is no route_id or
+ * day to type in — the days are derived from where the clients are, which is
+ * what makes this module work with any client's file.
  */
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.requireAuth()) return;
 
-    const { qs, qsAll, toast, setButtonBusy } = window.SD_UI;
+    const { qs, toast, setButtonBusy } = window.SD_UI;
 
     qs('#userChip').textContent = window.SD_AUTH.getEmail() || 'usuario';
     qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
 
-    const OPT_URL = window.SD_CONFIG.OPTIMIZATION_URL;
+    const OPTIMIZATION_URL = window.SD_CONFIG.OPTIMIZATION_URL;
+    // Shared with the Excel module on purpose: one upload feeds every analysis.
+    const DATASET_KEY = 'sd_excel_dataset_id';
 
-    // ---------- Map setup ----------
-    const map = L.map('map', {
-        center: [-16.5000, -68.1500], // La Paz default
-        zoom: 14,
-        zoomControl: true,
-        attributionControl: true
-    });
+    // Tier arrives as a code; colour and wording belong to the UI.
+    const TIER_COLOR = { HIGH: '#2d7d46', MEDIUM: '#c4a378', LOW: '#5e6580' };
+    const TIER_LABELS = { HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo' };
 
-    // CartoDB Voyager tiles — light + color, matches the corporate theme.
-    const baseTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19
-    }).addTo(map);
+    // The service reports why it cannot build a plan with a stable code; the
+    // sentence belongs here, like every other label.
+    const ROUTE_ERRORS = {
+        MISSING_COORDINATES: 'El archivo no tiene coordenadas. Agrega las columnas ' +
+            'Latitud y Longitud para usar el módulo de rutas.',
+        NO_GEOCODED_CLIENTS: 'No hay clientes con coordenadas válidas para ese filtro.',
+        EMPTY_PERIOD: 'No hay ventas en el período seleccionado.',
+        EMPTY_UPLOAD: 'El archivo que subiste está vacío.',
+        EMPTY_CSV: 'El archivo CSV está vacío.',
+        EMPTY_POINT_LIST: 'La lista de puntos está vacía.',
+        INVALID_ROW: 'Una fila del archivo tiene valores inválidos.',
+        INVALID_POINT: 'Un punto del archivo tiene valores inválidos.',
+        ROUTING_SERVICE_UNAVAILABLE: 'El servicio de ruteo vial (OSRM) no está disponible.',
+        ROUTING_SERVICE_NO_ROUTE: 'No se encontró una ruta por calles para ese tramo.'
+    };
 
-    // Tile fallback: if the CartoDB CDN is unreachable, swap to the standard OSM
-    // tiles once so the map never renders as a blank grey canvas.
-    let tilesFellBack = false;
-    baseTiles.on('tileerror', () => {
-        if (tilesFellBack) return;
-        tilesFellBack = true;
-        map.removeLayer(baseTiles);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
-            maxZoom: 19
+    function errorText(error, fallback) {
+        return ROUTE_ERRORS[error && error.code] || (error && error.message) || fallback;
+    }
+    const ROUTE_COLOR = '#0d1e4c';
+
+    const state = { datasetId: sessionStorage.getItem(DATASET_KEY), plan: null, day: null };
+    let map = null;
+    let layer = null;
+
+    if (!state.datasetId) {
+        qs('#noDataset').hidden = false;
+        return;
+    }
+    qs('#plannerLayout').hidden = false;
+
+    // ---------- Map ----------
+    function ensureMap() {
+        if (map) return map;
+        map = window.L.map('map', { scrollWheelZoom: true }).setView([-16.5, -68.13], 13);
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
         }).addTo(map);
-    });
+        layer = window.L.layerGroup().addTo(map);
+        return map;
+    }
 
-    // Leaflet miscomputes its size when the map div is laid out (flex/grid) after
-    // init, which shows as a grey box with the markers/lines piled up. Force a
-    // recalculation once the layout settles and on every resize.
-    function refreshMapSize() { map.invalidateSize(false); }
-    requestAnimationFrame(refreshMapSize);
-    setTimeout(refreshMapSize, 300);
-    window.addEventListener('resize', refreshMapSize);
+    /**
+     * Leaflet measures its container on creation. The map lives inside a panel
+     * that starts hidden, so without this the tiles render into a zero-sized box
+     * and the map stays grey — the "se queda en modo carga" bug.
+     */
+    function refreshMapSize() {
+        setTimeout(() => { if (map) map.invalidateSize(); }, 0);
+    }
 
-    const layers = {
-        points: L.layerGroup().addTo(map),
-        original: L.layerGroup().addTo(map),
-        optimized: L.layerGroup().addTo(map)
-    };
-
-    const state = {
-        points: [],     // [{day, client_id, y, x, color}, ...]
-        segments: [],   // optimized result
-        routeId: null,
-        day: null,
-        dist: null
-    };
-
-    // ---------- Layer toggles ----------
-    function bindToggle(toggleId, layerKey) {
-        qs('#' + toggleId).addEventListener('change', (event) => {
-            const layer = layers[layerKey];
-            if (event.target.checked) map.addLayer(layer);
-            else map.removeLayer(layer);
+    function numberedIcon(stop) {
+        const color = TIER_COLOR[stop.segment] || TIER_COLOR.LOW;
+        return window.L.divIcon({
+            className: 'stop-pin-wrapper',
+            html: `<span class="stop-pin" style="background:${color}">${stop.stop_order}</span>`,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
         });
     }
-    bindToggle('togglePoints', 'points');
-    bindToggle('toggleOriginal', 'original');
-    bindToggle('toggleOptimized', 'optimized');
 
-    // ---------- Loader helpers ----------
-    function showLoader(text) {
-        qs('#mapLoaderText').textContent = text || 'Cargando…';
-        qs('#mapLoader').hidden = false;
+    function drawDay(day) {
+        ensureMap();
+        layer.clearLayers();
+
+        const stops = day.stops || [];
+        if (!stops.length) return;
+
+        stops.forEach((stop) => {
+            window.L.marker([stop.latitude, stop.longitude], { icon: numberedIcon(stop) })
+                .bindPopup(
+                    `<strong>${stop.stop_order}. ${escapeHtml(stop.client)}</strong><br>` +
+                    `Valor: ${escapeHtml(stop.segment)}<br>` +
+                    `Compró Bs ${formatMoney(stop.amount)}<br>` +
+                    `Última compra: ${escapeHtml(stop.last_purchase || '—')}`
+                )
+                .addTo(layer);
+        });
+
+        // The backend returns [lon, lat] along the streets; Leaflet wants
+        // [lat, lon]. When OSRM could not be reached the geometry is empty and
+        // we join the stops directly — a straight line is a degraded map, an
+        // empty one is a broken module.
+        const road = (day.geometry || []).map((pair) => [pair[1], pair[0]]);
+        const path = road.length ? road : stops.map((stop) => [stop.latitude, stop.longitude]);
+        window.L.polyline(path, {
+            color: ROUTE_COLOR, weight: road.length ? 4 : 2,
+            opacity: 0.85, dashArray: road.length ? null : '6 6'
+        }).addTo(layer);
+
+        map.fitBounds(window.L.latLngBounds(
+            stops.map((stop) => [stop.latitude, stop.longitude])
+        ), { padding: [30, 30] });
+        refreshMapSize();
     }
-    function hideLoader() { qs('#mapLoader').hidden = true; }
 
-    function setNote(message, variant) {
+    // ---------- Rendering ----------
+    function renderDayList(plan) {
+        const list = qs('#dayList');
+        list.innerHTML = '';
+        plan.days.forEach((day) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'day-chip' + (day.day === state.day ? ' is-active' : '');
+            button.dataset.day = String(day.day);
+            button.innerHTML =
+                `<span class="day-chip-title">Día ${day.day}</span>` +
+                `<span class="day-chip-meta">${day.stops.length} paradas · ` +
+                `${formatDecimal(day.distance_km)} km</span>`;
+            list.appendChild(button);
+        });
+        qs('#daysCard').hidden = false;
+        qs('#legendCard').hidden = false;
+    }
+
+    function renderDaySummary(day) {
+        const hours = Math.floor(day.duration_min / 60);
+        const minutes = Math.round(day.duration_min % 60);
+        qs('#daySummary').innerHTML =
+            metric('Paradas', String(day.stops.length)) +
+            metric('Recorrido', `${formatDecimal(day.distance_km)} km`) +
+            metric('Tiempo en ruta', hours ? `${hours} h ${minutes} min` : `${minutes} min`) +
+            metric('Compra del día', `Bs ${formatMoney(day.total_amount)}`);
+        qs('#daySummary').hidden = false;
+    }
+
+    function metric(label, value) {
+        return `<div class="metric"><p class="metric-label">${escapeHtml(label)}</p>` +
+               `<p class="metric-value">${escapeHtml(value)}</p></div>`;
+    }
+
+    function renderStops(day) {
+        const tbody = qs('#stopsTable tbody');
+        tbody.innerHTML = '';
+        day.stops.forEach((stop) => {
+            const row = document.createElement('tr');
+            row.innerHTML =
+                `<td class="numeric">${stop.stop_order}</td>` +
+                `<td>${escapeHtml(stop.client)}</td>` +
+                `<td><span class="tier-badge tier-${stop.segment.toLowerCase()}">` +
+                `${escapeHtml(TIER_LABELS[stop.segment] || stop.segment)}</span></td>` +
+                `<td class="numeric">Bs ${formatMoney(stop.amount)}</td>` +
+                `<td class="numeric">${escapeHtml(stop.last_purchase || '—')}</td>`;
+            tbody.appendChild(row);
+        });
+        qs('#stopsCard').hidden = false;
+    }
+
+    function selectDay(dayNumber) {
+        const day = state.plan.days.find((item) => item.day === dayNumber);
+        if (!day) return;
+        state.day = dayNumber;
+        renderDayList(state.plan);
+        renderDaySummary(day);
+        renderStops(day);
+        drawDay(day);
+    }
+
+    qs('#dayList').addEventListener('click', (event) => {
+        const chip = event.target.closest('.day-chip');
+        if (chip) selectDay(Number(chip.dataset.day));
+    });
+
+    // ---------- Plan request ----------
+    async function buildPlan() {
         const note = qs('#formNote');
-        note.className = 'form-note' + (variant ? ' ' + variant : '');
-        note.textContent = message || '';
-    }
+        note.className = 'form-note';
+        note.textContent = 'Agrupando clientes y calculando el recorrido…';
+        const done = setButtonBusy(qs('#planButton'), 'Calculando…');
 
-    function readForm() {
-        const form = qs('#routeForm');
-        return {
-            route_id: Number(form.elements.route_id.value),
-            day: Number(form.elements.day.value),
-            dist: Number(form.elements.dist.value)
-        };
-    }
+        try {
+            const params = { days: qs('#daysSelect').value };
+            const seller = qs('#sellerSelect').value;
+            if (seller) params.seller = seller;
+            if (qs('#planFrom').value) params.date_from = qs('#planFrom').value;
+            if (qs('#planTo').value) params.date_to = qs('#planTo').value;
 
-    // ---------- Drawing ----------
-    function clearAll() {
-        layers.points.clearLayers();
-        layers.original.clearLayers();
-        layers.optimized.clearLayers();
-    }
+            const plan = await window.SD_API.get(
+                `${OPTIMIZATION_URL}/v1/optimization/plan/` +
+                `${encodeURIComponent(state.datasetId)}`,
+                params
+            );
+            if (!plan.days || !plan.days.length) {
+                throw new Error('No se pudo armar ninguna ruta con esos filtros.');
+            }
 
-    function colorFor(point) {
-        if (point.color === 'red') return '#c0392b';
-        if (point.color === 'green') return '#2d7d46';
-        return '#c8941d';
-    }
+            state.plan = plan;
+            fillSellers(plan.sellers, seller);
+            qs('#mapOverlay').hidden = true;
+            selectDay(plan.days[0].day);
 
-    function drawPoints(points) {
-        layers.points.clearLayers();
-        points.forEach((point) => {
-            L.circleMarker([point.y, point.x], {
-                radius: point.color === 'red' || point.color === 'green' ? 9 : 7,
-                color: '#ffffff',
-                weight: 2,
-                fillColor: colorFor(point),
-                fillOpacity: 0.95
-            })
-                .bindPopup(
-                    `<strong>Cliente ${point.client_id}</strong><br>` +
-                    `día ${point.day}<br>` +
-                    `lat ${point.y.toFixed(5)}, lng ${point.x.toFixed(5)}`
-                )
-                .addTo(layers.points);
-        });
-
-        if (points.length === 0) return;
-        const bounds = L.latLngBounds(points.map((p) => [p.y, p.x]));
-        map.fitBounds(bounds, { padding: [40, 40] });
-    }
-
-    function drawOriginalRoute(points) {
-        layers.original.clearLayers();
-        if (points.length < 2) return;
-        // Visit order is the dataset's client_id order; mirrors the legacy notebook.
-        const sorted = [...points].sort((a, b) => a.client_id - b.client_id);
-        const latlngs = sorted.map((p) => [p.y, p.x]);
-        L.polyline(latlngs, {
-            color: '#7a4a2a',
-            weight: 3,
-            opacity: 0.85,
-            dashArray: '6 6'
-        })
-            .bindPopup('Ruta original (orden client_id)')
-            .addTo(layers.original);
-    }
-
-    function drawOptimizedRoute(segments) {
-        layers.optimized.clearLayers();
-        if (segments.length === 0) return;
-        // Each segment carries (y, x) and (y_next, x_next): the linear hop between
-        // two consecutive stops in the optimized visit order.
-        segments.forEach((seg) => {
-            L.polyline([[seg.y, seg.x], [seg.y_next, seg.x_next]], {
-                color: '#0d1e4c',
-                weight: 4,
-                opacity: 0.95
-            })
-                .bindPopup(
-                    `<strong>${seg.origin} → ${seg.target}</strong><br>` +
-                    `distance (graph): ${seg.distance.toFixed(1)} m<br>` +
-                    `linear: ${seg.time_seg.toFixed(1)} m`
-                )
-                .addTo(layers.optimized);
-        });
-    }
-
-    function renderSummary(segments) {
-        const card = qs('#summaryCard');
-        if (segments.length === 0) {
-            card.hidden = true;
-            return;
+            note.classList.add('success');
+            note.textContent = `${plan.total_clients} clientes repartidos en ` +
+                `${plan.days.length} días.`;
+        } catch (error) {
+            note.classList.add('error');
+            note.textContent = errorText(error, 'No se pudieron armar las rutas.');
+            toast(errorText(error, 'Error al armar las rutas.'), 'error');
+        } finally {
+            done();
         }
-        const totalDistance = segments.reduce((acc, s) => acc + (s.distance || 0), 0);
-        const totalLinear = segments.reduce((acc, s) => acc + (s.time_seg || 0), 0);
-        const stops = new Set();
-        segments.forEach((s) => { stops.add(s.origin); stops.add(s.target); });
-        const avgSegment = segments.length ? totalLinear / segments.length : 0;
+    }
 
-        const cards = [
-            { label: 'Paradas', value: String(stops.size), variant: 'accent' },
-            { label: 'Segmentos', value: String(segments.length) },
-            { label: 'Distancia total', value: formatMeters(totalDistance), variant: 'accent' },
-            { label: 'Lineal total', value: formatMeters(totalLinear) },
-            { label: 'Promedio / tramo', value: formatMeters(avgSegment) },
-            { label: 'OSM radio', value: `${state.dist} m` }
-        ];
-        const container = qs('#summaryMetrics');
-        container.innerHTML = '';
-        cards.forEach((card) => {
-            const node = document.createElement('div');
-            node.className = 'metric';
-            node.innerHTML = `
-                <p class="metric-label">${escapeHtml(card.label)}</p>
-                <p class="metric-value ${card.variant || ''}">${escapeHtml(card.value)}</p>
-            `;
-            container.appendChild(node);
+    function fillSellers(sellers, selected) {
+        const select = qs('#sellerSelect');
+        if (!sellers || !sellers.length || select.dataset.filled) return;
+        sellers.forEach((seller) => {
+            const option = document.createElement('option');
+            option.value = seller;
+            option.textContent = seller;
+            select.appendChild(option);
         });
-        card.hidden = false;
+        select.dataset.filled = '1';
+        if (selected) select.value = selected;
     }
 
-    function formatMeters(value) {
-        if (value == null || Number.isNaN(value)) return '—';
-        if (value >= 1000) return `${(value / 1000).toFixed(2)} km`;
-        return `${Math.round(value)} m`;
+    qs('#planButton').addEventListener('click', buildPlan);
+
+    // ---------- helpers ----------
+    function formatMoney(value) {
+        if (value == null || isNaN(value)) return '—';
+        return Number(value).toLocaleString('es-BO',
+            { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
+
+    function formatDecimal(value) {
+        if (value == null || isNaN(value)) return '—';
+        return Number(value).toLocaleString('es-BO',
+            { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    }
+
     function escapeHtml(value) {
-        return String(value)
-            .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-            .replaceAll("'", '&#039;');
+        return String(value == null ? '' : value)
+            .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
     }
 
-    // ---------- CSV upload ----------
-    const routeFileInput = qs('#routeFileInput');
-    const routeUploadZone = qs('#routeUploadZone');
-    const routeFileChip = qs('#routeFileChip');
-    const routeUploadButton = qs('#routeUploadButton');
-    const routeUploadNote = qs('#routeUploadNote');
-    let stagedRouteFile = null;
+    window.SD_SESSION.mountChip(
+        'sessionChip',
+        'El plan que estás viendo se vuelve a calcular al entrar de nuevo.'
+    );
 
-    qs('#routeChooseLink').addEventListener('click', (event) => {
-        event.preventDefault();
-        routeFileInput.click();
-    });
-    routeFileInput.addEventListener('change', () => {
-        const file = routeFileInput.files && routeFileInput.files[0];
-        if (file) stageRouteFile(file);
-    });
-    ['dragenter', 'dragover'].forEach((eventName) => {
-        routeUploadZone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            routeUploadZone.classList.add('dragover');
-        });
-    });
-    ['dragleave', 'drop'].forEach((eventName) => {
-        routeUploadZone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            routeUploadZone.classList.remove('dragover');
-        });
-    });
-    routeUploadZone.addEventListener('drop', (event) => {
-        const file = event.dataTransfer.files && event.dataTransfer.files[0];
-        if (file) stageRouteFile(file);
-    });
-    routeUploadZone.addEventListener('click', (event) => {
-        // Avoid double-trigger when clicking the inner anchor.
-        if (event.target.id === 'routeChooseLink') return;
-        routeFileInput.click();
-    });
-
-    function stageRouteFile(file) {
-        if (!/\.(csv|txt)$/i.test(file.name)) {
-            setRouteUploadNote('Solo se aceptan .csv o .txt.', 'error');
-            return;
-        }
-        stagedRouteFile = file;
-        routeFileChip.hidden = false;
-        routeFileChip.textContent = `${file.name} · ${formatBytes(file.size)}`;
-        routeUploadButton.disabled = false;
-        setRouteUploadNote('', '');
-    }
-
-    function setRouteUploadNote(message, variant) {
-        routeUploadNote.className = 'form-note' + (variant ? ' ' + variant : '');
-        routeUploadNote.textContent = message || '';
-    }
-
-    function formatBytes(bytes) {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
-
-    // Download a CSV template the user can fill in.
-    qs('#routeSampleButton').addEventListener('click', () => {
-        const sample = [
-            'route_id,day,client_id,latitude,longitude,client',
-            '2,1,101,-16.5000,-68.1500,Tienda Doña Rosa',
-            '2,1,102,-16.5050,-68.1450,Mini-market El Sol',
-            '2,1,103,-16.5100,-68.1400,Bodega Lupita',
-            '2,1,104,-16.5070,-68.1525,Almacén San Pedro',
-            '2,1,105,-16.4980,-68.1455,Tienda Esquina'
-        ].join('\n');
-        const blob = new Blob([sample], { type: 'text/csv;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'plantilla_puntos_ruta.csv';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        setRouteUploadNote('Plantilla descargada. Completá tus puntos y volvé a subir.', 'success');
-    });
-
-    routeUploadButton.addEventListener('click', async () => {
-        if (!stagedRouteFile) return;
-        const done = setButtonBusy(routeUploadButton, 'Subiendo…');
-        setRouteUploadNote('Subiendo CSV…', '');
-        showLoader('Subiendo CSV…');
-        try {
-            const formData = new FormData();
-            formData.append('file', stagedRouteFile);
-            const response = await window.SD_API.postFormData(
-                `${OPT_URL}/v1/optimization/routes/bulk-upload`,
-                formData
-            );
-            const writtenRoute = response.route_id;
-            const writtenDay = response.day;
-            const writtenCount = response.points_written;
-            // Mirror the just-uploaded (route_id, day) onto the form so a
-            // subsequent "Cargar puntos" hits the same partition.
-            const form = qs('#routeForm');
-            form.elements.route_id.value = writtenRoute;
-            form.elements.day.value = writtenDay;
-            setRouteUploadNote(
-                `OK — ${writtenCount} punto(s) escritos para route_id=${writtenRoute}, day=${writtenDay}.`,
-                'success'
-            );
-            toast(`CSV subido: ${writtenCount} punto(s).`, 'success');
-            // Auto-trigger the existing load flow so the map updates right away.
-            qs('#loadPointsButton').click();
-        } catch (error) {
-            setRouteUploadNote(error.message || 'Error al subir el CSV.', 'error');
-            toast(error.message || 'Error al subir el CSV.', 'error');
-        } finally {
-            hideLoader();
-            done();
-        }
-    });
-
-    // ---------- API actions ----------
-    qs('#loadPointsButton').addEventListener('click', async () => {
-        const params = readForm();
-        if (!params.route_id || params.day < 0) {
-            setNote('Completa route_id y day antes de cargar.', 'error');
-            return;
-        }
-        setNote('Consultando data_model…');
-        showLoader('Cargando puntos…');
-        const button = qs('#loadPointsButton');
-        const done = setButtonBusy(button, 'Cargando…');
-        try {
-            // GET helper from api.js — the response is a normalized JSON array.
-            const data = await window.SD_API.get(
-                `${OPT_URL}/v1/optimization/data_model`,
-                { route_id: params.route_id, day: params.day }
-            );
-            const points = Array.isArray(data) ? data : (data.data || []);
-            state.points = points;
-            state.routeId = params.route_id;
-            state.day = params.day;
-            state.dist = params.dist;
-
-            clearAll();
-            drawPoints(points);
-            drawOriginalRoute(points);
-            qs('#optimizeButton').disabled = points.length < 2;
-            qs('#summaryCard').hidden = true;
-            setNote(`${points.length} punto(s) cargados.`, 'success');
-        } catch (error) {
-            setNote(error.message || 'Error al cargar puntos.', 'error');
-            toast(error.message || 'Error al cargar.', 'error');
-        } finally {
-            hideLoader();
-            done();
-        }
-    });
-
-    qs('#optimizeButton').addEventListener('click', async () => {
-        if (state.points.length < 2) return;
-        const params = readForm();
-        state.dist = params.dist;
-        setNote('Ejecutando heurística + osmnx en el backend (puede tardar)…');
-        showLoader('Optimizando…');
-        const button = qs('#optimizeButton');
-        const done = setButtonBusy(button, 'Optimizando…');
-        try {
-            const segments = await window.SD_API.get(
-                `${OPT_URL}/v1/optimization/optimal_route`,
-                {
-                    route_id: state.routeId,
-                    day: state.day,
-                    dist: params.dist
-                }
-            );
-            const list = Array.isArray(segments) ? segments : (segments.data || []);
-            state.segments = list;
-            drawOptimizedRoute(list);
-            renderSummary(list);
-            setNote(`Ruta optimizada con ${list.length} segmento(s).`, 'success');
-        } catch (error) {
-            setNote(error.message || 'Error al optimizar.', 'error');
-            toast(error.message || 'Error al optimizar.', 'error');
-        } finally {
-            hideLoader();
-            done();
-        }
-    });
+    // Kick off with a plan so the module is never an empty screen.
+    buildPlan();
 });

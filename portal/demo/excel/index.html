@@ -3,18 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel → Oportunidades — SmartDecisions Demo</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=4">
-    <link rel="stylesheet" href="excel.css?v=12">
+    <title>Análisis Comercial — SmartDecisions Demo</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=6dea3d8c49">
+    <link rel="stylesheet" href="excel.css?v=61e86bbdfb">
     <link rel="icon" type="image/png" sizes="64x64" href="../../assets/favicon-bear-64.png?v=5">
     <link rel="icon" type="image/png" sizes="32x32" href="../../assets/favicon-bear-32.png?v=5">
     <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png?v=5">
-    <script src="../js/config.js?v=2"></script>
-    <script src="../js/auth.js?v=2" defer></script>
-    <script src="../js/api.js?v=2" defer></script>
-    <script src="../js/ui.js" defer></script>
+    <script src="../js/config.js?v=6f757ca564"></script>
+    <script src="../js/auth.js?v=ee49f43985" defer></script>
+    <script src="../js/api.js?v=3ed1e6bc89" defer></script>
+    <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-    <script src="excel.js?v=13" defer></script>
+    <script src="excel.js?v=e84a439c29" defer></script>
 </head>
 <body>
 
@@ -35,7 +36,7 @@
 
 <main>
     <div class="container">
-        <h1 class="page-title">Excel → Oportunidades</h1>
+        <h1 class="page-title">Análisis Comercial</h1>
         <p class="page-subtitle">
             Sube tu archivo de ventas, valídalo contra el contrato y ejecuta el motor
             <strong>Afinidad × Drop Size</strong>. El resultado es una lista de
@@ -106,6 +107,27 @@
                     Elige el análisis que quieres ver sobre estos datos. Puedes probar
                     varios sin volver a subir el archivo.
                 </p>
+
+                <!-- Reporting window: applies to every analysis below. -->
+                <div class="period-bar" id="periodBar" hidden>
+                    <span class="period-label">Período analizado</span>
+                    <label class="period-field">
+                        <span>Desde</span>
+                        <input type="date" id="periodFrom">
+                    </label>
+                    <label class="period-field">
+                        <span>Hasta</span>
+                        <input type="date" id="periodTo">
+                    </label>
+                    <button type="button" class="btn btn-secondary btn-small" id="periodApply">
+                        Aplicar
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-small" id="periodReset">
+                        Todo el período
+                    </button>
+                    <span class="period-note" id="periodNote"></span>
+                </div>
+
                 <div class="analysis-menu" id="analysisMenu">
                     <button type="button" class="analysis-card" data-analysis="summary">
                         <span class="analysis-icon">📊</span>
@@ -130,6 +152,12 @@
                         <span class="analysis-title">Segmentación de Clientes</span>
                         <span class="analysis-desc">Clasifica a tus clientes por valor (alto,
                             medio, bajo) para priorizar.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="portfolio">
+                        <span class="analysis-icon">💔</span>
+                        <span class="analysis-title">Salud de Cartera</span>
+                        <span class="analysis-desc">Quiénes dejaron de comprar, quiénes se
+                            recuperaron y a qué clientes estás por perder.</span>
                     </button>
                 </div>
                 <p class="form-note" id="runNote" aria-live="polite"></p>
@@ -180,6 +208,243 @@
                             <tbody></tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- ---------- Rentabilidad (solo si el archivo trae Costo Unitario) ---------- -->
+            <div class="analysis-block" id="marginBlock" hidden>
+                <h3 class="block-title">Rentabilidad</h3>
+                <p class="block-subtitle">
+                    Vender más no siempre es ganar más. Esto compara lo que facturas
+                    contra lo que te costó la mercadería.
+                </p>
+                <div class="metric-grid" id="marginKpis"></div>
+                <div class="split-layout">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Margen por categoría</h3>
+                        <canvas id="chartMargenCategoria"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Dónde está la ganancia</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="marginCategoryTable">
+                                <thead><tr>
+                                    <th>Categoría</th>
+                                    <th class="numeric">Venta</th>
+                                    <th class="numeric">Margen</th>
+                                    <th class="numeric">%</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert-panel" id="marginAlerts" hidden>
+                    <h4 class="alert-title">⚠ Productos que no dejan margen</h4>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="marginAlertTable">
+                            <thead><tr>
+                                <th>Producto</th>
+                                <th class="numeric">Venta</th>
+                                <th class="numeric">Margen</th>
+                                <th>Motivo</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Crecimiento ---------- -->
+            <div class="analysis-block" id="growthBlock" hidden>
+                <h3 class="block-title">Crecimiento</h3>
+                <p class="block-subtitle">
+                    Cómo se mueve la venta mes a mes y contra el mismo mes del año pasado.
+                </p>
+                <div class="metric-grid" id="growthKpis"></div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Variación mes a mes</h3>
+                        <canvas id="chartGrowth"></canvas>
+                    </div>
+                    <div class="chart-card" id="seasonalityCard">
+                        <h3 class="chart-title">Estacionalidad</h3>
+                        <p class="chart-hint">
+                            100 es un mes promedio. 130 significa que ese mes vende un 30%
+                            por encima del promedio.
+                        </p>
+                        <canvas id="chartSeasonality"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card" id="mixCard">
+                    <h3 class="chart-title">Qué categorías ganan y pierden peso</h3>
+                    <p class="chart-hint">Último mes contra el anterior, en puntos porcentuales.</p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="mixTable">
+                            <thead><tr>
+                                <th>Categoría</th>
+                                <th class="numeric">Participación</th>
+                                <th class="numeric">Cambio</th>
+                                <th class="numeric">Venta</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Concentración ---------- -->
+            <div class="analysis-block" id="concentrationBlock" hidden>
+                <h3 class="block-title">Concentración y riesgo</h3>
+                <p class="block-subtitle">
+                    De cuántos clientes depende realmente el negocio, y qué productos
+                    son su núcleo.
+                </p>
+                <div class="metric-grid" id="concentrationKpis"></div>
+                <p class="insight-line" id="hhiReading"></p>
+                <div class="split-layout">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Clasificación ABC de productos</h3>
+                        <canvas id="chartAbc"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Qué significa cada clase</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="abcTable">
+                                <thead><tr>
+                                    <th>Clase</th>
+                                    <th class="numeric">Productos</th>
+                                    <th class="numeric">% venta</th>
+                                    <th>Qué hacer</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Eficiencia ---------- -->
+            <div class="analysis-block" id="efficiencyBlock" hidden>
+                <h3 class="block-title">Eficiencia comercial</h3>
+                <p class="block-subtitle">
+                    Tamaño de pedido, productividad de la fuerza de venta y cómo se movió
+                    el precio realmente cobrado.
+                </p>
+                <div class="metric-grid" id="efficiencyKpis"></div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Productividad por vendedor</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="sellerTable">
+                                <thead><tr>
+                                    <th>Vendedor</th>
+                                    <th class="numeric">Venta</th>
+                                    <th class="numeric">Pedidos</th>
+                                    <th class="numeric">Clientes</th>
+                                    <th class="numeric">Ticket</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card" id="priceCard">
+                        <h3 class="chart-title">Deriva del precio realizado</h3>
+                        <p class="chart-hint">
+                            Precio efectivo (monto ÷ unidades) de la mitad reciente del
+                            período contra la anterior. Detecta descuentos que nunca
+                            tocaron la lista de precios.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="priceTable">
+                                <thead><tr>
+                                    <th>Producto</th>
+                                    <th class="numeric">Antes</th>
+                                    <th class="numeric">Ahora</th>
+                                    <th class="numeric">Cambio</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== Salud de Cartera ===================== -->
+        <section id="stepPortfolio" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Salud de Cartera</h2>
+                <span class="cache-stamp" id="stampPortfolio"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="portfolio">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <div class="insight-panel">
+                <p class="insight-objective">
+                    <strong>Objetivo:</strong> detectar a tiempo a los clientes que se
+                    están enfriando, antes de que dejen de comprar del todo.
+                </p>
+                <p class="insight-what">
+                    <strong>Qué mira:</strong> cuántos clientes compraron cada mes, cuáles
+                    son nuevos, cuáles volvieron y cuáles se perdieron. Un cliente entra a
+                    la lista de riesgo si su compra cayó fuerte contra su propio promedio
+                    o si lleva demasiado tiempo sin comprar.
+                </p>
+                <p class="insight-note">
+                    La antigüedad se mide contra la fecha más reciente del archivo, no
+                    contra hoy — así un archivo viejo no reporta a toda la cartera como perdida.
+                </p>
+            </div>
+            <div class="metric-grid" id="portfolioKpis"></div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3 class="chart-title">Movimiento de clientes por mes</h3>
+                    <canvas id="chartMovement"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Clientes activos por mes</h3>
+                    <canvas id="chartActive"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="section-head">
+                    <h3 class="chart-title">Clientes en riesgo</h3>
+                    <input type="search" id="riskSearch" class="table-search"
+                           placeholder="Buscar cliente…" aria-label="Buscar cliente en riesgo">
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="riskTable">
+                        <thead><tr>
+                            <th>Cliente</th>
+                            <th class="numeric">Promedio mensual</th>
+                            <th class="numeric">Último mes</th>
+                            <th class="numeric">Variación</th>
+                            <th class="numeric">Días sin comprar</th>
+                            <th>Motivo</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="pager" id="riskPager"></div>
+            </div>
+
+            <div class="chart-card" id="lostCard" hidden>
+                <h3 class="chart-title">Clientes perdidos</h3>
+                <p class="chart-hint">
+                    Llevan más de seis meses sin comprar. No son una visita de esta
+                    semana: son una campaña de reactivación.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="lostTable">
+                        <thead><tr>
+                            <th>Cliente</th>
+                            <th class="numeric">Compraba al mes</th>
+                            <th class="numeric">Última compra</th>
+                            <th class="numeric">Días</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
         </section>
@@ -260,9 +525,9 @@
                             <span>Filtrar segmento</span>
                             <select id="segmentFilter">
                                 <option value="">Todos</option>
-                                <option value="Alto">Alto</option>
-                                <option value="Medio">Medio</option>
-                                <option value="Bajo">Bajo</option>
+                                <option value="HIGH">Alto</option>
+                                <option value="MEDIUM">Medio</option>
+                                <option value="LOW">Bajo</option>
                             </select>
                         </label>
                         <label class="filter-label filter-label-inline">

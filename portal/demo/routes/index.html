@@ -3,23 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Optimización de rutas — SmartDecisions Demo</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=5">
+    <title>Rutas de visita — SmartDecisions Demo</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=6dea3d8c49">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="">
-    <link rel="stylesheet" href="routes.css?v=5">
+    <link rel="stylesheet" href="routes.css?v=94a5f4a663">
     <link rel="icon" type="image/png" sizes="64x64" href="../../assets/favicon-bear-64.png?v=5">
     <link rel="icon" type="image/png" sizes="32x32" href="../../assets/favicon-bear-32.png?v=5">
     <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png?v=5">
-    <script src="../js/config.js"></script>
-    <script src="../js/auth.js" defer></script>
-    <script src="../js/api.js" defer></script>
-    <script src="../js/ui.js" defer></script>
+    <script src="../js/config.js?v=6f757ca564"></script>
+    <script src="../js/auth.js?v=ee49f43985" defer></script>
+    <script src="../js/api.js?v=3ed1e6bc89" defer></script>
+    <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin="" defer></script>
-    <script src="routes.js?v=6" defer></script>
+    <script src="routes.js?v=1482e10cb4" defer></script>
 </head>
 <body>
 
@@ -31,6 +32,7 @@
         </a>
         <div class="demo-nav-actions">
             <a href="../home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <span class="session-chip" id="sessionChip" hidden></span>
             <span class="user-chip" id="userChip">…</span>
             <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
         </div>
@@ -39,110 +41,100 @@
 
 <main>
     <div class="container">
-        <h1 class="page-title">Optimización de rutas</h1>
+        <h1 class="page-title">Rutas de visita</h1>
         <p class="page-subtitle">
-            Visualiza los puntos de venta de una ruta planificada, ejecuta la heurística
-            de orden óptimo (Afinidad ↔ red vial de OpenStreetMap) y compara la ruta
-            original con la optimizada en el mapa.
+            A partir de tu archivo de ventas: agrupa a tus clientes por cercanía,
+            arma los días de visita y ordena las paradas para recorrer menos
+            kilómetros. Cada parada te dice a quién visitas y cuánto vale.
         </p>
 
-        <section class="routes-layout">
-            <!-- ====== Sidebar: controls + summary ====== -->
+        <!-- Shown when no sales file has been uploaded yet. -->
+        <section class="card empty-state" id="noDataset" hidden>
+            <h3>Primero sube tu archivo de ventas</h3>
+            <p>
+                Las rutas se arman con los clientes de tu archivo, así que no hay
+                nada que planificar hasta que cargues uno. También necesita las
+                columnas <code>Latitud</code> y <code>Longitud</code>.
+            </p>
+            <a class="btn btn-primary" href="../excel/index.html">Ir a cargar el archivo</a>
+        </section>
+
+        <section class="routes-layout" id="plannerLayout" hidden>
+            <!-- ====== Sidebar ====== -->
             <aside class="routes-sidebar">
                 <article class="card">
-                    <h3>Parámetros</h3>
-                    <form id="routeForm" class="form-stack" autocomplete="off">
-                        <div class="grid-2">
-                            <label><span>route_id</span>
-                                <input type="number" name="route_id" min="1" value="2" required></label>
-                            <label><span>day</span>
-                                <input type="number" name="day" min="0" value="1" required></label>
-                        </div>
+                    <h3>Planificar</h3>
+                    <form id="planForm" class="form-stack" autocomplete="off">
                         <label>
-                            <span>radio (metros para grafo OSM)</span>
-                            <input type="number" name="dist" min="100" max="50000" step="100"
-                                   value="1500" required>
+                            <span>Vendedor</span>
+                            <select id="sellerSelect">
+                                <option value="">Todos</option>
+                            </select>
                         </label>
+                        <label>
+                            <span>Días de visita</span>
+                            <select id="daysSelect">
+                                <option value="3">3 días</option>
+                                <option value="5" selected>5 días</option>
+                                <option value="6">6 días</option>
+                            </select>
+                        </label>
+                        <div class="grid-2">
+                            <label><span>Desde</span>
+                                <input type="date" id="planFrom"></label>
+                            <label><span>Hasta</span>
+                                <input type="date" id="planTo"></label>
+                        </div>
                         <div class="form-actions">
-                            <button type="button" class="btn btn-ghost" id="loadPointsButton">
-                                Cargar puntos
-                            </button>
-                            <button type="button" class="btn btn-primary" id="optimizeButton" disabled>
-                                Optimizar
+                            <button type="button" class="btn btn-primary" id="planButton">
+                                Armar rutas
                             </button>
                         </div>
                         <p class="form-note" id="formNote" aria-live="polite"></p>
                     </form>
                 </article>
 
-                <article class="card">
-                    <h3>Subir CSV de puntos</h3>
-                    <p class="page-subtitle" style="margin: 0 0 0.8rem; font-size: 0.85rem;">
-                        Columnas requeridas: <code>route_id</code>, <code>day</code>,
-                        <code>client_id</code>, <code>latitude</code>, <code>longitude</code>
-                        (+ opcional <code>client</code>). Todas las filas comparten el
-                        mismo <code>route_id</code> y <code>day</code>; re-subir
-                        reemplaza los puntos previos.
-                    </p>
-                    <div class="upload-zone" id="routeUploadZone">
-                        <input type="file" id="routeFileInput" accept=".csv,.txt" hidden>
-                        <p class="upload-hint">
-                            Arrastra tu <code>.csv</code> aquí o
-                            <a href="#" id="routeChooseLink">elegí un archivo</a>.
-                        </p>
-                        <p id="routeFileChip" class="file-chip" hidden></p>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-ghost btn-small"
-                                id="routeSampleButton">
-                            Bajar plantilla
-                        </button>
-                        <button type="button" class="btn btn-primary btn-small"
-                                id="routeUploadButton" disabled>
-                            Subir y cargar
-                        </button>
-                    </div>
-                    <p class="form-note" id="routeUploadNote" aria-live="polite"></p>
+                <article class="card" id="daysCard" hidden>
+                    <h3>Días</h3>
+                    <div class="day-list" id="dayList"></div>
                 </article>
 
-                <article class="card">
-                    <h3>Capas</h3>
-                    <label class="toggle-row">
-                        <input type="checkbox" id="toggleOriginal" checked>
-                        <span class="swatch swatch-original"></span>
-                        <span>Ruta original (orden client_id)</span>
-                    </label>
-                    <label class="toggle-row">
-                        <input type="checkbox" id="toggleOptimized" checked>
-                        <span class="swatch swatch-optimized"></span>
-                        <span>Ruta optimizada</span>
-                    </label>
-                    <label class="toggle-row">
-                        <input type="checkbox" id="togglePoints" checked>
-                        <span class="swatch swatch-points"></span>
-                        <span>Puntos de venta</span>
-                    </label>
-                </article>
-
-                <article class="card" id="summaryCard" hidden>
-                    <h3>Resumen de la ruta optimizada</h3>
-                    <div class="metric-grid" id="summaryMetrics"></div>
-                    <p class="page-subtitle" style="margin: 0.8rem 0 0; font-size: 0.85rem;">
-                        <code>distance</code> es la distancia entre origen y target del
-                        segmento; <code>linear</code> es la distancia geodésica directa
-                        entre paradas consecutivas. La ruta de la red vial se calcula en
-                        el backend con OSM nodes.
+                <article class="card" id="legendCard" hidden>
+                    <h3>Valor del cliente</h3>
+                    <p class="legend-hint">
+                        El color de cada parada es cuánto compra ese cliente, para
+                        que sepas a quién no puedes dejar de visitar.
                     </p>
+                    <div class="legend-row"><span class="swatch tier-alto"></span> Alto</div>
+                    <div class="legend-row"><span class="swatch tier-medio"></span> Medio</div>
+                    <div class="legend-row"><span class="swatch tier-bajo"></span> Bajo</div>
                 </article>
             </aside>
 
-            <!-- ====== Map ====== -->
-            <section class="routes-map-wrapper">
-                <div id="map" class="routes-map" role="application"
-                     aria-label="Mapa de la ruta planificada"></div>
-                <div id="mapLoader" class="map-loader" hidden>
-                    <div class="spinner"></div>
-                    <span id="mapLoaderText">Cargando…</span>
+            <!-- ====== Map + stops ====== -->
+            <section class="routes-main">
+                <div class="day-summary" id="daySummary" hidden></div>
+                <div class="routes-map-wrapper">
+                    <div id="map" class="routes-map"></div>
+                    <div class="map-overlay" id="mapOverlay">
+                        <p>Elige los parámetros y pulsa <strong>Armar rutas</strong>.</p>
+                    </div>
+                </div>
+
+                <div class="card stops-card" id="stopsCard" hidden>
+                    <h3>Orden de visita</h3>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="stopsTable">
+                            <thead><tr>
+                                <th>#</th>
+                                <th>Cliente</th>
+                                <th>Valor</th>
+                                <th class="numeric">Compra en el período</th>
+                                <th class="numeric">Última compra</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
         </section>
@@ -151,7 +143,7 @@
 
 <footer class="demo-footer">
     <div class="container">
-        Una iniciativa de <strong>BearSoft</strong> · Demo SmartDecisions
+        <p>Una iniciativa de <strong>BearSoft</strong> · Demo SmartDecisions</p>
     </div>
 </footer>
 

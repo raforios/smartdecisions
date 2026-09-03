@@ -344,3 +344,20 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     .demo-nav-actions span:not(.user-chip) { display: none; }
     main { padding: 1.5rem 0; }
 }
+
+/* Session countdown chip, shared by every module page. */
+.session-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+.session-chip.warning { color: var(--warning, #b8860b); border-color: var(--accent-3, #b8860b); }
+@media (max-width: 900px) {
+    .session-chip { display: none; }
+}

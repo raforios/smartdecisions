@@ -1,0 +1,224 @@
+/* Cotizaciones y proyecciones — module styles.
+   Only what this module adds; everything shared lives in ../styles/demo.css */
+
+.controls-card { margin-bottom: 1.25rem; }
+
+.controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.control { display: flex; flex-direction: column; gap: .35rem; }
+
+.control label {
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color: var(--muted, #5e6580);
+}
+
+.control select,
+.control input {
+    padding: .55rem .7rem;
+    border: 1px solid #d7dbe6;
+    border-radius: 8px;
+    font: inherit;
+    background: #fff;
+    min-width: 11rem;
+}
+
+.control-hint {
+    margin: .75rem 0 0;
+    font-size: .85rem;
+    color: var(--muted, #5e6580);
+}
+
+.panel { margin-bottom: 1.25rem; }
+
+.panel-head {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: .9rem;
+}
+
+.panel-head h2 { margin: 0; font-size: 1.15rem; }
+
+.panel-meta { font-size: .85rem; color: var(--muted, #5e6580); }
+
+.ai-slot { margin-left: auto; }
+
+.ai-answer {
+    margin-top: .75rem;
+    padding: .75rem .9rem;
+    background: #f4f6fb;
+    border-left: 3px solid #0d1e4c;
+    border-radius: 6px;
+    font-size: .92rem;
+}
+
+/* Wide tables scroll on their own instead of pushing the page sideways. */
+.table-scroll { overflow-x: auto; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+
+.data-table th,
+.data-table td {
+    padding: .55rem .7rem;
+    border-bottom: 1px solid #eceff5;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.data-table th {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted, #5e6580);
+}
+
+.data-table td.num,
+.data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.unit { color: var(--muted, #5e6580); font-size: .8rem; }
+
+.up { color: #2d7d46; }
+.down { color: #b4373a; }
+
+.tag {
+    display: inline-block;
+    padding: .12rem .5rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    background: #eceff5;
+    color: #3a4056;
+}
+
+.tag-HIGH { background: #e3f1e8; color: #2d7d46; }
+.tag-MEDIUM { background: #f6efe1; color: #8a6a20; }
+.tag-LOW { background: #f3e6e6; color: #b4373a; }
+.tag-INSUFFICIENT { background: #eceff5; color: #5e6580; }
+
+.method {
+    display: block;
+    margin-top: .15rem;
+    font-size: .72rem;
+    color: var(--muted, #5e6580);
+}
+
+/* Sparklines: observed solid, projection dashed, so the eye never mistakes a
+   forecast for something that already happened. */
+.spark-cell { width: 240px; }
+
+.spark { width: 100%; height: 44px; overflow: visible; }
+
+.spark polyline { fill: none; stroke-width: 1.6; }
+
+.spark-observed { stroke: #0d1e4c; }
+
+.spark-projected {
+    stroke: #c4a378;
+    stroke-dasharray: 4 3;
+}
+
+.chart-holder { margin-top: 1rem; }
+
+.chart-holder .spark { height: 140px; }
+
+.rate-figures {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.75rem;
+}
+
+.figure { display: flex; flex-direction: column; gap: .2rem; }
+
+.figure-label {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted, #5e6580);
+}
+
+.figure-value { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.scenario-table tbody tr:last-child td { font-weight: 600; }
+
+.scenario-verdict { margin-top: 1rem; font-size: 1.05rem; font-weight: 600; }
+
+.scenario-note {
+    display: block;
+    margin-top: .3rem;
+    font-size: .82rem;
+    font-weight: 400;
+    color: var(--muted, #5e6580);
+}
+
+@media (max-width: 640px) {
+    .controls-row { flex-direction: column; align-items: stretch; }
+    .control select, .control input { min-width: 0; width: 100%; }
+    .rate-figures { gap: 1rem; }
+}
+
+/* Official quotation cells: the figure leads, and the two windows it depends on
+   sit under it — the fortnight averaged and the fortnight it governs. */
+.official-value { display: block; font-weight: 600; }
+
+.official-window {
+    display: block;
+    font-size: .72rem;
+    font-weight: 400;
+    color: var(--muted, #5e6580);
+    white-space: nowrap;
+}
+
+.data-table td.daily { color: var(--muted, #5e6580); font-size: .85rem; }
+
+.rule-note {
+    background: #f4f6fb;
+    border-left: 3px solid #0d1e4c;
+    border-radius: 6px;
+    padding: .7rem .9rem;
+    margin: 0 0 1rem;
+}
+
+/* Verification drawer: the closed fortnights behind the projected price. */
+.verify-toggle {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.verify-toggle[disabled] { cursor: default; opacity: .75; }
+
+.verify-toggle .caret {
+    display: inline-block;
+    width: 1em;
+    color: var(--muted, #5e6580);
+}
+
+.verify-toggle[disabled] .caret { visibility: hidden; }
+
+.history-row > td { background: #f7f9fc; padding: 0; }
+
+.history-box { padding: .9rem 1.1rem 1.1rem 2.2rem; }
+
+.history-box h4 {
+    margin: 0 0 .5rem;
+    font-size: .85rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted, #5e6580);
+}
+
+.history-table { font-size: .85rem; max-width: 40rem; }
+
+.history-table th, .history-table td { border-bottom-color: #e3e8f0; }
