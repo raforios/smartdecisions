@@ -9,7 +9,6 @@ FROM python:${VARIANT}-slim
 
 # Instalar dependencias básicas del sistema
 RUN apt-get update && apt-get install -y \
-    default-libmysqlclient-dev \
     curl build-essential zip && \
     rm -rf /var/lib/apt/lists/*
 
@@ -25,6 +24,6 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 # Copia el resto de la app
 COPY . .
 
-EXPOSE 3020
+EXPOSE 3000
 
 CMD ["python", "main.py"]

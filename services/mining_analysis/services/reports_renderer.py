@@ -10,6 +10,7 @@ import io
 import os
 import tempfile
 from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -90,16 +91,33 @@ def _draw_centered(
     draw.text(origin, text, font = font, fill = color)
 
 
+# Bulletins publish two decimals; the database keeps four.
+_PRICE_QUANTUM: Decimal = Decimal('0.01')
+
+
 def _format_price(value: Optional[float]) -> str:
     '''
     Two decimals for fractional values, no decimals for integer-like quotes
     (Antimonio 27,000, Wolfram 116,355). Matches the published bulletins.
+
+    Rounds HALF_UP through Decimal, never with float formatting: the price is
+    stored with four decimals, and `f'{12.825:.2f}'` yields 12.82 because the
+    binary float sitting behind that literal is 12.8249999…. A published
+    bulletin cannot round a half down — the rest of the service already uses
+    ROUND_HALF_UP for the same reason.
+
+    Args:
+        value (float | None): Average price to render.
+
+    Returns:
+        str: Grouped decimal string, or an em dash when there is no value.
     '''
     if value is None:
         return '—'
-    if abs(value - round(value)) < 1e-9:
-        return f'{int(round(value)):,}'
-    return f'{value:,.2f}'
+    amount = Decimal(str(value)).quantize(_PRICE_QUANTUM, rounding = ROUND_HALF_UP)
+    if amount == amount.to_integral_value():
+        return f'{int(amount):,}'
+    return f'{amount:,.2f}'
 
 
 def _format_date(value: Any) -> str:

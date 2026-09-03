@@ -11,6 +11,7 @@ from services.utils import (
     handle_service_errors,
 )
 from services.logger_config import custom_logger as logger
+from services.price_forecast import get_price_forecast_service
 from services.royalties_etl import process_royalties_excel_service
 from services.mining_analysis import (
     get_royalties_summary_service,
@@ -22,6 +23,8 @@ from services.mining_analysis import (
     get_biweekly_history_service,
 )
 from schemas.mining_analysis import (
+    ForecastMethod,
+    PriceForecastResponse,
     MiningPriceResponseSchema,
     BulkUploadMiningResponseSchema,
     RoyaltySummaryResponse,
@@ -191,3 +194,22 @@ async def get_biweekly_history_controller(
         db = db, period_from = period_from, period_to = period_to,
     )
     return BiweeklyHistoryResponse(**result)
+
+@handle_service_errors('MINING_ANALYSIS')
+async def get_price_forecast_controller(
+    db: Session,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str,
+    days_ahead: int,
+    method: ForecastMethod
+) -> PriceForecastResponse:
+    '''
+    Orchestrates the mineral price projection.
+    '''
+    message = (f'User: {current_user} requesting a {days_ahead}-day price '
+               f'forecast with {method.value}.')
+    logger.info(message)
+    result = await get_price_forecast_service(
+        db = db, days_ahead = days_ahead, method = method
+    )
+    return PriceForecastResponse(**result)

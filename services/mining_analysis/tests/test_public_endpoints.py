@@ -13,12 +13,12 @@ from sqlalchemy.pool import StaticPool
 
 from models.mining_analysis import Mineral, MiningPrice
 from routes.public_reports import router as public_reports_router
-from services.db_connection import Base, get_db_dependency
+from services.db_connection import Base, GET_DB_DEPENDENCY
 from services.mining_analysis import OFFICIAL_MINERALS, _normalize_name
 
 
-@pytest.fixture()
-def public_client():
+@pytest.fixture(name = 'public_client')
+def _public_client():
     '''
     Builds a FastAPI app mounting only the public router and a SQLite-backed
     DB dependency override, returning the TestClient ready to hit the public
@@ -64,7 +64,7 @@ def public_client():
         finally:
             pass
 
-    app.dependency_overrides[get_db_dependency] = _override_db
+    app.dependency_overrides[GET_DB_DEPENDENCY] = _override_db
     try:
         yield TestClient(app)
     finally:
@@ -105,3 +105,28 @@ def test_public_biweekly_history_returns_200_without_auth(public_client):
     body = response.json()
     keys = [(p['year'], p['month'], p['half']) for p in body['periods']]
     assert (2026, 4, 1) in keys
+
+
+def test_responses_carry_codes_and_no_prose(public_client):
+    '''
+        Every report answers with a stable code, never with a sentence.
+
+        The backend returns data and codes; the wording belongs to the frontend
+        and to the interpretation layer. A regression here is invisible until
+        someone builds a screen on top of an English phrase.
+    '''
+    cases = (
+        ('/v1/mining-analysis/public/reports/daily',
+         {'date': '2026-04-11'}, 'DAILY_REPORT_GENERATED'),
+        ('/v1/mining-analysis/public/reports/biweekly',
+         {'year': 2026, 'month': 4, 'half': 1}, 'BIWEEKLY_REPORT_GENERATED'),
+        ('/v1/mining-analysis/public/reports/biweekly/history',
+         {'date_from': '2026-04-01', 'date_to': '2026-04-30'},
+         'BIWEEKLY_HISTORY_GENERATED'),
+    )
+
+    for path, params, expected in cases:
+        body = public_client.get(path, params = params).json()
+        assert body['result'] == expected
+        assert body['status'] == 'success'
+        assert 'message' not in body

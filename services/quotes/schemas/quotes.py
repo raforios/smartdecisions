@@ -123,3 +123,24 @@ class SaleScenarioRequest(BaseModel):
                       'the MINING_ANALYSIS projection. Omit to price the '
                       'currency move alone.'
     )
+
+
+class RateForecast(BaseModel):
+    '''
+        The exchange rate projected forward on its own.
+
+        Exists because the dollar is a question by itself, not only an input to
+        a sale: `projected` is empty when the history cannot support a
+        projection, and `confidence` says why.
+    '''
+    currency: str
+    days_ahead: int = Field(..., ge = 1)
+    confidence: RateConfidence
+    change_percent: Optional[float] = None
+    last_rate: Optional[float] = None
+    last_date: Optional[date] = None
+    final_rate: Optional[float] = Field(
+        None, description = 'Projected rate at the end of the horizon.'
+    )
+    history: List[ExchangeRatePoint] = []
+    projected: List[ExchangeRatePoint] = []

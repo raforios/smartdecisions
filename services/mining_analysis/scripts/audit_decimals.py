@@ -38,7 +38,7 @@ import argparse
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import openpyxl
 
@@ -56,7 +56,7 @@ def _normalize_mineral_label(raw: str) -> str:
     '''
         Strips the unit suffix and trailing whitespace from a column header.
     '''
-    return str(raw).split('\n')[0].strip()
+    return str(raw).split('\n', maxsplit = 1)[0].strip()
 
 
 def _classify(value) -> str:
@@ -160,28 +160,59 @@ def _print_sheet_section(
     '''
         Renders the per-sheet findings and returns the number of warnings raised.
     '''
-    warnings = 0
     print(f'\n── {sheet_name} ───────────────────────')
 
-    suspect_columns = []
+    warnings, suspect_columns = _report_columns(columns, promedio_by_mineral)
+    warnings += _report_average_crosscheck(
+        promedio_by_mineral, daily_by_mineral, tolerance
+    )
+
+    if suspect_columns:
+        print('  → re-revisar contra el PDF: ' + ', '.join(suspect_columns))
+    return warnings
+
+
+def _report_columns(
+    columns: List[Dict],
+    promedio_by_mineral: Dict[str, float]
+) -> Tuple[int, List[str]]:
+    '''
+        Prints one line per mineral column and flags the suspicious ones.
+
+        A column is suspicious when it mixes decimals with whole numbers — the
+        sign that the operator rounded some days by hand — or when every day is
+        a whole number yet the Promedio row carries decimals, which cannot
+        happen if the days really were integers.
+
+        Args:
+            columns (List[Dict]): Per-column counters gathered from the sheet.
+            promedio_by_mineral (Dict[str, float]): The sheet's Promedio row.
+
+        Returns:
+            Tuple[int, List[str]]: Warnings raised and the suspicious minerals.
+    '''
+    warnings = 0
+    suspect_columns: List[str] = []
+
     for col in columns:
         mineral = col['mineral']
         total = col['int'] + col['whole_float'] + col['clean_float']
         if total == 0:
             continue
+
         has_decimals = col['clean_float'] > 0
-        only_ints = col['int'] == total
+        rounded_by_hand = has_decimals and col['int'] > 0
+        avg_row = promedio_by_mineral.get(mineral)
+        integer_days_with_decimal_average = (
+            col['int'] == total and avg_row is not None and avg_row != int(avg_row)
+        )
+
         marker = '   '
-        if has_decimals and col['int'] > 0:
+        if rounded_by_hand or integer_days_with_decimal_average:
             marker = ' ! '
             suspect_columns.append(mineral)
             warnings += 1
-        elif only_ints and mineral in promedio_by_mineral:
-            avg_row = promedio_by_mineral[mineral]
-            if avg_row != int(avg_row):
-                marker = ' ! '
-                suspect_columns.append(mineral)
-                warnings += 1
+
         print(
             f'{marker}{mineral:22} '
             f'int={col["int"]:>3} whole_float={col["whole_float"]:>3} '
@@ -192,9 +223,33 @@ def _print_sheet_section(
                                 for d, v in col['whole_float_samples'])
             print(f'     · sospechosos: {preview}')
 
-    if not promedio_by_mineral:
-        return warnings
+    return warnings, suspect_columns
 
+
+def _report_average_crosscheck(
+    promedio_by_mineral: Dict[str, float],
+    daily_by_mineral: Dict[str, List[float]],
+    tolerance: float
+) -> int:
+    '''
+        Recomputes each Promedio from the daily values and reports the gap.
+
+        The published average must match the mean of the days it summarises;
+        a difference beyond the tolerance means the sheet was edited after the
+        average was computed, or the days were truncated.
+
+        Args:
+            promedio_by_mineral (Dict[str, float]): The sheet's Promedio row.
+            daily_by_mineral (Dict[str, List[float]]): Daily values per mineral.
+            tolerance (float): Largest accepted difference.
+
+        Returns:
+            int: Warnings raised.
+    '''
+    if not promedio_by_mineral:
+        return 0
+
+    warnings = 0
     print('  Cruce con fila Promedio:')
     for mineral, promedio_value in sorted(promedio_by_mineral.items()):
         daily = daily_by_mineral.get(mineral, [])
@@ -203,16 +258,13 @@ def _print_sheet_section(
         computed = sum(daily) / len(daily)
         delta = abs(computed - promedio_value)
         mismatched = delta > tolerance
-        marker = ' ✗ ' if mismatched else '   '
         if mismatched:
             warnings += 1
         print(
-            f'{marker}{mineral:22} '
+            f'{" ✗ " if mismatched else "   "}{mineral:22} '
             f'Promedio={_format_value(promedio_value):>14}  '
             f'mean(días)={computed:14.4f}  Δ={delta:10.4f}'
         )
-    if suspect_columns:
-        print('  → re-revisar contra el PDF: ' + ', '.join(suspect_columns))
     return warnings
 
 

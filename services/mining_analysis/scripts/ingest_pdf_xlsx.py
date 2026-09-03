@@ -29,15 +29,14 @@
 '''
 import argparse
 import re
-import sys
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import openpyxl
 
 from models.mining_analysis import Mineral, MiningPrice
-from services.db_connection import ENGINE, get_db_session
+from scripts.cli_support import database_session, report, source_is_missing
 from services.logger_config import custom_logger as logger
 from services.mining_analysis import (
     OFFICIAL_MINERALS,
@@ -94,7 +93,7 @@ def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[st
     for idx, cell in enumerate(header_row):
         if idx == 0 or cell is None:
             continue
-        raw = str(cell).split('\n')[0].strip()
+        raw = str(cell).split('\n', maxsplit = 1)[0].strip()
         if not raw:
             continue
         norm = _normalize_name(raw)
@@ -131,25 +130,58 @@ def _iter_daily_rows(sheet, sheet_name: str) -> List[Tuple[date, Dict[str, float
 
     parsed: List[Tuple[date, Dict[str, float]]] = []
     for row in rows[3:]:
-        day = row[0]
-        if not isinstance(day, int):
+        price_date = _row_date(row, year, month)
+        if price_date is None:
             continue
-        try:
-            price_date = date(year, month, day)
-        except ValueError:
-            continue
-        day_prices: Dict[str, float] = {}
-        for col_idx, mineral_norm in mineral_cols.items():
-            val = row[col_idx] if col_idx < len(row) else None
-            if val is None or val == '':
-                continue
-            try:
-                day_prices[mineral_norm] = float(val)
-            except (TypeError, ValueError):
-                continue
+        day_prices = _row_prices(row, mineral_cols)
         if day_prices:
             parsed.append((price_date, day_prices))
     return parsed
+
+
+def _row_date(row: Tuple[Any, ...], year: int, month: int) -> Optional[date]:
+    '''
+    Reads the day number in the first cell and builds the quotation date.
+
+    Args:
+        row (tuple): Row of the sheet, values only.
+        year (int): Year taken from the sheet title.
+        month (int): Month taken from the sheet title.
+
+    Returns:
+        date | None: The date, or None when the cell is not a day of that month
+            (header rows, totals, or a 31 in a 30-day month).
+    '''
+    day = row[0]
+    if not isinstance(day, int):
+        return None
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _row_prices(row: Tuple[Any, ...], mineral_cols: Dict[int, str]) -> Dict[str, float]:
+    '''
+    Reads the quotations of one day row, skipping blanks and unparseable cells.
+
+    Args:
+        row (tuple): Row of the sheet, values only.
+        mineral_cols (Dict[int, str]): Column index -> normalized mineral name.
+
+    Returns:
+        Dict[str, float]: Price per mineral present in that row.
+    '''
+    prices: Dict[str, float] = {}
+    for col_idx, mineral_norm in mineral_cols.items():
+        value = row[col_idx] if col_idx < len(row) else None
+        if value is None or value == '':
+            continue
+        try:
+            prices[mineral_norm] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return prices
 
 
 def _upsert_prices(
@@ -206,10 +238,7 @@ def main() -> int:
                                'script only prints a plan.')
     args = parser.parse_args()
 
-    if not args.source.exists():
-        message = f'Source file not found: {args.source}'
-        logger.error(message)
-        print(message, file = sys.stderr)
+    if source_is_missing(args.source):
         return 2
 
     workbook = openpyxl.load_workbook(args.source, data_only = True)
@@ -232,24 +261,15 @@ def main() -> int:
         print('DRY-RUN: re-run with --yes to write to the database.')
         return 0
 
-    session_factory = get_db_session(ENGINE)
-    db_gen = session_factory()
-    session = next(db_gen)
-    try:
+    with database_session() as session:
         ensure_official_minerals(session)
         mineral_id_by_norm = {
             _normalize_name(r.name): r.id for r in session.query(Mineral).all()
         }
         inserted, skipped = _upsert_prices(session, mineral_id_by_norm, all_parsed)
         message = f'Ingest complete: inserted={inserted}, skipped={skipped}.'
-        logger.info(message)
-        print(message)
-        return 0
-    finally:
-        try:
-            next(db_gen)
-        except StopIteration:
-            pass
+        report(message)
+    return 0
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 
 class RegisterNotFoundError(HTTPException):
     '''
-        Exception raised when a requested form header is not found in the database.
+        Exception raised when a requested register is not found in the database.
         Returns HTTP 404 Not Found.
     '''
     def __init__(self, detail: str = 'Register not found',
@@ -32,8 +32,8 @@ class ResourceNotFoundError(HTTPException):
 
 class RegisterAlreadyExistsError(HTTPException):
     '''
-        Exception raised when an attempt is made to create a form header
-        with a unique identifier (e.g., form_code) that already exists.
+        Exception raised when an attempt is made to create a register with a
+        unique identifier (e.g., code) that already exists.
         Returns HTTP 409 Conflict.
     '''
     def __init__(self, detail: str = 'A register with this code already exists',

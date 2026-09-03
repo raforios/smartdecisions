@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from models.mining_analysis import (
     Municipality, RoyaltyPayment, Company, RoyaltyTransaction
 )
+from schemas.mining_analysis import MiningResult, MiningStatus
 from services.utils import handle_service_errors
 from services.logger_config import custom_logger as logger
 
@@ -43,7 +44,8 @@ def excel_date_to_py_date(
         delta_days = pd.to_timedelta(float(excel_date), unit='D')
         return (pd.to_datetime('1899-12-30') + delta_days).date()
     except (ValueError, TypeError) as exc:
-        logger.warning('Failed to parse Excel date %s: %s', excel_date, exc)
+        error_msg = f'Failed to parse Excel date {excel_date}: {exc}'
+        logger.warning(error_msg)
         return date.today()
 
 
@@ -244,7 +246,8 @@ async def process_royalties_excel_service(
     try:
         excel_data = pd.ExcelFile(io.BytesIO(file_content), engine='openpyxl')
     except (ValueError, zipfile.BadZipFile) as exc:
-        logger.warning('Failed to read as xlsx, trying xls engine. Details: %s', exc)
+        error_msg = f'Failed to read as xlsx, trying xls engine. Details: {exc}'
+        logger.warning(error_msg)
         excel_data = pd.ExcelFile(io.BytesIO(file_content), engine='xlrd')
 
     sheet_det = next((s for s in excel_data.sheet_names if 'DETALLE' in s.upper()), None)
@@ -284,8 +287,8 @@ async def process_royalties_excel_service(
     logger.info('ETL completed. %s transactions and %s summaries saved.', txn_count, sum_res[0])
 
     return {
-        'status': 'success',
-        'message': f'ETL completed. {txn_count} transactions saved.',
+        'status': MiningStatus.SUCCESS,
+        'result': MiningResult.ROYALTIES_ETL_COMPLETED,
         'processed_transactions': txn_count,
         'processed_summaries': sum_res[0],
         'rejected_records': alias_res[1]

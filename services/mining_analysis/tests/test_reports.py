@@ -2,15 +2,16 @@
     Unit tests for the official daily and biweekly mineral report services.
 '''
 import asyncio
-import calendar
 from datetime import date
 
 import pytest
 
 from models.mining_analysis import Mineral, MiningPrice
+from services.reports_renderer import _format_price
 from services.mining_analysis import (
     OFFICIAL_MINERALS,
     ensure_official_minerals,
+    get_biweekly_history_service,
     get_biweekly_report_service,
     get_daily_report_service,
     _biweekly_period_bounds,
@@ -50,6 +51,7 @@ def _add_price(session, mineral_id: int, day: date, low: float, high: float = No
     (2026, 12, 2, (date(2026, 12, 16), date(2026, 12, 31))),
 ])
 def test_biweekly_period_bounds(year, month, half, expected):
+    '''Halves are fixed: 1 covers days 1-15 and 2 covers 16 to month end.'''
     assert _biweekly_period_bounds(year, month, half) == expected
 
 
@@ -59,6 +61,7 @@ def test_biweekly_period_bounds(year, month, half, expected):
     ((2026, 1, 1), (2025, 12, 2)),
 ])
 def test_prev_biweekly_period(cur, expected):
+    '''Walking back one period crosses month and year boundaries.'''
     assert _prev_biweekly_period(*cur) == expected
 
 
@@ -241,8 +244,6 @@ def test_biweekly_history_lists_only_periods_with_data(db_session):
     Only biweekly periods that actually have data should appear in the list.
     Fully-fallback rows are excluded.
     '''
-    from services.mining_analysis import get_biweekly_history_service
-
     ids = _seed_catalog(db_session)
     estano_id = ids[_normalize_name('Estaño')]
     _add_price(db_session, estano_id, date(2026, 4, 3), 21.0)
@@ -261,8 +262,30 @@ def test_biweekly_history_empty_when_no_data(db_session):
     With no price rows at all, the history endpoint returns an empty list
     instead of raising.
     '''
-    from services.mining_analysis import get_biweekly_history_service
-
     _seed_catalog(db_session)
     result = _run(get_biweekly_history_service(db_session))
     assert result['periods'] == []
+
+
+# --- price rendering --------------------------------------------------------
+
+def test_price_rounds_half_up_not_toward_the_even_float():
+    '''
+        A bulletin cannot round a half down. 12.825 is the real Bismuto average
+        for the first half of September; plain float formatting renders 12.82
+        because the binary float behind it is 12.8249999….
+    '''
+    assert _format_price(12.825) == '12.83'
+    assert _format_price(0.735) == '0.74'
+    assert _format_price(12.8249) == '12.82'
+
+
+def test_integer_like_quotes_keep_no_decimals():
+    '''Antimonio and Wolfram are published without decimals.'''
+    assert _format_price(27000.0) == '27,000'
+    assert _format_price(116355.0) == '116,355'
+
+
+def test_missing_price_renders_a_dash():
+    '''A mineral with no quote shows an em dash, never a zero.'''
+    assert _format_price(None) == '—'

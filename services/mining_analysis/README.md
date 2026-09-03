@@ -168,6 +168,75 @@ Suite enfocada en:
 
 ---
 
+## ☁️ Despliegue y persistencia conmutable
+
+El servicio corre sobre **MySQL/PostgreSQL o DynamoDB**, según
+`PERSISTENCE_BACKEND` en el `.env`:
+
+| Valor | Qué usa |
+|---|---|
+| `sql` | El motor relacional de `DB_HOST`/`DATABASE`. |
+| `dynamodb` | Las tablas `minerals` y `mining_prices`. |
+
+**En AWS tiene que ser `dynamodb`:** no hay RDS levantado. Para trabajar local
+contra el MySQL del Docker, cambia el valor a `sql`. La suite de pruebas queda
+fijada al camino SQL desde `tests/conftest.py`, así que no depende de lo que
+diga el `.env` ni toca AWS.
+
+### Tablas
+
+Las crea `services/ci/api/create_dynamodb_tables.sh`, que sabe de claves
+compuestas:
+
+| Tabla | Partición | Ordenamiento |
+|---|---|---|
+| `minerals` | `mineral_id` (S) | — |
+| `mining_prices` | `mineral_id` (S) | `date` (S, ISO) |
+
+La clave de ordenamiento es lo que permite leer "este mineral entre estas dos
+fechas" en una sola consulta, que es como se lee siempre.
+
+### Permisos
+
+El rol del Lambda recibe `AmazonDynamoDBFullAccess` del propio
+`build_and_deploy.sh`, así que las dos tablas quedan cubiertas sin pasos
+extra.
+
+### Proceso quincenal del boletín (Ministerio)
+
+El ETL escribe **solo** en el relacional; las lecturas sí saben de los dos
+motores. Hasta que la escritura también pase por `prices_store`, la quincena se
+carga contra MySQL local y después se empuja a la nube:
+
+```bash
+# 1. Levantar el servicio contra MySQL, sin tocar el .env
+PERSISTENCE_BACKEND=sql python main.py
+
+# 2. Subir el xlsx desde el Streamlit (apunta a http://localhost:3020)
+#    y generar el boletín PDF/PNG como siempre.
+
+# 3. Empujar la quincena nueva a DynamoDB
+python -m scripts.migrate_to_dynamodb --yes
+```
+
+El paso 3 es idempotente: reescribe lo que ya estaba con los mismos valores y
+agrega lo nuevo.
+
+### Migrar el histórico
+
+El ETL carga el MySQL local; DynamoDB arranca vacío. Para copiar el histórico:
+
+```bash
+python -m scripts.migrate_to_dynamodb          # informa qué copiaría
+python -m scripts.migrate_to_dynamodb --yes    # copia y verifica
+```
+
+Lee siempre del relacional y escribe en DynamoDB, sea cual sea el
+`PERSISTENCE_BACKEND`. Es idempotente: cada escritura es un put por clave, así
+que correrlo dos veces deja el mismo estado. Usa como partición el mismo
+identificador numérico que expone el camino SQL (`str(row.id)`), que es lo que
+mantiene los dos backends hablando del mismo mineral.
+
 ## 👤 Creado Por
 
 **Rafael Ríos Bascón** [raforios@gmail.com](mailto:raforios@gmail.com)

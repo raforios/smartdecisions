@@ -16,13 +16,11 @@
 '''
 import argparse
 import asyncio
-import sys
 from pathlib import Path
 
 from sqlalchemy import text
 
-from services.db_connection import ENGINE, get_db_session
-from services.logger_config import custom_logger as logger
+from scripts.cli_support import database_session, report, source_is_missing
 from services.mining_analysis import process_mining_etl_service
 
 
@@ -63,10 +61,7 @@ def main() -> int:
                         help = 'Skip confirmation prompt and execute.')
     args = parser.parse_args()
 
-    if not args.source.exists():
-        message = f'Source file not found: {args.source}'
-        logger.error(message)
-        print(message, file = sys.stderr)
+    if source_is_missing(args.source):
         return 2
 
     if not args.yes:
@@ -74,25 +69,15 @@ def main() -> int:
               f'{args.source}. Re-run with --yes to apply.')
         return 0
 
-    session_factory = get_db_session(ENGINE)
-    db_gen = session_factory()
-    session = next(db_gen)
-    try:
+    with database_session() as session:
         deleted = _truncate_prices(session)
         message = f'Backfill: deleted {deleted} rows from t_mining_prices.'
-        logger.info(message)
-        print(message)
+        report(message)
 
         result = asyncio.run(_reingest(session, args.source, args.delimiter))
         message = f'Backfill: {result}'
-        logger.info(message)
-        print(message)
-        return 0
-    finally:
-        try:
-            next(db_gen)
-        except StopIteration:
-            pass
+        report(message)
+    return 0
 
 
 if __name__ == '__main__':

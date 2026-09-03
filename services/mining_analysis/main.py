@@ -20,6 +20,7 @@ from services.api_exceptions import setup_exception_handlers
 from services.db_connection import ENGINE, Base
 from services.logger_config import custom_logger as logger
 from services.environment import load_and_validate_env_vars
+from services.prices_store import uses_dynamodb
 
 # Configuración de variables de entorno
 ENV_VARS = load_and_validate_env_vars(
@@ -46,9 +47,19 @@ OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED els
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     '''
-        Handles the startup and shutdown events. 
-        Ensures t_minerals and t_mining_prices exist.
+        Handles the startup and shutdown events.
+
+        Ensures the relational schema exists, but only when the service is
+        actually configured to run on it. On DynamoDB there is no schema to
+        create and no relational database to reach: doing this unconditionally
+        would kill startup in an environment where no RDS is even deployed.
     '''
+    if uses_dynamodb():
+        message = 'Application startup: quotations run on DynamoDB, no schema to verify.'
+        logger.info(message)
+        yield
+        return
+
     message = 'Application startup: Verifying Mining Analysis database schema.'
     logger.info(message)
     try:

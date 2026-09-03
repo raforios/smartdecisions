@@ -16,7 +16,5 @@ xlrd
 openpyxl
 
 
-xlsxwriter
-kaleido
 Pillow
 fpdf2

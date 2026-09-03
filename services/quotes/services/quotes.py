@@ -281,8 +281,64 @@ async def sale_scenario_service(
     }
 
 
+@handle_service_errors('QUOTES')
+async def get_forecast_service(
+    days_ahead: int = 30,
+    currency: str = USD
+) -> Dict[str, Any]:
+    '''
+    Projects the exchange rate forward on its own.
+
+    The sale scenario answers "today or in a month" for a given sale; this
+    answers the narrower question of where the rate itself is heading, which is
+    what a chart of the dollar needs.
+
+    Args:
+        days_ahead (int): How far ahead to project.
+        currency (str): ISO 4217 code.
+
+    Returns:
+        Dict[str, Any]: Payload matching RateForecast shape.
+
+    Raises:
+        InvalidInputError: If the horizon is out of bounds.
+        ServiceUnavailableError: If no rate has been published yet.
+    '''
+    if days_ahead < 1 or days_ahead > SCENARIO_MAX_DAYS:
+        raise InvalidInputError(detail = QuotesError.INVALID_DATE_RANGE.value)
+
+    history = stored_rates(currency)
+    if not history:
+        raise ServiceUnavailableError(detail = QuotesError.NO_RATE_PUBLISHED.value)
+
+    projection = project_rate(history, days_ahead)
+    message = (
+        f'{currency} projected {days_ahead} day(s) over {len(history)} observation(s); '
+        f'confidence {projection.confidence.value}.'
+    )
+    logger.info(message)
+    return {
+        'currency': currency,
+        'days_ahead': days_ahead,
+        'confidence': projection.confidence,
+        'change_percent': projection.change_percent,
+        'last_rate': history[-1].official_rate,
+        'last_date': history[-1].date,
+        'final_rate': (
+            None if projection.final_rate is None else round(projection.final_rate, 4)
+        ),
+        'history': [
+            {'date': item.date, 'rate': item.official_rate} for item in history
+        ],
+        'projected': [
+            {'date': day, 'rate': round(rate, 4)} for day, rate in projection.points
+        ],
+    }
+
+
 __all__ = [
     'FLOAT_REGIME_START',
+    'get_forecast_service',
     'get_history_service',
     'sale_scenario_service',
     'stored_rates',

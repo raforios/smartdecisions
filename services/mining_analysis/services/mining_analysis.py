@@ -2,6 +2,7 @@
     Mining Analysis Business Logic Services
 '''
 import calendar
+from dataclasses import dataclass
 from collections import defaultdict
 from datetime import date
 import io
@@ -22,9 +23,16 @@ from models.mining_analysis import (
     RoyaltyPayment,
     RoyaltyTransaction
 )
+from schemas.mining_analysis import MiningResult, MiningStatus
 from services.utils import handle_service_errors
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
+from services.prices_store import (
+    average_low,
+    date_bounds,
+    latest_prices_before,
+    list_minerals
+)
 
 
 # Canonical mineral catalog rendered in the official Minerales_0X templates.
@@ -40,6 +48,40 @@ OFFICIAL_MINERALS: Tuple[Dict[str, str], ...] = (
     {'name': 'Oro',       'chemical_symbol': 'Au', 'unit': 'OT',  'quoted_in': 'LFIX'},
     {'name': 'Plata',     'chemical_symbol': 'Ag', 'unit': 'OT',  'quoted_in': 'LFIX'},
 )
+
+def _normalize_separators(digits: str) -> str:
+    '''
+    Rewrites a numeric string so Python can parse it, whichever convention the
+    source used.
+
+    The rule is positional: the rightmost separator is the decimal mark and the
+    other one groups thousands. When only one kind appears, repetition decides —
+    two dots cannot both be decimals, so they are grouping.
+
+    Args:
+        digits (str): String holding only digits, dots and commas.
+
+    Returns:
+        str: The same number with a single dot as the decimal mark.
+    '''
+    has_dot = '.' in digits
+    has_comma = ',' in digits
+
+    if has_dot and has_comma:
+        if digits.rfind('.') > digits.rfind(','):
+            return digits.replace(',', '')
+        return digits.replace('.', '').replace(',', '.')
+
+    if has_dot:
+        # Multiple dots → european thousands grouping; single dot → anglo decimal.
+        return digits.replace('.', '') if digits.count('.') > 1 else digits
+
+    if has_comma:
+        # Multiple commas → anglo thousands grouping; single comma → european decimal.
+        return digits.replace(',', '') if digits.count(',') > 1 else digits.replace(',', '.')
+
+    return digits
+
 
 def clean_currency_pro(value: Any) -> float:
     '''
@@ -69,29 +111,8 @@ def clean_currency_pro(value: Any) -> float:
     if not str_val:
         return 0.0
 
-    has_dot = '.' in str_val
-    has_comma = ',' in str_val
-
-    if has_dot and has_comma:
-        # Rightmost separator is the decimal mark; the other groups thousands.
-        if str_val.rfind('.') > str_val.rfind(','):
-            normalized = str_val.replace(',', '')
-        else:
-            normalized = str_val.replace('.', '').replace(',', '.')
-    elif has_dot:
-        # Multiple dots → european thousands grouping; single dot → anglo decimal.
-        normalized = str_val.replace('.', '') if str_val.count('.') > 1 else str_val
-    elif has_comma:
-        # Multiple commas → anglo thousands grouping; single comma → european decimal.
-        if str_val.count(',') > 1:
-            normalized = str_val.replace(',', '')
-        else:
-            normalized = str_val.replace(',', '.')
-    else:
-        normalized = str_val
-
     try:
-        result = float(normalized)
+        result = float(_normalize_separators(str_val))
     except ValueError:
         return 0.0
 
@@ -227,8 +248,8 @@ async def process_mining_etl_service(
     db.commit()
 
     return {
-        'status': 'success',
-        'message': f'ETL finished: {processed} new records, {skipped} skipped.',
+        'status': MiningStatus.SUCCESS,
+        'result': MiningResult.PRICES_ETL_COMPLETED,
         'processed_records': processed,
         'skipped_records': skipped
     }
@@ -383,8 +404,8 @@ async def get_royalties_summary_service(
                     if year else 0
 
     return {
-        'status': 'success',
-        'message': 'Data retrieved successfully',
+        'status': MiningStatus.SUCCESS,
+        'result': MiningResult.ROYALTY_SUMMARY_RETRIEVED,
         'data': {
             'detailed_records': formatted_data,
             'summary_kpis': {
@@ -448,8 +469,8 @@ async def get_transactions_summary_service(
     ]
 
     return {
-        'status': 'success',
-        'message': 'Transactions retrieved successfully',
+        'status': MiningStatus.SUCCESS,
+        'result': MiningResult.TRANSACTIONS_RETRIEVED,
         'data': formatted_data
     }
 
@@ -492,14 +513,16 @@ def _prev_biweekly_period(year: int, month: int, half: int) -> Tuple[int, int, i
     return year, month - 1, 2
 
 
-def _resolve_mineral_id_map(db: Session) -> Dict[str, int]:
+def _resolve_mineral_id_map(db: Session) -> Dict[str, str]:
     '''
     Builds {normalized_name: mineral_id} for the official catalog. Minerals
     missing from the catalog are simply absent from the map; callers must
     handle that case by emitting a fallback row.
     '''
-    rows = db.query(Mineral.id, Mineral.name).all()
-    return {_normalize_name(r.name): r.id for r in rows}
+    return {
+        _normalize_name(record.name): record.mineral_id
+        for record in list_minerals(db = db)
+    }
 
 
 def _empty_daily_row(catalog: Dict[str, str], ref_date: date) -> Dict[str, Any]:
@@ -550,14 +573,8 @@ async def get_daily_report_service(
             rows.append(_empty_daily_row(catalog, ref_date))
             continue
 
-        latest_two = (
-            db.query(MiningPrice)
-              .filter(MiningPrice.mineral_id == mineral_id,
-                      MiningPrice.date <= ref_date)
-              .order_by(MiningPrice.date.desc())
-              .limit(2)
-              .all()
-        )
+        # Through the store, so the report reads the same on either backend.
+        latest_two = latest_prices_before(str(mineral_id), ref_date, 2, db = db)
         if not latest_two:
             rows.append(_empty_daily_row(catalog, ref_date))
             continue
@@ -587,8 +604,8 @@ async def get_daily_report_service(
         })
 
     return {
-        'status': 'success',
-        'message': 'Daily report generated.',
+        'status': MiningStatus.SUCCESS,
+        'result': MiningResult.DAILY_REPORT_GENERATED,
         'ref_date': ref_date,
         'rows': rows,
     }
@@ -608,22 +625,89 @@ def _compute_biweekly_average(
     mean divides by that exact count, matching the spec "se aplica el promedio
     para ese número de días".
     '''
-    result = (
-        db.query(
-            func.avg(MiningPrice.price_low).label('avg_low'),
-            func.count(func.distinct(MiningPrice.date)).label('days')
-        )
-        .filter(
-            MiningPrice.mineral_id == mineral_id,
-            MiningPrice.date >= period_start,
-            MiningPrice.date <= period_end,
-            MiningPrice.price_low.isnot(None)
-        )
-        .one()
-    )
-    if not result.days or result.avg_low is None:
-        return None
-    return float(result.avg_low), int(result.days)
+    # Delegated to the store so the same rule holds on either backend: the
+    # relational one aggregates with SQL, DynamoDB reads the partition and
+    # averages in Python. This function no longer knows which is active.
+    return average_low(str(mineral_id), period_start, period_end, db = db)
+
+
+# How far back the report looks for the last published quotation of a mineral,
+# in biweekly periods. Two years is generous for "el del periodo anterior que se
+# tenga" and still bounds the search on a mineral that was never quoted.
+_MAX_FALLBACK_PERIODS: int = 24
+
+
+@dataclass(frozen = True)
+class _BiweeklyAverage:
+    '''
+    One mineral's figure for a biweekly report, and which window produced it.
+
+    `is_fallback` is True when the number does not belong to the requested
+    period: either the mineral is absent from the catalogue, or the report had
+    to walk back to an earlier period to find a quotation. The UI marks those
+    rows so a reader never takes an old price for a current one.
+    '''
+    avg_price_low: float
+    sample_size: int
+    period_start: date
+    period_end: date
+    is_fallback: bool
+
+    def as_row(self) -> Dict[str, Any]:
+        '''
+        Renders the figure as the keys the report payload carries.
+
+        Returns:
+            Dict[str, Any]: Fields merged into the mineral's row.
+        '''
+        return {
+            'avg_price_low': self.avg_price_low,
+            'sample_size': self.sample_size,
+            'period_start': self.period_start,
+            'period_end': self.period_end,
+            'is_fallback': self.is_fallback,
+        }
+
+
+def _average_with_fallback(
+    db: Session,
+    mineral_id: Optional[str],
+    period: Tuple[int, int, int]
+) -> _BiweeklyAverage:
+    '''
+    Returns the mineral's average for the requested period, or the most recent
+    earlier one when that period has no data.
+
+    Args:
+        db (Session): Database session.
+        mineral_id (str | None): Mineral identifier, None when the catalogue
+            has no such mineral.
+        period (tuple[int, int, int]): Requested (year, month, half).
+
+    Returns:
+        _BiweeklyAverage: The figure and the window it actually came from.
+    '''
+    year, month, half = period
+    start, end = _biweekly_period_bounds(year, month, half)
+
+    if mineral_id is None:
+        return _BiweeklyAverage(0.0, 0, start, end, is_fallback = True)
+
+    calc = _compute_biweekly_average(db, mineral_id, start, end)
+    if calc is not None:
+        return _BiweeklyAverage(calc[0], calc[1], start, end, is_fallback = False)
+
+    current = period
+    for _ in range(_MAX_FALLBACK_PERIODS):
+        current = _prev_biweekly_period(*current)
+        past_start, past_end = _biweekly_period_bounds(*current)
+        calc = _compute_biweekly_average(db, mineral_id, past_start, past_end)
+        if calc is not None:
+            return _BiweeklyAverage(
+                calc[0], calc[1], past_start, past_end, is_fallback = True
+            )
+
+    return _BiweeklyAverage(0.0, 0, start, end, is_fallback = True)
 
 
 @handle_service_errors('MINING_ANALYSIS')
@@ -654,48 +738,24 @@ async def get_biweekly_report_service(
     '''
     period_start, period_end = _biweekly_period_bounds(year, month, half)
     mineral_ids = _resolve_mineral_id_map(db)
-    rows: List[Dict[str, Any]] = []
-
-    for catalog in OFFICIAL_MINERALS:
-        normalized = _normalize_name(catalog['name'])
-        mineral_id = mineral_ids.get(normalized)
-
-        avg_low, sample_size = 0.0, 0
-        used_start, used_end = period_start, period_end
-        is_fallback = mineral_id is None
-
-        if mineral_id is not None:
-            calc = _compute_biweekly_average(db, mineral_id, period_start, period_end)
-            if calc is not None:
-                avg_low, sample_size = calc
-            else:
-                # Mark as fallback up-front; flip back only on a successful match.
-                is_fallback = True
-                cur_y, cur_m, cur_h = year, month, half
-                for _ in range(24):
-                    cur_y, cur_m, cur_h = _prev_biweekly_period(cur_y, cur_m, cur_h)
-                    fb_start, fb_end = _biweekly_period_bounds(cur_y, cur_m, cur_h)
-                    calc = _compute_biweekly_average(db, mineral_id, fb_start, fb_end)
-                    if calc is not None:
-                        avg_low, sample_size = calc
-                        used_start, used_end = fb_start, fb_end
-                        break
-
-        rows.append({
+    rows: List[Dict[str, Any]] = [
+        {
             'mineral': catalog['name'],
             'chemical_symbol': catalog['chemical_symbol'],
             'unit': catalog['unit'],
             'quoted_in': catalog['quoted_in'],
-            'avg_price_low': avg_low,
-            'sample_size': sample_size,
-            'period_start': used_start,
-            'period_end': used_end,
-            'is_fallback': is_fallback,
-        })
+            **_average_with_fallback(
+                db,
+                mineral_ids.get(_normalize_name(catalog['name'])),
+                (year, month, half)
+            ).as_row()
+        }
+        for catalog in OFFICIAL_MINERALS
+    ]
 
     return {
-        'status': 'success',
-        'message': 'Biweekly report generated.',
+        'status': MiningStatus.SUCCESS,
+        'result': MiningResult.BIWEEKLY_REPORT_GENERATED,
         'year': year,
         'month': month,
         'half': half,
@@ -752,22 +812,19 @@ async def get_biweekly_history_service(
     Returns:
         Dict[str, Any]: Payload matching BiweeklyHistoryResponse shape.
     '''
-    bounds = db.query(
-        func.min(MiningPrice.date).label('min_d'),
-        func.max(MiningPrice.date).label('max_d'),
-    ).one()
-    if bounds.min_d is None:
+    oldest, newest = date_bounds(db = db)
+    if oldest is None:
         today = date.today()
         return {
-            'status': 'success',
-            'message': 'Biweekly history generated.',
+            'status': MiningStatus.SUCCESS,
+            'result': MiningResult.BIWEEKLY_HISTORY_GENERATED,
             'period_from': period_from or today,
             'period_to': period_to or today,
             'periods': [],
         }
 
-    period_from = period_from or bounds.min_d
-    period_to = period_to or bounds.max_d
+    period_from = period_from or oldest
+    period_to = period_to or newest
     if period_from > period_to:
         raise InvalidInputError(detail = 'period_from must be <= period_to.')
 
@@ -788,8 +845,8 @@ async def get_biweekly_history_service(
         })
 
     return {
-        'status': 'success',
-        'message': 'Biweekly history generated.',
+        'status': MiningStatus.SUCCESS,
+        'result': MiningResult.BIWEEKLY_HISTORY_GENERATED,
         'period_from': period_from,
         'period_to': period_to,
         'periods': periods,

@@ -2,8 +2,40 @@
     Mining Analysis Schemas (Request/Response)
 '''
 from datetime import datetime, date
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
+
+class MiningStatus(str, Enum):
+    '''
+        Whether a request could be served.
+
+        Typed instead of a loose string so the value cannot drift between
+        endpoints; the wire value is the same one the API already returned.
+    '''
+    SUCCESS = 'success'
+
+
+class MiningResult(str, Enum):
+    '''
+        What the endpoint did, as a stable code.
+
+        These used to be English sentences ('Daily report generated.'). The
+        backend returns data and codes; the wording belongs to the frontend or
+        to the interpretation layer, which is how the other services already
+        work. The facts that the sentences carried — how many records the ETL
+        processed, how many it skipped — travel in their own fields, where they
+        can be read without parsing prose.
+    '''
+    PRICES_ETL_COMPLETED = 'PRICES_ETL_COMPLETED'
+    ROYALTIES_ETL_COMPLETED = 'ROYALTIES_ETL_COMPLETED'
+    ROYALTY_SUMMARY_RETRIEVED = 'ROYALTY_SUMMARY_RETRIEVED'
+    TRANSACTIONS_RETRIEVED = 'TRANSACTIONS_RETRIEVED'
+    DAILY_REPORT_GENERATED = 'DAILY_REPORT_GENERATED'
+    BIWEEKLY_REPORT_GENERATED = 'BIWEEKLY_REPORT_GENERATED'
+    BIWEEKLY_HISTORY_GENERATED = 'BIWEEKLY_HISTORY_GENERATED'
+    PRICE_FORECAST_GENERATED = 'PRICE_FORECAST_GENERATED'
+
 
 class MiningAnalysisBaseSchema(BaseModel):
     '''
@@ -45,9 +77,9 @@ class MiningPriceResponseSchema(MiningAnalysisBaseSchema):
 
 class BulkUploadMiningResponseSchema(BaseModel):
     ''' Response schema for the ETL process. '''
-    message: str
+    result: MiningResult = MiningResult.PRICES_ETL_COMPLETED
     processed_records: int
-    status: str = 'success'
+    status: MiningStatus = MiningStatus.SUCCESS
     skipped_records: int = 0
 
 class RoyaltySummaryItem(BaseModel):
@@ -88,8 +120,8 @@ class RoyaltySummaryData(BaseModel):
 
 class RoyaltySummaryResponse(BaseModel):
     ''' Main response schema for ministerial reporting. '''
-    status: str
-    message: str
+    status: MiningStatus
+    result: MiningResult
     data: RoyaltySummaryData
 
 class CompanyTransactionItem(BaseModel):
@@ -104,8 +136,8 @@ class CompanyTransactionItem(BaseModel):
 
 class TransactionSummaryResponse(BaseModel):
     ''' Main response schema for transactions. '''
-    status: str
-    message: str
+    status: MiningStatus
+    result: MiningResult
     data: List[CompanyTransactionItem]
 
 
@@ -133,8 +165,8 @@ class DailyMineralPriceRow(BaseModel):
 
 class DailyReportResponse(BaseModel):
     ''' Response schema for the daily mineral report. '''
-    status: str = 'success'
-    message: str = 'Daily report generated.'
+    status: MiningStatus = MiningStatus.SUCCESS
+    result: MiningResult = MiningResult.DAILY_REPORT_GENERATED
     ref_date: date
     rows: List[DailyMineralPriceRow]
 
@@ -159,8 +191,8 @@ class BiweeklyMineralPriceRow(BaseModel):
 
 class BiweeklyReportResponse(BaseModel):
     ''' Response schema for the biweekly official mineral report. '''
-    status: str = 'success'
-    message: str = 'Biweekly report generated.'
+    status: MiningStatus = MiningStatus.SUCCESS
+    result: MiningResult = MiningResult.BIWEEKLY_REPORT_GENERATED
     year: int
     month: int
     half: int = Field(..., ge = 1, le = 2,
@@ -189,8 +221,77 @@ class BiweeklyHistoryResponse(BaseModel):
     cotización in the requested range. Ordered chronologically (oldest first)
     so the front-end can plot the line chart without sorting.
     '''
-    status: str = 'success'
-    message: str = 'Biweekly history generated.'
+    status: MiningStatus = MiningStatus.SUCCESS
+    result: MiningResult = MiningResult.BIWEEKLY_HISTORY_GENERATED
     period_from: date
     period_to: date
     periods: List[BiweeklyPeriodSummary]
+
+
+# --- Price forecasting ---
+
+class ForecastMethod(str, Enum):
+    '''
+        How a projection was produced.
+
+        A stable code, not a sentence: the frontend and the interpretation layer
+        word it, and a caller can request one explicitly.
+    '''
+    LINEAR = 'LINEAR'
+    MOVING_AVERAGE = 'MOVING_AVERAGE'
+
+
+class ForecastConfidence(str, Enum):
+    '''
+        How much history backs a projection.
+
+        Reported so a thin series is never presented with the same weight as a
+        full one. A quotation with three weeks of history can be projected, but
+        the reader has to know that is what they are looking at.
+    '''
+    HIGH = 'HIGH'
+    MEDIUM = 'MEDIUM'
+    LOW = 'LOW'
+    INSUFFICIENT = 'INSUFFICIENT'
+
+
+class PricePoint(BaseModel):
+    '''One quotation on one date, historical or projected.'''
+    date: date
+    price: float
+
+
+class MineralForecast(BaseModel):
+    '''
+        The projection for a single mineral.
+
+        `history` carries the observed quotations the projection was fitted on,
+        so the UI can draw both series on the same axis and the reader can judge
+        the trend rather than take the number on faith.
+    '''
+    mineral: str
+    chemical_symbol: Optional[str] = None
+    unit: Optional[str] = None
+    method: ForecastMethod
+    confidence: ForecastConfidence
+    sample_size: int = Field(..., ge = 0, description = 'Days of history used.')
+    last_price: Optional[float] = Field(
+        None, description = 'Most recent observed quotation.'
+    )
+    change_percent: Optional[float] = Field(
+        None, description = 'Projected change against the last observed price.'
+    )
+    history: List[PricePoint] = []
+    forecast: List[PricePoint] = []
+
+
+class PriceForecastResponse(BaseModel):
+    '''
+        Payload for GET /v1/mining-analysis/forecast/prices.
+    '''
+    status: MiningStatus = MiningStatus.SUCCESS
+    result: MiningResult = MiningResult.PRICE_FORECAST_GENERATED
+    days_ahead: int
+    history_from: Optional[date] = None
+    history_to: Optional[date] = None
+    minerals: List[MineralForecast] = []
