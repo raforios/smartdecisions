@@ -57,17 +57,6 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM])
-        email: str = payload.get('email')
-
-        message = f'User authenticated with email: {email} ------'
-        logger.info(message)
-
-        if email is None:
-            raise UnauthorizedError(
-                detail = 'No user email was found in the token',
-                headers = {'WWW-Authenticate': 'Bearer'},
-            )
-        return email
     except JWTError as e:
         raise UnauthorizedError(
             detail = 'Invalid credentials',
@@ -78,3 +67,18 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
             detail = 'An unexpected authentication error occurred',
             headers = {'WWW-Authenticate': 'Bearer'},
         ) from e
+
+    # Raised outside the try on purpose: UnauthorizedError derives from
+    # Exception, so raising it inside would be swallowed by the catch-all above
+    # and reported as an unexpected error, hiding the real cause.
+    email: str = payload.get('email')
+
+    message = f'User authenticated with email: {email}'
+    logger.info(message)
+
+    if email is None:
+        raise UnauthorizedError(
+            detail = 'No user email was found in the token',
+            headers = {'WWW-Authenticate': 'Bearer'},
+        )
+    return email
