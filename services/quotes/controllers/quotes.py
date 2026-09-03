@@ -9,11 +9,13 @@ from fastapi import Request
 from models.quotes import USD
 from schemas.quotes import (
     ExchangeRateHistory,
+    RateForecast,
     SaleScenario,
     SaleScenarioRequest,
     SyncResult
 )
 from services.quotes import (
+    get_forecast_service,
     get_history_service,
     sale_scenario_service,
     sync_rates_service
@@ -96,3 +98,26 @@ async def sale_scenario_controller(
         mineral_change_percent = scenario.mineral_change_percent
     )
     return SaleScenario(**result)
+
+
+@handle_service_errors('QUOTES')
+async def get_forecast_controller(
+    days_ahead: int,
+    currency: str,
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> RateForecast:
+    '''
+        Projects the exchange rate forward on its own.
+
+        Args:
+            days_ahead (int): How far ahead to project.
+            currency (str): ISO 4217 code.
+            current_user (str): Authenticated caller.
+            request (Request): Incoming request, used by the audit decorator.
+
+        Returns:
+            RateForecast: Observed series, projection and confidence.
+    '''
+    result = await get_forecast_service(days_ahead = days_ahead, currency = currency)
+    return RateForecast(**result)

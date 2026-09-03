@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, Request, status
 
 from controllers.quotes import (
+    get_forecast_controller,
     get_history_controller,
     sale_scenario_controller,
     sync_rates_controller
@@ -14,6 +15,7 @@ from controllers.quotes import (
 from models.quotes import USD
 from schemas.quotes import (
     ExchangeRateHistory,
+    RateForecast,
     SaleScenario,
     SaleScenarioRequest,
     SyncResult
@@ -114,6 +116,37 @@ async def sale_scenario_endpoint(
 
     return await sale_scenario_controller(
         scenario = scenario,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/exchange-rates/forecast',
+    response_model = RateForecast,
+    status_code = status.HTTP_200_OK,
+    summary = 'Where the official rate is heading.',
+    description = 'Projects the stored series forward. `projected` comes back '
+                  'empty when the history cannot support a projection, and '
+                  '`confidence` says why: a thin series is never presented with '
+                  'the same weight as a full one.'
+)
+async def get_rate_forecast_endpoint(
+    request: Request,
+    days_ahead: int = Query(30, ge = 1, le = 90,
+                            description = 'Days to project.'),
+    currency: str = Query(USD, min_length = 3, max_length = 3,
+                          description = 'ISO 4217 code.'),
+    current_user: str = Depends(get_current_user)
+) -> RateForecast:
+    ''' Endpoint projecting the official exchange rate. '''
+    message = (f'User: {current_user}. Requested a {days_ahead}-day '
+               f'{currency} rate forecast.')
+    logger.info(message)
+
+    return await get_forecast_controller(
+        days_ahead = days_ahead,
+        currency = currency,
         current_user = current_user,
         request = request
     )

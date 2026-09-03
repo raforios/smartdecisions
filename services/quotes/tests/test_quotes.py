@@ -250,3 +250,46 @@ def test_scenario_reports_no_rate_when_nothing_is_stored(store): # pylint: disab
         _run(quotes.sale_scenario_service(quantity = 10, unit_price_usd = 100))
 
     assert QuotesError.NO_RATE_PUBLISHED.value in str(failure.value.detail)
+
+
+def test_forecast_projects_the_rate_on_its_own(store):
+    '''The dollar is a question by itself, not only an input to a sale.'''
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    result = _run(quotes.get_forecast_service(days_ahead = 30))
+
+    assert result['confidence'] is RateConfidence.MEDIUM
+    assert len(result['projected']) == 30
+    assert result['final_rate'] > result['last_rate']
+    assert result['change_percent'] > 0
+    # The observed series must travel too, or the chart has nothing to anchor on.
+    assert len(result['history']) == 60
+    assert result['history'][-1]['date'] < result['projected'][0]['date']
+
+
+def test_forecast_refuses_to_guess_on_a_thin_history(store):
+    '''
+        Below the minimum sample the projection is withheld, and the caller is
+        told why instead of receiving a line drawn through noise.
+    '''
+    for item in build_history(5):
+        store[(item.currency, item.date)] = item
+
+    result = _run(quotes.get_forecast_service(days_ahead = 30))
+
+    assert result['projected'] == []
+    assert result['final_rate'] is None
+    assert result['confidence'] is RateConfidence.INSUFFICIENT
+    assert len(result['history']) == 5
+
+
+def test_forecast_refuses_a_horizon_beyond_the_bound(store):
+    '''Past a quarter the projection describes the fitted line, not the market.'''
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    with pytest.raises(HTTPException) as failure:
+        _run(quotes.get_forecast_service(days_ahead = quotes.SCENARIO_MAX_DAYS + 1))
+
+    assert QuotesError.INVALID_DATE_RANGE.value in str(failure.value.detail)
