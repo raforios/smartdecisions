@@ -261,6 +261,35 @@ class PricePoint(BaseModel):
     price: float
 
 
+class OfficialQuotation(BaseModel):
+    '''
+        The official biweekly quotation of one mineral.
+
+        In Bolivia the price mining companies settle on is not the last
+        quotation of the day: it is the **average of the previous fortnight**.
+        The mean of 1-15 September is what rules from 16 to 30 September, so the
+        window that was averaged and the window it governs are never the same —
+        `period_*` says what was averaged, `valid_*` says when it applies.
+    '''
+    period_start: date
+    period_end: date
+    valid_from: date
+    valid_to: date
+    avg_price_low: float
+    sample_size: int = Field(..., ge = 0, description = 'Days that fed the mean.')
+    observed_days: int = Field(
+        0, ge = 0, description = 'Of those, days already published.'
+    )
+    projected_days: int = Field(
+        0, ge = 0, description = 'Of those, days still to happen.'
+    )
+    is_complete: bool = Field(
+        True,
+        description = 'False when the horizon does not cover the whole window, '
+                      'so the mean is missing working days.'
+    )
+
+
 class MineralForecast(BaseModel):
     '''
         The projection for a single mineral.
@@ -283,6 +312,22 @@ class MineralForecast(BaseModel):
     )
     history: List[PricePoint] = []
     forecast: List[PricePoint] = []
+    official_current: Optional[OfficialQuotation] = Field(
+        None, description = 'The price in force today, from the closed fortnight.'
+    )
+    official_history: List[OfficialQuotation] = Field(
+        default_factory = list,
+        description = 'Official prices already published, newest first, so the '
+                      'projection can be checked against what happened.'
+    )
+    official_forecast: List[OfficialQuotation] = Field(
+        default_factory = list,
+        description = 'Upcoming official prices the horizon reaches. The first '
+                      'one mixes days already quoted with projected ones.'
+    )
+    official_change_percent: Optional[float] = Field(
+        None, description = 'Next official price against the one in force.'
+    )
 
 
 class PriceForecastResponse(BaseModel):

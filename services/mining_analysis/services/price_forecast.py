@@ -28,6 +28,7 @@
 '''
 from dataclasses import dataclass
 from datetime import date as date_type, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -43,11 +44,13 @@ from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 from services.mining_analysis import (
     OFFICIAL_MINERALS,
+    _biweekly_period_bounds,
     _normalize_name,
+    _prev_biweekly_period,
     _resolve_mineral_id_map
 )
 from services.prices_store import PriceRecord, prices_in_window
-from services.utils import handle_service_errors
+from services.utils import get_current_time_gmt, handle_service_errors
 
 
 ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
@@ -56,7 +59,12 @@ ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
     'FORECAST_MEDIUM_CONFIDENCE_DAYS': int,
     'FORECAST_MOVING_AVERAGE_WINDOW': int,
     'FORECAST_HISTORY_POINTS': int,
+    'OFFICIAL_HISTORY_PERIODS': int,
 })
+
+# How many closed fortnights travel with the projection so the reader can
+# check it against what actually happened. Six is a quarter of a year.
+OFFICIAL_HISTORY_PERIODS = ENV_VARS['OFFICIAL_HISTORY_PERIODS'] or 6
 
 # Below this, a projection says more about the noise than about the mineral.
 MIN_DAYS = ENV_VARS['FORECAST_MIN_DAYS'] or 10
@@ -236,6 +244,276 @@ def project(
     return Projection(list(zip(dates, projected)), used_method, confidence, change)
 
 
+# The official quotation is published with two decimals, so that is the figure
+# the service returns: rounding it later, in the browser, would let the API and
+# the bulletin disagree on the number a sale is settled at.
+_OFFICIAL_QUANTUM: Decimal = Decimal('0.01')
+
+
+def _official_round(value: float) -> float:
+    '''
+    Rounds an official average to two decimals, HALF_UP.
+
+    Never with float formatting: the price is stored with four decimals and
+    `f'{12.825:.2f}'` yields 12.82, because the binary float behind that literal
+    is 12.8249999…. A published quotation cannot round a half down, and
+    `reports_renderer` already rounds this way for the same reason.
+
+    Args:
+        value (float): Average to round.
+
+    Returns:
+        float: The same figure with two decimals.
+    '''
+    return float(Decimal(str(value)).quantize(_OFFICIAL_QUANTUM, rounding = ROUND_HALF_UP))
+
+
+def _next_biweekly_period(year: int, month: int, half: int) -> Tuple[int, int, int]:
+    '''
+    Returns the biweekly period immediately after the one given.
+
+    Args:
+        year (int): Year of the period.
+        month (int): Month of the period.
+        half (int): 1 for days 1-15, 2 for 16-end.
+
+    Returns:
+        Tuple[int, int, int]: The following (year, month, half).
+    '''
+    if half == 1:
+        return year, month, 2
+    if month == 12:
+        return year + 1, 1, 1
+    return year, month + 1, 1
+
+
+def _period_of(day: date_type) -> Tuple[int, int, int]:
+    '''
+    Returns the biweekly period a date falls into.
+
+    Args:
+        day (date): Any calendar date.
+
+    Returns:
+        Tuple[int, int, int]: Its (year, month, half).
+    '''
+    return day.year, day.month, 1 if day.day <= 15 else 2
+
+
+def _official_average(
+    window: Tuple[date_type, date_type],
+    observed: Dict[date_type, float],
+    projected: Dict[date_type, float]
+) -> Optional[Dict[str, Any]]:
+    '''
+    Averages one biweekly window, using observations first and the projection
+    only for the days still to come.
+
+    Quotations are published on working days — of 104 observations in the
+    series, 104 fall on weekdays — so the projection is read on weekdays only.
+    Averaging over calendar days instead would put a denominator of 15 against a
+    real one of 10 and quietly lower every projected official price.
+
+    Args:
+        window (tuple[date, date]): Period start and end, inclusive.
+        observed (Dict[date, float]): Quotations already published.
+        projected (Dict[date, float]): Projected daily values.
+
+    Returns:
+        Dict[str, Any] | None: The average and how it was composed, or None
+            when no day of the window has a value at all.
+    '''
+    start, end = window
+    values: List[float] = []
+    observed_days, projected_days, working_days = 0, 0, 0
+
+    day = start
+    while day <= end:
+        if day.weekday() < 5:
+            working_days += 1
+        if day in observed:
+            values.append(observed[day])
+            observed_days += 1
+        elif day.weekday() < 5 and day in projected:
+            values.append(projected[day])
+            projected_days += 1
+        day += timedelta(days = 1)
+
+    if not values:
+        return None
+
+    return {
+        'period_start': start,
+        'period_end': end,
+        'avg_price_low': _official_round(sum(values) / len(values)),
+        'sample_size': len(values),
+        'observed_days': observed_days,
+        'projected_days': projected_days,
+        # A window the horizon only half reaches still averages, but the reader
+        # has to know the mean is missing days before treating it as the price.
+        'is_complete': len(values) >= working_days,
+    }
+
+
+def _validity_of(period: Tuple[int, int, int]) -> Tuple[date_type, date_type]:
+    '''
+    Returns the window a period's average rules over.
+
+    The Bolivian official quotation of a fortnight is the average of the
+    fortnight before it: the mean of 1-15 September is the price every mining
+    company settles on from 16 to 30 September. The number and the days it
+    governs are therefore never the same window, and reporting one without the
+    other is what makes a reader take an old price for a current one.
+
+    Args:
+        period (tuple[int, int, int]): The averaged (year, month, half).
+
+    Returns:
+        Tuple[date, date]: First and last day the average is in force.
+    '''
+    return _biweekly_period_bounds(*_next_biweekly_period(*period))
+
+
+def _projected_officials(
+    reference: date_type,
+    horizon_end: date_type,
+    observed: Dict[date_type, float],
+    projected: Dict[date_type, float]
+) -> List[Dict[str, Any]]:
+    '''
+    Builds the upcoming official quotations the horizon reaches.
+
+    Starts at the period in course, whose average is part observed and part
+    projected — the days already quoted are facts, and mixing them in is what
+    makes the first projected official worth reading at all.
+
+    Args:
+        reference (date): Today.
+        horizon_end (date): Last projected date.
+        observed (Dict[date, float]): Quotations already published.
+        projected (Dict[date, float]): Projected daily values.
+
+    Returns:
+        List[Dict[str, Any]]: One entry per period, chronologically.
+    '''
+    entries: List[Dict[str, Any]] = []
+    period = _period_of(reference)
+    while True:
+        entry = _official_average(_biweekly_period_bounds(*period), observed, projected)
+        if entry is None:
+            break
+        entry['valid_from'], entry['valid_to'] = _validity_of(period)
+        entries.append(entry)
+        period = _next_biweekly_period(*period)
+        # Stop once the projection no longer reaches the next window.
+        if _biweekly_period_bounds(*period)[0] > horizon_end:
+            break
+    return entries
+
+
+def _official_history(
+    reference: date_type,
+    observed: Dict[date_type, float],
+    periods: int
+) -> List[Dict[str, Any]]:
+    '''
+    Returns the official quotations already published, newest first.
+
+    The projected price is only worth as much as the reader's ability to check
+    it against what actually happened, so the closed fortnights travel with the
+    projection instead of forcing a second call to the report endpoint.
+
+    Args:
+        reference (date): Today.
+        observed (Dict[date, float]): Quotations already published.
+        periods (int): How many closed fortnights to walk back.
+
+    Returns:
+        List[Dict[str, Any]]: One entry per period that had quotations.
+    '''
+    entries: List[Dict[str, Any]] = []
+    # Two steps back: one lands on the period in force, which already travels
+    # as `official_current` and would only repeat itself here.
+    period = _prev_biweekly_period(*_prev_biweekly_period(*_period_of(reference)))
+    for _ in range(periods):
+        entry = _official_average(_biweekly_period_bounds(*period), observed, {})
+        if entry is not None:
+            entry['valid_from'], entry['valid_to'] = _validity_of(period)
+            entries.append(entry)
+        period = _prev_biweekly_period(*period)
+    return entries
+
+
+def _official_block(
+    mineral_id: Optional[str],
+    projection: Projection,
+    reference: date_type,
+    db: Optional[Session] = None
+) -> Dict[str, Any]:
+    '''
+    Builds the official-quotation view of one mineral.
+
+    Args:
+        mineral_id (str | None): Mineral identifier, None when uncatalogued.
+        projection (Projection): The daily projection already computed.
+        reference (date): Today, which decides which period is in force.
+        db (Session | None): Relational session; ignored on DynamoDB.
+
+    Returns:
+        Dict[str, Any]: `official_current`, `official_forecast` and the change
+            between the price in force and the next one.
+    '''
+    empty: Dict[str, Any] = {
+        'official_current': None,
+        'official_history': [],
+        'official_forecast': [],
+        'official_change_percent': None,
+    }
+    if mineral_id is None:
+        return empty
+
+    projected = dict(projection.points)
+    horizon_end = max(projected) if projected else reference
+
+    # The average in force today is the one of the period that already closed.
+    current_period = _prev_biweekly_period(*_period_of(reference))
+    # Read from the oldest fortnight the history shows through the horizon:
+    # everything the averages below may need, in a single pass over storage.
+    oldest = current_period
+    for _ in range(OFFICIAL_HISTORY_PERIODS):
+        oldest = _prev_biweekly_period(*oldest)
+    read_from = _biweekly_period_bounds(*oldest)[0]
+    observed = {
+        record.date: record.price_low
+        for record in prices_in_window(mineral_id, read_from, horizon_end, db = db)
+        if record.price_low is not None
+    }
+
+    current = _official_average(
+        _biweekly_period_bounds(*current_period), observed, {}
+    )
+    if current is not None:
+        current['valid_from'], current['valid_to'] = _validity_of(current_period)
+
+    forecast = _projected_officials(reference, horizon_end, observed, projected)
+
+    change = None
+    if current and forecast and current['avg_price_low']:
+        change = round(
+            (forecast[0]['avg_price_low'] - current['avg_price_low'])
+            / current['avg_price_low'] * 100, 2
+        )
+
+    return {
+        'official_current': current,
+        'official_history': _official_history(
+            reference, observed, OFFICIAL_HISTORY_PERIODS
+        ),
+        'official_forecast': forecast,
+        'official_change_percent': change,
+    }
+
+
 @handle_service_errors('MINING_ANALYSIS')
 async def get_price_forecast_service(
     db: Session,
@@ -262,6 +540,9 @@ async def get_price_forecast_service(
     mineral_ids = _resolve_mineral_id_map(db)
     minerals: List[Dict[str, Any]] = []
     observed_dates: List[date_type] = []
+    # One reference for every mineral, so the whole payload agrees on which
+    # fortnight is in force even if the request straddles midnight.
+    reference = get_current_time_gmt().date()
 
     for catalog in OFFICIAL_MINERALS:
         mineral_id = mineral_ids.get(_normalize_name(catalog['name']))
@@ -270,9 +551,17 @@ async def get_price_forecast_service(
             if mineral_id is not None else []
         )
         observed_dates.extend(record.date for record in history)
-        minerals.append(
-            _forecast_row(catalog, history[-HISTORY_POINTS:], days_ahead, method)
-        )
+        minerals.append(_forecast_row(
+            ForecastRequest(
+                catalog = catalog,
+                history = history[-HISTORY_POINTS:],
+                days_ahead = days_ahead,
+                method = method,
+                mineral_id = mineral_id,
+                reference = reference
+            ),
+            db = db
+        ))
 
     message = f'Price forecast built for {len(minerals)} minerals, {days_ahead} day(s).'
     logger.info(message)
@@ -286,24 +575,40 @@ async def get_price_forecast_service(
     }
 
 
-def _forecast_row(
-    catalog: Dict[str, str],
-    history: List[PriceRecord],
-    days_ahead: int,
+@dataclass(frozen = True)
+class ForecastRequest:
+    '''
+    What one mineral's row needs to be built.
+
+    Grouped rather than passed loose because the row needs the catalogue entry,
+    the history, the horizon, the method and who to ask for the official
+    average — more arguments than a function should carry.
+    '''
+    catalog: Dict[str, str]
+    history: List[PriceRecord]
+    days_ahead: int
     method: ForecastMethod
+    mineral_id: Optional[str] = None
+    reference: Optional[date_type] = None
+
+
+def _forecast_row(
+    request: ForecastRequest,
+    db: Optional[Session] = None
 ) -> Dict[str, Any]:
     '''
     Builds one mineral's entry of the forecast payload.
 
     Args:
-        catalog (Dict[str, str]): Entry of OFFICIAL_MINERALS.
-        history (List[PriceRecord]): Observed quotations to fit on.
-        days_ahead (int): How many days to project.
-        method (ForecastMethod): Requested projection method.
+        request (ForecastRequest): Catalogue entry, history and horizon.
+        db (Session | None): Relational session; ignored on DynamoDB.
 
     Returns:
-        Dict[str, Any]: The mineral's row, projection included.
+        Dict[str, Any]: The mineral's row, daily projection and official
+            quotation included.
     '''
+    catalog, history = request.catalog, request.history
+    days_ahead, method = request.days_ahead, request.method
     result = project(history, days_ahead, method)
     priced = [record for record in history if record.price_low is not None]
     return {
@@ -321,4 +626,10 @@ def _forecast_row(
         'forecast': [
             {'date': day, 'price': round(price, 4)} for day, price in result.points
         ],
+        **_official_block(
+            request.mineral_id,
+            result,
+            request.reference or get_current_time_gmt().date(),
+            db = db
+        ),
     }
