@@ -1,12 +1,13 @@
 '''
     Quotes Microservice Main Handler
 '''
+import asyncio
 import socket
 from datetime import date, datetime
 from typing import Any, AsyncIterator, Dict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 
@@ -18,6 +19,7 @@ from routes.quotes import router as quotes_router
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+from services.quotes import scheduled_sync_service
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
@@ -154,4 +156,60 @@ if __name__ == '__main__':
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 
-handler = Mangum(app)
+# The Lambda answers two kinds of caller. API Gateway sends HTTP events, which
+# Mangum turns into ASGI; EventBridge sends a scheduled event, which has no
+# request at all and would make Mangum fail looking for one. The dispatch below
+# is the only place that has to know the difference.
+_asgi_handler = Mangum(app)
+
+# What a scheduled event looks like, and what a manual test invocation can send
+# to reach the same path from the console.
+_SCHEDULED_SOURCE = 'aws.events'
+_SYNC_TASK = 'sync_rates'
+
+
+def _is_scheduled_sync(event: Dict[str, Any]) -> bool:
+    '''
+        Tells a scheduled invocation apart from an HTTP one.
+
+        Args:
+            event (Dict[str, Any]): Raw Lambda event.
+
+        Returns:
+            bool: True when the event asks for the rate sync.
+    '''
+    if not isinstance(event, dict):
+        return False
+    return (event.get('source') == _SCHEDULED_SOURCE
+            or event.get('task') == _SYNC_TASK)
+
+
+def handler(event: Dict[str, Any], context: Any) -> Any:
+    '''
+        Lambda entry point.
+
+        Args:
+            event (Dict[str, Any]): Raw Lambda event.
+            context (Any): Lambda context, passed through to Mangum.
+
+        Returns:
+            Any: The HTTP response, or the sync result for a scheduled run.
+
+        Raises:
+            RuntimeError: If the scheduled sync could not complete. Raised so
+                the invocation is marked as failed and the retry policy applies;
+                a silent success would leave the series with a hole nobody sees.
+    '''
+    if _is_scheduled_sync(event):
+        try:
+            result = asyncio.run(scheduled_sync_service())
+        except HTTPException as error:
+            error_msg = f'Scheduled rate sync failed: {error.detail}'
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from error
+        message = (f"Scheduled rate sync stored {result['stored']} day(s), "
+                   f"skipped {result['already_present']} already present.")
+        logger.info(message)
+        return result
+
+    return _asgi_handler(event, context)

@@ -36,6 +36,7 @@ ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
     'FLOAT_REGIME_START': str,
     'SYNC_MAX_DAYS': int,
     'SCENARIO_MAX_DAYS': int,
+    'SCHEDULED_SYNC_DAYS': int,
 })
 
 # The day the rate stopped being fixed. Series fitted for projection must start
@@ -49,6 +50,13 @@ FLOAT_REGIME_START: date_type = date_type.fromisoformat(
 # Upper bound for a single sync, so one call cannot spend an hour hitting the
 # BCB one date at a time.
 SYNC_MAX_DAYS = ENV_VARS['SYNC_MAX_DAYS'] or 400
+
+# Days each scheduled run covers. More than one on purpose: the BCB publishes
+# nothing on weekends and holidays, and a run that failed yesterday must be
+# repaired by the next one instead of leaving a hole in the series forever.
+# Re-reading a stored date costs nothing — the sync skips it without asking the
+# source.
+SCHEDULED_SYNC_DAYS = ENV_VARS['SCHEDULED_SYNC_DAYS'] or 7
 
 # Longest horizon a sale scenario may compare. Beyond a quarter the
 # projection says more about the fitted line than about the market.
@@ -336,10 +344,33 @@ async def get_forecast_service(
     }
 
 
+@handle_service_errors('QUOTES')
+async def scheduled_sync_service(currency: str = USD) -> Dict[str, Any]:
+    '''
+    Runs the sync the way the daily schedule needs it.
+
+    Exists apart from `sync_rates_service` so the window the schedule uses is a
+    decision of the domain and not of whoever wrote the cron expression: the
+    trigger says *when*, this says *how much to repair*.
+
+    Args:
+        currency (str): ISO 4217 code.
+
+    Returns:
+        Dict[str, Any]: Payload matching SyncResult shape.
+    '''
+    message = f'Scheduled {currency} sync over {SCHEDULED_SYNC_DAYS} day(s).'
+    logger.info(message)
+    return await sync_rates_service(
+        days_back = SCHEDULED_SYNC_DAYS, currency = currency
+    )
+
+
 __all__ = [
     'FLOAT_REGIME_START',
     'get_forecast_service',
     'get_history_service',
+    'scheduled_sync_service',
     'sale_scenario_service',
     'stored_rates',
     'sync_rates_service',

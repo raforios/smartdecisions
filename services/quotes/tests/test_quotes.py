@@ -293,3 +293,40 @@ def test_forecast_refuses_a_horizon_beyond_the_bound(store):
         _run(quotes.get_forecast_service(days_ahead = quotes.SCENARIO_MAX_DAYS + 1))
 
     assert QuotesError.INVALID_DATE_RANGE.value in str(failure.value.detail)
+
+
+def test_scheduled_sync_repairs_more_than_one_day(store):
+    '''
+        Each scheduled run covers a window, not just yesterday.
+
+        The BCB publishes nothing on weekends and holidays, and a run that
+        failed must be repaired by the next one; a one-day window would leave a
+        permanent hole in the series.
+    '''
+    asked = []
+
+    with patch.object(quotes, 'fetch_official_rate', lambda day: asked.append(day) or 12.32):
+        result = _run(quotes.scheduled_sync_service())
+
+    assert result['requested_days'] == quotes.SCHEDULED_SYNC_DAYS
+    assert quotes.SCHEDULED_SYNC_DAYS > 1
+    assert len(asked) == quotes.SCHEDULED_SYNC_DAYS
+    assert len(store) == quotes.SCHEDULED_SYNC_DAYS
+
+
+def test_scheduled_sync_does_not_refetch_what_is_stored(store):
+    '''
+        Running it every day must not re-ask the source for dates already held:
+        the window overlaps by design, and the BCB answers one date per call.
+    '''
+    with patch.object(quotes, 'fetch_official_rate', lambda day: 12.32):
+        _run(quotes.scheduled_sync_service())
+
+    asked = []
+    with patch.object(quotes, 'fetch_official_rate', lambda day: asked.append(day) or 12.32):
+        result = _run(quotes.scheduled_sync_service())
+
+    assert not asked
+    assert result['stored'] == 0
+    assert result['already_present'] == quotes.SCHEDULED_SYNC_DAYS
+    assert len(store) == quotes.SCHEDULED_SYNC_DAYS

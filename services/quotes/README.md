@@ -128,6 +128,7 @@ están en `.env`, no incrustados en el código:
 | `FLOAT_REGIME_START` | `2026-06-27` | Dónde arranca la serie comparable. |
 | `SYNC_MAX_DAYS` | `400` | Techo de un sync, para no golpear al BCB una hora. |
 | `SCENARIO_MAX_DAYS` | `90` | Horizonte máximo del escenario. |
+| `SCHEDULED_SYNC_DAYS` | `7` | Días que repara cada corrida programada. |
 | `RATE_FORECAST_MIN_DAYS` | `15` | Debajo de esto la proyección describe el ruido. |
 | `RATE_FORECAST_MEDIUM_CONFIDENCE_DAYS` | `45` | Umbral de `MEDIUM`. |
 | `RATE_FORECAST_HIGH_CONFIDENCE_DAYS` | `90` | Umbral de `HIGH`. |
@@ -135,6 +136,51 @@ están en `.env`, no incrustados en el código:
 **Gotcha:** a las variables opcionales ausentes `load_and_validate_env_vars` les
 asigna `None` explícito, así que el default se aplica con `or`, no con
 `dict.get(name, default)`.
+
+## Actualización automática del tipo de cambio
+
+El BCB sirve **una fecha por request**, así que la serie no se llena sola: hay
+que pedirle cada día. Eso lo hace una regla de EventBridge que invoca este mismo
+Lambda una vez al día.
+
+```text
+EventBridge  cron(0 13 * * ? *)   →  Lambda  →  handler() ve {"task":"sync_rates"}
+      13:00 UTC = 09:00 La Paz                  →  scheduled_sync_service()
+```
+
+**El Lambda atiende dos tipos de llamador.** API Gateway manda eventos HTTP, que
+Mangum convierte en ASGI; EventBridge manda un evento programado, que no trae
+petición alguna y haría fallar a Mangum buscándola. El `handler` de `main.py` es
+el único lugar que conoce esa diferencia; todo lo demás sigue igual.
+
+**La ventana la decide el dominio, no el cron.** Cada corrida cubre
+`SCHEDULED_SYNC_DAYS` días (7 por defecto), no solo ayer: el BCB no publica fines
+de semana ni feriados, y una corrida que falló tiene que repararla la siguiente.
+Releer una fecha ya guardada no cuesta nada — el sync la saltea sin preguntarle a
+la fuente.
+
+**Si el sync falla, la invocación falla.** El handler convierte el error en
+`RuntimeError` a propósito, para que EventBridge reintente y el fallo se vea en
+las métricas. Devolver un éxito silencioso dejaría un hueco en la serie que nadie
+notaría hasta que alguien liquide una venta con una cotización vieja.
+
+### Crear la regla
+
+```bash
+bash services/ci/api/create_schedules.sh
+```
+
+Idempotente. **Se corre después de desplegar**, no antes: la regla invoca al
+Lambda que esté publicado, y una versión sin el dispatch fallaría al recibir un
+evento sin petición HTTP.
+
+### Probarla sin esperar al horario
+
+```bash
+aws lambda invoke --function-name quotes-handler-service \
+    --payload '{"task":"sync_rates"}' --cli-binary-format raw-in-base64-out \
+    --profile deploy_ml /dev/stdout
+```
 
 ## Ejecución local
 
