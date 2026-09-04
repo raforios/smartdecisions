@@ -891,6 +891,31 @@ modo dentro de otro: no se mezclan aunque compartan base. El orden es:
    precarga el precio **oficial**, no el diario, y aplica
    `official_change_percent`. **Requiere redesplegar MINING_ANALYSIS.**
 
+   **Tres consultas de Rafael, resueltas (2026-09-03).**
+   1. *"La proyección de minerales nunca pasa de 15 días."* El filtro **sí**
+      funcionaba —15 días dan 1 quincena, 30 dan 2, 60 dan 4— pero la tabla solo
+      pintaba `official_forecast[0]`, que siempre es la quincena en curso. Se veía
+      congelado por mi diseño, no por el backend. **No hay que quitar el filtro:**
+      el desplegable de cada mineral ahora muestra la cadena completa (publicadas
+      · vigente · proyectadas) y ahí el plazo se ve.
+   2. *Los scripts.* Los cinco funcionan y quedaron documentados en el README por
+      lo que son: `audit_decimals` + `ingest_pdf_xlsx` + `migrate_to_dynamodb` son
+      la **rutina quincenal en orden** (auditar el re-tipeo del PDF, cargar,
+      publicar); `cli_support` es andamiaje compartido, no se ejecuta. El único de
+      un solo uso ya cumplido era **`backfill_prices`**: borraba `t_mining_prices`
+      entero para reparar el bug del `clean_currency_pro`, corregido hace tiempo.
+      **Eliminado por decisión de Rafael** el 2026-09-03; queda en git (`81ef57c`)
+      si alguna vez hiciera falta. `ingest_pdf_xlsx` reconstruye igual sobre una
+      tabla vacía, así que no se perdió ninguna capacidad.
+   3. *El Streamlit contra AWS daba `Connection refused` a localhost:3020.*
+      `API_BASE_URL` tiene default localhost y hay que exportarla. Pero además
+      `/prices` —el endpoint del traceback— era el **último read que quedaba
+      solo-SQL**. Se agregó `all_quotations` al store y el endpoint pasó por ahí;
+      `id` y `created_at` se hicieron opcionales en los schemas porque en DynamoDB
+      no existe un número de fila. Verificado: 732 filas **idénticas** por los dos
+      caminos. Ahora contra AWS funcionan todas las lecturas; `POST /etl/upload`
+      sigue siendo local, como acordamos en la opción (a).
+
    **Ajustes a la cotización oficial (2026-09-03, misma sesión).**
    - **Dos decimales, HALF_UP, en el backend.** El servicio devuelve la cifra ya
      redondeada como la publica el boletín, en vez de dejar que la redondee el
