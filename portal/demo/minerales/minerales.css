@@ -222,3 +222,29 @@
 .history-table { font-size: .85rem; max-width: 40rem; }
 
 .history-table th, .history-table td { border-bottom-color: #e3e8f0; }
+
+/* Period states: published, in force, projected. Colour carries the same
+   distinction as the dashed line on the sparkline — what happened versus what
+   is only expected. */
+.state {
+    display: inline-block;
+    padding: .1rem .45rem;
+    border-radius: 999px;
+    font-size: .7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.state-past { background: #eceff5; color: #5e6580; }
+.state-current { background: #e3f1e8; color: #2d7d46; }
+.state-future { background: #f6efe1; color: #8a6a20; }
+
+.period-current td { font-weight: 600; }
+.period-future td { color: #4a5068; }
+
+.history-note {
+    margin: .6rem 0 0;
+    font-size: .78rem;
+    color: var(--muted, #5e6580);
+    max-width: 44rem;
+}

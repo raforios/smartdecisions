@@ -148,19 +148,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     /**
-     * The closed fortnights of one mineral, so the projected price can be
-     * checked against what actually happened. Each row states the window it
-     * averaged, over how many quotations, and the fortnight it governed — the
-     * three facts that let a reader reproduce the number by hand.
+     * Every fortnight of one mineral in one table: the ones already published,
+     * the one in force, and every projected one the horizon reaches.
+     *
+     * The projected chain is what makes the plazo selector visible. The
+     * headline column only shows the next official price, which is always the
+     * fortnight in course, so at 15, 30 or 60 days it looked frozen — the chain
+     * is where the horizon actually shows up.
      */
-    function historyRow(item) {
-        const rows = item.official_history.map((entry) => `
-            <tr>
-                <td>${shortDate(entry.period_start)} – ${shortDate(entry.period_end)}</td>
-                <td class="num">${money(entry.avg_price_low)}</td>
-                <td class="num">${entry.sample_size}</td>
-                <td>${shortDate(entry.valid_from)} – ${shortDate(entry.valid_to)}</td>
-            </tr>`).join('');
+    function periodsRow(item) {
+        const rows = [];
+
+        (item.official_history || []).slice().reverse().forEach((entry) => {
+            rows.push(periodLine(entry, 'Publicada', 'past'));
+        });
+        if (item.official_current) {
+            rows.push(periodLine(item.official_current, 'Vigente', 'current'));
+        }
+        (item.official_forecast || []).forEach((entry) => {
+            const label = entry.is_complete === false ? 'Proyectada · parcial' : 'Proyectada';
+            rows.push(periodLine(entry, label, 'future'));
+        });
 
         const holder = document.createElement('tr');
         holder.className = 'history-row';
@@ -168,21 +176,42 @@ document.addEventListener('DOMContentLoaded', () => {
         holder.innerHTML = `
             <td colspan="7">
                 <div class="history-box">
-                    <h4>Quincenas anteriores de ${item.mineral}</h4>
+                    <h4>Quincenas de ${item.mineral}</h4>
                     <table class="data-table history-table">
                         <thead>
                             <tr>
+                                <th>Estado</th>
                                 <th>Promedio de</th>
                                 <th class="num">Oficial</th>
                                 <th class="num">Registros</th>
-                                <th>Rigió</th>
+                                <th>Rige</th>
                             </tr>
                         </thead>
-                        <tbody>${rows}</tbody>
+                        <tbody>${rows.join('')}</tbody>
                     </table>
+                    <p class="history-note">
+                        Cada cifra es el promedio de los registros de esa quincena
+                        para este mineral, y rige la quincena siguiente. En las
+                        proyectadas, los días ya cotizados se usan tal cual y sólo
+                        se proyecta el resto.
+                    </p>
                 </div>
             </td>`;
         return holder;
+    }
+
+    function periodLine(entry, label, kind) {
+        const composition = entry.projected_days > 0
+            ? `${entry.observed_days} + ${entry.projected_days} proy.`
+            : `${entry.sample_size}`;
+        return `
+            <tr class="period-${kind}">
+                <td><span class="state state-${kind}">${label}</span></td>
+                <td>${shortDate(entry.period_start)} – ${shortDate(entry.period_end)}</td>
+                <td class="num">${money(entry.avg_price_low)}</td>
+                <td class="num">${composition}</td>
+                <td>${shortDate(entry.valid_from)} – ${shortDate(entry.valid_to)}</td>
+            </tr>`;
     }
 
     function renderMinerals(data) {
@@ -201,11 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const row = document.createElement('tr');
             row.className = 'mineral-row';
-            const history_count = (item.official_history || []).length;
+            const periods = (item.official_history || []).length
+                + (item.official_current ? 1 : 0)
+                + (item.official_forecast || []).length;
             row.innerHTML = `
                 <td>
                     <button class="verify-toggle" type="button"
-                            ${history_count ? '' : 'disabled'}
+                            ${periods ? '' : 'disabled'}
                             aria-expanded="false">
                         <span class="caret">▸</span>${item.mineral}</button>
                     ${item.unit ? `<span class="unit">${item.unit}</span>` : ''}
@@ -222,8 +253,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="spark-cell">${sparkline(history, forecast)}</td>`;
             body.appendChild(row);
 
-            if (history_count) {
-                body.appendChild(historyRow(item));
+            if (periods) {
+                body.appendChild(periodsRow(item));
                 row.querySelector('.verify-toggle').addEventListener('click', (event) => {
                     const button = event.currentTarget;
                     const open = button.getAttribute('aria-expanded') === 'true';

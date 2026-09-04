@@ -1,7 +1,8 @@
 ''' Global configuration and constants for the Streamlit App. '''
 import os
 
-API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:3020/v1/mining-analysis')
+# API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:3020/v1/mining-analysis')
+API_BASE_URL = os.getenv('API_BASE_URL', 'https://jvxmqeg601.execute-api.us-east-1.amazonaws.com/minig_analysis/v1/mining-analysis')
 AUTH_SERVICE_URL = os.getenv('AUTH_SERVICE_URL', 'https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth')
 
 UI_COLORS = {
