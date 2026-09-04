@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from fastapi import Request
 import pandas as pd
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from models.mining_analysis import (
     Company,
     Mineral,
@@ -28,6 +28,7 @@ from services.utils import handle_service_errors
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
 from services.prices_store import (
+    all_quotations,
     average_low,
     date_bounds,
     latest_prices_before,
@@ -254,9 +255,40 @@ async def process_mining_etl_service(
         'skipped_records': skipped
     }
 
-async def get_all_prices_service(db: Session) -> List[MiningPrice]:
-    ''' Retrieves all mineral prices with their associated mineral metadata. '''
-    return db.query(MiningPrice).options(joinedload(MiningPrice.mineral)).all()
+async def get_all_prices_service(db: Session) -> List[Dict[str, Any]]:
+    '''
+    Retrieves every quotation with the metadata of its mineral.
+
+    Goes through the store so it answers on either backend. The mineral's unit,
+    symbol and market come from OFFICIAL_MINERALS, the published catalogue: on
+    DynamoDB the table holds only the name, and the bulletins are built from
+    that catalogue anyway.
+
+    Args:
+        db (Session): Database session; ignored when running on DynamoDB.
+
+    Returns:
+        List[Dict[str, Any]]: Rows matching MiningPriceResponseSchema.
+    '''
+    catalog = {
+        _normalize_name(entry['name']): entry for entry in OFFICIAL_MINERALS
+    }
+    rows: List[Dict[str, Any]] = []
+    for record in all_quotations(db = db):
+        entry = catalog.get(_normalize_name(record.mineral_name), {})
+        rows.append({
+            'date': record.date,
+            'price_low': record.price_low,
+            'price_high': record.price_high,
+            'mineral': {
+                'name': record.mineral_name,
+                'unit': entry.get('unit', ''),
+                'chemical_symbol': entry.get('chemical_symbol'),
+                'quoted_in': entry.get('quoted_in'),
+                'method': entry.get('method'),
+            },
+        })
+    return rows
 
 def _calculate_advanced_kpis(
     data: List[Dict[str, Any]],

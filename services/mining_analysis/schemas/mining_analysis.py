@@ -56,9 +56,16 @@ class MineralBase(BaseModel):
     method: Optional[str] = Field(None, max_length = 255, description = 'Calculation method.')
 
 class MineralResponseSchema(MineralBase, MiningAnalysisBaseSchema):
-    ''' Response schema for a mineral including ID. '''
-    id: int
-    created_at: datetime
+    '''
+        Response schema for a mineral.
+
+        `id` and `created_at` are optional because DynamoDB has neither: the
+        partition key is the identifier and there is no row to time-stamp. The
+        payload the consumers actually read — name, unit, symbol, market — is
+        the same on both backends.
+    '''
+    id: Optional[int] = None
+    created_at: Optional[datetime] = None
 
 class MiningPriceCreateSchema(BaseModel):
     ''' Schema for creating a price entry. '''
@@ -68,8 +75,13 @@ class MiningPriceCreateSchema(BaseModel):
     price_high: Optional[float] = None
 
 class MiningPriceResponseSchema(MiningAnalysisBaseSchema):
-    ''' Response schema for mineral prices with nested mineral info. '''
-    id: int
+    '''
+        Response schema for mineral prices with nested mineral info.
+
+        `id` is optional: on DynamoDB a quotation is identified by mineral and
+        date, which is its key, and there is no surrogate row number to report.
+    '''
+    id: Optional[int] = None
     date: date
     price_low: float
     price_high: Optional[float]

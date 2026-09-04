@@ -136,21 +136,49 @@ Para levantar el microservicio en tu entorno de desarrollo local, sigue estos pa
 
 ## 🧰 Scripts Operativos
 
-Los scripts viven en `scripts/` y se ejecutan como módulos para que respeten el `PYTHONPATH` del microservicio. Todos exponen `--yes` como interruptor explícito de escritura; sin él imprimen el plan y salen sin tocar la base de datos.
+Viven en `scripts/` y se ejecutan como módulos, para que respeten el
+`PYTHONPATH` del microservicio. **Los que escriben exigen `--yes`**; sin esa
+bandera imprimen el plan y salen sin tocar nada.
 
-### Backfill de `t_mining_prices`
-Reproceso completo con el ETL ya corregido (separador decimal anglo/europeo). Borra el contenido actual de `t_mining_prices` antes de reingresar el archivo fuente:
+### La rutina de cada quincena, en orden
+
+Estos tres se usan juntos, cada 15 días, cuando llega el PDF del Ministerio:
+
+**1. `audit_decimals.py` — antes de cargar.** Solo lee. El PDF oficial publica
+con dos decimales (`WÓLFRAM 64205.75`); al re-tipearlos al Excel consolidado a
+veces se pierden y quedan enteros. Este auditor recorre cada hoja `Diario`,
+cruza el promedio que trae el Excel contra el promedio aritmético de los días, y
+lista las celdas que hay que verificar contra el PDF. No corrige nada: dice
+dónde mirar.
 
 ```shell
-python -m scripts.backfill_prices --source /ruta/cotizaciones_min.xlsx --yes
+python -m scripts.audit_decimals                       # usa data/cotizaciones_mineras_bolivia.xlsx
+python -m scripts.audit_decimals --source /ruta.xlsx --tolerance 0.01
 ```
 
-### Ingesta de Diarios extraídos de PDFs escaneados
-Carga las hojas `… Q1/Q2 - Diario` del Excel curado (`cotizaciones_mineras_bolivia.xlsx`) en `t_mining_prices`. Idempotente: omite fechas que ya tengan registro:
+**2. `ingest_pdf_xlsx.py` — la carga.** Lee las hojas `{Mes} Q{1|2} - Diario`
+del Excel consolidado y las inserta en `t_mining_prices`. Idempotente: omite las
+fechas que ya tienen registro, así que volver a correrlo sobre el mismo archivo
+no duplica nada.
 
 ```shell
 python -m scripts.ingest_pdf_xlsx --source /ruta/cotizaciones_mineras_bolivia.xlsx --yes
 ```
+
+**3. `migrate_to_dynamodb.py` — publicar a la nube.** El ETL escribe en el
+relacional y el servicio desplegado lee de DynamoDB, así que la quincena recién
+cargada hay que empujarla. Idempotente: cada escritura es un put por clave.
+
+```shell
+python -m scripts.migrate_to_dynamodb            # informa qué copiaría
+python -m scripts.migrate_to_dynamodb --yes      # copia y verifica
+```
+
+### El que no se ejecuta
+
+**`cli_support.py` — no se ejecuta.** Es el andamiaje que comparten los demás:
+abre la sesión de base de datos, la cierra bien y aborta si el archivo fuente no
+existe. Estaba escrito dos veces con formas distintas; vive acá una sola vez.
 
 ---
 
@@ -218,6 +246,22 @@ PERSISTENCE_BACKEND=sql python main.py
 # 3. Empujar la quincena nueva a DynamoDB
 python -m scripts.migrate_to_dynamodb --yes
 ```
+
+### Apuntar el Streamlit al servicio desplegado
+
+`demo/utils/config.py` lee `API_BASE_URL` del entorno y su default es
+`http://localhost:3020/v1/mining-analysis`; sin esa variable el Streamlit
+siempre golpea localhost, aunque el Lambda esté arriba.
+
+```bash
+export API_BASE_URL="https://jvxmqeg601.execute-api.us-east-1.amazonaws.com/minig_analysis/v1/mining-analysis"
+streamlit run app.py
+```
+
+**Sirve para consultar, no para cargar.** Contra AWS las lecturas funcionan
+—`/prices`, los reportes diario y quincenal, el PDF y el PNG—, pero
+`POST /etl/upload` escribe en el relacional y en el Lambda no hay ninguno. La
+carga de la quincena se hace con el servicio local, según el flujo de arriba.
 
 El paso 3 es idempotente: reescribe lo que ya estaba con los mismos valores y
 agrega lo nuevo.

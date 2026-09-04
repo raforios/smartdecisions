@@ -1,10 +1,11 @@
 '''
     Shared scaffolding for the maintenance scripts.
 
-    Both scripts open a database session, run their job and have to drain the
-    session generator afterwards, and both refuse to start when the source file
-    is missing. That was written twice, in two slightly different shapes; here
-    it is written once, so a fix to the session handling lands in both.
+    Every script opens a database session, runs its job and has to drain the
+    session generator afterwards; the ones that read a file also refuse to start
+    when it is missing. That was written more than once, in slightly different
+    shapes; here it is written once, so a fix to the session handling lands
+    everywhere.
 '''
 import sys
 from contextlib import contextmanager, suppress

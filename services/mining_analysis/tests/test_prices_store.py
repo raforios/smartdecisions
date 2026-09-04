@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from models.mining_analysis_dyb import MiningPriceItem
+from models.mining_analysis_dyb import MineralItem, MiningPriceItem
 from services import crud_dyb, prices_store
 
 
@@ -231,3 +231,46 @@ def test_date_bounds_of_an_empty_table_is_undefined():
     with patch.object(prices_store, 'uses_dynamodb', lambda: True), \
          patch('services.crud_dyb.scan_prices', list):
         assert prices_store.date_bounds() == (None, None)
+
+
+def test_all_quotations_carries_the_mineral_name(dynamo_backend): # pylint: disable=unused-argument
+    '''
+        The full export publishes the quotation with its mineral.
+
+        On DynamoDB there is no join: the name is resolved against the catalogue
+        read, and a quotation whose mineral is missing must still travel rather
+        than disappear from an export.
+    '''
+    catalogue = [
+        MineralItem(mineral_id = '7', name = 'Bismuto', unit = 'LF'),
+    ]
+
+    with patch('services.crud_dyb.list_minerals', lambda: catalogue), \
+         patch('services.crud_dyb.scan_prices', lambda: [
+             MiningPriceItem(mineral_id = '7', date = date(2026, 8, 27), price_low = 12.82),
+             MiningPriceItem(mineral_id = '99', date = date(2026, 8, 27), price_low = 1.0),
+         ]):
+        records = prices_store.all_quotations()
+
+    assert len(records) == 2
+    named = {record.mineral_id: record.mineral_name for record in records}
+    assert named['7'] == 'Bismuto'
+    assert named['99'] == ''
+
+
+def test_all_quotations_comes_back_in_date_order(dynamo_backend): # pylint: disable=unused-argument
+    '''
+        The export is read as a series, so the order is part of the contract:
+        the Streamlit report sorts by date and takes the last row per mineral.
+    '''
+    with patch('services.crud_dyb.list_minerals', lambda: []), \
+         patch('services.crud_dyb.scan_prices', lambda: [
+             MiningPriceItem(mineral_id = '1', date = date(2026, 8, 27), price_low = 3.0),
+             MiningPriceItem(mineral_id = '1', date = date(2026, 8, 17), price_low = 1.0),
+             MiningPriceItem(mineral_id = '1', date = date(2026, 8, 20), price_low = 2.0),
+         ]):
+        records = prices_store.all_quotations()
+
+    assert [record.date for record in records] == [
+        date(2026, 8, 17), date(2026, 8, 20), date(2026, 8, 27)
+    ]

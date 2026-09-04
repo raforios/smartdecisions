@@ -273,6 +273,73 @@ def date_bounds(db: Optional[Session] = None) -> Tuple[Optional[date_type],
     return bounds[0], bounds[1]
 
 
+
+@dataclass(frozen = True)
+class QuotationRecord:
+    '''
+    One quotation together with the mineral it belongs to.
+
+    The full-catalogue endpoint publishes both, and on DynamoDB there is no join
+    to lean on: the name comes from the catalogue table and the rest of the
+    metadata from OFFICIAL_MINERALS, the published catalogue the bulletins are
+    built from.
+    '''
+    mineral_id: str
+    mineral_name: str
+    date: date_type
+    price_low: Optional[float] = None
+    price_high: Optional[float] = None
+
+
+def all_quotations(db: Optional[Session] = None) -> List[QuotationRecord]:
+    '''
+        Returns every stored quotation with its mineral.
+
+        SQL joins; DynamoDB scans the table and resolves the names against the
+        catalogue read once. It is the one access pattern the table was not
+        keyed for, which is why it belongs to a full export and not to a screen
+        that refreshes.
+
+        Args:
+            db (Session | None): Relational session; ignored on DynamoDB.
+
+        Returns:
+            List[QuotationRecord]: Quotations ordered by date, then mineral.
+    '''
+    if uses_dynamodb():
+        from services import crud_dyb # pylint: disable=import-outside-toplevel
+        names = {item.mineral_id: item.name for item in crud_dyb.list_minerals()}
+        return sorted(
+            (
+                QuotationRecord(
+                    item.mineral_id, names.get(item.mineral_id, ''),
+                    item.date, item.price_low, item.price_high
+                )
+                for item in crud_dyb.scan_prices()
+            ),
+            key = lambda record: (record.date, record.mineral_name)
+        )
+
+    from models.mining_analysis import ( # pylint: disable=import-outside-toplevel
+        Mineral,
+        MiningPrice
+    )
+    rows = (
+        db.query(MiningPrice)
+        .join(Mineral, Mineral.id == MiningPrice.mineral_id)
+        .order_by(MiningPrice.date, Mineral.name)
+        .all()
+    )
+    return [
+        QuotationRecord(
+            str(row.mineral_id), row.mineral.name, row.date,
+            None if row.price_low is None else float(row.price_low),
+            None if row.price_high is None else float(row.price_high)
+        )
+        for row in rows
+    ]
+
+
 def log_active_backend() -> None:
     '''
         Records which backend the quotations are being served from.
