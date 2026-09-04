@@ -891,6 +891,28 @@ modo dentro de otro: no se mezclan aunque compartan base. El orden es:
    precarga el precio **oficial**, no el diario, y aplica
    `official_change_percent`. **Requiere redesplegar MINING_ANALYSIS.**
 
+   **El plazo seguía sin verse (2026-09-03).** Rafael volvió a reportar que los
+   minerales no pasan de 15 días. El backend desplegado sí trae la cadena
+   —verificado en su `openapi.json`—, pero yo la había puesto **solo dentro del
+   desplegable**, y la columna visible ('Próxima oficial') es por definición la
+   quincena en curso, así que a 15, 30 o 60 días mostraba lo mismo. Escondí el
+   horizonte detrás de un clic: error de diseño mío, no del servicio.
+
+   Corregido sacándolo a la superficie: columna nueva **'Al final de N días'**
+   —la última quincena que alcanza el plazo, la única celda que se mueve al
+   cambiarlo—, el encabezado dice el plazo elegido y el resumen del panel dice
+   cuántas quincenas alcanza. Cuando el plazo solo llega a una, la celda dice
+   'igual que la próxima' en vez de repetir el número.
+
+   **Tabla del dólar día por día.** El panel del dólar tenía solo el gráfico; se
+   agregó la serie en números (fecha, día de la semana, Bs por USD, variación
+   diaria y acumulada, publicada/proyectada), plegable, con encabezado fijo y
+   alto acotado, y un interruptor para incluir o no las proyectadas. Un gráfico
+   muestra la forma; una venta se liquida contra una cifra que alguien lee en una
+   fila. Las fechas se parsean como fecha local: `new Date('2026-09-03')` se
+   interpreta como UTC y al oeste de Greenwich caería un día antes, poniendo cada
+   cotización en el día de semana equivocado.
+
    **Tres consultas de Rafael, resueltas (2026-09-03).**
    1. *"La proyección de minerales nunca pasa de 15 días."* El filtro **sí**
       funcionaba —15 días dan 1 quincena, 30 dan 2, 60 dan 4— pero la tabla solo

@@ -122,8 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
      * the fortnight it rules over. Both windows are shown because a reader who
      * only sees the number takes it for today's price.
      */
-    function officialCell(quotation) {
-        if (!quotation) return '<td class="num">—</td>';
+    function officialCell(quotation, sameAs) {
+        if (!quotation) {
+            return `<td class="num muted-cell">${
+                sameAs ? 'igual que la próxima' : '—'
+            }</td>`;
+        }
         const partial = quotation.is_complete === false ? ' parcial' : '';
         const composition = quotation.projected_days > 0
             ? `${quotation.observed_days} días reales + ${quotation.projected_days} proyectados`
@@ -174,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         holder.className = 'history-row';
         holder.hidden = true;
         holder.innerHTML = `
-            <td colspan="7">
+            <td colspan="8">
                 <div class="history-box">
                     <h4>Quincenas de ${item.mineral}</h4>
                     <table class="data-table history-table">
@@ -226,7 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const last = item.last_price !== null && item.last_price !== undefined
                 ? item.last_price
                 : (history.length ? history[history.length - 1] : null);
-            const next = (item.official_forecast || [])[0] || null;
+            const chain = item.official_forecast || [];
+            const next = chain[0] || null;
+            // The last fortnight the horizon reaches. This is the cell that
+            // actually moves when the plazo changes: the next official price is
+            // always the fortnight in course, so on its own the selector looked
+            // like it did nothing.
+            const furthest = chain.length > 1 ? chain[chain.length - 1] : null;
 
             const row = document.createElement('tr');
             row.className = 'mineral-row';
@@ -243,6 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
                 ${officialCell(item.official_current)}
                 ${officialCell(next)}
+                ${officialCell(furthest, next)}
                 <td class="num ${changeClass(item.official_change_percent)}">${
                     percent(item.official_change_percent)
                 }</td>
@@ -265,13 +276,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        qs('#horizonHead').textContent = `Al final de ${data.days_ahead} días`;
+
         const current = data.minerals.find((item) => item.official_current);
         const inForce = current
             ? ` · oficial vigente del ${current.official_current.valid_from}` +
               ` al ${current.official_current.valid_to}`
             : '';
+        const reach = Math.max(
+            ...data.minerals.map((item) => (item.official_forecast || []).length), 0
+        );
+        const reachText = reach
+            ? ` · el plazo alcanza ${reach} quincena${reach === 1 ? '' : 's'}`
+            : '';
         qs('#mineralsMeta').textContent =
-            `${data.minerals.length} minerales${inForce}`;
+            `${data.minerals.length} minerales${inForce}${reachText}`;
         qs('#mineralsPanel').hidden = false;
     }
 
@@ -297,6 +316,71 @@ document.addEventListener('DOMContentLoaded', () => {
         );
         state.rate = data;
         renderRate(data);
+    }
+
+
+    const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves',
+                      'viernes', 'sábado'];
+
+    /**
+     * Reads an ISO date as a local calendar date. `new Date('2026-09-03')`
+     * parses as UTC and, west of Greenwich, renders as the day before — which
+     * would put every quotation on the wrong weekday.
+     */
+    function asLocalDate(iso) {
+        const [year, month, day] = iso.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    function weekdayOf(iso) {
+        return WEEKDAYS[asLocalDate(iso).getDay()];
+    }
+
+    /**
+     * The rate series as numbers, newest first, with the day-to-day move and
+     * the accumulated one. A chart shows the shape; the settlement figure is
+     * read off a table, and the drop between two dates is the number a seller
+     * argues with.
+     */
+    function renderRateTable(data) {
+        const body = qs('#rateTable tbody');
+        const withProjection = qs('#rateShowProjected').checked;
+
+        const observed = data.history.map((point) => ({
+            date: point.date, rate: point.rate, projected: false
+        }));
+        const projected = withProjection
+            ? data.projected.map((point) => ({
+                date: point.date, rate: point.rate, projected: true
+            }))
+            : [];
+        const series = observed.concat(projected);
+        if (!series.length) {
+            body.innerHTML = '';
+            return;
+        }
+
+        const base = series[0].rate;
+        const rows = series.map((entry, index) => {
+            const previous = index > 0 ? series[index - 1].rate : null;
+            const step = previous ? ((entry.rate - previous) / previous) * 100 : null;
+            const total = base ? ((entry.rate - base) / base) * 100 : null;
+            const state = entry.projected
+                ? '<span class="state state-future">Proyectada</span>'
+                : '<span class="state state-past">Publicada</span>';
+            return `
+                <tr class="${entry.projected ? 'period-future' : ''}">
+                    <td>${entry.date}</td>
+                    <td>${weekdayOf(entry.date)}</td>
+                    <td class="num">${money(entry.rate)}</td>
+                    <td class="num ${changeClass(step)}">${percent(step)}</td>
+                    <td class="num ${changeClass(total)}">${percent(total)}</td>
+                    <td>${state}</td>
+                </tr>`;
+        });
+
+        // Newest first: the current rate is what a reader looks for.
+        body.innerHTML = rows.reverse().join('');
     }
 
     function renderRate(data) {
@@ -333,6 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
         qs('#rateMeta').textContent =
             `${data.history.length} días observados desde ${data.history[0].date}`;
+        renderRateTable(data);
         qs('#ratePanel').hidden = false;
     }
 
@@ -489,6 +574,16 @@ document.addEventListener('DOMContentLoaded', () => {
             done();
         }
     }
+
+    qs('#rateToggle').addEventListener('click', (event) => {
+        const holder = qs('#rateTableHolder');
+        holder.hidden = !holder.hidden;
+        event.currentTarget.setAttribute('aria-expanded', String(!holder.hidden));
+        event.currentTarget.textContent = holder.hidden ? 'Ver la tabla' : 'Ocultar la tabla';
+    });
+    qs('#rateShowProjected').addEventListener('change', () => {
+        if (state.rate) renderRateTable(state.rate);
+    });
 
     qs('#runButton').addEventListener('click', run);
     qs('#scopeSelect').addEventListener('change', run);
