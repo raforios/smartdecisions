@@ -7,6 +7,8 @@
     breaks the whole service the moment it is deployed — Mangum would fail
     looking for a request that a scheduled event never has.
 '''
+import json
+from datetime import date
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +20,24 @@ from schemas.quotes import QuotesError
 
 
 SCHEDULED_EVENT = {'source': 'aws.events', 'detail-type': 'Scheduled Event'}
+
+
+def _sync_payload():
+    '''
+        A sync result as the domain returns it, dates included.
+
+        Returns:
+            dict: Payload matching SyncResult, with real `date` objects.
+    '''
+    return {
+        'currency': 'USD',
+        'requested_days': 7,
+        'stored': 3,
+        'already_present': 4,
+        'without_publication': 0,
+        'date_from': date(2026, 8, 29),
+        'date_to': date(2026, 9, 4),
+    }
 HTTP_EVENT = {
     'version': '2.0',
     'rawPath': '/v1/quotes/exchange-rates',
@@ -27,17 +47,33 @@ HTTP_EVENT = {
 
 def test_scheduled_event_runs_the_sync():
     '''A scheduled event must reach the sync, never the ASGI adapter.'''
-    expected = {'stored': 3, 'already_present': 4}
-
     async def _sync():
-        return expected
+        return _sync_payload()
 
     with patch.object(main, 'scheduled_sync_service', _sync), \
          patch.object(main, '_asgi_handler') as asgi:
         result = main.handler(SCHEDULED_EVENT, None)
 
-    assert result == expected
+    assert result['stored'] == 3
     asgi.assert_not_called()
+
+
+def test_scheduled_result_is_json_serialisable():
+    '''
+        The Lambda runtime marshals the return value as JSON and cannot handle a
+        `date`. On the HTTP path FastAPI does that conversion; a scheduled
+        invocation has no FastAPI in front of it, so returning the raw payload
+        fails *after* the sync already wrote — the work succeeds and the
+        invocation still reports an error, which then gets retried.
+    '''
+    async def _sync():
+        return _sync_payload()
+
+    with patch.object(main, 'scheduled_sync_service', _sync):
+        result = main.handler(SCHEDULED_EVENT, None)
+
+    json.dumps(result)
+    assert result['date_from'] == '2026-08-29'
 
 
 def test_manual_task_event_runs_the_sync():
@@ -46,7 +82,7 @@ def test_manual_task_event_runs_the_sync():
         schedule, which is how the sync gets tested after a deploy.
     '''
     async def _sync():
-        return {'stored': 1, 'already_present': 0}
+        return _sync_payload()
 
     with patch.object(main, 'scheduled_sync_service', _sync), \
          patch.object(main, '_asgi_handler') as asgi:

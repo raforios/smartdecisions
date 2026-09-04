@@ -15,6 +15,7 @@ from mangum import Mangum
 import uvicorn
 
 from routes.quotes import router as quotes_router
+from schemas.quotes import SyncResult
 
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
@@ -210,6 +211,11 @@ def handler(event: Dict[str, Any], context: Any) -> Any:
         message = (f"Scheduled rate sync stored {result['stored']} day(s), "
                    f"skipped {result['already_present']} already present.")
         logger.info(message)
-        return result
+        # Through the response model: the payload carries `date` objects, and the
+        # Lambda runtime can only marshal JSON. On the HTTP path FastAPI does this
+        # conversion; a scheduled invocation has no FastAPI in front of it, so
+        # returning the raw dict fails after the work is already done — the sync
+        # succeeds and the invocation still reports an error.
+        return SyncResult(**result).model_dump(mode = 'json')
 
     return _asgi_handler(event, context)

@@ -75,9 +75,13 @@ for rule_config in "${RULES[@]}"; do
     fi
 
     # El Id del target es fijo, así que put-targets reemplaza en vez de duplicar.
+    # Va en JSON y no en la sintaxis abreviada `Id=1,Arn=...,Input=...`: el
+    # Input es a su vez JSON y sus comillas rompen el parser de la forma corta.
+    TARGETS_JSON=$(python3 -c "import json,sys; print(json.dumps([{'Id':'1','Arn':sys.argv[1],'Input':sys.argv[2]}]))" "$FUNCTION_ARN" "$PAYLOAD")
+
     aws events put-targets \
         --rule "$RULE_NAME" \
-        --targets "Id=1,Arn=${FUNCTION_ARN},Input=${PAYLOAD}" \
+        --targets "$TARGETS_JSON" \
         --region "$REGION" \
         --profile "$PROFILE" \
         --output text --query 'FailedEntryCount'
