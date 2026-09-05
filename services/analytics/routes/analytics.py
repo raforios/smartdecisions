@@ -9,6 +9,7 @@ from controllers.analytics import (
     forecast_controller,
     get_pdv_opportunities_controller,
     get_results_controller,
+    list_runs_controller,
     portfolio_controller,
     run_analytics_controller,
     segmentation_controller
@@ -16,6 +17,7 @@ from controllers.analytics import (
 from schemas.analytics import (
     AnalyticsPdvResponse,
     AnalyticsResultsResponse,
+    RunListResponse,
     AnalyticsRunResponse,
     CommercialSummaryResponse,
     ForecastResponse,
@@ -229,6 +231,34 @@ async def run_analytics_endpoint(
         params = window.as_params(),
         current_user = current_user,
         request = request
+    )
+
+
+@router.get(
+    '/runs',
+    response_model = RunListResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Your own analyses, most recent first',
+    description = (
+        'Lists the analytics runs of the authenticated caller. Only theirs: the '
+        'owner is part of the query, not a filter applied afterwards.'
+    )
+)
+async def list_runs_endpoint(
+    request: Request,
+    limit: int = Query(20, ge = 1, le = 100, description = 'Most rows to return.'),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> RunListResponse:
+    ''' Endpoint listing the caller\'s own analyses. '''
+    message = f'User: {current_user}. Requested their analysis history.'
+    logger.info(message)
+
+    return await list_runs_controller(
+        dynamodb_resource = dynamodb_resource,
+        request = request,
+        current_user = current_user,
+        limit = limit
     )
 
 

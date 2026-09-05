@@ -12,6 +12,8 @@ from schemas.ingest import (
     OPTIONAL_COLUMNS,
     REQUIRED_COLUMNS,
     TEMPLATE_VERSION,
+    DatasetListResponse,
+    DatasetSummary,
     IngestResponse,
     IngestStatusResponse,
     IngestSummary,
@@ -26,7 +28,8 @@ from services.ingest import (
 )
 from services.ingest_utils import (
     download_bytes,
-    get_dataset_by_id,
+    get_owned_dataset,
+    list_datasets_for_owner,
     persist_dataset,
     upload_bytes,
     upload_excel
@@ -204,7 +207,7 @@ async def download_rejected_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> bytes:
     '''
         Returns the CSV of rows that could not be loaded, each carrying the
@@ -213,7 +216,11 @@ async def download_rejected_controller(
         Raises:
             ResourceNotFoundError: If the dataset has no rejected-rows file.
     '''
-    item = get_dataset_by_id(dynamodb_resource = dynamodb_resource, dataset_id = dataset_id)
+    item = get_owned_dataset(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        owner_email = current_user
+    )
     rejected_key = item.get('rejected_s3_key')
     if not rejected_key:
         raise ResourceNotFoundError(
@@ -223,18 +230,64 @@ async def download_rejected_controller(
 
 
 @handle_service_errors('INGEST')
+async def list_datasets_controller(
+    dynamodb_resource: ServiceResource,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str,
+    limit: int = 20
+) -> DatasetListResponse:
+    '''
+        Returns the caller's own uploads, most recent first.
+
+        Args:
+            dynamodb_resource (ServiceResource): DynamoDB resource.
+            request (Request): Incoming request, used by the audit decorator.
+            current_user (str): Authenticated caller and owner of the rows.
+            limit (int): Most rows to return.
+
+        Returns:
+            DatasetListResponse: The caller's uploads.
+    '''
+    items = list_datasets_for_owner(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        limit = limit
+    )
+    return DatasetListResponse(
+        owner_email = current_user,
+        count = len(items),
+        datasets = [
+            DatasetSummary(
+                dataset_id = item['dataset_id'],
+                status = item['status'],
+                total_rows = int(item.get('total_rows', 0)),
+                valid_rows = int(item.get('valid_rows', 0)),
+                error_rows = int(item.get('error_rows', 0)),
+                unique_points_of_sale = int(item.get('unique_points_of_sale', 0)),
+                unique_products = int(item.get('unique_products', 0)),
+                date_range_start = item.get('date_range_start'),
+                date_range_end = item.get('date_range_end'),
+                created_at = item['created_at']
+            )
+            for item in items
+        ]
+    )
+
+
+@handle_service_errors('INGEST')
 async def get_dataset_status_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> IngestStatusResponse:
     '''
         Controller to retrieve the status of a previously ingested dataset.
     '''
-    item = get_dataset_by_id(
+    item = get_owned_dataset(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = current_user
     )
     return IngestStatusResponse(
         dataset_id = item['dataset_id'],

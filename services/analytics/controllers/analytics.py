@@ -8,6 +8,8 @@ from fastapi import Request
 from schemas.analytics import (
     AnalyticsPdvResponse,
     AnalyticsResultsResponse,
+    RunListResponse,
+    RunSummary,
     AnalyticsRunResponse,
     AnalyticsSummary,
     CommercialSummaryResponse,
@@ -31,6 +33,7 @@ from services.analytics_utils import (
     apply_date_range,
     get_dataset_metadata,
     get_latest_run_for_dataset,
+    list_runs_for_owner,
     load_dataframe_from_s3,
     persist_run,
     setting
@@ -295,18 +298,78 @@ async def run_analytics_controller(
 
 
 @handle_service_errors('ANALYTICS')
+async def list_runs_controller(
+    dynamodb_resource: ServiceResource,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str,
+    limit: int = 20
+) -> RunListResponse:
+    '''
+        Returns the caller's own analyses, most recent first.
+
+        Args:
+            dynamodb_resource (ServiceResource): DynamoDB resource.
+            request (Request): Incoming request, used by the audit decorator.
+            current_user (str): Authenticated caller and owner of the rows.
+            limit (int): Most rows to return.
+
+        Returns:
+            RunListResponse: The caller's analyses.
+    '''
+    items = list_runs_for_owner(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        limit = limit
+    )
+    return RunListResponse(
+        owner_email = current_user,
+        count = len(items),
+        runs = [
+            RunSummary(
+                run_id = item['run_id'],
+                dataset_id = item['dataset_id'],
+                status = item['status'],
+                total_opportunities = int(item.get('summary', {}).get(
+                    'total_opportunities', 0)),
+                total_pos_with_opportunities = int(item.get('summary', {}).get(
+                    'total_pos_with_opportunities', 0)),
+                total_expected_value = _optional_float(
+                    item.get('summary', {}).get('total_expected_value')
+                ),
+                created_at = str(item['created_at'])
+            )
+            for item in items
+        ]
+    )
+
+
+def _optional_float(value: Any) -> Optional[float]:
+    '''
+        Renders a DynamoDB number as a float, tolerating its absence.
+
+        Args:
+            value (Any): Raw stored value, possibly None or Decimal.
+
+        Returns:
+            float | None: The number, or None when there is none.
+    '''
+    return None if value is None else float(value)
+
+
+@handle_service_errors('ANALYTICS')
 async def get_results_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> AnalyticsResultsResponse:
     '''
         Returns the most recent persisted run for the dataset.
     '''
     run = get_latest_run_for_dataset(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = current_user
     )
     return AnalyticsResultsResponse(
         dataset_id = run['dataset_id'],
@@ -324,14 +387,15 @@ async def get_pdv_opportunities_controller(
     dataset_id: str,
     pdv_id: str,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> AnalyticsPdvResponse:
     '''
         Returns the opportunities for a single PdV from the latest run.
     '''
     run = get_latest_run_for_dataset(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = current_user
     )
     pdv_opportunities = [
         opp for opp in run['opportunities']

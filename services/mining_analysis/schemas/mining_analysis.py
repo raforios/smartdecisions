@@ -249,8 +249,10 @@ class ForecastMethod(str, Enum):
         A stable code, not a sentence: the frontend and the interpretation layer
         word it, and a caller can request one explicitly.
     '''
+    DAMPED_TREND = 'DAMPED_TREND'
     LINEAR = 'LINEAR'
     MOVING_AVERAGE = 'MOVING_AVERAGE'
+    NAIVE = 'NAIVE'
 
 
 class ForecastConfidence(str, Enum):
@@ -321,6 +323,15 @@ class MineralForecast(BaseModel):
     )
     change_percent: Optional[float] = Field(
         None, description = 'Projected change against the last observed price.'
+    )
+    mean_absolute_error: Optional[float] = Field(
+        None,
+        description = 'Average miss of this method on this mineral, measured by '
+                      'replaying the series. Not an assumed interval.'
+    )
+    baseline_method: ForecastMethod = ForecastMethod.NAIVE
+    baseline_error: Optional[float] = Field(
+        None, description = 'Same measurement for repeating the last quotation.'
     )
     history: List[PricePoint] = []
     forecast: List[PricePoint] = []

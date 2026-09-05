@@ -8,7 +8,7 @@
 '''
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +21,7 @@ class AnalyticsError(str, Enum):
     NO_DATE_COLUMN = 'NO_DATE_COLUMN'
     EMPTY_PERIOD = 'EMPTY_PERIOD'
     DATASET_UNREADABLE = 'DATASET_UNREADABLE'
+    RUN_NOT_FOUND = 'RUN_NOT_FOUND'
 
 
 class Opportunity(BaseModel):
@@ -78,6 +79,34 @@ class AnalyticsRunResponse(BaseModel):
     summary: AnalyticsSummary
     opportunities: list[Opportunity]
     created_at: datetime
+
+
+class RunSummary(BaseModel):
+    '''
+        One row of "my analyses".
+
+        Lighter than the full results on purpose: a history list says when a
+        dataset was analysed and how much it found, not every opportunity.
+    '''
+    run_id: str
+    dataset_id: str
+    status: str
+    total_opportunities: int = 0
+    total_pos_with_opportunities: int = 0
+    total_expected_value: Optional[float] = None
+    created_at: str
+
+
+class RunListResponse(BaseModel):
+    '''
+        The caller's own analyses, most recent first.
+
+        Only the caller's: the owner is part of the query, so the panel that
+        shows "your last analysis" cannot surface another client's.
+    '''
+    owner_email: str
+    count: int = Field(..., ge = 0)
+    runs: List[RunSummary] = Field(default_factory = list)
 
 
 class AnalyticsResultsResponse(BaseModel):

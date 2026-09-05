@@ -7,9 +7,9 @@
     are derived) and the DTOs that describe the HTTP envelope.
 '''
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -130,6 +130,7 @@ class IngestError(str, Enum):
     EMPTY_UPLOAD = 'EMPTY_UPLOAD'
     FILES_SERVICE_UNREACHABLE = 'FILES_SERVICE_UNREACHABLE'
     FILES_SERVICE_REJECTED_UPLOAD = 'FILES_SERVICE_REJECTED_UPLOAD'
+    DATASET_NOT_FOUND = 'DATASET_NOT_FOUND'
 
 
 class ValidationIssue(BaseModel):
@@ -171,6 +172,39 @@ class IngestResponse(BaseModel):
     summary: IngestSummary
     issues: list[ValidationIssue] = Field(default_factory = list)
     created_at: datetime
+
+
+class DatasetSummary(BaseModel):
+    '''
+        One row of "my uploads".
+
+        Deliberately lighter than IngestStatusResponse: a history list needs to
+        say what was uploaded and how it went, not carry every validation issue
+        of every file.
+    '''
+    dataset_id: str
+    status: str
+    total_rows: int = 0
+    valid_rows: int = 0
+    error_rows: int = 0
+    unique_points_of_sale: int = 0
+    unique_products: int = 0
+    date_range_start: Optional[date] = None
+    date_range_end: Optional[date] = None
+    created_at: datetime
+
+
+class DatasetListResponse(BaseModel):
+    '''
+        The caller's own uploads, most recent first.
+
+        Only the caller's: the owner is part of the query, not a filter applied
+        afterwards. Ordering matters as much as the content — the screen that
+        consumes this shows "your last upload", which is the first row.
+    '''
+    owner_email: str
+    count: int = Field(..., ge = 0)
+    datasets: List[DatasetSummary] = Field(default_factory = list)
 
 
 class IngestStatusResponse(BaseModel):

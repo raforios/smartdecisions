@@ -15,8 +15,8 @@ import pytest
 from fastapi import HTTPException
 
 from models.quotes import USD, ExchangeRateItem
-from schemas.quotes import QuotesError, RateConfidence
-from services import bcb_source, quotes
+from schemas.quotes import ForecastMethod, QuotesError, RateConfidence
+from services import bcb_source, quotes, rate_forecast
 from services.exceptions import ServiceUnavailableError
 
 from tests.conftest import build_history
@@ -330,3 +330,66 @@ def test_scheduled_sync_does_not_refetch_what_is_stored(store):
     assert result['stored'] == 0
     assert result['already_present'] == quotes.SCHEDULED_SYNC_DAYS
     assert len(store) == quotes.SCHEDULED_SYNC_DAYS
+
+
+def test_the_projection_reports_what_it_has_been_worth(store):
+    '''
+        A projected figure travels with the error it has actually made.
+
+        Not an assumed confidence interval: the series is replayed from every
+        starting point and the misses are averaged. Publishing a number without
+        that is asking the reader to trust it blindly.
+    '''
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    result = _run(quotes.get_forecast_service(days_ahead = 15))
+    accuracy = result['accuracy']
+
+    assert accuracy['method'] is ForecastMethod.DAMPED_TREND
+    assert accuracy['baseline_method'] is ForecastMethod.NAIVE
+    assert accuracy['mean_absolute_error'] >= 0
+    assert accuracy['baseline_error'] >= 0
+    assert accuracy['windows'] > 0
+
+
+def test_a_flat_series_projects_flat():
+    '''
+        With no movement there is no trend to carry forward, so the projection
+        must repeat the level. A straight-line fit did this too; the point is
+        that damping does not invent a slope where there is none.
+    '''
+    flat = [10.0] * 40
+
+    projected = rate_forecast.damped_trend(flat, 10)
+
+    assert all(abs(value - 10.0) < 1e-9 for value in projected)
+
+
+def test_the_trend_fades_instead_of_running_away():
+    '''
+        This is the whole reason the straight line was replaced.
+
+        On a rising series a line keeps adding the same slope forever; the
+        damped trend adds less every step, so the projection converges instead
+        of extrapolating two months of drift into a number nobody should trust.
+    '''
+    rising = [10.0 + 0.05 * index for index in range(60)]
+
+    projected = rate_forecast.damped_trend(rising, 30)
+    steps = [projected[i + 1] - projected[i] for i in range(len(projected) - 1)]
+
+    assert projected[-1] > projected[0]
+    # Every step is smaller than the one before it.
+    assert all(steps[i + 1] < steps[i] + 1e-12 for i in range(len(steps) - 1))
+    # And a straight line would have gone further than the damped one.
+    assert projected[-1] < rising[-1] + 0.05 * 30
+
+
+def test_the_error_is_not_published_without_enough_windows():
+    '''
+        A mean over two replays is not a measurement. Better no number than one
+        that looks measured and is not.
+    '''
+    assert rate_forecast.backtest_error([10.0] * 32, 30) is None
+    assert rate_forecast.baseline_error([10.0] * 32, 30) is None

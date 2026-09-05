@@ -6,16 +6,17 @@
     the FILES service for regular uploads.
 '''
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import boto3
 import requests
+from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
 from schemas.ingest import IngestError
 from services.crud import create_item, get_item_by_key
 from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
+from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 from services.utils import audit_event, get_current_time_gmt
 
@@ -111,6 +112,83 @@ def get_dataset_by_id(
         table_name = DATASETS_TABLE,
         key = {'id': dataset_id}
     )
+
+
+def list_datasets_for_owner(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    limit: int = 20
+) -> List[Dict[str, Any]]:
+    '''
+        Returns the caller's own uploads, most recent first.
+
+        The owner is part of the scan filter, so the query cannot return
+        somebody else's rows even by mistake. With `id` as the partition key
+        there is no Query that filters by owner, so this scans; at POC volumes
+        that is fine, and the right move when the table grows is a Global
+        Secondary Index on `owner_email`.
+
+        Args:
+            dynamodb_resource (ServiceResource): DynamoDB resource.
+            owner_email (str): Authenticated caller.
+            limit (int): Most rows to return.
+
+        Returns:
+            List[Dict[str, Any]]: Stored dataset records, newest first.
+    '''
+    table = dynamodb_resource.Table(DATASETS_TABLE)
+    items: List[Dict[str, Any]] = []
+    scan_kwargs: Dict[str, Any] = {
+        'FilterExpression': Attr('owner_email').eq(owner_email)
+    }
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get('Items', []))
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+
+    items.sort(key = lambda item: str(item.get('created_at', '')), reverse = True)
+    return items[:limit]
+
+
+def get_owned_dataset(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    owner_email: str
+) -> Dict[str, Any]:
+    '''
+        Retrieves a dataset only if it belongs to whoever is asking.
+
+        Every read by id goes through here. Without it, an authenticated user of
+        one client who knows —or guesses— an identifier reads the sales data of
+        another: the owner was being stored on every record and never checked.
+
+        A dataset of somebody else answers exactly like one that does not exist.
+        Telling them apart would let a caller confirm which identifiers are real,
+        which is a map of the customer base.
+
+        Args:
+            dynamodb_resource (ServiceResource): DynamoDB resource.
+            dataset_id (str): Identifier of the dataset.
+            owner_email (str): Authenticated caller.
+
+        Returns:
+            Dict[str, Any]: The stored dataset record.
+
+        Raises:
+            ResourceNotFoundError: If it does not exist or belongs to someone else.
+    '''
+    item = get_dataset_by_id(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    if not item or item.get('owner_email') != owner_email:
+        error_msg = f'Dataset {dataset_id} is not available for {owner_email}.'
+        logger.warning(error_msg)
+        raise ResourceNotFoundError(detail = IngestError.DATASET_NOT_FOUND.value)
+    return item
 
 
 # ---------------------------------------------------------------------------

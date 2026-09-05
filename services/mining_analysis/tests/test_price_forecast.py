@@ -39,10 +39,14 @@ def _series(values: list) -> list:
 
 
 def test_rising_series_is_projected_upwards():
-    '''A quotation that has been climbing is projected to keep climbing.'''
+    '''
+        A quotation that has been climbing is projected to keep climbing, but
+        with a trend that fades: the default is the damped method because a
+        straight line missed about twice as much on every mineral measured.
+    '''
     result = project(_series([10 + index * 0.1 for index in range(100)]), days_ahead = 30)
 
-    assert result.method is ForecastMethod.LINEAR
+    assert result.method is ForecastMethod.DAMPED_TREND
     assert result.confidence is ForecastConfidence.HIGH
     assert len(result.points) == 30
     assert result.points[-1][1] > result.points[0][1]
@@ -81,7 +85,11 @@ def test_collapsing_line_falls_back_to_the_moving_average():
     '''
     steep_decline = [61000 - index * 2000 for index in range(22)]
 
-    result = project(_series(steep_decline), days_ahead = 30)
+    result = project(
+        _series(steep_decline),
+        days_ahead = 30,
+        method = ForecastMethod.LINEAR
+    )
 
     assert result.method is ForecastMethod.MOVING_AVERAGE
     assert all(price > 0 for _, price in result.points)
@@ -261,3 +269,43 @@ def test_official_history_skips_the_period_already_in_force():
 
     assert [entry['period_start'] for entry in history] == [date(2026, 8, 1)]
     assert history[0]['avg_price_low'] == 10.0
+
+
+def test_the_damped_trend_does_not_extrapolate_a_collapse():
+    '''
+        The Wolfram case, with the method that is now the default.
+
+        A straight line fitted over 22 falling days crossed zero inside the
+        horizon and had to fall back. The damped trend never gets there: each
+        step carries less of the decline than the one before, so it settles
+        instead of collapsing, and no fallback is needed.
+    '''
+    steep_decline = [61000 - index * 2000 for index in range(22)]
+
+    result = project(_series(steep_decline), days_ahead = 30)
+
+    assert result.method is ForecastMethod.DAMPED_TREND
+    assert all(price > 0 for _, price in result.points)
+    assert result.points[-1][1] > steep_decline[-1] * 0.5
+
+
+def test_the_projection_reports_the_error_it_has_made():
+    '''
+        Every mineral publishes how far this method has missed on its own
+        series, alongside the same measurement for repeating the last
+        quotation. A number without that is asking to be believed on faith.
+    '''
+    prices = [10 + index * 0.1 for index in range(100)]
+
+    measured = price_forecast._backtest(prices, 15) # pylint: disable=protected-access
+    naive = price_forecast._backtest(prices, 15, naive = True) # pylint: disable=protected-access
+
+    assert measured is not None and measured >= 0
+    assert naive is not None and naive >= 0
+    # On a steadily rising series the trend model must beat repeating a value.
+    assert measured < naive
+
+
+def test_the_error_is_withheld_when_there_are_too_few_windows():
+    '''A mean over two replays is not a measurement, so it is not published.'''
+    assert price_forecast._backtest([10.0] * 32, 30) is None # pylint: disable=protected-access

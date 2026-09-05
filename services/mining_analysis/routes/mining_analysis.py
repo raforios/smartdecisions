@@ -243,7 +243,7 @@ async def get_price_forecast_endpoint(
     request: Request,
     days_ahead: int = Query(30, ge = 1, le = 180,
                             description = 'Days to project ahead.'),
-    method: ForecastMethod = Query(ForecastMethod.LINEAR,
+    method: ForecastMethod = Query(ForecastMethod.DAMPED_TREND,
                                    description = 'Projection method.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)

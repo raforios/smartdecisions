@@ -3,8 +3,8 @@
 '''
 from pathlib import Path
 from fastapi import (
-    APIRouter, Depends, File, Header, Path as PathParam, Request, Response,
-    UploadFile, status
+    APIRouter, Depends, File, Header, Path as PathParam, Query, Request,
+    Response, UploadFile, status
 )
 from boto3.resources.base import ServiceResource
 
@@ -13,6 +13,7 @@ from controllers.ingest import (
     download_template_controller,
     get_dataset_status_controller,
     get_template_info_controller,
+    list_datasets_controller,
     ingest_excel_controller,
     ingest_excel_from_s3_controller
 )
@@ -20,6 +21,7 @@ from schemas.ingest import (
     IngestError,
     IngestFromS3Request,
     IngestResponse,
+    DatasetListResponse,
     IngestStatusResponse,
     TemplateInfo
 )
@@ -176,6 +178,33 @@ async def ingest_excel_from_s3_endpoint(
         file_name = payload.file_name,
         current_user = current_user,
         request = request
+    )
+
+
+@router.get(
+    '/datasets',
+    response_model = DatasetListResponse,
+    summary = 'Your own uploads, most recent first',
+    description = (
+        'Lists the datasets uploaded by the authenticated caller. Only theirs: '
+        'the owner is part of the query, not a filter applied afterwards.'
+    )
+)
+async def list_datasets_endpoint(
+    request: Request,
+    limit: int = Query(20, ge = 1, le = 100, description = 'Most rows to return.'),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+) -> DatasetListResponse:
+    ''' Endpoint listing the caller\'s own uploads. '''
+    message = f'User: {current_user}. Requested their dataset history.'
+    logger.info(message)
+
+    return await list_datasets_controller(
+        dynamodb_resource = dynamodb_resource,
+        request = request,
+        current_user = current_user,
+        limit = limit
     )
 
 

@@ -13,7 +13,10 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
+from fastapi import HTTPException
+
 from schemas.analytics import (
+    AnalyticsError,
     CommercialSummaryResponse,
     ForecastResponse,
     PortfolioResponse,
@@ -135,3 +138,191 @@ def test_segmentation_returns_a_full_response(dataset):
     assert response.dataset_id == dataset
     assert [tier.tier for tier in response.tiers] == ['HIGH', 'MEDIUM', 'LOW']
     assert response.clients
+
+
+class _FakeTable: # pylint: disable=too-few-public-methods
+    '''A DynamoDB table that applies the scan filter it is given.'''
+
+    def __init__(self, items):
+        self._items = items
+
+    def scan(self, **kwargs):
+        '''Filters the stored items the way DynamoDB would.'''
+        condition = kwargs.get('FilterExpression')
+        expression = condition.get_expression() if condition else None
+        return {'Items': [item for item in self._items if _matches(item, expression)]}
+
+
+def _matches(item, expression):
+    '''
+        Evaluates the boto3 condition tree against one item.
+
+        Only the two operators this filter uses — equality and AND — because a
+        fuller emulator would be more code than the thing under test.
+    '''
+    if expression is None:
+        return True
+    operator = expression['operator']
+    if operator == 'AND':
+        return all(_matches(item, part.get_expression())
+                   for part in expression['values'])
+    attribute, expected = expression['values']
+    return item.get(attribute.name) == expected
+
+
+class _FakeResource: # pylint: disable=too-few-public-methods
+    '''Stands in for the DynamoDB resource.'''
+
+    def __init__(self, items):
+        self._items = items
+
+    def Table(self, _name): # pylint: disable=invalid-name
+        '''Mirrors the boto3 resource API.'''
+        return _FakeTable(self._items)
+
+
+def _run_item(owner: str) -> dict:
+    '''
+        A persisted analytics run.
+
+        Args:
+            owner (str): Email stamped as the owner.
+
+        Returns:
+            dict: The stored record.
+    '''
+    return {
+        'id': 'run-1',
+        'run_id': 'run-1',
+        'dataset_id': 'ds-001',
+        'owner_email': owner,
+        'status': 'READY',
+        'summary': {
+            'total_pos_with_opportunities': 8,
+            'total_opportunities': 24,
+            'total_expected_value': 15300.5,
+            'affinity_rules_evaluated': 120,
+            'parameters': {'min_support': 0.02},
+        },
+        'opportunities': [],
+        'created_at': '2026-08-10T12:00:00-04:00',
+    }
+
+
+def test_a_run_of_another_client_is_not_readable():
+    '''
+        The owner is part of the scan filter, so somebody else's run is
+        indistinguishable from one that does not exist.
+
+        Analytics is the module that carries the commercial reading of a
+        client's sales — who their best points of sale are and what they are
+        failing to sell. Reading another company's is worse than reading the
+        raw file.
+    '''
+    resource = _FakeResource([_run_item('otra@empresa.com')])
+
+    with pytest.raises(HTTPException) as failure:
+        asyncio.run(controllers.get_results_controller(
+            dynamodb_resource = resource,
+            dataset_id = 'ds-001',
+            request = None,
+            current_user = 'yo@miempresa.com'
+        ))
+
+    assert AnalyticsError.RUN_NOT_FOUND.value in str(failure.value.detail)
+
+
+def test_the_owner_reads_their_own_run():
+    '''The filter must not get in the way of whoever owns the run.'''
+    resource = _FakeResource([_run_item('yo@miempresa.com')])
+
+    response = asyncio.run(controllers.get_results_controller(
+        dynamodb_resource = resource,
+        dataset_id = 'ds-001',
+        request = None,
+        current_user = 'yo@miempresa.com'
+    ))
+
+    assert response.dataset_id == 'ds-001'
+    assert response.run_id == 'run-1'
+
+
+class _RunsTable: # pylint: disable=too-few-public-methods
+    '''A DynamoDB table that applies the owner filter of a scan.'''
+
+    def __init__(self, items):
+        self._items = items
+
+    def scan(self, **kwargs):
+        '''Returns the rows whose owner matches the filter.'''
+        attribute, expected = kwargs['FilterExpression'].get_expression()['values']
+        return {'Items': [item for item in self._items
+                          if item.get(attribute.name) == expected]}
+
+
+class _RunsResource: # pylint: disable=too-few-public-methods
+    '''Stands in for the DynamoDB resource.'''
+
+    def __init__(self, items):
+        self._items = items
+
+    def Table(self, _name): # pylint: disable=invalid-name
+        '''Mirrors the boto3 resource API.'''
+        return _RunsTable(self._items)
+
+
+def _stored_run(owner: str, run_id: str, created_at: str) -> dict:
+    '''
+        A persisted run row.
+
+        Args:
+            owner (str): Owner email.
+            run_id (str): Identifier.
+            created_at (str): ISO timestamp.
+
+        Returns:
+            dict: The record as DynamoDB holds it.
+    '''
+    return {
+        'id': run_id, 'run_id': run_id, 'dataset_id': 'ds-1',
+        'owner_email': owner, 'status': 'completed',
+        'summary': {'total_opportunities': 964,
+                    'total_pos_with_opportunities': 260,
+                    'total_expected_value': 15300.5},
+        'created_at': created_at,
+    }
+
+
+def test_the_analysis_history_only_lists_your_own():
+    '''
+        The panel reads the first row as "your last analysis". Showing another
+        client's would be worse than showing none.
+    '''
+    resource = _RunsResource([
+        _stored_run('yo@miempresa.com', 'run-mine', '2026-09-01T10:00:00-04:00'),
+        _stored_run('otra@empresa.com', 'run-theirs', '2026-09-03T10:00:00-04:00'),
+    ])
+
+    response = asyncio.run(controllers.list_runs_controller(
+        dynamodb_resource = resource, request = None,
+        current_user = 'yo@miempresa.com', limit = 20
+    ))
+
+    assert response.count == 1
+    assert response.runs[0].run_id == 'run-mine'
+    assert response.runs[0].total_opportunities == 964
+
+
+def test_the_analysis_history_comes_back_newest_first():
+    '''Order is part of the contract: the first row is "the last analysis".'''
+    resource = _RunsResource([
+        _stored_run('yo@miempresa.com', 'viejo', '2026-08-01T10:00:00-04:00'),
+        _stored_run('yo@miempresa.com', 'nuevo', '2026-09-03T21:00:00-04:00'),
+    ])
+
+    response = asyncio.run(controllers.list_runs_controller(
+        dynamodb_resource = resource, request = None,
+        current_user = 'yo@miempresa.com', limit = 20
+    ))
+
+    assert [run.run_id for run in response.runs] == ['nuevo', 'viejo']

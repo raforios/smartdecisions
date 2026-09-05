@@ -22,13 +22,16 @@ from datetime import date as date_type, timedelta
 from typing import Any, Dict, List, Optional
 
 from models.quotes import USD, ExchangeRateItem
-from schemas.quotes import QuotesError
+from schemas.quotes import ForecastMethod, QuotesError
 from services.bcb_source import SOURCE_NAME, fetch_official_rate
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 from services.quotes_utils import get_rate, put_rate, query_rates
-from services.rate_forecast import project as project_rate
+from services.rate_forecast import (
+    backtest_windows,
+    project as project_rate
+)
 from services.utils import get_current_time_gmt, handle_service_errors
 
 
@@ -330,6 +333,15 @@ async def get_forecast_service(
         'days_ahead': days_ahead,
         'confidence': projection.confidence,
         'change_percent': projection.change_percent,
+        'accuracy': {
+            'method': ForecastMethod.DAMPED_TREND,
+            'mean_absolute_error': projection.expected_error,
+            'baseline_method': ForecastMethod.NAIVE,
+            'baseline_error': projection.baseline_error,
+            'windows': backtest_windows(
+                [item.official_rate for item in history], days_ahead
+            ),
+        },
         'last_rate': history[-1].official_rate,
         'last_date': history[-1].date,
         'final_rate': (

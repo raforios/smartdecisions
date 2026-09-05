@@ -474,23 +474,82 @@ def persist_run(
     return _decimal_to_native(item)
 
 
+def list_runs_for_owner(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    limit: int = 20
+) -> List[Dict[str, Any]]:
+    '''
+        Returns the caller's own analyses, most recent first.
+
+        The owner is part of the scan filter, the same way the single-run read
+        works, so no row of another client can reach the response. With `id` as
+        the partition key there is no Query that filters by owner; at POC volumes
+        a scan is fine and the right move later is a GSI on `owner_email`.
+
+        Args:
+            dynamodb_resource (ServiceResource): DynamoDB resource.
+            owner_email (str): Authenticated caller.
+            limit (int): Most rows to return.
+
+        Returns:
+            List[Dict[str, Any]]: Stored runs, newest first.
+    '''
+    table = dynamodb_resource.Table(ANALYTICS_RUNS_TABLE)
+    items: List[Dict[str, Any]] = []
+    scan_kwargs: Dict[str, Any] = {
+        'FilterExpression': Attr('owner_email').eq(owner_email)
+    }
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get('Items', []))
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+
+    items.sort(key = lambda item: str(item.get('created_at', '')), reverse = True)
+    return items[:limit]
+
+
 def get_latest_run_for_dataset(
     dynamodb_resource: ServiceResource,
-    dataset_id: str
+    dataset_id: str,
+    owner_email: str
 ) -> Dict[str, Any]:
     '''
-        Returns the most recent run for the given dataset.
+        Returns the most recent run for the given dataset, if it is the
+        caller's.
+
+        The owner is part of the filter, not a check applied afterwards: a run
+        belonging to somebody else must be indistinguishable from one that does
+        not exist, and comparing after reading invites forgetting the comparison.
 
         With PK `id`, there is no DynamoDB Query that filters by dataset_id
-        directly, so we Scan the table with a FilterExpression. This is OK
-        for POC volumes; if the table grows, the right move is to add a
-        Global Secondary Index on `dataset_id`.
+        directly, so we Scan the table with a FilterExpression. This is OK for
+        POC volumes; if the table grows, the right move is a Global Secondary
+        Index on `dataset_id`.
+
+        Args:
+            dynamodb_resource (ServiceResource): DynamoDB resource.
+            dataset_id (str): Dataset the run belongs to.
+            owner_email (str): Authenticated caller.
+
+        Returns:
+            Dict[str, Any]: The most recent run.
+
+        Raises:
+            RegisterNotFoundError: If no run of that dataset belongs to the
+                caller.
     '''
     table = dynamodb_resource.Table(ANALYTICS_RUNS_TABLE)
     items: List[Dict[str, Any]] = []
     last_evaluated_key = None
     while True:
-        scan_kwargs = {'FilterExpression': Attr('dataset_id').eq(dataset_id)}
+        scan_kwargs = {
+            'FilterExpression': (Attr('dataset_id').eq(dataset_id)
+                                 & Attr('owner_email').eq(owner_email))
+        }
         if last_evaluated_key:
             scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
         response = table.scan(**scan_kwargs)
@@ -500,8 +559,9 @@ def get_latest_run_for_dataset(
             break
 
     if not items:
-        error_msg = f'No analytics run found for dataset {dataset_id}.'
+        error_msg = (f'No analytics run of dataset {dataset_id} is available '
+                     f'for {owner_email}.')
         logger.warning(error_msg)
-        raise RegisterNotFoundError(detail = error_msg)
+        raise RegisterNotFoundError(detail = AnalyticsError.RUN_NOT_FOUND.value)
     items.sort(key = lambda record: record.get('created_at', ''), reverse = True)
     return _decimal_to_native(items[0])

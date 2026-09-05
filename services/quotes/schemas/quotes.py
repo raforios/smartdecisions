@@ -71,6 +71,40 @@ class RateConfidence(str, Enum):
     INSUFFICIENT = 'INSUFFICIENT'
 
 
+class ForecastMethod(str, Enum):
+    '''
+        How a projection was produced.
+
+        A code, not a sentence: the frontend words it. It travels with every
+        projection because a reader judging a number is entitled to know what
+        produced it.
+    '''
+    DAMPED_TREND = 'DAMPED_TREND'
+    NAIVE = 'NAIVE'
+
+
+class ForecastAccuracy(BaseModel):
+    '''
+        How far a model has missed on this very series.
+
+        Measured, not assumed: the series is replayed from every starting point
+        that leaves room for the horizon and the errors are averaged. The
+        baseline is the naive forecast — "tomorrow is the same as today" — which
+        for an exchange rate is the hardest short-horizon benchmark there is.
+        Publishing both is what lets a reader judge whether the projection earns
+        its place.
+    '''
+    method: ForecastMethod
+    mean_absolute_error: Optional[float] = Field(
+        None, description = 'Average miss of the model, in the unit of the series.'
+    )
+    baseline_method: ForecastMethod = ForecastMethod.NAIVE
+    baseline_error: Optional[float] = Field(
+        None, description = 'Average miss of the baseline, same measurement.'
+    )
+    windows: int = Field(0, ge = 0, description = 'Replays the average is over.')
+
+
 class SaleOutcome(BaseModel):
     '''
         What a sale is worth under one set of conditions.
@@ -141,6 +175,9 @@ class RateForecast(BaseModel):
     last_date: Optional[date] = None
     final_rate: Optional[float] = Field(
         None, description = 'Projected rate at the end of the horizon.'
+    )
+    accuracy: Optional[ForecastAccuracy] = Field(
+        None, description = 'What the projection has been worth on this series.'
     )
     history: List[ExchangeRatePoint] = []
     projected: List[ExchangeRatePoint] = []

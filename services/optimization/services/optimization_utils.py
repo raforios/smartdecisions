@@ -41,18 +41,26 @@ FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 
 
 
-def _build_route_day_key(route_id: int, day: int) -> str:
+def _build_route_day_key(owner_email: str, route_id: int, day: int) -> str:
     '''
-        Builds the composite partition key used by t_optimization_routes.
+        Builds the partition key of the routes table.
+
+        The owner is part of the key, not a filter applied afterwards, because
+        this partition is deleted before every upload. Without it, two clients
+        planning "route 1, day 1" — and route identifiers are small integers
+        everybody uses — share a partition, so the second upload **erases the
+        first client's points**. That is worse than reading somebody else's
+        data, and no filter on the read path would have prevented it.
 
         Args:
+            owner_email (str): Owner of the plan.
             route_id (int): Identifier of the planned route.
             day (int): Day index within the plan.
 
         Returns:
-            str: Composite key in the form "{route_id}#{day}".
+            str: Composite key in the form "{owner}#{route_id}#{day}".
     '''
-    return f'{int(route_id)}#{int(day)}'
+    return f'{owner_email}#{int(route_id)}#{int(day)}'
 
 
 def _point_to_item(
@@ -96,7 +104,8 @@ def _point_to_item(
 def get_route_points(
     dynamodb_resource: ServiceResource,
     route_id: int,
-    day: int
+    day: int,
+    owner_email: str
 ) -> List[Dict[str, Any]]:
     '''
         Retrieves all client geolocation points for a (route_id, day) pair.
@@ -113,7 +122,7 @@ def get_route_points(
             RegisterNotFoundError: If no points exist for that (route_id, day).
     '''
     table = dynamodb_resource.Table(ROUTES_TABLE)
-    partition_key = _build_route_day_key(route_id, day)
+    partition_key = _build_route_day_key(owner_email, route_id, day)
 
     response = table.query(
         KeyConditionExpression = Key('route_day_key').eq(partition_key)
@@ -138,7 +147,8 @@ def get_route_points(
 def delete_points_for_route_day(
     dynamodb_resource: ServiceResource,
     route_id: int,
-    day: int
+    day: int,
+    owner_email: str
 ) -> int:
     '''
         Removes every existing point under the (route_id, day) partition.
@@ -156,7 +166,7 @@ def delete_points_for_route_day(
             int: Number of items deleted.
     '''
     table = dynamodb_resource.Table(ROUTES_TABLE)
-    partition_key = _build_route_day_key(route_id, day)
+    partition_key = _build_route_day_key(owner_email, route_id, day)
     response = table.query(
         KeyConditionExpression = Key('route_day_key').eq(partition_key),
         ProjectionExpression = 'route_day_key, client_id'
@@ -184,7 +194,8 @@ def bulk_upload_points(
     dynamodb_resource: ServiceResource,
     route_id: int,
     day: int,
-    points: List[Dict[str, Any]]
+    points: List[Dict[str, Any]],
+    owner_email: str
 ) -> int:
     '''
         Persists a list of geolocated client points under the given
@@ -208,11 +219,12 @@ def bulk_upload_points(
     if not points:
         raise InvalidInputError(detail = OptimizationError.EMPTY_POINT_LIST.value)
 
-    partition_key = _build_route_day_key(route_id, day)
+    partition_key = _build_route_day_key(owner_email, route_id, day)
     deleted = delete_points_for_route_day(
         dynamodb_resource = dynamodb_resource,
         route_id = route_id,
-        day = day
+        day = day,
+        owner_email = owner_email
     )
 
     table = dynamodb_resource.Table(ROUTES_TABLE)

@@ -65,7 +65,8 @@ def _route_points_to_df(items: List[dict]) -> pd.DataFrame:
 def _load_dataframe(
     dynamodb_resource: ServiceResource,
     route_id: int,
-    day: int
+    day: int,
+    owner_email: str
 ) -> pd.DataFrame:
     '''
         Reads the route points from DynamoDB and returns them as the dataframe
@@ -75,7 +76,8 @@ def _load_dataframe(
     items = get_route_points(
         dynamodb_resource = dynamodb_resource,
         route_id = route_id,
-        day = day
+        day = day,
+        owner_email = owner_email
     )
     return _route_points_to_df(items)
 
@@ -94,7 +96,8 @@ def _df_to_pydantic(df: pd.DataFrame, model) -> list:
 def _ordered_route_models(
     dynamodb_resource: ServiceResource,
     route_id: int,
-    day: int
+    day: int,
+    owner_email: str
 ) -> List[OptimizationResponse]:
     '''
         Computes the ordered linear-distance route and returns it as the
@@ -102,7 +105,7 @@ def _ordered_route_models(
         `optimization_algorithm_controller` so the latter does not have to
         call a decorated controller.
     '''
-    dtf = _load_dataframe(dynamodb_resource, route_id, day)
+    dtf = _load_dataframe(dynamodb_resource, route_id, day, owner_email)
     dtf_distances = build_distance_matrix(dtf)
     dtf_order = filter_order_df(
         dtf_distances['origin'] == int(dtf_distances['origin'].iloc[0]),
@@ -119,12 +122,12 @@ async def preparing_data_controller(
     route_id: int,
     day: int,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> Optional[List[DataMapResponse]]:
     '''
         Returns the base map data (geolocated client points tagged with color).
     '''
-    dtf = _load_dataframe(dynamodb_resource, route_id, day)
+    dtf = _load_dataframe(dynamodb_resource, route_id, day, current_user)
     data = tag_map_colors(dtf)
     return _df_to_pydantic(data, DataMapResponse)
 
@@ -135,12 +138,12 @@ async def data_ordered_controller(
     route_id: int,
     day: int,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> Optional[List[OptimizationResponse]]:
     '''
         Returns the ordered linear-distance pairs (origin → target).
     '''
-    return _ordered_route_models(dynamodb_resource, route_id, day)
+    return _ordered_route_models(dynamodb_resource, route_id, day, current_user)
 
 
 @handle_service_errors('OPTIMIZATION')
@@ -150,7 +153,7 @@ async def optimization_algorithm_controller(
     route_id: int,
     day: int,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> Optional[List[RouteResponse]]:
     '''
         Runs the full route-optimization pipeline (ordering + OSRM projection).
@@ -159,7 +162,7 @@ async def optimization_algorithm_controller(
         layer for backward compatibility but no longer affects routing: OSRM
         resolves the full street geometry for every segment regardless.
     '''
-    dtf_final_models = _ordered_route_models(dynamodb_resource, route_id, day)
+    dtf_final_models = _ordered_route_models(dynamodb_resource, route_id, day, current_user)
     dtf_final = pd.DataFrame([m.model_dump() for m in dtf_final_models])
     dtf_route = resolve_road_route(dtf_final)
     return _df_to_pydantic(dtf_route, RouteResponse)
@@ -171,13 +174,13 @@ async def simulation_algorithm_controller(
     route_id: int,
     day: int,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str
 ) -> dict:
     '''
         Returns the geodesic distance matrix between all client points
         (output of GeoAnalyzer.get_distance_matrix as a dict).
     '''
-    dtf = _load_dataframe(dynamodb_resource, route_id, day)
+    dtf = _load_dataframe(dynamodb_resource, route_id, day, current_user)
     data = tag_map_colors(dtf)
 
     distance_matrix = data[data['day'] == day][['client_id', 'y', 'x']].reset_index(
@@ -201,7 +204,7 @@ async def simulation_algorithm_controller(
 async def bulk_upload_routes_controller(
     dynamodb_resource: ServiceResource,
     csv_text: str,
-    current_user: str, # pylint: disable=unused-argument
+    current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> BulkUploadResponse:
     '''
@@ -209,8 +212,9 @@ async def bulk_upload_routes_controller(
         (route_id, day) partition. Re-uploading the same (route_id, day)
         replaces the previous content.
 
-        `current_user` is accepted so the @audit_event decorator can stamp
-        the event with the operator email; `request` is consumed by
+        The caller's email is part of the partition key, so a re-upload only
+        replaces that client's own points: two clients planning "route 1, day 1"
+        no longer erase each other. `request` is consumed by
         @handle_service_errors for the usage log.
     '''
     rows, headers, route_id, day = parse_route_csv(csv_text)
@@ -218,7 +222,8 @@ async def bulk_upload_routes_controller(
         dynamodb_resource = dynamodb_resource,
         route_id = route_id,
         day = day,
-        points = rows
+        points = rows,
+        owner_email = current_user
     )
     return BulkUploadResponse(
         route_id = route_id,
