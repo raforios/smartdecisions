@@ -29,9 +29,29 @@ document.addEventListener('DOMContentLoaded', () => {
         INSUFFICIENT: 'Datos insuficientes'
     };
     const METHOD_LABELS = {
+        DAMPED_TREND: 'Tendencia amortiguada',
         LINEAR: 'Tendencia lineal',
-        MOVING_AVERAGE: 'Promedio móvil'
+        MOVING_AVERAGE: 'Promedio móvil',
+        NAIVE: 'Sin cambio'
     };
+
+    /**
+     * How far the model has actually missed, next to the same measurement for
+     * the benchmark it has to beat. Both come from replaying the stored series,
+     * so the figure is measured and not an assumed interval — and showing the
+     * benchmark is what lets a reader judge whether the projection earns its
+     * place instead of taking the margin on faith.
+     */
+    function accuracyNote(method, error, baselineError) {
+        const name = METHOD_LABELS[method] || method;
+        if (error === null || error === undefined) {
+            return `${name} · sin historia suficiente para medir el error`;
+        }
+        const versus = (baselineError === null || baselineError === undefined)
+            ? ''
+            : ` · sin cambio erraría ±${money(baselineError)}`;
+        return `${name} · error medido ±${money(error)}${versus}`;
+    }
     const SERVICE_ERRORS = {
         NO_RATE_PUBLISHED: 'Todavía no hay cotizaciones del dólar guardadas.',
         SOURCE_UNAVAILABLE: 'El Banco Central no respondió.',
@@ -260,7 +280,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="num daily">${money(last)}</td>
                 <td><span class="tag tag-${item.confidence}">${
                     CONFIDENCE_LABELS[item.confidence] || item.confidence
-                }</span><span class="method">${METHOD_LABELS[item.method] || ''}</span></td>
+                }</span><span class="method">${accuracyNote(
+                    item.method, item.mean_absolute_error, item.baseline_error
+                )}</span></td>
                 <td class="spark-cell">${sparkline(history, forecast)}</td>`;
             body.appendChild(row);
 
@@ -408,6 +430,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="figure-value"><span class="tag tag-${data.confidence}">${
                     CONFIDENCE_LABELS[data.confidence] || data.confidence
                 }</span></span>
+            </div>
+            <div class="figure figure-wide">
+                <span class="figure-label">Modelo</span>
+                <span class="figure-note">${
+                    data.accuracy
+                        ? accuracyNote(data.accuracy.method,
+                                       data.accuracy.mean_absolute_error,
+                                       data.accuracy.baseline_error) +
+                          ` · sobre ${data.accuracy.windows} réplicas`
+                        : '—'
+                }</span>
             </div>`;
 
         qs('#rateChart').innerHTML = sparkline(

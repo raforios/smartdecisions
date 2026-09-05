@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Demo — SmartDecisions</title>
-    <link rel="stylesheet" href="styles/demo.css?v=6dea3d8c49">
+    <link rel="stylesheet" href="styles/demo.css?v=58befa6b25">
     <link rel="icon" type="image/png" sizes="64x64" href="../assets/favicon-bear-64.png?v=5">
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-bear-32.png?v=5">
     <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png?v=5">
@@ -12,6 +12,7 @@
     <script src="js/auth.js?v=ee49f43985" defer></script>
     <script src="js/api.js?v=3ed1e6bc89" defer></script>
     <script src="js/ui.js?v=b84ea2ad2a" defer></script>
+    <script src="js/activity.js?v=af47792a97" defer></script>
 </head>
 <body>
 
@@ -36,6 +37,15 @@
             Empieza por <strong>Análisis Comercial</strong> si vas a probar el motor
             comercial; los otros dos exploran capacidades de ML y rutas.
         </p>
+
+        <!-- What the account already has: filled from the caller's own history. -->
+        <section class="card activity-card" id="activityCard" hidden>
+            <div class="activity-head">
+                <h2>Tu actividad</h2>
+                <span class="activity-meta" id="activityMeta"></span>
+            </div>
+            <div class="activity-grid" id="activityGrid"></div>
+        </section>
 
         <div class="card-grid">
             <a class="module-card" href="excel/index.html">

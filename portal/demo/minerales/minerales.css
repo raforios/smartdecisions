@@ -298,3 +298,15 @@
 @media (max-width: 640px) {
     .rate-table-actions { margin-left: 0; width: 100%; }
 }
+
+/* The model and its measured error sit next to the figure they qualify: a
+   projection is only worth what its track record says it is. */
+.figure-wide { flex-basis: 100%; }
+
+.figure-note {
+    font-size: .82rem;
+    color: var(--muted, #5e6580);
+    font-variant-numeric: tabular-nums;
+}
+
+.data-table .method { line-height: 1.35; }

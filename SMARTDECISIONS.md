@@ -891,6 +891,123 @@ modo dentro de otro: no se mezclan aunque compartan base. El orden es:
    precarga el precio **oficial**, no el diario, y aplica
    `official_change_percent`. **Requiere redesplegar MINING_ANALYSIS.**
 
+   **Historial propio y panel "Tu actividad" (2026-09-05).** El home abría con
+   tres tarjetas vacías, que se lee como folleto y no como producto. Ahora, al
+   entrar, la cuenta ve lo que ya tiene.
+
+   Hicieron falta dos endpoints que no existían —solo se podía leer por id,
+   sabiéndolo de memoria—: `GET /v1/ingest/datasets` y `GET /v1/analytics/runs`,
+   los dos con el dueño **dentro de la consulta**, no como filtro posterior. Cada
+   uno ordena por fecha descendente, porque la primera fila es la que el panel
+   lee como "tu última carga" y el orden es parte del contrato, no un detalle de
+   cómo DynamoDB haya escaneado.
+
+   El panel pide **una sola fila** a cada servicio: mostrar la última trayendo
+   cuarenta se paga en cada carga de página. Si no hay nada que mostrar no se
+   muestra, así que una cuenta nueva conserva el home limpio; y si un servicio no
+   responde el panel se oculta en vez de bloquear los módulos.
+
+   De paso resuelve una fricción real: al entrar se re-siembra el `dataset_id` en
+   `sessionStorage`, así que quien vuelve al día siguiente encuentra sus módulos
+   listos en lugar de que se le pida subir otra vez el mismo archivo.
+
+   Verificado contra la tabla real: 46 datasets y 9 corridas del dueño, **0 para
+   un usuario ajeno**. INGEST 23 tests, ANALYTICS 59, Pylint 10.00 en ambos.
+   **Los dos servicios ya estaban en la lista de redespliegue.**
+
+   **Cambio de modelo predictivo (2026-09-05).** Un economista amigo de Rafael
+   preguntó por el R² y por ARIMA. Medido sobre los 70 días reales del dólar:
+
+   - **R² del ajuste lineal: 0,7567** — pero no significa lo que parece. La
+     autocorrelación de nivel en lag 1 es **0,9951**, casi una raíz unitaria: el
+     R² alto es regresión espuria sobre una serie con tendencia.
+   - **El BCB publica los siete días**, y el valor de sábado y domingo **repite
+     el del lunes siguiente**, no el del viernes. El 37,7% de los cambios diarios
+     son exactamente cero.
+   - **La autocorrelación de los cambios en lag 1 es 0,4885**: hay señal que un
+     modelo de series temporales aprovecha y un ajuste lineal ignora.
+
+   **Backtest con ventanas móviles (MAE en Bs): el modelo que teníamos era el
+   peor en los tres horizontes.** A 30 días erraba 1,066 contra 0,333 del
+   ingenuo. Reemplazado por **suavizado exponencial con tendencia amortiguada**,
+   con parámetros ajustados por búsqueda en grilla (dólar α=1,00 β=0,45 φ=0,70;
+   minerales α=0,80 β=0,05 φ=0,88, todos en `.env`). Le gana al ingenuo a 7 y 15
+   días y queda cerca a 30.
+
+   El efecto en las cifras publicadas es grande y era el síntoma del problema:
+   el dólar pasó de **+8,96% a +1,57%** a 30 días; Plata de **−25,09% a +1,18%**;
+   Antimonio de **−34,54% a −1,20%**. Aquellas caídas eran la recta extrapolando
+   declives cortos.
+
+   **Cada proyección viaja con su propio error medido**, no con un intervalo
+   asumido: la serie se re-corre desde cada punto de partida que deja espacio al
+   horizonte y se promedian los fallos. Y viaja también el error del **modelo
+   ingenuo** como comparador, que es lo que permite juzgar si la proyección se
+   gana su lugar. Rafael fue explícito: *"mostrar el error sin tener sustento no
+   es honesto"*.
+
+   De regalo, el colapso del Wolfram dejó de necesitar respaldo: la tendencia
+   amortiguada no puede cruzar el cero porque cada paso arrastra menos que el
+   anterior. **Requiere redesplegar QUOTES y MINING_ANALYSIS.**
+
+   **Aislamiento por cliente (2026-09-05).** Primer paso hacia SaaS de verdad.
+   El `owner_email` se guardaba en cada registro y **nunca se verificaba**.
+
+   - **INGEST:** `GET /{dataset_id}` y la descarga de rechazados leían sin mirar
+     al dueño. Cualquier usuario autenticado que conociera —o adivinara— un id
+     leía las ventas de otro cliente. Nueva guarda `get_owned_dataset`; un
+     dataset ajeno responde **igual que uno inexistente** (404 +
+     `DATASET_NOT_FOUND`), porque distinguirlos permitiría confirmar qué ids
+     existen, que es un mapa de la cartera de clientes.
+   - **ANALYTICS:** el dueño pasó a ser **parte del filtro del scan**, no una
+     comparación posterior que se puede olvidar. Es el módulo que carga la
+     lectura comercial de un cliente —sus mejores puntos de venta y lo que está
+     dejando de vender—; leer la de otra empresa es peor que leer el archivo
+     crudo. De paso, `RegisterNotFoundError` devolvía prosa en el `detail`;
+     ahora devuelve `RUN_NOT_FOUND` (§7).
+   - **OPTIMIZATION:** acá había algo peor que una fuga. La partición era
+     `{route_id}#{day}` sin dueño, y **el upload borra la partición antes de
+     escribir**: dos clientes planificando "ruta 1, día 1" —y los route_id son
+     enteros chicos que todos usan— y el segundo **borraba los puntos del
+     primero**. Ningún filtro en la lectura lo habría evitado. El dueño pasó a
+     la clave: `{owner}#{route_id}#{day}`, así el aislamiento es por
+     construcción.
+
+   Los tres cambios se verificaron **rompiendo el código a propósito**: sin la
+   guarda, sin el filtro y sin el dueño en la clave, los tests nuevos fallan.
+   Ninguna prueba anterior cubría nada de esto. 20 + 57 + 19 tests, Pylint 10.00
+   en los tres.
+
+   **Pendiente de esto:** los 109 ítems de `optimization_routes` quedaron con la
+   clave vieja y son inalcanzables; son datos de demo, regenerables subiendo el
+   CSV de nuevo. **Requiere redesplegar INGEST, ANALYTICS y OPTIMIZATION.**
+
+   **Captura automática del dólar (2026-09-04).** Hasta hoy la serie solo crecía
+   si alguien llamaba a mano al endpoint de sync: la cuenta no tenía **ninguna**
+   regla de EventBridge y lo único con permiso para invocar el Lambda de QUOTES
+   era API Gateway. Automatizado con una regla diaria a las **13:00 UTC (09:00 de
+   La Paz)**, para que la cotización del día ya esté en la tabla cuando alguien
+   abra una pantalla.
+
+   - **El Lambda ahora atiende dos tipos de llamador.** API Gateway manda eventos
+     HTTP que Mangum convierte en ASGI; EventBridge manda un evento programado sin
+     petición, que haría fallar a Mangum buscándola. El `handler` de `main.py` es
+     el único lugar que conoce la diferencia, y `tests/test_handler.py` fija que
+     todo lo que no sea el evento programado siga yendo al adaptador de siempre.
+   - **La ventana la decide el dominio, no el cron.** `scheduled_sync_service`
+     repara `SCHEDULED_SYNC_DAYS` días (7): el BCB no publica fines de semana ni
+     feriados y una corrida fallida debe repararla la siguiente. El disparador
+     dice *cuándo*; el servicio dice *cuánto reparar*.
+   - **Si el sync falla, la invocación falla** (`RuntimeError`), para que
+     EventBridge reintente y el fallo aparezca en métricas. Un éxito silencioso
+     dejaría un hueco que nadie ve hasta que se liquide una venta con una
+     cotización vieja.
+   - `services/ci/api/create_schedules.sh`, idempotente, al lado del de tablas.
+     **Se corre después de desplegar**, no antes.
+
+   Probado de punta a punta contra el BCB y la tabla real: guardó la cotización
+   del 4-sep y salteó las 6 que ya estaban. 26 tests, Pylint 10.00/10.
+
    **El plazo seguía sin verse (2026-09-03).** Rafael volvió a reportar que los
    minerales no pasan de 15 días. El backend desplegado sí trae la cadena
    —verificado en su `openapi.json`—, pero yo la había puesto **solo dentro del
