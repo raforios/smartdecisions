@@ -22,7 +22,7 @@
 import json
 from dataclasses import replace
 from datetime import timedelta
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from models.ai import ExplanationItem, PromptItem
 from schemas.ai import AIError, ViewName
@@ -88,21 +88,55 @@ def _system_prompt(prompt: PromptItem) -> str:
     return f'{prompt.role}\n\n{prompt.instructions}\n\nReglas:\n{rules}'
 
 
+def _trim(value: Any, budget_hit: List[bool]) -> Any:
+    '''
+        Walks a structure and cuts every long list, at any depth.
+
+        Depth matters: a route plan is `days[].stops[]`, so trimming only the
+        top level cut a list of five and left the eighty thousand stops
+        underneath. That payload reached the model as 218 000 tokens against a
+        limit of 200 000, and the call failed outright.
+
+        Args:
+            value (Any): Node of the response being walked.
+            budget_hit (List[bool]): Single-element flag set when something was
+                actually cut, so the caller can log it once.
+
+        Returns:
+            Any: The same node, with long lists reduced to a sample.
+    '''
+    if isinstance(value, dict):
+        return {key: _trim(item, budget_hit) for key, item in value.items()}
+
+    if isinstance(value, list):
+        if len(value) > SAMPLE_SIZE:
+            budget_hit[0] = True
+            kept = [_trim(item, budget_hit) for item in value[:SAMPLE_SIZE]]
+            kept.append(
+                f'… {len(value) - SAMPLE_SIZE} elemento(s) más, no mostrados: '
+                f'se envía una muestra de los primeros {SAMPLE_SIZE}.'
+            )
+            return kept
+        return [_trim(item, budget_hit) for item in value]
+
+    return value
+
+
 def _fit_to_budget(payload: Dict[str, Any]) -> Dict[str, Any]:
     '''
         Shrinks a response that does not fit the token budget, without
         re-declaring its shape.
 
         Some responses are long by nature: the opportunities run answers with
-        545 rows and 246 KB, about 61 000 tokens. Sending that costs a fortune
-        and produces a worse explanation, because no reader — model or person —
-        takes in 545 rows; and refusing it outright leaves the button broken on
-        the screen where it is most useful.
+        545 rows and 246 KB, and a route plan carries every stop of every day.
+        Sending that costs a fortune and produces a worse explanation, because
+        no reader — model or person — takes in hundreds of rows; and refusing it
+        leaves the button broken on the screen where it is most useful.
 
-        So the longest lists are cut to a sample, biggest first, until the
-        payload fits. Nothing is re-typed and no key is invented beyond a marker
-        that says a list was sampled — which the model needs, or it would
-        describe a sample as if it were the whole.
+        So every long list is cut to a sample, at whatever depth it sits.
+        Nothing is re-typed and no key is invented: the marker goes inside the
+        list itself, which the model needs or it would describe a sample as if
+        it were the whole.
 
         Args:
             payload (Dict[str, Any]): The response as the service returned it.
@@ -113,23 +147,8 @@ def _fit_to_budget(payload: Dict[str, Any]) -> Dict[str, Any]:
     if len(json.dumps(payload, default = str)) <= MAX_PAYLOAD_CHARACTERS:
         return payload
 
-    trimmed = dict(payload)
-    lists = sorted(
-        ((key, value) for key, value in trimmed.items() if isinstance(value, list)),
-        key = lambda pair: len(pair[1]),
-        reverse = True
-    )
-
-    for key, value in lists:
-        if len(json.dumps(trimmed, default = str)) <= MAX_PAYLOAD_CHARACTERS:
-            break
-        if len(value) <= SAMPLE_SIZE:
-            continue
-        trimmed[key] = value[:SAMPLE_SIZE]
-        trimmed[f'{key}_muestra'] = (
-            f'Se muestran {SAMPLE_SIZE} de {len(value)} elementos, los primeros '
-            f'del orden en que el servicio los devolvió.'
-        )
+    budget_hit = [False]
+    trimmed = _trim(payload, budget_hit)
 
     message = (
         f'Payload trimmed to fit the budget: '

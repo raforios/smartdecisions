@@ -297,8 +297,9 @@ def test_a_long_response_is_sampled_instead_of_refused(model, cache): # pylint: 
     assert len(sent) <= ai.MAX_PAYLOAD_CHARACTERS + 500
     # The model must be told it is looking at a sample, or it would describe it
     # as if it were the whole.
-    assert 'history_muestra' in sent
-    assert 'de 3000' in sent
+    # The model must be told it is looking at a sample, or it would describe it
+    # as if it were the whole.
+    assert 'no mostrados' in sent
 
 
 def test_a_response_that_fits_is_not_touched(model, cache): # pylint: disable=unused-argument
@@ -319,3 +320,28 @@ def test_an_empty_payload_is_still_refused(model):
 
     assert AIError.EMPTY_PAYLOAD.value in str(failure.value.detail)
     assert not model
+
+
+def test_a_long_list_is_trimmed_at_any_depth(model, cache): # pylint: disable=unused-argument
+    """
+        A route plan is days[].stops[]: trimming only the top level cut a list
+        of five and left eighty thousand stops underneath, which reached the
+        model as 218 000 tokens against a limit of 200 000 and failed outright.
+    """
+    nested = {
+        'route_id': 1,
+        'days': [
+            {'day': day, 'stops': [{'client': f'Cliente {i}', 'amount': 100.0,
+                                    'relleno': 'x' * 80} for i in range(500)]}
+            for day in range(1, 6)
+        ]
+    }
+
+    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
+        _run(ai.explain_service(ViewName.RATE_FORECAST, nested))
+
+    sent = model[0]['user_prompt']
+    assert len(sent) <= ai.MAX_PAYLOAD_CHARACTERS + 500
+    assert 'no mostrados' in sent
+    # The structure survives: it is still days with stops, only shorter.
+    assert 'stops' in sent and 'Cliente 0' in sent
