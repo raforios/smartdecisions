@@ -33,6 +33,7 @@ from services.analytics_utils import (
     apply_date_range,
     get_dataset_metadata,
     get_latest_run_for_dataset,
+    HISTORY_DEFAULT_LIMIT,
     list_runs_for_owner,
     load_dataframe_from_s3,
     persist_run,
@@ -302,7 +303,7 @@ async def list_runs_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str,
-    limit: int = 20
+    limit: int = HISTORY_DEFAULT_LIMIT
 ) -> RunListResponse:
     '''
         Returns the caller's own analyses, most recent first.

@@ -30,7 +30,9 @@ from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 
 
-ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+# Required: reaching an external source has a budget, and it is not the
+# code's to assume.
+ENV_VARS = load_and_validate_env_vars({
     'BCB_BASE_URL': str,
     'BCB_REQUEST_TIMEOUT_SECONDS': int,
 })
@@ -38,7 +40,7 @@ BASE_URL = (
     ENV_VARS['BCB_BASE_URL']
     or 'https://www.bcb.gob.bo/librerias/indicadores/otras/otras_imprimir.php'
 )
-REQUEST_TIMEOUT_SECONDS = ENV_VARS['BCB_REQUEST_TIMEOUT_SECONDS'] or 20
+REQUEST_TIMEOUT_SECONDS = ENV_VARS['BCB_REQUEST_TIMEOUT_SECONDS']
 
 SOURCE_NAME = 'BCB'
 

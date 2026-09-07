@@ -32,6 +32,11 @@ ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
     'DYNAMODB_TABLE_NAME_ANALYTICS_RUNS': str,
     'BUCKET_NAME': str,
+    'HISTORY_DEFAULT_LIMIT': int,
+    'AMOUNT_DECIMALS': int,
+    'CHANGE_DECIMALS': int,
+    'FORECAST_MONTHS_AHEAD': int,
+    'RANKING_SIZE': int,
 })
 INGEST_DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 ANALYTICS_RUNS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_ANALYTICS_RUNS']
@@ -66,7 +71,7 @@ def money(value: float) -> float:
         Returns:
             float: The amount rounded to 2 decimals, or 0.0 when not a number.
     '''
-    return round(float(value), 2) if pd.notna(value) else 0.0
+    return round(float(value), AMOUNT_DECIMALS) if pd.notna(value) else 0.0
 
 
 def ratio(numerator: float, denominator: float) -> float:
@@ -101,7 +106,10 @@ def percent_change(current: float, previous: Optional[float]) -> Optional[float]
     '''
     if not previous or pd.isna(previous):
         return None
-    return round((float(current) - float(previous)) / float(previous) * 100, 1)
+    return round(
+        (float(current) - float(previous)) / float(previous) * 100,
+        CHANGE_DECIMALS
+    )
 
 
 def label_series(dataframe: pd.DataFrame, id_col: str, name_col: str) -> Optional[pd.Series]:
@@ -474,10 +482,25 @@ def persist_run(
     return _decimal_to_native(item)
 
 
+# How many history rows a caller gets when they do not ask for a number.
+HISTORY_DEFAULT_LIMIT = ENV_VARS['HISTORY_DEFAULT_LIMIT']
+
+# Decimals a money figure carries in a response.
+AMOUNT_DECIMALS = ENV_VARS['AMOUNT_DECIMALS']
+
+# Decimals a published percentage carries, and how far the forecast looks
+# ahead when the caller does not say.
+CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']
+FORECAST_MONTHS_AHEAD = ENV_VARS['FORECAST_MONTHS_AHEAD']
+
+# How many rows a 'best' or 'worst' ranking shows.
+RANKING_SIZE = ENV_VARS['RANKING_SIZE']
+
+
 def list_runs_for_owner(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    limit: int = 20
+    limit: int = HISTORY_DEFAULT_LIMIT
 ) -> List[Dict[str, Any]]:
     '''
         Returns the caller's own analyses, most recent first.

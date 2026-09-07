@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from schemas.analytics import ForecastBlock
-
+from services.analytics_utils import AMOUNT_DECIMALS, FORECAST_MONTHS_AHEAD
 from services.logger_config import custom_logger as logger
 
 _AMOUNT = 'total_amount'
@@ -55,7 +55,7 @@ def _forecast_values(history: List[float], months_ahead: int, method: str) -> Li
         slope, intercept = np.polyfit(x, series, 1)
         projected = [float(slope * (len(series) + i) + intercept)
                      for i in range(months_ahead)]
-    return [round(max(value, 0.0), 2) for value in projected]
+    return [round(max(value, 0.0), AMOUNT_DECIMALS) for value in projected]
 
 
 def _monthly_totals(dataframe: pd.DataFrame) -> pd.Series:
@@ -76,7 +76,7 @@ def _series_block(name: str, monthly: pd.Series, months_ahead: int, method: str
     '''
     if len(monthly) < 2:
         return None
-    history = [{'month': str(idx), 'amount': round(float(val), 2)}
+    history = [{'month': str(idx), 'amount': round(float(val), AMOUNT_DECIMALS)}
                for idx, val in monthly.items()]
     future_months = _next_months(str(monthly.index[-1]), months_ahead)
     future_values = _forecast_values(list(monthly.values), months_ahead, method)
@@ -86,13 +86,13 @@ def _series_block(name: str, monthly: pd.Series, months_ahead: int, method: str
         'name': name,
         'history': history,
         'forecast': forecast,
-        'total_forecast': round(sum(future_values), 2),
+        'total_forecast': round(sum(future_values), AMOUNT_DECIMALS),
     }
 
 
 def build_forecast(
     dataframe: pd.DataFrame,
-    months_ahead: int = 3,
+    months_ahead: int = FORECAST_MONTHS_AHEAD,
     method: str = METHOD_LINEAR,
     group_by: Optional[str] = None
 ) -> Dict[str, Any]:

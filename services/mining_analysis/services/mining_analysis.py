@@ -24,6 +24,7 @@ from models.mining_analysis import (
     RoyaltyTransaction
 )
 from schemas.mining_analysis import MiningResult, MiningStatus
+from services.environment import load_and_validate_env_vars
 from services.utils import handle_service_errors
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
@@ -34,6 +35,17 @@ from services.prices_store import (
     latest_prices_before,
     list_minerals
 )
+
+
+# Required, not optional: a fallback written in code is still a number the
+# code chose.
+ENV_VARS = load_and_validate_env_vars({
+    'MAX_FALLBACK_PERIODS': int,
+    'CHANGE_DECIMALS': int,
+})
+
+# Decimals a published percentage carries.
+CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']
 
 
 # Canonical mineral catalog rendered in the official Minerales_0X templates.
@@ -631,7 +643,7 @@ async def get_daily_report_service(
             'price_date': price.date,
             'previous_price_low': prev_low,
             'previous_price_date': prev.date if prev is not None else None,
-            'change_pct': round(change_pct, 4),
+            'change_pct': round(change_pct, CHANGE_DECIMALS),
             'is_fallback': price.date != ref_date,
         })
 
@@ -666,7 +678,7 @@ def _compute_biweekly_average(
 # How far back the report looks for the last published quotation of a mineral,
 # in biweekly periods. Two years is generous for "el del periodo anterior que se
 # tenga" and still bounds the search on a mineral that was never quoted.
-_MAX_FALLBACK_PERIODS: int = 24
+_MAX_FALLBACK_PERIODS: int = ENV_VARS['MAX_FALLBACK_PERIODS']
 
 
 @dataclass(frozen = True)

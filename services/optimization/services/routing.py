@@ -17,12 +17,13 @@ from services.logger_config import custom_logger as logger
 
 
 # OSRM demo server by default; override with a self-hosted instance in prod.
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+# Required: the routing provider and its budget are deployment decisions.
+_SETTINGS = load_and_validate_env_vars({
     'OSRM_BASE_URL': str,
     'OSRM_REQUEST_TIMEOUT_SECONDS': int,
 })
-OSRM_BASE_URL = _SETTINGS['OSRM_BASE_URL'] or 'https://router.project-osrm.org'
-_REQUEST_TIMEOUT_SECONDS = _SETTINGS['OSRM_REQUEST_TIMEOUT_SECONDS'] or 10
+OSRM_BASE_URL = _SETTINGS['OSRM_BASE_URL']
+_REQUEST_TIMEOUT_SECONDS = _SETTINGS['OSRM_REQUEST_TIMEOUT_SECONDS']
 
 
 def _fetch_osrm_route(coordinates: str) -> Dict[str, Any]:

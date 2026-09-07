@@ -30,14 +30,13 @@ from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 
 
-ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+# Required: the table a service reads is not something code may assume.
+ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_MINERALS': str,
     'DYNAMODB_TABLE_NAME_MINING_PRICES': str,
 })
-# Defaults without the 't_' prefix: that prefix names the MySQL tables, and
-# every DynamoDB table in the account goes without it.
-MINERALS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_MINERALS'] or 'minerals'
-PRICES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_MINING_PRICES'] or 'mining_prices'
+MINERALS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_MINERALS']
+PRICES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_MINING_PRICES']
 
 # Region and credentials come from the default chain (Lambda role in AWS).
 _resource = boto3.resource('dynamodb')

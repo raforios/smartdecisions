@@ -15,6 +15,7 @@ import pytest
 from fastapi import HTTPException
 
 from schemas.ingest import IngestError, IngestResponse, TEMPLATE_COLUMNS
+from services import ingest_utils
 from controllers import ingest as controllers
 
 
@@ -58,6 +59,7 @@ def _stored():
 
     with patch.object(controllers, 'download_bytes', lambda _: _template_file()), \
          patch.object(controllers, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
          patch.object(controllers, 'persist_dataset', _persist):
         yield persisted
 
@@ -79,6 +81,9 @@ def test_ingest_from_s3_returns_a_full_response(stored):
     assert response.summary.unique_points_of_sale == 5
     assert not response.issues
     assert stored['file_s3_key']
+    # The content fingerprint is what makes a re-upload recognisable later.
+    assert stored['file_fingerprint']
+    assert response.already_stored is False
 
 
 def _dataset(owner: str) -> dict:
@@ -261,3 +266,44 @@ def test_the_history_respects_the_limit():
 
     assert response.count == 1
     assert response.datasets[0].dataset_id == 'ds-10'
+
+
+def test_uploading_the_same_file_twice_does_not_duplicate_it():
+    '''
+        The same content from the same owner is the same dataset.
+
+        Before this, every upload minted a new identifier, a new copy in S3 and
+        a new history row — forty-six accumulated from a single file — and
+        nothing told the user they already had it. Now the existing dataset
+        comes back, flagged, and nothing is written.
+    '''
+    already = _dataset('yo@miempresa.com')
+    written = []
+
+    with patch.object(controllers, 'download_bytes', lambda _: b'las mismas ventas'), \
+         patch.object(controllers, 'find_dataset_by_fingerprint',
+                      lambda **kwargs: already), \
+         patch.object(controllers, 'persist_dataset',
+                      lambda **kwargs: written.append(kwargs) or already):
+        response = asyncio.run(controllers.ingest_excel_from_s3_controller(
+            dynamodb_resource = None,
+            file_key = 'ingest/raw/otra-vez.csv',
+            file_name = 'ventas.csv',
+            current_user = 'yo@miempresa.com',
+            request = None
+        ))
+
+    assert response.already_stored is True
+    assert response.dataset_id == already['dataset_id']
+    # Nothing was written: no second row, no second copy in S3.
+    assert not written
+
+
+def test_the_fingerprint_is_the_content_and_not_the_name():
+    '''
+        The same figures renamed are the same dataset; a corrected file is a
+        different one even under the same name.
+    '''
+    same = ingest_utils.content_fingerprint(b'fila1,fila2')
+    assert same == ingest_utils.content_fingerprint(b'fila1,fila2')
+    assert same != ingest_utils.content_fingerprint(b'fila1,fila2,fila3')

@@ -173,6 +173,14 @@ class RateForecast(BaseModel):
     change_percent: Optional[float] = None
     last_rate: Optional[float] = None
     last_date: Optional[date] = None
+    valid_from: Optional[date] = Field(
+        None, description = 'First day the published rate is in force.'
+    )
+    valid_to: Optional[date] = Field(
+        None,
+        description = 'Last day it is in force. The rate published for a '
+                      'Saturday governs Saturday, Sunday and Monday.'
+    )
     final_rate: Optional[float] = Field(
         None, description = 'Projected rate at the end of the horizon.'
     )

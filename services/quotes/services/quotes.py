@@ -18,8 +18,9 @@
     previous decade. Any projection fitted over the whole history would conclude
     the rate stays at 6.86. Callers that project must start from the float.
 '''
+import re
 from datetime import date as date_type, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError
@@ -35,40 +36,72 @@ from services.rate_forecast import (
 from services.utils import get_current_time_gmt, handle_service_errors
 
 
-ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+# Every business decision below is read from the environment and **required**.
+# A fallback in code is still a number living in code: the day the service is
+# deployed without one of these it must say so, not run quietly on a value
+# nobody chose.
+ENV_VARS = load_and_validate_env_vars({
     'FLOAT_REGIME_START': str,
     'SYNC_MAX_DAYS': int,
+    'SYNC_DEFAULT_DAYS': int,
     'SCENARIO_MAX_DAYS': int,
+    'SCENARIO_DEFAULT_DAYS': int,
     'SCHEDULED_SYNC_DAYS': int,
+    'RATE_BLOCK_WEEKDAYS': str,
+    'AMOUNT_DECIMALS': int,
+    'RATE_DECIMALS': int,
+    'HISTORY_FLOAT_REGIME_ONLY': int,
 })
 
 # The day the rate stopped being fixed. Series fitted for projection must start
-# here: the years of 6.86 before it belong to a different regime and would flatten
-# any trend. Configurable because it is a fact about the country, not about the
-# code, and a second regime change must not require a release.
-FLOAT_REGIME_START: date_type = date_type.fromisoformat(
-    ENV_VARS['FLOAT_REGIME_START'] or '2026-06-27'
+# here: the years of 6.86 before it belong to a different regime and would
+# flatten any trend. A second regime change must not require a release.
+FLOAT_REGIME_START: date_type = date_type.fromisoformat(ENV_VARS['FLOAT_REGIME_START'])
+
+# Weekdays the BCB publishes as a single block, as Python numbers them (Monday
+# is 0). Today it is Saturday-Sunday-Monday: the rate published on Friday night
+# governs the three. It is a decision of the central bank, not an invariant —
+# the day they move to a five-day block, this is one line of `.env`.
+#
+# Any non-digit separates: the value must not carry commas, because the deploy
+# hands the whole `.env` to `--environment Variables={...}` and a comma there
+# ends one variable and starts the next. Reading it this way means the file can
+# use `5-6-0`, `5 6 0` or anything else legible without the parser caring.
+RATE_BLOCK_WEEKDAYS = tuple(
+    int(found) for found in re.findall(r'\d+', ENV_VARS['RATE_BLOCK_WEEKDAYS'])
 )
 
 # Upper bound for a single sync, so one call cannot spend an hour hitting the
-# BCB one date at a time.
-SYNC_MAX_DAYS = ENV_VARS['SYNC_MAX_DAYS'] or 400
+# BCB one date at a time, and the window a caller gets without asking.
+SYNC_MAX_DAYS = ENV_VARS['SYNC_MAX_DAYS']
+SYNC_DEFAULT_DAYS = ENV_VARS['SYNC_DEFAULT_DAYS']
 
-# Days each scheduled run covers. More than one on purpose: the BCB publishes
-# nothing on weekends and holidays, and a run that failed yesterday must be
-# repaired by the next one instead of leaving a hole in the series forever.
-# Re-reading a stored date costs nothing — the sync skips it without asking the
-# source.
-SCHEDULED_SYNC_DAYS = ENV_VARS['SCHEDULED_SYNC_DAYS'] or 7
+# Days each scheduled run covers. More than one on purpose: a run that failed
+# yesterday must be repaired by the next one instead of leaving a hole in the
+# series forever. Re-reading a stored date costs nothing — the sync skips it
+# without asking the source.
+SCHEDULED_SYNC_DAYS = ENV_VARS['SCHEDULED_SYNC_DAYS']
 
-# Longest horizon a sale scenario may compare. Beyond a quarter the
-# projection says more about the fitted line than about the market.
-SCENARIO_MAX_DAYS = ENV_VARS['SCENARIO_MAX_DAYS'] or 90
+# Longest horizon a projection may reach, and the one used when none is asked
+# for. Beyond a quarter the projection says more about the model than about the
+# market.
+SCENARIO_MAX_DAYS = ENV_VARS['SCENARIO_MAX_DAYS']
+SCENARIO_DEFAULT_DAYS = ENV_VARS['SCENARIO_DEFAULT_DAYS']
+
+# How many decimals a settled amount and a quoted rate carry. Money and
+# quotation are not the same precision, and neither is ours to assume.
+AMOUNT_DECIMALS = ENV_VARS['AMOUNT_DECIMALS']
+
+# Whether a history request without a lower bound starts at the float regime.
+# It is the sane default, but it is a decision about what a chart should show,
+# not an invariant of the code.
+HISTORY_FLOAT_REGIME_ONLY = bool(ENV_VARS['HISTORY_FLOAT_REGIME_ONLY'])
+RATE_DECIMALS = ENV_VARS['RATE_DECIMALS']
 
 
 @handle_service_errors('QUOTES')
 async def sync_rates_service(
-    days_back: int = 30,
+    days_back: int = SYNC_DEFAULT_DAYS,
     currency: str = USD
 ) -> Dict[str, Any]:
     '''
@@ -134,7 +167,7 @@ async def get_history_service(
     date_from: Optional[date_type] = None,
     date_to: Optional[date_type] = None,
     currency: str = USD,
-    float_regime_only: bool = True
+    float_regime_only: bool = HISTORY_FLOAT_REGIME_ONLY
 ) -> Dict[str, Any]:
     '''
     Returns the stored series for a currency.
@@ -196,7 +229,7 @@ def stored_rates(
 async def sale_scenario_service(
     quantity: float,
     unit_price_usd: float,
-    days_ahead: int = 30,
+    days_ahead: int = SCENARIO_DEFAULT_DAYS,
     mineral_change_percent: Optional[float] = None
 ) -> Dict[str, Any]:
     '''
@@ -234,12 +267,12 @@ async def sale_scenario_service(
         raise ServiceUnavailableError(detail = QuotesError.NO_RATE_PUBLISHED.value)
 
     today_rate = history[-1].official_rate
-    amount_usd_today = round(quantity * unit_price_usd, 2)
+    amount_usd_today = round(quantity * unit_price_usd, AMOUNT_DECIMALS)
     today = {
         'exchange_rate': today_rate,
         'mineral_price': unit_price_usd,
         'amount_usd': amount_usd_today,
-        'amount_bob': round(amount_usd_today * today_rate, 2),
+        'amount_bob': round(amount_usd_today * today_rate, AMOUNT_DECIMALS),
     }
 
     projection = project_rate(history, days_ahead)
@@ -261,17 +294,17 @@ async def sale_scenario_service(
         }
 
     future_price = unit_price_usd * (1 + (mineral_change_percent or 0.0) / 100)
-    amount_usd_future = round(quantity * future_price, 2)
+    amount_usd_future = round(quantity * future_price, AMOUNT_DECIMALS)
     projected = {
-        'exchange_rate': round(projection.final_rate, 4),
-        'mineral_price': round(future_price, 4),
+        'exchange_rate': round(projection.final_rate, RATE_DECIMALS),
+        'mineral_price': round(future_price, RATE_DECIMALS),
         'amount_usd': amount_usd_future,
-        'amount_bob': round(amount_usd_future * projection.final_rate, 2),
+        'amount_bob': round(amount_usd_future * projection.final_rate, AMOUNT_DECIMALS),
     }
 
-    difference = round(projected['amount_bob'] - today['amount_bob'], 2)
+    difference = round(projected['amount_bob'] - today['amount_bob'], AMOUNT_DECIMALS)
     difference_percent = (
-        round(difference / today['amount_bob'] * 100, 2)
+        round(difference / today['amount_bob'] * 100, AMOUNT_DECIMALS)
         if today['amount_bob'] else None
     )
 
@@ -292,9 +325,41 @@ async def sale_scenario_service(
     }
 
 
+def validity_of(day: date_type) -> Tuple[date_type, date_type]:
+    '''
+    Returns the window a published rate governs.
+
+    The BCB publishes the rate the night before, and the one it publishes for a
+    **Saturday covers Saturday, Sunday and Monday** — the page says so in
+    letters: "vigente para el sábado 5, domingo 6 y lunes 7". Every other day
+    governs only itself.
+
+    This matters more than it looks. Reading the series as one value per day
+    suggests the rate of Monday is news on Monday, when in fact it was known and
+    fixed since Friday night. A miner closing a sale on Saturday is settling at a
+    figure that will not move until Tuesday, and that is a fact worth stating
+    rather than leaving the reader to notice three equal numbers in a row.
+
+    Args:
+        day (date): Date the rate was published for.
+
+    Returns:
+        Tuple[date, date]: First and last day the rate is in force.
+    '''
+    if day.weekday() not in RATE_BLOCK_WEEKDAYS:
+        return day, day
+
+    first, last = day, day
+    while (first - timedelta(days = 1)).weekday() in RATE_BLOCK_WEEKDAYS:
+        first -= timedelta(days = 1)
+    while (last + timedelta(days = 1)).weekday() in RATE_BLOCK_WEEKDAYS:
+        last += timedelta(days = 1)
+    return first, last
+
+
 @handle_service_errors('QUOTES')
 async def get_forecast_service(
-    days_ahead: int = 30,
+    days_ahead: int = SCENARIO_DEFAULT_DAYS,
     currency: str = USD
 ) -> Dict[str, Any]:
     '''
@@ -344,14 +409,16 @@ async def get_forecast_service(
         },
         'last_rate': history[-1].official_rate,
         'last_date': history[-1].date,
+        'valid_from': validity_of(history[-1].date)[0],
+        'valid_to': validity_of(history[-1].date)[1],
         'final_rate': (
-            None if projection.final_rate is None else round(projection.final_rate, 4)
+            None if projection.final_rate is None else round(projection.final_rate, RATE_DECIMALS)
         ),
         'history': [
             {'date': item.date, 'rate': item.official_rate} for item in history
         ],
         'projected': [
-            {'date': day, 'rate': round(rate, 4)} for day, rate in projection.points
+            {'date': day, 'rate': round(rate, RATE_DECIMALS)} for day, rate in projection.points
         ],
     }
 
@@ -382,6 +449,7 @@ __all__ = [
     'FLOAT_REGIME_START',
     'get_forecast_service',
     'get_history_service',
+    'validity_of',
     'scheduled_sync_service',
     'sale_scenario_service',
     'stored_rates',

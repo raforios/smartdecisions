@@ -82,7 +82,9 @@ def test_public_daily_returns_200_without_auth(public_client):
     estano = next(r for r in body['rows'] if r['mineral'] == 'Estaño')
     assert estano['price_low'] == 22.0
     assert estano['previous_price_low'] == 21.0
-    assert estano['change_pct'] == pytest.approx((22.0 - 21.0) / 21.0 * 100, rel = 1e-4)
+    # Two decimals, like every published percentage: the exact value is
+    # 4.7619…, and what travels is what a reader would be shown.
+    assert estano['change_pct'] == pytest.approx(4.76, abs = 1e-9)
 
 
 def test_public_biweekly_returns_200_without_auth(public_client):

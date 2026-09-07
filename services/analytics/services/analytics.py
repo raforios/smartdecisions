@@ -34,6 +34,7 @@ from schemas.analytics import (
 )
 
 from services.affinity import compute_opportunities
+from services.analytics_utils import AMOUNT_DECIMALS, RANKING_SIZE
 from services.concentration import build_concentration
 from services.efficiency import build_efficiency
 from services.forecast import build_forecast
@@ -54,7 +55,7 @@ _PRODUCT_NAME = 'product_name'
 
 def _money(value: float) -> float:
     '''Rounds a monetary amount to 2 decimals, guarding against NaN.'''
-    return round(float(value), 2) if pd.notna(value) else 0.0
+    return round(float(value), AMOUNT_DECIMALS) if pd.notna(value) else 0.0
 
 
 def _label_series(dataframe: pd.DataFrame, id_col: str, name_col: str) -> pd.Series:
@@ -182,10 +183,10 @@ def build_commercial_summary(dataframe: pd.DataFrame) -> CommercialSummaryBlock:
 
     return CommercialSummaryBlock(
         kpis = _kpis(dataframe),
-        best_clients = _ranking(dataframe, client_labels, top = 10, ascending = False),
-        worst_clients = _ranking(dataframe, client_labels, top = 10, ascending = True),
-        top_products = _ranking(dataframe, product_labels, top = 10, ascending = False),
-        bottom_products = _ranking(dataframe, product_labels, top = 10, ascending = True),
+        best_clients = _ranking(dataframe, client_labels, top = RANKING_SIZE, ascending = False),
+        worst_clients = _ranking(dataframe, client_labels, top = RANKING_SIZE, ascending = True),
+        top_products = _ranking(dataframe, product_labels, top = RANKING_SIZE, ascending = False),
+        bottom_products = _ranking(dataframe, product_labels, top = RANKING_SIZE, ascending = True),
         by_category = _distribution(dataframe, 'category'),
         by_channel = _distribution(dataframe, 'channel'),
         by_region = _distribution(dataframe, 'region'),

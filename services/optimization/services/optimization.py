@@ -60,43 +60,43 @@ EARTH_RADIUS_M: float = 6_371_000.0
 # segmentation module. That is deliberate: a client shown as 'HIGH' on the
 # segmentation screen must be 'HIGH' on the map. Two services means two .env
 # files, so the values have to be kept in step in both.
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+# Required, not optional: a fallback written in code is still a number chosen
+# by the code. If one is missing the service must say so at startup.
+ENV_VARS = load_and_validate_env_vars({
     'SEGMENTATION_HIGH_TOP_SHARE': float,
     'SEGMENTATION_MEDIUM_TOP_SHARE': float,
     'ROUTES_MAX_STOPS_PER_DAY': int,
+    'CLUSTER_SEED': int,
+    'AMOUNT_DECIMALS': int,
+    'DURATION_DECIMALS': int,
+    'ROUTES_KMEANS_ITERATIONS': int,
+    'ROUTES_TWO_OPT_PASSES': int,
 })
 
+# Fixed so the same points always produce the same grouping: a plan that
+# reshuffles between two identical runs is impossible to trust or to support.
+CLUSTER_SEED = ENV_VARS['CLUSTER_SEED']
 
-def _setting(name: str, default: float) -> float:
-    '''
-        Reads a tuning knob, falling back to its default when unset.
+# Decimals a money figure and a duration carry in a response.
+AMOUNT_DECIMALS = ENV_VARS['AMOUNT_DECIMALS']
+DURATION_DECIMALS = ENV_VARS['DURATION_DECIMALS']
 
-        `load_and_validate_env_vars` stores an explicit None for every optional
-        variable that is not configured, so `dict.get(name, default)` returns
-        that None rather than the default.
-
-        Args:
-            name (str): Variable name.
-            default (float): Value to use when the variable is not configured.
-
-        Returns:
-            float: The configured value, or the default.
-    '''
-    value = _SETTINGS.get(name)
-    return default if value is None else value
+# Unit conversions, not decisions.
+METRES_PER_KM = 1000
+SECONDS_PER_MINUTE = 60
 
 
 # A client in the top 20% by purchase value is 'HIGH'; the quantile is the
 # complement of that share.
-_HIGH_VALUE_QUANTILE: float = 1 - _setting('SEGMENTATION_HIGH_TOP_SHARE', 0.20)
-_MID_VALUE_QUANTILE: float = 1 - _setting('SEGMENTATION_MEDIUM_TOP_SHARE', 0.50)
-_MAX_STOPS_PER_DAY: int = int(_setting('ROUTES_MAX_STOPS_PER_DAY', 60))
+_HIGH_VALUE_QUANTILE: float = 1 - ENV_VARS['SEGMENTATION_HIGH_TOP_SHARE']
+_MID_VALUE_QUANTILE: float = 1 - ENV_VARS['SEGMENTATION_MEDIUM_TOP_SHARE']
+_MAX_STOPS_PER_DAY: int = ENV_VARS['ROUTES_MAX_STOPS_PER_DAY']
 
 # Algorithm internals: these bound the search, they do not change what the
 # product reports. 2-opt is O(n^2) per pass; a day's route is tens of stops, so
 # a handful of passes converges well within the request budget.
-_KMEANS_ITERATIONS: int = int(_setting('ROUTES_KMEANS_ITERATIONS', 60))
-_TWO_OPT_PASSES: int = int(_setting('ROUTES_TWO_OPT_PASSES', 8))
+_KMEANS_ITERATIONS: int = ENV_VARS['ROUTES_KMEANS_ITERATIONS']
+_TWO_OPT_PASSES: int = ENV_VARS['ROUTES_TWO_OPT_PASSES']
 
 
 def haversine_matrix(points: np.ndarray) -> np.ndarray:
@@ -122,7 +122,11 @@ def haversine_matrix(points: np.ndarray) -> np.ndarray:
     return 2 * EARTH_RADIUS_M * np.arcsin(np.sqrt(np.clip(inner, 0, 1)))
 
 
-def _kmeans(points: np.ndarray, clusters: int, seed: int = 7) -> np.ndarray:
+def _kmeans(
+    points: np.ndarray,
+    clusters: int,
+    seed: int = CLUSTER_SEED
+) -> np.ndarray:
     '''
         Groups points into `clusters` geographic clusters (Lloyd's algorithm).
 
@@ -395,7 +399,7 @@ def _stop_payload(row: pd.Series, position: int) -> RouteStop:
         client = str(row['client_name']),
         latitude = float(row['latitude']),
         longitude = float(row['longitude']),
-        amount = round(float(row['amount']), 2),
+        amount = round(float(row['amount']), AMOUNT_DECIMALS),
         segment = str(row['segment']),
         last_purchase = None if pd.isna(last) else pd.Timestamp(last).strftime('%Y-%m-%d')
     )
@@ -730,8 +734,8 @@ def build_day(clients: pd.DataFrame, day: int) -> DayRoute:
     return DayRoute(
         day = int(day),
         stops = stops,
-        distance_km = round(trip['distance'] / 1000, 2),
-        duration_min = round(trip['duration'] / 60, 1),
-        total_amount = round(sum(stop.amount for stop in stops), 2),
+        distance_km = round(trip['distance'] / METRES_PER_KM, AMOUNT_DECIMALS),
+        duration_min = round(trip['duration'] / SECONDS_PER_MINUTE, DURATION_DECIMALS),
+        total_amount = round(sum(stop.amount for stop in stops), AMOUNT_DECIMALS),
         geometry = trip['geometry']
     )

@@ -36,6 +36,10 @@ TABLES=(
     # que es exactamente para lo que sirve la clave de ordenamiento.
     "minerals:mineral_id:S"
     "mining_prices:mineral_id:S:date:S"
+    # Capa de IA. Los roles se versionan, así que la clave de ordenamiento es la
+    # versión; el caché es una sola clave porque solo se busca por ella exacta.
+    "ai_prompts:view:S:version:N"
+    "ai_explanations:cache_key:S"
 
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"

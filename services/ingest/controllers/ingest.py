@@ -21,6 +21,8 @@ from schemas.ingest import (
     ValidationIssue
 )
 from services.exceptions import ResourceNotFoundError
+from services.logger_config import custom_logger as logger
+from services.ingest_utils import HISTORY_DEFAULT_LIMIT
 from services.ingest import (
     parse_and_validate,
     parse_and_validate_partial,
@@ -28,6 +30,8 @@ from services.ingest import (
 )
 from services.ingest_utils import (
     download_bytes,
+    content_fingerprint,
+    find_dataset_by_fingerprint,
     get_owned_dataset,
     list_datasets_for_owner,
     persist_dataset,
@@ -53,11 +57,24 @@ CSV_CONTENT_TYPE = ENV_VARS['CSV_CONTENT_TYPE'] or 'text/csv'
 TEMPLATE_S3_KEY = ENV_VARS['TEMPLATE_S3_KEY'] or 'ingest/templates/template_ventas_v1.xlsx'
 
 
-def _to_response(item: Dict[str, Any]) -> IngestResponse:
+def _to_response(
+    item: Dict[str, Any],
+    already_stored: bool = False
+) -> IngestResponse:
     '''
         Maps a persisted DynamoDB item into the public IngestResponse schema.
+
+        Args:
+            item (Dict[str, Any]): Stored dataset record.
+            already_stored (bool): True when the upload matched a dataset the
+                caller already had, so the client can say so instead of
+                reporting a load that did not happen.
+
+        Returns:
+            IngestResponse: Public payload.
     '''
     return IngestResponse(
+        already_stored = already_stored,
         dataset_id = item['dataset_id'],
         status = item['status'],
         file_s3_key = item.get('file_s3_key') or '',
@@ -102,6 +119,21 @@ async def ingest_excel_controller(
         Returns:
             IngestResponse: Public payload with the summary and per-row issues.
     '''
+    # The same file uploaded twice is the same dataset, not a second one: it
+    # used to mint a new identifier, a new copy in S3 and a new history row
+    # every time, with nothing telling the user they already had it.
+    fingerprint = content_fingerprint(file_bytes)
+    existing = find_dataset_by_fingerprint(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        fingerprint = fingerprint
+    )
+    if existing is not None:
+        message = (f'Dataset {existing["dataset_id"]} already holds this exact '
+                   f'file for {current_user}; returning it.')
+        logger.info(message)
+        return _to_response(existing, already_stored = True)
+
     result = parse_and_validate(file_bytes, filename)
     is_valid = not result.issues
 
@@ -122,6 +154,7 @@ async def ingest_excel_controller(
             'status': 'validated' if is_valid else 'failed',
             'file_s3_key': file_s3_key,
             'template_version': TEMPLATE_VERSION,
+            'file_fingerprint': fingerprint,
             **result.summary.model_dump(),
             'issues': [issue.model_dump(mode = 'json') for issue in result.issues]
         }
@@ -164,6 +197,19 @@ async def ingest_excel_from_s3_controller(
     '''
     file_bytes = download_bytes(file_key)
 
+    # Same rule as the direct upload: identical content is the same dataset.
+    fingerprint = content_fingerprint(file_bytes)
+    existing = find_dataset_by_fingerprint(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        fingerprint = fingerprint
+    )
+    if existing is not None:
+        message = (f'Dataset {existing["dataset_id"]} already holds this exact '
+                   f'file for {current_user}; returning it.')
+        logger.info(message)
+        return _to_response(existing, already_stored = True)
+
     result = parse_and_validate_partial(file_bytes, file_name)
     has_valid_rows = len(result.accepted) > 0
 
@@ -192,6 +238,7 @@ async def ingest_excel_from_s3_controller(
             'file_s3_key': normalized_key,
             'rejected_s3_key': rejected_key,
             'template_version': TEMPLATE_VERSION,
+            'file_fingerprint': fingerprint,
             **result.summary.model_dump(),
             'issues': [
                 issue.model_dump(mode = 'json')
@@ -234,7 +281,7 @@ async def list_datasets_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str,
-    limit: int = 20
+    limit: int = HISTORY_DEFAULT_LIMIT
 ) -> DatasetListResponse:
     '''
         Returns the caller's own uploads, most recent first.

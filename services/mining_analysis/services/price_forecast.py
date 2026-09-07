@@ -53,7 +53,8 @@ from services.prices_store import PriceRecord, prices_in_window
 from services.utils import get_current_time_gmt, handle_service_errors
 
 
-ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+# Required, not optional: a fallback in code is still a number the code chose.
+ENV_VARS = load_and_validate_env_vars({
     'FORECAST_MIN_DAYS': int,
     'FORECAST_HIGH_CONFIDENCE_DAYS': int,
     'FORECAST_MEDIUM_CONFIDENCE_DAYS': int,
@@ -70,26 +71,26 @@ ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
 # Smoothing parameters, fitted by minimising the backtest error over the six
 # minerals with enough history. Configurable because they belong to the data:
 # refitting them as the series grows must not need a release.
-HOLT_ALPHA = ENV_VARS['HOLT_ALPHA'] or 0.80
-HOLT_BETA = ENV_VARS['HOLT_BETA'] or 0.05
-HOLT_PHI = ENV_VARS['HOLT_PHI'] or 0.88
+HOLT_ALPHA = ENV_VARS['HOLT_ALPHA']
+HOLT_BETA = ENV_VARS['HOLT_BETA']
+HOLT_PHI = ENV_VARS['HOLT_PHI']
 
 # How much history each replay needs, and how many replays make a published
 # average honest.
-BACKTEST_MIN_TRAIN = ENV_VARS['BACKTEST_MIN_TRAIN'] or 30
-BACKTEST_MIN_WINDOWS = ENV_VARS['BACKTEST_MIN_WINDOWS'] or 5
+BACKTEST_MIN_TRAIN = ENV_VARS['BACKTEST_MIN_TRAIN']
+BACKTEST_MIN_WINDOWS = ENV_VARS['BACKTEST_MIN_WINDOWS']
 
 # How many closed fortnights travel with the projection so the reader can
 # check it against what actually happened. Six is a quarter of a year.
-OFFICIAL_HISTORY_PERIODS = ENV_VARS['OFFICIAL_HISTORY_PERIODS'] or 6
+OFFICIAL_HISTORY_PERIODS = ENV_VARS['OFFICIAL_HISTORY_PERIODS']
 
 # Below this, a projection says more about the noise than about the mineral.
-MIN_DAYS = ENV_VARS['FORECAST_MIN_DAYS'] or 10
+MIN_DAYS = ENV_VARS['FORECAST_MIN_DAYS']
 # Thresholds for how much weight the projection deserves.
-HIGH_CONFIDENCE_DAYS = ENV_VARS['FORECAST_HIGH_CONFIDENCE_DAYS'] or 60
-MEDIUM_CONFIDENCE_DAYS = ENV_VARS['FORECAST_MEDIUM_CONFIDENCE_DAYS'] or 30
+HIGH_CONFIDENCE_DAYS = ENV_VARS['FORECAST_HIGH_CONFIDENCE_DAYS']
+MEDIUM_CONFIDENCE_DAYS = ENV_VARS['FORECAST_MEDIUM_CONFIDENCE_DAYS']
 # Days averaged by the moving-average method.
-MOVING_AVERAGE_WINDOW = ENV_VARS['FORECAST_MOVING_AVERAGE_WINDOW'] or 7
+MOVING_AVERAGE_WINDOW = ENV_VARS['FORECAST_MOVING_AVERAGE_WINDOW']
 
 # A linear projection that drops to this fraction of the lowest observed price
 # has stopped describing the mineral and started describing the fitted line.
@@ -100,7 +101,7 @@ _COLLAPSE_FLOOR_RATIO: float = 0.25
 # How many observed points travel back with each mineral. The UI draws the
 # trend behind the projection; a couple of hundred points is plenty for that
 # and keeps the payload from growing with the archive.
-HISTORY_POINTS = ENV_VARS['FORECAST_HISTORY_POINTS'] or 180
+HISTORY_POINTS = ENV_VARS['FORECAST_HISTORY_POINTS']
 
 # Earliest date the store is asked for. The quotations start in 2026; this is
 # simply a lower bound for the range query.

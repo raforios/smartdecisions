@@ -393,3 +393,58 @@ def test_the_error_is_not_published_without_enough_windows():
     '''
     assert rate_forecast.backtest_error([10.0] * 32, 30) is None
     assert rate_forecast.baseline_error([10.0] * 32, 30) is None
+
+
+def test_a_saturday_rate_governs_until_monday():
+    '''
+        The BCB publishes on Friday night a rate "vigente para el sábado,
+        domingo y lunes". Reading the series as one value per day hides that a
+        sale closed on Saturday settles at a figure already fixed until Tuesday.
+    '''
+    saturday = date(2026, 9, 5)
+
+    assert quotes.validity_of(saturday) == (saturday, date(2026, 9, 7))
+    # Sunday and Monday belong to the same block and must report it identically.
+    assert quotes.validity_of(date(2026, 9, 6)) == (saturday, date(2026, 9, 7))
+    assert quotes.validity_of(date(2026, 9, 7)) == (saturday, date(2026, 9, 7))
+
+
+def test_a_weekday_rate_governs_only_its_own_day():
+    '''Tuesday through Friday each carry their own rate.'''
+    for day in (date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3), date(2026, 9, 4)):
+        assert quotes.validity_of(day) == (day, day)
+
+
+def test_the_forecast_reports_the_window_in_force(store):
+    '''
+        The projection travels with the window its starting point governs, so
+        the screen can say "in force until Monday" instead of showing a date the
+        reader has to interpret.
+    '''
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    result = _run(quotes.get_forecast_service(days_ahead = 15))
+
+    assert result['valid_from'] <= result['last_date'] <= result['valid_to']
+
+
+def test_the_weekday_block_is_read_without_commas():
+    '''
+        The value must never carry commas.
+
+        The deploy hands the whole `.env` to `--environment Variables={...}`,
+        where a comma ends one variable and starts the next: `5,6,0` broke the
+        AWS CLI outright. Reading any non-digit as a separator keeps the file
+        legible and the deploy working.
+    '''
+    import re as _re # pylint: disable=import-outside-toplevel
+
+    def _parse(raw):
+        return tuple(int(found) for found in _re.findall(r'\d+', raw))
+
+    assert _parse('5-6-0') == (5, 6, 0)
+    assert _parse('5 6 0') == (5, 6, 0)
+    assert _parse('5,6,0') == (5, 6, 0)
+    # And what the service actually loaded agrees with the file.
+    assert quotes.RATE_BLOCK_WEEKDAYS == (5, 6, 0)

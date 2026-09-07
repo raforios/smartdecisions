@@ -5,6 +5,7 @@
     DynamoDB items, direct S3 access for files too large for API Gateway, and
     the FILES service for regular uploads.
 '''
+import hashlib
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -26,6 +27,7 @@ ENV_VARS = load_and_validate_env_vars(
         'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
         'BUCKET_NAME': str,
         'FILES_SERVICE_URL': str,
+        'HISTORY_DEFAULT_LIMIT': int,
     },
     optional_env_vars = {
         'BUCKET_PATH': str,
@@ -112,6 +114,64 @@ def get_dataset_by_id(
         table_name = DATASETS_TABLE,
         key = {'id': dataset_id}
     )
+
+
+# How many history rows a caller gets when they do not ask for a number.
+HISTORY_DEFAULT_LIMIT = ENV_VARS['HISTORY_DEFAULT_LIMIT']
+
+
+def content_fingerprint(file_bytes: bytes) -> str:
+    '''
+        Returns a stable fingerprint of an uploaded file.
+
+        Args:
+            file_bytes (bytes): Raw content as uploaded.
+
+        Returns:
+            str: Hexadecimal SHA-256 of the bytes.
+    '''
+    return hashlib.sha256(file_bytes).hexdigest()
+
+
+def find_dataset_by_fingerprint(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    fingerprint: str
+) -> Optional[Dict[str, Any]]:
+    '''
+        Returns the caller's dataset with this exact content, if it exists.
+
+        Uploading the same file twice used to mint a second identifier, a second
+        copy in S3 and a second row here — forty-six of them accumulated from one
+        file during testing. Nothing told the user they already had it, and the
+        history filled with rows indistinguishable from each other.
+
+        Identity is the content, not the filename: the same figures renamed are
+        the same dataset, and a corrected file is a different one even under the
+        same name.
+
+        Args:
+            dynamodb_resource (ServiceResource): DynamoDB resource.
+            owner_email (str): Authenticated caller.
+            fingerprint (str): Content fingerprint to look for.
+
+        Returns:
+            Dict[str, Any] | None: The stored record, or None if it is new.
+    '''
+    table = dynamodb_resource.Table(DATASETS_TABLE)
+    scan_kwargs: Dict[str, Any] = {
+        'FilterExpression': (Attr('owner_email').eq(owner_email)
+                             & Attr('file_fingerprint').eq(fingerprint))
+    }
+    while True:
+        response = table.scan(**scan_kwargs)
+        items = response.get('Items', [])
+        if items:
+            return items[0]
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            return None
+        scan_kwargs['ExclusiveStartKey'] = last_key
 
 
 def list_datasets_for_owner(

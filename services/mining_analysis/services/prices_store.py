@@ -25,10 +25,12 @@ from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
 
-ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+# Required: which engine holds the data is a deployment decision that must
+# be stated, not guessed.
+ENV_VARS = load_and_validate_env_vars({
     'PERSISTENCE_BACKEND': str,
 })
-BACKEND = (ENV_VARS['PERSISTENCE_BACKEND'] or 'sql').strip().lower()
+BACKEND = ENV_VARS['PERSISTENCE_BACKEND'].strip().lower()
 DYNAMODB_BACKEND = 'dynamodb'
 SQL_BACKEND = 'sql'
 

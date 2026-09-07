@@ -167,6 +167,12 @@ class IngestResponse(BaseModel):
         means the file was uploaded but rejected: `errors` lists per-row issues.
     '''
     dataset_id: str
+    already_stored: bool = Field(
+        False,
+        description = 'True when the file was already loaded: same owner, same '
+                      'content. Nothing was written and the existing dataset is '
+                      'returned.'
+    )
     status: str = Field(..., description = "'validated' or 'failed'.")
     file_s3_key: str = Field(..., description = 'Object key in the S3 bucket managed by FILES.')
     summary: IngestSummary

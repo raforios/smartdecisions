@@ -27,7 +27,9 @@ from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
 
-ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+# Required, not optional: a fallback in code is still a number living in
+# code. Missing configuration must fail loudly at startup.
+ENV_VARS = load_and_validate_env_vars({
     'RATE_FORECAST_MIN_DAYS': int,
     'RATE_FORECAST_HIGH_CONFIDENCE_DAYS': int,
     'RATE_FORECAST_MEDIUM_CONFIDENCE_DAYS': int,
@@ -36,29 +38,37 @@ ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
     'RATE_HOLT_PHI': float,
     'BACKTEST_MIN_TRAIN': int,
     'BACKTEST_MIN_WINDOWS': int,
+    'RATE_COLLAPSE_FLOOR_RATIO': float,
+    'ERROR_DECIMALS': int,
+    'CHANGE_DECIMALS': int,
 })
 
 # Smoothing parameters, chosen by minimising the backtest error over the stored
 # series (grid search on 7/15/30-day horizons). They are configurable because
 # they are a property of the data, not of the code: as the series grows they
 # should be refitted, and that must not need a release.
-ALPHA = ENV_VARS['RATE_HOLT_ALPHA'] or 1.0
-BETA = ENV_VARS['RATE_HOLT_BETA'] or 0.45
-PHI = ENV_VARS['RATE_HOLT_PHI'] or 0.70
+ALPHA = ENV_VARS['RATE_HOLT_ALPHA']
+BETA = ENV_VARS['RATE_HOLT_BETA']
+PHI = ENV_VARS['RATE_HOLT_PHI']
 
 # Backtest bounds: how much history each replay needs before forecasting, and
 # how many replays make a mean worth publishing.
-BACKTEST_MIN_TRAIN = ENV_VARS['BACKTEST_MIN_TRAIN'] or 30
-BACKTEST_MIN_WINDOWS = ENV_VARS['BACKTEST_MIN_WINDOWS'] or 5
+BACKTEST_MIN_TRAIN = ENV_VARS['BACKTEST_MIN_TRAIN']
+BACKTEST_MIN_WINDOWS = ENV_VARS['BACKTEST_MIN_WINDOWS']
 
 # Below this the projection describes the noise, not the currency.
-MIN_DAYS = ENV_VARS['RATE_FORECAST_MIN_DAYS'] or 15
-HIGH_CONFIDENCE_DAYS = ENV_VARS['RATE_FORECAST_HIGH_CONFIDENCE_DAYS'] or 90
-MEDIUM_CONFIDENCE_DAYS = ENV_VARS['RATE_FORECAST_MEDIUM_CONFIDENCE_DAYS'] or 45
+MIN_DAYS = ENV_VARS['RATE_FORECAST_MIN_DAYS']
+HIGH_CONFIDENCE_DAYS = ENV_VARS['RATE_FORECAST_HIGH_CONFIDENCE_DAYS']
+MEDIUM_CONFIDENCE_DAYS = ENV_VARS['RATE_FORECAST_MEDIUM_CONFIDENCE_DAYS']
 
 # A rate projected below this fraction of the lowest observed value is not a
-# forecast, it is the fitted line leaving the data behind.
-_COLLAPSE_FLOOR_RATIO: float = 0.5
+# forecast, it is the model leaving the data behind. What counts as "too far
+# below" is a judgement about the currency, so it is configured.
+_COLLAPSE_FLOOR_RATIO: float = ENV_VARS['RATE_COLLAPSE_FLOOR_RATIO']
+
+# Decimals a published error and a published percentage carry.
+ERROR_DECIMALS = ENV_VARS['ERROR_DECIMALS']
+CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']
 
 
 @dataclass(frozen = True)
@@ -180,7 +190,7 @@ def backtest_error(values: List[float], days_ahead: int) -> Optional[float]:
 
     if len(errors) < BACKTEST_MIN_WINDOWS:
         return None
-    return round(float(np.mean(errors)), 4)
+    return round(float(np.mean(errors)), ERROR_DECIMALS)
 
 
 def baseline_error(values: List[float], days_ahead: int) -> Optional[float]:
@@ -211,7 +221,7 @@ def baseline_error(values: List[float], days_ahead: int) -> Optional[float]:
 
     if len(errors) < BACKTEST_MIN_WINDOWS:
         return None
-    return round(float(np.mean(errors)), 4)
+    return round(float(np.mean(errors)), ERROR_DECIMALS)
 
 
 def project(rates: List[ExchangeRateItem], days_ahead: int) -> RateProjection:
@@ -243,7 +253,10 @@ def project(rates: List[ExchangeRateItem], days_ahead: int) -> RateProjection:
         return RateProjection([], confidence, None, None, None)
 
     last_rate = values[-1]
-    change = round((projected[-1] - last_rate) / last_rate * 100, 2) if last_rate else None
+    change = (
+        round((projected[-1] - last_rate) / last_rate * 100, CHANGE_DECIMALS)
+        if last_rate else None
+    )
     expected_error = backtest_error(values, days_ahead)
     reference_error = baseline_error(values, days_ahead)
     dates = [
