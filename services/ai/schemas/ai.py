@@ -41,6 +41,15 @@ class ViewName(str, Enum):
         Adding a module tomorrow means adding a member here and a role in the
         prompts table — not touching the engine.
     '''
+    # Análisis Comercial
+    COMMERCIAL_SUMMARY = 'commercial_summary'
+    OPPORTUNITIES = 'opportunities'
+    SEGMENTATION = 'segmentation'
+    SALES_FORECAST = 'sales_forecast'
+    PORTFOLIO = 'portfolio'
+    # Optimización de rutas
+    ROUTE_PLAN = 'route_plan'
+    # Cotizaciones y proyecciones
     MINERALS_FORECAST = 'minerals_forecast'
     RATE_FORECAST = 'rate_forecast'
     SALE_SCENARIO = 'sale_scenario'
