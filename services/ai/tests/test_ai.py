@@ -148,21 +148,6 @@ def test_the_backend_response_travels_whole(model, cache): # pylint: disable=unu
     assert '12.58' in sent
 
 
-def test_an_oversized_payload_is_refused_before_anything_else(model):
-    '''
-        A screen that grew unexpectedly must not become a bill that grew
-        unexpectedly, and the check happens before validation so a large
-        malformed payload is not parsed either.
-    '''
-    huge = dict(RATE_VIEW, history = [{'date': '2026-09-05', 'rate': 12.5}] * 20000)
-
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service(ViewName.RATE_FORECAST, huge))
-
-    assert AIError.PAYLOAD_TOO_LARGE.value in str(failure.value.detail)
-    assert not model
-
 
 def test_a_second_identical_request_is_served_from_cache(model, cache):
     '''
@@ -232,20 +217,6 @@ def test_the_prompt_carries_the_role_and_every_rule(model, cache): # pylint: dis
         assert rule in system
 
 
-def test_an_oversized_payload_is_measured_as_json(model):
-    '''
-        The ceiling is on what actually travels, so it is measured on the
-        serialised payload and not on the Python object's repr.
-    '''
-    huge = dict(RATE_VIEW, history = [{'date': '2026-09-05', 'rate': 12.5}] * 5000)
-
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service(ViewName.RATE_FORECAST, huge))
-
-    assert AIError.PAYLOAD_TOO_LARGE.value in str(failure.value.detail)
-    assert not model
-
 
 def test_the_cache_key_changes_with_every_input_that_changes_the_answer():
     '''
@@ -305,3 +276,46 @@ def test_storing_a_role_retires_the_previous_version():
     assert retired == [1]
     # The old version is still there, not deleted.
     assert (ViewName.RATE_FORECAST.value, 1) in stored
+
+
+def test_a_long_response_is_sampled_instead_of_refused(model, cache): # pylint: disable=unused-argument
+    """
+        Some responses are long by nature — the opportunities run answers with
+        545 rows and 246 KB. Refusing it leaves the button broken on the screen
+        where it is most useful, and sending it whole costs a fortune for a
+        worse explanation: nobody reads 545 rows.
+    """
+    huge = dict(RATE_VIEW, history = [
+        {'date': '2026-09-05', 'rate': 12.5, 'relleno': 'x' * 60} for _ in range(3000)
+    ])
+
+    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
+        result = _run(ai.explain_service(ViewName.RATE_FORECAST, huge))
+
+    assert result['text']
+    sent = model[0]['user_prompt']
+    assert len(sent) <= ai.MAX_PAYLOAD_CHARACTERS + 500
+    # The model must be told it is looking at a sample, or it would describe it
+    # as if it were the whole.
+    assert 'history_muestra' in sent
+    assert 'de 3000' in sent
+
+
+def test_a_response_that_fits_is_not_touched(model, cache): # pylint: disable=unused-argument
+    """Trimming is a last resort, not something that happens on every call."""
+    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
+        _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+
+    sent = model[0]['user_prompt']
+    assert 'muestra' not in sent
+    assert '12.58' in sent
+
+
+def test_an_empty_payload_is_still_refused(model):
+    """Nothing to explain is not an explanation."""
+    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
+        with pytest.raises(HTTPException) as failure:
+            _run(ai.explain_service(ViewName.RATE_FORECAST, {}))
+
+    assert AIError.EMPTY_PAYLOAD.value in str(failure.value.detail)
+    assert not model

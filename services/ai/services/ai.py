@@ -48,6 +48,7 @@ from services.utils import get_current_time_gmt, handle_service_errors
 ENV_VARS = load_and_validate_env_vars({
     'EXPLANATION_CACHE_HOURS': int,
     'MAX_PAYLOAD_CHARACTERS': int,
+    'LIST_SAMPLE_SIZE': int,
 })
 
 # How long an answer stays valid. A day, because the figures underneath move by
@@ -58,6 +59,10 @@ CACHE_HOURS = ENV_VARS['EXPLANATION_CACHE_HOURS']
 # turn into an unexpectedly large bill, and it is also the crudest defence
 # against somebody pushing a large payload through the endpoint.
 MAX_PAYLOAD_CHARACTERS = ENV_VARS['MAX_PAYLOAD_CHARACTERS']
+
+# How many elements of a long list survive the trim. Enough to see the shape
+# of the ranking, not so many that the reader drowns in it.
+SAMPLE_SIZE = ENV_VARS['LIST_SAMPLE_SIZE']
 
 # The question every explanation answers. Fixed here rather than accepted from
 # the caller: this endpoint explains a screen, it does not take instructions.
@@ -83,6 +88,58 @@ def _system_prompt(prompt: PromptItem) -> str:
     return f'{prompt.role}\n\n{prompt.instructions}\n\nReglas:\n{rules}'
 
 
+def _fit_to_budget(payload: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+        Shrinks a response that does not fit the token budget, without
+        re-declaring its shape.
+
+        Some responses are long by nature: the opportunities run answers with
+        545 rows and 246 KB, about 61 000 tokens. Sending that costs a fortune
+        and produces a worse explanation, because no reader — model or person —
+        takes in 545 rows; and refusing it outright leaves the button broken on
+        the screen where it is most useful.
+
+        So the longest lists are cut to a sample, biggest first, until the
+        payload fits. Nothing is re-typed and no key is invented beyond a marker
+        that says a list was sampled — which the model needs, or it would
+        describe a sample as if it were the whole.
+
+        Args:
+            payload (Dict[str, Any]): The response as the service returned it.
+
+        Returns:
+            Dict[str, Any]: The same response, trimmed only if it had to be.
+    '''
+    if len(json.dumps(payload, default = str)) <= MAX_PAYLOAD_CHARACTERS:
+        return payload
+
+    trimmed = dict(payload)
+    lists = sorted(
+        ((key, value) for key, value in trimmed.items() if isinstance(value, list)),
+        key = lambda pair: len(pair[1]),
+        reverse = True
+    )
+
+    for key, value in lists:
+        if len(json.dumps(trimmed, default = str)) <= MAX_PAYLOAD_CHARACTERS:
+            break
+        if len(value) <= SAMPLE_SIZE:
+            continue
+        trimmed[key] = value[:SAMPLE_SIZE]
+        trimmed[f'{key}_muestra'] = (
+            f'Se muestran {SAMPLE_SIZE} de {len(value)} elementos, los primeros '
+            f'del orden en que el servicio los devolvió.'
+        )
+
+    message = (
+        f'Payload trimmed to fit the budget: '
+        f'{len(json.dumps(payload, default = str)):,} -> '
+        f'{len(json.dumps(trimmed, default = str)):,} characters.'
+    )
+    logger.info(message)
+    return trimmed
+
+
 @handle_service_errors('AI')
 async def explain_service(view: ViewName, data: Dict[str, Any]) -> Dict[str, Any]:
     '''
@@ -96,20 +153,19 @@ async def explain_service(view: ViewName, data: Dict[str, Any]) -> Dict[str, Any
         Dict[str, Any]: Payload matching ExplainResponse shape.
 
     Raises:
-        InvalidInputError: If the payload is empty or too large.
+        InvalidInputError: If the payload is empty.
         RegisterNotFoundError: If no role is configured for the view.
         ServiceUnavailableError: If the model cannot be reached or says nothing.
     '''
     if not data:
         raise InvalidInputError(detail = AIError.EMPTY_PAYLOAD.value)
-    if len(json.dumps(data, default = str)) > MAX_PAYLOAD_CHARACTERS:
-        raise InvalidInputError(detail = AIError.PAYLOAD_TOO_LARGE.value)
 
     # The payload travels as the producing service returned it. It already
     # passed a Pydantic model on the other side; re-declaring its shape here
     # would be a second contract for one thing, and would drop fields the
-    # expert could have used.
-    payload = data
+    # expert could have used. The only thing done to it is fitting it to the
+    # budget when a list is longer than anyone can read.
+    payload = _fit_to_budget(data)
 
     prompt = get_active_prompt(view.value)
     if prompt is None:
