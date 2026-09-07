@@ -310,3 +310,15 @@
 }
 
 .data-table .method { line-height: 1.35; }
+
+.page-note {
+    max-width: 62ch;
+    margin: -.35rem 0 1.5rem;
+    padding: .8rem 1rem;
+    background: #f4f6fb;
+    border-left: 3px solid #0d1e4c;
+    border-radius: 0 6px 6px 0;
+    font-size: .88rem;
+    line-height: 1.55;
+    color: #33405e;
+}

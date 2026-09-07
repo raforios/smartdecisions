@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cotizaciones y proyecciones — SmartDecisions Demo</title>
+    <title>Cotizaciones y proyecciones — SmartDecisions</title>
     <link rel="stylesheet" href="../styles/demo.css?v=58befa6b25">
-    <link rel="stylesheet" href="minerales.css?v=78d2de3bfc">
+    <link rel="stylesheet" href="minerales.css?v=de41e013e4">
     <link rel="icon" type="image/png" sizes="64x64" href="../../assets/favicon-bear-64.png?v=5">
     <link rel="icon" type="image/png" sizes="32x32" href="../../assets/favicon-bear-32.png?v=5">
     <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png?v=5">
@@ -15,7 +15,7 @@
     <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=d7c1fcdca6" defer></script>
-    <script src="minerales.js?v=414cdea8e7" defer></script>
+    <script src="minerales.js?v=74f94f89c3" defer></script>
 </head>
 <body>
 
@@ -37,11 +37,8 @@
 <main>
     <div class="container">
         <h1 class="page-title">Cotizaciones y proyecciones</h1>
-        <p class="page-subtitle">
-            El mineral se cotiza en dólares y el dólar se cotiza en bolivianos.
-            Puedes mirar cada uno por separado o los dos juntos, al plazo que
-            decidas, para responder la pregunta de fondo: ¿vendes hoy o esperas?
-        </p>
+        <p class="page-subtitle">Cotización oficial de minerales y tipo de cambio, con proyección al plazo elegido.</p>
+        <p class="page-note">Modelo: suavizado exponencial con tendencia amortiguada. Cada proyección se publica con el error que ese modelo registró sobre esta misma serie y con el del modelo de referencia.</p>
 
         <!-- Shared controls: everything below reacts to these two. -->
         <section class="card controls-card">

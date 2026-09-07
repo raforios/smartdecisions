@@ -891,7 +891,50 @@ modo dentro de otro: no se mezclan aunque compartan base. El orden es:
    precarga el precio **oficial**, no el diario, y aplica
    `official_change_percent`. **Requiere redesplegar MINING_ANALYSIS.**
 
-   **Historial propio y panel "Tu actividad" (2026-09-05).** El home abría con
+   **Nada hardcodeado en QUOTES (2026-09-05).** Rafael señaló constantes de
+   negocio dentro de `services/quotes.py` — una regla que ya había dado. Barrido
+   completo del servicio, y con un criterio más estricto que antes: **las
+   variables pasaron de opcionales a requeridas**. El patrón
+   `ENV_VARS['X'] or 30` seguía siendo un número viviendo en el código; ahora,
+   si falta configuración, el servicio falla al arrancar en vez de correr
+   callado sobre un valor que nadie eligió.
+
+   Movidos a `.env`: `SYNC_DEFAULT_DAYS`, `SCENARIO_DEFAULT_DAYS`,
+   `AMOUNT_DECIMALS`, `RATE_DECIMALS`, `ERROR_DECIMALS`, `CHANGE_DECIMALS`,
+   `RATE_COLLAPSE_FLOOR_RATIO` y los ocho que ya existían con fallback.
+
+   El caso más interesante es **`RATE_BLOCK_WEEKDAYS=5,6,0`**: los días que el
+   BCB publica como un bloque. Estaban como `MONDAY, SATURDAY, SUNDAY = 0, 5, 6`
+   con tres `if` encadenados. Ahora `validity_of()` deriva la ventana recorriendo
+   el bloque configurado, así que si el BCB pasara a un bloque de cinco días es
+   una línea de `.env` y no un cambio de código. Verificado: viernes rige un día,
+   sábado/domingo/lunes rigen 05→07, martes vuelve a uno.
+
+   Lo único que quedó como literal es `(mineral_change_percent or 0.0) / 100`:
+   el 0.0 es "sin cambio" y el 100 convierte porcentaje a fracción. Aritmética,
+   no decisión.
+
+   **Pruebas de Rafael y correcciones (2026-09-05).**
+   - **Bug: Análisis Comercial no mostraba nada.** El menú de análisis solo se
+     revelaba tras subir un archivo **en esa misma sesión**, así que quien
+     llegaba con el dataset ya cargado —desde el panel nuevo, o tras recargar—
+     caía en una pantalla en blanco y se le pedía subir otra vez el mismo
+     archivo. Ahora el módulo pide el resumen del dataset y reconstruye esa
+     pantalla; si el dataset no existe o es ajeno, lo olvida y arranca desde la
+     carga.
+   - **Vigencia del fin de semana.** El BCB publica el viernes de noche una
+     cotización *"vigente para el sábado, domingo y lunes"* — la captura del
+     2026-09-05 lo dice en letras. Leer la serie como un valor por día escondía
+     que quien cierra una venta el sábado liquida a una cifra ya fija hasta el
+     martes. `validity_of()` devuelve la ventana y el pronóstico la publica;
+     la vista dice "Vigente 05/09 – 07/09" en vez de una fecha suelta.
+     Verificado contra el BCB: guardamos **12,58 para el sábado 5**, idéntico.
+   - **Textos.** Las cuatro cabeceras hablaban de microservicios, contratos y
+     nombres de motor. Reescritas en términos de lo que el usuario obtiene. La de
+     cotizaciones además declara el modelo y por qué se eligió, que es lo que
+     Rafael pidió para dar confianza.
+
+   **Historial propio y panel "Tu actividad" (2026-09-05). El home abría con
    tres tarjetas vacías, que se lee como folleto y no como producto. Ahora, al
    entrar, la cuenta ve lo que ya tiene.
 

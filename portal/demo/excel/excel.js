@@ -1641,5 +1641,38 @@ document.addEventListener('DOMContentLoaded', () => {
         'sessionChip',
         'Tus resultados quedan guardados: vuelve a entrar y verás la misma pantalla.'
     );
-    if (state.datasetId) restoreLastView();
+    /**
+     * Brings a returning user back to a usable screen.
+     *
+     * The analysis menu used to be revealed only by an upload made in this same
+     * session, so somebody arriving with a dataset already loaded — from the
+     * home panel, or after a reload — landed on a blank page and was asked to
+     * upload the same file again. The dataset's own summary is enough to rebuild
+     * that screen, and the service only returns it to its owner.
+     */
+    async function restoreDataset() {
+        try {
+            const status = await window.SD_API.get(
+                `${window.SD_CONFIG.INGEST_URL}/v1/ingest/${state.datasetId}`
+            );
+            renderIngestSummary(status.summary, status.status);
+            qs('#stepValidation').hidden = false;
+
+            const isValid = status.status === 'validated';
+            qs('#validatedBlock').hidden = !isValid;
+            qs('#errorsBlock').hidden = isValid;
+            if (isValid) {
+                renderRejectedNotice(status.dataset_id, status.summary);
+            } else {
+                renderIssues(status.issues || []);
+            }
+            restoreLastView();
+        } catch (error) {
+            // The dataset is gone, or belongs to somebody else: forget it and
+            // let the user start from the upload step instead of failing.
+            setDataset(null);
+        }
+    }
+
+    if (state.datasetId) restoreDataset();
 });

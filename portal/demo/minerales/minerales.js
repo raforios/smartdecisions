@@ -412,8 +412,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         qs('#rateFigures').innerHTML = `
             <div class="figure">
-                <span class="figure-label">Hoy (${data.last_date})</span>
+                <span class="figure-label">${
+                    data.valid_from && data.valid_to && data.valid_from !== data.valid_to
+                        ? `Vigente ${shortDate(data.valid_from)} – ${shortDate(data.valid_to)}`
+                        : `Vigente hoy (${shortDate(data.last_date)})`
+                }</span>
                 <span class="figure-value">${money(data.last_rate)} Bs</span>
+                ${data.valid_from !== data.valid_to ? `<span class="figure-note">
+                    El BCB publica el viernes la cotización del fin de semana:
+                    rige hasta el lunes inclusive.
+                </span>` : ''}
             </div>
             <div class="figure">
                 <span class="figure-label">En ${data.days_ahead} días</span>
