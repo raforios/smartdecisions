@@ -7,7 +7,7 @@
     2026 that makes the older history unusable for projection.
 '''
 import asyncio
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -448,3 +448,42 @@ def test_the_weekday_block_is_read_without_commas():
     assert _parse('5,6,0') == (5, 6, 0)
     # And what the service actually loaded agrees with the file.
     assert quotes.RATE_BLOCK_WEEKDAYS == (5, 6, 0)
+
+
+def test_the_sync_reaches_the_end_of_the_block_not_today(store):
+    '''
+        On a Saturday the rate of Sunday and Monday is already published.
+
+        The BCB puts it out on Friday night for the three days. Stopping the
+        window at "today" left Monday missing until Monday arrived, so the
+        screen showed a published figure as a projection — which is exactly the
+        kind of thing that costs credibility.
+    '''
+    asked = []
+
+    with patch.object(quotes, 'fetch_official_rate',
+                      lambda day: asked.append(day) or 12.58), \
+         patch.object(quotes, 'get_current_time_gmt',
+                      lambda: datetime(2026, 9, 5, 10, 0, tzinfo = timezone.utc)):
+        result = _run(quotes.sync_rates_service(days_back = 3))
+
+    # Saturday the 5th is "today"; the block runs to Monday the 7th.
+    assert max(asked) == date(2026, 9, 7)
+    assert result['date_to'] == date(2026, 9, 7)
+    assert date(2026, 9, 7) in {rate.date for rate in store.values()}
+
+
+def test_the_sync_of_a_weekday_stops_at_today(store): # pylint: disable=unused-argument
+    '''
+        Outside a block there is nothing published ahead, so the window must not
+        reach into the future asking the source for dates it has no answer for.
+    '''
+    asked = []
+
+    with patch.object(quotes, 'fetch_official_rate',
+                      lambda day: asked.append(day) or 12.45), \
+         patch.object(quotes, 'get_current_time_gmt',
+                      lambda: datetime(2026, 9, 2, 10, 0, tzinfo = timezone.utc)):
+        _run(quotes.sync_rates_service(days_back = 3))
+
+    assert max(asked) == date(2026, 9, 2)

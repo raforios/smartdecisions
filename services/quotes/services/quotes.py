@@ -99,6 +99,38 @@ HISTORY_FLOAT_REGIME_ONLY = bool(ENV_VARS['HISTORY_FLOAT_REGIME_ONLY'])
 RATE_DECIMALS = ENV_VARS['RATE_DECIMALS']
 
 
+def validity_of(day: date_type) -> Tuple[date_type, date_type]:
+    '''
+    Returns the window a published rate governs.
+
+    The BCB publishes the rate the night before, and the one it publishes for a
+    **Saturday covers Saturday, Sunday and Monday** — the page says so in
+    letters: "vigente para el sábado 5, domingo 6 y lunes 7". Every other day
+    governs only itself.
+
+    This matters more than it looks. Reading the series as one value per day
+    suggests the rate of Monday is news on Monday, when in fact it was known and
+    fixed since Friday night. A miner closing a sale on Saturday is settling at a
+    figure that will not move until Tuesday, and that is a fact worth stating
+    rather than leaving the reader to notice three equal numbers in a row.
+
+    Args:
+        day (date): Date the rate was published for.
+
+    Returns:
+        Tuple[date, date]: First and last day the rate is in force.
+    '''
+    if day.weekday() not in RATE_BLOCK_WEEKDAYS:
+        return day, day
+
+    first, last = day, day
+    while (first - timedelta(days = 1)).weekday() in RATE_BLOCK_WEEKDAYS:
+        first -= timedelta(days = 1)
+    while (last + timedelta(days = 1)).weekday() in RATE_BLOCK_WEEKDAYS:
+        last += timedelta(days = 1)
+    return first, last
+
+
 @handle_service_errors('QUOTES')
 async def sync_rates_service(
     days_back: int = SYNC_DEFAULT_DAYS,
@@ -126,7 +158,17 @@ async def sync_rates_service(
         raise InvalidInputError(detail = QuotesError.INVALID_DATE_RANGE.value)
 
     today = get_current_time_gmt().date()
-    window = [today - timedelta(days = offset) for offset in range(days_back)]
+    # The window reaches the END of the block today belongs to, not today.
+    # The BCB publishes on Friday night a rate valid Saturday, Sunday and
+    # Monday: all three are already published on Saturday, and stopping at
+    # "today" left Monday missing until Monday — so the screen showed it as
+    # projected when it had been a published figure since Friday.
+    last_day = validity_of(today)[1]
+    first_day = today - timedelta(days = days_back - 1)
+    window = [
+        first_day + timedelta(days = offset)
+        for offset in range((last_day - first_day).days + 1)
+    ]
 
     stored, already_present, without_publication = 0, 0, 0
     for day in sorted(window):
@@ -323,38 +365,6 @@ async def sale_scenario_service(
         'difference_bob': difference,
         'difference_percent': difference_percent,
     }
-
-
-def validity_of(day: date_type) -> Tuple[date_type, date_type]:
-    '''
-    Returns the window a published rate governs.
-
-    The BCB publishes the rate the night before, and the one it publishes for a
-    **Saturday covers Saturday, Sunday and Monday** — the page says so in
-    letters: "vigente para el sábado 5, domingo 6 y lunes 7". Every other day
-    governs only itself.
-
-    This matters more than it looks. Reading the series as one value per day
-    suggests the rate of Monday is news on Monday, when in fact it was known and
-    fixed since Friday night. A miner closing a sale on Saturday is settling at a
-    figure that will not move until Tuesday, and that is a fact worth stating
-    rather than leaving the reader to notice three equal numbers in a row.
-
-    Args:
-        day (date): Date the rate was published for.
-
-    Returns:
-        Tuple[date, date]: First and last day the rate is in force.
-    '''
-    if day.weekday() not in RATE_BLOCK_WEEKDAYS:
-        return day, day
-
-    first, last = day, day
-    while (first - timedelta(days = 1)).weekday() in RATE_BLOCK_WEEKDAYS:
-        first -= timedelta(days = 1)
-    while (last + timedelta(days = 1)).weekday() in RATE_BLOCK_WEEKDAYS:
-        last += timedelta(days = 1)
-    return first, last
 
 
 @handle_service_errors('QUOTES')
