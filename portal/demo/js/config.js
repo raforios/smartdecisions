@@ -24,6 +24,11 @@ window.SD_CONFIG = {
     MINING_URL:        'https://jvxmqeg601.execute-api.us-east-1.amazonaws.com/minig_analysis',
     QUOTES_URL:        'https://w61p0ef0w7.execute-api.us-east-1.amazonaws.com/quotes',
 
+    // Capa de interpretación. Definirla es lo que hace aparecer el botón
+    // "¿Qué significa esto?" en cada vista: sin ella el portal funciona igual,
+    // sólo que sin explicaciones.
+    AI_URL:            'https://wi8s2oocc0.execute-api.us-east-1.amazonaws.com/ai',
+
     // S3 bucket where large sales files are staged (direct-to-S3 upload via
     // pre-signed URL, bypassing the ~10 MB API Gateway limit).
     INGEST_BUCKET:     'ml-data-file-handler',

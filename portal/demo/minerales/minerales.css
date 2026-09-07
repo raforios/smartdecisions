@@ -51,14 +51,10 @@
 
 .ai-slot { margin-left: auto; }
 
-.ai-answer {
-    margin-top: .75rem;
-    padding: .75rem .9rem;
-    background: #f4f6fb;
-    border-left: 3px solid #0d1e4c;
-    border-radius: 6px;
-    font-size: .92rem;
-}
+/* El panel de interpretación se estiliza una sola vez, en demo.css. La copia
+   que vivía aquí pisaba aquella —este archivo carga después— y hacía que la
+   misma nota se viera de un tamaño en Cotizaciones y de otro en Resumen
+   Comercial. */
 
 /* Wide tables scroll on their own instead of pushing the page sideways. */
 .table-scroll { overflow-x: auto; }
@@ -99,7 +95,7 @@
 }
 
 .tag-HIGH { background: #e3f1e8; color: #2d7d46; }
-.tag-MEDIUM { background: #f6efe1; color: #8a6a20; }
+.tag-MEDIUM { background: #dff1ee; color: #0d5c55; }
 .tag-LOW { background: #f3e6e6; color: #b4373a; }
 .tag-INSUFFICIENT { background: #eceff5; color: #5e6580; }
 
@@ -121,7 +117,7 @@
 .spark-observed { stroke: #0d1e4c; }
 
 .spark-projected {
-    stroke: #c4a378;
+    stroke: #12796f;
     stroke-dasharray: 4 3;
 }
 
@@ -179,8 +175,8 @@
 .data-table td.daily { color: var(--muted, #5e6580); font-size: .85rem; }
 
 .rule-note {
-    background: #f4f6fb;
-    border-left: 3px solid #0d1e4c;
+    background: #eef3fa;
+    border-left: 3px solid #2f6fb5;
     border-radius: 6px;
     padding: .7rem .9rem;
     margin: 0 0 1rem;
@@ -237,7 +233,7 @@
 
 .state-past { background: #eceff5; color: #5e6580; }
 .state-current { background: #e3f1e8; color: #2d7d46; }
-.state-future { background: #f6efe1; color: #8a6a20; }
+.state-future { background: #dceafa; color: #255a94; }
 
 .period-current td { font-weight: 600; }
 .period-future td { color: #4a5068; }
@@ -315,10 +311,14 @@
     max-width: 62ch;
     margin: -.35rem 0 1.5rem;
     padding: .8rem 1rem;
-    background: #f4f6fb;
-    border-left: 3px solid #0d1e4c;
+    background: #eef3fa;
+    border-left: 3px solid #2f6fb5;
     border-radius: 0 6px 6px 0;
     font-size: .88rem;
     line-height: 1.55;
     color: #33405e;
 }
+
+
+/* El panel abre entre la cabecera del panel y su contenido: aire abajo también. */
+.panel-head + .ai-answer { margin-bottom: 1.4rem; }

@@ -16,6 +16,24 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#userChip').textContent = window.SD_AUTH.getEmail() || 'usuario';
     qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
 
+    if (window.SD_AI) {
+        // The button lives in the card's own header and the answer opens right
+        // under it. Appending the button to the card put it below the table and
+        // the pager, which read as a control for something else entirely.
+        window.SD_AI.registerView('route_plan', () => state.plan);
+        const head = qs('#stopsHead');
+        if (head) window.SD_AI.mountExplain(head, 'route_plan', head);
+    }
+
+    qs('#stopsPrev').addEventListener('click', () => {
+        state.stopsPage -= 1;
+        paintStops();
+    });
+    qs('#stopsNext').addEventListener('click', () => {
+        state.stopsPage += 1;
+        paintStops();
+    });
+
     const OPTIMIZATION_URL = window.SD_CONFIG.OPTIMIZATION_URL;
     // Shared with the Excel module on purpose: one upload feeds every analysis.
     const DATASET_KEY = 'sd_excel_dataset_id';
@@ -45,7 +63,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const ROUTE_COLOR = '#0d1e4c';
 
-    const state = { datasetId: sessionStorage.getItem(DATASET_KEY), plan: null, day: null };
+    const state = {
+        datasetId: sessionStorage.getItem(DATASET_KEY),
+        plan: null, day: null, stops: [], stopsPage: 0
+    };
     let map = null;
     let layer = null;
 
@@ -156,10 +177,29 @@ document.addEventListener('DOMContentLoaded', () => {
                `<p class="metric-value">${escapeHtml(value)}</p></div>`;
     }
 
+    // Rows per page. Fixed so the card keeps the same height whether a day has
+    // eight stops or eighty: a table that grows with the data pushes the map off
+    // the screen and makes every day look like a different screen.
+    const STOPS_PER_PAGE = 10;
+
     function renderStops(day) {
+        state.stops = day.stops;
+        state.stopsPage = 0;
+        paintStops();
+        qs('#stopsCard').hidden = false;
+    }
+
+    function paintStops() {
+        const stops = state.stops || [];
+        const pages = Math.max(1, Math.ceil(stops.length / STOPS_PER_PAGE));
+        state.stopsPage = Math.min(Math.max(state.stopsPage, 0), pages - 1);
+
+        const from = state.stopsPage * STOPS_PER_PAGE;
+        const shown = stops.slice(from, from + STOPS_PER_PAGE);
+
         const tbody = qs('#stopsTable tbody');
         tbody.innerHTML = '';
-        day.stops.forEach((stop) => {
+        shown.forEach((stop) => {
             const row = document.createElement('tr');
             row.innerHTML =
                 `<td class="numeric">${stop.stop_order}</td>` +
@@ -170,7 +210,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="numeric">${escapeHtml(stop.last_purchase || '—')}</td>`;
             tbody.appendChild(row);
         });
-        qs('#stopsCard').hidden = false;
+
+        // Keep the height steady on the last page, so the card does not jump.
+        for (let filler = shown.length; filler < STOPS_PER_PAGE; filler += 1) {
+            const row = document.createElement('tr');
+            row.className = 'row-filler';
+            row.innerHTML = '<td colspan="5">&nbsp;</td>';
+            tbody.appendChild(row);
+        }
+
+        qs('#stopsCount').textContent = stops.length === 1
+            ? '1 parada'
+            : `${stops.length} paradas`;
+        qs('#stopsPage').textContent = `${state.stopsPage + 1} / ${pages}`;
+        qs('#stopsPrev').disabled = state.stopsPage === 0;
+        qs('#stopsNext').disabled = state.stopsPage >= pages - 1;
+        qs('#stopsPager').hidden = stops.length <= STOPS_PER_PAGE;
     }
 
     function selectDay(dayNumber) {

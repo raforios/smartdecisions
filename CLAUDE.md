@@ -133,7 +133,7 @@ python main.py
 
 | Servicio | Función | Datos |
 |---|---|---|
-| **AUTH** | Emite y valida JWT, gestiona usuarios y login | MySQL |
+| **AUTH** | Emite y valida JWT, gestiona usuarios y login | DynamoDB |
 | **EVENTS** | Auditoría, logs de uso y trazabilidad. Recibe logs vía `utils.py` | DynamoDB |
 | **FILES** | Interfaz con S3: subida, lectura, borrado, URLs pre-firmadas | S3 |
 

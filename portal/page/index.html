@@ -1,167 +1,821 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="BearSoft · SmartDecisions — De tu Excel de ventas a decisiones que mueven plata.">
-    <title id="site-title"></title>
-    <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-bear-64.png?v=5">
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-bear-32.png?v=5">
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=5">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="./css/style.css?v=2">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BearSoft — Software que decide con datos</title>
+<meta name="description" content="Desarrollo de software a medida en Bolivia desde 2004. Backend en Python, bases de datos e infraestructura AWS para clientes en Bolivia, Colombia y Estados Unidos. Capacitación técnica y SmartDecisions, nuestra plataforma de inteligencia de negocios.">
+<meta property="og:title" content="BearSoft — Software que decide con datos">
+<meta property="og:description" content="Veintidós años construyendo software para otros. Ahora también el nuestro: SmartDecisions.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://bearsoft.com.bo">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-bear-64.png">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-bear-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="canonical" href="https://bearsoft.com.bo/">
+<meta name="robots" content="index,follow">
+<meta name="author" content="BearSoft">
+<meta property="og:locale" content="es_BO">
+<meta property="og:site_name" content="BearSoft">
+<meta property="og:image" content="https://bearsoft.com.bo/assets/web/about.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ProfessionalService",
+  "name": "BearSoft",
+  "url": "https://bearsoft.com.bo",
+  "foundingDate": "2004",
+  "areaServed": ["BO", "CO", "US"],
+  "address": {"@type": "PostalAddress", "addressLocality": "La Paz", "addressCountry": "BO"},
+  "geo": {"@type": "GeoCoordinates", "latitude": -16.54317124283387, "longitude": -68.07182673283694},
+  "hasMap": "https://maps.app.goo.gl/GivF4zx98tFKT1pZ6",
+  "email": "raforios@gmail.com",
+  "telephone": "+59177781631",
+  "description": "Desarrollo de software a medida, inteligencia de negocios y capacitación técnica. Backend, datos e infraestructura en AWS.",
+  "makesOffer": [
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Desarrollo de software a medida"}},
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Inteligencia de negocios (SmartDecisions)"}},
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Capacitación técnica en Python, bases de datos e IA"}}
+  ]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{
+  /* Azules fríos y un verde-azulado de acento. Sin dorados. */
+  --ink:#152441; --ink-2:#3c4a68; --slate:#6b7590;
+  --paper:#f7f9fc; --surface:#ffffff; --surface-2:#eef3fa; --surface-3:#e3ebf6;
+  --line:#dbe4f0;
+  --blue:#2f6fb5; --blue-deep:#255a94; --blue-soft:#dceafa;
+  --teal:#12796f; --teal-soft:#dff1ee;
+  --measure:66ch;
+  --s1:clamp(.82rem,.8rem+.1vw,.88rem);
+  --s2:clamp(1rem,.97rem+.16vw,1.08rem);
+  --s3:clamp(1.12rem,1.06rem+.32vw,1.3rem);
+  --s4:clamp(1.5rem,1.3rem+.9vw,2.05rem);
+  --s5:clamp(2.2rem,1.6rem+2.6vw,4rem);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ink:#e9eef8; --ink-2:#c0cadd; --slate:#8f9ab4;
+    --paper:#0b111d; --surface:#131b2b; --surface-2:#1a2436; --surface-3:#212c42;
+    --line:#28344b;
+    --blue:#6aa6e8; --blue-deep:#8dbdf2; --blue-soft:#1b2c45;
+    --teal:#5fc4b6; --teal-soft:#15302d;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'Source Sans 3',system-ui,sans-serif;font-size:var(--s2);line-height:1.65;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:74rem;margin:0 auto;padding:0 clamp(1.1rem,4vw,2.5rem)}
+h1,h2,h3,h4{font-family:Archivo,system-ui,sans-serif;text-wrap:balance;margin:0}
+a{color:var(--blue)}
+a:hover{color:var(--blue-deep)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+
+/* header */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--paper) 90%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:1.4rem;height:4.2rem}
+.brand{display:flex;align-items:center;gap:.6rem;text-decoration:none;color:var(--ink);
+  font-weight:700;font-family:Archivo,sans-serif;letter-spacing:-.01em;font-size:1.15rem}
+.brand:hover{color:var(--ink)}
+.brand img{width:34px;height:34px;border-radius:8px;object-fit:cover}
+.nav{margin-left:auto;display:flex;gap:1.3rem;align-items:center}
+.nav>a:not(.btn){color:var(--ink-2);text-decoration:none;font-size:var(--s1);font-weight:600}
+.nav>a:not(.btn):hover{color:var(--blue)}
+@media(max-width:52rem){.nav>a:not(.btn){display:none}}
+.btn{display:inline-block;padding:.62rem 1.15rem;border-radius:8px;font-weight:600;
+  font-size:var(--s1);text-decoration:none;border:1px solid transparent;white-space:nowrap;
+  cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn-primary:hover{background:var(--blue-deep);border-color:var(--blue-deep);color:#fff}
+.btn-soft{background:var(--blue-soft);color:var(--blue-deep);border-color:transparent}
+.btn-soft:hover{background:var(--surface-3);color:var(--blue-deep)}
+.btn-ghost{background:transparent;color:var(--ink-2);border-color:var(--line)}
+.btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+.btn-onDark{background:#fff;color:#152441;border-color:#fff}
+.btn-onDark:hover{background:var(--blue-soft);color:#152441}
+.btn-onDark-ghost{background:transparent;color:#dbe6f7;border-color:rgba(255,255,255,.35)}
+.btn-onDark-ghost:hover{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.6)}
+
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:.76rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--blue);margin:0 0 1rem}
+
+/* hero */
+.hero{position:relative;overflow:hidden;background:var(--surface-2);
+  padding:clamp(3.5rem,8vw,6.5rem) 0 clamp(3rem,6vw,5rem);border-bottom:1px solid var(--line)}
+#net{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hero .wrap{position:relative;z-index:1;display:grid;gap:clamp(2rem,5vw,3.5rem);align-items:center}
+@media(min-width:60rem){.hero .wrap{grid-template-columns:1.1fr .9fr}}
+h1{font-size:var(--s5);font-weight:800;line-height:1.02;letter-spacing:-.03em;max-width:16ch}
+.lede{font-size:var(--s3);color:var(--ink-2);max-width:54ch;margin:1.3rem 0 0;line-height:1.5}
+.cta-row{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1.9rem}
+.hero-art{position:relative;border-radius:16px;overflow:hidden;
+  box-shadow:0 20px 50px rgba(21,36,65,.18)}
+.hero-art img{display:block;width:100%;height:auto}
+@media(max-width:60rem){.hero-art{display:none}}
+
+/* proof */
+.proof{background:var(--surface);border-bottom:1px solid var(--line);padding:1.7rem 0}
+.proof-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1.5rem}
+.stat b{display:block;font-family:Archivo,sans-serif;font-size:var(--s4);font-weight:700;
+  line-height:1.05;letter-spacing:-.02em;color:var(--blue-deep)}
+.stat span{font-size:var(--s1);color:var(--slate)}
+
+section{padding:clamp(3rem,6.5vw,5rem) 0}
+.sec-head{max-width:var(--measure);margin-bottom:2.3rem}
+h2{font-size:var(--s4);font-weight:700;letter-spacing:-.02em;line-height:1.14}
+.sec-head p{color:var(--ink-2);margin:.7rem 0 0;font-size:var(--s3);line-height:1.5}
+.band{background:var(--surface-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+
+/* Una banda visual donde el texto se acumula: el ojo necesita dónde apoyarse
+   antes de tres columnas de listas. */
+.wide-art{border-radius:14px;overflow:hidden;border:1px solid var(--line);
+  margin-bottom:1.6rem;max-height:15rem}
+.wide-art img{display:block;width:100%;height:15rem;object-fit:cover;object-position:center 45%}
+
+/* cards */
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));gap:1.1rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.6rem}
+.card h3{font-size:var(--s3);font-weight:600;margin-bottom:.45rem}
+.card>p{color:var(--ink-2);margin:0 0 1rem}
+.tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:.7rem;
+  letter-spacing:.1em;text-transform:uppercase;padding:.2rem .55rem;border-radius:999px;
+  background:var(--blue-soft);color:var(--blue-deep);margin-bottom:.9rem}
+.tag-teal{background:var(--teal-soft);color:var(--teal)}
+.card ul{margin:0;padding-left:1.05rem;color:var(--slate);font-size:var(--s1)}
+.card li{margin-bottom:.32rem}
+.card li::marker{color:var(--blue)}
+
+/* process */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1.1rem;
+  counter-reset:step}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.5rem;
+  counter-increment:step}
+.step::before{content:counter(step,decimal-leading-zero);font-family:'JetBrains Mono',monospace;
+  font-size:.78rem;color:var(--blue);letter-spacing:.1em;display:block;margin-bottom:.7rem}
+.step h3{font-size:var(--s2);font-weight:600;margin-bottom:.4rem}
+.step p{margin:0;color:var(--ink-2);font-size:var(--s1);line-height:1.55}
+
+/* stack */
+.stack{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:1.6rem 2rem}
+.stack h4{font-size:.78rem;font-family:'JetBrains Mono',monospace;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--slate);margin-bottom:.6rem}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem}
+.chip{font-size:var(--s1);padding:.28rem .7rem;border-radius:7px;background:var(--surface-2);
+  border:1px solid var(--line);color:var(--ink-2)}
+
+/* product */
+.product{background:linear-gradient(150deg,#152441,#1d3a6b);color:#e9eef8;border-radius:18px;
+  padding:clamp(1.8rem,4vw,3.2rem);display:grid;gap:2.2rem}
+@media(min-width:58rem){.product{grid-template-columns:1fr 1fr;align-items:center}}
+.product h2{color:#fff}.product .eyebrow{color:#9dc4f0}
+.product>div>p{color:#c3d1e8;max-width:46ch}
+.modules{display:grid;gap:.65rem}
+.module{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);
+  border-radius:10px;padding:.85rem 1.05rem}
+.module b{display:block;font-family:Archivo,sans-serif;font-size:var(--s2);color:#fff;
+  margin-bottom:.15rem}
+.module span{font-size:var(--s1);color:#aabbd6;line-height:1.5}
+.prod-art{border-radius:12px;overflow:hidden;margin-bottom:1rem;border:1px solid rgba(255,255,255,.15)}
+.prod-art img{display:block;width:100%;height:11rem;object-fit:cover;object-position:center 55%}
+
+/* work */
+.work{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.job{display:grid;gap:.35rem;padding:1.4rem 1.6rem;border-bottom:1px solid var(--line)}
+.job:last-child{border-bottom:0}
+@media(min-width:46rem){.job{grid-template-columns:14rem 1fr;gap:0 2rem;align-items:baseline}}
+.job b{font-family:Archivo,sans-serif;font-weight:600;font-size:var(--s2)}
+.job .where{font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--slate);margin-top:.3rem}
+.job p{margin:0;color:var(--ink-2)}
+.job ul{margin:.4rem 0 0;padding-left:1.05rem;color:var(--slate);font-size:var(--s1)}
+.job li::marker{color:var(--teal)}
+
+/* contact */
+.reach{display:grid;gap:1.3rem}
+.details{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.7rem}
+.detail{display:grid;gap:.15rem;padding:.85rem 1rem;border-radius:10px;
+  background:var(--surface-2);border:1px solid var(--line);text-decoration:none}
+.detail-label{font-family:'JetBrains Mono',monospace;font-size:.68rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--blue)}
+.detail-value{font-weight:600;color:var(--ink);font-size:var(--s2);word-break:break-word}
+.detail-hint{font-size:.72rem;color:var(--slate)}
+.detail-link:hover{border-color:var(--blue);background:var(--blue-soft)}
+.detail-link:hover .detail-value{color:var(--blue-deep)}
+/* El correo se copia, no se hace clic: un mailto sin cliente configurado no
+   abre nada y deja al visitante sin la dirección. */
+.pick{user-select:all}
+.contact{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  padding:clamp(1.8rem,4vw,3rem);display:grid;gap:1.7rem}
+@media(min-width:54rem){.contact{grid-template-columns:1fr auto;align-items:center}}
+.contact p{color:var(--ink-2);margin:.5rem 0 0;max-width:48ch}
+.ways{display:flex;gap:.7rem;flex-wrap:wrap}
+
+footer{border-top:1px solid var(--line);padding:2.2rem 0;color:var(--slate);font-size:var(--s1);
+  background:var(--surface)}
+footer .wrap{display:block}
+/* El logo como banda propia sobre el pie: grande sin descuadrar la línea de
+   créditos, que sigue siendo una fila aparte. */
+.foot-banner{display:flex;justify-content:center;padding:.5rem 0 1.6rem;
+  border-bottom:1px solid var(--line);margin-bottom:1.4rem}
+.foot-banner img{height:clamp(5.5rem,13vw,9rem);width:auto;opacity:.95}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .foot-banner img{
+    background:#fff;border-radius:10px;padding:.5rem 1rem;box-sizing:content-box}
+}
+.foot-line{margin:0;text-align:center}
+/* Marca de visita: dice de dónde se conectó quien mira, en letra chica. Es
+   cortesía y transparencia — la misma información que el servidor ya ve. */
+.visit-note{margin:.7rem 0 0;text-align:center;font-size:.72rem;color:var(--slate);
+  font-family:'JetBrains Mono',monospace;letter-spacing:.02em}
+</style>
 </head>
 <body>
 
-<header class="site-header">
-    <div class="container nav">
-        <a href="#hero" class="brand">
-            <img src="assets/bear-face.jpg" alt="BearSoft" class="brand-mark">
-            <span class="brand-text">Bear<span class="accent">Soft</span></span>
-        </a>
-        <nav class="nav-links">
-            <a href="#about">Sobre Mí</a>
-            <a href="#expertise">Expertise</a>
-            <a href="#ml-app">SmartDecisions</a>
-            <a href="#services">Servicios</a>
-            <a href="#contact">Contacto</a>
-            <a href="https://smartdecisions.bearsoft.com.bo" target="_blank" rel="noopener" class="btn btn-primary btn-small">Probar demo</a>
-        </nav>
-    </div>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/bear-face.jpg" alt="">BearSoft</a>
+    <nav class="nav">
+      <a href="#servicios">Servicios</a>
+      <a href="#como">Cómo trabajamos</a>
+      <a href="#stack">Tecnología</a>
+      <a href="#producto">SmartDecisions</a>
+      <a href="#clientes">Clientes</a>
+      <a href="#capacitacion">Capacitación</a>
+      <a href="#valores">Compromiso</a>
+      <a class="btn btn-primary" href="#contacto">Conversemos</a>
+    </nav>
+  </div>
 </header>
 
-<main>
+<main id="top">
 
-    <section id="hero" class="hero">
-        <div id="particles-js"></div>
-        <div class="container hero-grid">
-            <div class="hero-text">
-                <p class="eyebrow">Por <strong>BearSoft</strong></p>
-                <h1 id="hero-tagline"></h1>
-                <p class="brand-name" id="hero-brand-name"></p>
-                <h2 id="hero-subtitle"></h2>
-                <a href="#services" class="btn btn-primary" id="hero-cta"></a>
-            </div>
-            <div class="hero-visual">
-                <div class="bear-card">
-                    <img src="assets/bear-mascot.jpg" alt="Mascota BearSoft" class="bear-icon">
-                    <p class="bear-tagline">Decisiones <strong>firmes</strong> con datos reales.</p>
-                </div>
-            </div>
+  <section class="hero">
+    <canvas id="net" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">Desde 2004 · Bolivia · Colombia · Estados Unidos</p>
+        <h1>Software que decide con datos.</h1>
+        <p class="lede">
+          Construimos los sistemas que sostienen la operación de empresas e
+          instituciones: backend, datos e infraestructura en la nube. Veintidós
+          años haciéndolo para otros son los que hoy sostienen nuestro propio
+          producto.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#contacto">Conversemos</a>
+          <a class="btn btn-soft" href="https://smartdecisions.bearsoft.com.bo"
+             target="_blank" rel="noopener">Entrar a SmartDecisions</a>
         </div>
-    </section>
+      </div>
+      <div class="hero-art">
+        <img src="assets/web/about.jpg" width="1400" height="1400"
+             alt="Composición de nodos y trayectorias conectadas">
+      </div>
+    </div>
+  </section>
 
-    <section id="about" class="section">
-        <div class="container about-grid">
-            <div class="about-image">
-                <img id="about-carousel-image" src="./img/about.png" alt="About">
-            </div>
-            <div class="about-content">
-                <h2 id="about-title"></h2>
-                <p id="about-intro"></p>
-                <ul id="about-points" class="icon-list"></ul>
-                <a href="./docs/cv.pdf" id="cv-button" class="btn btn-ghost" download>
-                    <i class="fas fa-download"></i> <span id="cv-button-text"></span>
-                </a>
-            </div>
+  <div class="proof">
+    <div class="wrap proof-grid">
+      <div class="stat"><b>2004</b><span>Primer cliente</span></div>
+      <div class="stat"><b>3 países</b><span>Bolivia, Colombia, EE.&nbsp;UU.</span></div>
+      <div class="stat"><b>+10</b><span>Aplicaciones a medida entregadas</span></div>
+      <div class="stat"><b>+20</b><span>Microservicios en producción</span></div>
+      <div class="stat"><b>SmartDecisions</b><span>Nuestro primer producto</span></div>
+    </div>
+  </div>
+
+  <section id="servicios">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Qué hacemos</h2>
+        <p>
+          Tres formas de trabajar juntos, según lo que necesites: un producto que
+          ya funciona, un sistema hecho a la medida de tu operación, o que tu
+          propio equipo aprenda a construirlo.
+        </p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <span class="tag">Producto</span>
+          <h3>SmartDecisions</h3>
+          <p>
+            Plataforma de inteligencia de negocios. Subes tus datos de venta y
+            obtienes decisiones cuantificadas en bolivianos, no reportes que hay
+            que interpretar.
+          </p>
+          <ul>
+            <li>Oportunidades de venta por punto de venta</li>
+            <li>Pronóstico de demanda y de cotizaciones</li>
+            <li>Segmentación de cartera y riesgo de fuga</li>
+            <li>Optimización de rutas de visita</li>
+            <li>Capa de IA que interpreta cada pantalla</li>
+          </ul>
+        </article>
+        <article class="card">
+          <span class="tag">A medida</span>
+          <h3>Desarrollo de software</h3>
+          <p>
+            Sistemas construidos para cómo trabaja tu empresa, no para cómo
+            trabaja un software genérico. Del análisis a la operación.
+          </p>
+          <ul>
+            <li>Arquitectura de microservicios y APIs</li>
+            <li>Integración con los sistemas que ya tienes</li>
+            <li>Automatización de procesos manuales</li>
+            <li>Migración y modelado de datos</li>
+            <li>Despliegue e infraestructura en AWS</li>
+          </ul>
+        </article>
+        <article class="card">
+          <span class="tag tag-teal">Capacitación</span>
+          <h3>Formación técnica</h3>
+          <p>
+            Para equipos que quieren dejar de depender de terceros. Enseñamos lo
+            que usamos todos los días, sobre proyectos reales.
+          </p>
+          <ul>
+            <li>Python para backend y análisis de datos</li>
+            <li>MySQL y PostgreSQL: modelado y rendimiento</li>
+            <li>Linux y administración de servidores</li>
+            <li>Desarrollo asistido por IA y agentes</li>
+            <li>Buenas prácticas: pruebas y revisión de código</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="como" class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Cómo trabajamos</h2>
+        <p>Sin sorpresas de alcance ni sistemas que nadie puede mantener después.</p>
+      </div>
+      <div class="steps">
+        <article class="step">
+          <h3>Entender el negocio</h3>
+          <p>
+            Antes de escribir código entendemos cómo se trabaja hoy y qué
+            decisión se quiere mejorar. La mitad de los proyectos fracasan por
+            resolver con elegancia el problema equivocado.
+          </p>
+        </article>
+        <article class="step">
+          <h3>Entregar en partes</h3>
+          <p>
+            Cada entrega funciona por sí sola y se puede probar. Nada de
+            desaparecer tres meses y volver con un sistema que hay que aceptar
+            entero o rechazar entero.
+          </p>
+        </article>
+        <article class="step">
+          <h3>Construir para durar</h3>
+          <p>
+            Código con pruebas, documentado y revisado. Lo que entregamos tiene
+            que poder mantenerlo otro equipo, incluido el tuyo.
+          </p>
+        </article>
+        <article class="step">
+          <h3>Operar y acompañar</h3>
+          <p>
+            Desplegamos, monitoreamos y acompañamos la puesta en marcha. Un
+            sistema no está terminado hasta que alguien lo usa todos los días.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="stack">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Con qué lo construimos</h2>
+        <p>
+          Herramientas maduras donde importa la estabilidad; nuevas donde dan
+          una ventaja real.
+        </p>
+      </div>
+      <div class="stack">
+        <div>
+          <h4>Backend</h4>
+          <div class="chips">
+            <span class="chip">Python</span><span class="chip">FastAPI</span>
+            <span class="chip">SQLAlchemy</span><span class="chip">Pydantic</span>
+            <span class="chip">Pytest</span>
+          </div>
         </div>
-    </section>
-
-    <section id="expertise" class="section section-alt">
-        <div class="container">
-            <h2 id="expertise-title"></h2>
-            <div class="card-grid" id="expertise-grid"></div>
+        <div>
+          <h4>Datos</h4>
+          <div class="chips">
+            <span class="chip">MySQL</span><span class="chip">PostgreSQL</span>
+            <span class="chip">DynamoDB</span><span class="chip">pandas</span>
+            <span class="chip">NumPy</span>
+          </div>
         </div>
-    </section>
+        <div>
+          <h4>Nube</h4>
+          <div class="chips">
+            <span class="chip">AWS Lambda</span><span class="chip">API Gateway</span>
+            <span class="chip">S3</span><span class="chip">CloudFront</span>
+            <span class="chip">RDS</span><span class="chip">EventBridge</span>
+          </div>
+        </div>
+        <div>
+          <h4>Inteligencia artificial</h4>
+          <div class="chips">
+            <span class="chip">AWS Bedrock</span><span class="chip">Claude</span>
+            <span class="chip">Series temporales</span><span class="chip">Agentes</span>
+          </div>
+        </div>
+        <div>
+          <h4>Operación</h4>
+          <div class="chips">
+            <span class="chip">Docker</span><span class="chip">Linux</span>
+            <span class="chip">Git</span><span class="chip">CI/CD</span>
+          </div>
+        </div>
+        <div>
+          <h4>Frontend</h4>
+          <div class="chips">
+            <span class="chip">JavaScript</span><span class="chip">Leaflet</span>
+            <span class="chip">Streamlit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <section id="ml-app" class="section">
-        <div class="container ml-app-grid">
-            <div class="ml-app-content">
-                <p class="eyebrow">Producto BearSoft</p>
-                <h2 id="ml-app-title"></h2>
-                <p id="ml-app-intro"></p>
-                <ul id="ml-app-features" class="icon-list"></ul>
-                <a href="" target="_blank" rel="noopener" class="btn btn-primary" id="ml-app-cta"></a>
+  <section id="producto">
+    <div class="wrap">
+      <div class="product">
+        <div>
+          <p class="eyebrow">Producto propio</p>
+          <h2>SmartDecisions</h2>
+          <p style="margin-top:.9rem">
+            Inteligencia de negocios que responde tres preguntas con números: qué
+            pasó, qué viene y qué conviene hacer. Cada proyección se publica con
+            el error que ese modelo cometió de verdad, para que puedas juzgarla
+            en vez de creerla.
+          </p>
+          <p style="margin-top:.8rem">
+            Y una capa de interpretación: un botón en cada pantalla que explica,
+            desde el criterio de un especialista, qué significa lo que estás
+            viendo.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-onDark" href="https://smartdecisions.bearsoft.com.bo"
+               target="_blank" rel="noopener">Entrar a la plataforma</a>
+            <a class="btn btn-onDark-ghost" href="#contacto">Pedir una demostración</a>
+          </div>
+        </div>
+        <div>
+          <div class="prod-art">
+            <img src="assets/web/ml.jpg" width="1400" height="1400"
+                 alt="Series de venta proyectadas sobre una malla de datos">
+          </div>
+          <div class="modules">
+            <div class="module">
+              <b>Análisis comercial</b>
+              <span>Qué ofrecerle a cada cliente, cuánto vas a vender, a quién
+              estás por perder y cuánto margen deja cada línea.</span>
             </div>
-            <div class="ml-app-image">
-                <img id="ml-carousel-image" src="./img/ml.png" alt="SmartDecisions">
+            <div class="module">
+              <b>Cotizaciones y proyecciones</b>
+              <span>Cotización oficial de minerales y del dólar, con proyección y
+              escenario de venta: ¿vendes hoy o esperas?</span>
             </div>
-        </div>
-    </section>
-
-    <section id="smartdecisions" class="section section-alt">
-        <div class="container">
-            <h2 id="smartdecisions-title"></h2>
-            <p class="section-lead" id="smartdecisions-intro"></p>
-            <div class="formula" id="smartdecisions-formula"></div>
-            <p class="section-note" id="smartdecisions-formula-note"></p>
-
-            <h3 class="subhead" id="smartdecisions-benefits-title"></h3>
-            <div class="card-grid" id="smartdecisions-benefits"></div>
-
-            <h3 class="subhead" id="smartdecisions-steps-title"></h3>
-            <ol class="steps" id="smartdecisions-steps"></ol>
-
-            <h3 class="subhead" id="smartdecisions-pillars-title"></h3>
-            <div class="card-grid" id="smartdecisions-pillars"></div>
-
-            <div class="smartdecisions-cta">
-                <a href="" target="_blank" rel="noopener" class="btn btn-primary" id="smartdecisions-cta-btn"></a>
+            <div class="module">
+              <b>Optimización de rutas</b>
+              <span>Días de visita agrupados por cercanía y paradas ordenadas
+              sobre la red vial real.</span>
             </div>
+          </div>
         </div>
-    </section>
+      </div>
+    </div>
+  </section>
 
-    <section id="services" class="section">
-        <div class="container">
-            <h2 id="services-title"></h2>
-            <ul class="services-list" id="services-list"></ul>
+  <section id="clientes">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Con quiénes trabajamos</h2>
+        <p>
+          No publicamos logos. Un cliente nos contrata por lo que sabemos hacer,
+          no por a quién le facturamos antes.
+        </p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <span class="tag">Alcance</span>
+          <h3>Tres países</h3>
+          <p>
+            Desarrollamos software para empresas de <strong>Estados Unidos,
+            Colombia y Bolivia</strong>: startups de producto, consultoras que
+            nos suman a sus equipos e instituciones del Estado.
+          </p>
+        </article>
+        <article class="card">
+          <span class="tag">Operación</span>
+          <h3>Infraestructura en AWS</h3>
+          <p>
+            Montamos y operamos la nube de nuestros clientes: microservicios
+            serverless, bases relacionales y NoSQL, despliegue automatizado y
+            monitoreo. Sistemas que llevan años corriendo sin sobresaltos.
+          </p>
+        </article>
+        <article class="card">
+          <span class="tag tag-teal">Equipos</span>
+          <h3>Capacitación en sitio</h3>
+          <p>
+            Formamos a los equipos técnicos de nuestros clientes para que puedan
+            mantener y extender lo que construimos. El objetivo es que dejen de
+            necesitarnos para lo cotidiano.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="capacitacion" class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Capacitación técnica</h2>
+        <p>
+          Formamos equipos sobre proyectos reales, no sobre ejercicios de manual.
+          Lo que enseñamos es lo que usamos todos los días para construir y
+          operar software en producción.
+        </p>
+      </div>
+      <div class="wide-art">
+        <img src="assets/web/tech.jpg" width="1200" height="1200"
+             alt="Circuitos y trazos de datos convergiendo en un punto de luz">
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <span class="tag">Fundamentos</span>
+          <h3>Backend y datos</h3>
+          <p>Del primer endpoint a un servicio que aguanta producción.</p>
+          <ul>
+            <li>Python: APIs, pruebas y estructura de un proyecto que se mantiene</li>
+            <li>MySQL y PostgreSQL: modelado, índices y por qué una consulta es lenta</li>
+            <li>Linux: la línea de comandos que hace falta de verdad</li>
+            <li>Git y revisión de código en equipo</li>
+          </ul>
+        </article>
+        <article class="card">
+          <span class="tag tag-teal">Aprendizaje automático</span>
+          <h3>De la fórmula al modelo</h3>
+          <p>
+            Sin cajas negras: se ve el descenso de gradiente moverse, el costo
+            bajar y el modelo entrenarse paso a paso.
+          </p>
+          <ul>
+            <li>Regresión lineal y logística desde cero</li>
+            <li>Normalización, costo y gradiente, con los números a la vista</li>
+            <li>Series temporales: cuándo un pronóstico vale y cuándo no</li>
+            <li>Cómo medir un modelo contra el que hay que vencer</li>
+            <li>Cuadernos de trabajo con datos reales, no ejercicios de juguete</li>
+          </ul>
+        </article>
+        <article class="card">
+          <span class="tag">Actualidad</span>
+          <h3>Desarrollo asistido por IA</h3>
+          <p>
+            Cómo trabajar con modelos y agentes sin perder el control del código
+            ni la responsabilidad sobre lo que se entrega.
+          </p>
+          <ul>
+            <li>Agentes de programación: qué delegar y qué revisar siempre</li>
+            <li>Integrar un modelo en un producto propio</li>
+            <li>Costo, latencia y caché: lo que nadie cuenta en las demos</li>
+            <li>Los límites: qué no se le pide a un modelo</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="valores">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Cómo nos comprometemos</h2>
+        <p>
+          Lo que se puede prometer por escrito y sostener después.
+        </p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <h3>Te decimos que no</h3>
+          <p>
+            Si un proyecto no nos calza —por tecnología, por plazo o porque otro
+            lo haría mejor— lo decimos antes de empezar. Un trabajo mal tomado
+            cuesta más caro que uno no tomado.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Tus datos son tuyos</h3>
+          <p>
+            No los usamos para nada que no hayas pedido, no los compartimos y no
+            los movemos fuera de tu propia nube. Cada acceso queda auditado.
+          </p>
+        </article>
+        <article class="card">
+          <h3>El código te pertenece</h3>
+          <p>
+            Documentado, con pruebas y en tu repositorio desde el primer día.
+            Nunca dependes de nosotros para seguir: si te vas, te llevas todo.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Trabajo iterativo</h3>
+          <p>
+            Ciclos cortos con entregas que funcionan, revisión conjunta al final
+            de cada uno y prioridades que se ajustan sobre lo que ya viste
+            funcionar, no sobre un plan de hace tres meses.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Sin sorpresas de alcance</h3>
+          <p>
+            Lo que cambia se conversa y se cotiza antes, no aparece en la factura
+            final. Y si nos equivocamos en la estimación, es problema nuestro.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Hablamos claro</h3>
+          <p>
+            Sin jerga para impresionar ni informes que nadie lee. Si algo va mal
+            te enteras por nosotros y a tiempo, no cuando ya no hay margen.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="contacto">
+    <div class="wrap">
+      <div class="contact">
+        <div>
+          <h2>Conversemos</h2>
+          <p>
+            Cuéntanos qué necesitas resolver. Si podemos ayudarte te lo decimos,
+            y si no, también: preferimos no tomar un proyecto antes que
+            entregarlo a medias.
+          </p>
         </div>
-    </section>
-
-    <section id="contact" class="section section-alt">
-        <div class="container contact-grid">
-            <div>
-                <h2 id="contact-main-title"></h2>
-                <p id="contact-intro"></p>
-                <div class="social-links">
-                    <a href="" target="_blank" rel="noopener" title="LinkedIn" id="linkedin-link"><i class="fab fa-linkedin"></i></a>
-                    <a href="" target="_blank" rel="noopener" title="GitHub" id="github-link"><i class="fab fa-github"></i></a>
-                    <a href="" target="_blank" rel="noopener" class="whatsapp-icon" title="Escríbeme por WhatsApp" id="whatsapp-link"><i class="fab fa-whatsapp"></i></a>
-                </div>
+        <div class="reach">
+          <div class="ways">
+            <a class="btn btn-primary" href="https://wa.me/59177781631"
+               target="_blank" rel="noopener">WhatsApp</a>
+            <a class="btn btn-ghost" href="https://www.linkedin.com/in/raforios"
+               target="_blank" rel="noopener">LinkedIn</a>
+          </div>
+          <div class="details">
+            <div class="detail">
+              <span class="detail-label">E-mail</span>
+              <span class="detail-value pick">raforios@gmail.com</span>
+              <span class="detail-hint">Haz clic para seleccionar y copiar</span>
             </div>
-            <form class="contact-form" action="https://formspree.io/f/xblyoppy" method="POST">
-                <input type="hidden" name="_subject" value="Nuevo Mensaje de Contacto desde la Web">
-                <label>
-                    <span>Nombre</span>
-                    <input type="text" id="name" name="name" autocomplete="name" required>
-                </label>
-                <label>
-                    <span>Email</span>
-                    <input type="email" id="email" name="email" autocomplete="email" required>
-                </label>
-                <label>
-                    <span>Mensaje</span>
-                    <textarea id="message" name="message" rows="4" autocomplete="off" required></textarea>
-                </label>
-                <button type="submit" class="btn btn-primary" id="form-submit-button"></button>
-            </form>
+            <a class="detail detail-link"
+               href="https://maps.app.goo.gl/GivF4zx98tFKT1pZ6"
+               target="_blank" rel="noopener">
+              <span class="detail-label">Oficina</span>
+              <span class="detail-value">BearSoft · La Paz, Bolivia</span>
+              <span class="detail-hint">Ver en Google Maps →</span>
+            </a>
+          </div>
         </div>
-    </section>
+      </div>
+    </div>
+  </section>
 
 </main>
 
-<footer class="site-footer">
-    <div class="container footer-grid">
-        <div>
-            <span class="brand-text">Bear<span class="accent">Soft</span></span>
-            <p class="muted">SmartDecisions — decisiones comerciales con datos.</p>
-        </div>
-        <p class="muted" id="copyright-year"></p>
+<footer>
+  <div class="wrap">
+    <div class="foot-banner">
+      <img src="assets/web/logo.png" alt="BearSoft" width="1200" height="400">
     </div>
+    <p id="copyright" class="foot-line">La Paz, Bolivia</p>
+    <p class="visit-note" id="visitNote" hidden></p>
+  </div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-<script src="./js/script.js"></script>
+<script>
+document.getElementById('copyright').textContent =
+  `© ${new Date().getFullYear()} · La Paz, Bolivia`;
+
+/**
+ * Where this visitor is connecting from, shown in the footer.
+ *
+ * It is a courtesy, not analytics: the same information the server already
+ * sees, said out loud. The traffic figures come from CloudFront's own logs
+ * (`tools/traffic_report.py`), which count every request without asking the
+ * visitor for anything and do not depend on a third party.
+ *
+ * Best effort: if the lookup is unreachable the footer simply stays as it was.
+ */
+(function visitNote() {
+  const note = document.getElementById('visitNote');
+  if (!note) return;
+
+  fetch('https://ipwho.is/')
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      if (!data || !data.success) return;
+      const place = [data.city, data.country].filter(Boolean).join(', ');
+      note.textContent = place
+        ? `Nos visitas desde ${place} · ${data.ip}`
+        : `Nos visitas desde ${data.ip}`;
+      note.hidden = false;
+    })
+    .catch(() => { /* sin ubicación, el pie sigue igual */ });
+})();
+
+/**
+ * Constellation behind the hero: points that drift and link when they come
+ * close. Written here rather than pulled from a CDN — it is forty lines, it
+ * costs one request less, and the palette is the brand's instead of a library
+ * default. It stops entirely when the reader asked for less motion.
+ */
+(function constellation() {
+  const canvas = document.getElementById('net');
+  if (!canvas || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const context = canvas.getContext('2d');
+  const points = [];
+  let width = 0, height = 0;
+
+  function palette() {
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return dark ? { dot: '106,166,232', line: '106,166,232' }
+                : { dot: '47,111,181', line: '18,121,111' };
+  }
+
+  function resize() {
+    const ratio = window.devicePixelRatio || 1;
+    width = canvas.clientWidth;
+    height = canvas.clientHeight;
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    const wanted = Math.min(90, Math.round((width * height) / 14000));
+    points.length = 0;
+    for (let index = 0; index < wanted; index += 1) {
+      points.push({
+        x: Math.random() * width, y: Math.random() * height,
+        dx: (Math.random() - 0.5) * 0.32, dy: (Math.random() - 0.5) * 0.32,
+        r: 1 + Math.random() * 1.7
+      });
+    }
+  }
+
+  function frame() {
+    const colors = palette();
+    context.clearRect(0, 0, width, height);
+
+    for (const point of points) {
+      point.x += point.dx; point.y += point.dy;
+      if (point.x < 0 || point.x > width) point.dx *= -1;
+      if (point.y < 0 || point.y > height) point.dy *= -1;
+    }
+
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const distance = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y);
+        if (distance > 140) continue;
+        context.strokeStyle = `rgba(${colors.line},${0.2 * (1 - distance / 140)})`;
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(points[i].x, points[i].y);
+        context.lineTo(points[j].x, points[j].y);
+        context.stroke();
+      }
+    }
+
+    context.fillStyle = `rgba(${colors.dot},0.28)`;
+    for (const point of points) {
+      context.beginPath();
+      context.arc(point.x, point.y, point.r, 0, Math.PI * 2);
+      context.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+  requestAnimationFrame(frame);
+})();
+</script>
 </body>
 </html>

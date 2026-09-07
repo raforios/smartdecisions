@@ -4,34 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rutas de visita — SmartDecisions</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=58befa6b25">
+    <link rel="stylesheet" href="../styles/demo.css?v=016300b357">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="">
-    <link rel="stylesheet" href="routes.css?v=94a5f4a663">
-    <link rel="icon" type="image/png" sizes="64x64" href="../../assets/favicon-bear-64.png?v=5">
-    <link rel="icon" type="image/png" sizes="32x32" href="../../assets/favicon-bear-32.png?v=5">
-    <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png?v=5">
-    <script src="../js/config.js?v=6f757ca564"></script>
-    <script src="../js/auth.js?v=ee49f43985" defer></script>
+    <link rel="stylesheet" href="routes.css?v=32c696ddf7">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=5">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=5">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=5">
+    <script src="../js/config.js?v=cea826bc9c"></script>
+    <script src="../js/auth.js?v=33efdcbe59" defer></script>
     <script src="../js/api.js?v=3ed1e6bc89" defer></script>
     <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin="" defer></script>
-    <script src="routes.js?v=1482e10cb4" defer></script>
+    <script src="routes.js?v=cbe5136a0d" defer></script>
 </head>
 <body>
 
 <header class="demo-header">
     <div class="container demo-nav">
-        <a href="../home.html" class="brand">
-            <img src="../../assets/bear-face.jpg" alt="" aria-hidden="true">
+        <a href="/home.html" class="brand">
+            <img src="/assets/bear-face.jpg" alt="" aria-hidden="true">
             <span class="brand-text">Smart<span class="accent">Decisions</span></span>
         </a>
         <div class="demo-nav-actions">
-            <a href="../home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <a href="/home.html" class="btn btn-ghost btn-small">← Módulos</a>
             <span class="session-chip" id="sessionChip" hidden></span>
             <span class="user-chip" id="userChip">…</span>
             <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
@@ -118,7 +119,9 @@
                 </div>
 
                 <div class="card stops-card" id="stopsCard" hidden>
-                    <h3>Orden de visita</h3>
+                    <div class="card-head" id="stopsHead">
+                        <h3>Orden de visita</h3>
+                    </div>
                     <div class="table-wrapper">
                         <table class="data-table" id="stopsTable">
                             <thead><tr>
@@ -130,6 +133,16 @@
                             </tr></thead>
                             <tbody></tbody>
                         </table>
+                    </div>
+                    <div class="pager" id="stopsPager" hidden>
+                        <span class="pager-count" id="stopsCount"></span>
+                        <div class="pager-controls">
+                            <button type="button" class="btn btn-ghost btn-small"
+                                    id="stopsPrev">← Anterior</button>
+                            <span class="pager-page" id="stopsPage"></span>
+                            <button type="button" class="btn btn-ghost btn-small"
+                                    id="stopsNext">Siguiente →</button>
+                        </div>
                     </div>
                 </div>
             </section>

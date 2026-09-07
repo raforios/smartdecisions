@@ -145,7 +145,7 @@
 }
 .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
 .tier-high { background: #2d7d46; }
-.tier-medium { background: #c4a378; }
+.tier-medium { background: #12796f; }
 .tier-low { background: #5e6580; }
 
 .tier-badge {
@@ -157,7 +157,7 @@
     color: #fff;
 }
 .tier-badge.tier-high { background: #2d7d46; }
-.tier-badge.tier-medium { background: #c4a378; color: var(--text-strong); }
+.tier-badge.tier-medium { background: #dff1ee; color: #0d5c55; }
 .tier-badge.tier-low { background: #5e6580; }
 
 /* --- Stops table --- */
@@ -193,3 +193,58 @@
    stayed on top of the map, and the period bar showed before it had dates.
    This makes hiding work regardless of what the layout rules say. */
 [hidden] { display: none !important; }
+
+/* Paginated stops: the card keeps one height whether a day has eight stops or
+   eighty. A table that grows with the data pushes the map off the screen and
+   makes every day look like a different screen. */
+.pager {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: .9rem;
+    padding-top: .8rem;
+    border-top: 1px solid #eceff5;
+}
+
+.pager-count { font-size: .85rem; color: #5e6580; }
+
+.pager-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+
+.pager-page {
+    font-size: .85rem;
+    color: #5e6580;
+    font-variant-numeric: tabular-nums;
+    min-width: 3.5rem;
+    text-align: center;
+}
+
+.pager button[disabled] { opacity: .4; cursor: default; }
+
+/* Filler rows hold the height on the last page without showing anything. */
+.row-filler td { border-bottom-color: transparent; }
+
+
+/* Card header: title on the left, its controls on the right. The AI button
+   belongs here and not at the foot of the card, where it read as a control for
+   whatever came after it. */
+.card-head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: .9rem;
+}
+
+.card-head h3 { margin: 0; }
+
+.card-head .ai-ask { margin-left: auto; }
+
+/* Cuando el panel se abre entre la cabecera y la tabla necesita aire de los
+   dos lados, o queda pegado al encabezado de columnas. */
+.card-head + .ai-answer { margin-bottom: 1.4rem; }

@@ -649,9 +649,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.SD_AI.registerView('sale_scenario', () => ({
         minerals: state.minerals, rate: state.rate, days_ahead: state.days
     }));
-    window.SD_AI.mountExplain('mineralsAi', 'minerals_forecast');
-    window.SD_AI.mountExplain('rateAi', 'rate_forecast');
-    window.SD_AI.mountExplain('scenarioAi', 'sale_scenario');
+    window.SD_AI.mountExplain('mineralsAi', 'minerals_forecast',
+                             qs('#mineralsPanel').querySelector('.panel-head'));
+    window.SD_AI.mountExplain('rateAi', 'rate_forecast',
+                             qs('#ratePanel').querySelector('.panel-head'));
+    window.SD_AI.mountExplain('scenarioAi', 'sale_scenario',
+                             qs('#scenarioPanel').querySelector('.panel-head'));
 
     run();
 });

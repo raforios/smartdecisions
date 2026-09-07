@@ -98,7 +98,8 @@
         if (isAuthenticated()) {
             return true;
         }
-        const next = encodeURIComponent(window.location.pathname);
+        // Full path, so a module with query parameters comes back as it was.
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `${window.SD_CONFIG.LOGIN_PATH}?next=${next}`;
         return false;
     }

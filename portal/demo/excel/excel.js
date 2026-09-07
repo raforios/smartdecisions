@@ -1674,5 +1674,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // The interpretation layer reads exactly what each analysis returned: the
+    // cached payload is the backend's own response, so nothing is re-shaped for
+    // it. The button only appears where SD_CONFIG.AI_URL is configured.
+    const AI_VIEWS = {
+        stepDashboard: ['commercial_summary', 'summary'],
+        stepOpportunities: ['opportunities', 'opportunities'],
+        stepSegmentation: ['segmentation', 'segmentation'],
+        stepForecast: ['sales_forecast', 'forecast'],
+        stepPortfolio: ['portfolio', 'portfolio']
+    };
+
+    if (window.SD_AI) {
+        Object.entries(AI_VIEWS).forEach(([sectionId, [viewId, kind]]) => {
+            window.SD_AI.registerView(viewId, () => {
+                const cached = cachedResult(kind);
+                return cached ? cached.payload : null;
+            });
+            const section = document.getElementById(sectionId);
+            const head = section && section.querySelector('.section-head');
+            if (head) window.SD_AI.mountExplain(head, viewId, head);
+        });
+    }
+
     if (state.datasetId) restoreDataset();
 });
