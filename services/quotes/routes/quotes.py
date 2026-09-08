@@ -2,11 +2,12 @@
     QUOTES: routes handler
 '''
 from datetime import date as date_type
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
 from controllers.quotes import (
+    get_bench_controller,
     get_forecast_controller,
     get_history_controller,
     sale_scenario_controller,
@@ -15,6 +16,7 @@ from controllers.quotes import (
 from models.quotes import USD
 from schemas.quotes import (
     ExchangeRateHistory,
+    ModelBench,
     RateForecast,
     SaleScenario,
     SaleScenarioRequest,
@@ -147,6 +149,42 @@ async def get_rate_forecast_endpoint(
     return await get_forecast_controller(
         days_ahead = days_ahead,
         currency = currency,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/exchange-rates/bench',
+    response_model = ModelBench,
+    status_code = status.HTTP_200_OK,
+    summary = 'Compare projection models on the same series.',
+    description = 'Runs several models over the stored series and returns each '
+                  'one with the error it actually made, ordered best first. '
+                  'Seeing them together answers what none of them answers '
+                  'alone: how much the projection depends on the model. Where '
+                  'they agree the figure belongs to the market; where they '
+                  'diverge it belongs to the model.'
+)
+async def get_bench_endpoint(
+    request: Request,
+    days_ahead: int = Query(30, ge = 1, le = 90, description = 'Días a proyectar.'),
+    models: Optional[List[str]] = Query(
+        None, description = 'Modelos a correr. Omitir para correr todos.'
+    ),
+    currency: str = Query(USD, min_length = 3, max_length = 3,
+                          description = 'Código ISO 4217.'),
+    current_user: str = Depends(get_current_user)
+) -> ModelBench:
+    ''' Endpoint que compara modelos de proyección. '''
+    message = (f'User: {current_user}. Requested a {days_ahead}-day '
+               f'{currency} model bench.')
+    logger.info(message)
+
+    return await get_bench_controller(
+        days_ahead = days_ahead,
+        currency = currency,
+        models = models,
         current_user = current_user,
         request = request
     )

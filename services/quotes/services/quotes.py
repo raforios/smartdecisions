@@ -29,9 +29,12 @@ from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 from services.quotes_utils import get_rate, put_rate, query_rates
+from services.forecast_models import MODELS
 from services.rate_forecast import (
     backtest_windows,
-    project as project_rate
+    confidence_for,
+    project as project_rate,
+    run_bench
 )
 from services.utils import get_current_time_gmt, handle_service_errors
 
@@ -455,8 +458,70 @@ async def scheduled_sync_service(currency: str = USD) -> Dict[str, Any]:
     )
 
 
+@handle_service_errors('QUOTES')
+async def get_bench_service(
+    days_ahead: int = SCENARIO_DEFAULT_DAYS,
+    currency: str = USD,
+    models: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    '''
+    Corre varios modelos sobre la misma serie y los devuelve medidos.
+
+    Sin `models` corre todo el banco. Cada uno viene con su proyección y con el
+    error que cometió al re-correr la serie, ordenados del que menos erró al que
+    más — incluido el que está por defecto cuando pierde, que es exactamente lo
+    que hay que poder ver.
+
+    Args:
+        days_ahead (int): Días a proyectar.
+        currency (str): Código ISO 4217.
+        models (List[str] | None): Modelos a correr. None corre todos.
+
+    Returns:
+        Dict[str, Any]: Payload con forma de ModelBench.
+
+    Raises:
+        InvalidInputError: Si el horizonte está fuera de rango.
+        ServiceUnavailableError: Si todavía no hay cotizaciones guardadas.
+    '''
+    if days_ahead < 1 or days_ahead > SCENARIO_MAX_DAYS:
+        raise InvalidInputError(detail = QuotesError.INVALID_DATE_RANGE.value)
+
+    history = stored_rates(currency)
+    if not history:
+        raise ServiceUnavailableError(detail = QuotesError.NO_RATE_PUBLISHED.value)
+
+    chosen = [name for name in (models or list(MODELS)) if name in MODELS]
+    if not chosen:
+        raise InvalidInputError(detail = QuotesError.UNKNOWN_MODEL.value)
+
+    runs = run_bench(history, days_ahead, chosen)
+    values = [item.official_rate for item in history]
+
+    message = (
+        f'{currency} bench over {len(history)} observation(s): '
+        f'{len(runs)} model(s) at {days_ahead} day(s).'
+    )
+    logger.info(message)
+    return {
+        'currency': currency,
+        'days_ahead': days_ahead,
+        'confidence': confidence_for(len(history)),
+        'last_rate': history[-1].official_rate,
+        'last_date': history[-1].date,
+        'valid_from': validity_of(history[-1].date)[0],
+        'valid_to': validity_of(history[-1].date)[1],
+        'windows': backtest_windows(values, days_ahead),
+        'history': [
+            {'date': item.date, 'rate': item.official_rate} for item in history
+        ],
+        'runs': runs,
+    }
+
+
 __all__ = [
     'FLOAT_REGIME_START',
+    'get_bench_service',
     'get_forecast_service',
     'get_history_service',
     'validity_of',

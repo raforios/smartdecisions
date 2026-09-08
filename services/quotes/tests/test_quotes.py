@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError, RateConfidence
-from services import bcb_source, quotes, rate_forecast
+from services import bcb_source, forecast_models, quotes, rate_forecast
 from services.exceptions import ServiceUnavailableError
 
 from tests.conftest import build_history
@@ -487,3 +487,73 @@ def test_the_sync_of_a_weekday_stops_at_today(store): # pylint: disable=unused-a
         _run(quotes.sync_rates_service(days_back = 3))
 
     assert max(asked) == date(2026, 9, 2)
+
+
+def test_the_bench_runs_every_model_and_ranks_them_by_error(store):
+    """
+        Los modelos se devuelven ordenados por lo que erraron de verdad.
+
+        El orden es el contrato: lo primero que se lee es el mejor, y por eso el
+        modelo por defecto tiene que poder aparecer abajo. Un banco que siempre
+        pusiera al favorito primero no serviria para elegir.
+    """
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    result = _run(quotes.get_bench_service(days_ahead = 15))
+    errors = [run['mean_absolute_error'] for run in result['runs']
+              if run['mean_absolute_error'] is not None]
+
+    assert len(result['runs']) == len(forecast_models.MODELS)
+    assert errors == sorted(errors)
+    for run in result['runs']:
+        assert len(run['projected']) == 15
+
+
+def test_the_bench_can_run_a_subset(store):
+    """El banco corre lo que se le pida, para poder ir sumando modelos."""
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    result = _run(quotes.get_bench_service(
+        days_ahead = 15, models = ['NAIVE', 'DAMPED_TREND']
+    ))
+
+    assert len(result['runs']) == 2
+    assert {run['model'] for run in result['runs']} == {'NAIVE', 'DAMPED_TREND'}
+
+
+def test_an_unknown_model_is_refused(store):
+    """Pedir solo un modelo que no existe es un error, no un banco vacio."""
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    with pytest.raises(HTTPException) as failure:
+        _run(quotes.get_bench_service(days_ahead = 15, models = ['ARIMA_MAGICO']))
+
+    assert QuotesError.UNKNOWN_MODEL.value in str(failure.value.detail)
+
+
+def test_every_model_answers_the_horizon_asked_for():
+    """
+        Todo modelo devuelve tantos valores como pasos se le piden. Es la unica
+        garantia que el banco necesita para recorrerlos sin conocerlos.
+    """
+    series = [10.0 + 0.05 * index for index in range(40)]
+
+    for name, projector in forecast_models.MODELS.items():
+        projected = projector(series, 12)
+        assert len(projected) == 12, name
+        assert all(isinstance(value, float) for value in projected), name
+
+
+def test_a_flat_series_is_projected_flat_by_every_model():
+    """
+        Sin movimiento no hay tendencia que arrastrar. Un modelo que invente
+        pendiente sobre una serie plana esta leyendo ruido.
+    """
+    flat = [10.0] * 40
+
+    for name, projector in forecast_models.MODELS.items():
+        projected = projector(flat, 10)
+        assert all(abs(value - 10.0) < 1e-6 for value in projected), name

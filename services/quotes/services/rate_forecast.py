@@ -17,13 +17,14 @@
 '''
 from dataclasses import dataclass
 from datetime import date as date_type, timedelta
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from models.quotes import ExchangeRateItem
 from schemas.quotes import RateConfidence
 from services.environment import load_and_validate_env_vars
+from services.forecast_models import MODELS, damped_trend
 from services.logger_config import custom_logger as logger
 
 
@@ -117,40 +118,6 @@ def confidence_for(sample_size: int) -> RateConfidence:
     return RateConfidence.LOW
 
 
-def damped_trend(values: List[float], days_ahead: int) -> List[float]:
-    '''
-        Projects a series with exponential smoothing and a damped trend.
-
-        Replaces the least-squares line that was here before. On the stored
-        series a straight line was the **worst** of every option measured: at a
-        30-day horizon it missed by 1.07 Bs against 0.33 for simply repeating
-        today's rate. An exchange rate behaves close to a random walk — the
-        lag-1 autocorrelation of the level is 0.995 — so a line fitted over two
-        months extrapolates a slope the market does not honour.
-
-        This keeps the last observation as the level and adds a trend that
-        **fades** with distance: `phi` below 1 means each further day inherits
-        less of the recent drift. That is what stops the projection from running
-        away, and it is why this beats repeating today's value at 7 and 15 days
-        while a line loses at every horizon.
-
-        Args:
-            values (List[float]): Observed series, oldest first.
-            days_ahead (int): How many steps to project.
-
-        Returns:
-            List[float]: The projected values.
-    '''
-    level, trend = values[0], values[1] - values[0]
-    for value in values[1:]:
-        previous = level
-        level = ALPHA * value + (1 - ALPHA) * (level + PHI * trend)
-        trend = BETA * (level - previous) + (1 - BETA) * PHI * trend
-
-    damping = np.cumsum(PHI ** np.arange(1, days_ahead + 1))
-    return [float(value) for value in level + damping * trend]
-
-
 def backtest_windows(values: List[float], days_ahead: int) -> int:
     '''
         How many replays a series affords at a horizon.
@@ -222,6 +189,101 @@ def baseline_error(values: List[float], days_ahead: int) -> Optional[float]:
     if len(errors) < BACKTEST_MIN_WINDOWS:
         return None
     return round(float(np.mean(errors)), ERROR_DECIMALS)
+
+
+def error_of(model: str, values: List[float], days_ahead: int) -> Optional[float]:
+    '''
+        Mide cuánto ha errado un modelo sobre esta misma serie.
+
+        No es un intervalo de confianza asumido: la serie se vuelve a correr
+        desde cada punto de partida que deje espacio al horizonte, el modelo
+        proyecta desde ahí y se promedian los fallos absolutos. Es la única
+        medida que no se puede maquillar.
+
+        Args:
+            model (str): Nombre del modelo en el registro.
+            values (List[float]): Serie observada.
+            days_ahead (int): Horizonte a medir.
+
+        Returns:
+            float | None: Error absoluto medio, o None si hay muy pocas ventanas.
+    '''
+    projector = MODELS.get(model)
+    if projector is None:
+        return None
+
+    errors: List[float] = []
+    for cut in range(BACKTEST_MIN_TRAIN, len(values) - days_ahead + 1):
+        forecast = np.array(projector(values[:cut], days_ahead))
+        actual = np.array(values[cut:cut + days_ahead])
+        errors.append(float(np.mean(np.abs(forecast - actual))))
+
+    if len(errors) < BACKTEST_MIN_WINDOWS:
+        return None
+    return round(float(np.mean(errors)), ERROR_DECIMALS)
+
+
+def run_bench(
+    rates: List[ExchangeRateItem],
+    days_ahead: int,
+    models: List[str]
+) -> List[Dict[str, Any]]:
+    '''
+        Corre varios modelos sobre la misma serie y los devuelve medidos.
+
+        Existe para poder verlos juntos, que responde una pregunta mejor que
+        cualquiera por separado: **cuánto depende la respuesta del modelo**.
+        Donde las proyecciones coinciden, la cifra es del negocio; donde se
+        separan, es del modelo, y ahí es donde hay que desconfiar.
+
+        Vienen ordenados por su error medido, del mejor al peor. Eso los expone
+        a todos, incluido el que está por defecto cuando pierde — que es
+        precisamente lo que hay que poder ver.
+
+        Args:
+            rates (List[ExchangeRateItem]): Cotizaciones observadas.
+            days_ahead (int): Días a proyectar.
+            models (List[str]): Modelos a correr; los desconocidos se ignoran.
+
+        Returns:
+            List[Dict[str, Any]]: Un bloque por modelo, mejor primero.
+    '''
+    observed = sorted(rates, key = lambda item: item.date)
+    values = [float(item.official_rate) for item in observed]
+    dates = [
+        observed[-1].date + timedelta(days = offset)
+        for offset in range(1, days_ahead + 1)
+    ]
+    last_rate = values[-1]
+
+    results: List[Dict[str, Any]] = []
+    for name in models:
+        projector = MODELS.get(name)
+        if projector is None:
+            continue
+        projected = projector(values, days_ahead)
+        change = (
+            round((projected[-1] - last_rate) / last_rate * 100, CHANGE_DECIMALS)
+            if last_rate else None
+        )
+        results.append({
+            'model': name,
+            'change_percent': change,
+            'final_rate': round(projected[-1], 4),
+            'mean_absolute_error': error_of(name, values, days_ahead),
+            'projected': [
+                {'date': day, 'rate': round(value, 4)}
+                for day, value in zip(dates, projected)
+            ],
+        })
+
+    # Los que no se pudieron medir van al final: un modelo sin error conocido no
+    # puede presentarse como el mejor.
+    results.sort(key = lambda item: (
+        item['mean_absolute_error'] is None,
+        item['mean_absolute_error'] or 0.0
+    ))
+    return results
 
 
 def project(rates: List[ExchangeRateItem], days_ahead: int) -> RateProjection:

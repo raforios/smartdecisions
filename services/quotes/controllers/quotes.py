@@ -2,19 +2,21 @@
     QUOTES controllers.
 '''
 from datetime import date as date_type
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import Request
 
 from models.quotes import USD
 from schemas.quotes import (
     ExchangeRateHistory,
+    ModelBench,
     RateForecast,
     SaleScenario,
     SaleScenarioRequest,
     SyncResult
 )
 from services.quotes import (
+    get_bench_service,
     get_forecast_service,
     get_history_service,
     sale_scenario_service,
@@ -121,3 +123,30 @@ async def get_forecast_controller(
     '''
     result = await get_forecast_service(days_ahead = days_ahead, currency = currency)
     return RateForecast(**result)
+
+
+@handle_service_errors('QUOTES')
+async def get_bench_controller(
+    days_ahead: int,
+    currency: str,
+    models: Optional[List[str]],
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> ModelBench:
+    '''
+        Corre varios modelos sobre la serie y los devuelve medidos.
+
+        Args:
+            days_ahead (int): Días a proyectar.
+            currency (str): Código ISO 4217.
+            models (List[str] | None): Modelos a correr; None corre todos.
+            current_user (str): Llamador autenticado.
+            request (Request): Petición entrante, usada por el decorador de auditoría.
+
+        Returns:
+            ModelBench: Los modelos corridos, del que menos erró al que más.
+    '''
+    result = await get_bench_service(
+        days_ahead = days_ahead, currency = currency, models = models
+    )
+    return ModelBench(**result)

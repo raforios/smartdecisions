@@ -23,6 +23,7 @@ class QuotesError(str, Enum):
     NO_RATE_PUBLISHED = 'NO_RATE_PUBLISHED'
     EMPTY_PERIOD = 'EMPTY_PERIOD'
     INVALID_DATE_RANGE = 'INVALID_DATE_RANGE'
+    UNKNOWN_MODEL = 'UNKNOWN_MODEL'
 
 
 class ExchangeRatePoint(BaseModel):
@@ -103,6 +104,42 @@ class ForecastAccuracy(BaseModel):
         None, description = 'Average miss of the baseline, same measurement.'
     )
     windows: int = Field(0, ge = 0, description = 'Replays the average is over.')
+
+
+class ModelRun(BaseModel):
+    '''
+        Un modelo corrido sobre la serie, con lo que ha errado de verdad.
+
+        `mean_absolute_error` viene de re-correr la serie desde cada punto de
+        partida, no de un intervalo asumido. Es None cuando la historia no deja
+        suficientes ventanas para medirlo: mejor sin número que con uno que
+        parece medido y no lo está.
+    '''
+    model: str
+    change_percent: Optional[float] = None
+    final_rate: Optional[float] = None
+    mean_absolute_error: Optional[float] = None
+    projected: List[ExchangeRatePoint] = Field(default_factory = list)
+
+
+class ModelBench(BaseModel):
+    '''
+        Varios modelos sobre la misma serie, ordenados por su error.
+
+        Verlos juntos responde algo que ninguno responde solo: **cuánto depende
+        la respuesta del modelo**. Donde las proyecciones coinciden, la cifra es
+        del negocio; donde se separan, es del modelo.
+    '''
+    currency: str
+    days_ahead: int = Field(..., ge = 1)
+    confidence: RateConfidence
+    last_rate: Optional[float] = None
+    last_date: Optional[date] = None
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+    windows: int = Field(0, ge = 0, description = 'Réplicas que promedia el error.')
+    history: List[ExchangeRatePoint] = Field(default_factory = list)
+    runs: List[ModelRun] = Field(default_factory = list)
 
 
 class SaleOutcome(BaseModel):
