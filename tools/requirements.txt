@@ -1,0 +1,36 @@
+fastapi
+python-dotenv
+SQLAlchemy
+uvicorn
+pylint
+numpy
+pandas
+PyJWT
+passlib
+bcrypt==4.0.1
+geopy
+psycopg2-binary
+python-multipart
+networkx
+osmnx
+scikit-learn
+
+mangum
+PyMySQL
+# cvxpy
+
+ipywidgets
+ipympl
+matplotlib
+openpyxl
+folium
+googlemaps
+seaborn
+plotly
+geopandas
+nbformat
+
+
+# aws-cdk-lib
+# speedtest
+tqdm
