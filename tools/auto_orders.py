@@ -81,8 +81,8 @@ def login(url) -> str :
             token: JSON TOKEN
     '''
     data = {
-        'username' : 'raforios@gmail.com',
-        'password' : 'MotoAzud'
+        'username' : 'XXXXX',
+        'password' : 'XXXXXX'
     }
     endpoint_login = '/auth/login'
     url_login = f'{url}/{endpoint_login}'
