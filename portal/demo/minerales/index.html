@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cotizaciones y proyecciones — SmartDecisions</title>
     <link rel="stylesheet" href="../styles/demo.css?v=016300b357">
-    <link rel="stylesheet" href="minerales.css?v=b84e66d852">
+    <link rel="stylesheet" href="minerales.css?v=0e3ffa13c0">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=5">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=5">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=5">
@@ -15,7 +15,7 @@
     <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
-    <script src="minerales.js?v=86a4af0e7c" defer></script>
+    <script src="minerales.js?v=bc3a0cc4ff" defer></script>
 </head>
 <body>
 
@@ -54,6 +54,14 @@
                 <div class="control">
                     <label for="daysInput">Plazo (días)</label>
                     <input type="number" id="daysInput" min="1" max="90" step="1" value="30">
+                </div>
+                <div class="control">
+                    <label for="mineralModel">Modelo (minerales)</label>
+                    <select id="mineralModel">
+                        <option value="DAMPED_TREND">Tendencia amortiguada</option>
+                        <option value="LINEAR">Tendencia lineal</option>
+                        <option value="MOVING_AVERAGE">Promedio móvil</option>
+                    </select>
                 </div>
                 <button class="btn btn-primary" id="runButton">Proyectar</button>
             </div>
@@ -133,6 +141,58 @@
                     </thead>
                     <tbody></tbody>
                 </table>
+            </div>
+
+            <div class="bench">
+                <div class="controls-row">
+                    <div class="control">
+                        <label for="rateModel">Modelo de proyección</label>
+                        <select id="rateModel"></select>
+                    </div>
+                    <div class="control control-wide">
+                        <span class="model-note" id="rateModelNote"></span>
+                    </div>
+                </div>
+
+                <div class="table-scroll rate-table-scroll">
+                    <table class="data-table" id="forecastTable">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Día</th>
+                                <th class="num">Bs por USD</th>
+                                <th class="num">Variación</th>
+                                <th class="num">Desde hoy</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <details class="bench-detail">
+                    <summary>Cómo se comparan los modelos</summary>
+                    <p class="control-hint">
+                        Cada modelo se mide re-corriendo la serie desde cada punto
+                        de partida posible y promediando lo que erró al proyectar
+                        <strong id="benchHorizon">30</strong> días. Es un promedio
+                        histórico, no el error de la cifra de arriba: un modelo
+                        puede acertar hoy y ser peor en promedio, o al revés.
+                    </p>
+                    <div class="table-scroll">
+                        <table class="data-table" id="benchTable">
+                            <thead>
+                                <tr>
+                                    <th>Modelo</th>
+                                    <th class="num">Proyecta</th>
+                                    <th class="num">Cambio</th>
+                                    <th class="num">Error medio</th>
+                                    <th>Sobre el horizonte</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </details>
             </div>
 
             <p class="control-hint">

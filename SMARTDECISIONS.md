@@ -450,7 +450,31 @@ Las que siguen condicionando el código. Las que se revirtieron no están.
 
 ## 8. Lo último que se hizo
 
-**Semana del 1 al 7 de septiembre de 2026.**
+**8 de septiembre de 2026 — tras la primera reunión con clientes.**
+
+1. **Plantilla de ventas restaurada.** Daba 503: al limpiar duplicados en S3 se
+   borró `ingest/templates/template_ventas_v1.xlsx`. Ahora se **genera desde el
+   contrato** (`tools/build_sales_template.py`), así no puede divergir del
+   validador. Verificado: pasa su propia validación.
+2. **Banco de modelos en Cotizaciones.** Nueve modelos —ingenuo, promedio,
+   deriva, lineal, promedio móvil, suavizado simple, Holt, tendencia amortiguada
+   y Theta— que se activan y se acumulan en el mismo gráfico, cada uno con su
+   error medido por backtest y su veredicto contra el ingenuo. Sin ARIMA a
+   propósito: con 70 observaciones no hay con qué estimar sus órdenes, y un
+   modelo vendido como sofisticado que pierde contra "mañana es igual que hoy"
+   es un pasivo frente a un cliente.
+   *Resultado a 7 días la amortiguada gana; a 30 pierde contra el ingenuo. Eso
+   se ve en pantalla, no se esconde.*
+3. **Gráfico de productos legible:** los nombres largos se encimaban. Fuente
+   menor, ancho de eje fijo, nombres cortados con el completo en el tooltip.
+4. **Pronóstico comercial comparado:** ahora trae los dos métodos y los dibuja
+   juntos. Donde se separan es donde la proyección deja de ser sólida.
+5. **Segmentación a 10 filas**, para que la tabla quepa sin desplazar.
+
+**Decidido:** ML_FUNCTIONS se mantiene desplegado (no representa costo); los
+cuadernos de capacitación se harán sólo si hacen falta.
+
+**Antes — semana del 1 al 7 de septiembre de 2026.**
 
 1. **Cotizaciones y proyecciones** completo: cotización oficial con su cadena de
    quincenas, tipo de cambio con vigencia de fin de semana, escenario de venta.

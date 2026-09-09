@@ -540,6 +540,10 @@ document.addEventListener('DOMContentLoaded', () => {
         moving_average: 'Media móvil'
     };
 
+    function otherMethod(method) {
+        return method === 'moving_average' ? 'linear' : 'moving_average';
+    }
+
     const ANALYTICS_ERRORS = {
         INVALID_DATE: 'La fecha no es válida. Usa el formato AAAA-MM-DD.',
         NO_DATE_COLUMN: 'El archivo no tiene una columna de fecha válida, ' +
@@ -615,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!cached) return;
         if (kind === 'forecast') {
             restoreForecastControls(cached.payload.params);
-            renderForecast(cached.payload.data);
+            renderForecast(cached.payload.data, cached.payload.compare);
             showAnalysisView('stepForecast', false);
         } else {
             ANALYSES[kind].render(cached.payload);
@@ -813,7 +817,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showAnalysisView('stepSegmentation');
     }
 
-    const SEGMENT_PAGE_SIZE = 20;
+    // Diez filas: la tabla cabe en pantalla sin desplazar, que es lo que
+    // permite compararlas de un vistazo. Veinte obligaba a bajar y perder de
+    // vista las primeras.
+    const SEGMENT_PAGE_SIZE = 10;
     let segmentPage = 0;
 
     function filteredSegmentClients() {
@@ -884,7 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cached = cachedResult('forecast');
         if (cached) {
             restoreForecastControls(cached.payload.params);
-            renderForecast(cached.payload.data);
+            renderForecast(cached.payload.data, cached.payload.compare);
             qs('#forecastNote').textContent =
                 `Método: ${FORECAST_METHODS[cached.payload.data.method] || ''} · ` +
                 `${cached.payload.data.months_ahead} meses proyectados. ` +
@@ -917,14 +924,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (group) params.group_by = group;
             if (state.period.from) params.date_from = state.period.from;
             if (state.period.to) params.date_to = state.period.to;
-            const data = await window.SD_API.get(
-                `${ANALYTICS_URL}/v1/analytics/forecast/${encodeURIComponent(state.datasetId)}`,
-                params
-            );
-            cacheResult('forecast', { data, params });
-            renderForecast(data);
-            note.textContent = `Método: ${FORECAST_METHODS[data.method] || ''} · ` +
-                `${data.months_ahead} meses proyectados.`;
+            // Both methods, always: seeing them apart tells you what one model
+            // says; seeing them together tells you how much the answer depends
+            // on the model, which is the useful question. Where the two lines
+            // separate is where the projection stops being solid.
+            const url =
+                `${ANALYTICS_URL}/v1/analytics/forecast/${encodeURIComponent(state.datasetId)}`;
+            const [primary, secondary] = await Promise.all([
+                window.SD_API.get(url, params),
+                window.SD_API.get(url, { ...params, method: otherMethod(params.method) })
+                    .catch(() => null)
+            ]);
+            cacheResult('forecast', { data: primary, compare: secondary, params });
+            renderForecast(primary, secondary);
+            note.textContent = secondary
+                ? `Comparando ${FORECAST_METHODS[primary.method]} contra ` +
+                  `${FORECAST_METHODS[secondary.method]} · ` +
+                  `${primary.months_ahead} meses proyectados.`
+                : `Método: ${FORECAST_METHODS[primary.method] || ''} · ` +
+                  `${primary.months_ahead} meses proyectados.`;
         } catch (error) {
             note.classList.add('error');
             note.textContent = error.message || 'No se pudo calcular el pronóstico.';
@@ -934,7 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderForecast(data) {
+    function renderForecast(data, compare) {
         const container = qs('#forecastCharts');
         container.innerHTML = '';
         const series = data.series || [];
@@ -947,19 +965,35 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'chart-card';
             const total = formatCurrency(serie.total_forecast);
+            const other = compare && (compare.series || [])
+                .find((item) => (item.name || '') === (serie.name || ''));
+            // Two totals side by side answer "how much does the method change
+            // the number", which is the reason for showing both at all.
+            const gap = other && serie.total_forecast
+                ? ` · el otro método proyecta ${formatCurrency(other.total_forecast)}`
+                : '';
             card.innerHTML = `<h3 class="chart-title">${escapeHtml(serie.name || 'Total')} ` +
-                `<span class="chart-sub">· proyección ${escapeHtml(total)}</span></h3>` +
+                `<span class="chart-sub">· proyección ${escapeHtml(total)}` +
+                `${escapeHtml(gap)}</span></h3>` +
                 `<canvas id="forecast_${index}"></canvas>`;
             container.appendChild(card);
 
             const hist = serie.history || [];
             const fore = serie.forecast || [];
+            // The same series computed with the other method, matched by name so
+            // a grouped forecast lines each group up with its own counterpart.
+            const twin = compare && (compare.series || [])
+                .find((other) => (other.name || '') === (serie.name || ''));
             // Continuous x-axis: historical months then projected months. The
             // forecast line starts from the last historical point for continuity.
             const labels = hist.map((p) => p.month).concat(fore.map((p) => p.month));
             const histData = hist.map((p) => p.amount).concat(fore.map(() => null));
             const foreData = hist.map((p, i) => (i === hist.length - 1 ? p.amount : null))
                 .concat(fore.map((p) => p.amount));
+            const twinData = twin
+                ? hist.map((p, i) => (i === hist.length - 1 ? p.amount : null))
+                    .concat((twin.forecast || []).map((p) => p.amount))
+                : null;
             makeChart(`forecast_${index}`, {
                 type: 'line',
                 data: {
@@ -967,8 +1001,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     datasets: [
                         { label: 'Histórico', data: histData, borderColor: BRAND[0],
                           backgroundColor: 'rgba(13,30,76,0.08)', fill: true, tension: 0.3 },
-                        { label: 'Pronóstico', data: foreData, borderColor: BRAND[1],
-                          borderDash: [6, 4], tension: 0.3 }
+                        { label: FORECAST_METHODS[data.method] || 'Pronóstico',
+                          data: foreData, borderColor: BRAND[1],
+                          borderDash: [6, 4], tension: 0.3 },
+                        ...(twinData ? [{
+                            label: FORECAST_METHODS[compare.method] || 'Alternativa',
+                            data: twinData, borderColor: '#12796f',
+                            borderDash: [2, 3], tension: 0.3, pointRadius: 2
+                        }] : [])
                     ]
                 },
                 options: {
@@ -1557,16 +1597,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     qs('#riskSearch').addEventListener('input', () => { riskPage = 0; renderRiskTable(); });
 
+    // Real product and client names run long — "Chocolate Barra Rellena 90g" —
+    // and Chart.js keeps the axis font at its default, so on a narrow screen the
+    // labels overlap into an unreadable stack. Smaller type, a cap on length and
+    // a fixed axis width keep every name legible; the tooltip still shows the
+    // full one.
+    const AXIS_LABEL_MAX = 26;
+
+    function shortLabel(text) {
+        const clean = dimensionLabel(text);
+        return clean.length > AXIS_LABEL_MAX
+            ? `${clean.slice(0, AXIS_LABEL_MAX - 1)}…`
+            : clean;
+    }
+
     function horizontalBar(canvasId, rows, label, valueKey = 'amount') {
         const items = rows || [];
+        const base = chartOptions('money');
         makeChart(canvasId, {
             type: 'bar',
             data: {
-                labels: items.map((r) => dimensionLabel(r.label)),
+                labels: items.map((r) => shortLabel(r.label)),
                 datasets: [{ label, data: items.map((r) => r[valueKey]), backgroundColor: BRAND[1] }]
             },
-            options: { ...chartOptions('money'), indexAxis: 'y' }
+            options: {
+                ...base,
+                indexAxis: 'y',
+                maintainAspectRatio: false,
+                layout: { padding: { right: 12 } },
+                scales: {
+                    y: {
+                        ticks: {
+                            font: { size: 11 },
+                            autoSkip: false,
+                            crossAlign: 'far'
+                        },
+                        grid: { display: false },
+                        afterFit: (scale) => { scale.width = 148; }
+                    },
+                    x: {
+                        ticks: { font: { size: 11 }, callback: (v) => formatCompact(v) },
+                        grid: { color: 'rgba(21,36,65,.06)' }
+                    }
+                },
+                plugins: {
+                    ...base.plugins,
+                    tooltip: {
+                        ...base.plugins.tooltip,
+                        callbacks: {
+                            ...base.plugins.tooltip.callbacks,
+                            // The axis may be truncated; the tooltip never is.
+                            title: (ctx) => dimensionLabel(items[ctx[0].dataIndex].label)
+                        }
+                    }
+                }
+            }
         });
+    }
+
+    // Axis ticks in full bolivianos crowd each other; 12.500 reads as 12,5 k.
+    function formatCompact(value) {
+        const number = Number(value) || 0;
+        if (Math.abs(number) >= 1000000) return `${(number / 1000000).toFixed(1)} M`;
+        if (Math.abs(number) >= 1000) return `${Math.round(number / 1000)} k`;
+        return String(number);
     }
 
     function chartOptions(format) {

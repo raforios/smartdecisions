@@ -312,7 +312,7 @@
     font-size: 0.98rem;
     color: var(--text-strong);
 }
-.chart-card canvas { max-height: 300px; }
+.chart-card canvas { height: 320px !important; max-height: 320px; }
 
 /* --- Forecast controls --- */
 .forecast-controls {
@@ -551,7 +551,7 @@
    Chart.js measures a canvas inside a hidden section it writes height:0, and
    the card then collapses to zero too — a feedback loop that leaves an empty
    card even after the section becomes visible. A floor on the canvas breaks it. */
-.chart-card canvas { min-height: 240px; }
+.chart-card canvas { height: 300px !important; min-height: 300px; }
 
 /* The `hidden` attribute is only a default of display:none, and any rule that
    sets `display` on the same element silently overrides it — the map overlay

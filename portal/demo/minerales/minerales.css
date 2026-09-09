@@ -322,3 +322,38 @@
 
 /* El panel abre entre la cabecera del panel y su contenido: aire abajo también. */
 .panel-head + .ai-answer { margin-bottom: 1.4rem; }
+
+/* --- Selector de modelo y su proyección ---------------------------------- */
+.bench { margin-top: 1.8rem; padding-top: 1.4rem; border-top: 1px solid #eceff5; }
+
+.control-wide { flex: 1 1 22rem; min-width: 0; }
+
+.model-note {
+    display: block;
+    font-size: .82rem;
+    line-height: 1.5;
+    color: #5e6580;
+    padding-top: 1.55rem;
+}
+
+#forecastTable { min-width: 34rem; }
+
+.bench-detail { margin-top: 1.4rem; }
+
+.bench-detail summary {
+    cursor: pointer;
+    font-size: .88rem;
+    font-weight: 600;
+    color: #2f6fb5;
+    padding: .4rem 0;
+}
+
+.bench-detail summary:hover { color: #255a94; }
+
+.bench-detail .control-hint { margin: .6rem 0 1rem; max-width: 46rem; }
+
+#benchTable { min-width: 38rem; }
+
+/* La fila del modelo elegido, destacada: la tabla explica por qué está
+   seleccionado, no compite con el selector. */
+.model-on td { font-weight: 600; background: #f4f8fd; }

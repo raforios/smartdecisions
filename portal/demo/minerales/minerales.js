@@ -14,7 +14,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.requireAuth()) return;
 
-    const { qs, toast, setButtonBusy } = window.SD_UI;
+    const { qs, qsAll, toast, setButtonBusy } = window.SD_UI;
 
     qs('#userChip').textContent = window.SD_AUTH.getEmail() || 'usuario';
     qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
@@ -65,7 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return SERVICE_ERRORS[error && error.code] || (error && error.message) || fallback;
     }
 
-    const state = { minerals: null, rate: null, days: 30 };
+    const state = { minerals: null, rate: null, bench: null,
+                    model: null, days: 30 };
 
     // --- formatting -------------------------------------------------------
 
@@ -130,7 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadMinerals(days) {
         const data = await window.SD_API.get(
-            `${MINING_URL}/v1/mining-analysis/forecast/prices`, { days_ahead: days }
+            `${MINING_URL}/v1/mining-analysis/forecast/prices`,
+            { days_ahead: days, method: qs('#mineralModel').value }
         );
         state.minerals = data;
         renderMinerals(data);
@@ -406,10 +408,98 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderRate(data) {
-        const projectedLabel = data.final_rate === null
-            ? 'Sin proyección'
-            : `${money(data.final_rate)} Bs`;
+        state.rate = data;
+        qs('#rateMeta').textContent =
+            `${data.history.length} días observados desde ${data.history[0].date}`;
+        renderRateTable(data);
+        qs('#ratePanel').hidden = false;
+    }
 
+    // --- modelos de proyección -------------------------------------------
+
+    const MODEL_LABELS = {
+        NAIVE: 'Sin cambio (referencia)',
+        MEAN: 'Promedio histórico',
+        DRIFT: 'Deriva',
+        LINEAR: 'Tendencia lineal',
+        MOVING_AVERAGE: 'Promedio móvil',
+        SIMPLE_EXPONENTIAL: 'Suavizado exponencial simple',
+        HOLT: 'Holt con tendencia',
+        DAMPED_TREND: 'Tendencia amortiguada',
+        THETA: 'Método Theta'
+    };
+
+    const MODEL_HINTS = {
+        NAIVE: 'Repite la última cotización. Es el rival a vencer: en tipos de '
+             + 'cambio casi nada le gana de forma sostenida a horizontes cortos.',
+        MEAN: 'Repite el promedio de toda la serie. Sirve de contraste: si gana, '
+            + 'la serie no tiene tendencia.',
+        DRIFT: 'Extiende la pendiente entre el primer y el último dato.',
+        LINEAR: 'Recta de mínimos cuadrados sobre toda la serie. Extrapola la '
+              + 'pendiente sin freno.',
+        MOVING_AVERAGE: 'Repite el promedio de los últimos días. Sin tendencia.',
+        SIMPLE_EXPONENTIAL: 'Nivel que sigue a la serie, cargando el peso en lo '
+                          + 'reciente. Sin tendencia.',
+        HOLT: 'Nivel más tendencia, sin amortiguar: la pendiente se mantiene.',
+        DAMPED_TREND: 'Nivel más tendencia que se desvanece con la distancia, '
+                    + 'para que la proyección se asiente en vez de dispararse.',
+        THETA: 'Promedia una recta de largo plazo con un suavizado que sigue lo '
+             + 'reciente. Fuerte en series cortas.'
+    };
+
+    const DEFAULT_MODEL = 'DAMPED_TREND';
+
+    async function loadBench(days) {
+        const data = await window.SD_API.get(
+            `${QUOTES_URL}/v1/quotes/exchange-rates/bench`, { days_ahead: days }
+        );
+        state.bench = data;
+        if (!state.model || !data.runs.some((run) => run.model === state.model)) {
+            state.model = DEFAULT_MODEL;
+        }
+        fillModelSelect(data);
+        renderModel();
+        renderBenchTable(data);
+    }
+
+    function fillModelSelect(data) {
+        const select = qs('#rateModel');
+        // En el orden en que el servicio los devolvió: del que menos erró al que
+        // más, para que la lista misma sea una recomendación.
+        select.innerHTML = data.runs.map((run) => {
+            const label = MODEL_LABELS[run.model] || run.model;
+            const error = run.mean_absolute_error === null
+                ? 'sin medir'
+                : `±${money(run.mean_absolute_error)}`;
+            return `<option value="${run.model}"${
+                run.model === state.model ? ' selected' : ''
+            }>${label} · ${error}</option>`;
+        }).join('');
+    }
+
+    function currentRun() {
+        if (!state.bench) return null;
+        return state.bench.runs.find((run) => run.model === state.model) || null;
+    }
+
+    /**
+     * La proyección del modelo elegido: gráfico, cifras y la serie día por día.
+     *
+     * Una sola línea proyectada, no nueve. Superponerlas contestaba una pregunta
+     * que nadie hizo y hacía ilegible la que importa — cuánto va a valer el
+     * dólar según el modelo que elegí.
+     */
+    function renderModel() {
+        const run = currentRun();
+        const data = state.bench;
+        if (!run || !data) return;
+
+        qs('#rateModelNote').textContent = MODEL_HINTS[run.model] || '';
+
+        // Cifras de cabecera, ahora del modelo elegido.
+        const projectedLabel = run.final_rate === null
+            ? 'Sin proyección'
+            : `${money(run.final_rate)} Bs`;
         qs('#rateFigures').innerHTML = `
             <div class="figure">
                 <span class="figure-label">${
@@ -429,8 +519,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="figure">
                 <span class="figure-label">Cambio</span>
-                <span class="figure-value ${changeClass(data.change_percent)}">${
-                    percent(data.change_percent)
+                <span class="figure-value ${changeClass(run.change_percent)}">${
+                    percent(run.change_percent)
                 }</span>
             </div>
             <div class="figure">
@@ -442,24 +532,81 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="figure figure-wide">
                 <span class="figure-label">Modelo</span>
                 <span class="figure-note">${
-                    data.accuracy
-                        ? accuracyNote(data.accuracy.method,
-                                       data.accuracy.mean_absolute_error,
-                                       data.accuracy.baseline_error) +
-                          ` · sobre ${data.accuracy.windows} réplicas`
-                        : '—'
+                    MODEL_LABELS[run.model] || run.model
+                }${
+                    run.mean_absolute_error === null
+                        ? ' · sin historia suficiente para medir su error'
+                        : ` · a ${data.days_ahead} días ha errado ±${
+                            money(run.mean_absolute_error)} Bs en promedio, sobre ${
+                            data.windows} réplicas de la serie`
                 }</span>
             </div>`;
 
         qs('#rateChart').innerHTML = sparkline(
             data.history.map((point) => point.rate),
-            data.projected.map((point) => point.rate),
-            640, 140
+            run.projected.map((point) => point.rate),
+            640, 150
         );
-        qs('#rateMeta').textContent =
-            `${data.history.length} días observados desde ${data.history[0].date}`;
-        renderRateTable(data);
-        qs('#ratePanel').hidden = false;
+
+        renderForecastTable(data, run);
+    }
+
+    /**
+     * La serie proyectada, día por día. Es lo que un gráfico no puede dar: la
+     * cifra concreta de cada fecha, que es contra lo que después se compara la
+     * realidad.
+     */
+    function renderForecastTable(data, run) {
+        const body = qs('#forecastTable tbody');
+        const base = data.last_rate;
+        let previous = base;
+
+        body.innerHTML = run.projected.map((point) => {
+            const step = previous ? ((point.rate - previous) / previous) * 100 : null;
+            const total = base ? ((point.rate - base) / base) * 100 : null;
+            previous = point.rate;
+            return `
+                <tr>
+                    <td>${point.date}</td>
+                    <td>${weekdayOf(point.date)}</td>
+                    <td class="num">${money(point.rate)}</td>
+                    <td class="num ${changeClass(step)}">${percent(step)}</td>
+                    <td class="num ${changeClass(total)}">${percent(total)}</td>
+                </tr>`;
+        }).join('');
+    }
+
+    /**
+     * La comparación entre modelos, plegada.
+     *
+     * Va aparte y explicada porque el error medido es un promedio sobre toda la
+     * historia al horizonte pedido — no dice nada sobre si la cifra de hoy va a
+     * acertar. Presentarlo junto a la proyección los hacía parecer lo mismo.
+     */
+    function renderBenchTable(data) {
+        qs('#benchHorizon').textContent = data.days_ahead;
+        const body = qs('#benchTable tbody');
+
+        body.innerHTML = data.runs.map((run) => `
+            <tr class="${run.model === state.model ? 'model-on' : ''}">
+                <td>${MODEL_LABELS[run.model] || run.model}</td>
+                <td class="num">${money(run.final_rate)}</td>
+                <td class="num ${changeClass(run.change_percent)}">${
+                    percent(run.change_percent)
+                }</td>
+                <td class="num">${
+                    run.mean_absolute_error === null
+                        ? 'sin medir'
+                        : '±' + money(run.mean_absolute_error)
+                }</td>
+                <td>${
+                    run.mean_absolute_error === null
+                        ? '<span class="state state-past">Historia insuficiente</span>'
+                        : `<span class="state state-${
+                            run === data.runs[0] ? 'current' : 'past'
+                          }">${run === data.runs[0] ? 'El más preciso' : 'Medido'}</span>`
+                }</td>
+            </tr>`).join('');
     }
 
     // --- sale scenario ----------------------------------------------------
@@ -601,7 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const jobs = [];
             if (scope !== 'RATE') jobs.push(loadMinerals(days));
-            if (scope !== 'MINERALS') jobs.push(loadRate(days));
+            if (scope !== 'MINERALS') jobs.push(loadRate(days), loadBench(days));
             await Promise.all(jobs);
 
             qs('#mineralsPanel').hidden = scope === 'RATE';
@@ -626,8 +773,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.rate) renderRateTable(state.rate);
     });
 
+    qs('#rateModel').addEventListener('change', (event) => {
+        state.model = event.target.value;
+        renderModel();
+        renderBenchTable(state.bench);
+    });
+
     qs('#runButton').addEventListener('click', run);
     qs('#scopeSelect').addEventListener('change', run);
+    qs('#mineralModel').addEventListener('change', run);
     qs('#mineralSelect').addEventListener('change', syncScenarioInputs);
     qs('#priceInput').addEventListener('input', (event) => {
         event.target.dataset.touched = '1';
@@ -645,7 +799,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // The interpretation layer reads what each view is showing, as data.
     window.SD_AI.registerView('minerals_forecast', () => state.minerals);
-    window.SD_AI.registerView('rate_forecast', () => state.rate);
+    window.SD_AI.registerView('rate_forecast',
+                              () => state.bench || state.rate);
     window.SD_AI.registerView('sale_scenario', () => ({
         minerals: state.minerals, rate: state.rate, days_ahead: state.days
     }));
