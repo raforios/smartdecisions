@@ -49,6 +49,7 @@ ENV_VARS = load_and_validate_env_vars({
     'EXPLANATION_CACHE_HOURS': int,
     'MAX_PAYLOAD_CHARACTERS': int,
     'LIST_SAMPLE_SIZE': int,
+    'EXPLANATION_QUESTION': str,
 })
 
 # How long an answer stays valid. A day, because the figures underneath move by
@@ -64,9 +65,10 @@ MAX_PAYLOAD_CHARACTERS = ENV_VARS['MAX_PAYLOAD_CHARACTERS']
 # of the ranking, not so many that the reader drowns in it.
 SAMPLE_SIZE = ENV_VARS['LIST_SAMPLE_SIZE']
 
-# The question every explanation answers. Fixed here rather than accepted from
-# the caller: this endpoint explains a screen, it does not take instructions.
-_QUESTION = '¿Qué significa esto?'
+# The question every explanation answers. Never accepted from the caller — this
+# endpoint explains a screen, it does not take instructions — but it is how the
+# model is asked, so it is tuned in configuration like the rest of the prompt.
+_QUESTION = ENV_VARS['EXPLANATION_QUESTION']
 
 
 def _system_prompt(prompt: PromptItem) -> str:

@@ -498,9 +498,21 @@ get_environment_variables() {
     if [ -f ".env" ]; then
         # Leer el archivo .env línea por línea
         while IFS='=' read -r key value; do
-            # Eliminar espacios en blanco alrededor de la clave y el valor
-            key=$(echo "$key" | xargs)
-            value=$(echo "$value" | xargs)
+            # Recorte con expansión de parámetros en vez de `xargs`: xargs
+            # interpreta el contenido como argumentos de shell, así que un
+            # apóstrofo suelto en un comentario aborta la línea con
+            # "unterminated quote". Se quitan los espacios de los extremos y,
+            # sólo después, un par de comillas envolventes.
+            key="${key#"${key%%[![:space:]]*}"}"
+            key="${key%"${key##*[![:space:]]}"}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            if [[ ${#value} -ge 2 ]]; then
+                case "$value" in
+                    \"*\") value="${value:1:${#value}-2}" ;;
+                    \'*\') value="${value:1:${#value}-2}" ;;
+                esac
+            fi
 
             # Ignorar comentarios y líneas vacías
             if [[ -n "$key" && ! "$key" =~ ^# ]]; then
@@ -642,9 +654,13 @@ manage_dynamodb_table() {
 manage_lambda_function() {
     log_section "VERIFICANDO FUNCIÓN LAMBDA '$FUNCTION_NAME' EN LA REGIÓN '$REGION'"
 
-    local env_args=""
+    # Arreglo y no cadena: al expandir `$env_args` sin comillas, bash parte por
+    # espacios y un valor como "¿Qué significa esto?" llega a la CLI como tres
+    # argumentos sueltos ("Unknown options: ..."). Un arreglo expandido con
+    # "${env_args[@]}" conserva cada elemento entero.
+    local env_args=()
     if [ -n "$LAMBDA_ENV_VARS_JSON" ]; then
-        env_args="--environment $LAMBDA_ENV_VARS_JSON"
+        env_args=(--environment "$LAMBDA_ENV_VARS_JSON")
     fi
 
     if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$REGION" --profile "$PROFILE" > /dev/null 2>&1; then
@@ -680,7 +696,7 @@ manage_lambda_function() {
             --role "$ROLE_ARN" \
             --region "$REGION" \
             --profile "$PROFILE" \
-            $env_args || { echo "Error: Falló la actualización de la configuración de Lambda."; exit 1; }
+            "${env_args[@]}" || { echo "Error: Falló la actualización de la configuración de Lambda."; exit 1; }
 
         echo "Función Lambda '$FUNCTION_NAME' actualizada con éxito."
     else
@@ -696,7 +712,7 @@ manage_lambda_function() {
             --memory-size "$MEMORY_SIZE" \
             --region "$REGION" \
             --profile "$PROFILE" \
-            $env_args || { echo "Error: Falló la creación de la Lambda '$FUNCTION_NAME'."; exit 1; }
+            "${env_args[@]}" || { echo "Error: Falló la creación de la Lambda '$FUNCTION_NAME'."; exit 1; }
         
         echo "Esperando que la función Lambda '$FUNCTION_NAME' esté activa después de la creación..."
         aws lambda wait function-active \
