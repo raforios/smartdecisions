@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rafael Ríos Bascón — Turning data into decisions</title>
+<meta name="description" content="Software Architect, AI and Cloud. Founder of BearSoft. 26 years building backend systems, cloud infrastructure and machine learning models for companies in Bolivia, the United States, Colombia and Mexico.">
+<meta name="author" content="Rafael Ríos Bascón">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-64.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="canonical" href="https://raforios.com/en/">
+<meta property="og:type" content="profile">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="es_BO">
+<meta property="og:site_name" content="Rafael Ríos Bascón">
+<meta property="og:url" content="https://raforios.com/en/">
+<meta property="og:title" content="Rafael Ríos Bascón — Software Architect · AI · Cloud">
+<meta property="og:description" content="26 years turning data into decisions. Backend, DevOps, Machine Learning and IT audit. Founder of BearSoft.">
+<meta name="twitter:card" content="summary">
+<link rel="alternate" hreflang="es" href="https://raforios.com/">
+<link rel="alternate" hreflang="en" href="https://raforios.com/en/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+:root {
+  --bg:            #f7f9fc;
+  --bg-alt:        #eef3fa;
+  --panel:         #ffffff;
+  --border:        #dbe4f0;
+  --border-strong: #c2d2e8;
+  --text:          #152441;
+  --text-strong:   #0d1a31;
+  --muted:         #6b7590;
+  --accent:        #2f6fb5;
+  --accent-strong: #255a94;
+  --accent-2:      #12796f;
+  --accent-2-str:  #0d5c55;
+  --wash:          #2f6fb514;
+  --deep-1:        #10306a;
+  --deep-2:        #14515f;
+  --deep-ink:      #eaf2fb;
+  --deep-dim:      #9fbcd8;
+  --shadow-sm:     0 2px 8px rgba(13, 30, 76, .06);
+  --shadow-lg:     0 10px 40px rgba(13, 30, 76, .12);
+
+  --step--1: clamp(.79rem, .77rem + .1vw, .86rem);
+  --step-0:  clamp(1rem, .97rem + .16vw, 1.09rem);
+  --step-1:  clamp(1.19rem, 1.12rem + .34vw, 1.42rem);
+  --step-2:  clamp(1.42rem, 1.3rem + .6vw, 1.9rem);
+  --step-3:  clamp(1.7rem, 1.46rem + 1.15vw, 2.5rem);
+  --step-5:  clamp(2rem, 1.35rem + 3.1vw, 3.9rem);
+
+  --measure: 66ch;
+  --gutter: clamp(1.1rem, 5vw, 3.5rem);
+  --drawer-w: 18rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:            #0b1524;
+    --bg-alt:        #111d31;
+    --panel:         #14223a;
+    --border:        #24344f;
+    --border-strong: #35496a;
+    --text:          #dfe8f5;
+    --text-strong:   #f2f6fc;
+    --muted:         #93a2bf;
+    --accent:        #6ea7e0;
+    --accent-strong: #93c1ec;
+    --accent-2:      #3fb3a4;
+    --accent-2-str:  #63cabc;
+    --wash:          #6ea7e01c;
+    --deep-1:        #08192f;
+    --deep-2:        #0c3541;
+    --shadow-sm:     0 2px 8px rgba(0,0,0,.4);
+    --shadow-lg:     0 10px 40px rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:            #0b1524;
+  --bg-alt:        #111d31;
+  --panel:         #14223a;
+  --border:        #24344f;
+  --border-strong: #35496a;
+  --text:          #dfe8f5;
+  --text-strong:   #f2f6fc;
+  --muted:         #93a2bf;
+  --accent:        #6ea7e0;
+  --accent-strong: #93c1ec;
+  --accent-2:      #3fb3a4;
+  --accent-2-str:  #63cabc;
+  --wash:          #6ea7e01c;
+  --deep-1:        #08192f;
+  --deep-2:        #0c3541;
+  --shadow-sm:     0 2px 8px rgba(0,0,0,.4);
+  --shadow-lg:     0 10px 40px rgba(0,0,0,.45);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: var(--step-0);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 {
+  font-family: Bitter, ui-serif, Georgia, serif;
+  font-weight: 700;
+  line-height: 1.16;
+  letter-spacing: -.012em;
+  text-wrap: balance;
+  color: var(--text-strong);
+  margin: 0;
+}
+p { margin: 0; }
+a { color: inherit; }
+svg { display: block; }
+
+.mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+/* ---------- el contenido se corre cuando el menú aparece ---------- */
+
+.page { transition: margin-left .28s cubic-bezier(.3,.7,.3,1); }
+@media (min-width: 60rem) {
+  body.menu-open .page { margin-left: var(--drawer-w); }
+}
+
+/* ---------- barra superior ---------- */
+
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .7rem var(--gutter);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-left { display: flex; align-items: center; gap: .8rem; }
+.brand {
+  font-family: Bitter, serif; font-weight: 700; font-size: var(--step-0);
+  letter-spacing: -.02em; text-decoration: none; color: var(--text-strong);
+}
+.brand span { color: var(--accent); }
+
+.lang, .menu-btn {
+  font-family: "JetBrains Mono", monospace; font-size: .7rem; letter-spacing: .1em;
+  border-radius: 4px; transition: color .16s ease, border-color .16s ease;
+}
+.lang {
+  text-decoration: none; color: var(--muted);
+  border: 1px solid var(--border); padding: .42rem .55rem;
+}
+.lang:hover { color: var(--accent); border-color: var(--accent); }
+
+.menu-btn {
+  display: inline-flex; align-items: center; gap: .5rem; text-transform: uppercase;
+  color: var(--text); background: transparent;
+  border: 1px solid var(--border-strong); padding: .42rem .7rem; cursor: pointer;
+}
+.menu-btn:hover { border-color: var(--accent); color: var(--accent); }
+.menu-btn .bars { display: grid; gap: 3px; }
+.menu-btn .bars i { display: block; width: 14px; height: 1.5px; background: currentColor; transition: transform .2s ease, opacity .2s ease; }
+body.menu-open .menu-btn .bars i:nth-child(1) { transform: translateY(4.5px) rotate(45deg); }
+body.menu-open .menu-btn .bars i:nth-child(2) { opacity: 0; }
+body.menu-open .menu-btn .bars i:nth-child(3) { transform: translateY(-4.5px) rotate(-45deg); }
+
+.scrim {
+  position: fixed; inset: 0; background: rgba(6,14,28,.45);
+  opacity: 0; pointer-events: none; transition: opacity .22s ease; z-index: 45;
+}
+body.menu-open .scrim { opacity: 1; pointer-events: auto; }
+@media (min-width: 60rem) { .scrim { display: none; } }
+
+.drawer {
+  position: fixed; top: 0; left: 0; z-index: 50;
+  width: min(var(--drawer-w), 84vw); height: 100%;
+  background: var(--panel); border-right: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  padding: 1.2rem 1.3rem 2rem;
+  transform: translateX(-101%);
+  transition: transform .28s cubic-bezier(.3,.7,.3,1);
+  overflow-y: auto;
+}
+body.menu-open .drawer { transform: translateX(0); }
+
+.drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.1rem; }
+.drawer-head p { font-family: "JetBrains Mono", monospace; font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.close-btn { background: transparent; border: 0; color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; padding: .2rem .4rem; }
+.close-btn:hover { color: var(--accent); }
+
+.drawer nav { display: flex; flex-direction: column; }
+.drawer nav a {
+  padding: .68rem 0; border-top: 1px solid var(--border);
+  font-size: var(--step--1); text-decoration: none; color: var(--text);
+  transition: color .16s ease, padding-left .16s ease;
+}
+.drawer nav a:hover, .drawer nav a.active { color: var(--accent); padding-left: .35rem; }
+.drawer-foot { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .74rem; color: var(--muted); line-height: 1.6; }
+
+/* ---------- layout ---------- */
+
+.wrap { max-width: 64rem; margin: 0 auto; padding: 0 var(--gutter); }
+section { padding: clamp(3rem, 7vw, 5.5rem) 0; }
+section + section { border-top: 1px solid var(--border); }
+
+.eyebrow {
+  font-family: "JetBrains Mono", monospace; font-size: .69rem; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--accent-2-str); margin-bottom: .8rem;
+}
+.lede { font-size: var(--step-1); line-height: 1.55; color: var(--muted); max-width: var(--measure); }
+.lede strong { color: var(--text-strong); font-weight: 600; }
+
+/* ---------- encabezado ---------- */
+
+.hero {
+  position: relative; padding: 0; border: 0;
+  background:
+    radial-gradient(115% 115% at 85% 10%, color-mix(in srgb, var(--deep-2) 92%, transparent) 0%, transparent 60%),
+    linear-gradient(158deg, var(--deep-1) 0%, color-mix(in srgb, var(--deep-1) 76%, var(--deep-2)) 100%);
+  color: var(--deep-ink);
+  overflow: hidden;
+}
+.hero::before {
+  content: ""; position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(234,242,251,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(234,242,251,.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(85% 75% at 22% 32%, #000 12%, transparent 78%);
+  pointer-events: none;
+}
+.hero-inner {
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: 1fr; gap: 2.4rem; align-items: center;
+  padding: clamp(2.8rem, 7vw, 5rem) 0 clamp(2.4rem, 6vw, 4rem);
+}
+@media (min-width: 58rem) { .hero-inner { grid-template-columns: minmax(0,1.02fr) minmax(0,.98fr); gap: 3rem; } }
+
+.hero .tagline { font-size: var(--step-5); color: #fff; letter-spacing: -.028em; }
+.hero .who {
+  font-family: "JetBrains Mono", monospace; font-size: var(--step--1);
+  color: #7fe3d4; letter-spacing: .05em; margin-bottom: .9rem;
+}
+.hero .subtitle { margin-top: 1.2rem; font-size: var(--step-1); line-height: 1.55; max-width: 44ch; color: var(--deep-ink); }
+.hero .subtitle strong { color: #fff; font-weight: 600; }
+
+.actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.9rem; }
+.btn {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .78rem 1.25rem; border-radius: 6px;
+  font-size: var(--step--1); font-weight: 600; text-decoration: none;
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform .16s ease, background .16s ease, border-color .16s ease;
+}
+.btn svg { width: 15px; height: 15px; flex: none; }
+.btn-solid { background: #fff; color: var(--deep-1); }
+.btn-solid:hover { transform: translateY(-1px); background: #dcebfa; }
+.btn-line { border-color: rgba(255,255,255,.4); color: #fff; }
+.btn-line:hover { border-color: #fff; transform: translateY(-1px); }
+.btn-accent { background: var(--accent); color: #fff; font-family: inherit; }
+.btn-accent:hover { background: var(--accent-strong); transform: translateY(-1px); }
+.btn-ghost { border-color: var(--border-strong); color: var(--text); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+.hero-figures {
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 1px; background: rgba(255,255,255,.13);
+  border-top: 1px solid rgba(255,255,255,.13);
+}
+@media (min-width: 46rem) { .hero-figures { grid-template-columns: repeat(4, 1fr); } }
+.hero-figures > div { background: color-mix(in srgb, var(--deep-1) 80%, transparent); padding: 1rem 1.15rem 1.2rem; }
+.hero-figures b {
+  font-family: Bitter, serif; font-size: clamp(1.5rem,3.2vw,2.05rem); font-weight: 700;
+  font-variant-numeric: tabular-nums; color: #fff; display: block; line-height: 1;
+}
+.hero-figures span { font-size: .73rem; color: var(--deep-dim); display: block; margin-top: .4rem; line-height: 1.4; }
+
+/* ---------- arte conceptual ---------- */
+
+.art { width: 100%; height: auto; }
+.art .ink  { stroke: currentColor; fill: none; }
+.art .fill { fill: currentColor; }
+.art .hot  { stroke: #4fd1c0; fill: none; }
+.art .hotf { fill: #4fd1c0; }
+.card-art { color: var(--accent); width: 100%; max-width: 190px; height: auto; margin-bottom: 1rem; }
+.card-art .hot { stroke: var(--accent-2); }
+.card-art .hotf { fill: var(--accent-2); }
+.hero-art-frame {
+  border: 1px solid rgba(255,255,255,.16); border-radius: 12px;
+  background: rgba(4,16,34,.3); padding: 1.2rem; color: #a8cdf0;
+}
+
+/* ---------- sobre mí ---------- */
+
+.about { display: grid; grid-template-columns: 1fr; gap: 2.4rem; align-items: start; }
+@media (min-width: 54rem) { .about { grid-template-columns: minmax(0,1.15fr) minmax(0,.85fr); gap: 3rem; } }
+.about-art { color: var(--accent); background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 1.6rem; }
+
+.points { list-style: none; margin: 1.6rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.points li { display: grid; grid-template-columns: 26px 1fr; gap: .8rem; align-items: start; font-size: var(--step--1); }
+.points svg { width: 20px; height: 20px; color: var(--accent-2); margin-top: .25rem; }
+
+/* ---------- especialización ---------- */
+
+.areas { display: grid; grid-template-columns: 1fr; gap: 1.2rem; margin-top: 2rem; }
+@media (min-width: 40rem) { .areas { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 62rem) { .areas { grid-template-columns: repeat(3, 1fr); } }
+
+.area {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--panel);
+  padding: 1.5rem 1.4rem 1.6rem; box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.area:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--border-strong); }
+.area h3 { font-size: var(--step-1); margin-bottom: .5rem; }
+.area p { font-size: var(--step--1); color: var(--muted); }
+.area .tech {
+  margin-top: auto; padding-top: 1rem;
+  font-family: "JetBrains Mono", monospace; font-size: .68rem; line-height: 1.6; color: var(--accent-2-str);
+}
+
+/* ---------- producto ---------- */
+
+.product {
+  display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center;
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--panel); box-shadow: var(--shadow-sm);
+  padding: clamp(1.5rem, 4vw, 2.6rem); margin-top: 2rem;
+}
+@media (min-width: 54rem) { .product { grid-template-columns: minmax(0,1.1fr) minmax(0,.9fr); gap: 2.6rem; } }
+.product h3 { font-size: var(--step-2); margin-bottom: .7rem; }
+.product .features { list-style: none; margin: 1.2rem 0 0; padding: 0; display: grid; gap: .8rem; }
+.product .features li { display: grid; grid-template-columns: 22px 1fr; gap: .7rem; font-size: var(--step--1); color: var(--muted); }
+.product .features svg { width: 17px; height: 17px; color: var(--accent-2); margin-top: .3rem; }
+.product .features b { color: var(--text-strong); }
+.product-art { color: var(--accent); background: var(--bg-alt); border-radius: 12px; padding: 1.4rem; }
+
+/* ---------- servicios ---------- */
+
+.services { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 2rem; }
+@media (min-width: 44rem) { .services { grid-template-columns: repeat(2, 1fr); } }
+.service { background: var(--panel); padding: 1.35rem 1.4rem; display: grid; grid-template-columns: 30px 1fr; gap: .9rem; transition: background .18s ease; }
+.service:hover { background: var(--wash); }
+.service svg { width: 22px; height: 22px; color: var(--accent); margin-top: .2rem; }
+.service b { display: block; font-family: Bitter, serif; font-size: var(--step-0); color: var(--text-strong); margin-bottom: .25rem; }
+.service p { font-size: var(--step--1); color: var(--muted); }
+
+/* ---------- clientes ---------- */
+
+.clients { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 1.6rem; padding: 0; list-style: none; }
+.clients li {
+  font-family: "JetBrains Mono", monospace; font-size: .73rem;
+  padding: .36rem .65rem; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--panel);
+}
+.clients li.mark { border-color: var(--accent-2); color: var(--accent-2-str); }
+
+/* ---------- contacto ---------- */
+
+.contact-grid { display: grid; grid-template-columns: 1fr; gap: 2.2rem; margin-top: 2rem; }
+@media (min-width: 52rem) { .contact-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 3rem; } }
+
+form { display: grid; gap: .8rem; align-content: start; }
+label { font-family: "JetBrains Mono", monospace; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: .3rem; }
+input, textarea {
+  font-family: inherit; font-size: var(--step--1); color: var(--text);
+  background: var(--panel); border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: .7rem .8rem; width: 100%;
+}
+input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+textarea { min-height: 8rem; resize: vertical; }
+
+.direct { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; align-content: start; }
+.direct a, .direct div { background: var(--panel); padding: 1.05rem 1.15rem; text-decoration: none; display: block; transition: background .18s ease; }
+.direct a:hover { background: var(--wash); }
+.direct .k { font-family: "JetBrains Mono", monospace; font-size: .66rem; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: .3rem; }
+.direct .v { font-size: var(--step--1); font-weight: 500; color: var(--text-strong); word-break: break-word; }
+
+footer {
+  border-top: 1px solid var(--border); padding: 1.8rem 0 3rem; font-size: .76rem; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; justify-content: space-between;
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.hero :focus-visible { outline-color: #fff; }
+@media (prefers-reduced-motion: reduce) { *, .drawer, .page { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="scrim" id="scrim"></div>
+
+<aside class="drawer" id="drawer" aria-label="Sections" inert>
+  <div class="drawer-head">
+    <p>Navigation</p>
+    <button class="close-btn" id="closeBtn" aria-label="Close menu">&times;</button>
+  </div>
+  <nav id="nav">
+    <a href="#inicio">Home</a>
+    <a href="#about">About me</a>
+    <a href="#expertise">Areas of expertise</a>
+    <a href="#producto">SmartDecisions</a>
+    <a href="#services">Services</a>
+    <a href="#clientes">Clients and track record</a>
+    <a href="#contact">Contact</a>
+  </nav>
+  <p class="drawer-foot">La Paz, Bolivia<br>Remote and hybrid consulting<br>+591 77781631</p>
+</aside>
+
+<div class="page" id="page">
+
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="menu-btn" id="menuBtn" aria-expanded="false" aria-controls="drawer">
+      <span class="bars" aria-hidden="true"><i></i><i></i><i></i></span> Menu
+    </button>
+    <a class="brand" href="#inicio">Rafael Ríos<span>.</span></a>
+  </div>
+  <a class="lang" href="/" hreflang="es">ES</a>
+</header>
+
+<section class="hero" id="inicio">
+  <div class="wrap">
+    <div class="hero-inner">
+      <div>
+        <p class="who">Software Architect · AI · Cloud · Founder of BearSoft</p>
+        <h1 class="tagline">Turning data into intelligent decisions</h1>
+        <p class="subtitle">
+          Twenty-six years building the <strong>digital core</strong> of companies and
+          institutions across Bolivia, the United States, Colombia and Mexico.
+          High-performance backend, cloud infrastructure and artificial intelligence
+          models your business can put to work from the first month.
+        </p>
+        <div class="actions">
+          <a class="btn btn-solid" href="#services">Explore my services</a>
+          <a class="btn btn-line" href="/docs/resume.pdf" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Resume
+          </a>
+          <a class="btn btn-line" href="/docs/cv.pdf" download>CV (Spanish)</a>
+        </div>
+      </div>
+
+      <div class="hero-art-frame">
+        <svg class="art" viewBox="0 0 400 250" role="img" aria-label="Scattered data points resolving into a rising line">
+          <g class="ink" stroke-width="1" opacity=".3">
+            <path d="M24 214 H 384"/><path d="M24 214 V 30"/>
+          </g>
+          <g class="ink" stroke-width="1" opacity=".16">
+            <path d="M24 160 H 384"/><path d="M24 106 H 384"/><path d="M24 56 H 384"/>
+          </g>
+          <g class="ink" stroke-width="1" opacity=".22">
+            <path d="M34 196 L58 150 L46 118 L76 188 L92 132 L66 82"/>
+            <path d="M108 176 L120 112 L96 62 L140 158 L150 96"/>
+          </g>
+          <g class="fill" opacity=".45">
+            <circle cx="34" cy="196" r="3"/><circle cx="58" cy="150" r="3"/><circle cx="46" cy="118" r="3"/>
+            <circle cx="76" cy="188" r="3"/><circle cx="92" cy="132" r="3"/><circle cx="66" cy="82" r="3"/>
+            <circle cx="108" cy="176" r="3"/><circle cx="120" cy="112" r="3"/><circle cx="96" cy="62" r="3"/>
+            <circle cx="140" cy="158" r="3"/><circle cx="150" cy="96" r="3"/>
+          </g>
+          <path class="ink" stroke-width="1.8" opacity=".95"
+                d="M150 176 C 190 168, 214 150, 240 126 S 300 74, 356 52"/>
+          <path class="hot" stroke-width="2" stroke-dasharray="5 4" d="M356 52 C 366 47, 374 43, 386 39"/>
+          <g class="hotf"><circle cx="356" cy="52" r="4.5"/><circle cx="386" cy="39" r="3"/></g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-figures wrap" style="max-width:64rem;margin-inline:auto">
+    <div><b>26</b><span>years in professional practice</span></div>
+    <div><b>40+</b><span>projects and organizations</span></div>
+    <div><b>14</b><span>institutions audited</span></div>
+    <div><b>4</b><span>countries I have worked in</span></div>
+  </div>
+</section>
+
+<main class="wrap">
+
+  <section id="about">
+    <p class="eyebrow">About me</p>
+    <h2 style="font-size:var(--step-3)">Twenty-six years turning technical problems into business results</h2>
+
+    <div class="about" style="margin-top:1.8rem">
+      <div>
+        <p class="lede">
+          Systems Engineer with a <strong>Master's in Intelligent Flexible
+          Systems</strong> and over fifteen years in the backend. I command Python, Java
+          and JavaScript, I have built and operated infrastructure on AWS, and today I
+          embed <strong>artificial intelligence into enterprise and government
+          solutions</strong>. I founded BearSoft, my software and data analytics
+          consultancy.
+        </p>
+        <p class="lede" style="margin-top:1.1rem">
+          What sets me apart is having sat in all four seats: I build the systems,
+          <strong>audit them under ISO 27000 and COBIT 5</strong>, train the teams that
+          maintain them, and have run the IT departments that answer for them. That is
+          why what I deliver survives the audit, the handover and the year after.
+        </p>
+
+        <ul class="points">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="6" rx="1.5"/><rect x="2" y="15" width="20" height="6" rx="1.5"/><path d="M6 6h.01M6 18h.01"/></svg>
+            <span>Robust, scalable APIs, with performance and security as a requirement rather than an afterthought.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+            <span>Automated deployments (CI/CD) and infrastructure as code: less downtime and a smaller cloud bill.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-5 4 3 5-7"/></svg>
+            <span>Data turned into decisions: dashboards and reports that answer business questions rather than decorate.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+            <span>Machine learning and generative AI models embedded in the real workflow, with their error measured and published.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>
+            <span>Training for your team: university lecturer and corporate trainer since 2004.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="about-art">
+        <svg class="art" viewBox="0 0 300 300" role="img" aria-label="Four disciplines orbiting a single core">
+          <g class="ink" stroke-width="1" opacity=".25">
+            <circle cx="150" cy="150" r="128"/><circle cx="150" cy="150" r="102"/>
+            <circle cx="150" cy="150" r="76"/><circle cx="150" cy="150" r="50"/>
+          </g>
+          <path class="fill" opacity=".1" d="M150 118 L178 134 V166 L150 182 L122 166 V134 Z"/>
+          <path class="ink" stroke-width="1.8" d="M150 118 L178 134 V166 L150 182 L122 166 V134 Z"/>
+          <g class="ink" stroke-width="1" opacity=".45" stroke-dasharray="3 4">
+            <path d="M150 34 V 118"/><path d="M240 150 H 178"/>
+            <path d="M150 214 V 182"/><path d="M86 150 H 122"/>
+          </g>
+          <g class="hotf">
+            <circle cx="150" cy="22" r="6"/><circle cx="252" cy="150" r="6"/>
+            <circle cx="150" cy="226" r="6"/><circle cx="74" cy="150" r="6"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section id="expertise">
+    <p class="eyebrow">Areas of expertise</p>
+    <h2 style="font-size:var(--step-3)">What I bring from day one</h2>
+
+    <div class="areas">
+      <article class="area">
+        <svg class="art card-art" viewBox="0 0 200 120" role="img" aria-label="Microservice architecture">
+          <g class="ink" stroke-width="1.5">
+            <rect x="12" y="14" width="52" height="26" rx="3"/>
+            <rect x="12" y="52" width="52" height="26" rx="3"/>
+            <rect x="12" y="90" width="52" height="22" rx="3"/>
+            <rect x="112" y="74" width="56" height="30" rx="3"/>
+          </g>
+          <g class="ink" stroke-width="1" opacity=".6">
+            <path d="M64 27 H 88 V 45 H 112"/><path d="M64 65 H 88 V 45"/>
+            <path d="M64 101 H 88 V 89 H 112"/>
+          </g>
+          <rect class="hot" stroke-width="2" x="112" y="30" width="56" height="30" rx="3"/>
+        </svg>
+        <h3>Custom backend development</h3>
+        <p>Microservice architectures and REST APIs built to grow: the digital core your business needs to scale without rewriting everything every two years.</p>
+        <p class="tech">Python · FastAPI · Java · Spring Boot · Node.js · PostgreSQL · MySQL · Docker · Clean Architecture · DDD</p>
+      </article>
+
+      <article class="area">
+        <svg class="art card-art" viewBox="0 0 200 120" role="img" aria-label="Continuous integration pipeline into the cloud">
+          <g class="ink" stroke-width="1.5">
+            <path d="M14 74 H 150"/>
+            <rect x="20" y="58" width="26" height="26" rx="3"/>
+            <rect x="60" y="58" width="26" height="26" rx="3"/>
+            <path d="M136 40 a 18 18 0 0 1 34 6 a 14 14 0 0 1 -3 27 h -31 a 16 16 0 0 1 0 -33 z"/>
+          </g>
+          <rect class="hot" stroke-width="2" x="100" y="58" width="26" height="26" rx="3"/>
+          <g class="ink" stroke-width="1" opacity=".5" stroke-dasharray="3 3">
+            <path d="M33 52 V 34 H 113 V 52"/>
+          </g>
+        </svg>
+        <h3>Cloud and DevOps consulting</h3>
+        <p>Infrastructure as code, automated deployments and cost optimization: cut your cloud spend without giving up performance or security.</p>
+        <p class="tech">AWS · Terraform · Docker · Kubernetes · GCP · Azure · Jenkins · CircleCI · Linux · Shell</p>
+      </article>
+
+      <article class="area">
+        <svg class="art card-art" viewBox="0 0 200 120" role="img" aria-label="Indicator dashboard">
+          <g class="ink" stroke-width="1.5">
+            <path d="M18 104 H 182"/>
+            <rect x="28" y="66" width="18" height="38"/><rect x="58" y="46" width="18" height="58"/>
+            <rect x="88" y="78" width="18" height="26"/><rect x="118" y="34" width="18" height="70"/>
+          </g>
+          <rect class="hotf" x="148" y="54" width="18" height="50"/>
+          <path class="hot" stroke-width="2" d="M28 62 C 60 40, 92 66, 124 30 S 158 28, 166 24"/>
+        </svg>
+        <h3>Data analysis and BI</h3>
+        <p>Your raw data turned into actionable information. Dashboards and reports that unlock the critical indicators to decide on evidence, not intuition.</p>
+        <p class="tech">Python · Pandas · NumPy · SQL · ETL · Power BI · Data Warehousing · Jupyter</p>
+      </article>
+
+      <article class="area">
+        <svg class="art card-art" viewBox="0 0 200 120" role="img" aria-label="Neural network leading into a projection">
+          <g class="ink" stroke-width="1" opacity=".5">
+            <path d="M34 30 L84 24 M34 30 L84 60 M34 60 L84 24 M34 60 L84 60 M34 60 L84 96 M34 90 L84 60 M34 90 L84 96"/>
+            <path d="M84 24 L130 44 M84 60 L130 44 M84 60 L130 80 M84 96 L130 80"/>
+          </g>
+          <g class="fill">
+            <circle cx="34" cy="30" r="5"/><circle cx="34" cy="60" r="5"/><circle cx="34" cy="90" r="5"/>
+            <circle cx="84" cy="24" r="5"/><circle cx="84" cy="60" r="5"/><circle cx="84" cy="96" r="5"/>
+          </g>
+          <path class="hotf" opacity=".16" d="M138 62 C 152 58, 162 48, 180 30 L 180 46 C 164 56, 152 66, 140 68 Z"/>
+          <path class="hot" stroke-width="2" stroke-dasharray="4 3" d="M138 62 C 152 58, 162 48, 180 36"/>
+          <g class="hotf"><circle cx="130" cy="44" r="5.5"/><circle cx="130" cy="80" r="5.5"/></g>
+        </svg>
+        <h3>Machine Learning and AI</h3>
+        <p>Prediction, classification and optimization models embedded in your operation — plus a generative AI layer that explains every result in business language.</p>
+        <p class="tech">Scikit-learn · Time series · LLMs · Prompt engineering · Claude · Gemini · MLOps with FastAPI</p>
+      </article>
+
+      <article class="area">
+        <svg class="art card-art" viewBox="0 0 200 120" role="img" aria-label="Audit shield with checklist">
+          <path class="ink" stroke-width="1.5" d="M100 12 L152 32 V 66 c 0 24 -22 36 -52 44 c -30 -8 -52 -20 -52 -44 V 32 Z"/>
+          <g class="hot" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M78 50 l 7 7 l 16 -16"/><path d="M78 72 l 7 7 l 16 -16"/>
+          </g>
+          <g class="ink" stroke-width="1" opacity=".5"><path d="M110 54 h 18 M110 76 h 18"/></g>
+        </svg>
+        <h3>IT audit and security</h3>
+        <p>Audits under ISO 27000 with the COBIT 5 methodology. Find vulnerabilities and bottlenecks before a regulator or an incident finds them for you.</p>
+        <p class="tech">COBIT 5 · ISO 27000 · Risk analysis · Architecture review · Performance audit</p>
+      </article>
+
+      <article class="area">
+        <svg class="art card-art" viewBox="0 0 200 120" role="img" aria-label="Knowledge transfer as a graph">
+          <rect class="ink" stroke-width="1.5" x="18" y="16" width="88" height="62" rx="4"/>
+          <g class="ink" stroke-width="1" opacity=".6">
+            <path d="M34 58 L52 38 L72 50 L90 30"/>
+          </g>
+          <g class="fill"><circle cx="34" cy="58" r="3"/><circle cx="52" cy="38" r="3"/><circle cx="72" cy="50" r="3"/><circle cx="90" cy="30" r="3"/></g>
+          <g class="ink" stroke-width="1" opacity=".45" stroke-dasharray="3 3">
+            <path d="M106 47 H 140"/><path d="M140 47 L 166 26"/><path d="M140 47 L 166 47"/><path d="M140 47 L 166 68"/>
+          </g>
+          <g class="hotf"><circle cx="171" cy="26" r="5"/><circle cx="171" cy="47" r="5"/><circle cx="171" cy="68" r="5"/></g>
+        </svg>
+        <h3>Training and mentoring</h3>
+        <p>Equip your team with knowledge they can apply: AI tooling, prompting practice, cloud and databases. University lecturer and corporate trainer since 2004.</p>
+        <p class="tech">Tailored workshops · Technical mentoring · PostgreSQL · Java · Node.js · Angular · AI tooling</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="producto">
+    <p class="eyebrow">My own product</p>
+    <h2 style="font-size:var(--step-3)">SmartDecisions, the proof of what I offer</h2>
+
+    <div class="product">
+      <div>
+        <h3>Commercial intelligence for your operation</h3>
+        <p class="lede" style="font-size:var(--step-0)">
+          At BearSoft we build SmartDecisions: you upload your sales and the platform
+          hands back decisions, not spreadsheets. It is in production, with real
+          customers, and it is the best demonstration of how I work.
+        </p>
+        <ul class="features">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-6"/></svg>
+            <span><b>Forecast your demand</b> from your own history, with the model’s error measured and published.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 12.6L12 21.2 3.4 12.6A5.5 5.5 0 1 1 12 5.7a5.5 5.5 0 1 1 8.6 6.9z"/></svg>
+            <span><b>Segment your customer base</b> and know which accounts carry your sales, which are at risk and which are already gone.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="3" width="15" height="13" rx="1.5"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            <span><b>Optimize your sales team’s visit routes</b>: fewer kilometres, more coverage.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.2 3.9c-.6.4-.7.9-.7 1.6"/><path d="M12 17.5h.01"/></svg>
+            <span><b>Ask the AI</b> what each screen means: an artificial intelligence layer translates the numbers into business language.</span>
+          </li>
+        </ul>
+        <div class="actions" style="margin-top:1.6rem">
+          <a class="btn btn-accent" href="https://smartdecisions.bearsoft.com.bo" target="_blank" rel="noopener">See SmartDecisions</a>
+          <a class="btn btn-ghost" href="https://bearsoft.com.bo" target="_blank" rel="noopener">Visit BearSoft</a>
+        </div>
+      </div>
+
+      <div class="product-art">
+        <svg class="art" viewBox="0 0 300 240" role="img" aria-label="Sales data turning into decisions">
+          <g class="ink" stroke-width="1.4">
+            <rect x="18" y="22" width="90" height="14" rx="2"/>
+            <rect x="18" y="44" width="90" height="14" rx="2"/>
+            <rect x="18" y="66" width="90" height="14" rx="2"/>
+            <rect x="18" y="88" width="90" height="14" rx="2"/>
+          </g>
+          <g class="ink" stroke-width="1" opacity=".5" stroke-dasharray="3 3"><path d="M108 62 H 142"/></g>
+          <circle class="ink" stroke-width="1.6" cx="170" cy="62" r="26"/>
+          <path class="hot" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M158 62 l 8 9 l 18 -20"/>
+          <g class="ink" stroke-width="1.4">
+            <path d="M18 210 H 282"/>
+            <rect x="34" y="168" width="20" height="42"/><rect x="70" y="146" width="20" height="64"/>
+            <rect x="106" y="180" width="20" height="30"/>
+          </g>
+          <rect class="hotf" x="142" y="132" width="20" height="78"/>
+          <path class="hotf" opacity=".16" d="M170 132 C 200 122, 226 132, 268 110 L 268 128 C 226 146, 200 138, 170 146 Z"/>
+          <path class="hot" stroke-width="2" stroke-dasharray="5 4" d="M170 132 C 200 122, 226 132, 268 116"/>
+          <g class="hotf"><circle cx="268" cy="116" r="4.5"/></g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section id="services">
+    <p class="eyebrow">Services</p>
+    <h2 style="font-size:var(--step-3)">How we can work together</h2>
+
+    <div class="services">
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <div><b>Custom backend development</b><p>Build the robust, scalable digital core your business needs to grow without limits.</p></div>
+      </div>
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+        <div><b>Cloud architecture and DevOps</b><p>Strategies tailored to your operation to optimize infrastructure and cloud deployment processes.</p></div>
+      </div>
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <div><b>Cloud cost optimization</b><p>Cut your operating spend without compromising performance or security. I have done it for clients in three countries.</p></div>
+      </div>
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.1 14a5 5 0 1 0-6.2 0c.6.5 1.1 1.2 1.1 2h4c0-.8.5-1.5 1.1-2z"/></svg>
+        <div><b>Machine learning and AI models</b><p>Integrate intelligent solutions that learn from your data and adapt to your needs, with the error always in plain sight.</p></div>
+      </div>
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="13" y="8" width="3" height="10"/><rect x="19" y="5" width="2" height="13"/></svg>
+        <div><b>Business Intelligence and data analysis</b><p>Unlock the critical indicators of your business to decide quickly and on evidence.</p></div>
+      </div>
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        <div><b>Systems and security audit</b><p>ISO 27000 audits under COBIT 5: find vulnerabilities and bottlenecks before the regulator does.</p></div>
+      </div>
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>
+        <div><b>Training in AI, data and cloud</b><p>Equip your team with the skills that make the difference today: generative AI, prompting, cloud and databases.</p></div>
+      </div>
+      <div class="service">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+        <div><b>Legacy application modernization</b><p>Turn ageing systems into maintainable solutions. I have migrated entire ERPs from Oracle 9i to current architectures.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="clientes">
+    <p class="eyebrow">Clients and track record</p>
+    <h2 style="font-size:var(--step-3)">Who I have worked with</h2>
+    <p class="lede" style="margin-top:1rem">
+      Consulting for companies in the United States, Colombia and Mexico; systems for
+      international organizations and the Bolivian government; and IT audits in banking,
+      telecoms and energy. The resume carries the full detail.
+    </p>
+    <ul class="clients">
+      <li class="mark">Ministry of Mining and Metallurgy</li>
+      <li class="mark">Pensions Authority — APS</li>
+      <li>Applaudo</li><li>Koombea</li><li>Simetrik</li><li>NextGo</li>
+      <li>Avetta</li><li>Boxtribe</li><li>AB InBev (Detesim)</li>
+      <li>FAO — United Nations</li><li>GIZ</li><li>Danish Cooperation</li>
+      <li>Swisscontact</li><li>Bolivian Stock Exchange</li>
+      <li>YPFB</li><li>COMIBOL</li><li>Nuevatel PCS</li><li>Mutual La Paz</li>
+      <li>EPSAS</li><li>ENTEL</li>
+    </ul>
+  </section>
+
+  <section id="contact">
+    <p class="eyebrow">Contact</p>
+    <h2 style="font-size:var(--step-3)">Let's talk about your project</h2>
+    <p class="lede" style="margin-top:1rem">
+      I am available for projects worth doing — consulting, architecture, audit or
+      training, remote or hybrid from La Paz. Write to me and I will reply.
+    </p>
+
+    <div class="contact-grid">
+      <form action="https://formspree.io/f/xblyoppy" method="POST">
+        <input type="hidden" name="_subject" value="New message from raforios.com">
+        <div>
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" autocomplete="name" required>
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" autocomplete="email" required>
+        </div>
+        <div>
+          <label for="message">Message</label>
+          <textarea id="message" name="message" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-accent" style="justify-content:center">Send message</button>
+      </form>
+
+      <div class="direct">
+        <a href="mailto:raforios@gmail.com"><span class="k">Email</span><span class="v">raforios@gmail.com</span></a>
+        <a href="https://wa.me/59177781631" target="_blank" rel="noopener"><span class="k">WhatsApp</span><span class="v">+591 77781631</span></a>
+        <a href="https://www.linkedin.com/in/raforios" target="_blank" rel="noopener"><span class="k">LinkedIn</span><span class="v">/in/raforios</span></a>
+        <a href="https://github.com/raforios" target="_blank" rel="noopener"><span class="k">GitHub</span><span class="v">@raforios</span></a>
+        <div><span class="k">Location</span><span class="v">La Paz, Bolivia</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>© <span id="year" class="mono">2026</span> Rafael Ríos Bascón. All rights reserved.</span>
+    <span class="mono">raforios.com</span>
+  </footer>
+
+</main>
+</div>
+
+<script>
+'use strict';
+
+document.getElementById('year').textContent = new Date().getFullYear();
+
+const body = document.body;
+const drawer = document.getElementById('drawer');
+const menuBtn = document.getElementById('menuBtn');
+const narrow = () => window.matchMedia('(max-width: 59.99rem)').matches;
+
+function setMenu(open) {
+  // Al cerrar, el foco sale del cajón ANTES de inertizarlo. Marcarlo oculto con
+  // el foco dentro deja a quien navega con teclado o lector de pantalla apuntando
+  // a algo que ya no existe para la tecnología asistiva, y el navegador lo bloquea.
+  if (!open && drawer.contains(document.activeElement)) menuBtn.focus();
+
+  body.classList.toggle('menu-open', open);
+  // `inert` en vez de `aria-hidden`: además de ocultarlo del árbol de
+  // accesibilidad, impide que el foco entre en un panel que está fuera de
+  // pantalla, cosa que `aria-hidden` no hace.
+  drawer.inert = !open;
+  menuBtn.setAttribute('aria-expanded', String(open));
+  body.style.overflow = open && narrow() ? 'hidden' : '';
+  if (open) drawer.querySelector('nav a').focus();
+}
+
+menuBtn.addEventListener('click', () => setMenu(!body.classList.contains('menu-open')));
+document.getElementById('closeBtn').addEventListener('click', () => setMenu(false));
+document.getElementById('scrim').addEventListener('click', () => setMenu(false));
+drawer.querySelectorAll('nav a').forEach(a => a.addEventListener('click', () => {
+  if (narrow()) setMenu(false);
+}));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+
+const navLinks = [...document.querySelectorAll('#nav a')];
+const targets = navLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const spy = new IntersectionObserver(items => {
+  items.forEach(item => {
+    if (!item.isIntersecting) return;
+    const i = targets.indexOf(item.target);
+    navLinks.forEach((link, k) => link.classList.toggle('active', k === i));
+  });
+}, { rootMargin: '-45% 0px -50% 0px' });
+targets.forEach(t => spy.observe(t));
+</script>
+</body>
+</html>

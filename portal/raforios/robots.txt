@@ -1,0 +1,4 @@
+# raforios.com — sitio personal de Rafael Ríos Bascón
+
+User-agent: *
+Allow: /

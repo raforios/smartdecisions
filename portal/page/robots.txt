@@ -1,0 +1,11 @@
+# bearsoft.com.bo
+
+# Esto orienta a los buscadores que respetan el protocolo. Los escáneres que
+# piden /wp-login.php no lo leen: contra ellos no hay nada que configurar aquí.
+
+User-agent: *
+Allow: /
+
+# Restos de cuando el dominio era un portafolio personal. Siguen alcanzables
+# por URL directa, pero no son parte del sitio de la empresa.
+Disallow: /docs/

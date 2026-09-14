@@ -12,6 +12,7 @@
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-bear-64.png">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-bear-32.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="canonical" href="https://bearsoft.com.bo/">
 <meta name="robots" content="index,follow">
 <meta name="author" content="BearSoft">
@@ -227,10 +228,6 @@ footer .wrap{display:block}
 .foot-banner{display:flex;justify-content:center;padding:.5rem 0 1.6rem;
   border-bottom:1px solid var(--line);margin-bottom:1.4rem}
 .foot-banner img{height:clamp(5.5rem,13vw,9rem);width:auto;opacity:.95}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]) .foot-banner img{
-    background:#fff;border-radius:10px;padding:.5rem 1rem;box-sizing:content-box}
-}
 .foot-line{margin:0;text-align:center}
 /* Marca de visita: dice de dónde se conectó quien mira, en letra chica. Es
    cortesía y transparencia — la misma información que el servidor ya ve. */
@@ -703,7 +700,10 @@ footer .wrap{display:block}
 <footer>
   <div class="wrap">
     <div class="foot-banner">
-      <img src="assets/web/logo.png" alt="BearSoft" width="1200" height="400">
+      <picture>
+        <source srcset="assets/web/logo-dark.png" media="(prefers-color-scheme: dark)">
+        <img src="assets/web/logo.png" alt="BearSoft" width="900" height="305">
+      </picture>
     </div>
     <p id="copyright" class="foot-line">La Paz, Bolivia</p>
     <p class="visit-note" id="visitNote" hidden></p>

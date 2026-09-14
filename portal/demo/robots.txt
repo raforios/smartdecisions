@@ -1,0 +1,8 @@
+# smartdecisions.bearsoft.com.bo
+
+# La demo exige sesión: no hay nada público que valga la pena indexar, y una
+# pantalla de login compitiendo en los resultados con bearsoft.com.bo sólo
+# reparte el tráfico de la marca entre dos sitios.
+
+User-agent: *
+Disallow: /

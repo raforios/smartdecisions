@@ -450,7 +450,44 @@ Las que siguen condicionando el código. Las que se revirtieron no están.
 
 ## 8. Lo último que se hizo
 
-**8 de septiembre de 2026 — tras la primera reunión con clientes.**
+**9 de septiembre de 2026 — barrido de configuración en seis servicios.**
+
+Se auditaron AI, QUOTES, INGEST, ANALYTICS, OPTIMIZATION y MINING_ANALYSIS con
+el agente `auditor-hardcode`, y se corrigió todo lo que el barrido encontró.
+
+1. **Dos inconsistencias que no se veían.** `HISTORY_DEFAULT_LIMIT` existía,
+   estaba en el `.env` y era requerida, pero la ruta de INGEST y el listado
+   escribían `20` a mano; en QUOTES, el banco de modelos redondeaba a `4`
+   decimales literales mientras el resto del archivo respetaba `RATE_DECIMALS`.
+   Cambiar el `.env` dejaba el sistema en dos estados a la vez.
+2. **Se eliminó el patrón `ENV_VARS['X'] or valor`** de INGEST y QUOTES. En
+   `bcb_source.py` el respaldo era además código muerto: la variable ya estaba
+   declarada como requerida, así que el `or` nunca se ejecutaba.
+3. **ANALYTICS: se retiró el mecanismo `setting()`.** Veintisiete perillas del
+   servicio —umbrales de concentración, cartera, márgenes, segmentación,
+   eficiencia y afinidad— se leían con un valor por defecto en el código, y
+   quince de ellas ni siquiera figuraban en el `.env`: corrían con números que
+   nadie había elegido. Ahora son requeridas y están todas configuradas.
+4. **Parámetros del modelo de pronóstico al `.env`** en ANALYTICS (ventana del
+   promedio móvil, techo del horizonte, categorías del gráfico) y en
+   MINING_ANALYSIS (suelo de colapso, decimales publicados, horizonte por
+   defecto).
+5. **Regalías del Ministerio:** el tipo de cambio `6.96`, el piso de
+   recaudación de Bs 5.000, la caída crítica del -20% y las filas de cada KPI
+   dejaron de ser literales.
+
+**Lo que se dejó a propósito:** el campo `dist` de OPTIMIZATION —está muerto por
+contrato, corresponde borrarlo, no parametrizarlo—, las palabras excluidas del
+ETL de regalías —una lista con comas no puede vivir en el `.env`— y el
+`limit = 2` de `latest_prices_before`, que es la aritmética de una variación
+diaria, no una decisión.
+
+**Verificado:** 248 tests en verde y Pylint 10.00 en los seis servicios.
+**Pendiente:** los seis necesitan redespliegue de backend. Las variables nuevas
+sólo llegan al Lambda a través del `.env`, que `build_and_deploy.sh` vuelca
+entero en `--environment Variables={...}`.
+
+**Antes — 8 de septiembre de 2026, tras la primera reunión con clientes.**
 
 1. **Plantilla de ventas restaurada.** Daba 503: al limpiar duplicados en S3 se
    borró `ingest/templates/template_ventas_v1.xlsx`. Ahora se **genera desde el
