@@ -9,6 +9,14 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
+from services.environment import load_and_validate_env_vars
+
+# How many visit days a plan spreads the clients over when the caller does not
+# say. It is the length of the commercial cycle of the operation being planned
+# — weekly, fortnightly — so it is configured, not assumed here.
+_SETTINGS = load_and_validate_env_vars({'ROUTES_DEFAULT_PLAN_DAYS': int})
+DEFAULT_PLAN_DAYS = _SETTINGS['ROUTES_DEFAULT_PLAN_DAYS']
+
 
 class OptimizationError(str, Enum):
     '''
@@ -122,7 +130,7 @@ class PlanQueryParams(BaseModel):
         description = 'Restrict the plan to one salesperson\'s clients.'
     )
     days: int = Field(
-        default = 5, ge = 1, le = 12,
+        default = DEFAULT_PLAN_DAYS, ge = 1, le = 12,
         description = 'How many visit days to spread the clients over.'
     )
     date_from: Optional[str] = Field(

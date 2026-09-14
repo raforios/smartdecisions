@@ -66,7 +66,19 @@ ENV_VARS = load_and_validate_env_vars({
     'HOLT_PHI': float,
     'BACKTEST_MIN_TRAIN': int,
     'BACKTEST_MIN_WINDOWS': int,
+    'FORECAST_COLLAPSE_FLOOR_RATIO': float,
+    'ERROR_DECIMALS': int,
+    'CHANGE_DECIMALS': int,
+    'PRICE_DECIMALS': int,
+    'PUBLISHED_PRICE_DECIMALS': int,
 })
+
+# Decimals a published error, a published percentage and a published price
+# carry. Stored prices keep four; a bulletin publishes two.
+ERROR_DECIMALS = ENV_VARS['ERROR_DECIMALS']
+CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']
+PRICE_DECIMALS = ENV_VARS['PRICE_DECIMALS']
+PUBLISHED_PRICE_DECIMALS = ENV_VARS['PUBLISHED_PRICE_DECIMALS']
 
 # Smoothing parameters, fitted by minimising the backtest error over the six
 # minerals with enough history. Configurable because they belong to the data:
@@ -96,7 +108,7 @@ MOVING_AVERAGE_WINDOW = ENV_VARS['FORECAST_MOVING_AVERAGE_WINDOW']
 # has stopped describing the mineral and started describing the fitted line.
 # Wolfram, with three weeks of steeply falling quotations, reached zero inside a
 # 30-day horizon: the arithmetic was right and the answer was nonsense.
-_COLLAPSE_FLOOR_RATIO: float = 0.25
+_COLLAPSE_FLOOR_RATIO: float = ENV_VARS['FORECAST_COLLAPSE_FLOOR_RATIO']
 
 # How many observed points travel back with each mineral. The UI draws the
 # trend behind the projection; a couple of hundred points is plenty for that
@@ -203,7 +215,7 @@ def _backtest(
 
     if len(errors) < BACKTEST_MIN_WINDOWS:
         return None
-    return round(float(np.mean(errors)), 4)
+    return round(float(np.mean(errors)), ERROR_DECIMALS)
 
 
 def _project_linear(prices: List[float], days_ahead: int) -> Optional[List[float]]:
@@ -317,7 +329,7 @@ def project(
 
     last_price = values[-1]
     change = (
-        round((projected[-1] - last_price) / last_price * 100, 2)
+        round((projected[-1] - last_price) / last_price * 100, CHANGE_DECIMALS)
         if last_price else None
     )
 
@@ -333,7 +345,7 @@ def project(
 # The official quotation is published with two decimals, so that is the figure
 # the service returns: rounding it later, in the browser, would let the API and
 # the bulletin disagree on the number a sale is settled at.
-_OFFICIAL_QUANTUM: Decimal = Decimal('0.01')
+_OFFICIAL_QUANTUM: Decimal = Decimal(1).scaleb(-PUBLISHED_PRICE_DECIMALS)
 
 
 def _official_round(value: float) -> float:
@@ -587,7 +599,7 @@ def _official_block(
     if current and forecast and current['avg_price_low']:
         change = round(
             (forecast[0]['avg_price_low'] - current['avg_price_low'])
-            / current['avg_price_low'] * 100, 2
+            / current['avg_price_low'] * 100, CHANGE_DECIMALS
         )
 
     return {
@@ -716,7 +728,8 @@ def _forecast_row(
             {'date': record.date, 'price': record.price_low} for record in priced
         ],
         'forecast': [
-            {'date': day, 'price': round(price, 4)} for day, price in result.points
+            {'date': day, 'price': round(price, PRICE_DECIMALS)}
+            for day, price in result.points
         ],
         **_official_block(
             request.mineral_id,

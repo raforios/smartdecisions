@@ -10,6 +10,7 @@ from services.utils import (
     _trigger_bulk_audit,
     handle_service_errors,
 )
+from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 from services.price_forecast import get_price_forecast_service
 from services.royalties_etl import process_royalties_excel_service
@@ -33,6 +34,13 @@ from schemas.mining_analysis import (
     BiweeklyReportResponse,
     BiweeklyHistoryResponse,
 )
+
+# Rate used to convert a royalties file that arrives in dollars. The caller may
+# override it per upload; what it falls back to is the official rate of the
+# period, which is a decision of the Ministry and moves with it.
+_SETTINGS = load_and_validate_env_vars({'ROYALTIES_DEFAULT_EXCHANGE_RATE': str})
+DEFAULT_EXCHANGE_RATE = Decimal(_SETTINGS['ROYALTIES_DEFAULT_EXCHANGE_RATE'])
+
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 @handle_service_errors('MINING_ANALYSIS')
@@ -101,7 +109,7 @@ async def upload_royalties_controller(
     current_user: str,
     file_name: str,
     file_content: bytes,
-    exchange_rate: Decimal = Decimal('6.96')
+    exchange_rate: Decimal = DEFAULT_EXCHANGE_RATE
 ) -> Dict[str, Any]:
     '''
         Controller to handle in-memory bulk upload of Royalties with currency conversion.

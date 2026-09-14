@@ -22,23 +22,19 @@ from services.logger_config import custom_logger as logger
 from services.utils import audit_event, get_current_time_gmt
 
 
-ENV_VARS = load_and_validate_env_vars(
-    env_vars = {
-        'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
-        'BUCKET_NAME': str,
-        'FILES_SERVICE_URL': str,
-        'HISTORY_DEFAULT_LIMIT': int,
-    },
-    optional_env_vars = {
-        'BUCKET_PATH': str,
-        'UPLOAD_TIMEOUT_SECONDS': int,
-    }
-)
+ENV_VARS = load_and_validate_env_vars({
+    'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
+    'BUCKET_NAME': str,
+    'FILES_SERVICE_URL': str,
+    'HISTORY_DEFAULT_LIMIT': int,
+    'BUCKET_PATH': str,
+    'UPLOAD_TIMEOUT_SECONDS': int,
+})
 DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 FILES_SERVICE_URL = ENV_VARS['FILES_SERVICE_URL'].rstrip('/')
-DEFAULT_BUCKET_PATH = (ENV_VARS['BUCKET_PATH'] or 'ingest').strip('/')
-UPLOAD_TIMEOUT_SECONDS = ENV_VARS['UPLOAD_TIMEOUT_SECONDS'] or 60
+DEFAULT_BUCKET_PATH = ENV_VARS['BUCKET_PATH'].strip('/')
+UPLOAD_TIMEOUT_SECONDS = ENV_VARS['UPLOAD_TIMEOUT_SECONDS']
 
 # Region + credentials come from the default chain (Lambda role in AWS).
 _s3_client = boto3.client('s3')
@@ -177,7 +173,7 @@ def find_dataset_by_fingerprint(
 def list_datasets_for_owner(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    limit: int = 20
+    limit: int = HISTORY_DEFAULT_LIMIT
 ) -> List[Dict[str, Any]]:
     '''
         Returns the caller's own uploads, most recent first.
@@ -405,7 +401,7 @@ def upload_excel(
                                      the response payload is unusable.
     '''
     url = f'{FILES_SERVICE_URL}/v1/s3/upload'
-    target_folder = (folder or DEFAULT_BUCKET_PATH or '').strip('/')
+    target_folder = (folder or DEFAULT_BUCKET_PATH).strip('/')
 
     headers = {'Authorization': f'Bearer {bearer_token}'}
     files = {'file': (filename, file_bytes, _content_type_for(filename))}

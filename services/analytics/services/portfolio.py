@@ -25,7 +25,6 @@ from schemas.analytics import (
 )
 
 from services.analytics_utils import (
-    setting,
     CLIENT_ID,
     CLIENT_NAME,
     AMOUNT,
@@ -43,7 +42,7 @@ from services.logger_config import custom_logger as logger
 # quarterly need different numbers, and getting them wrong flags either nobody
 # or the whole book. They are read from the environment so an operation can be
 # tuned without a redeploy, with the defaults below calibrated on real data.
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+_SETTINGS = load_and_validate_env_vars({
     'PORTFOLIO_RISK_DROP_PERCENT': float,
     'PORTFOLIO_RISK_SILENCE_DAYS': int,
     'PORTFOLIO_LOST_SILENCE_DAYS': int,
@@ -53,17 +52,17 @@ _SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
 
 # A client whose latest month falls this far below their own monthly average is
 # not "buying less", they are leaving.
-_RISK_DROP_PERCENT = setting(_SETTINGS, 'PORTFOLIO_RISK_DROP_PERCENT', -30.0)
+_RISK_DROP_PERCENT = _SETTINGS['PORTFOLIO_RISK_DROP_PERCENT']
 # Days without a single purchase before a client is flagged regardless of amount.
-_RISK_SILENCE_DAYS = setting(_SETTINGS, 'PORTFOLIO_RISK_SILENCE_DAYS', 60)
+_RISK_SILENCE_DAYS = _SETTINGS['PORTFOLIO_RISK_SILENCE_DAYS']
 # Past this point the client is not at risk, they are gone: chasing them is a
 # reactivation campaign, not this week's route. Keeping both in one list buried
 # the actionable names among clients who left a year ago.
-_LOST_SILENCE_DAYS = setting(_SETTINGS, 'PORTFOLIO_LOST_SILENCE_DAYS', 180)
+_LOST_SILENCE_DAYS = _SETTINGS['PORTFOLIO_LOST_SILENCE_DAYS']
 
 # The at-risk list is meant to be worked through, so it is short by design.
-_MAX_RISK_CLIENTS = setting(_SETTINGS, 'PORTFOLIO_MAX_RISK_CLIENTS', 25)
-_MAX_LOST_CLIENTS = setting(_SETTINGS, 'PORTFOLIO_MAX_LOST_CLIENTS', 100)
+_MAX_RISK_CLIENTS = _SETTINGS['PORTFOLIO_MAX_RISK_CLIENTS']
+_MAX_LOST_CLIENTS = _SETTINGS['PORTFOLIO_MAX_LOST_CLIENTS']
 
 
 def _monthly_client_sets(dataframe: pd.DataFrame, parsed_dates: pd.Series,

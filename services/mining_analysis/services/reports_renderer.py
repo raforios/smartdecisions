@@ -17,6 +17,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 from fpdf import FPDF
 
+from services.environment import load_and_validate_env_vars
+
 
 _ASSETS_DIR = Path(__file__).resolve().parent.parent / 'assets' / 'templates'
 DAILY_TEMPLATE_PATH = str(_ASSETS_DIR / 'Minerales_01.png')
@@ -91,8 +93,10 @@ def _draw_centered(
     draw.text(origin, text, font = font, fill = color)
 
 
-# Bulletins publish two decimals; the database keeps four.
-_PRICE_QUANTUM: Decimal = Decimal('0.01')
+# Bulletins publish fewer decimals than the database keeps: how many is a
+# decision of whoever signs the bulletin, not of this renderer.
+_SETTINGS = load_and_validate_env_vars({'PUBLISHED_PRICE_DECIMALS': int})
+_PRICE_QUANTUM: Decimal = Decimal(1).scaleb(-_SETTINGS['PUBLISHED_PRICE_DECIMALS'])
 
 
 def _format_price(value: Optional[float]) -> str:

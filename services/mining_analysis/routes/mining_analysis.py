@@ -15,6 +15,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from services.logger_config import custom_logger as logger
 from services.db_connection import GET_DB_DEPENDENCY
+from services.environment import load_and_validate_env_vars
 from services.security import get_current_user
 from controllers.mining_analysis import (
     bulk_upload_mining_controller,
@@ -36,6 +37,10 @@ from schemas.mining_analysis import (
     ForecastMethod,
     PriceForecastResponse,
 )
+
+# Days a price projection covers when the caller does not ask for a horizon.
+_SETTINGS = load_and_validate_env_vars({'FORECAST_DEFAULT_DAYS_AHEAD': int})
+DEFAULT_DAYS_AHEAD = _SETTINGS['FORECAST_DEFAULT_DAYS_AHEAD']
 
 router = APIRouter(prefix = '/v1/mining-analysis', tags = ['Mining Analysis'])
 
@@ -241,7 +246,7 @@ async def get_biweekly_report_endpoint(
 )
 async def get_price_forecast_endpoint(
     request: Request,
-    days_ahead: int = Query(30, ge = 1, le = 180,
+    days_ahead: int = Query(DEFAULT_DAYS_AHEAD, ge = 1, le = 180,
                             description = 'Days to project ahead.'),
     method: ForecastMethod = Query(ForecastMethod.DAMPED_TREND,
                                    description = 'Projection method.'),

@@ -16,7 +16,6 @@ import pandas as pd
 from schemas.analytics import SegmentationBlock, SegmentClient, SegmentTier
 
 from services.environment import load_and_validate_env_vars
-from services.analytics_utils import setting
 from services.logger_config import custom_logger as logger
 
 _AMOUNT = 'total_amount'
@@ -28,14 +27,14 @@ _ORDER = 'order_id'
 # The OPTIMIZATION service colours every route stop by the same tiers, so it
 # reads variables of these exact names. Change one, change both, or the same
 # client shows as 'HIGH' on one screen and 'MEDIUM' on the other.
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+_SETTINGS = load_and_validate_env_vars({
     'SEGMENTATION_HIGH_TOP_SHARE': float,
     'SEGMENTATION_MEDIUM_TOP_SHARE': float,
     'SEGMENTATION_MAX_CLIENTS': int,
 })
-_ALTO_TOP_SHARE = setting(_SETTINGS, 'SEGMENTATION_HIGH_TOP_SHARE', 0.20)
-_MEDIO_TOP_SHARE = setting(_SETTINGS, 'SEGMENTATION_MEDIUM_TOP_SHARE', 0.50)
-_MAX_CLIENTS = setting(_SETTINGS, 'SEGMENTATION_MAX_CLIENTS', 500)
+_ALTO_TOP_SHARE = _SETTINGS['SEGMENTATION_HIGH_TOP_SHARE']
+_MEDIO_TOP_SHARE = _SETTINGS['SEGMENTATION_MEDIUM_TOP_SHARE']
+_MAX_CLIENTS = _SETTINGS['SEGMENTATION_MAX_CLIENTS']
 
 _TIER_ALTO = 'HIGH'
 _TIER_MEDIO = 'MEDIUM'

@@ -31,19 +31,16 @@ from services.analytics_utils import (
     dates,
     money,
     percent_change,
-    ratio,
-    setting
+    ratio
 )
 from services.logger_config import custom_logger as logger
 
 # A seasonality index built on less than a full year compares months that never
 # repeat, which reads as signal when it is noise.
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+_SETTINGS = load_and_validate_env_vars({
     'GROWTH_MIN_MONTHS_FOR_SEASONALITY': int,
 })
-_MIN_MONTHS_FOR_SEASONALITY = setting(
-    _SETTINGS, 'GROWTH_MIN_MONTHS_FOR_SEASONALITY', 12
-)
+_MIN_MONTHS_FOR_SEASONALITY = _SETTINGS['GROWTH_MIN_MONTHS_FOR_SEASONALITY']
 
 
 def _monthly_series(dataframe: pd.DataFrame, parsed_dates: pd.Series) -> pd.Series:

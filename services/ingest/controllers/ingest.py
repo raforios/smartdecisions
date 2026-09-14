@@ -43,18 +43,20 @@ from services.utils import handle_service_errors
 
 # Only a slice of the issues travels in the JSON response / DynamoDB item
 # (400 KB limit); the full set lives in the rejected CSV in S3.
-ENV_VARS = load_and_validate_env_vars({}, optional_env_vars = {
+ENV_VARS = load_and_validate_env_vars({
     'MAX_ISSUES_ON_RESPONSE': int,
-    'CSV_CONTENT_TYPE': str,
     'TEMPLATE_S3_KEY': str,
 })
-MAX_ISSUES_ON_RESPONSE = ENV_VARS['MAX_ISSUES_ON_RESPONSE'] or 100
-CSV_CONTENT_TYPE = ENV_VARS['CSV_CONTENT_TYPE'] or 'text/csv'
+MAX_ISSUES_ON_RESPONSE = ENV_VARS['MAX_ISSUES_ON_RESPONSE']
+# The MIME type of the rejected-rows download. It stays in the code because it
+# describes the format of the file, not a decision anybody would take
+# differently: a CSV is served as a CSV.
+CSV_CONTENT_TYPE = 'text/csv'
 # The template is a static object in the default bucket, not something the
 # service builds: the format is fixed and the client is the one who complies
 # with it. Changing it means changing business logic, so it moves over time and
 # never at runtime.
-TEMPLATE_S3_KEY = ENV_VARS['TEMPLATE_S3_KEY'] or 'ingest/templates/template_ventas_v1.xlsx'
+TEMPLATE_S3_KEY = ENV_VARS['TEMPLATE_S3_KEY']
 
 
 def _to_response(

@@ -42,10 +42,27 @@ from services.prices_store import (
 ENV_VARS = load_and_validate_env_vars({
     'MAX_FALLBACK_PERIODS': int,
     'CHANGE_DECIMALS': int,
+    'ROYALTIES_MAX_VARIATION_PERCENT': str,
+    'ROYALTIES_MIN_BASELINE_BOB': str,
+    'ROYALTIES_CRITICAL_DROP_PERCENT': float,
+    'ROYALTIES_KPI_TOP_ROWS': int,
 })
 
 # Decimals a published percentage carries.
 CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']
+
+# Royalty KPIs. The cap keeps a percentage readable when a municipality starts
+# from almost nothing; the baseline filter drops the amounts too small to make
+# a variation mean anything; the drop threshold is what the Ministry calls a
+# critical fall; and the top rows are how many make the bulletin. Read as
+# strings so Decimal takes them exactly, without a float in between.
+MAX_VARIATION_PERCENT = Decimal(ENV_VARS['ROYALTIES_MAX_VARIATION_PERCENT'])
+MIN_BASELINE_BOB = Decimal(ENV_VARS['ROYALTIES_MIN_BASELINE_BOB'])
+CRITICAL_DROP_PERCENT = ENV_VARS['ROYALTIES_CRITICAL_DROP_PERCENT']
+KPI_TOP_ROWS = ENV_VARS['ROYALTIES_KPI_TOP_ROWS']
+
+# A percentage is published with the same decimals everywhere in the service.
+_PERCENT_QUANTUM: Decimal = Decimal(1).scaleb(-CHANGE_DECIMALS)
 
 
 # Canonical mineral catalog rendered in the official Minerales_0X templates.
@@ -342,21 +359,21 @@ def _calculate_advanced_kpis(
             row['variacion_monto_bob'] = float(actual - pasado)
             porc = ((actual - pasado) / pasado) * Decimal('100')
 
-            porc = max(Decimal('-999.99'), min(porc, Decimal('999.99')))
-            row['variacion_porcentaje'] = float(porc.quantize(Decimal('1.00'),
+            porc = max(-MAX_VARIATION_PERCENT, min(porc, MAX_VARIATION_PERCENT))
+            row['variacion_porcentaje'] = float(porc.quantize(_PERCENT_QUANTUM,
                                         rounding = ROUND_HALF_UP))
 
     annual_kpis = []
     for (dept, muni), vals in muni_agg.items():
         # Significance filter: Ignore if previous baseline was < 5000 Bs (statistical noise)
-        if vals['pasado'] > Decimal('5000'):
+        if vals['pasado'] > MIN_BASELINE_BOB:
             porc = ((vals['actual'] - vals['pasado']) / vals['pasado']) * Decimal('100')
-            porc = max(Decimal('-999.99'), min(porc, Decimal('999.99')))
+            porc = max(-MAX_VARIATION_PERCENT, min(porc, MAX_VARIATION_PERCENT))
 
             annual_kpis.append({
                 'department': dept,
                 'municipality': muni,
-                'variacion_porcentaje': float(porc.quantize(Decimal('1.00'),
+                'variacion_porcentaje': float(porc.quantize(_PERCENT_QUANTUM,
                                         rounding = ROUND_HALF_UP))
             })
 
@@ -368,11 +385,12 @@ def _calculate_advanced_kpis(
                 [d for d in annual_kpis if d['variacion_porcentaje'] > 0],
                 key = lambda x: x['variacion_porcentaje'],
                 reverse = True
-            )[:5],
+            )[:KPI_TOP_ROWS],
             'alerta_caida_critica': sorted(
-                [d for d in annual_kpis if d['variacion_porcentaje'] < -20],
+                [d for d in annual_kpis
+                 if d['variacion_porcentaje'] < CRITICAL_DROP_PERCENT],
                 key = lambda x: x['variacion_porcentaje']
-            )[:5]
+            )[:KPI_TOP_ROWS]
         }
     }
 

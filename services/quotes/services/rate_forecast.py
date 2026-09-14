@@ -42,6 +42,7 @@ ENV_VARS = load_and_validate_env_vars({
     'RATE_COLLAPSE_FLOOR_RATIO': float,
     'ERROR_DECIMALS': int,
     'CHANGE_DECIMALS': int,
+    'RATE_DECIMALS': int,
 })
 
 # Smoothing parameters, chosen by minimising the backtest error over the stored
@@ -67,9 +68,12 @@ MEDIUM_CONFIDENCE_DAYS = ENV_VARS['RATE_FORECAST_MEDIUM_CONFIDENCE_DAYS']
 # below" is a judgement about the currency, so it is configured.
 _COLLAPSE_FLOOR_RATIO: float = ENV_VARS['RATE_COLLAPSE_FLOOR_RATIO']
 
-# Decimals a published error and a published percentage carry.
+# Decimals a published error, a published percentage and a published rate
+# carry. The rate shares its setting with the rest of the service: the bench
+# and the live forecast must not disagree on how precise a rate is.
 ERROR_DECIMALS = ENV_VARS['ERROR_DECIMALS']
 CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']
+RATE_DECIMALS = ENV_VARS['RATE_DECIMALS']
 
 
 @dataclass(frozen = True)
@@ -269,10 +273,10 @@ def run_bench(
         results.append({
             'model': name,
             'change_percent': change,
-            'final_rate': round(projected[-1], 4),
+            'final_rate': round(projected[-1], RATE_DECIMALS),
             'mean_absolute_error': error_of(name, values, days_ahead),
             'projected': [
-                {'date': day, 'rate': round(value, 4)}
+                {'date': day, 'rate': round(value, RATE_DECIMALS)}
                 for day, value in zip(dates, projected)
             ],
         })

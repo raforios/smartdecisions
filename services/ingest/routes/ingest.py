@@ -27,6 +27,7 @@ from schemas.ingest import (
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.exceptions import InvalidInputError
+from services.ingest_utils import HISTORY_DEFAULT_LIMIT
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
 
@@ -192,7 +193,10 @@ async def ingest_excel_from_s3_endpoint(
 )
 async def list_datasets_endpoint(
     request: Request,
-    limit: int = Query(20, ge = 1, le = 100, description = 'Most rows to return.'),
+    limit: int = Query(
+        HISTORY_DEFAULT_LIMIT, ge = 1, le = 100,
+        description = 'Most rows to return.'
+    ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ) -> DatasetListResponse:

@@ -36,8 +36,7 @@ from services.analytics_utils import (
     HISTORY_DEFAULT_LIMIT,
     list_runs_for_owner,
     load_dataframe_from_s3,
-    persist_run,
-    setting
+    persist_run
 )
 from services.environment import load_and_validate_env_vars
 from services.utils import handle_service_errors
@@ -45,7 +44,7 @@ from services.utils import handle_service_errors
 
 # Caps on opportunities kept in the run (DynamoDB item limit + usable table)
 # and the affinity-engine tuning knobs. Configurable per deployment.
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+_SETTINGS = load_and_validate_env_vars({
     'ANALYTICS_MAX_PER_PRODUCT': int,
     'ANALYTICS_MAX_OPPORTUNITIES': int,
     'AFFINITY_MIN_SUPPORT': float,
@@ -53,8 +52,8 @@ _SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
     'AFFINITY_TOP_N_PER_PDV': int,
     'AFFINITY_ITEM_LEVEL': str,
 })
-_MAX_PER_PRODUCT = setting(_SETTINGS, 'ANALYTICS_MAX_PER_PRODUCT', 60)
-_MAX_OPPORTUNITIES = setting(_SETTINGS, 'ANALYTICS_MAX_OPPORTUNITIES', 800)
+_MAX_PER_PRODUCT = _SETTINGS['ANALYTICS_MAX_PER_PRODUCT']
+_MAX_OPPORTUNITIES = _SETTINGS['ANALYTICS_MAX_OPPORTUNITIES']
 
 
 def _top_opportunities_per_product(opportunities: List[Opportunity]) -> List[Opportunity]:
@@ -86,10 +85,10 @@ def _engine_parameters() -> Dict[str, Any]:
         dense and interpretable. Override with AFFINITY_ITEM_LEVEL=product.
     '''
     return {
-        'min_support': setting(_SETTINGS, 'AFFINITY_MIN_SUPPORT', 0.01),
-        'min_lift': setting(_SETTINGS, 'AFFINITY_MIN_LIFT', 1.0),
-        'top_n_per_pdv': setting(_SETTINGS, 'AFFINITY_TOP_N_PER_PDV', 10),
-        'item_level': setting(_SETTINGS, 'AFFINITY_ITEM_LEVEL', 'category').strip().lower()
+        'min_support': _SETTINGS['AFFINITY_MIN_SUPPORT'],
+        'min_lift': _SETTINGS['AFFINITY_MIN_LIFT'],
+        'top_n_per_pdv': _SETTINGS['AFFINITY_TOP_N_PER_PDV'],
+        'item_level': _SETTINGS['AFFINITY_ITEM_LEVEL'].strip().lower()
     }
 
 

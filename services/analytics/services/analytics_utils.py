@@ -168,28 +168,6 @@ def order_count(dataframe: pd.DataFrame) -> int:
     return int(len(dataframe))
 
 
-def setting(loaded: dict, name: str, default: Any) -> Any:
-    '''
-        Reads a tuning knob loaded from the environment, falling back to its
-        default when it was not configured.
-
-        Needed because `load_and_validate_env_vars` stores an explicit None for
-        every optional variable that is unset, so `dict.get(name, default)`
-        returns that None instead of the default. Using `or` would work for the
-        current values but would silently discard a legitimate 0.
-
-        Args:
-            loaded (dict): Result of `load_and_validate_env_vars`.
-            name (str): Variable name.
-            default (Any): Value to use when the variable is not configured.
-
-        Returns:
-            Any: The configured value, or the default.
-    '''
-    value = loaded.get(name)
-    return default if value is None else value
-
-
 # ---------------------------------------------------------------------------
 # Date range filter
 # ---------------------------------------------------------------------------

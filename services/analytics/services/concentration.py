@@ -30,8 +30,7 @@ from services.analytics_utils import (
     PRODUCT_NAME,
     label_series,
     money,
-    ratio,
-    setting
+    ratio
 )
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
@@ -39,7 +38,7 @@ from services.logger_config import custom_logger as logger
 # Business thresholds: configurable per deployment, never literals in the code.
 # The HHI cut points are borrowed from competition analysis and read here as
 # "how much of the revenue depends on a handful of accounts".
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+_SETTINGS = load_and_validate_env_vars({
     'CONCENTRATION_PARETO_TARGET': float,
     'CONCENTRATION_ABC_A_LIMIT': float,
     'CONCENTRATION_ABC_B_LIMIT': float,
@@ -48,13 +47,13 @@ _SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
     'CONCENTRATION_HHI_MODERATE': float,
     'CONCENTRATION_HHI_HIGH': float,
 })
-_PARETO_TARGET = setting(_SETTINGS, 'CONCENTRATION_PARETO_TARGET', 0.80)
-_ABC_A_LIMIT = setting(_SETTINGS, 'CONCENTRATION_ABC_A_LIMIT', 0.80)
-_ABC_B_LIMIT = setting(_SETTINGS, 'CONCENTRATION_ABC_B_LIMIT', 0.95)
-_TOP_CLIENTS = setting(_SETTINGS, 'CONCENTRATION_TOP_CLIENTS', 10)
-_MAX_ABC_ROWS = setting(_SETTINGS, 'CONCENTRATION_MAX_ABC_ROWS', 300)
-_HHI_MODERATE = setting(_SETTINGS, 'CONCENTRATION_HHI_MODERATE', 0.15)
-_HHI_HIGH = setting(_SETTINGS, 'CONCENTRATION_HHI_HIGH', 0.25)
+_PARETO_TARGET = _SETTINGS['CONCENTRATION_PARETO_TARGET']
+_ABC_A_LIMIT = _SETTINGS['CONCENTRATION_ABC_A_LIMIT']
+_ABC_B_LIMIT = _SETTINGS['CONCENTRATION_ABC_B_LIMIT']
+_TOP_CLIENTS = _SETTINGS['CONCENTRATION_TOP_CLIENTS']
+_MAX_ABC_ROWS = _SETTINGS['CONCENTRATION_MAX_ABC_ROWS']
+_HHI_MODERATE = _SETTINGS['CONCENTRATION_HHI_MODERATE']
+_HHI_HIGH = _SETTINGS['CONCENTRATION_HHI_HIGH']
 
 def _sorted_totals(dataframe: pd.DataFrame, labels: Optional[pd.Series]) -> Optional[pd.Series]:
     '''

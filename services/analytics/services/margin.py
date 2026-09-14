@@ -25,7 +25,6 @@ from schemas.analytics import (
 
 from services.environment import load_and_validate_env_vars
 from services.analytics_utils import (
-    setting,
     QUANTITY,
     CATEGORY,
     CLIENT_ID,
@@ -42,17 +41,17 @@ from services.analytics_utils import (
 )
 
 
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+_SETTINGS = load_and_validate_env_vars({
     'MARGIN_TOP_ROWS': int,
     'MARGIN_THIN_THRESHOLD': float,
 })
 
 # Rows kept in each breakdown, so the response stays renderable in a table.
-_TOP_ROWS: int = setting(_SETTINGS, 'MARGIN_TOP_ROWS', 15)
+_TOP_ROWS: int = _SETTINGS['MARGIN_TOP_ROWS']
 # A product is flagged when its realized margin falls below this share of
 # revenue. What counts as "too thin" depends on the client's cost structure,
 # so it is configurable; 2% is a distribution-business default.
-_THIN_MARGIN: float = setting(_SETTINGS, 'MARGIN_THIN_THRESHOLD', 0.02)
+_THIN_MARGIN: float = _SETTINGS['MARGIN_THIN_THRESHOLD']
 
 
 def has_cost_data(dataframe: pd.DataFrame) -> bool:

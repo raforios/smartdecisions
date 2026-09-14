@@ -36,10 +36,7 @@ ENV_VARS = load_and_validate_env_vars({
     'BCB_BASE_URL': str,
     'BCB_REQUEST_TIMEOUT_SECONDS': int,
 })
-BASE_URL = (
-    ENV_VARS['BCB_BASE_URL']
-    or 'https://www.bcb.gob.bo/librerias/indicadores/otras/otras_imprimir.php'
-)
+BASE_URL = ENV_VARS['BCB_BASE_URL']
 REQUEST_TIMEOUT_SECONDS = ENV_VARS['BCB_REQUEST_TIMEOUT_SECONDS']
 
 SOURCE_NAME = 'BCB'

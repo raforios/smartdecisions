@@ -25,6 +25,11 @@ from schemas.analytics import (
     SegmentationResponse
 )
 from services.db_connection import GET_DB_DEPENDENCY
+from services.analytics_utils import (
+    FORECAST_MONTHS_AHEAD,
+    HISTORY_DEFAULT_LIMIT
+)
+from services.forecast import MAX_MONTHS_AHEAD
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
 
@@ -78,7 +83,9 @@ class ForecastOptions: # pylint: disable=too-few-public-methods
         self,
         window: DateWindow = Depends(),
         method: str = Query('linear', pattern = '^(linear|moving_average)$'),
-        months_ahead: int = Query(3, ge = 1, le = 12),
+        months_ahead: int = Query(
+            FORECAST_MONTHS_AHEAD, ge = 1, le = MAX_MONTHS_AHEAD
+        ),
         group_by: str = Query(None, pattern = '^(category)$')
     ):
         self.window = window
@@ -246,7 +253,10 @@ async def run_analytics_endpoint(
 )
 async def list_runs_endpoint(
     request: Request,
-    limit: int = Query(20, ge = 1, le = 100, description = 'Most rows to return.'),
+    limit: int = Query(
+        HISTORY_DEFAULT_LIMIT, ge = 1, le = 100,
+        description = 'Most rows to return.'
+    ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ) -> RunListResponse:

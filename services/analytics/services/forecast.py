@@ -17,7 +17,21 @@ import pandas as pd
 
 from schemas.analytics import ForecastBlock
 from services.analytics_utils import AMOUNT_DECIMALS, FORECAST_MONTHS_AHEAD
+from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+
+# How the projection is shaped. The moving-average window, the ceiling on how
+# far ahead anybody may ask and how many category lines fit on one chart are
+# all judgements about the business being forecast, so an operation can retune
+# them without a release.
+_SETTINGS = load_and_validate_env_vars({
+    'FORECAST_MOVING_AVERAGE_MONTHS': int,
+    'FORECAST_MAX_MONTHS_AHEAD': int,
+    'FORECAST_MAX_CATEGORIES': int,
+})
+MOVING_AVERAGE_MONTHS = _SETTINGS['FORECAST_MOVING_AVERAGE_MONTHS']
+MAX_MONTHS_AHEAD = _SETTINGS['FORECAST_MAX_MONTHS_AHEAD']
+MAX_CATEGORIES = _SETTINGS['FORECAST_MAX_CATEGORIES']
 
 _AMOUNT = 'total_amount'
 METHOD_LINEAR = 'linear'
@@ -47,7 +61,7 @@ def _forecast_values(history: List[float], months_ahead: int, method: str) -> Li
     '''
     series = np.array(history, dtype = float)
     if method == METHOD_MOVING_AVERAGE:
-        window = min(3, len(series))
+        window = min(MOVING_AVERAGE_MONTHS, len(series))
         baseline = float(series[-window:].mean())
         projected = [baseline] * months_ahead
     else:  # linear trend via least-squares on the month index
@@ -111,7 +125,7 @@ def build_forecast(
                 (each with its historical and projected points).
     '''
     method = method if method in _VALID_METHODS else METHOD_LINEAR
-    months_ahead = max(1, min(int(months_ahead), 12))
+    months_ahead = max(1, min(int(months_ahead), MAX_MONTHS_AHEAD))
     message = (f'Building forecast method={method} months={months_ahead} '
                f'group_by={group_by}.')
     logger.info(message)
@@ -123,7 +137,7 @@ def build_forecast(
     if group_by == 'category' and 'category' in dataframe.columns:
         # One forecast per category, largest first, capped so the chart stays readable.
         totals = dataframe.groupby(dataframe['category'].fillna(''))[_AMOUNT].sum()
-        for category in totals.sort_values(ascending = False).head(6).index:
+        for category in totals.sort_values(ascending = False).head(MAX_CATEGORIES).index:
             subset = dataframe[dataframe['category'].fillna('') == category]
             block = _series_block(str(category), _monthly_totals(subset), months_ahead, method)
             if block:

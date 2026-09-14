@@ -35,22 +35,21 @@ from services.analytics_utils import (
     money,
     order_count,
     percent_change,
-    ratio,
-    setting
+    ratio
 )
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
 # Price drift is only reported for products with enough movement in both halves
 # of the period; a single invoice is an anecdote, not a trend.
-_SETTINGS = load_and_validate_env_vars({}, optional_env_vars = {
+_SETTINGS = load_and_validate_env_vars({
     'EFFICIENCY_MAX_SELLERS': int,
     'EFFICIENCY_MAX_PRICE_ROWS': int,
     'EFFICIENCY_MIN_UNITS_FOR_PRICE': int,
 })
-_MAX_SELLERS = setting(_SETTINGS, 'EFFICIENCY_MAX_SELLERS', 50)
-_MAX_PRICE_ROWS = setting(_SETTINGS, 'EFFICIENCY_MAX_PRICE_ROWS', 100)
-_MIN_UNITS_FOR_PRICE = setting(_SETTINGS, 'EFFICIENCY_MIN_UNITS_FOR_PRICE', 5)
+_MAX_SELLERS = _SETTINGS['EFFICIENCY_MAX_SELLERS']
+_MAX_PRICE_ROWS = _SETTINGS['EFFICIENCY_MAX_PRICE_ROWS']
+_MIN_UNITS_FOR_PRICE = _SETTINGS['EFFICIENCY_MIN_UNITS_FOR_PRICE']
 
 
 def _drop_size_kpis(dataframe: pd.DataFrame) -> List[KpiCard]:
