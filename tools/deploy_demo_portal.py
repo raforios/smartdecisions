@@ -60,7 +60,14 @@ def _stamp(page: Path) -> bool:
     original = page.read_text(encoding = 'utf-8')
 
     def _replace(match: 're.Match[str]') -> str:
-        target = (page.parent / match.group('path')).resolve()
+        # A reference starting with "/" is rooted at the site, not at the disk.
+        # Joining it to the page's folder made pathlib drop the folder and look
+        # for the file at the filesystem root, where it never is: the reference
+        # was reported missing and, worse, kept its old hash. Every absolute
+        # reference — the style the deploy skill mandates — went unstamped.
+        raw = match.group('path')
+        base = PORTAL_ROOT if raw.startswith('/') else page.parent
+        target = (base / raw.lstrip('/')).resolve()
         if not target.exists():
             print(f'  aviso: {page.name} apunta a {match.group("path")}, que no existe')
             return match.group(0)
@@ -120,6 +127,54 @@ def _publish(only: Optional[str]) -> None:
           '--profile', PROFILE, '--query', 'Invalidation.Status', '--output', 'text'])
 
 
+def _valid_module(only: Optional[str]) -> Optional[str]:
+    '''
+        Rejects a `--only` that is not one real module directory.
+
+        Written after `--only .` published the whole portal a second time under
+        a literal `./` prefix: the sync target became `s3://bucket/./`, so the
+        site existed twice and the copy went stale two days later. A relative
+        marker, a path separator or a name that is not a directory of the
+        portal all stop the deploy here instead of turning into a key prefix.
+
+        Args:
+            only (str | None): Module asked for on the command line.
+
+        Returns:
+            str | None: The module, or None when the whole portal was asked
+                for.
+
+        Raises:
+            SystemExit: When the value cannot name a module.
+    '''
+    if only is None:
+        return None
+
+    module = only.strip().strip('/')
+    if module in ('', '.', '..') or '/' in module or module.startswith('.'):
+        raise SystemExit(
+            f'--only "{only}" no nombra un módulo. Omite --only para desplegar '
+            f'el portal completo.'
+        )
+    if not (PORTAL_ROOT / module).is_dir():
+        raise SystemExit(
+            f'--only "{module}" no existe en {PORTAL_ROOT.name}/. '
+            f'Módulos: {", ".join(sorted(_modules()))}.'
+        )
+    return module
+
+
+def _modules() -> List[str]:
+    '''
+        Returns the module directories the portal actually has.
+
+        Returns:
+            List[str]: Directory names directly under the portal root.
+    '''
+    return [item.name for item in PORTAL_ROOT.iterdir()
+            if item.is_dir() and not item.name.startswith('.')]
+
+
 def main() -> int:
     '''
         Entry point of the deploy.
@@ -134,7 +189,8 @@ def main() -> int:
                         help = 'Limita a un módulo (ej: minerales).')
     args = parser.parse_args()
 
-    pages = _pages(args.only)
+    only = _valid_module(args.only)
+    pages = _pages(only)
     if not pages:
         print('No se encontraron páginas.')
         return 1
@@ -150,7 +206,7 @@ def main() -> int:
         print('Simulación: no se subió nada. Repite con --yes.')
         return 0
 
-    _publish(args.only)
+    _publish(only)
     print('Despliegue terminado.')
     return 0
 

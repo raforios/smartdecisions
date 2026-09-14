@@ -7,11 +7,22 @@
     CDN que sirve el sitio: cuentan cada petición, no piden nada al visitante y
     no dependen de nadie más.
 
-    Qué cuenta y qué no. Una **visita** aquí es una dirección IP distinta en el
-    día; una **página vista** es una petición a un `.html` o a la raíz. Los
-    recursos —CSS, imágenes, JavaScript— se descartan, porque una sola página
-    genera veinte peticiones y contarlas infla el número diez veces. No es
-    analítica de sesiones: es tráfico real, sin adivinanzas.
+    Qué cuenta y qué no. Una **página vista** es una petición a un `.html` o a
+    la raíz **que el sitio efectivamente sirvió**. Los recursos —CSS, imágenes,
+    JavaScript— se descartan, porque una sola página genera veinte peticiones.
+    Y se descarta todo lo que terminó en 403 o 404: internet zumba con
+    escáneres que piden `/wp-login.php` y `/xmlrpc.php` a cualquier dominio, y
+    contarlos multiplicaba el tráfico de BearSoft por diez. Ese ruido no se
+    esconde: se informa aparte, al final de cada sitio.
+
+    Una **visita** es una dirección IP distinta en el día, leída de
+    `x-forwarded-for` y no de `c-ip`. Los sitios van detrás de Cloudflare, así
+    que `c-ip` es el nodo de Cloudflare que reenvió la petición —contarlo era
+    contar puntos de presencia de la CDN, no personas.
+
+    No hay países: `c-country` no existe en este formato de log. Lo más cercano
+    es el PoP de CloudFront que atendió la petición, que se reporta como tal y
+    no como si fuera la ubicación del visitante.
 
     Uso:
         python -m tools.traffic_report                  # últimos 7 días
@@ -35,6 +46,7 @@ PROFILE = 'deploy_ml'
 SITES = {
     'bearsoft': 'bearsoft/',
     'smartdecisions': 'smartdecisions/',
+    'raforios': 'raforios/',
 }
 
 # Extensiones que no son una página. Una sola visita pide el HTML y luego veinte
@@ -44,9 +56,15 @@ ASSET_SUFFIXES = (
     '.map', '.json', '.webp', '.gif'
 )
 
-# Peticiones que no vienen de una persona mirando el sitio.
+# Peticiones que no vienen de una persona mirando el sitio. Sirve para los bots
+# que se identifican; los escáneres de vulnerabilidades se anuncian como un
+# Chrome cualquiera y sólo los delata el código de respuesta.
 BOT_MARKERS = ('bot', 'crawl', 'spider', 'slurp', 'curl', 'wget', 'headless',
                'monitor', 'preview', 'scan')
+
+# Respuestas que significan "el sitio entregó la página". Todo lo demás es una
+# petición a algo que no existe: no es una visita, es alguien probando suerte.
+SERVED_STATUSES = ('200', '304', '206')
 
 
 def _session():
@@ -141,23 +159,47 @@ def _is_person(agent: str) -> bool:
     return not any(marker in lowered for marker in BOT_MARKERS)
 
 
+def _client(row: Dict[str, str]) -> str:
+    '''
+        Returns the address of whoever asked, not of whoever relayed it.
+
+        The sites sit behind Cloudflare, so `c-ip` is a Cloudflare edge node and
+        counting it counts the CDN's points of presence. The real address
+        travels in `x-forwarded-for`; its first hop is the client, the rest are
+        the proxies it crossed.
+
+        Args:
+            row (Dict[str, str]): One parsed log line.
+
+        Returns:
+            str: Client address.
+    '''
+    forwarded = row.get('x-forwarded-for', '-')
+    if forwarded and forwarded != '-':
+        return forwarded.split(',')[0].strip()
+    return row.get('c-ip', '')
+
+
 def _collect(rows: Iterator[Dict[str, str]], since: date) -> Dict[str, Any]:
     '''
         Reduces the log lines to the figures the report prints.
+
+        Separates what the site served from what it refused. The status code is
+        not enough on its own: SmartDecisions answers every miss with its own
+        index.html and a 200, so a scanner asking for `/.git/config` looks like
+        a reader. `x-edge-result-type` still says `Error`, and that is what
+        settles it.
 
         Args:
             rows (Iterator[Dict[str, str]]): Parsed log lines.
             since (date): Earliest day to count.
 
         Returns:
-            Dict[str, Any]: Counters by day, page, country and referrer.
+            Dict[str, Any]: Counters by day, page, edge location and referrer.
     '''
-    by_day: Dict[str, Set[str]] = defaultdict(set)
-    views_by_day: Counter = Counter()
-    pages: Counter = Counter()
-    countries: Counter = Counter()
-    referrers: Counter = Counter()
-    visitors: Set[str] = set()
+    served: List[Dict[str, str]] = []
+    probed: Counter = Counter()
+    scanners: Set[str] = set()
 
     for row in rows:
         day = row.get('date', '')
@@ -165,28 +207,80 @@ def _collect(rows: Iterator[Dict[str, str]], since: date) -> Dict[str, Any]:
             continue
         if not _is_person(row.get('cs(User-Agent)', '')):
             continue
-        if not _is_page(row.get('cs-uri-stem', '')):
+        uri = row.get('cs-uri-stem', '') or '/'
+        if not _is_page(uri):
             continue
 
-        ip = row.get('c-ip', '')
-        by_day[day].add(ip)
-        visitors.add(ip)
-        views_by_day[day] += 1
-        pages[row.get('cs-uri-stem', '/')] += 1
-        countries[row.get('c-country', '??')] += 1
+        result = row.get('x-edge-result-type', '')
+        # A redirect is the same visit on its way to the real page; counting it
+        # would count that visit twice.
+        if result == 'Redirect':
+            continue
 
-        referrer = row.get('cs(Referer)', '-')
+        if result == 'Error' or row.get('sc-status', '') not in SERVED_STATUSES:
+            probed[uri] += 1
+            scanners.add(_client(row))
+            continue
+
+        served.append({
+            'day': day,
+            'client': _client(row),
+            'uri': uri,
+            'edge': row.get('x-edge-location', '???')[:3],
+            'referrer': row.get('cs(Referer)', '-'),
+        })
+
+    return _reduce(served, probed, scanners)
+
+
+def _reduce(
+    served: List[Dict[str, str]],
+    probed: Counter,
+    scanners: Set[str]
+) -> Dict[str, Any]:
+    '''
+        Turns the served requests into the published figures.
+
+        Whoever asked for `/wp-login.php` is dropped from the visit count even
+        for the pages they did get: they also fetch the home page, and counting
+        them there was what made a scan look like an audience.
+
+        Args:
+            served (List[Dict[str, str]]): Requests the site answered.
+            probed (Counter): Refused paths and how often each was asked for.
+            scanners (Set[str]): Addresses that asked for something absent.
+
+        Returns:
+            Dict[str, Any]: Counters ready to print.
+    '''
+    by_day: Dict[str, Set[str]] = defaultdict(set)
+    counts: Dict[str, Counter] = {
+        name: Counter() for name in ('views', 'pages', 'edges', 'referrers')
+    }
+    visitors: Set[str] = set()
+
+    for entry in served:
+        if entry['client'] in scanners:
+            continue
+        by_day[entry['day']].add(entry['client'])
+        visitors.add(entry['client'])
+        counts['views'][entry['day']] += 1
+        counts['pages'][entry['uri']] += 1
+        counts['edges'][entry['edge']] += 1
+
+        referrer = entry['referrer']
         if referrer and referrer != '-' and 'bearsoft.com.bo' not in referrer:
-            referrers[referrer.split('/')[2] if '//' in referrer else referrer] += 1
+            source = referrer.split('/')[2] if '//' in referrer else referrer
+            counts['referrers'][source] += 1
 
     return {
         'days': {day: len(ips) for day, ips in sorted(by_day.items())},
-        'views': views_by_day,
-        'pages': pages,
-        'countries': countries,
-        'referrers': referrers,
+        **counts,
+        'probed': probed,
         'visitors': len(visitors),
-        'total_views': sum(views_by_day.values()),
+        'rejected': sum(probed.values()),
+        'scanners': len(scanners),
+        'total_views': sum(counts['views'].values()),
     }
 
 
@@ -221,14 +315,37 @@ def _print(site: str, data: Dict[str, Any], days: int) -> None:
     for page, count in data['pages'].most_common(8):
         print(f'    {count:>5}  {page}')
 
-    print('\n  Países')
-    for country, count in data['countries'].most_common(8):
-        print(f'    {count:>5}  {country}')
+    print('\n  Dónde se atendió (PoP de CloudFront, no el país del visitante)')
+    for edge, count in data['edges'].most_common(8):
+        print(f'    {count:>5}  {edge}')
 
     if data['referrers']:
         print('\n  De dónde llegaron')
         for source, count in data['referrers'].most_common(6):
             print(f'    {count:>5}  {source}')
+
+    _print_noise(data)
+
+
+def _print_noise(data: Dict[str, Any]) -> None:
+    '''
+        Prints the rejected traffic, so the scanning is visible instead of
+        inflating the visit count.
+
+        Args:
+            data (Dict[str, Any]): Collected figures.
+    '''
+    if not data['rejected']:
+        return
+
+    total = data['rejected'] + data['total_views']
+    share = data['rejected'] / total * 100
+    print(f'\n  Ruido descartado: {data["rejected"]:,} petición(es) a rutas que '
+          f'no existen ({share:.0f}% de todo lo pedido)')
+    print(f'    Desde {data["scanners"]:,} dirección(es), que quedan fuera del '
+          f'conteo de visitas. Más buscado:')
+    for uri, count in data['probed'].most_common(6):
+        print(f'      {count:>4}  {uri}')
 
 
 def main() -> int:
