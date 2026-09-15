@@ -32,7 +32,7 @@ from services.exceptions import (
 
 from services.environment import load_and_validate_env_vars
 
-# Carga las variables de entorno necesarias
+# Loads the environment variables this module needs
 ENV_VARS = load_and_validate_env_vars(
     {
         'EVENTS_SERVICE_URL': str,
@@ -423,8 +423,8 @@ def audit_event(
         async def wrapper(*args, **kwargs):
             # The current_user/user_id is often an email or a string identifier.
             # Do not force conversion to int to avoid errors in the audit service.
-            # El header identifica al usuario final del cliente; si no viene,
-            # se mantiene el comportamiento previo.
+            # The header identifies the client's end user; without it, the
+            # previous behaviour stands.
             user_id = (get_request_user_id()
                        or kwargs.get('current_user')
                        or kwargs.get('user_id', '1001'))

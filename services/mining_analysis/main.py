@@ -12,7 +12,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from mangum import Mangum
 import uvicorn
 
-# Importación del router del microservicio actual
+# Router of this microservice
 from routes.mining_analysis import router as mining_router
 from routes.public_reports import router as public_reports_router
 
@@ -22,7 +22,7 @@ from services.logger_config import custom_logger as logger
 from services.environment import load_and_validate_env_vars
 from services.prices_store import uses_dynamodb
 
-# Configuración de variables de entorno
+# Environment variable configuration
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
         'HOST': str,
@@ -77,10 +77,10 @@ APP_CONFIG = {
     'root_path': ROOT_PATH_NORMALIZED,
     'title': 'Mining Analysis Service',
     'description': '''
-        Este microservicio es el núcleo de inteligencia para el sector minero. 
-        Permite la ingesta masiva de datos de cotización mediante procesos ETL, 
-        la normalización de precios históricos y la exposición de métricas para 
-        sistemas externos y dashboards de Business Intelligence.''',
+        This microservice is the intelligence core for the mining sector. It
+        handles bulk ingest of quotation data through ETL processes, normalizes
+        historical prices and exposes metrics for external systems and Business
+        Intelligence dashboards.''',
     'version': '1.0.0',
     'contact': {
         'name': 'Mining Tech Support',
@@ -137,7 +137,7 @@ async def custom_swagger_ui():
     )
 
 # CORS estándar: lista explícita opcional por env (CORS_ALLOWED_ORIGINS, CSV) +
-# un patrón que cubre nuestros frontends sin listar URLs una por una.
+# one pattern covering our frontends without listing URLs one by one.
 CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
 ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
@@ -158,7 +158,7 @@ app.add_middleware(
     allow_headers = ['*'],
 )
 
-# Inclusión de routers — el público va antes para que aparezca primero en /docs.
+# Router registration. The public one goes first so it shows up first in /docs.
 app.include_router(public_reports_router)
 app.include_router(mining_router)
 
