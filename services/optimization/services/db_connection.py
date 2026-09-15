@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 from services.logger_config import custom_logger as logger
 from services.exceptions import ServiceUnavailableError
 
-# Inicializa la conexión de boto3
+# Initializes the boto3 connection
 dynamodb_resource = boto3.resource('dynamodb')
 
 def get_db_resource() -> Callable:
@@ -47,5 +47,5 @@ def get_table(table_name: str):
             detail = 'Unexpected database initialization error.'
         ) from e
 
-# Instancia de la dependencia para su uso en FastAPI
+# Dependency instance, for FastAPI to inject
 GET_DB_DEPENDENCY: Callable = get_db_resource() # pylint: disable=invalid-name
