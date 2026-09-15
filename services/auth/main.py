@@ -48,9 +48,9 @@ ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
 ]
 
-# Además de la lista explícita (ORIGINS), un patrón cubre todos nuestros frontends
-# —subdominios de bearsoft.com.bo, *.cloudfront.net y localhost— sin listarlos uno
-# por uno. Se puede sobreescribir con la env var CORS_ALLOWED_ORIGIN_REGEX.
+# On top of the explicit list (ORIGINS), one pattern covers every frontend we
+# have —bearsoft.com.bo subdomains, *.cloudfront.net and localhost— without
+# listing them one by one. Overridable with the CORS_ALLOWED_ORIGIN_REGEX env var.
 DEFAULT_CORS_ORIGIN_REGEX = (
     r'^https://([a-z0-9-]+\.)*bearsoft\.com\.bo$'
     r'|^https://[a-z0-9-]+\.cloudfront\.net$'

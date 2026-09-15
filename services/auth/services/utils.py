@@ -5,7 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from services.environment import load_and_validate_env_vars
 
-# Carga las variables de entorno necesarias
+# Loads the environment variables this module needs
 ENV_VARS = load_and_validate_env_vars(
     {
         'TARGET_TIMEZONE': str
