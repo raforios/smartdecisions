@@ -45,6 +45,18 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from tools.build_receivables import (
+    COLLECTIONS_SHEET,
+    SCENARIOS,
+    STOCK_SCENARIOS,
+    STOCK_SHEET,
+    CreditBook,
+    build_credit_book,
+    build_stock_snapshot,
+    describe as describe_credit,
+    describe_stock
+)
+
 
 # --- Source contract -------------------------------------------------------
 
@@ -233,6 +245,8 @@ class BuildConfig:
     months: int = 24
     seed: int = 20260826
     routes: tuple[int, ...] = field(default_factory = tuple)
+    scenario: str = 'estresada'
+    stock_scenario: str = 'ajustado'
 
 
 # --- Loading and cleaning --------------------------------------------------
@@ -723,7 +737,8 @@ def to_template(frame: pd.DataFrame) -> pd.DataFrame:
     return frame[list(TEMPLATE_HEADERS)].rename(columns = TEMPLATE_HEADERS)
 
 
-def build_provenance_sheet(frame: pd.DataFrame) -> pd.DataFrame:
+def build_provenance_sheet(frame: pd.DataFrame, book: CreditBook,
+                           stock_scenario: str) -> pd.DataFrame:
     '''
         Builds the sheet that states which fields are real and which are
         synthetic, so the file can be handed to a prospect without implying
@@ -731,6 +746,9 @@ def build_provenance_sheet(frame: pd.DataFrame) -> pd.DataFrame:
 
         Args:
             frame (pd.DataFrame): The template-shaped frame.
+            book (CreditBook): The generated credit book, whose origin has to
+                be stated too.
+            stock_scenario (str): Scenario the stock snapshot was drawn with.
 
         Returns:
             pd.DataFrame: Two-column provenance table.
@@ -756,6 +774,20 @@ def build_provenance_sheet(frame: pd.DataFrame) -> pd.DataFrame:
                                            'con un nombre real es casual.'),
         ('Producto', 'Descripción genérica; se retiraron las marcas.'),
         ('Latitud, Longitud', 'Reales. Habilitan el módulo de rutas.'),
+        ('Condición, Plazo, Límite de crédito', 'SIMULADOS. El archivo de origen '
+                                                'es 99,9% al contado; el libro de '
+                                                'crédito se genera con plazos de 5 '
+                                                'a 120 días y un 70% de la venta a '
+                                                'crédito, que es lo que describen '
+                                                'las empresas del rubro.'),
+        ('Hoja Cobros', f'SIMULADA, escenario "{book.scenario}". Incluye cobros a '
+                        'tiempo, con mora, parciales y facturas sin cobrar. Corte '
+                        f'al {book.as_of.date()}.'),
+        ('Hoja Stock', f'SIMULADA, escenario "{stock_scenario}". Una foto del '
+                       f'{book.as_of.date()}, dibujada desde la demanda observada '
+                       'de cada producto, con quiebres, faltantes, exceso y '
+                       'capital inmovilizado. «Comprometido» es lo que un ERP '
+                       'tendría reservado en pedidos: se lee, no se decide acá.'),
     ]
     return pd.DataFrame(notes, columns = ['Campo', 'Origen'])
 
@@ -775,13 +807,26 @@ def build(config: BuildConfig) -> pd.DataFrame:
     frame = extend_history(frame, config)
     sheet = to_template(frame)
 
+    # The credit book is generated separately: the source file is 99.9% cash
+    # and the prospects described the opposite, so it cannot be derived from the
+    # data. The provenance sheet says so.
+    book = build_credit_book(sheet, config.scenario, config.seed)
+    # The stock photo is drawn FROM the observed demand: a product selling 10
+    # a day gets the units its situation calls for at that pace. Drawn at random
+    # it would produce coverages nobody can read.
+    stock = build_stock_snapshot(book.sales, config.stock_scenario, config.seed)
+
     config.output.parent.mkdir(parents = True, exist_ok = True)
     with pd.ExcelWriter(config.output, engine = 'openpyxl') as writer:
-        sheet.to_excel(writer, sheet_name = 'Ventas', index = False)
-        build_provenance_sheet(sheet).to_excel(
+        book.sales.to_excel(writer, sheet_name = 'Ventas', index = False)
+        book.collections.to_excel(writer, sheet_name = COLLECTIONS_SHEET, index = False)
+        stock.to_excel(writer, sheet_name = STOCK_SHEET, index = False)
+        build_provenance_sheet(sheet, book, config.stock_scenario).to_excel(
             writer, sheet_name = 'Origen de los datos', index = False
         )
-    return sheet
+    describe_credit(book)
+    describe_stock(stock, config.stock_scenario)
+    return book.sales
 
 
 def describe(sheet: pd.DataFrame, output: Path) -> None:
@@ -828,11 +873,19 @@ def parse_args() -> BuildConfig:
     parser.add_argument('--months', type = int, default = 24)
     parser.add_argument('--seed', type = int, default = 20260826)
     parser.add_argument('--routes', type = int, nargs = '*', default = [])
+    parser.add_argument('--scenario', choices = sorted(SCENARIOS), default = 'estresada',
+                        help = 'Conducta de pago del libro de crédito. Por defecto '
+                               'estresada: una cartera sana no prueba nada en una demo.')
+    parser.add_argument('--stock-scenario', choices = sorted(STOCK_SCENARIOS),
+                        default = 'ajustado',
+                        help = 'Situación del almacén. Por defecto ajustado: con '
+                               'quiebres y exceso a la vez.')
     args = parser.parse_args()
 
     return BuildConfig(
         source = args.source, output = args.output, rows = args.rows,
-        months = args.months, seed = args.seed, routes = tuple(args.routes)
+        months = args.months, seed = args.seed, routes = tuple(args.routes),
+        scenario = args.scenario, stock_scenario = args.stock_scenario
     )
 
 

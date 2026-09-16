@@ -27,10 +27,17 @@ BUCKET = 'bearsoft-smartdecisions-landing'
 DISTRIBUTION_ID = 'EXP60FDO0MJVI'
 PROFILE = 'deploy_ml'
 
-# Local .js/.css references only: an absolute URL belongs to somebody else's
-# cache policy and must not be rewritten.
+# Local references only: an absolute URL belongs to somebody else's cache
+# policy and must not be rewritten.
+#
+# Images and icons are stamped for the same reason code is: replacing the bytes
+# behind a name that never changes — the brand mark, a favicon — leaves every
+# browser and CloudFront serving the old picture. The manual `?v=` that used to
+# cover them was the step that got forgotten, which is the bug this tool exists
+# to remove.
 _ASSET_REFERENCE = re.compile(
-    r'(?P<attr>(?:src|href)=")(?P<path>(?!https?://)[^"?]+\.(?:js|css))(?:\?v=[^"]*)?"'
+    r'(?P<attr>(?:src|href)=")(?P<path>(?!https?://)[^"?]+'
+    r'\.(?:js|css|jpg|jpeg|png|svg|webp|ico))(?:\?v=[^"]*)?"'
 )
 
 
