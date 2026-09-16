@@ -3,7 +3,7 @@
 '''
 import socket
 from datetime import date, datetime
-from typing import Any, AsyncIterator, Dict
+from typing import Any, AsyncGenerator, Dict
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -58,7 +58,7 @@ CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     '''
         Handles startup/shutdown. DynamoDB tables are managed outside the app
         lifecycle (via dynamodb.sh / IaC); we only log readiness here.

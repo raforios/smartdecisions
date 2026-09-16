@@ -465,24 +465,24 @@ async def get_bench_service(
     models: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     '''
-    Corre varios modelos sobre la misma serie y los devuelve medidos.
+    Runs several models over the same series and returns them measured.
 
-    Sin `models` corre todo el banco. Cada uno viene con su proyección y con el
-    error que cometió al re-correr la serie, ordenados del que menos erró al que
-    más — incluido el que está por defecto cuando pierde, que es exactamente lo
-    que hay que poder ver.
+    Without `models` it runs the whole bench. Each one comes with its projection
+    and with the error it made when replaying the series, ordered from the one
+    that missed least to the one that missed most — including the default when
+    it loses, which is exactly what has to be visible.
 
     Args:
-        days_ahead (int): Días a proyectar.
-        currency (str): Código ISO 4217.
-        models (List[str] | None): Modelos a correr. None corre todos.
+        days_ahead (int): Days to project.
+        currency (str): ISO 4217 code.
+        models (List[str] | None): Models to run. None runs them all.
 
     Returns:
-        Dict[str, Any]: Payload con forma de ModelBench.
+        Dict[str, Any]: Payload matching the ModelBench shape.
 
     Raises:
-        InvalidInputError: Si el horizonte está fuera de rango.
-        ServiceUnavailableError: Si todavía no hay cotizaciones guardadas.
+        InvalidInputError: If the horizon is out of range.
+        ServiceUnavailableError: If no quotations are stored yet.
     '''
     if days_ahead < 1 or days_ahead > SCENARIO_MAX_DAYS:
         raise InvalidInputError(detail = QuotesError.INVALID_DATE_RANGE.value)
@@ -517,16 +517,3 @@ async def get_bench_service(
         ],
         'runs': runs,
     }
-
-
-__all__ = [
-    'FLOAT_REGIME_START',
-    'get_bench_service',
-    'get_forecast_service',
-    'get_history_service',
-    'validity_of',
-    'scheduled_sync_service',
-    'sale_scenario_service',
-    'stored_rates',
-    'sync_rates_service',
-]
