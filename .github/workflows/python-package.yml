@@ -16,9 +16,8 @@ jobs:
         # Lista de los directorios de microservicios para que el workflow los recorra
         service-directory:
           - "services/auth"
+          - "services/events"
           - "services/files"
-          - "services/forms"
-          - "services/localization"
           - "services/ml_functions"
 
     steps:
