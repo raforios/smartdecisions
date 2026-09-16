@@ -40,6 +40,10 @@ TABLES=(
     # versión; el caché es una sola clave porque solo se busca por ella exacta.
     "ai_prompts:view:S:version:N"
     "ai_explanations:cache_key:S"
+    # Política de crédito de cada cliente de SmartDecisions. Clave simple: la
+    # política se lee entera por dueño, y el dueño es parte de la consulta y no
+    # un filtro posterior — leer la de otro cambiaría sus provisiones.
+    "analytics_credit_policies:owner_email:S"
 
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"

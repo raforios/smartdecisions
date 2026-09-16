@@ -3,7 +3,7 @@
 '''
 import socket
 from datetime import datetime, date
-from typing import Dict, Any, AsyncIterator
+from typing import Dict, Any, AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -40,7 +40,7 @@ ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED else '/openapi.json'
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     '''
         Handles the startup and shutdown events of the FastAPI application.
         DynamoDB tables are managed outside the application lifecycle.
