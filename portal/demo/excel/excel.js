@@ -108,25 +108,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return readCache().results[kind] || null;
     }
 
+    // Un análisis puede alimentar más de una vista: el resumen y la fuente de
+    // volumen salen de la misma respuesta, y las dos tienen que mostrar cuándo
+    // se calculó. Por eso el sello se marca por lista de nodos y no por uno.
     const STAMP_IDS = {
-        summary: 'stampSummary',
-        opportunities: 'stampOpportunities',
-        segmentation: 'stampSegmentation',
-        portfolio: 'stampPortfolio'
+        summary: ['stampSummary', 'stampVolume'],
+        opportunities: ['stampOpportunities'],
+        segmentation: ['stampSegmentation'],
+        portfolio: ['stampPortfolio'],
+        receivables: ['stampReceivables'],
+        stock: ['stampStock']
     };
 
     function markStamp(kind, timestamp) {
-        const node = document.getElementById(STAMP_IDS[kind]);
-        if (!node) return;
         const time = new Date(timestamp).toLocaleTimeString('es-BO',
             { hour: '2-digit', minute: '2-digit' });
-        node.textContent = `Calculado a las ${time}`;
+        (STAMP_IDS[kind] || []).forEach((id) => {
+            const node = document.getElementById(id);
+            if (node) node.textContent = `Calculado a las ${time}`;
+        });
     }
 
     // The analysis sections are mutually exclusive views (tab-like): showing one
     // hides the others, so the page doesn't grow into a long vertical stack.
-    const ANALYSIS_SECTIONS = ['stepDashboard', 'stepForecast', 'stepSegmentation',
-        'stepOpportunities', 'stepPortfolio'];
+    const ANALYSIS_SECTIONS = ['stepDashboard', 'stepVolume', 'stepForecast',
+        'stepSegmentation', 'stepOpportunities', 'stepPortfolio', 'stepReceivables',
+        'stepStock'];
     function showAnalysisView(sectionId, scroll = true) {
         ANALYSIS_SECTIONS.forEach((id) => { qs('#' + id).hidden = (id !== sectionId); });
         sessionStorage.setItem(VIEW_KEY, sectionId);
@@ -514,9 +521,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // A few KPIs read better with the period the number belongs to.
+    /**
+     * Etiqueta de una tarjeta KPI.
+     *
+     * Las que vienen del backend traen `metric_code` y se traducen acá. Las que
+     * arma el frontend —concentración, fuente de volumen— traen su etiqueta
+     * escrita: sin este respaldo salían a pantalla sin título.
+     */
     function kpiLabel(card) {
         const entry = KPI_LABELS[card && card.metric_code];
-        if (!entry) return card && card.metric_code ? String(card.metric_code) : '';
+        if (!entry) {
+            if (card && card.label) return card.label;
+            return card && card.metric_code ? String(card.metric_code) : '';
+        }
         if (card.metric_code === 'LAST_MONTH_SALES' && card.reference) {
             return `Venta de ${card.reference}`;
         }
@@ -552,6 +569,15 @@ document.addEventListener('DOMContentLoaded', () => {
         DATASET_UNREADABLE: 'No se pudo leer el archivo del bucket de FILES.'
     };
 
+    // El mismo código de nivel, leído sobre productos en vez de clientes: la
+    // frase cambia porque la dependencia de un SKU no se gestiona como la
+    // dependencia de una cuenta.
+    const VOLUME_LEVELS = {
+        HIGH: 'Alta: el volumen depende de muy pocos productos.',
+        MODERATE: 'Moderada: hay dependencia de algunos productos clave.',
+        LOW: 'Baja: el volumen está bien repartido en el catálogo.'
+    };
+
     const CONCENTRATION_LEVELS = {
         HIGH: 'Alta: la venta depende de muy pocos clientes.',
         MODERATE: 'Moderada: hay dependencia de algunos clientes clave.',
@@ -570,7 +596,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `Mismo mes de ${String(card.reference).slice(0, 4)} (YoY)`
                 : 'Se necesita un año de historial';
         }
-        return entry ? entry[1] : null;
+        // Igual que la etiqueta: la nota de una tarjeta armada a mano es la que
+        // trae la tarjeta.
+        return entry ? entry[1] : ((card && card.hint) || null);
     }
 
     function renderIssues(issues) {
@@ -606,9 +634,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // back where they were instead of on an empty screen.
     const VIEW_TO_KIND = {
         stepDashboard: 'summary',
+        stepVolume: 'summary',
         stepOpportunities: 'opportunities',
         stepSegmentation: 'segmentation',
-        stepForecast: 'forecast'
+        stepForecast: 'forecast',
+        stepReceivables: 'receivables',
+        stepStock: 'stock'
     };
 
     function restoreLastView() {
@@ -622,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderForecast(cached.payload.data, cached.payload.compare);
             showAnalysisView('stepForecast', false);
         } else {
-            ANALYSES[kind].render(cached.payload);
+            ANALYSES[kind].render(cached.payload, sectionId);
             markStamp(kind, cached.at);
         }
     }
@@ -654,6 +685,19 @@ document.addEventListener('DOMContentLoaded', () => {
             ready: 'Salud de cartera lista.', failed: 'No se pudo revisar la cartera.',
             fetch: () => window.SD_API.get(analysisUrl('portfolio')),
             render: renderPortfolio
+        },
+        receivables: {
+            busy: 'Calculando…', running: 'Leyendo la cartera por cobrar…',
+            ready: 'Cuentas por cobrar listas.',
+            failed: 'No se pudo calcular la cartera por cobrar.',
+            fetch: () => window.SD_API.get(analysisUrl('receivables')),
+            render: renderReceivables
+        },
+        stock: {
+            busy: 'Leyendo…', running: 'Leyendo el stock del día…',
+            ready: 'Stock del día listo.', failed: 'No se pudo leer el stock.',
+            fetch: () => window.SD_API.get(analysisUrl('stock')),
+            render: renderStock
         }
     };
 
@@ -665,14 +709,19 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Shows an analysis, reusing the cached payload unless a recalculation is
      * explicitly requested. `trigger` is the button that shows the busy state.
+     *
+     * `view` overrides which section the renderer ends on. It exists because
+     * one response can answer two questions: the commercial summary and the
+     * volume source travel together, and asking for the second must not cost a
+     * second call to the same endpoint.
      */
-    async function openAnalysis(kind, trigger, force = false) {
+    async function openAnalysis(kind, trigger, force = false, view = null) {
         if (!state.datasetId) return;
         const analysis = ANALYSES[kind];
         if (!force) {
             const cached = cachedResult(kind);
             if (cached) {
-                analysis.render(cached.payload);
+                analysis.render(cached.payload, view);
                 markStamp(kind, cached.at);
                 return;
             }
@@ -684,7 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const payload = await analysis.fetch();
             cacheResult(kind, payload);
-            analysis.render(payload);
+            analysis.render(payload, view);
             markStamp(kind, Date.now());
             note.classList.add('success');
             note.textContent = analysis.ready;
@@ -702,12 +751,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!card || card.disabled) return;
         const kind = card.dataset.analysis;
         if (kind === 'forecast') openForecast(card);
+        else if (kind === 'volume') openAnalysis('summary', card, false, 'stepVolume');
         else openAnalysis(kind, card);
     });
 
     // "↻ Recalcular" inside each result section: same analysis, fresh numbers.
     qsAll('[data-recalc]').forEach((button) => {
-        button.addEventListener('click', () => openAnalysis(button.dataset.recalc, button, true));
+        button.addEventListener('click', () => openAnalysis(
+            button.dataset.recalc, button, true, button.dataset.recalcView || null
+        ));
     });
 
     // ---------- Reporting window ----------
@@ -1259,7 +1311,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chartRegistry[canvasId] = new window.Chart(qs('#' + canvasId), config);
     }
 
-    function renderCommercialSummary(data) {
+    /**
+     * El resumen comercial y la fuente de volumen salen de la misma respuesta.
+     * `view` dice en qué vista terminar, porque el usuario puede haber pedido
+     * cualquiera de las dos y el archivo se lee una sola vez.
+     */
+    function renderCommercialSummary(data, view) {
         // KPIs
         const kpiBox = qs('#dashboardKpis');
         kpiBox.innerHTML = '';
@@ -1307,10 +1364,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showPeriodBar(data.period);
         renderMargin(data.margin);
         renderGrowth(data.growth);
+        renderVolumeSource(data.volume_source);
         renderConcentration(data.concentration);
         renderEfficiency(data.efficiency);
 
-        showAnalysisView('stepDashboard');
+        showAnalysisView(view || 'stepDashboard');
     }
 
     // ---------- Profitability ----------
@@ -1413,14 +1471,189 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        const mix = crecimiento.category_mix || [];
-        qs('#mixCard').hidden = mix.length === 0;
-        fillTable('mixTable', mix, (row) =>
+    }
+
+    // ---------- Volume source ----------
+    // Códigos que reporta el motor, redactados acá. El backend nombra el
+    // efecto; la frase que lo explica es del frontend.
+    const VOLUME_EFFECTS = {
+        PRICE: ['Precio', 'Lo mismo vendido a otro precio'],
+        QUANTITY: ['Cantidad', 'Más o menos unidades al precio anterior'],
+        JOINT: ['Cruce', 'La parte que no es sólo precio ni sólo cantidad'],
+        ENTRY: ['Productos nuevos', 'Productos que no se vendían el mes anterior'],
+        EXIT: ['Productos que salieron', 'Productos que dejaron de venderse'],
+        NEW_CLIENTS: ['Clientes nuevos', 'Cuentas que no compraban el mes anterior'],
+        LOST_CLIENTS: ['Clientes perdidos', 'Cuentas que dejaron de comprar'],
+        RETAINED_CLIENTS: ['Clientes que se mantuvieron', 'Los mismos clientes, comprando distinto']
+    };
+
+    function effectLabel(code) {
+        const entry = VOLUME_EFFECTS[code];
+        return entry ? entry[0] : String(code);
+    }
+
+    function effectHint(code) {
+        const entry = VOLUME_EFFECTS[code];
+        return entry ? entry[1] : '';
+    }
+
+    function fillEffects(tableId, rows) {
+        fillTable(tableId, rows, (row) =>
+            `<td>${escapeHtml(effectLabel(row.effect_code))}` +
+            `<span class="cell-note">${escapeHtml(effectHint(row.effect_code))}</span></td>` +
+            `<td class="numeric ${deltaClass(row.amount)}">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric">${formatDelta(row.percentage)}</td>`);
+    }
+
+    /**
+     * De dónde sale el volumen: productos, clientes, el cruce entre ambos y la
+     * descomposición del último movimiento.
+     *
+     * Las piezas que antes estaban repartidas —el mix de categorías dentro de
+     * Crecimiento y el ABC dentro de Concentración— se muestran acá y sólo acá.
+     */
+    function renderVolumeSource(volumen) {
+        const headline = (volumen && volumen.headline) || {};
+        // Sin productos no hay nada que contestar, pero la vista se muestra
+        // igual con su explicación: si el usuario pidió este análisis, dejarlo
+        // frente a una pantalla vacía es peor que decirle por qué no hay nada.
+        const empty = !headline.total_products;
+        qs('#volumeEmpty').hidden = !empty;
+        qs('#volumeContent').hidden = empty;
+        if (empty) return;
+
+        fillKpis('volumeKpis', [
+            { label: 'Productos vendidos', value: headline.total_products, format: 'int',
+              hint: 'Cuántos productos distintos tuvieron venta en el período' },
+            { label: 'Productos que hacen el 80%', value: headline.pareto_products,
+              format: 'int',
+              hint: `El ${formatDecimal(headline.pareto_product_percentage, 1)}% del catálogo` },
+            { label: `Peso del top ${headline.top_products_count}`,
+              value: headline.top_products_percentage, format: 'percent',
+              hint: 'Qué parte de la venta hacen los productos de la tabla' }
+        ]);
+
+        qs('#volumeHhiReading').textContent = VOLUME_LEVELS[headline.hhi_level] || '';
+
+        const products = volumen.products || [];
+        makeChart('chartVolumePareto', {
+            type: 'bar',
+            data: {
+                labels: products.map((row) => shortLabel(row.label)),
+                datasets: [
+                    {
+                        label: 'Participación', data: products.map((row) => row.share),
+                        backgroundColor: BRAND[0], order: 2
+                    },
+                    {
+                        label: 'Acumulado', type: 'line', order: 1,
+                        data: products.map((row) => row.cumulative),
+                        borderColor: BRAND[3], backgroundColor: 'rgba(45,125,70,0.1)',
+                        tension: 0.3, pointRadius: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: true, position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => products[items[0].dataIndex].label,
+                            label: (ctx) => `${ctx.dataset.label}: ` +
+                                `${formatDecimal(ctx.parsed.y, 2)}%`
+                        }
+                    }
+                },
+                scales: { y: { ticks: { callback: (value) => `${value}%` } } }
+            }
+        });
+
+        const abc = volumen.abc_summary || [];
+        makeChart('chartVolumeAbc', {
+            type: 'doughnut',
+            data: {
+                labels: abc.map((row) => `Clase ${row.abc_class}`),
+                datasets: [{
+                    data: abc.map((row) => row.amount),
+                    backgroundColor: [BRAND[3], BRAND[2], BRAND[5]]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const row = abc[ctx.dataIndex];
+                                return `${formatInt(row.products)} productos · ` +
+                                       `${formatDecimal(row.percentage, 1)}% de la venta`;
+                            },
+                            afterLabel: (ctx) => ABC_DESCRIPTIONS[abc[ctx.dataIndex].abc_class] || ''
+                        }
+                    }
+                }
+            }
+        });
+
+        fillTable('volumeProductsTable', products, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric">${formatDecimal(row.share, 2)}%</td>` +
+            `<td class="numeric">${formatDecimal(row.cumulative, 2)}%</td>` +
+            `<td><span class="badge badge-${row.abc_class.toLowerCase()}">` +
+            `${row.abc_class}</span></td>` +
+            `<td class="numeric">${formatInt(row.clients)}</td>`);
+
+        fillTable('volumeClientsTable', volumen.clients, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric">${formatDecimal(row.share, 2)}%</td>` +
+            `<td>${escapeHtml(row.anchor_product || '—')}</td>` +
+            `<td class="numeric">${formatDecimal(row.anchor_share, 1)}%</td>`);
+
+        const matrix = volumen.matrix || [];
+        qs('#volumeMatrixCard').hidden = matrix.length === 0;
+        fillTable('volumeMatrixTable', matrix, (row) =>
+            `<td>${escapeHtml(row.client)}</td>` +
+            `<td>${escapeHtml(row.product)}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric">${formatDecimal(row.client_share, 1)}%</td>` +
+            `<td class="numeric">${formatDecimal(row.product_share, 1)}%</td>`);
+
+        const mix = volumen.category_mix || [];
+        qs('#volumeMixCard').hidden = mix.length === 0;
+        fillTable('volumeMixTable', mix, (row) =>
             `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
             `<td class="numeric">${formatDecimal(row.current_share, 1)}%</td>` +
             `<td class="numeric ${deltaClass(row.share_change)}">` +
             `${formatDelta(row.share_change, ' pp')}</td>` +
             `<td class="numeric">${formatCurrency(row.current_amount)}</td>`);
+
+        renderVolumeDecomposition(volumen.decomposition);
+    }
+
+    function renderVolumeDecomposition(decomposition) {
+        const block = qs('#volumeDecompositionBlock');
+        const byProduct = (decomposition && decomposition.by_product) || [];
+        if (!byProduct.length) {
+            block.hidden = true;
+            return;
+        }
+        block.hidden = false;
+
+        qs('#volumeDecompositionNote').textContent =
+            `${formatDateMonth(decomposition.current_month)} cerró en ` +
+            `${formatCurrency(decomposition.current_amount)} contra ` +
+            `${formatCurrency(decomposition.previous_amount)} de ` +
+            `${formatDateMonth(decomposition.previous_month)}: ` +
+            `${formatCurrency(decomposition.change)} ` +
+            `(${formatDelta(decomposition.change_percentage)}). Las dos lecturas ` +
+            'de abajo explican ese mismo cambio.';
+
+        fillEffects('volumeProductEffects', byProduct);
+        fillEffects('volumeClientEffects', (decomposition.by_client) || []);
     }
 
     // ---------- Concentration ----------
@@ -1447,25 +1680,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ]);
 
         qs('#hhiReading').textContent = CONCENTRATION_LEVELS[clients.hhi_level] || '';
-
-        const abc = (concentracion.abc && concentracion.abc.summary) || [];
-        makeChart('chartAbc', {
-            type: 'doughnut',
-            data: {
-                labels: abc.map((row) => `Clase ${row.abc_class}`),
-                datasets: [{
-                    data: abc.map((row) => row.amount),
-                    backgroundColor: [BRAND[3], BRAND[2], BRAND[5]]
-                }]
-            },
-            options: { responsive: true, plugins: { legend: { position: 'right' } } }
-        });
-
-        fillTable('abcTable', abc, (row) =>
-            `<td><span class="badge badge-${row.abc_class.toLowerCase()}">${row.abc_class}</span></td>` +
-            `<td class="numeric">${formatInt(row.products)}</td>` +
-            `<td class="numeric">${formatDecimal(row.percentage, 1)}%</td>` +
-            `<td class="cell-note">${escapeHtml(ABC_DESCRIPTIONS[row.abc_class] || '')}</td>`);
     }
 
     // ---------- Efficiency ----------
@@ -1499,6 +1713,438 @@ document.addEventListener('DOMContentLoaded', () => {
     const RISK_PAGE_SIZE = 15;
     let riskClients = [];
     let riskPage = 0;
+
+    // ---------- Stock ----------
+    // Códigos del motor, redactados acá.
+    const STOCK_STATUS_LABELS = {
+        OUT_OF_STOCK: 'Sin stock',
+        CRITICAL: 'Crítico',
+        LOW: 'Bajo',
+        HEALTHY: 'Sano',
+        EXCESS: 'Exceso',
+        NO_DEMAND: 'Sin rotación'
+    };
+
+    const STOCK_UNAVAILABLE = {
+        NO_SNAPSHOT: 'Todavía no cargaste una foto de inventario para este ' +
+            'archivo. Súbela con el formato de la hoja Stock de la plantilla y ' +
+            'este tablero se enciende.',
+        NO_PRODUCTS: 'La foto de inventario no tiene productos que se puedan ' +
+            'cruzar con el catálogo de ventas.'
+    };
+
+    // El orden en que se leen las situaciones: primero lo que falta.
+    const STOCK_STATUS_ORDER = ['OUT_OF_STOCK', 'CRITICAL', 'LOW', 'HEALTHY',
+        'EXCESS', 'NO_DEMAND'];
+
+    function stockBadge(code) {
+        return `<span class="badge badge-${String(code).toLowerCase()}">` +
+               `${escapeHtml(STOCK_STATUS_LABELS[code] || code)}</span>`;
+    }
+
+    function coverageCell(row) {
+        return row.coverage_days == null
+            ? '<span class="cell-note">sin rotación</span>'
+            : `${formatDecimal(row.coverage_days, 1)} d`;
+    }
+
+    /**
+     * El stock del día: cuánto dura, qué está por quebrar y qué capital está
+     * quieto. `Disponible` refleja lo que el ERP ya comprometió.
+     */
+    function renderStock(data) {
+        const empty = qs('#stockEmpty');
+        const content = qs('#stockContent');
+
+        if (!data || data.available !== true) {
+            const code = data && data.reason_code;
+            empty.textContent = STOCK_UNAVAILABLE[code] ||
+                'No hay una foto de inventario que se pueda leer.';
+            empty.hidden = false;
+            content.hidden = true;
+            qs('#stockSubtitle').textContent = '';
+            showPeriodBar(data && data.period);
+            showAnalysisView('stepStock');
+            return;
+        }
+        empty.hidden = true;
+        content.hidden = false;
+
+        const kpis = data.kpis || {};
+        qs('#stockSubtitle').textContent =
+            `Foto del ${formatDate(kpis.snapshot_date)}. La cobertura se mide con ` +
+            'la venta observada en el período, no con una proyección.';
+
+        fillKpis('stockKpis', [
+            { label: 'Productos', value: kpis.products, format: 'int',
+              hint: `${formatDecimal(kpis.units_on_hand, 0)} unidades en almacén` },
+            { label: 'Disponible', value: kpis.units_available, format: 'int',
+              hint: `${formatDecimal(kpis.units_committed, 0)} unidades ya ` +
+                    'comprometidas por el ERP' },
+            { label: 'Valor del inventario', value: kpis.stock_value, format: 'money',
+              hint: kpis.stock_value == null
+                  ? 'Falta el costo unitario para valorizarlo'
+                  : 'Existencia por su costo unitario' },
+            { label: 'Sin stock', value: kpis.out_of_stock, format: 'int',
+              hint: 'Productos en cero que sí tienen demanda' },
+            { label: 'Por quebrar', value: kpis.at_risk, format: 'int',
+              hint: 'Sin stock, críticos y bajos juntos' },
+            { label: 'Capital quieto', value: kpis.excess_value, format: 'money',
+              hint: `${formatInt(kpis.excess_products)} productos con exceso o sin ` +
+                    'rotación' },
+            { label: 'Cobertura promedio', value: kpis.average_coverage_days,
+              format: 'decimal', hint: 'Días que dura el stock al ritmo actual' },
+            { label: 'Venta diaria en riesgo', value: kpis.stockout_value_at_risk,
+              format: 'money',
+              hint: 'Lo que se deja de vender por día si no se repone' }
+        ]);
+
+        qs('#stockNote').textContent =
+            'La columna «Disponible» es existencia menos lo que tu ERP ya tiene ' +
+            'comprometido en pedidos: se lee de tu sistema, no se reserva acá.';
+
+        renderStockCharts(data.products || []);
+
+        fillTable('stockRiskTable', data.at_risk, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            `<td>${row.abc_class
+                ? `<span class="badge badge-${row.abc_class.toLowerCase()}">` +
+                  `${row.abc_class}</span>` : '—'}</td>` +
+            `<td class="numeric">${formatDecimal(row.on_hand, 0)}</td>` +
+            `<td class="numeric">${formatDecimal(row.available, 0)}</td>` +
+            `<td class="numeric">${formatDecimal(row.daily_demand, 2)}</td>` +
+            `<td class="numeric">${coverageCell(row)}</td>` +
+            `<td>${escapeHtml(formatDate(row.stockout_date))}</td>` +
+            `<td>${stockBadge(row.status_code)}</td>`);
+
+        fillTable('stockExcessTable', data.excess, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            `<td>${row.abc_class
+                ? `<span class="badge badge-${row.abc_class.toLowerCase()}">` +
+                  `${row.abc_class}</span>` : '—'}</td>` +
+            `<td class="numeric">${formatDecimal(row.on_hand, 0)}</td>` +
+            `<td class="numeric">${coverageCell(row)}</td>` +
+            `<td class="numeric">${formatDecimal(row.excess_units, 0)}</td>` +
+            `<td class="numeric">${row.excess_value == null
+                ? '—' : formatCurrency(row.excess_value)}</td>` +
+            `<td>${stockBadge(row.status_code)}</td>`);
+
+        showPeriodBar(data.period);
+        showAnalysisView('stepStock');
+    }
+
+    function renderStockCharts(products) {
+        const counts = STOCK_STATUS_ORDER.map((code) =>
+            products.filter((row) => row.status_code === code).length);
+        const values = STOCK_STATUS_ORDER.map((code) => products
+            .filter((row) => row.status_code === code)
+            .reduce((total, row) => total + (row.stock_value || 0), 0));
+        const labels = STOCK_STATUS_ORDER.map((code) => STOCK_STATUS_LABELS[code]);
+        const colours = [BRAND[1], BRAND[7], BRAND[4], BRAND[3], BRAND[2], BRAND[5]];
+
+        makeChart('chartStockStatus', {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{ label: 'Productos', data: counts, backgroundColor: colours }]
+            },
+            options: chartOptions('int')
+        });
+
+        makeChart('chartStockValue', {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{ data: values, backgroundColor: colours }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: {
+                        callbacks: { label: (ctx) => formatCurrency(ctx.parsed) }
+                    }
+                }
+            }
+        });
+    }
+
+    // ---------- Receivables ----------
+    // Códigos del backend, redactados acá. El servicio devuelve
+    // AgingBucket.DAYS_31_60 y CreditRisk.CRITICAL; la frase es del frontend.
+    const AGING_LABELS = {
+        CURRENT: 'Por vencer',
+        DAYS_1_15: '1 a 15 días',
+        DAYS_16_30: '16 a 30 días',
+        DAYS_31_60: '31 a 60 días',
+        DAYS_61_90: '61 a 90 días',
+        DAYS_91_120: '91 a 120 días',
+        DAYS_OVER_120: 'Más de 120 días'
+    };
+
+    const RISK_LABELS = {
+        HEALTHY: 'Al día',
+        WATCH: 'En observación',
+        DELINQUENT: 'Moroso',
+        CRITICAL: 'Crítico'
+    };
+
+    const DUE_WINDOW_LABELS = {
+        OVERDUE: 'Ya vencido',
+        DAYS_7: 'Próximos 7 días',
+        DAYS_15: 'Días 8 a 15',
+        DAYS_30: 'Días 16 a 30',
+        BEYOND: 'Más adelante'
+    };
+
+    const RECEIVABLES_UNAVAILABLE = {
+        NO_CREDIT_COLUMNS: 'Este archivo no trae las columnas de crédito ' +
+            '(Condición Venta, Plazo Días). Descarga la plantilla actualizada, ' +
+            'llénalas y vuelve a subir el archivo.',
+        NO_CREDIT_SALES: 'Todas las ventas de este archivo son al contado, así que ' +
+            'no hay cartera por cobrar que analizar.'
+    };
+
+    const CREDIT_MARGIN_UNAVAILABLE = {
+        NO_COST_COLUMN: 'Sin la columna Costo Unitario no se puede calcular qué deja ' +
+            'el crédito: falta el margen del que se descuentan el financiamiento y el ' +
+            'incobrable.'
+    };
+
+    function riskBadge(code) {
+        return `<span class="badge badge-${String(code).toLowerCase()}">` +
+               `${escapeHtml(RISK_LABELS[code] || code)}</span>`;
+    }
+
+    /**
+     * La cartera por cobrar: posición, antigüedad, recuperabilidad, quién debe,
+     * quién cobra, qué vence cuándo y qué deja el crédito.
+     */
+    function renderReceivables(data) {
+        const empty = qs('#receivablesEmpty');
+        const content = qs('#receivablesContent');
+
+        if (!data || data.available !== true) {
+            const code = data && data.reason_code;
+            empty.textContent = RECEIVABLES_UNAVAILABLE[code] ||
+                'Este archivo no tiene información de crédito para analizar.';
+            empty.hidden = false;
+            content.hidden = true;
+            qs('#receivablesSubtitle').textContent = '';
+            showPeriodBar(data && data.period);
+            showAnalysisView('stepReceivables');
+            return;
+        }
+        empty.hidden = true;
+        content.hidden = false;
+
+        const kpis = data.kpis || {};
+        qs('#receivablesSubtitle').textContent =
+            `Cartera al ${formatDate(kpis.as_of)}, el último día con movimiento del ` +
+            'archivo. Todas las antigüedades se miden contra esa fecha.';
+
+        fillKpis('receivablesKpis', [
+            { label: 'Saldo por cobrar', value: kpis.receivable_total, format: 'money',
+              hint: `${formatInt(kpis.open_invoices)} facturas abiertas de ` +
+                    `${formatInt(kpis.clients_with_debt)} clientes` },
+            { label: 'Vencido', value: kpis.overdue_amount, format: 'money',
+              hint: `${formatDecimal(kpis.overdue_rate, 1)}% del saldo` },
+            { label: 'Recuperable', value: kpis.recoverable_amount, format: 'money',
+              hint: `${formatDecimal(kpis.recoverable_rate, 1)}% del saldo` },
+            { label: 'Incobrable estimado', value: kpis.uncollectible_amount,
+              format: 'money',
+              hint: `${formatDecimal(kpis.uncollectible_rate, 1)}% del saldo` },
+            { label: 'Venta a crédito', value: kpis.credit_share, format: 'percent',
+              hint: `Bs ${formatDecimal(kpis.credit_amount, 0)} de la venta del período` },
+            { label: 'DSO', value: kpis.days_sales_outstanding, format: 'decimal',
+              hint: 'Días que tarda en volver la venta a crédito' },
+            { label: 'Mora promedio', value: kpis.weighted_days_late, format: 'decimal',
+              hint: 'Días de atraso de lo vencido, ponderados por monto' },
+            { label: 'Efectividad de cobranza', value: kpis.collection_effectiveness,
+              format: 'decimal',
+              hint: 'CEI: de lo cobrable en el período, cuánto se cobró (100 es todo)' },
+            { label: 'Cobrado a tiempo', value: kpis.on_time_rate, format: 'percent',
+              hint: 'Parte de lo ya cobrado que entró dentro del plazo' },
+            { label: 'Plazo otorgado vs real', value: kpis.average_term_granted,
+              format: 'decimal',
+              hint: kpis.average_term_real == null
+                  ? 'Todavía no hay cobros para comparar'
+                  : `Se cobra en promedio a los ${formatDecimal(kpis.average_term_real, 1)} días` }
+        ]);
+
+        renderReceivablesPolicy(data.policy);
+        renderAging(data.aging || []);
+        renderCreditMargin(data.margin || {});
+
+        fillTable('debtorsTable', data.debtors, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            `<td class="numeric">${formatCurrency(row.open_amount)}</td>` +
+            `<td class="numeric">${formatCurrency(row.overdue_amount)}</td>` +
+            `<td class="numeric">${formatInt(row.oldest_days)}</td>` +
+            `<td class="numeric">${row.limit_utilization == null
+                ? '<span class="cell-note">sin línea</span>'
+                : `${formatDecimal(row.limit_utilization, 1)}%`}</td>` +
+            `<td>${riskBadge(row.risk_code)}</td>`);
+
+        fillTable('collectorsTable', data.collectors, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            `<td class="numeric">${formatCurrency(row.open_amount)}</td>` +
+            `<td class="numeric">${formatCurrency(row.overdue_amount)}</td>` +
+            `<td class="numeric">${formatInt(row.clients)}</td>` +
+            `<td class="numeric">${row.on_time_rate == null
+                ? '—' : `${formatDecimal(row.on_time_rate, 1)}%`}</td>`);
+
+        renderDueCalendar(data.due_windows || [], data.due_dates || []);
+        renderCollectionCurve(data.collection_curve || []);
+
+        fillTable('priorityTable', data.priority, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            `<td>${escapeHtml(row.collector || '—')}</td>` +
+            `<td class="numeric">${formatCurrency(row.overdue_amount)}</td>` +
+            `<td class="numeric">${formatInt(row.oldest_days)}</td>` +
+            `<td class="numeric">${formatDecimal(row.recovery_probability * 100, 0)}%</td>` +
+            `<td class="numeric">${formatCurrency(row.expected_recovery)}</td>`);
+
+        showPeriodBar(data.period);
+        showAnalysisView('stepReceivables');
+    }
+
+    function renderReceivablesPolicy(policy) {
+        if (!policy) {
+            qs('#receivablesPolicyNote').textContent = '';
+            return;
+        }
+        const own = policy.source_code === 'CLIENT';
+        qs('#receivablesPolicyNote').textContent =
+            (own ? 'Calculado con tu política de crédito' : 'Calculado con la política por defecto') +
+            `: tramos de ${policy.aging_buckets.join(', ')} días, ` +
+            `tasa financiera ${formatDecimal(policy.financial_rate_daily * 365 * 100, 1)}% anual` +
+            (own ? '.' : '. Puedes registrar la tuya y estos números cambian.');
+    }
+
+    function renderAging(aging) {
+        makeChart('chartAging', {
+            type: 'bar',
+            data: {
+                labels: aging.map((row) => AGING_LABELS[row.bucket_code] || row.bucket_code),
+                datasets: [{
+                    label: 'Saldo (Bs)', data: aging.map((row) => row.amount),
+                    backgroundColor: aging.map((row) =>
+                        row.bucket_code === 'CURRENT' ? BRAND[3] : BRAND[1])
+                }]
+            },
+            options: chartOptions('money')
+        });
+
+        const recoverable = aging.map((row) => row.amount - row.provision);
+        makeChart('chartRecovery', {
+            type: 'bar',
+            data: {
+                labels: aging.map((row) => AGING_LABELS[row.bucket_code] || row.bucket_code),
+                datasets: [
+                    { label: 'Recuperable', data: recoverable, backgroundColor: BRAND[3] },
+                    {
+                        label: 'Incobrable', backgroundColor: BRAND[1],
+                        data: aging.map((row) => row.provision)
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: { x: { stacked: true }, y: { stacked: true } }
+            }
+        });
+
+        fillTable('agingTable', aging, (row) =>
+            `<td>${escapeHtml(AGING_LABELS[row.bucket_code] || row.bucket_code)}</td>` +
+            `<td class="numeric">${formatInt(row.invoices)}</td>` +
+            `<td class="numeric">${formatInt(row.clients)}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric">${formatDecimal(row.share, 1)}%</td>` +
+            `<td class="numeric">${formatDecimal(row.expected_loss_rate * 100, 0)}%</td>` +
+            `<td class="numeric">${formatCurrency(row.provision)}</td>`);
+    }
+
+    function renderCreditMargin(margin) {
+        const block = qs('#creditMarginBlock');
+        if (!margin.available) {
+            block.hidden = false;
+            qs('#creditMarginKpis').innerHTML = '';
+            qs('#creditMarginNote').textContent =
+                CREDIT_MARGIN_UNAVAILABLE[margin.reason_code] ||
+                'No hay datos suficientes para calcular qué deja el crédito.';
+            return;
+        }
+        block.hidden = false;
+
+        fillKpis('creditMarginKpis', [
+            { label: 'Margen bruto del crédito', value: margin.credit_gross_margin,
+              format: 'money',
+              hint: `${formatDecimal(margin.credit_gross_margin_rate, 1)}% de la venta a ` +
+                    `crédito · al contado ${formatDecimal(margin.cash_gross_margin_rate, 1)}%` },
+            { label: 'Costo financiero', value: margin.financing_cost, format: 'money',
+              hint: `De los cuales Bs ${formatDecimal(margin.delinquency_cost, 0)} son ` +
+                    'por mora' },
+            { label: 'Incobrable esperado', value: margin.expected_loss, format: 'money',
+              hint: 'Provisión sobre el saldo abierto' },
+            { label: 'Margen neto del crédito', value: margin.net_margin, format: 'money',
+              hint: `${formatDecimal(margin.net_margin_rate, 1)}% de la venta a crédito` }
+        ]);
+
+        const lost = margin.credit_gross_margin - margin.net_margin;
+        qs('#creditMarginNote').textContent =
+            `Financiar y provisionar la cartera se lleva Bs ${formatDecimal(lost, 0)} ` +
+            `del margen bruto: de ${formatDecimal(margin.credit_gross_margin_rate, 1)}% ` +
+            `queda ${formatDecimal(margin.net_margin_rate, 1)}%.`;
+    }
+
+    function renderDueCalendar(windows, dates) {
+        makeChart('chartDueWindows', {
+            type: 'bar',
+            data: {
+                labels: windows.map((row) => DUE_WINDOW_LABELS[row.window_code] || row.window_code),
+                datasets: [{
+                    label: 'Monto (Bs)', data: windows.map((row) => row.amount),
+                    backgroundColor: windows.map((row) =>
+                        row.window_code === 'OVERDUE' ? BRAND[1] : BRAND[0])
+                }]
+            },
+            options: chartOptions('money')
+        });
+
+        fillTable('dueDatesTable', dates, (row) =>
+            `<td>${escapeHtml(formatDate(row.due_date))}</td>` +
+            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            `<td class="numeric">${formatInt(row.invoices)}</td>` +
+            `<td class="numeric">${formatInt(row.clients)}</td>`);
+    }
+
+    function renderCollectionCurve(curve) {
+        qs('#curveCard').hidden = curve.length === 0;
+        if (!curve.length) return;
+
+        makeChart('chartCurve', {
+            type: 'line',
+            data: {
+                labels: curve.map((point) => point.cohort_month),
+                datasets: [30, 60, 90].map((days, index) => ({
+                    label: `${days} días`,
+                    data: curve.map((point) => point[`collected_${days}`]),
+                    borderColor: [BRAND[0], BRAND[3], BRAND[2]][index],
+                    backgroundColor: 'transparent',
+                    // Un horizonte que no transcurrió viaja en null: la línea se
+                    // corta en vez de caer a cero, que se leería como un desplome.
+                    spanGaps: false, tension: 0.3
+                }))
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: { y: { ticks: { callback: (value) => `${value}%` } } }
+            }
+        });
+    }
 
     function renderPortfolio(data) {
         fillKpis('portfolioKpis', data.kpis, (card) =>
@@ -1715,6 +2361,31 @@ document.addEventListener('DOMContentLoaded', () => {
         })}`;
     }
 
+    const MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+    /**
+     * 'YYYY-MM' escrito como lo diría una persona. Se arma con los nombres de
+     * mes y no con `new Date('2026-03')`, que en zonas al oeste de Greenwich
+     * devuelve el mes anterior.
+     */
+    function formatDateMonth(key) {
+        if (!key) return '—';
+        const [year, month] = String(key).split('-');
+        const name = MONTH_NAMES[Number(month) - 1];
+        return name ? `${name} de ${year}` : String(key);
+    }
+
+    /**
+     * 'YYYY-MM-DD' a dd/mm/aaaa, partiendo el texto y no con `new Date`, que al
+     * oeste de Greenwich devuelve el día anterior.
+     */
+    function formatDate(value) {
+        if (!value) return '—';
+        const [year, month, day] = String(value).split('-');
+        return day ? `${day}/${month}/${year}` : String(value);
+    }
+
     function formatDateRange(start, end) {
         if (!start && !end) return '—';
         return `${start || '?'} → ${end || '?'}`;
@@ -1773,6 +2444,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // it. The button only appears where SD_CONFIG.AI_URL is configured.
     const AI_VIEWS = {
         stepDashboard: ['commercial_summary', 'summary'],
+        stepVolume: ['volume_source', 'summary'],
+        stepReceivables: ['receivables', 'receivables'],
+        stepStock: ['stock', 'stock'],
         stepOpportunities: ['opportunities', 'opportunities'],
         stepSegmentation: ['segmentation', 'segmentation'],
         stepForecast: ['sales_forecast', 'forecast'],
@@ -1783,7 +2457,13 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.entries(AI_VIEWS).forEach(([sectionId, [viewId, kind]]) => {
             window.SD_AI.registerView(viewId, () => {
                 const cached = cachedResult(kind);
-                return cached ? cached.payload : null;
+                if (!cached) return null;
+                // Fuente de volumen comparte la respuesta con el resumen, pero
+                // explica su propio bloque: mandar la respuesta entera haría que
+                // la explicación hablara de pantallas que no se están viendo.
+                return viewId === 'volume_source'
+                    ? cached.payload.volume_source
+                    : cached.payload;
             });
             const section = document.getElementById(sectionId);
             const head = section && section.querySelector('.section-head');

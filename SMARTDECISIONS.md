@@ -80,8 +80,8 @@ validan `Authorization` contra AUTH.
 
 | Servicio | Función | Infra |
 |---|---|---|
-| 📥 INGEST | Plantilla, parseo, validación y normalización del archivo | Lambda 1024 MB / 30 s |
-| 📊 ANALYTICS | Resumen, afinidad, pronóstico, segmentación, crecimiento, concentración, eficiencia, margen, cartera | Lambda 2048 MB / 120 s |
+| 📥 INGEST | Plantilla, parseo, validación y normalización del archivo de ventas, de los cobros y del stock | Lambda 1024 MB / 30 s |
+| 📊 ANALYTICS | Resumen, fuente de volumen, afinidad, pronóstico, segmentación, crecimiento, concentración, eficiencia, margen, cartera, cuentas por cobrar y stock | Lambda 2048 MB / 120 s |
 | 🗺️ OPTIMIZATION | Días de visita por proximidad y orden de paradas | Lambda 256 MB / 30 s |
 | ⛏️ MINING_ANALYSIS | Cotización oficial de minerales, proyección, boletín PDF/PNG del Ministerio | Lambda 1024 MB · persistencia conmutable SQL/DynamoDB |
 | 💵 QUOTES | Tipo de cambio oficial del BCB, proyección y escenario de venta | Lambda 256 MB |
@@ -94,6 +94,14 @@ portal. Se reubicará como demo de la línea de capacitación en `bearsoft.com.b
 > **LOCALIZATION no es parte de SmartDecisions** — es de Binaria. Las rutas las
 > resuelve OPTIMIZATION.
 
+**Qué entra en una revisión general y qué no.** Los diez servicios del producto
+son AI, ANALYTICS, AUTH, EVENTS, FILES, INGEST, MINING_ANALYSIS, ML_FUNCTIONS,
+OPTIMIZATION y QUOTES. **FORMS, LOCALIZATION, TRADE, EVENTS_MYSQL, PLANNING,
+CMS, MINING_SUMMIT y SUPPLIES no se tocan nunca** sin que Rafael lo pida para
+ese servicio en concreto: son de clientes —Binaria y el Ministerio— y viven en
+el monorepo por conveniencia. Un hallazgo legítimo en uno de esos ocho se
+reporta y se espera el OK; no se corrige de paso.
+
 **Frontend:** `portal/demo/` — Vanilla JS, sin build, S3 + CloudFront.
 `app/frontend/` es el prototipo Streamlit original: **está muerto**.
 
@@ -105,13 +113,16 @@ Cada módulo es una pregunta de negocio, no un algoritmo. *El usuario nunca lee
 | Módulo | Pregunta que responde | Estado |
 |---|---|---|
 | Resumen Comercial | ¿Cómo vamos? ¿Crece? ¿De quién dependemos? ¿Cuánto ganamos? | ✅ |
+| Fuente de volumen | ¿De qué productos y de qué clientes sale la venta, y de dónde vino el movimiento del mes? | ✅ |
 | Oportunidades | ¿Qué le ofrezco a cada cliente y cuánto vale? | ✅ |
 | Pronóstico | ¿Cuánto voy a vender los próximos meses? | ✅ |
 | Segmentación | ¿Quiénes son mis clientes valiosos? | ✅ |
 | Salud de Cartera | ¿A quién estoy por perder? | ✅ |
+| Cuentas por cobrar | ¿Cuánto me deben, qué tan vencido está, cuánto voy a recuperar y qué deja el crédito? | ✅ |
+| Stock del día | ¿Cuántos días me dura lo que tengo, qué está por quebrar y cuánto capital está quieto? | ✅ |
 | Rutas de visita | ¿En qué orden visito y qué le llevo a cada uno? | ✅ |
 | Cotizaciones y proyecciones | ¿A qué precio está el mineral y el dólar, y conviene vender hoy o esperar? | ✅ |
-| Interpretación (IA) | ¿Qué significa esto? — sobre cualquiera de las pantallas anteriores | ✅ backend, falta encender en el portal |
+| Interpretación (IA) | ¿Qué significa esto? — sobre cualquiera de las pantallas anteriores | ✅ |
 | Predicciones de fuga | ¿Qué cliente va a dejar de comprarme? | 📋 |
 | Retail | Módulo aparte, con su propio contrato de datos | 📋 |
 
@@ -163,20 +174,31 @@ español familiar**; `column_mapper` los traduce a los nombres canónicos intern
 acepta además los alias típicos de un ERP (`Numero Factura`, `Codigo Sap`,
 `Cliente ID`, `Unidades`, `Monto Final`…).
 
+Los canónicos van **en inglés**, como todo identificador del código. La fuente
+de verdad es `SALES_COLUMNS` en `services/ingest/schemas/ingest.py`: de ahí se
+derivan el mapeador de encabezados, el esquema del DataFrame, las listas de
+obligatorias y opcionales y la plantilla publicada.
+
 | Columna (plantilla) | Canónico | Oblig. | Para qué sirve |
 |---|---|---|---|
-| Fecha | `fecha` | Sí | Tendencia, pronóstico, estacionalidad |
-| Nro Factura | `id_pedido` | Sí | Agrupa la canasta — **sin esto no hay afinidad** |
-| Cliente | `id_punto_venta` / `nombre_pdv` | Sí | Segmentación, cartera |
-| Producto | `id_producto` / `nombre_producto` | Sí | Afinidad, ABC |
-| Cantidad | `cantidad` | Sí | Drop size |
-| Zona / Ciudad | `zona` / `ciudad` | No | Análisis por sector |
-| Vendedor | `vendedor` | No | Productividad de la fuerza de venta |
-| Latitud / Longitud | `latitud` / `longitud` | No | **Habilita el módulo de rutas** |
-| Categoria | `categoria` | No | Afinidad por categoría, mix, ABC |
-| Precio Unitario | `precio_unitario` | No | Valorizar oportunidades en Bs |
-| **Costo Unitario** | `costo_unitario` | No | **Habilita margen y rentabilidad** |
-| Monto Total | `monto_total` | No | Si falta, se calcula cantidad × precio |
+| Fecha | `date` | Sí | Tendencia, pronóstico, estacionalidad |
+| Nro Factura | `order_id` | Sí | Agrupa la canasta — **sin esto no hay afinidad** |
+| Cliente | `pos_name` → `pos_id` | Sí | Segmentación, cartera. El identificador lo deriva el servicio |
+| Producto | `product_name` → `product_id` | Sí | Afinidad, ABC. El identificador lo deriva el servicio |
+| Cantidad | `quantity` | Sí | Drop size |
+| Zona / Ciudad / Region | `zone` / `city` / `region` | No | Análisis por sector |
+| Canal | `channel` | No | Comparación entre canales |
+| Vendedor | `seller` | No | Productividad de la fuerza de venta |
+| Latitud / Longitud | `latitude` / `longitude` | No | **Habilita el módulo de rutas** |
+| Categoria | `category` | No | Afinidad por categoría, mix, ABC |
+| Precio Unitario | `unit_price` | No | Valorizar oportunidades en Bs |
+| **Costo Unitario** | `unit_cost` | No | **Habilita margen y rentabilidad** |
+| Monto Total | `total_amount` | No | Si falta, se calcula cantidad × precio |
+
+**Obligatoria para el motor no es lo mismo que obligatoria para el cliente.** El
+cliente escribe `Cliente` y `Producto`; `pos_id` y `product_id` los deriva
+INGEST, porque el cliente no tiene esos códigos. Por eso `SalesColumn` distingue
+`required` de `template_required`.
 
 **Reglas del contrato:**
 
@@ -192,6 +214,76 @@ acepta además los alias típicos de un ERP (`Numero Factura`, `Codigo Sap`,
 - **El motor de análisis es uno solo.** Excel, CSV y una futura integración con
   ERP son adaptadores de ingesta intercambiables. La normalización ocurre una sola
   vez, en INGEST.
+
+### 3.1 Crédito y cobros
+
+El formato lo definimos nosotros y el ERP se adapta. Las columnas de la venta
+viajan en la **misma hoja de ventas**
+—una sola carga sigue alimentando todos los módulos— y son opcionales: sin ellas,
+el tablero de Cuentas por cobrar simplemente no se ofrece.
+
+| Columna (plantilla) | Canónico | Qué es |
+|---|---|---|
+| Condicion Venta | `payment_terms` | `CONTADO` / `CREDITO`. Reemplaza el `Tipo Pago` que traen los ERP |
+| Plazo Dias | `credit_days` | De 5 a 120; con la fecha de la venta deriva el vencimiento |
+| Fecha Vencimiento | `due_date` | Si viene, manda sobre el plazo |
+| Responsable Cobro | `collector` | Si falta, cae en `Vendedor` |
+| Limite Credito | `credit_limit` | Del cliente. Sin esto no hay utilización de línea |
+
+Los cobros son un **contrato aparte que se casa con la venta**, cargable después
+y de forma incremental (hoja `Cobros` del mismo libro, o su propio archivo):
+
+| Columna | Canónico | Qué es |
+|---|---|---|
+| Nro Factura | `order_id` | La llave contra la venta. Ya es obligatoria en la carga inicial |
+| Fecha Cobro | `payment_date` | |
+| Monto Cobrado | `paid_amount` | Admite abonos parciales: varias filas por factura |
+| Medio | `payment_method` | Opcional |
+| Responsable Cobro | `collector` | Opcional: quien cobró puede no ser el asignado |
+
+**Reglas propias:**
+
+- **La cuenta por cobrar vive al nivel de factura.** En la hoja de ventas una
+  factura ocupa varias filas —una por producto—, así que el saldo se arma con la
+  suma de `total_amount` por `order_id`. Si una misma factura apareciera con dos
+  fechas o dos clientes, va como incidencia con código: no se elige una fila.
+- **Factura sin cobros = saldo abierto, no error.** Es lo que permite cargar
+  ventas hoy y cobros mañana.
+- **Cobro sin venta = incidencia con código**, nunca descarte en silencio.
+- **Parámetros de política por cliente en tabla**, con fallback al `.env` **campo
+  por campo**: tramos de antigüedad, matriz de provisión, tasa financiera diaria,
+  umbral de moroso y plazo por defecto. Quien sólo quiere cambiar la tasa no
+  debería tener que declarar los siete.
+
+### 3.2 Stock del día
+
+Una **foto**, no un libro de movimientos: una fila por producto y día con lo que
+había en el almacén. Se carga por su propio endpoint porque cambia todos los días
+mientras el archivo de ventas se carga una vez, y porque el ERP que lo exporta
+casi nunca es el mismo sistema que emite las facturas. Una carga nueva
+**reemplaza** la anterior.
+
+| Columna (plantilla) | Canónico | Qué es |
+|---|---|---|
+| Fecha | `snapshot_date` | El día de la foto |
+| Producto | `product_name` → `product_id` | El identificador lo deriva el servicio |
+| Existencia | `on_hand` | Unidades en el almacén |
+| Comprometido | `committed` | Lo que el ERP ya reservó en pedidos. **Se lee, no se escribe** |
+| En Transito | `in_transit` | Opcional |
+| Almacen | `warehouse` | Opcional |
+| Costo Unitario | `unit_cost` | Opcional. Sin él no se valoriza el inventario |
+
+**La línea que no se cruza.** `disponible = existencia − comprometido` **reporta**
+un compromiso que el ERP del cliente ya tomó. SmartDecisions no reserva, no
+aparta y no promete stock: ser dueño de esa verdad significa ser dueño de la
+concurrencia, la idempotencia y la culpa cuando el ERP diga otra cosa — una pelea
+que este producto pierde contra el ERP del cliente. El endpoint de "almacén con
+reservas" que se sugirió en la reunión **queda fuera a propósito**.
+
+**Lo que sí es BI** y una consulta de saldo no da: cobertura en días a la demanda
+observada, fecha estimada de quiebre, capital inmovilizado en lo que no rota, y
+la clase ABC de cada producto para que un quiebre en un A no se lea como uno en
+un C.
 
 ---
 
@@ -450,7 +542,227 @@ Las que siguen condicionando el código. Las que se revirtieron no están.
 
 ## 8. Lo último que se hizo
 
-**9 de septiembre de 2026 — barrido de configuración en seis servicios.**
+**14 de septiembre de 2026 — observaciones posteriores a la reunión del 9.**
+
+Se revisaron con clientes potenciales sólo Análisis Comercial y Optimización de
+rutas. De ahí salieron tres tableros nuevos, y de la revisión con el economista,
+la corrección del panel del dólar.
+
+### Fuente de volumen — módulo nuevo
+
+Existía repartido en tres bloques y en ninguno se veía como una pregunta propia:
+el mix de categorías dentro de Crecimiento, el ABC dentro de Concentración y un
+ranking de productos en el Resumen. Ninguno cruzaba cliente con producto.
+
+1. **`services/volume.py`** (596 líneas) con lo que el bloque contesta: curva de
+   Pareto de productos con su alcance —a cuántos clientes le llega cada uno—,
+   clientes con el **producto que los sostiene** y qué porcentaje de su compra
+   representa, el cruce cliente × producto leído de los dos lados, y la
+   **descomposición del último movimiento** en precio, cantidad, cruce, entradas
+   y salidas por producto, y en clientes nuevos, perdidos y retenidos. Las dos
+   descomposiciones suman el mismo cambio, así que ninguna puede explicar más de
+   lo que pasó.
+2. **Las piezas se mudaron, no se copiaron.** `category_mix` salió de
+   `growth.py`, el ABC salió de `concentration.py` y `top_clients` —que el
+   frontend nunca renderizaba— se reemplazó por la tabla de clientes con ancla.
+   `AbcBlock.products`, que viajaba con hasta 300 filas sin que nadie las
+   mostrara, dejó de existir.
+3. **`hhi_level` es ahora un helper compartido** en `analytics_utils.py`: los dos
+   motores hacen la misma pregunta a sujetos distintos —clientes y productos— y
+   cada uno trae sus propios cortes del `.env`.
+4. **Nueve variables nuevas** `VOLUME_*` en el `.env`; se fueron
+   `CONCENTRATION_ABC_A_LIMIT`, `CONCENTRATION_ABC_B_LIMIT` y
+   `CONCENTRATION_MAX_ABC_ROWS`.
+5. **Vista propia en el portal** (`stepVolume`), con su tarjeta en el menú, su
+   sello de cálculo y su botón de IA. **Sale de la respuesta del resumen**: pedir
+   la pregunta nueva no cuesta otra llamada al endpoint, y `openAnalysis` acepta
+   la vista en la que terminar.
+6. **Rol de IA `volume_source` v1** sembrado en `ai_prompts`, y la vista sumada a
+   la lista cerrada de `ViewName`. La IA recibe **su bloque**, no la respuesta
+   entera del resumen: mandarla completa hacía que explicara pantallas que no se
+   están viendo.
+7. **Dos fallos de paso, arreglados:** las tarjetas KPI armadas en el frontend
+   —las de Concentración y las de este bloque— salían **sin etiqueta y sin nota**,
+   porque `kpiLabel` y `kpiHint` sólo sabían traducir `metric_code` y no caían en
+   la etiqueta propia de la tarjeta.
+
+**Verificado:** 68 tests en verde y Pylint 10.00 en ANALYTICS; el motor corrido
+sobre `DetalleVentas.csv` real (121.236 filas, 211 productos con venta: 33 hacen
+el 80%, HHI 0,0408) con las dos descomposiciones cerrando en el mismo cambio; y
+el renderizador del portal corrido en Node contra esa misma salida —vista,
+KPIs, seis tablas, los dos gráficos, el payload de la IA y el caso sin datos—.
+
+**Pendiente de Rafael:** desplegar **ANALYTICS** (bloque nuevo + nueve variables
+nuevas del `.env`) y **AI** (la vista `volume_source` en el `Enum`). El portal
+**no se publicó todavía a propósito**: sin el backend nuevo la vista mostraría su
+nota de vacío. En cuanto despliegues, publico y verifico.
+
+1. **Assets de marca del demo.** `portal/demo/assets/` había quedado con el
+   juego viejo —el oso de dibujo animado y los favicons de julio— mientras la
+   página se actualizó el 11 y 13 de septiembre. Se copió el juego nuevo a los
+   seis HTML del demo y se subió un `favicon.ico` real, que antes devolvía HTML.
+   El estampador de `tools/deploy_demo_portal.py` ahora **cubre imágenes e
+   iconos**, no sólo `.js`/`.css`: reemplazar los bytes detrás de un nombre fijo
+   dejaba a CloudFront y al navegador sirviendo la imagen anterior.
+2. **Frase de apertura de `bearsoft.com.bo`** reemplazada por la versión que
+   trajo Rafael, con el cierre que ata la experiencia al producto. El
+   `og:description` se alineó: decía "Veintidós años".
+3. **Panel del dólar: una sola tabla y un solo gráfico.** Había dos tablas
+   —una fija, alimentada por `/forecast` con el método del servicio, y otra que
+   seguía al selector—: la misma pregunta contestada dos veces y con dos
+   respuestas a la vista. Ahora el selector de modelo manda sobre las cifras, el
+   gráfico y la tabla única. Se cayó la llamada a `/forecast` en ese panel
+   —`/bench` ya trae histórico, vigente y confianza—, o sea **una invocación de
+   Lambda en vez de dos**.
+4. **El modelo por defecto dejó de estar escrito en el código.** Era
+   `DEFAULT_MODEL = 'DAMPED_TREND'`; ahora es el de menor error medido al plazo
+   pedido, que el servicio ya devuelve primero, y la pantalla **explica por qué
+   lo es** con su error y el número de réplicas. Mientras el usuario no elija,
+   el default sigue al plazo; en cuanto elige, se respeta su elección.
+5. **Dos contadores de histórico**, que no se deducen uno del otro: cotizaciones
+   publicadas y días corridos que cubren. El BCB publica en días hábiles y el
+   viernes cubre el fin de semana. La fecha de arranque de la serie sale del
+   dato y no de un `27/06/2026` escrito en el HTML.
+6. **La capa de IA recibe el modelo elegido.** Antes se le pasaba el banco
+   completo y no sabía cuál estaba viendo el usuario: explicaba nueve
+   proyecciones donde en pantalla hay una. Viaja la respuesta tal cual más
+   `selected_model`; la vista del escenario además recibe el resultado del
+   escenario, que no le llegaba.
+
+**Verificado:** `node --check`, arnés en Node sobre la vista con una respuesta
+de `/bench` fabricada (selector, tabla única, casilla de proyectadas, payload de
+IA y cambio de modelo), y lo publicado comparado con lo local en demo y página.
+
+**Pendiente de Rafael (backend):** nada de esto lo necesita. El texto del rol
+`rate_forecast` en `ai_prompts` sí conviene versionarlo para que use
+`selected_model`, y eso se administra por la API, no por el repositorio.
+
+### Cuentas por cobrar — módulo nuevo
+
+Lo pidieron los interesados como el hueco más grande: la mayoría de sus ventas
+son a crédito —dijeron cerca del 70%, con plazos de 5 a 120 días— y el archivo de
+ventas no responde nada de eso.
+
+1. **Contrato ampliado** (§3.1): cinco columnas de crédito en la hoja de ventas y
+   la hoja `Cobros` como contrato aparte, cargable después y de forma
+   incremental. Endpoint propio: `POST /v1/ingest/{dataset_id}/collections`. Si el
+   libro que devuelve el cliente ya trae la hoja llena, **la misma subida carga
+   las dos cosas**.
+2. **`services/receivables.py` + `receivables_views.py`** en ANALYTICS. El motor
+   mide el libro; el segundo arma las cuatro listas sobre las que se actúa. Todo
+   al nivel de factura, contra el **último día con actividad del archivo** y no
+   contra hoy: un dataset del trimestre pasado reportaría toda su cartera vencida
+   sólo por el paso del tiempo.
+3. **Los KPI**, con su descripción en pantalla: antigüedad por tramos con su
+   provisión, recuperable contra incobrable, DSO, mora ponderada **por monto** y
+   no por factura, CEI —que mide al equipo de cobranza, no a los clientes—, plazo
+   otorgado contra plazo real, calendario de vencimientos, curva de cobro por
+   cohorte y la lista de gestión ordenada por **recupero esperado** y no por
+   antigüedad: el saldo más viejo suele ser el que menos vuelve.
+4. **Margen neto del crédito:** margen bruto − costo financiero − incobrable
+   esperado. Sobre el archivo de demo, 22,9% de margen bruto quedan en **15,0%**.
+   Es el número que da vuelta una reunión.
+5. **Política por cliente** en `analytics_credit_policies`, con fallback al `.env`
+   **campo por campo**: quien sólo quiere cambiar la tasa no declara los siete
+   parámetros. `GET`/`PUT /v1/analytics/credit-policy`, y la política aplicada
+   viaja en la respuesta para que el lector vea qué produjo cada número.
+6. **Rol de IA `receivables` v1** sembrado, con una regla explícita: si se cita
+   una tasa de pérdida, decir que es un parámetro configurado y no un hecho.
+
+### Stock del día — módulo nuevo
+
+**Se dejó fuera el "almacén con reservas" a propósito**, y coincidimos en el
+motivo: SmartDecisions sería dueño de la verdad del stock —concurrencia,
+idempotencia, la culpa cuando el ERP diga otra cosa— y esa pelea la pierde contra
+el ERP del cliente. Lo que sí se hace: **leer** lo que el ERP ya comprometió y
+reportar lo que implica.
+
+1. **Contrato y endpoint** (§3.2): `POST /v1/ingest/{dataset_id}/stock`. Una carga
+   nueva reemplaza la foto anterior, que es el punto de una foto diaria.
+2. **`services/stock.py`** en ANALYTICS: cobertura en días a la demanda
+   observada, fecha estimada de quiebre, exceso sobre el techo de cobertura,
+   capital inmovilizado y clase ABC de cada producto. La demanda sale del
+   histórico de ventas y **no del módulo de pronóstico**: la cobertura es una
+   medición, y mezclarle una proyección haría parecer medida una fecha inferida.
+3. **Con stock y sin demanda medida no hay cobertura**: se reporta `NO_DEMAND` y
+   todas sus unidades cuentan como capital quieto. Informar cobertura infinita
+   disfrazaría de sano un producto que nadie compra.
+
+### Un fallo que venía de antes
+
+El corte ABC comparaba el acumulado **incluyendo** el propio producto, así que un
+producto que concentra el 99% de la venta salía **clase C** en vez de A. Corregido
+en `volume.py` y en `stock.py`: ahora se compara el acumulado que lo precede, y el
+ítem que cruza el umbral pertenece a la clase que cruza. Sobre el archivo real,
+las 33 clases A coinciden ahora exactamente con el punto de Pareto.
+
+### Limpieza de reglas rotas
+
+1. **Los cuatro `__all__` los había puesto yo** —verificado con `git log -S`— y
+   son inertes: el proyecto nunca usa `from modulo import *`, y no tienen nada que
+   ver con `__init__.py`. Quitados. Eso destapó que `services/analytics.py`
+   importaba los nueve motores **sólo para re-exportarlos**: el controlador ahora
+   importa de cada motor y hay una capa menos.
+2. **Los comentarios y docstrings en castellano, traducidos**: 80 líneas en los
+   archivos del producto y ocho frases del boilerplate, repetidas por copia en
+   los diez servicios. **El boilerplate también**: el `db_connection.py` original
+   de EVENTS (agosto 2025) está enteramente en inglés y el castellano lo
+   introdujo Claude en commits posteriores. Que un archivo sea contrato significa
+   que no se cambia su comportamiento, no que pueda quedar en otro idioma.
+3. **El botón de IA de Pronóstico nunca se montaba.** `js/ai.js` lo inserta en
+   `.section-head` y esa sección era la única que no la tenía, así que la vista
+   estaba registrada y el botón no aparecía en pantalla. Corregido; las ocho
+   vistas del módulo comercial tienen ahora su botón.
+4. **Skill `/constitucion`** (`.claude/skills/constitucion/`): siete barridos de
+   las reglas que **no fallan solas** —idioma, mecanismos inventados, carpetas
+   nuevas, DTOs, códigos de UI, configuración y qué se borró de código previo—.
+   Con el filtro de los diez servicios en código, no en prosa.
+
+**Verificado:** los diez servicios del producto con su suite en verde y Pylint
+10.00 (ANALYTICS 98, MINING_ANALYSIS 87, QUOTES 42, INGEST 34, OPTIMIZATION 19,
+AI 16). Los dos motores corridos sobre `ventas_demo.xlsx`: cartera de Bs 187.961
+con 57,9% vencido, DSO 71,6 días, CEI 35,5; almacén de 159 productos con 28
+quiebres y Bs 60.217 inmovilizados. Las dos vistas del portal corridas en Node
+contra esas respuestas, incluidos los casos sin datos.
+
+**Pendiente de Rafael — una sola ronda de despliegue:**
+
+| Servicio | Por qué |
+|---|---|
+| **INGEST** | Contrato v3, dos endpoints nuevos, `collections.py` y `stock.py` |
+| **ANALYTICS** | Cinco motores nuevos, tres endpoints, **28 variables nuevas** en el `.env` y la tabla `analytics_credit_policies` |
+| **AI** | Tres vistas nuevas en el `Enum` (`volume_source`, `receivables`, `stock`) |
+| **QUOTES** | Sólo la limpieza del `__all__` y el docstring; sin cambio funcional |
+| **MINING_ANALYSIS** | Sólo idioma en un comentario y en la descripción de Swagger |
+| AUTH · EVENTS · FILES · ML_FUNCTIONS · OPTIMIZATION | Sólo idioma en el boilerplate; van si hay redespliegue de todas formas |
+
+**Ya hecho de este lado, no hace falta pedirlo:**
+
+- **Tabla `analytics_credit_policies`** creada y activa. Se declaró en
+  `services/ci/api/create_dynamodb_tables.sh` —que es donde viven las tablas del
+  producto— y se ejecutó el script, que es idempotente y saltó las 16 existentes.
+  El `services/ci/create_dynamodb_tables.sh` es el de Binaria (perfil
+  `deploy_binaria`) y no se toca.
+- **Plantilla v3 publicada** en `s3://ml-data-file-handler/ingest/templates/`,
+  con las cuatro hojas —Ventas, Cobros, Stock e Instrucciones— y verificada por
+  SHA-256 contra el archivo local. Las tres hojas de datos pasan sus tres
+  validadores sin una sola incidencia.
+- **`AsyncIterator` → `AsyncGenerator`** en los `main.py` de los siete servicios
+  que lo usaban. Pylance avisaba que anotar así el retorno de un
+  `@asynccontextmanager` quedó obsoleto: el decorador espera un generador
+  asíncrono. Verificado abriendo y cerrando el `lifespan` de los siete, no sólo
+  que importen.
+
+**Nota del orden:** la plantilla se publicó antes del deploy de INGEST. No rompe
+nada porque el validador corre en modo `strict='filter'` y descarta las columnas
+que no conoce; hasta que INGEST esté desplegado, un archivo con crédito y stock
+cargará sus ventas y **ignorará en silencio** esas dos hojas.
+
+**El portal no se publicó a propósito.** Sin el backend nuevo las tres vistas
+nuevas mostrarían su nota de vacío. En cuanto despliegues, publico y verifico
+contra lo local.
+
+**Antes — 9 de septiembre de 2026, barrido de configuración en seis servicios.**
 
 Se auditaron AI, QUOTES, INGEST, ANALYTICS, OPTIMIZATION y MINING_ANALYSIS con
 el agente `auditor-hardcode`, y se corrigió todo lo que el barrido encontró.

@@ -5,24 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cotizaciones y proyecciones — SmartDecisions</title>
     <link rel="stylesheet" href="../styles/demo.css?v=016300b357">
-    <link rel="stylesheet" href="minerales.css?v=0e3ffa13c0">
-    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=5">
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=5">
-    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=5">
+    <link rel="stylesheet" href="minerales.css?v=5f55c92c17">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=cea826bc9c"></script>
     <script src="../js/auth.js?v=33efdcbe59" defer></script>
     <script src="../js/api.js?v=3ed1e6bc89" defer></script>
     <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
-    <script src="minerales.js?v=bc3a0cc4ff" defer></script>
+    <script src="minerales.js?v=509ba6d7a4" defer></script>
 </head>
 <body>
 
 <header class="demo-header">
     <div class="container demo-nav">
         <a href="/home.html" class="brand">
-            <img src="/assets/bear-face.jpg" alt="" aria-hidden="true">
+            <img src="/assets/bear-face.jpg?v=e028b9fcd7" alt="" aria-hidden="true">
             <span class="brand-text">Smart<span class="accent">Decisions</span></span>
         </a>
         <div class="demo-nav-actions">
@@ -38,7 +38,7 @@
     <div class="container">
         <h1 class="page-title">Cotizaciones y proyecciones</h1>
         <p class="page-subtitle">Cotización oficial de minerales y tipo de cambio, con proyección al plazo elegido.</p>
-        <p class="page-note">Modelo: suavizado exponencial con tendencia amortiguada. Cada proyección se publica con el error que ese modelo registró sobre esta misma serie y con el del modelo de referencia.</p>
+        <p class="page-note">Cada proyección se publica con el error que ese modelo registró sobre esta misma serie y con el del modelo de referencia.</p>
 
         <!-- Shared controls: everything below reacts to these two. -->
         <section class="card controls-card">
@@ -113,6 +113,21 @@
                 <span class="panel-meta" id="rateMeta"></span>
                 <span class="ai-slot" id="rateAi"></span>
             </div>
+            <!-- El modelo manda sobre todo lo que sigue: cifras, gráfico y
+                 tabla. Antes había una tabla fija con un método y otra que
+                 cambiaba con el selector: la misma pregunta contestada dos
+                 veces, y con dos respuestas distintas a la vista. -->
+            <div class="controls-row">
+                <div class="control">
+                    <label for="rateModel">Modelo de proyección</label>
+                    <select id="rateModel"></select>
+                </div>
+                <div class="control control-wide">
+                    <span class="model-note" id="rateModelNote"></span>
+                </div>
+            </div>
+            <p class="control-hint" id="rateDefaultNote"></p>
+
             <div class="rate-figures" id="rateFigures"></div>
             <div class="chart-holder" id="rateChart"></div>
 
@@ -144,31 +159,6 @@
             </div>
 
             <div class="bench">
-                <div class="controls-row">
-                    <div class="control">
-                        <label for="rateModel">Modelo de proyección</label>
-                        <select id="rateModel"></select>
-                    </div>
-                    <div class="control control-wide">
-                        <span class="model-note" id="rateModelNote"></span>
-                    </div>
-                </div>
-
-                <div class="table-scroll rate-table-scroll">
-                    <table class="data-table" id="forecastTable">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Día</th>
-                                <th class="num">Bs por USD</th>
-                                <th class="num">Variación</th>
-                                <th class="num">Desde hoy</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-
                 <details class="bench-detail">
                     <summary>Cómo se comparan los modelos</summary>
                     <p class="control-hint">
@@ -195,11 +185,9 @@
                 </details>
             </div>
 
-            <p class="control-hint">
-                La serie arranca el 27/06/2026, cuando el tipo de cambio dejó de
-                estar fijo. Los años previos pertenecen a otro régimen y no son
-                comparables con lo que vino después.
-            </p>
+            <!-- La fecha de arranque sale de la serie misma, no escrita acá:
+                 el servicio es el que sabe dónde empieza el régimen flotante. -->
+            <p class="control-hint" id="rateSeriesNote"></p>
         </section>
 
         <!-- Sale scenario -->

@@ -6,9 +6,9 @@
     <title>Análisis Comercial — SmartDecisions</title>
     <link rel="stylesheet" href="../styles/demo.css?v=016300b357">
     <link rel="stylesheet" href="excel.css?v=7bfa615ee3">
-    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=5">
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=5">
-    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=5">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=cea826bc9c"></script>
     <script src="../js/auth.js?v=33efdcbe59" defer></script>
     <script src="../js/api.js?v=3ed1e6bc89" defer></script>
@@ -23,7 +23,7 @@
 <header class="demo-header">
     <div class="container demo-nav">
         <a href="/home.html" class="brand">
-            <img src="/assets/bear-face.jpg" alt="" aria-hidden="true">
+            <img src="/assets/bear-face.jpg?v=e028b9fcd7" alt="" aria-hidden="true">
             <span class="brand-text">Smart<span class="accent">Decisions</span></span>
         </a>
         <div class="demo-nav-actions">
@@ -132,6 +132,13 @@
                         <span class="analysis-desc">Ventas totales, mejor cliente, productos más y
                             menos vendidos, por categoría, canal y mes.</span>
                     </button>
+                    <button type="button" class="analysis-card" data-analysis="volume">
+                        <span class="analysis-icon">🧭</span>
+                        <span class="analysis-title">Fuente de volumen</span>
+                        <span class="analysis-desc">Qué productos y qué clientes hacen la
+                            venta, el producto que sostiene a cada cliente y de dónde vino
+                            el movimiento del mes.</span>
+                    </button>
                     <button type="button" class="analysis-card" data-analysis="opportunities">
                         <span class="analysis-icon">🎯</span>
                         <span class="analysis-title">Oportunidades de Venta</span>
@@ -149,6 +156,20 @@
                         <span class="analysis-title">Segmentación de Clientes</span>
                         <span class="analysis-desc">Clasifica a tus clientes por valor (alto,
                             medio, bajo) para priorizar.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="receivables">
+                        <span class="analysis-icon">💳</span>
+                        <span class="analysis-title">Cuentas por cobrar</span>
+                        <span class="analysis-desc">Cuánto te deben, qué tan vencido está,
+                            cuánto vas a recuperar, quién cobra qué y qué deja el crédito
+                            después de financiarlo.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="stock">
+                        <span class="analysis-icon">📦</span>
+                        <span class="analysis-title">Stock del día</span>
+                        <span class="analysis-desc">Cuántos días te dura lo que tienes,
+                            qué está por quebrar y cuánto capital está quieto en
+                            productos que no rotan.</span>
                     </button>
                     <button type="button" class="analysis-card" data-analysis="portfolio">
                         <span class="analysis-icon">💔</span>
@@ -273,52 +294,17 @@
                         <canvas id="chartSeasonality"></canvas>
                     </div>
                 </div>
-                <div class="chart-card" id="mixCard">
-                    <h3 class="chart-title">Qué categorías ganan y pierden peso</h3>
-                    <p class="chart-hint">Último mes contra el anterior, en puntos porcentuales.</p>
-                    <div class="table-wrapper">
-                        <table class="data-table" id="mixTable">
-                            <thead><tr>
-                                <th>Categoría</th>
-                                <th class="numeric">Participación</th>
-                                <th class="numeric">Cambio</th>
-                                <th class="numeric">Venta</th>
-                            </tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
 
             <!-- ---------- Concentración ---------- -->
             <div class="analysis-block" id="concentrationBlock" hidden>
                 <h3 class="block-title">Concentración y riesgo</h3>
                 <p class="block-subtitle">
-                    De cuántos clientes depende realmente el negocio, y qué productos
-                    son su núcleo.
+                    De cuántos clientes depende realmente el negocio. Qué productos son
+                    su núcleo se responde en Fuente de volumen.
                 </p>
                 <div class="metric-grid" id="concentrationKpis"></div>
                 <p class="insight-line" id="hhiReading"></p>
-                <div class="split-layout">
-                    <div class="chart-card">
-                        <h3 class="chart-title">Clasificación ABC de productos</h3>
-                        <canvas id="chartAbc"></canvas>
-                    </div>
-                    <div class="chart-card">
-                        <h3 class="chart-title">Qué significa cada clase</h3>
-                        <div class="table-wrapper">
-                            <table class="data-table" id="abcTable">
-                                <thead><tr>
-                                    <th>Clase</th>
-                                    <th class="numeric">Productos</th>
-                                    <th class="numeric">% venta</th>
-                                    <th>Qué hacer</th>
-                                </tr></thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <!-- ---------- Eficiencia ---------- -->
@@ -363,6 +349,424 @@
                                 <tbody></tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== Fuente de volumen ===================== -->
+        <!-- Vive en su propia vista, no como un bloque más del resumen: de dónde
+             sale el volumen es una pregunta propia. Sale de la misma respuesta
+             que el resumen comercial, así que pedirla no cuesta otra llamada. -->
+        <section id="stepVolume" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Fuente de volumen</h2>
+                <span class="cache-stamp" id="stampVolume"></span>
+                <button type="button" class="btn btn-ghost btn-small"
+                        data-recalc="summary" data-recalc-view="stepVolume">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle">
+                De qué productos y de qué clientes sale la venta, qué producto
+                sostiene a cada cliente, y de dónde vino el movimiento del último mes.
+            </p>
+            <!-- La nota de vacío existe para que la vista nunca quede en blanco:
+                 una pantalla sin nada fue exactamente lo que rompió una demo. -->
+            <p class="form-note" id="volumeEmpty" hidden>
+                Este archivo no tiene columnas de producto y monto suficientes para
+                responder de dónde sale el volumen.
+            </p>
+            <div id="volumeContent">
+            <div class="metric-grid" id="volumeKpis"></div>
+            <p class="insight-line" id="volumeHhiReading"></p>
+
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3 class="chart-title">Curva de Pareto de productos</h3>
+                    <p class="chart-hint">
+                        Cada barra es la participación del producto en la venta; la
+                        línea es el acumulado. Donde la línea llega al 80% están los
+                        productos que sostienen el negocio.
+                    </p>
+                    <canvas id="chartVolumePareto"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3 class="chart-title">Clases ABC del catálogo</h3>
+                    <p class="chart-hint">
+                        A es el primer 80% de la venta, B el siguiente 15%, C la cola.
+                    </p>
+                    <canvas id="chartVolumeAbc"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <h3 class="chart-title">Productos que hacen el volumen</h3>
+                <p class="chart-hint">
+                    La columna «Clientes» es a cuántos les llega el producto: dos
+                    productos con la misma participación y distinto alcance no son
+                    el mismo negocio.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="volumeProductsTable">
+                        <thead><tr>
+                            <th>Producto</th>
+                            <th class="numeric">Venta</th>
+                            <th class="numeric">% venta</th>
+                            <th class="numeric">Acumulado</th>
+                            <th>Clase</th>
+                            <th class="numeric">Clientes</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="split-layout">
+                <div class="chart-card">
+                    <h3 class="chart-title">Clientes y el producto que los sostiene</h3>
+                    <p class="chart-hint">
+                        «% del cliente» es cuánto pesa ese producto dentro de su
+                        propia compra. Un 90% es una relación con un producto, no
+                        con la empresa.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="volumeClientsTable">
+                            <thead><tr>
+                                <th>Cliente</th>
+                                <th class="numeric">Venta</th>
+                                <th class="numeric">% venta</th>
+                                <th>Producto ancla</th>
+                                <th class="numeric">% del cliente</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="chart-card" id="volumeMixCard">
+                    <h3 class="chart-title">Qué categorías ganan y pierden peso</h3>
+                    <p class="chart-hint">Último mes contra el anterior, en puntos porcentuales.</p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="volumeMixTable">
+                            <thead><tr>
+                                <th>Categoría</th>
+                                <th class="numeric">Participación</th>
+                                <th class="numeric">Cambio</th>
+                                <th class="numeric">Venta</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card" id="volumeMatrixCard">
+                <h3 class="chart-title">Cruce cliente × producto</h3>
+                <p class="chart-hint">
+                    Cada cruce leído de los dos lados: cuánto pesa el producto dentro
+                    del cliente, y cuánto pesa ese cliente dentro del producto.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="volumeMatrixTable">
+                        <thead><tr>
+                            <th>Cliente</th>
+                            <th>Producto</th>
+                            <th class="numeric">Venta</th>
+                            <th class="numeric">% del cliente</th>
+                            <th class="numeric">% del producto</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="analysis-block" id="volumeDecompositionBlock" hidden>
+                <h3 class="block-title">De dónde vino el movimiento</h3>
+                <p class="block-subtitle" id="volumeDecompositionNote"></p>
+                <div class="split-layout">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Por producto</h3>
+                        <p class="chart-hint">
+                            Vender más porque subieron los precios y vender más porque
+                            los clientes compraron más son el mismo número y dos cosas
+                            distintas.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="volumeProductEffects">
+                                <thead><tr>
+                                    <th>Efecto</th>
+                                    <th class="numeric">Bs</th>
+                                    <th class="numeric">% del cambio</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Por cliente</h3>
+                        <p class="chart-hint">
+                            El mismo cambio, explicado por quién compró: cuentas nuevas,
+                            perdidas y las que se mantuvieron.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="volumeClientEffects">
+                                <thead><tr>
+                                    <th>Efecto</th>
+                                    <th class="numeric">Bs</th>
+                                    <th class="numeric">% del cambio</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- ===================== Cuentas por cobrar ===================== -->
+        <!-- Vive en su propio endpoint porque necesita los cobros, que se cargan
+             aparte y después de la venta. Cuando el archivo no trae crédito, el
+             backend responde con un código y la vista lo dice. -->
+        <section id="stepReceivables" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Cuentas por cobrar</h2>
+                <span class="cache-stamp" id="stampReceivables"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="receivables">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle" id="receivablesSubtitle"></p>
+
+            <p class="form-note" id="receivablesEmpty" hidden></p>
+
+            <div id="receivablesContent">
+                <div class="metric-grid" id="receivablesKpis"></div>
+                <p class="insight-line" id="receivablesPolicyNote"></p>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Antigüedad del saldo</h3>
+                        <p class="chart-hint">
+                            Cuánto se debe en cada tramo de atraso. «Por vencer» todavía
+                            no venció: no es mora.
+                        </p>
+                        <canvas id="chartAging"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Recuperable vs incobrable</h3>
+                        <p class="chart-hint">
+                            Se aplica la pérdida esperada de cada tramo. Es un parámetro
+                            de tu política, no un hecho observado.
+                        </p>
+                        <canvas id="chartRecovery"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Tramos de antigüedad</h3>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="agingTable">
+                            <thead><tr>
+                                <th>Tramo</th>
+                                <th class="numeric">Facturas</th>
+                                <th class="numeric">Clientes</th>
+                                <th class="numeric">Saldo</th>
+                                <th class="numeric">% del saldo</th>
+                                <th class="numeric">Pérdida esperada</th>
+                                <th class="numeric">Provisión</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="analysis-block" id="creditMarginBlock" hidden>
+                    <h3 class="block-title">Qué deja el crédito</h3>
+                    <p class="block-subtitle">
+                        El margen bruto de una venta a crédito no es lo que queda: el
+                        dinero está afuera un tiempo y una parte no vuelve.
+                    </p>
+                    <div class="metric-grid" id="creditMarginKpis"></div>
+                    <p class="insight-line" id="creditMarginNote"></p>
+                </div>
+
+                <div class="split-layout">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Quiénes deben</h3>
+                        <p class="chart-hint">
+                            «Línea» es el límite de crédito del cliente; vacío significa
+                            que el archivo no lo trae, no que esté sin usar.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="debtorsTable">
+                                <thead><tr>
+                                    <th>Cliente</th>
+                                    <th class="numeric">Saldo</th>
+                                    <th class="numeric">Vencido</th>
+                                    <th class="numeric">Días</th>
+                                    <th class="numeric">Uso de línea</th>
+                                    <th>Riesgo</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Responsables de cobro</h3>
+                        <p class="chart-hint">
+                            El vencido mide la cartera que le tocó; «a tiempo» lo mide a
+                            él. Van juntos para no confundir una cosa con la otra.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="collectorsTable">
+                                <thead><tr>
+                                    <th>Responsable</th>
+                                    <th class="numeric">Saldo</th>
+                                    <th class="numeric">Vencido</th>
+                                    <th class="numeric">Clientes</th>
+                                    <th class="numeric">A tiempo</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Cobros pendientes por fecha</h3>
+                        <p class="chart-hint">
+                            Proyección de caja de lo que falta cobrar. Lo vencido va
+                            aparte: es plata que ya debería estar cobrada.
+                        </p>
+                        <canvas id="chartDueWindows"></canvas>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="dueDatesTable">
+                                <thead><tr>
+                                    <th>Vence</th>
+                                    <th class="numeric">Monto</th>
+                                    <th class="numeric">Facturas</th>
+                                    <th class="numeric">Clientes</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card" id="curveCard">
+                        <h3 class="chart-title">Curva de cobro</h3>
+                        <p class="chart-hint">
+                            De lo facturado a crédito cada mes, cuánto había vuelto a los
+                            30, 60 y 90 días. Un plazo que todavía no transcurrió va vacío.
+                        </p>
+                        <canvas id="chartCurve"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">A quién llamar hoy</h3>
+                    <p class="chart-hint">
+                        Ordenado por lo que se puede recuperar —saldo vencido por la
+                        probabilidad de recuperarlo— y no por antigüedad: el saldo más
+                        viejo suele ser el que menos vuelve.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="priorityTable">
+                            <thead><tr>
+                                <th>Cliente</th>
+                                <th>Responsable</th>
+                                <th class="numeric">Vencido</th>
+                                <th class="numeric">Días</th>
+                                <th class="numeric">Probabilidad</th>
+                                <th class="numeric">Recupero esperado</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== Stock del día ===================== -->
+        <!-- BI, no transaccional: «Disponible» refleja lo que el ERP del cliente
+             ya comprometió. Acá no se reserva ni se promete stock. -->
+        <section id="stepStock" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Stock del día</h2>
+                <span class="cache-stamp" id="stampStock"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="stock">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle" id="stockSubtitle"></p>
+
+            <p class="form-note" id="stockEmpty" hidden></p>
+
+            <div id="stockContent">
+                <div class="metric-grid" id="stockKpis"></div>
+                <p class="insight-line" id="stockNote"></p>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Situación del catálogo</h3>
+                        <p class="chart-hint">
+                            Cuántos productos hay en cada situación, según los días que
+                            les dura el stock al ritmo al que se venden.
+                        </p>
+                        <canvas id="chartStockStatus"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Dónde está el capital</h3>
+                        <p class="chart-hint">
+                            Valor del inventario por situación. El exceso es plata quieta
+                            en productos que no rotan.
+                        </p>
+                        <canvas id="chartStockValue"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Por quebrar</h3>
+                    <p class="chart-hint">
+                        Ordenado por urgencia. «Quiebre» es la fecha estimada al ritmo de
+                        venta observado, no una promesa de reposición.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="stockRiskTable">
+                            <thead><tr>
+                                <th>Producto</th>
+                                <th>Clase</th>
+                                <th class="numeric">Existencia</th>
+                                <th class="numeric">Disponible</th>
+                                <th class="numeric">Venta diaria</th>
+                                <th class="numeric">Cobertura</th>
+                                <th>Quiebre</th>
+                                <th>Situación</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Capital inmovilizado</h3>
+                    <p class="chart-hint">
+                        Lo que sobra por encima de una cobertura razonable, y lo que no
+                        registra venta en el período.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="stockExcessTable">
+                            <thead><tr>
+                                <th>Producto</th>
+                                <th>Clase</th>
+                                <th class="numeric">Existencia</th>
+                                <th class="numeric">Cobertura</th>
+                                <th class="numeric">Sobran</th>
+                                <th class="numeric">Capital quieto</th>
+                                <th>Situación</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -448,7 +852,9 @@
 
         <!-- ===================== Pronóstico de Demanda ===================== -->
         <section id="stepForecast" class="step-section" hidden>
-            <h2 class="section-title">Pronóstico de Demanda</h2>
+            <div class="section-head">
+                <h2 class="section-title">Pronóstico de Demanda</h2>
+            </div>
             <div class="insight-panel">
                 <p class="insight-objective">
                     <strong>¿Cómo leer el gráfico?</strong> La línea <strong>sólida azul</strong> es
