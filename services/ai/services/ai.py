@@ -329,12 +329,3 @@ async def save_role_service(definition: Dict[str, Any]) -> Dict[str, Any]:
         'model_id': prompt.model_id,
         'active': prompt.active,
     }
-
-
-__all__ = [
-    'CACHE_HOURS',
-    'MAX_PAYLOAD_CHARACTERS',
-    'explain_service',
-    'save_role_service',
-    'list_roles_service',
-]

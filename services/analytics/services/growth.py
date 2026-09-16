@@ -8,15 +8,15 @@
         1. Month-over-month and year-over-year variation.
         2. A seasonality index, so a weak month is read against its own history
            instead of against the annual average.
-        3. The category mix shift between the last month and the previous one —
-           what is gaining and losing weight inside the same total.
+
+    The category mix shift moved to `volume.py`: which categories gain weight
+    is where the volume comes from, not how fast the total moves.
 '''
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import pandas as pd
 
 from schemas.analytics import (
-    CategoryMix,
     GrowthBlock,
     KpiCard,
     MetricCode,
@@ -26,7 +26,6 @@ from schemas.analytics import (
 
 from services.environment import load_and_validate_env_vars
 from services.analytics_utils import (
-    CATEGORY,
     AMOUNT,
     dates,
     money,
@@ -115,70 +114,6 @@ def _seasonality(monthly: pd.Series) -> List[SeasonIndex]:
     ]
 
 
-def _category_mix(dataframe: pd.DataFrame, parsed_dates: pd.Series,
-                  monthly: pd.Series) -> List[CategoryMix]:
-    '''
-        Category shares of the last month against the previous one, so a shift
-        inside a flat total becomes visible.
-
-        Args:
-            dataframe (pd.DataFrame): Normalized sales rows.
-            parsed_dates (pd.Series): Coerced datetimes aligned to the frame.
-            monthly (pd.Series): Amount per 'YYYY-MM'.
-
-        Returns:
-            List[Dict[str, Any]]: Per-category current/previous amounts, shares
-                and the share change in percentage points, biggest gain first.
-                Empty when there is no category column or a single month.
-    '''
-    if CATEGORY not in dataframe.columns or len(monthly) < 2:
-        return []
-
-    months = list(monthly.index)
-    current_key, previous_key = months[-1], months[-2]
-    labelled = dataframe.assign(
-        _month = parsed_dates.dt.strftime('%Y-%m'),
-        _cat = dataframe[CATEGORY].fillna('').astype(str)
-    )
-    current = labelled.loc[labelled['_month'] == current_key].groupby('_cat')[AMOUNT].sum()
-    previous = labelled.loc[labelled['_month'] == previous_key].groupby('_cat')[AMOUNT].sum()
-    current_total, previous_total = current.sum(), previous.sum()
-
-    rows = [
-        _mix_row(category, (current, previous), (current_total, previous_total))
-        for category in sorted(set(current.index) | set(previous.index))
-    ]
-    return sorted(rows, key = lambda row: row.share_change, reverse = True)
-
-
-def _mix_row(category: str, amounts: Tuple[pd.Series, pd.Series],
-             totals: Tuple[float, float]) -> CategoryMix:
-    '''
-        Builds one category row of the mix comparison.
-
-        Args:
-            category (str): Category being described.
-            amounts (tuple): (current month series, previous month series).
-            totals (tuple): (current month total, previous month total).
-
-        Returns:
-            CategoryMix: Amounts, shares and the share change in points.
-    '''
-    current_amount = float(amounts[0].get(category, 0.0))
-    previous_amount = float(amounts[1].get(category, 0.0))
-    current_share = round(ratio(current_amount, totals[0]) * 100, 1)
-    previous_share = round(ratio(previous_amount, totals[1]) * 100, 1)
-    return CategoryMix(
-        label = str(category),
-        current_amount = money(current_amount),
-        previous_amount = money(previous_amount),
-        change = percent_change(current_amount, previous_amount),
-        current_share = current_share,
-        previous_share = previous_share,
-        share_change = round(current_share - previous_share, 1)
-    )
-
-
 def _growth_kpis(monthly: pd.Series) -> List[KpiCard]:
     '''
         Headline growth cards: last month's sales and its variation against the
@@ -225,10 +160,11 @@ def build_growth(dataframe: pd.DataFrame) -> GrowthBlock:
             dataframe (pd.DataFrame): Normalized sales rows as produced by ingest.
 
         Returns:
-            Dict[str, Any]: 'kpis' (MoM/YoY cards), 'monthly_change' (series
-                with per-month change), 'seasonality' (index per calendar
-                month) and 'category_mix' (share shift). Every section is empty
-                when the data cannot support it, never an error.
+            GrowthBlock: 'kpis' (MoM/YoY cards), 'monthly_change' (series
+                with per-month change) and 'seasonality' (index per calendar
+                month). Every section is empty when the data cannot support it,
+                never an error. The category mix moved to the volume-source
+                block.
     '''
     parsed_dates = dates(dataframe)
     if parsed_dates is None or AMOUNT not in dataframe.columns:
@@ -245,6 +181,5 @@ def build_growth(dataframe: pd.DataFrame) -> GrowthBlock:
     return GrowthBlock(
         kpis = _growth_kpis(monthly),
         monthly_change = _monthly_variation(monthly),
-        seasonality = _seasonality(monthly),
-        category_mix = _category_mix(dataframe, parsed_dates, monthly)
+        seasonality = _seasonality(monthly)
     )

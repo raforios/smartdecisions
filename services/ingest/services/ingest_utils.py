@@ -7,6 +7,7 @@
 '''
 import hashlib
 import uuid
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import boto3
@@ -93,6 +94,63 @@ def persist_dataset(
     message = f'Persisted ingest dataset {item["dataset_id"]} (status={item["status"]}).'
     logger.info(message)
     return persisted
+
+
+def _decimalize(value: Any) -> Any:
+    '''
+        Turns floats into Decimal, which is the only numeric type DynamoDB
+        accepts. Walks dicts and lists so a summary travels whole.
+
+        Args:
+            value (Any): Node of the payload being written.
+
+        Returns:
+            Any: The same node, with its floats converted.
+    '''
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _decimalize(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_decimalize(item) for item in value]
+    return value
+
+
+def attach_to_dataset(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    '''
+        Attaches a secondary load —payments, stock— to a sales dataset.
+
+        An update and not a new row because neither is another dataset: the
+        payments are the same sale collected, and the stock is the warehouse
+        behind the same catalogue. Each keeps ONE object key, so re-uploading
+        replaces the previous load instead of accumulating copies nobody can
+        tell apart — which for a daily stock snapshot is the whole point.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            dataset_id (str): Dataset the load belongs to.
+            payload (Dict[str, Any]): Attributes to write: the object key and
+                the summary of the load.
+
+        Returns:
+            Dict[str, Any]: The dataset as it now stands.
+    '''
+    values = {f':{name}': value for name, value in payload.items()}
+    assignments = ', '.join(f'#{name} = :{name}' for name in payload)
+    updated = dynamodb_resource.Table(DATASETS_TABLE).update_item(
+        Key = {'id': dataset_id},
+        UpdateExpression = f'SET {assignments}',
+        ExpressionAttributeNames = {f'#{name}': name for name in payload},
+        ExpressionAttributeValues = _decimalize(values),
+        ReturnValues = 'ALL_NEW'
+    )
+    message = f'Attached a secondary load to dataset {dataset_id}.'
+    logger.info(message)
+    return updated.get('Attributes', {})
 
 
 def get_dataset_by_id(

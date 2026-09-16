@@ -1,9 +1,12 @@
 '''
-    Unit tests for the concentration_engine (dependency risk + ABC).
+    Unit tests for the concentration engine (dependency risk on clients).
+
+    The ABC of the catalogue moved to the volume-source engine and is tested in
+    `test_volume.py`.
 '''
 import pandas as pd
 
-from schemas.analytics import AbcBlock, ClientConcentration, ConcentrationLevel
+from schemas.analytics import ClientConcentration, ConcentrationLevel
 from services.concentration import build_concentration
 
 
@@ -55,17 +58,8 @@ def test_pareto_point_counts_clients_making_up_eighty_percent():
     assert result.pareto_clients == 4
 
 
-def test_abc_classes_cover_the_whole_catalog():
-    '''Every product lands in exactly one class and the shares add to 100%.'''
-    abc = build_concentration(_clients_frame([100.0, 50.0, 25.0, 10.0, 5.0])).abc
-    assert sum(row.products for row in abc.summary) == 5
-    assert round(sum(row.percentage for row in abc.summary)) == 100
-    assert {row.abc_class for row in abc.summary} <= {'A', 'B', 'C'}
-
-
 def test_empty_sections_without_client_data():
     '''No client column means no concentration analysis, not a crash.'''
     frame = pd.DataFrame({'total_amount': [10.0, 20.0]})
     result = build_concentration(frame)
     assert result.clients == ClientConcentration()
-    assert result.abc == AbcBlock()

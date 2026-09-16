@@ -320,11 +320,17 @@ class CategoryMix(BaseModel):
 
 
 class GrowthBlock(BaseModel):
-    '''Growth section of the commercial summary.'''
+    '''
+        Growth section of the commercial summary.
+
+        The category mix used to live here and moved to the volume-source
+        block: how a category's weight shifts is where the volume comes from,
+        not how fast the total grows, and having it in two places invited two
+        readings of one number.
+    '''
     kpis: list[KpiCard] = []
     monthly_change: list[MonthlyChange] = []
     seasonality: list[SeasonIndex] = []
-    category_mix: list[CategoryMix] = []
 
 
 # --- Concentration (dependency risk) ---
@@ -352,7 +358,6 @@ class ClientConcentration(BaseModel):
     pareto_client_percentage: float = 0.0
     hhi: float = 0.0
     hhi_level: Optional[str] = None
-    top_clients: list[DistRow] = []
 
 
 class AbcClass(BaseModel):
@@ -363,24 +368,16 @@ class AbcClass(BaseModel):
     percentage: float
 
 
-class AbcProduct(BaseModel):
-    '''One product's ABC classification and its cumulative share of sales.'''
-    label: str
-    amount: float
-    abc_class: str
-    cumulative: float
-
-
-class AbcBlock(BaseModel):
-    '''ABC classification of the product catalog.'''
-    summary: list[AbcClass] = []
-    products: list[AbcProduct] = []
-
-
 class ConcentrationBlock(BaseModel):
-    '''Concentration section of the commercial summary.'''
+    '''
+        Concentration section of the commercial summary: how exposed the
+        business is to a few names.
+
+        Only clients live here now. The ABC of the catalogue moved to the
+        volume-source block, where the question is which products make the
+        volume; this one answers who the revenue depends on.
+    '''
     clients: ClientConcentration = ClientConcentration()
-    abc: AbcBlock = AbcBlock()
 
 
 # --- Efficiency (drop size, sales force, realized price) ---
@@ -536,18 +533,146 @@ class CommercialSummaryBlock(BaseModel):
     monthly_trend: list[TrendPoint] = []
 
 
+# --- Volume source (where the volume comes from) ---
+
+class VolumeProduct(BaseModel):
+    '''
+        One product as a source of volume: what it sold, what share of the
+        total that is, where it falls on the Pareto curve, its ABC class and
+        how many clients actually buy it.
+
+        Share and reach travel together on purpose: a product with 6% of the
+        volume bought by one client and one with 6% bought by two hundred are
+        the same line on a ranking and two different businesses.
+    '''
+    label: str
+    amount: float
+    units: float = 0.0
+    share: float
+    cumulative: float
+    abc_class: str
+    clients: int = 0
+
+
+class VolumeClient(BaseModel):
+    '''
+        One client as a source of volume, with the product that anchors it.
+
+        `anchor_share` is the weight of that product **inside the client**, not
+        in the total: it is what says whether the account is a relationship or
+        a single SKU that could walk away.
+    '''
+    label: str
+    amount: float
+    share: float
+    cumulative: float
+    products: int = 0
+    anchor_product: Optional[str] = None
+    anchor_share: float = 0.0
+
+
+class VolumeMatrixCell(BaseModel):
+    '''
+        One client-product intersection, read from both sides.
+
+        `client_share` is the weight of the product inside that client and
+        `product_share` the weight of that client inside the product. The same
+        amount can be trivial for the client and vital for the product.
+    '''
+    client: str
+    product: str
+    amount: float
+    units: float = 0.0
+    client_share: float
+    product_share: float
+
+
+class VolumeEffect(BaseModel):
+    '''
+        One term of a decomposition, in bolivianos and as a share of the move
+        it explains.
+    '''
+    effect_code: str = Field(
+        ...,
+        description = 'PRICE | QUANTITY | JOINT | ENTRY | EXIT | NEW_CLIENTS | '
+                      'LOST_CLIENTS | RETAINED_CLIENTS. The UI words it.'
+    )
+    amount: float
+    percentage: Optional[float] = None
+
+
+class VolumeDecomposition(BaseModel):
+    '''
+        Where the change between the last two months actually came from.
+
+        Two independent decompositions of the **same** delta, because a manager
+        asks it both ways. By product it splits into price, quantity, their
+        joint term and the products that entered or left; by client, into new,
+        lost and retained accounts. Both add up to `change`, so neither can
+        quietly explain more than what happened.
+
+        It answers what a ranking cannot: selling 8% more because prices rose
+        and selling 8% more because clients bought more are the same number and
+        two different meetings.
+    '''
+    current_month: Optional[str] = None
+    previous_month: Optional[str] = None
+    current_amount: float = 0.0
+    previous_amount: float = 0.0
+    change: float = 0.0
+    change_percentage: Optional[float] = None
+    by_product: list[VolumeEffect] = []
+    by_client: list[VolumeEffect] = []
+
+
+class VolumeHeadline(BaseModel):
+    '''
+        How few names make the volume: the catalogue size, the Pareto point and
+        the HHI of products with its reading as a code.
+    '''
+    total_products: int = 0
+    pareto_products: int = 0
+    pareto_product_percentage: float = 0.0
+    top_products_amount: float = 0.0
+    top_products_percentage: float = 0.0
+    top_products_count: int = 0
+    hhi: float = 0.0
+    hhi_level: Optional[str] = None
+
+
+class VolumeSourceBlock(BaseModel):
+    '''
+        Volume-source section: which products and which clients make the
+        volume, and where its movement came from.
+
+        It exists as a block of its own because it was answered in pieces
+        scattered across three others — the category mix inside growth, the ABC
+        inside concentration, a top-products ranking in the summary — and none
+        of them said, for one client, which product carries it.
+    '''
+    headline: VolumeHeadline = VolumeHeadline()
+    abc_summary: list[AbcClass] = []
+    products: list[VolumeProduct] = []
+    clients: list[VolumeClient] = []
+    matrix: list[VolumeMatrixCell] = []
+    category_mix: list[CategoryMix] = []
+    decomposition: VolumeDecomposition = VolumeDecomposition()
+
+
 class CommercialSummaryResponse(CommercialSummaryBlock):
     '''
         Full commercial summary for GET /v1/analytics/summary/{dataset_id}.
 
-        The first block answers 'how much did we sell'; the four that follow
-        answer the questions a manager asks next — is it growing, how exposed
-        are we, how efficiently are we selling, and what does it actually earn.
-        Every section is pre-labeled and pre-aggregated for tables + charts.
+        The first block answers 'how much did we sell'; the five that follow
+        answer the questions a manager asks next — is it growing, where does
+        the volume come from, how exposed are we, how efficiently are we
+        selling, and what does it actually earn. Every section is pre-labeled
+        and pre-aggregated for tables + charts.
     '''
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
     growth: GrowthBlock = GrowthBlock()
+    volume_source: VolumeSourceBlock = VolumeSourceBlock()
     concentration: ConcentrationBlock = ConcentrationBlock()
     efficiency: EfficiencyBlock = EfficiencyBlock()
     margin: MarginBlock = MarginBlock()

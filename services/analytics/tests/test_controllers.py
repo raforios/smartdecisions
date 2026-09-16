@@ -22,6 +22,7 @@ from schemas.analytics import (
     PortfolioResponse,
     SegmentationResponse
 )
+from schemas.receivables import CreditPolicyRequest, CreditPolicyResponse, ReceivablesResponse
 from controllers import analytics as controllers
 
 
@@ -55,8 +56,38 @@ def _sales_frame() -> pd.DataFrame:
             'unit_price': 8.5,
             'unit_cost': 6.0,
             'total_amount': round((3 + index % 5) * 8.5, 2),
+            # Credit on two out of three invoices, with different terms, so
+            # the book has several aging buckets and not just one.
+            'payment_terms': 'CONTADO' if index % 3 == 0 else 'CREDITO',
+            'credit_days': [0, 15, 60][index % 3],
+            'due_date': pd.NaT,
+            'collector': ['Ana', 'Juan'][index % 2],
+            'credit_limit': 5000.0,
         })
     return pd.DataFrame(rows)
+
+
+def _collections_frame() -> pd.DataFrame:
+    '''
+        Payments for part of the credit invoices, so the book has collected
+        history, open balances and overdue rows at once.
+
+        Returns:
+            pd.DataFrame: Payment rows as ingest hands them over.
+    '''
+    sales = _sales_frame()
+    credit = sales.loc[sales['payment_terms'] == 'CREDITO']
+    invoices = credit.groupby('order_id').agg(
+        date = ('date', 'min'), amount = ('total_amount', 'sum')
+    ).reset_index()
+    paid = invoices.iloc[::2]
+    return pd.DataFrame({
+        'order_id': paid['order_id'].values,
+        'payment_date': paid['date'] + pd.Timedelta(days = 20),
+        'paid_amount': paid['amount'].values,
+        'payment_method': 'EFECTIVO',
+        'collector': 'Ana'
+    })
 
 
 @pytest.fixture(name = 'dataset')
@@ -102,9 +133,84 @@ def test_commercial_summary_returns_a_full_response(dataset):
     assert response.dataset_id == dataset
     assert response.kpis and response.monthly_trend
     assert response.growth.kpis
+    assert response.volume_source.products
+    assert response.volume_source.headline.total_products > 0
+    assert response.volume_source.clients
+    assert response.volume_source.matrix
     assert response.concentration.clients.total_clients > 0
     assert response.efficiency.kpis
     assert response.margin.available is True
+
+
+def test_receivables_returns_a_full_response(dataset, monkeypatch):
+    '''
+        The receivables endpoint must build its response with the payments the
+        dataset carries, not with the sales alone.
+    '''
+    monkeypatch.setattr(
+        controllers, 'get_dataset_metadata',
+        lambda **_: {
+            'file_s3_key': 'ingest/normalized/test.csv',
+            'collections_s3_key': 'ingest/collections/test.csv',
+            'status': 'validated'
+        }
+    )
+    monkeypatch.setattr(
+        controllers, 'load_dataframe_from_s3',
+        lambda key: _collections_frame() if 'collections' in key else _sales_frame()
+    )
+    monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
+
+    response = _call(controllers.receivables_controller, dataset)
+
+    assert isinstance(response, ReceivablesResponse)
+    assert response.available is True
+    assert response.policy.source_code == 'DEFAULT'
+    assert response.kpis.receivable_total > 0
+    assert response.kpis.credit_share > 0
+    assert response.aging and response.debtors and response.collectors
+    assert response.margin.available is True
+
+
+def test_receivables_says_so_when_the_dataset_has_no_payments(dataset, monkeypatch):
+    '''
+        Without a collections file every credit invoice is open. That is a fact
+        of the data, not a failure, and the view has to build anyway.
+    '''
+    monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
+
+    response = _call(controllers.receivables_controller, dataset)
+
+    assert response.available is True
+    assert response.kpis.receivable_total > 0
+    assert response.kpis.collection_effectiveness is None or response.kpis.on_time_rate is None
+
+
+def test_credit_policy_round_trip(monkeypatch):
+    '''
+        Writing a policy answers with the RESOLVED one, so the caller sees
+        which defaults filled the gaps before a provision uses them.
+    '''
+    stored: dict = {}
+    monkeypatch.setattr(
+        controllers, 'save_credit_policy',
+        lambda dynamodb_resource, owner_email, policy: stored.update(policy) or stored
+    )
+    monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: stored or None)
+
+    response = asyncio.run(controllers.save_credit_policy_controller(
+        dynamodb_resource = None,
+        policy = CreditPolicyRequest(financial_rate_daily = 0.002),
+        request = None,
+        current_user = 'tester@bearsoft.com.bo'
+    ))
+
+    assert isinstance(response, CreditPolicyResponse)
+    assert response.source_code == 'CLIENT'
+    assert response.financial_rate_daily == 0.002
+    # What was not sent falls back to the service default.
+    assert response.aging_buckets
+    assert response.loss_rates
 
 
 def test_portfolio_returns_a_full_response(dataset):

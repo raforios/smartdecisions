@@ -1,12 +1,12 @@
 '''
     Analytics domain — main module.
 
-    Two things live here: the commercial summary (the sales picture that answers
-    "how are we doing?") and the domain's front door — every question the API
-    can ask is re-exported below, so controllers import from this module alone
-    and never reach into an individual engine.
-
     Commercial summary engine — the general sales dashboard.
+
+    One question per module: this one answers "how are we doing?". The rest of
+    the questions live in their own engine and the controller imports each one
+    from where it is defined. Re-exporting them through here added a layer that
+    hid which module actually answers what.
 
     Turns a normalized sales DataFrame (from ingest) into a clear, business-
     readable snapshot: headline KPIs, best/worst performers, top/bottom products,
@@ -33,16 +33,8 @@ from schemas.analytics import (
     TrendPoint
 )
 
-from services.affinity import compute_opportunities
 from services.analytics_utils import AMOUNT_DECIMALS, RANKING_SIZE
-from services.concentration import build_concentration
-from services.efficiency import build_efficiency
-from services.forecast import build_forecast
-from services.growth import build_growth
 from services.logger_config import custom_logger as logger
-from services.margin import build_margin
-from services.portfolio import build_portfolio
-from services.segmentation import build_segmentation
 
 _AMOUNT = 'total_amount'
 _QUANTITY = 'quantity'
@@ -193,21 +185,3 @@ def build_commercial_summary(dataframe: pd.DataFrame) -> CommercialSummaryBlock:
         by_seller = _distribution(dataframe, 'seller'),
         monthly_trend = _monthly_trend(dataframe)
     )
-
-
-# ---------------------------------------------------------------------------
-# Domain front door
-# ---------------------------------------------------------------------------
-# One question per engine, re-exported so the controller has a single import
-# surface. Adding a question means adding it here.
-__all__ = [
-    'build_commercial_summary',
-    'build_growth',
-    'build_concentration',
-    'build_efficiency',
-    'build_margin',
-    'build_portfolio',
-    'build_segmentation',
-    'build_forecast',
-    'compute_opportunities',
-]

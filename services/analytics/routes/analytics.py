@@ -5,6 +5,10 @@ from fastapi import APIRouter, Depends, Path, Query, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.analytics import (
+    get_credit_policy_controller,
+    receivables_controller,
+    save_credit_policy_controller,
+    stock_controller,
     commercial_summary_controller,
     forecast_controller,
     get_pdv_opportunities_controller,
@@ -14,6 +18,12 @@ from controllers.analytics import (
     run_analytics_controller,
     segmentation_controller
 )
+from schemas.receivables import (
+    CreditPolicyRequest,
+    CreditPolicyResponse,
+    ReceivablesResponse
+)
+from schemas.stock import StockResponse
 from schemas.analytics import (
     AnalyticsPdvResponse,
     AnalyticsResultsResponse,
@@ -322,6 +332,140 @@ async def get_pdv_opportunities_endpoint(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
         pdv_id = pdv_id,
+        request = request,
+        current_user = current_user
+    )
+
+
+@router.get(
+    '/receivables/{dataset_id}',
+    response_model = ReceivablesResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Receivables (aging, recoverability, collection agenda)',
+    description = (
+        'Reads the dataset with the payments attached to it and reports the '
+        'credit book: how much is out, how old it is, how much of it is '
+        'expected back, who owes it, who is responsible for collecting it, '
+        'what falls due when, and what the credit leaves once financed and '
+        'provisioned. Ages are measured against the last day with activity in '
+        'the file, not today. The parameters applied travel in `policy`: the '
+        'caller\'s own where they set them, the service defaults elsewhere. '
+        'Read-only.'
+    )
+)
+async def receivables_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    window: DateWindow = Depends(),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint returning the receivables view for a dataset_id.
+    '''
+    message = f'Receivables for dataset {dataset_id} requested by {current_user}.'
+    logger.info(message)
+    return await receivables_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        params = window.as_params(),
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/stock/{dataset_id}',
+    response_model = StockResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Stock of the day (coverage, stockout risk, immobilized capital)',
+    description = (
+        'Reads the latest stock snapshot attached to the dataset and reports '
+        'what it implies: days of coverage at the demand observed in the sales '
+        'history, which products are about to run out and on what date, which '
+        'ones hold capital nobody is buying, and the ABC class of each. '
+        '`available` is on hand minus what the ERP already committed: it is '
+        'REPORTED, never decided here — this service holds no reservations. '
+        'Read-only.'
+    )
+)
+async def stock_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    window: DateWindow = Depends(),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint returning the stock view for a dataset_id.
+    '''
+    message = f'Stock for dataset {dataset_id} requested by {current_user}.'
+    logger.info(message)
+    return await stock_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        params = window.as_params(),
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/credit-policy',
+    response_model = CreditPolicyResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Credit policy applied to the caller\'s book',
+    description = (
+        'Returns the aging buckets, the expected loss per bucket, the daily '
+        'financial rate, the delinquency threshold and the term assumed when a '
+        'credit sale states none. `source_code` says whether they are the '
+        'caller\'s own parameters or the service defaults.'
+    )
+)
+async def get_credit_policy_endpoint(
+    request: Request,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint returning the caller's credit policy.
+    '''
+    message = f'Credit policy requested by {current_user}.'
+    logger.info(message)
+    return await get_credit_policy_controller(
+        dynamodb_resource = dynamodb_resource,
+        request = request,
+        current_user = current_user
+    )
+
+
+@router.put(
+    '/credit-policy',
+    response_model = CreditPolicyResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Set the credit policy of the caller\'s book',
+    description = (
+        'Stores the parameters this client wants its receivables read with. '
+        'Every field is optional and what is left out falls back to the service '
+        'default, field by field. The answer is the RESOLVED policy, so the '
+        'caller can see which defaults filled the gaps before a provision is '
+        'computed with them.'
+    )
+)
+async def save_credit_policy_endpoint(
+    request: Request,
+    policy: CreditPolicyRequest,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint storing the caller's credit policy.
+    '''
+    message = f'Credit policy updated by {current_user}.'
+    logger.info(message)
+    return await save_credit_policy_controller(
+        dynamodb_resource = dynamodb_resource,
+        policy = policy,
         request = request,
         current_user = current_user
     )

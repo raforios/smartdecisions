@@ -23,6 +23,10 @@ class ValueRules:
     minimum: Optional[float] = None
     exclusive_minimum: Optional[float] = None
     value_range: Optional[tuple[float, float]] = None
+    # Accepted values of a closed-option column. It exists because a badly
+    # typed payment condition must not pass as cash by omission: that would
+    # change the receivable balance without anybody noticing.
+    allowed: Optional[tuple[str, ...]] = None
 
 
 @dataclass(frozen = True)
@@ -80,9 +84,76 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(minimum = 0.0)),
     SalesColumn('total_amount', 'Monto Total', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
+    # --- Credit: what is known at the moment of the sale --------------------
+    # Optional. Without them the receivables analysis is not offered; with them
+    # it turns on without the client loading anything separately.
+    SalesColumn('payment_terms', 'Condicion Venta', False, 'object',
+                rules = ValueRules(max_length = 16,
+                                   allowed = ('CONTADO', 'CREDITO'))),
+    SalesColumn('credit_days', 'Plazo Dias', False, 'Int64',
+                rules = ValueRules(minimum = 0.0)),
+    SalesColumn('due_date', 'Fecha Vencimiento', False, 'datetime64[ns]'),
+    SalesColumn('collector', 'Responsable Cobro', False, 'object'),
+    SalesColumn('credit_limit', 'Limite Credito', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
 )
 
-TEMPLATE_VERSION: str = 'v2'
+# The payment is a separate contract, married to the sale by `order_id` and
+# loaded afterwards: an invoice at 90 days is collected three months after the
+# file that registered it. It shares the `SalesColumn` type because it is the
+# same kind of declaration; what changes is the sheet it lives on.
+COLLECTION_COLUMNS: tuple[SalesColumn, ...] = (
+    SalesColumn('order_id', 'Nro Factura', True, 'object',
+                rules = ValueRules(max_length = 64), template_required = True),
+    SalesColumn('payment_date', 'Fecha Cobro', True, 'datetime64[ns]',
+                template_required = True),
+    SalesColumn('paid_amount', 'Monto Cobrado', True, 'float64',
+                rules = ValueRules(exclusive_minimum = 0.0),
+                template_required = True),
+    SalesColumn('payment_method', 'Medio', False, 'object',
+                rules = ValueRules(max_length = 32)),
+    SalesColumn('collector', 'Responsable Cobro', False, 'object'),
+)
+
+COLLECTION_HEADERS: tuple[str, ...] = tuple(
+    column.header for column in COLLECTION_COLUMNS
+)
+
+# The stock is a SNAPSHOT, not a movement ledger: one row per product and day
+# with what was in the warehouse. It has its own endpoint because it changes
+# every day while the sales file is loaded once, and because the ERP that
+# exports it is rarely the same system that issues the invoices.
+#
+# `Comprometido` is what the ERP already committed in orders: it is READ, never
+# written. SmartDecisions holds no reservations — it would own the truth of the
+# stock and lose that fight against the ERP.
+STOCK_COLUMNS: tuple[SalesColumn, ...] = (
+    SalesColumn('snapshot_date', 'Fecha', True, 'datetime64[ns]',
+                template_required = True),
+    SalesColumn('product_id', 'Producto ID', True, 'object',
+                rules = ValueRules(max_length = 64), filled_by_service = True),
+    SalesColumn('product_name', 'Producto', False, 'object', template_required = True),
+    SalesColumn('on_hand', 'Existencia', True, 'float64',
+                rules = ValueRules(minimum = 0.0), template_required = True),
+    SalesColumn('committed', 'Comprometido', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+    SalesColumn('in_transit', 'En Transito', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+    SalesColumn('warehouse', 'Almacen', False, 'object',
+                rules = ValueRules(max_length = 64)),
+    SalesColumn('unit_cost', 'Costo Unitario', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+)
+
+STOCK_HEADERS: tuple[str, ...] = tuple(
+    column.header for column in STOCK_COLUMNS if not column.filled_by_service
+)
+# Sheet names of the workbook the client downloads and returns filled in.
+SALES_SHEET: str = 'Ventas'
+COLLECTIONS_SHEET: str = 'Cobros'
+STOCK_SHEET: str = 'Stock'
+
+TEMPLATE_VERSION: str = 'v3'
 
 REQUIRED_COLUMNS: tuple[str, ...] = tuple(
     column.canonical for column in SALES_COLUMNS if column.required
@@ -116,6 +187,14 @@ class ValidationRule(str, Enum):
     MISSING_COLUMN = 'MISSING_COLUMN'
     EMPTY_FILE = 'EMPTY_FILE'
     INVALID_VALUE = 'INVALID_VALUE'
+    # Collections: the invoice is not in the sales dataset, or more was
+    # collected than was billed. Both are reported and never dropped: they are
+    # facts of the client's file, and deciding what they mean is not this
+    # service's call.
+    UNKNOWN_INVOICE = 'UNKNOWN_INVOICE'
+    OVERPAID_INVOICE = 'OVERPAID_INVOICE'
+    # Stock: the product in the snapshot is not in the sales catalogue.
+    UNKNOWN_PRODUCT = 'UNKNOWN_PRODUCT'
 
 
 class IngestError(str, Enum):
@@ -158,6 +237,68 @@ class IngestSummary(BaseModel):
                     description = 'ISO date of the latest valid sale.')
 
 
+class CollectionsSummary(BaseModel):
+    '''
+        What a collections load contains, once married to its sales dataset.
+
+        `unmatched_rows` travels because it is the number that says whether the
+        two files belong together: a load where nothing matched is almost
+        always the wrong dataset, not a client who paid nothing.
+    '''
+    total_rows: int = Field(0, ge = 0)
+    valid_rows: int = Field(0, ge = 0)
+    error_rows: int = Field(0, ge = 0)
+    matched_invoices: int = Field(0, ge = 0)
+    unmatched_rows: int = Field(0, ge = 0)
+    collected_amount: float = Field(0.0, ge = 0)
+    payment_date_start: Optional[str] = Field(None, description = 'ISO date, if any.')
+    payment_date_end: Optional[str] = Field(None, description = 'ISO date, if any.')
+
+
+class StockSummary(BaseModel):
+    '''
+        What a stock snapshot load contains.
+
+        `unknown_products` travels because it is the number that says whether
+        the snapshot belongs to this dataset: a load where nothing matched the
+        catalogue is the wrong file, not a warehouse full of new products.
+    '''
+    total_rows: int = Field(0, ge = 0)
+    valid_rows: int = Field(0, ge = 0)
+    error_rows: int = Field(0, ge = 0)
+    products: int = Field(0, ge = 0)
+    unknown_products: int = Field(0, ge = 0)
+    units_on_hand: float = Field(0.0)
+    snapshot_start: Optional[str] = Field(None, description = 'ISO date, if any.')
+    snapshot_end: Optional[str] = Field(None, description = 'ISO date, if any.')
+
+
+class StockResponse(BaseModel):
+    '''
+        Answer of a stock upload: what got in, what did not, and why.
+    '''
+    dataset_id: str = Field(..., description = 'Sales dataset the snapshot belongs to.')
+    status: str = Field(..., description = "'validated' or 'failed'.")
+    stock_s3_key: Optional[str] = Field(
+        None, description = 'Object key of the stored snapshot file.'
+    )
+    summary: StockSummary = StockSummary()
+    issues: List[ValidationIssue] = Field(default_factory = list)
+
+
+class CollectionsResponse(BaseModel):
+    '''
+        Answer of a collections upload: what got in, what did not, and why.
+    '''
+    dataset_id: str = Field(..., description = 'Sales dataset the payments belong to.')
+    status: str = Field(..., description = "'validated' or 'failed'.")
+    collections_s3_key: Optional[str] = Field(
+        None, description = 'Object key of the stored payments file.'
+    )
+    summary: CollectionsSummary = CollectionsSummary()
+    issues: List[ValidationIssue] = Field(default_factory = list)
+
+
 class IngestResponse(BaseModel):
     '''
         Response payload returned after a successful ingest.
@@ -177,6 +318,11 @@ class IngestResponse(BaseModel):
     file_s3_key: str = Field(..., description = 'Object key in the S3 bucket managed by FILES.')
     summary: IngestSummary
     issues: list[ValidationIssue] = Field(default_factory = list)
+    collections: Optional[CollectionsSummary] = Field(
+        None,
+        description = 'Filled when the uploaded workbook also carried a payments '
+                      'sheet, so one upload answers both contracts.'
+    )
     created_at: datetime
 
 
@@ -224,6 +370,17 @@ class IngestStatusResponse(BaseModel):
     file_s3_key: str
     summary: IngestSummary
     issues: list[ValidationIssue] = Field(default_factory = list)
+    collections: Optional[CollectionsSummary] = Field(
+        None,
+        description = 'Payments loaded against this dataset, when there are any. '
+                      'Its absence is what tells the frontend not to offer the '
+                      'receivables view.'
+    )
+    stock: Optional[StockSummary] = Field(
+        None,
+        description = 'Latest stock snapshot loaded against this dataset, when '
+                      'there is one. A new load replaces the previous snapshot.'
+    )
     created_at: datetime
 
 

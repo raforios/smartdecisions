@@ -16,7 +16,7 @@ import pandas as pd
 from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
-from schemas.analytics import AnalyticsError, PeriodInfo
+from schemas.analytics import AnalyticsError, ConcentrationLevel, PeriodInfo
 from services.crud import create_item
 from services.environment import load_and_validate_env_vars
 from services.exceptions import (
@@ -37,9 +37,11 @@ ENV_VARS = load_and_validate_env_vars({
     'CHANGE_DECIMALS': int,
     'FORECAST_MONTHS_AHEAD': int,
     'RANKING_SIZE': int,
+    'DYNAMODB_TABLE_NAME_CREDIT_POLICIES': str,
 })
 INGEST_DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 ANALYTICS_RUNS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_ANALYTICS_RUNS']
+CREDIT_POLICIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_CREDIT_POLICIES']
 FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 
 
@@ -88,6 +90,30 @@ def ratio(numerator: float, denominator: float) -> float:
     if not denominator or pd.isna(denominator):
         return 0.0
     return float(numerator) / float(denominator)
+
+
+def hhi_level(index: float, moderate: float, high: float) -> ConcentrationLevel:
+    '''
+        Reads a Herfindahl-Hirschman index as a concentration level.
+
+        Lives here and not inside an engine because two of them ask the same
+        question of different subjects — concentration asks it of clients, the
+        volume-source block of products — and each brings its own cut points
+        from its own configuration.
+
+        Args:
+            index (float): Herfindahl-Hirschman index between 0 and 1.
+            moderate (float): Lower bound of moderate concentration.
+            high (float): Lower bound of high concentration.
+
+        Returns:
+            ConcentrationLevel: The level code; the UI words it.
+    '''
+    if index >= high:
+        return ConcentrationLevel.HIGH
+    if index >= moderate:
+        return ConcentrationLevel.MODERATE
+    return ConcentrationLevel.LOW
 
 
 def percent_change(current: float, previous: Optional[float]) -> Optional[float]:
@@ -291,6 +317,68 @@ def apply_date_range(
 # role in AWS, ~/.aws/credentials in local dev) — same way AUTH and EVENTS
 # do it. No region_name argument needed.
 _s3_client = boto3.client('s3')
+
+
+def get_credit_policy(
+    dynamodb_resource: ServiceResource,
+    owner_email: str
+) -> Optional[Dict[str, Any]]:
+    '''
+        Reads the credit policy of one client of SmartDecisions.
+
+        The owner is the key, not a filter applied afterwards: a policy is the
+        clearest case of a per-client parameter and reading somebody else's
+        would silently change another company's provisions.
+
+        Args:
+            dynamodb_resource (ServiceResource): The shared DynamoDB resource.
+            owner_email (str): Authenticated caller and owner of the policy.
+
+        Returns:
+            Dict[str, Any] | None: The stored policy, or None when the client
+                never set one — in which case the service defaults apply.
+    '''
+    table = dynamodb_resource.Table(CREDIT_POLICIES_TABLE)
+    item = table.get_item(Key = {'owner_email': owner_email}).get('Item')
+    if not item:
+        message = f'No credit policy stored for {owner_email}; using defaults.'
+        logger.info(message)
+        return None
+    return _decimal_to_native(item)
+
+
+def save_credit_policy(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    policy: Dict[str, Any]
+) -> Dict[str, Any]:
+    '''
+        Stores the credit policy of one client, replacing the previous one.
+
+        A replace and not a merge: the policy is small and sending it whole is
+        how the caller says which fields it wants to keep. What it leaves out
+        falls back to the service defaults, field by field, when the figures
+        are computed.
+
+        Args:
+            dynamodb_resource (ServiceResource): The shared DynamoDB resource.
+            owner_email (str): Authenticated caller and owner of the policy.
+            policy (Dict[str, Any]): Parameters to store; empty values dropped.
+
+        Returns:
+            Dict[str, Any]: The stored item.
+    '''
+    item = {
+        'owner_email': owner_email,
+        'updated_at': get_current_time_gmt().isoformat(),
+        **{key: value for key, value in policy.items() if value is not None}
+    }
+    dynamodb_resource.Table(CREDIT_POLICIES_TABLE).put_item(
+        Item = _floats_to_decimal(item)
+    )
+    message = f'Stored credit policy for {owner_email}.'
+    logger.info(message)
+    return item
 
 
 def get_dataset_metadata(

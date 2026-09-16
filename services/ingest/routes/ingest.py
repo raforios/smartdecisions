@@ -13,12 +13,16 @@ from controllers.ingest import (
     download_template_controller,
     get_dataset_status_controller,
     get_template_info_controller,
+    ingest_collections_controller,
+    ingest_stock_controller,
     list_datasets_controller,
     ingest_excel_controller,
     ingest_excel_from_s3_controller
 )
 from schemas.ingest import (
+    CollectionsResponse,
     IngestError,
+    StockResponse,
     IngestFromS3Request,
     IngestResponse,
     DatasetListResponse,
@@ -177,6 +181,98 @@ async def ingest_excel_from_s3_endpoint(
         dynamodb_resource = dynamodb_resource,
         file_key = payload.file_key,
         file_name = payload.file_name,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.post(
+    '/{dataset_id}/collections',
+    response_model = CollectionsResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Upload the payments of a sales dataset',
+    description = (
+        'Accepts a .xlsx or .csv with the collections contract and marries it to '
+        'an existing sales dataset by invoice number. Loading it separately is '
+        'what lets a client register sales today and payments as they come in; '
+        'an invoice with no payment rows is an open balance, not an error. A new '
+        'load replaces the previous one for that dataset.'
+    )
+)
+async def ingest_collections_endpoint(
+    request: Request,
+    dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
+    file: UploadFile = File(...),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to ingest the payments of a sales dataset.
+    '''
+    filename = file.filename or ''
+    if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+        raise InvalidInputError(detail = IngestError.UNSUPPORTED_FILE_FORMAT.value)
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise InvalidInputError(detail = IngestError.EMPTY_UPLOAD.value)
+
+    message = (f'Ingesting collections "{filename}" ({len(file_bytes)} bytes) for '
+               f'dataset {dataset_id} from {current_user}.')
+    logger.info(message)
+
+    return await ingest_collections_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        file_bytes = file_bytes,
+        filename = filename,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.post(
+    '/{dataset_id}/stock',
+    response_model = StockResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Upload the daily stock snapshot of a sales dataset',
+    description = (
+        'Accepts a .xlsx or .csv with the stock contract —one row per product '
+        'and day with what is in the warehouse— and marries it to the product '
+        'catalogue of an existing sales dataset. It is a SNAPSHOT: a new load '
+        'replaces the previous one, so what is reported is always the latest '
+        'photo. `Comprometido` is read, never written: this service reports '
+        'what the ERP already committed and does not hold reservations of its '
+        'own.'
+    )
+)
+async def ingest_stock_endpoint(
+    request: Request,
+    dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
+    file: UploadFile = File(...),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to ingest the stock snapshot of a sales dataset.
+    '''
+    filename = file.filename or ''
+    if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+        raise InvalidInputError(detail = IngestError.UNSUPPORTED_FILE_FORMAT.value)
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise InvalidInputError(detail = IngestError.EMPTY_UPLOAD.value)
+
+    message = (f'Ingesting stock "{filename}" ({len(file_bytes)} bytes) for '
+               f'dataset {dataset_id} from {current_user}.')
+    logger.info(message)
+
+    return await ingest_stock_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        file_bytes = file_bytes,
+        filename = filename,
         current_user = current_user,
         request = request
     )

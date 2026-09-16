@@ -23,9 +23,11 @@ import pandera.pandas as pa
 from pandera.errors import SchemaErrors
 
 from schemas.ingest import (
+    COLLECTION_COLUMNS,
     REQUIRED_COLUMNS,
     OPTIONAL_COLUMNS,
     SALES_COLUMNS,
+    STOCK_COLUMNS,
     TEMPLATE_VERSION,
     IngestSummary,
     SalesColumn,
@@ -57,28 +59,34 @@ def _normalize_header(header: object) -> str:
     return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9]+', ' ', text)).strip()
 
 
-def _build_header_lookup() -> dict[str, str]:
+def _build_header_lookup(columns: tuple[SalesColumn, ...]) -> dict[str, str]:
     '''
-        Builds the {normalized header: canonical name} lookup from the contract.
+        Builds the {normalized header: canonical name} lookup of a contract.
 
         Both the template header the client fills in and the canonical name
         itself are accepted, so a file already using the contract's names also
         ingests.
 
+        Args:
+            columns (tuple[SalesColumn, ...]): The contract to read.
+
         Returns:
             dict[str, str]: Lookup used by map_columns.
     '''
     lookup: dict[str, str] = {}
-    for column in SALES_COLUMNS:
+    for column in columns:
         lookup[_normalize_header(column.header)] = column.canonical
         lookup[_normalize_header(column.canonical)] = column.canonical
     return lookup
 
 
-_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup()
+_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(SALES_COLUMNS)
+COLLECTION_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(COLLECTION_COLUMNS)
+STOCK_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(STOCK_COLUMNS)
 
 
-def map_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
+def map_columns(dataframe: pd.DataFrame,
+                lookup: Optional[dict[str, str]] = None) -> pd.DataFrame:
     '''
         Renames the source columns to the canonical contract names.
 
@@ -89,14 +97,17 @@ def map_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
 
         Args:
             dataframe (pd.DataFrame): Raw frame parsed from the user's file.
+            lookup (dict[str, str] | None): Contract lookup; the sales one by
+                default, so every existing caller keeps its behaviour.
 
         Returns:
             pd.DataFrame: The same frame with recognized columns renamed.
     '''
+    headers = lookup if lookup is not None else _HEADER_LOOKUP
     rename_map: dict[object, str] = {}
     already_taken: set[str] = set()
     for original in dataframe.columns:
-        canonical = _HEADER_LOOKUP.get(_normalize_header(original))
+        canonical = headers.get(_normalize_header(original))
         if canonical and canonical not in already_taken:
             rename_map[original] = canonical
             already_taken.add(canonical)
@@ -127,18 +138,24 @@ def _checks_for(column: SalesColumn) -> list[pa.Check]:
         checks.append(pa.Check.greater_than_or_equal_to(rules.minimum))
     if rules.value_range is not None:
         checks.append(pa.Check.in_range(*rules.value_range))
+    if rules.allowed is not None:
+        checks.append(pa.Check.isin(rules.allowed))
     return checks
 
 
-def _build_schema() -> pa.DataFrameSchema:
+def _build_schema(columns: tuple[SalesColumn, ...], description: str) -> pa.DataFrameSchema:
     '''
-        Builds the DataFrame schema from the contract.
+        Builds the DataFrame schema of a contract.
+
+        Args:
+            columns (tuple[SalesColumn, ...]): The contract to enforce.
+            description (str): What the schema is, for the error report.
 
         Returns:
             pa.DataFrameSchema: Schema in 'filter' mode, so unknown columns are
                 dropped instead of failing the whole file.
     '''
-    columns = {
+    declared = {
         column.canonical: pa.Column(
             dtype = column.dtype,
             nullable = not column.required,
@@ -146,21 +163,36 @@ def _build_schema() -> pa.DataFrameSchema:
             coerce = True,
             checks = _checks_for(column)
         )
-        for column in SALES_COLUMNS
+        for column in columns
     }
     return pa.DataFrameSchema(
-        columns = columns,
+        columns = declared,
         strict = 'filter',
         coerce = True,
         ordered = False,
-        description = (
-            f'SmartDecisions sales contract {TEMPLATE_VERSION}. Required: '
-            f'{", ".join(REQUIRED_COLUMNS)}. Optional: {", ".join(OPTIONAL_COLUMNS)}.'
-        )
+        description = description
     )
 
 
-SCHEMA: Final[pa.DataFrameSchema] = _build_schema()
+SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
+    SALES_COLUMNS,
+    f'SmartDecisions sales contract {TEMPLATE_VERSION}. Required: '
+    f'{", ".join(REQUIRED_COLUMNS)}. Optional: {", ".join(OPTIONAL_COLUMNS)}.'
+)
+
+# The other two contracts are validated with the same machinery: they are the
+# same kind of declaration read over a different sheet.
+COLLECTIONS_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
+    COLLECTION_COLUMNS,
+    f'SmartDecisions collections contract {TEMPLATE_VERSION}. Required: '
+    f'{", ".join(column.canonical for column in COLLECTION_COLUMNS if column.required)}.'
+)
+
+STOCK_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
+    STOCK_COLUMNS,
+    f'SmartDecisions stock contract {TEMPLATE_VERSION}. Required: '
+    f'{", ".join(column.canonical for column in STOCK_COLUMNS if column.required)}.'
+)
 
 # Pandera reports parameterized check names ("greater_than(0)",
 # "coerce_dtype('datetime64[ns]')"). They map to a stable code by prefix; the
@@ -218,14 +250,17 @@ def _rule_code(check_name: Optional[str]) -> ValidationRule:
     return ValidationRule.INVALID_VALUE
 
 
-def validate(dataframe: pd.DataFrame) -> ValidationResult:
+def validate(dataframe: pd.DataFrame,
+             schema: Optional[pa.DataFrameSchema] = None) -> ValidationResult:
     '''
-        Validates a sales DataFrame against the v1 template contract.
+        Validates a DataFrame against a published contract.
 
         Lazy mode: collects all errors instead of failing on the first.
 
         Args:
-            dataframe (pd.DataFrame): Raw DataFrame parsed from the user's Excel.
+            dataframe (pd.DataFrame): Raw DataFrame parsed from the user's file.
+            schema (pa.DataFrameSchema | None): Contract to enforce; the sales
+                one by default.
 
         Returns:
             ValidationResult: The coerced frame (or the original on full
@@ -240,8 +275,9 @@ def validate(dataframe: pd.DataFrame) -> ValidationResult:
         ))
         return ValidationResult(frame = dataframe, issues = issues)
 
+    contract = schema if schema is not None else SCHEMA
     try:
-        return ValidationResult(frame = SCHEMA.validate(dataframe, lazy = True), issues = [])
+        return ValidationResult(frame = contract.validate(dataframe, lazy = True), issues = [])
     except SchemaErrors as schema_errors:
         failure_cases = schema_errors.failure_cases
         for _, failure in failure_cases.iterrows():
@@ -265,8 +301,8 @@ def validate(dataframe: pd.DataFrame) -> ValidationResult:
             ))
 
         message = (
-            f'Excel validation found {len(issues)} issue(s) across '
-            f'{failure_cases["column"].nunique()} column(s).'
+            f'Validation of "{contract.description}" found {len(issues)} issue(s) '
+            f'across {failure_cases["column"].nunique()} column(s).'
         )
         logger.info(message)
         return ValidationResult(frame = dataframe, issues = issues)
@@ -426,19 +462,102 @@ def _coerce_dates(values: pd.Series) -> pd.Series:
     return day_first if day_first.notna().sum() > iso.notna().sum() else iso
 
 
+# Every date column of every contract, not just the sale's: the due date and
+# the payment date arrive in the same formats and through the same door.
+_DATE_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
+    column.canonical
+    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS
+    if column.dtype.startswith('datetime64')
+))
+
+# Closed-option columns are normalized before validating, because an ERP writes
+# 'Crédito', 'credito' or 'CRÉDITO' for the same thing and rejecting the row
+# over an accent would be rejecting correct data.
+_OPTION_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
+    column.canonical
+    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS
+    if column.rules.allowed is not None
+))
+
+
 def _parse_dates(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
-        Coerces the 'date' column to datetime. Unparseable dates become NaT so
-        the validator flags (and the partial pipeline rejects) those rows.
+        Coerces every contract date column to datetime. Unparseable dates
+        become NaT so the validator flags (and the partial pipeline rejects)
+        those rows.
 
         Args:
             dataframe (pd.DataFrame): Mapped DataFrame.
 
         Returns:
-            pd.DataFrame: Same frame with 'date' as datetime64.
+            pd.DataFrame: Same frame with its date columns as datetime64.
     '''
-    if 'date' in dataframe.columns:
-        dataframe['date'] = _coerce_dates(dataframe['date'])
+    for column in _DATE_COLUMNS:
+        if column in dataframe.columns:
+            dataframe[column] = _coerce_dates(dataframe[column])
+    return dataframe
+
+
+def _normalize_options(dataframe: pd.DataFrame) -> pd.DataFrame:
+    '''
+        Brings closed-option columns to the contract's spelling: uppercase, no
+        accents, trimmed. A blank stays blank so the column remains optional.
+
+        Args:
+            dataframe (pd.DataFrame): Mapped DataFrame.
+
+        Returns:
+            pd.DataFrame: Same frame with its option columns normalized.
+    '''
+    for column in _OPTION_COLUMNS:
+        if column not in dataframe.columns:
+            continue
+        dataframe[column] = dataframe[column].map(
+            lambda value: pd.NA if pd.isna(value) or not str(value).strip()
+            else _normalize_header(value).upper()
+        )
+    return dataframe
+
+
+def fill_product_ids(dataframe: pd.DataFrame) -> pd.DataFrame:
+    '''
+        Derives `product_id` from the product name, the same way the sales
+        pipeline does.
+
+        Public because the stock contract needs exactly this and nothing else:
+        the client writes 'Producto' and the service derives the code, so a
+        snapshot marries the catalogue by the same identifier the sales rows
+        were given.
+
+        Args:
+            dataframe (pd.DataFrame): Frame with canonical column names.
+
+        Returns:
+            pd.DataFrame: Same frame with `product_id` ensured.
+    '''
+    return _fill_from_name(dataframe, 'product_id', 'product_name')
+
+
+def _fill_from_name(dataframe: pd.DataFrame, id_column: str,
+                    name_column: str) -> pd.DataFrame:
+    '''
+        Fills one identifier column from its name column.
+
+        Args:
+            dataframe (pd.DataFrame): Frame with canonical column names.
+            id_column (str): Identifier to ensure.
+            name_column (str): Name it is derived from.
+
+        Returns:
+            pd.DataFrame: Same frame with the identifier ensured.
+    '''
+    if name_column not in dataframe.columns:
+        return dataframe
+    if id_column not in dataframe.columns:
+        dataframe[id_column] = dataframe[name_column]
+    else:
+        missing = dataframe[id_column].isna()
+        dataframe.loc[missing, id_column] = dataframe.loc[missing, name_column]
     return dataframe
 
 
@@ -460,13 +579,7 @@ def _fill_ids_from_names(dataframe: pd.DataFrame) -> pd.DataFrame:
         ('pos_id', 'pos_name'),
         ('product_id', 'product_name'),
     ):
-        if name_column not in dataframe.columns:
-            continue
-        if id_column not in dataframe.columns:
-            dataframe[id_column] = dataframe[name_column]
-        else:
-            missing = dataframe[id_column].isna()
-            dataframe.loc[missing, id_column] = dataframe.loc[missing, name_column]
+        dataframe = _fill_from_name(dataframe, id_column, name_column)
     return dataframe
 
 
@@ -595,6 +708,45 @@ def serialize_dataframe(dataframe: pd.DataFrame, filename: str) -> bytes:
     return buffer.getvalue()
 
 
+def read_file(file_bytes: bytes, filename: str) -> pd.DataFrame:
+    '''
+        Reads an uploaded file into a DataFrame. Public because the collections
+        pipeline reads the same formats through the same door.
+
+        Args:
+            file_bytes (bytes): Raw uploaded file content.
+            filename (str): Original filename; drives format detection.
+
+        Returns:
+            pd.DataFrame: Raw DataFrame, no validation yet.
+
+        Raises:
+            ValueError: If the file extension is not supported.
+    '''
+    return _read_dataframe(file_bytes, filename)
+
+
+def normalize_frame(dataframe: pd.DataFrame, lookup: dict[str, str]) -> pd.DataFrame:
+    '''
+        Brings a raw frame to a canonical contract: headers, ids, dates and
+        closed options.
+
+        Shared by both contracts on purpose. What the sales pipeline adds on top
+        —deriving ids from names and sanitizing coordinates— belongs only to it.
+
+        Args:
+            dataframe (pd.DataFrame): Raw frame parsed from the user's file.
+            lookup (dict[str, str]): Contract header lookup.
+
+        Returns:
+            pd.DataFrame: The mapped, cleaned frame.
+    '''
+    mapped = map_columns(dataframe, lookup)
+    mapped = _stringify_ids(mapped)
+    mapped = _parse_dates(mapped)
+    return _normalize_options(mapped)
+
+
 def _normalize(file_bytes: bytes, filename: str) -> pd.DataFrame:
     '''
         Reads the file and brings it to the canonical column contract.
@@ -609,10 +761,8 @@ def _normalize(file_bytes: bytes, filename: str) -> pd.DataFrame:
     # Map the published template's headers to the canonical names before
     # validating, then clean numeric codes and fill the required id columns
     # from the client and product names, which is all the template carries.
-    mapped = map_columns(_read_dataframe(file_bytes, filename))
-    mapped = _stringify_ids(mapped)
+    mapped = normalize_frame(_read_dataframe(file_bytes, filename), _HEADER_LOOKUP)
     mapped = _fill_ids_from_names(mapped)
-    mapped = _parse_dates(mapped)
     return _sanitize_geo(mapped)
 
 

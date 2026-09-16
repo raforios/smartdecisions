@@ -1,5 +1,8 @@
 '''
-    Unit tests for the growth_engine (MoM / YoY / seasonality / category mix).
+    Unit tests for the growth engine (MoM / YoY / seasonality).
+
+    The category mix moved to the volume-source engine and is tested in
+    `test_volume.py`.
 '''
 import pandas as pd
 

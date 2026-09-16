@@ -3,7 +3,7 @@
 '''
 import socket
 from datetime import date, datetime
-from typing import Any, AsyncIterator, Dict
+from typing import Any, AsyncGenerator, Dict
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -45,9 +45,9 @@ ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
 ]
 
-# Además de la lista explícita (ORIGINS), un patrón cubre todos nuestros frontends
-# —subdominios de bearsoft.com.bo, *.cloudfront.net y localhost— sin listarlos uno
-# por uno. Se puede sobreescribir con la env var CORS_ALLOWED_ORIGIN_REGEX.
+# On top of the explicit list (ORIGINS), one pattern covers every frontend we
+# have —bearsoft.com.bo subdomains, *.cloudfront.net and localhost— without
+# listing them one by one. Overridable with the CORS_ALLOWED_ORIGIN_REGEX env var.
 DEFAULT_CORS_ORIGIN_REGEX = (
     r'^https://([a-z0-9-]+\.)*bearsoft\.com\.bo$'
     r'|^https://[a-z0-9-]+\.cloudfront\.net$'
@@ -58,7 +58,7 @@ CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     '''
         Handles startup/shutdown. DynamoDB tables are managed outside the app
         lifecycle (via dynamodb.sh / IaC) and the downloadable template is a

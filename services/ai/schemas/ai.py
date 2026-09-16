@@ -43,6 +43,8 @@ class ViewName(str, Enum):
     '''
     # Análisis Comercial
     COMMERCIAL_SUMMARY = 'commercial_summary'
+    VOLUME_SOURCE = 'volume_source'
+    RECEIVABLES = 'receivables'
     OPPORTUNITIES = 'opportunities'
     SEGMENTATION = 'segmentation'
     SALES_FORECAST = 'sales_forecast'

@@ -18,25 +18,34 @@ from schemas.analytics import (
     PortfolioResponse,
     SegmentationResponse
 )
-from services.analytics import (
-    build_commercial_summary,
-    build_concentration,
-    build_efficiency,
-    build_forecast,
-    build_growth,
-    build_margin,
-    build_portfolio,
-    build_segmentation,
-    compute_opportunities
+from schemas.receivables import (
+    CreditPolicyRequest,
+    CreditPolicyResponse,
+    ReceivablesResponse
 )
+from schemas.stock import StockResponse
+from services.receivables import build_receivables, resolve_policy
+from services.stock import build_stock
+from services.affinity import compute_opportunities
+from services.analytics import build_commercial_summary
+from services.concentration import build_concentration
+from services.efficiency import build_efficiency
+from services.forecast import build_forecast
+from services.growth import build_growth
+from services.margin import build_margin
+from services.portfolio import build_portfolio
+from services.segmentation import build_segmentation
+from services.volume import build_volume_source
 from services.analytics_utils import (
     apply_date_range,
+    get_credit_policy,
     get_dataset_metadata,
     get_latest_run_for_dataset,
     HISTORY_DEFAULT_LIMIT,
     list_runs_for_owner,
     load_dataframe_from_s3,
-    persist_run
+    persist_run,
+    save_credit_policy
 )
 from services.environment import load_and_validate_env_vars
 from services.utils import handle_service_errors
@@ -166,9 +175,9 @@ async def commercial_summary_controller(
 ) -> CommercialSummaryResponse:
     '''
         Loads the normalized dataset and builds the full commercial summary:
-        the sales picture plus growth, concentration, efficiency and gross
-        margin. Read-only: everything is derived on the fly from the dataset,
-        so nothing is persisted as a run.
+        the sales picture plus growth, volume source, concentration, efficiency
+        and gross margin. Read-only: everything is derived on the fly from the
+        dataset, so nothing is persisted as a run.
     '''
     dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
     summary = build_commercial_summary(dataframe)
@@ -176,10 +185,137 @@ async def commercial_summary_controller(
         dataset_id = dataset_id,
         period = period,
         growth = build_growth(dataframe),
+        volume_source = build_volume_source(dataframe),
         concentration = build_concentration(dataframe),
         efficiency = build_efficiency(dataframe),
         margin = build_margin(dataframe),
         **summary.model_dump()
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def receivables_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: Dict[str, Any],
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> ReceivablesResponse:
+    '''
+        Loads the dataset with its payments and builds the receivables view:
+        position, aging, recoverability, who owes, who collects, what falls due
+        and what the credit is worth once financed and provisioned.
+
+        The payments are read from the collections file INGEST attached to the
+        dataset. Their absence is not an error: it means every credit invoice is
+        still open, which is what a client who has not loaded payments yet
+        should see.
+
+        Read-only: everything is derived on the fly, so nothing is persisted as
+        a run.
+    '''
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    collections_key = metadata.get('collections_s3_key')
+
+    block = build_receivables(
+        sales = dataframe,
+        collections = load_dataframe_from_s3(collections_key) if collections_key else None,
+        stored_policy = get_credit_policy(
+            dynamodb_resource = dynamodb_resource,
+            owner_email = current_user
+        )
+    )
+    return ReceivablesResponse(
+        dataset_id = dataset_id,
+        period = period,
+        **block.model_dump()
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def stock_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: Dict[str, Any],
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> StockResponse:
+    '''
+        Loads the latest stock snapshot of the dataset and reports what it
+        implies: coverage in days at the demand observed, which products are
+        about to run out and when, and how much capital is immobilized.
+
+        The snapshot comes from the stock file INGEST attached to the dataset.
+        Its absence is answered with a code, not with an empty warehouse.
+
+        Read-only, and deliberately so: `available` reflects what the client's
+        ERP already committed. Nothing here reserves or promises stock.
+    '''
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    stock_key = metadata.get('stock_s3_key')
+
+    block = build_stock(
+        sales = dataframe,
+        stock = load_dataframe_from_s3(stock_key) if stock_key else None
+    )
+    return StockResponse(
+        dataset_id = dataset_id,
+        period = period,
+        **block.model_dump()
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def get_credit_policy_controller(
+    dynamodb_resource: ServiceResource,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str
+) -> CreditPolicyResponse:
+    '''
+        Returns the credit policy that will be applied to the caller's book:
+        their own where they set it, the service default everywhere else.
+    '''
+    resolved = resolve_policy(get_credit_policy(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user
+    ))
+    return CreditPolicyResponse(
+        owner_email = current_user,
+        **resolved.as_dto().model_dump()
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def save_credit_policy_controller(
+    dynamodb_resource: ServiceResource,
+    policy: CreditPolicyRequest,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str
+) -> CreditPolicyResponse:
+    '''
+        Stores the caller's credit policy and answers with how it resolves.
+
+        Answering with the resolved policy and not with what was sent is
+        deliberate: the caller has to be able to see which defaults filled the
+        gaps before a provision is computed with them.
+    '''
+    save_credit_policy(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        policy = policy.model_dump(exclude_none = True)
+    )
+    return await get_credit_policy_controller(
+        dynamodb_resource = dynamodb_resource,
+        request = request,
+        current_user = current_user
     )
 
 
