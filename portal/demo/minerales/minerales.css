@@ -278,17 +278,37 @@
 /* Bounded height so 100+ rows never push the rest of the page out of reach. */
 .rate-table-scroll {
     margin-top: .75rem;
-    max-height: 26rem;
-    overflow-y: auto;
     border: 1px solid #eceff5;
     border-radius: 8px;
+    padding-bottom: .5rem;
 }
 
-.rate-table-scroll thead th {
-    position: sticky;
-    top: 0;
-    background: #fff;
-    box-shadow: inset 0 -1px 0 #eceff5;
+/* Paginated quotations: ten per page and the same controls as every table. */
+.pager {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: .9rem .75rem 0;
+    padding-top: .8rem;
+    border-top: 1px solid #eceff5;
+}
+
+.pager-count { font-size: .85rem; color: #5e6580; }
+
+.pager-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+
+.pager-page {
+    font-size: .85rem;
+    color: #5e6580;
+    font-variant-numeric: tabular-nums;
+    min-width: 3.5rem;
+    text-align: center;
 }
 
 @media (max-width: 640px) {

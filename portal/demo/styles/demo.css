@@ -457,6 +457,9 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     border-left: 3px solid #2f6fb5;
     border-radius: 0 10px 10px 0;
 }
+/* `display: block` above beats the `hidden` attribute, and the panel showed
+   as an empty box before anyone asked. */
+.ai-answer[hidden] { display: none; }
 
 .ai-answer .ai-text {
     margin: 0;

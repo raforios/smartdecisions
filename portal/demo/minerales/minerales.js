@@ -70,7 +70,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // puede cambiar al cambiar el plazo; en cuanto elige, su elección se
     // respeta y no se la sobrescribe a la espalda.
     const state = { minerals: null, bench: null, model: null,
-                    modelPicked: false, scenario: null, days: 30 };
+                    modelPicked: false, scenario: null, days: 30, ratePage: 0 };
+
+    // Ten rows per page, like every table of the product: a scrolling box of
+    // eighty quotations was a wall, and the reader lost the header.
+    const RATE_ROWS_PER_PAGE = 10;
 
     // --- formatting -------------------------------------------------------
 
@@ -411,7 +415,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Newest first: the current rate is what a reader looks for.
-        body.innerHTML = rows.reverse().join('');
+        const ordered = rows.reverse();
+        const pages = Math.max(1, Math.ceil(ordered.length / RATE_ROWS_PER_PAGE));
+        state.ratePage = Math.min(Math.max(state.ratePage, 0), pages - 1);
+        const from = state.ratePage * RATE_ROWS_PER_PAGE;
+        body.innerHTML = ordered.slice(from, from + RATE_ROWS_PER_PAGE).join('');
+
+        qs('#rateCount').textContent = `${ordered.length} cotizaciones`;
+        qs('#ratePage').textContent = `${state.ratePage + 1} / ${pages}`;
+        qs('#ratePrev').disabled = state.ratePage === 0;
+        qs('#rateNext').disabled = state.ratePage >= pages - 1;
+        qs('#ratePager').hidden = ordered.length <= RATE_ROWS_PER_PAGE;
     }
 
     /**
@@ -827,6 +841,15 @@ document.addEventListener('DOMContentLoaded', () => {
         event.currentTarget.textContent = holder.hidden ? 'Ver la tabla' : 'Ocultar la tabla';
     });
     qs('#rateShowProjected').addEventListener('change', () => {
+        state.ratePage = 0;
+        if (state.bench) renderRateTable(state.bench, currentRun());
+    });
+    qs('#ratePrev').addEventListener('click', () => {
+        state.ratePage -= 1;
+        if (state.bench) renderRateTable(state.bench, currentRun());
+    });
+    qs('#rateNext').addEventListener('click', () => {
+        state.ratePage += 1;
         if (state.bench) renderRateTable(state.bench, currentRun());
     });
 

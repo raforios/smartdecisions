@@ -255,11 +255,27 @@
 }
 
 /* --- Analysis menu (choose which analysis to run) --- */
+/* Four cards per row on desktop and the last row centred, so an odd count
+   forms an inverted pyramid instead of leaving a hole at the end of a grid.
+   Narrower screens fall to two columns and then one, still centred. */
 .analysis-menu {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 1rem;
     margin: 1rem 0;
+}
+/* Fixed basis and no grow: every card measures the same, so the shorter last
+   row is narrower as a whole instead of stretching its cards. */
+.analysis-menu .analysis-card { flex: 0 1 calc(20% - 0.8rem); }
+@media (max-width: 1200px) {
+    .analysis-menu .analysis-card { flex-basis: calc(25% - 0.75rem); }
+}
+@media (max-width: 900px) {
+    .analysis-menu .analysis-card { flex-basis: calc(50% - 0.5rem); }
+}
+@media (max-width: 540px) {
+    .analysis-menu .analysis-card { flex-basis: 100%; }
 }
 .analysis-card {
     position: relative;
@@ -312,7 +328,6 @@
     font-size: 0.98rem;
     color: var(--text-strong);
 }
-.chart-card canvas { height: 320px !important; max-height: 320px; }
 
 /* --- Forecast controls --- */
 .forecast-controls {
@@ -477,7 +492,12 @@
     border-radius: var(--radius-sm);
     margin: 0 0 1.1rem;
     color: var(--text-strong);
+    font-weight: 600;
 }
+/* Traffic light for the concentration reading: soft tones, still unmistakable. */
+.insight-line.level-low      { color: #2f7a4d; border-left-color: #7fc79a; }
+.insight-line.level-moderate { color: #a5741c; border-left-color: #e3bb63; }
+.insight-line.level-high     { color: #b6484a; border-left-color: #e59a9b; }
 
 /* --- Loss-making products: this is the block a manager acts on first --- */
 .alert-panel {
@@ -509,6 +529,16 @@
 .badge-a { background: var(--success); }
 .badge-b { background: var(--accent-3); color: var(--text-strong); }
 .badge-c { background: var(--muted); }
+/* Stock situation and credit risk: the codes of the engine, one tone each.
+   Without a background the white text vanished into the cell. */
+.badge-healthy      { background: var(--success); }
+.badge-low          { background: var(--warning); }
+.badge-critical     { background: var(--danger); }
+.badge-out_of_stock { background: #7a1f22; }
+.badge-excess       { background: var(--accent); }
+.badge-no_demand    { background: var(--muted); }
+.badge-watch        { background: var(--warning); }
+.badge-delinquent   { background: var(--danger); }
 
 /* --- Inline search inside a section header --- */
 .table-search {
@@ -537,21 +567,35 @@
     margin-top: 1.5rem;
     align-items: start;
 }
+/* Two tables side by side share the width evenly: neither is the chart.
+   Half a screen is tight, so headers may wrap and cells lose some padding:
+   otherwise the last column slid out of the wrapper behind an invisible
+   scrollbar. */
+.split-layout.split-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.split-even .data-table thead th { white-space: normal; padding: 0.7rem 0.6rem; }
+.split-even .data-table tbody td { padding: 0.65rem 0.6rem; }
 @media (max-width: 900px) {
-    .split-layout { grid-template-columns: 1fr; }
+    .split-layout, .split-layout.split-even { grid-template-columns: 1fr; }
 }
 
 /* Wide tables keep their natural column widths and scroll inside their wrapper
    instead of squeezing every cell into a four-line stack on a phone. */
-#riskTable, #sellerTable, #marginAlertTable { min-width: 760px; }
+#riskTable, #marginAlertTable { min-width: 760px; }
+/* Five short columns: it fits half a screen once the money stops wrapping. */
+#sellerTable { min-width: 520px; }
 #marginCategoryTable, #mixTable, #priceTable, #abcTable { min-width: 520px; }
 .cell-note { min-width: 24ch; }
+/* A hint under a label is its own line: inline it ran into the label
+   ("PrecioLo que cambió el precio…"). */
+.data-table td > .cell-note { display: block; margin-top: 0.15rem; min-width: 0; }
 
 /* A chart card has no height of its own: it takes it from the canvas. When
    Chart.js measures a canvas inside a hidden section it writes height:0, and
    the card then collapses to zero too — a feedback loop that leaves an empty
    card even after the section becomes visible. A floor on the canvas breaks it. */
-.chart-card canvas { height: 300px !important; min-height: 300px; }
+/* max-height is what Chart.js reads to clamp its bitmap to the box: without it
+   the chart measures the whole card and draws taller than the canvas shows. */
+.chart-card canvas { height: 300px !important; min-height: 300px; max-height: 300px; }
 
 /* The `hidden` attribute is only a default of display:none, and any rule that
    sets `display` on the same element silently overrides it — the map overlay

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Rutas de visita — module logic.
+ * Rutas — module logic.
  *
  * The plan comes from the sales dataset the user already uploaded in the Excel
  * module: same `dataset_id`, read from sessionStorage. There is no route_id or

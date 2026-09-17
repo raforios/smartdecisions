@@ -45,7 +45,10 @@
      * label until `done()` is called. Returns the done() callback.
      */
     function setButtonBusy(button, busyLabel) {
-        const originalLabel = button.textContent;
+        // Markup, not text: an analysis card is a button with an icon, a title
+        // and a description inside, and restoring textContent flattened it
+        // into one plain line after the first click.
+        const originalMarkup = button.innerHTML;
         const originalDisabled = button.disabled;
         button.disabled = true;
         button.dataset.sdBusy = '1';
@@ -53,7 +56,7 @@
         return function done() {
             button.disabled = originalDisabled;
             delete button.dataset.sdBusy;
-            if (busyLabel) button.textContent = originalLabel;
+            if (busyLabel) button.innerHTML = originalMarkup;
         };
     }
 

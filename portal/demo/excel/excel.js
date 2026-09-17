@@ -584,6 +584,15 @@ document.addEventListener('DOMContentLoaded', () => {
         LOW: 'Baja: la venta está bien repartida entre los clientes.'
     };
 
+    // The reading is a traffic light: the text takes the colour of its level
+    // so "Alta" is red before it is read, and "Baja" is green.
+    function setLevelReading(elementId, level, texts) {
+        const node = qs('#' + elementId);
+        node.textContent = texts[level] || '';
+        node.classList.remove('level-low', 'level-moderate', 'level-high');
+        if (texts[level]) node.classList.add(`level-${String(level).toLowerCase()}`);
+    }
+
     // A dimension the source file left blank still needs a row label.
     function dimensionLabel(value) {
         return value ? String(value) : 'Sin especificar';
@@ -869,12 +878,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showAnalysisView('stepSegmentation');
     }
 
-    // Diez filas: la tabla cabe en pantalla sin desplazar, que es lo que
-    // permite compararlas de un vistazo. Veinte obligaba a bajar y perder de
-    // vista las primeras.
-    const SEGMENT_PAGE_SIZE = 10;
-    let segmentPage = 0;
-
     function filteredSegmentClients() {
         const tier = qs('#segmentFilter').value;
         const search = qs('#segmentSearch').value.trim().toLowerCase();
@@ -885,24 +888,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderSegmentTable() {
         const rows = filteredSegmentClients();
-        const pages = Math.max(1, Math.ceil(rows.length / SEGMENT_PAGE_SIZE));
-        segmentPage = Math.min(segmentPage, pages - 1);
-        const start = segmentPage * SEGMENT_PAGE_SIZE;
-        const pageRows = rows.slice(start, start + SEGMENT_PAGE_SIZE);
-
-        const tbody = qs('#segmentTable tbody');
-        tbody.innerHTML = '';
-        if (pageRows.length === 0) {
-            tbody.innerHTML =
-                '<tr class="empty-row"><td colspan="7">Sin clientes para ese filtro.</td></tr>';
-        }
-        pageRows.forEach((client, index) => {
+        fillTable('segmentTable', rows, (client, position) => {
             const purchases = Number(client.purchases) || 0;
             const amount = Number(client.amount) || 0;
             const ticket = purchases ? amount / purchases : 0;
             const share = segmentTotal ? (amount / segmentTotal) * 100 : 0;
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td class="rank-cell">${start + index + 1}</td>` +
+            return `<td class="rank-cell">${position + 1}</td>` +
                 `<td>${escapeHtml(client.client)}</td>` +
                 `<td><span class="tier-badge tier-${client.tier}">` +
                 `${escapeHtml(tierLabel(client.tier))}</span></td>` +
@@ -910,8 +901,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="numeric strong">${formatCurrency(amount)}</td>` +
                 `<td class="numeric">${formatCurrency(ticket)}</td>` +
                 `<td class="numeric">${share.toFixed(2)}%</td>`;
-            tbody.appendChild(tr);
-        });
+        }, { emptyText: 'Sin clientes para ese filtro.' });
         // The API caps the client list, so say so instead of letting the user
         // wonder why the lowest tier looks smaller than its KPI card.
         qs('#segmentCount').textContent = segmentClients.length < segmentAllClients
@@ -919,18 +909,10 @@ document.addEventListener('DOMContentLoaded', () => {
               `${formatInt(segmentClients.length)} clientes de mayor valor ` +
               `de ${formatInt(segmentAllClients)}`
             : `${formatInt(rows.length)} cliente(s)`;
-        qs('#segmentPageInfo').textContent = rows.length === 0
-            ? '—'
-            : `${formatInt(start + 1)}–${formatInt(start + pageRows.length)} de ` +
-              `${formatInt(rows.length)} · pág. ${segmentPage + 1}/${pages}`;
-        qs('#segmentPrev').disabled = segmentPage === 0;
-        qs('#segmentNext').disabled = segmentPage >= pages - 1;
     }
 
-    qs('#segmentFilter').addEventListener('change', () => { segmentPage = 0; renderSegmentTable(); });
-    qs('#segmentSearch').addEventListener('input', () => { segmentPage = 0; renderSegmentTable(); });
-    qs('#segmentPrev').addEventListener('click', () => { segmentPage -= 1; renderSegmentTable(); });
-    qs('#segmentNext').addEventListener('click', () => { segmentPage += 1; renderSegmentTable(); });
+    qs('#segmentFilter').addEventListener('change', renderSegmentTable);
+    qs('#segmentSearch').addEventListener('input', renderSegmentTable);
 
     // ---------- Forecast ----------
     qs('#forecastRun').addEventListener('click', () => loadForecast());
@@ -1284,14 +1266,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /** Fills a table body from rows, building each cell from `cells(row)`. */
-    function fillTable(tableId, rows, cells) {
-        const tbody = qs(`#${tableId} tbody`);
+    // Every table shows ten rows and pages the rest. Ten fits on screen
+    // without scrolling, which is what lets rows be compared at a glance; a
+    // table that dumps sixty rows pushes the next section off the page and
+    // leaves a different amount of blank space under each block.
+    const TABLE_PAGE_SIZE = 10;
+
+    function fillTable(tableId, rows, cells, options = {}) {
+        const all = rows || [];
+        const pages = Math.max(1, Math.ceil(all.length / TABLE_PAGE_SIZE));
+        const page = Math.min(Math.max(options.page || 0, 0), pages - 1);
+        const start = page * TABLE_PAGE_SIZE;
+        const pageRows = all.slice(start, start + TABLE_PAGE_SIZE);
+
+        const table = qs(`#${tableId}`);
+        const tbody = table.querySelector('tbody');
         tbody.innerHTML = '';
-        (rows || []).forEach((row) => {
+        if (pageRows.length === 0 && options.emptyText) {
+            const columns = table.querySelectorAll('thead th').length || 1;
+            tbody.innerHTML = `<tr class="empty-row"><td colspan="${columns}">` +
+                `${escapeHtml(options.emptyText)}</td></tr>`;
+        }
+        pageRows.forEach((row, index) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = cells(row);
+            tr.innerHTML = cells(row, start + index);
             tbody.appendChild(tr);
         });
+        renderPager(table, all.length, page, pages, (next) =>
+            fillTable(tableId, rows, cells, { ...options, page: next }));
+    }
+
+    // The pager lives right after the table's scroll wrapper and only exists
+    // while there is more than one page: a table of six rows shows no controls.
+    function renderPager(table, total, page, pages, goTo) {
+        const anchor = table.closest('.table-wrapper') || table;
+        let pager = anchor.nextElementSibling;
+        if (!pager || !pager.classList.contains('table-pager')) {
+            pager = document.createElement('div');
+            pager.className = 'pager table-pager';
+            anchor.insertAdjacentElement('afterend', pager);
+        }
+        pager.hidden = pages <= 1;
+        if (pages <= 1) {
+            pager.innerHTML = '';
+            return;
+        }
+        const first = page * TABLE_PAGE_SIZE + 1;
+        const last = Math.min(total, (page + 1) * TABLE_PAGE_SIZE);
+        pager.innerHTML =
+            `<button type="button" class="btn btn-ghost btn-small" data-pager="prev"` +
+            `${page === 0 ? ' disabled' : ''}>‹ Anterior</button>` +
+            `<span class="pager-info">${formatInt(first)}–${formatInt(last)} de ` +
+            `${formatInt(total)} · página ${page + 1} de ${pages}</span>` +
+            `<button type="button" class="btn btn-ghost btn-small" data-pager="next"` +
+            `${page >= pages - 1 ? ' disabled' : ''}>Siguiente ›</button>`;
+        pager.querySelector('[data-pager="prev"]').addEventListener('click', () => goTo(page - 1));
+        pager.querySelector('[data-pager="next"]').addEventListener('click', () => goTo(page + 1));
     }
 
     function fillKpis(containerId, cards, variantFor) {
@@ -1305,8 +1335,13 @@ document.addEventListener('DOMContentLoaded', () => {
         })));
     }
 
+    // The canvas box is fixed by CSS, so the chart has to fill it as it is.
+    // With the default aspect ratio Chart.js drew a 2:1 bitmap from the width
+    // and the browser stretched it to the box height: in a narrow column the
+    // text came out tall and heavy, out of proportion with the bars.
     function makeChart(canvasId, config) {
         if (!window.Chart) return;
+        window.Chart.defaults.maintainAspectRatio = false;
         if (chartRegistry[canvasId]) chartRegistry[canvasId].destroy();
         chartRegistry[canvasId] = new window.Chart(qs('#' + canvasId), config);
     }
@@ -1356,10 +1391,8 @@ document.addEventListener('DOMContentLoaded', () => {
         horizontalBar('chartTopClientes', data.best_clients, 'Venta (Bs)');
         horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), 'Venta (Bs)');
 
-        // Bottom products (table)
-        fillTable('bottomProductosTable', data.bottom_products, (row) =>
-            `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>`);
+        // Bottom products: same bars as the top ten, so the two read alike.
+        horizontalBar('chartBottomProductos', data.bottom_products, 'Venta (Bs)');
 
         showPeriodBar(data.period);
         renderMargin(data.margin);
@@ -1533,7 +1566,7 @@ document.addEventListener('DOMContentLoaded', () => {
               hint: 'Qué parte de la venta hacen los productos de la tabla' }
         ]);
 
-        qs('#volumeHhiReading').textContent = VOLUME_LEVELS[headline.hhi_level] || '';
+        setLevelReading('volumeHhiReading', headline.hhi_level, VOLUME_LEVELS);
 
         const products = volumen.products || [];
         makeChart('chartVolumePareto', {
@@ -1679,7 +1712,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         ]);
 
-        qs('#hhiReading').textContent = CONCENTRATION_LEVELS[clients.hhi_level] || '';
+        setLevelReading('hhiReading', clients.hhi_level, CONCENTRATION_LEVELS);
     }
 
     // ---------- Efficiency ----------
@@ -1702,7 +1735,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const prices = eficiencia.prices || [];
         qs('#priceCard').hidden = prices.length === 0;
-        fillTable('priceTable', prices.slice(0, 15), (row) =>
+        fillTable('priceTable', prices, (row) =>
             `<td>${escapeHtml(row.product)}</td>` +
             `<td class="numeric">${formatCurrency(row.previous_price)}</td>` +
             `<td class="numeric">${formatCurrency(row.current_price)}</td>` +
@@ -1710,9 +1743,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- Portfolio health ----------
-    const RISK_PAGE_SIZE = 15;
     let riskClients = [];
-    let riskPage = 0;
 
     // ---------- Stock ----------
     // Códigos del motor, redactados acá.
@@ -2197,7 +2228,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         riskClients = data.at_risk || [];
-        riskPage = 0;
         renderRiskTable();
 
         // Kept in its own table: a client gone half a year is a campaign, not a
@@ -2218,30 +2248,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = term
             ? riskClients.filter((row) => (row.client || '').toLowerCase().includes(term))
             : riskClients;
-        const pages = Math.max(Math.ceil(rows.length / RISK_PAGE_SIZE), 1);
-        riskPage = Math.min(Math.max(riskPage, 0), pages - 1);
-        const slice = rows.slice(riskPage * RISK_PAGE_SIZE, (riskPage + 1) * RISK_PAGE_SIZE);
-
-        fillTable('riskTable', slice, (row) =>
+        fillTable('riskTable', rows, (row) =>
             `<td>${escapeHtml(row.client)}</td>` +
             `<td class="numeric">${formatCurrency(row.monthly_average_amount)}</td>` +
             `<td class="numeric">${formatCurrency(row.last_month_amount)}</td>` +
             `<td class="numeric ${deltaClass(row.change)}">${formatDelta(row.change)}</td>` +
             `<td class="numeric">${formatInt(row.days_without_purchase)}</td>` +
             `<td class="cell-note">${escapeHtml(riskReasonText(row))}</td>`);
-
-        qs('#riskPager').innerHTML =
-            `<button type="button" class="btn btn-ghost btn-small" id="riskPrev"` +
-            `${riskPage === 0 ? ' disabled' : ''}>‹ Anterior</button>` +
-            `<span class="pager-info">${formatInt(rows.length)} clientes · ` +
-            `página ${riskPage + 1} de ${pages}</span>` +
-            `<button type="button" class="btn btn-ghost btn-small" id="riskNext"` +
-            `${riskPage >= pages - 1 ? ' disabled' : ''}>Siguiente ›</button>`;
-        qs('#riskPrev').addEventListener('click', () => { riskPage -= 1; renderRiskTable(); });
-        qs('#riskNext').addEventListener('click', () => { riskPage += 1; renderRiskTable(); });
     }
 
-    qs('#riskSearch').addEventListener('input', () => { riskPage = 0; renderRiskTable(); });
+    qs('#riskSearch').addEventListener('input', renderRiskTable);
 
     // Real product and client names run long — "Chocolate Barra Rellena 90g" —
     // and Chart.js keeps the axis font at its default, so on a narrow screen the

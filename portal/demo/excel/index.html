@@ -4,19 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análisis Comercial — SmartDecisions</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=016300b357">
-    <link rel="stylesheet" href="excel.css?v=7bfa615ee3">
+    <link rel="stylesheet" href="../styles/demo.css?v=b715e581c6">
+    <link rel="stylesheet" href="excel.css?v=54dc71edb6">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=cea826bc9c"></script>
     <script src="../js/auth.js?v=33efdcbe59" defer></script>
     <script src="../js/api.js?v=3ed1e6bc89" defer></script>
-    <script src="../js/ui.js?v=b84ea2ad2a" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-    <script src="excel.js?v=baa90ec73c" defer></script>
+    <script src="excel.js?v=72a3475c6a" defer></script>
 </head>
 <body>
 
@@ -220,12 +220,7 @@
                 </div>
                 <div class="chart-card">
                     <h3 class="chart-title">Productos menos vendidos</h3>
-                    <div class="table-wrapper">
-                        <table class="data-table" id="bottomProductosTable">
-                            <thead><tr><th>Producto</th><th class="numeric">Venta (Bs)</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
+                    <canvas id="chartBottomProductos"></canvas>
                 </div>
             </div>
 
@@ -422,7 +417,7 @@
                 </div>
             </div>
 
-            <div class="split-layout">
+            <div class="split-layout split-even">
                 <div class="chart-card">
                     <h3 class="chart-title">Clientes y el producto que los sostiene</h3>
                     <p class="chart-hint">
@@ -483,7 +478,7 @@
             <div class="analysis-block" id="volumeDecompositionBlock" hidden>
                 <h3 class="block-title">De dónde vino el movimiento</h3>
                 <p class="block-subtitle" id="volumeDecompositionNote"></p>
-                <div class="split-layout">
+                <div class="split-layout split-even">
                     <div class="chart-card">
                         <h3 class="chart-title">Por producto</h3>
                         <p class="chart-hint">
@@ -591,7 +586,7 @@
                     <p class="insight-line" id="creditMarginNote"></p>
                 </div>
 
-                <div class="split-layout">
+                <div class="split-layout split-even">
                     <div class="chart-card">
                         <h3 class="chart-title">Quiénes deben</h3>
                         <p class="chart-hint">
@@ -827,7 +822,6 @@
                         <tbody></tbody>
                     </table>
                 </div>
-                <div class="pager" id="riskPager"></div>
             </div>
 
             <div class="chart-card" id="lostCard" hidden>
@@ -951,11 +945,6 @@
                             </tr></thead>
                             <tbody></tbody>
                         </table>
-                    </div>
-                    <div class="pager">
-                        <button type="button" class="btn btn-ghost btn-small" id="segmentPrev">‹ Anterior</button>
-                        <span class="filter-count" id="segmentPageInfo"></span>
-                        <button type="button" class="btn btn-ghost btn-small" id="segmentNext">Siguiente ›</button>
                     </div>
                 </div>
             </div>
