@@ -190,11 +190,12 @@ async def ingest_excel_controller(
 
     response = _to_response(persisted)
     if is_valid:
-        response.collections = await _collections_in_upload(
+        await _companion_sheets_in_upload(
             dynamodb_resource = dynamodb_resource,
             dataset = persisted,
             upload = (file_bytes, filename),
-            sales = result.accepted
+            sales = result.accepted,
+            response = response
         )
     return response
 
@@ -283,40 +284,58 @@ async def ingest_excel_from_s3_controller(
             ]
         }
     )
-    return _to_response(persisted)
+
+    response = _to_response(persisted)
+    if has_valid_rows:
+        await _companion_sheets_in_upload(
+            dynamodb_resource = dynamodb_resource,
+            dataset = persisted,
+            upload = (file_bytes, file_name),
+            sales = result.accepted,
+            response = response
+        )
+    return response
 
 
-async def _collections_in_upload(
+async def _companion_sheets_in_upload(
     dynamodb_resource: ServiceResource,
     dataset: Dict[str, Any],
     upload: tuple[bytes, str],
-    sales: Any
-) -> Optional[CollectionsSummary]:
+    sales: Any,
+    response: IngestResponse
+) -> None:
     '''
-        Loads the payments sheet that came inside a sales upload, if any.
+        Loads the payments and stock sheets that came inside a sales upload.
 
-        The workbook the client downloads carries both sheets, so returning it
-        filled answers both contracts in one upload — which is the product's
-        thesis: one load feeds every module. A file without that sheet reports
-        nothing at all: whoever sells cash should not have to know the contract
-        exists.
+        The workbook the client downloads carries the three sheets, so
+        returning it filled answers every contract in one upload — which is
+        the product's thesis: one load feeds every module. A file without a
+        companion sheet reports nothing about it: whoever sells cash or keeps
+        no warehouse should not have to know those contracts exist.
+
+        Both upload paths —multipart and pre-signed S3— go through here. The
+        S3 path, the one the portal uses, used to skip this step and the
+        payments sheet was silently ignored.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             dataset (Dict[str, Any]): The dataset just persisted.
             upload (tuple[bytes, str]): The uploaded content and its filename.
             sales (pd.DataFrame): The accepted sales rows.
-
-        Returns:
-            CollectionsSummary | None: The summary of what was loaded, or None
-                when the upload carried no payments.
+            response (IngestResponse): The response being assembled; its
+                `collections` and `stock` summaries are filled in place.
     '''
     file_bytes, filename = upload
+
     collections = parse_collections(file_bytes, filename, sales, auto = True)
-    if len(collections.accepted) == 0:
-        return None
-    stored = await _store_collections(dynamodb_resource, dataset, collections, filename)
-    return stored.summary
+    if len(collections.accepted) > 0:
+        stored = await _store_collections(dynamodb_resource, dataset, collections, filename)
+        response.collections = stored.summary
+
+    stock = parse_stock(file_bytes, filename, sales, auto = True)
+    if len(stock.accepted) > 0:
+        stored_stock = await _store_stock(dynamodb_resource, dataset, stock, filename)
+        response.stock = stored_stock.summary
 
 
 def _load_sales_frame(dataset: Dict[str, Any]) -> Any:
@@ -473,6 +492,28 @@ async def ingest_stock_controller(
         owner_email = current_user
     )
     result = parse_stock(file_bytes, filename, _load_sales_frame(dataset))
+    return await _store_stock(dynamodb_resource, dataset, result, filename)
+
+
+async def _store_stock(
+    dynamodb_resource: ServiceResource,
+    dataset: Dict[str, Any],
+    result: Any,
+    filename: str
+) -> StockResponse:
+    '''
+        Stores an accepted stock snapshot and attaches it to its dataset.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            dataset (Dict[str, Any]): Dataset the snapshot belongs to.
+            result (StockResult): Outcome of the stock pipeline.
+            filename (str): Original filename, for the log.
+
+        Returns:
+            StockResponse: Summary of the load and its issues.
+    '''
+    dataset_id = str(dataset['dataset_id'])
     has_rows = len(result.accepted) > 0
 
     stock_key: Optional[str] = None

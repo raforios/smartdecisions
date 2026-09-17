@@ -16,6 +16,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from io import BytesIO
+from functools import lru_cache
 from typing import Final, Optional
 
 import pandas as pd
@@ -390,10 +391,10 @@ def _read_dataframe(file_bytes: bytes, filename: str) -> pd.DataFrame:
             ValueError: If the file extension is not supported.
     '''
     lower = filename.lower()
-    buffer = BytesIO(file_bytes)
 
     if lower.endswith('.xlsx'):
-        return pd.read_excel(buffer, engine = 'openpyxl')
+        sheets = read_workbook(file_bytes)
+        return next(iter(sheets.values())) if sheets else pd.DataFrame()
     if lower.endswith('.csv'):
         return _read_csv(file_bytes)
 
@@ -706,6 +707,25 @@ def serialize_dataframe(dataframe: pd.DataFrame, filename: str) -> bytes:
     buffer = BytesIO()
     dataframe.to_excel(buffer, index = False, engine = 'openpyxl')
     return buffer.getvalue()
+
+
+@lru_cache(maxsize = 1)
+def read_workbook(file_bytes: bytes) -> dict[str, pd.DataFrame]:
+    '''
+        Opens an .xlsx once and returns every sheet by name.
+
+        The sales, payments and stock pipelines each look for their own sheet
+        in the same workbook, and opening a 2.6 MB book with openpyxl takes
+        about ten seconds: three opens blew the 30 s Lambda budget. Keyed on
+        the content, so the three reads of one upload share a single parse.
+
+        Args:
+            file_bytes (bytes): Raw .xlsx content.
+
+        Returns:
+            dict[str, pd.DataFrame]: Sheets in workbook order.
+    '''
+    return pd.read_excel(BytesIO(file_bytes), sheet_name = None, engine = 'openpyxl')
 
 
 def read_file(file_bytes: bytes, filename: str) -> pd.DataFrame:

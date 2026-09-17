@@ -323,6 +323,11 @@ class IngestResponse(BaseModel):
         description = 'Filled when the uploaded workbook also carried a payments '
                       'sheet, so one upload answers both contracts.'
     )
+    stock: Optional[StockSummary] = Field(
+        None,
+        description = 'Filled when the uploaded workbook also carried a stock '
+                      'sheet: the same upload feeds the stock module too.'
+    )
     created_at: datetime
 
 

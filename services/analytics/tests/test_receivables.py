@@ -106,6 +106,32 @@ def test_aging_is_measured_against_the_last_day_of_the_file():
     assert block.kpis.overdue_amount == 1000.0
 
 
+def test_aging_survives_pandas_python_string_storage():
+    '''
+        The Lambda package has no pyarrow, so pandas 3 keeps text in its Python
+        storage, where a column of str-Enum members compared with an Enum is
+        False on every row. The aging came back empty in production while this
+        suite passed on a laptop with pyarrow: the block has to fill under both.
+    '''
+    previous = pd.options.mode.string_storage
+    pd.options.mode.string_storage = 'python'
+    try:
+        sales = pd.DataFrame([
+            _sale('F-OLD', 'Vieja', '2026-01-01', 1000.0),
+            _sale('F-NEW', 'Nueva', '2026-06-01', 1000.0),
+        ])
+        for column in sales.columns:
+            if pd.api.types.is_string_dtype(sales[column]):
+                sales[column] = sales[column].astype('str')
+        block = build_receivables(sales, None)
+    finally:
+        pd.options.mode.string_storage = previous
+
+    buckets = {row.bucket_code: row for row in block.aging}
+    assert buckets[AgingBucket.CURRENT].amount == 1000.0
+    assert sum(row.provision for row in block.aging) > 0
+
+
 def test_partial_payment_leaves_the_rest_open_and_ageing():
     '''Half collected is half a receivable, and it keeps getting older.'''
     sales = pd.DataFrame([_sale('F-1', 'Tienda', '2026-01-01', 1000.0)])

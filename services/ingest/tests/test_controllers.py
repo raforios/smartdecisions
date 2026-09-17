@@ -7,6 +7,7 @@
 '''
 import asyncio
 from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import patch
 
 import pandas as pd
@@ -14,17 +15,24 @@ import pytest
 
 from fastapi import HTTPException
 
-from schemas.ingest import IngestError, IngestResponse, TEMPLATE_COLUMNS
+from schemas.ingest import (
+    COLLECTIONS_SHEET,
+    IngestError,
+    IngestResponse,
+    SALES_SHEET,
+    STOCK_SHEET,
+    TEMPLATE_COLUMNS
+)
 from services import ingest_utils
 from controllers import ingest as controllers
 
 
-def _template_file() -> bytes:
+def _template_rows() -> pd.DataFrame:
     '''
-        Builds a CSV with the published template headers.
+        Builds sales rows with the published template headers.
 
         Returns:
-            bytes: File content as the browser would upload it.
+            pd.DataFrame: Thirty lines over fifteen invoices.
     '''
     headers = [column.header for column in TEMPLATE_COLUMNS]
     start = date(2026, 1, 5)
@@ -38,7 +46,38 @@ def _template_file() -> bytes:
         values['Cantidad'] = 3
         values['Precio Unitario'] = 8.5
         rows.append(values)
-    return pd.DataFrame(rows, columns = headers).to_csv(index = False).encode('utf-8')
+    return pd.DataFrame(rows, columns = headers)
+
+
+def _template_file() -> bytes:
+    '''
+        Builds a CSV with the published template headers.
+
+        Returns:
+            bytes: File content as the browser would upload it.
+    '''
+    return _template_rows().to_csv(index = False).encode('utf-8')
+
+
+def _full_workbook() -> bytes:
+    '''
+        Builds the three-sheet workbook the client downloads and returns filled.
+
+        Returns:
+            bytes: An .xlsx with sales, payments and a stock snapshot.
+    '''
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine = 'openpyxl') as writer:
+        _template_rows().to_excel(writer, sheet_name = SALES_SHEET, index = False)
+        pd.DataFrame([
+            {'Nro Factura': 'F-0000', 'Fecha Cobro': '2026-02-10', 'Monto Cobrado': 20.0},
+            {'Nro Factura': 'F-0001', 'Fecha Cobro': '2026-02-12', 'Monto Cobrado': 51.0}
+        ]).to_excel(writer, sheet_name = COLLECTIONS_SHEET, index = False)
+        pd.DataFrame([
+            {'Fecha': '2026-02-15', 'Producto': 'Producto 0', 'Existencia': 40},
+            {'Fecha': '2026-02-15', 'Producto': 'Producto 1', 'Existencia': 12}
+        ]).to_excel(writer, sheet_name = STOCK_SHEET, index = False)
+    return buffer.getvalue()
 
 
 @pytest.fixture(name = 'stored')
@@ -84,6 +123,48 @@ def test_ingest_from_s3_returns_a_full_response(stored):
     # The content fingerprint is what makes a re-upload recognisable later.
     assert stored['file_fingerprint']
     assert response.already_stored is False
+    # A plain sales file carries no companion sheets and says so by absence.
+    assert response.collections is None
+    assert response.stock is None
+
+
+def test_the_s3_upload_loads_the_payments_and_stock_sheets_too():
+    '''
+        The portal uploads through the pre-signed S3 path, so that path has to
+        read the workbook's companion sheets: one load feeds every module. It
+        used to skip them, and receivables showed every invoice as open.
+    '''
+    attached: dict = {}
+
+    def _persist(dynamodb_resource, payload):  # pylint: disable=unused-argument
+        return {**payload, 'dataset_id': 'ds-full', 'created_at': '2026-02-15T10:00:00Z'}
+
+    def _attach(dynamodb_resource, dataset_id, payload):  # pylint: disable=unused-argument
+        attached.update(payload)
+
+    with patch.object(controllers, 'download_bytes', lambda _: _full_workbook()), \
+         patch.object(controllers, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
+         patch.object(controllers, 'persist_dataset', _persist), \
+         patch.object(controllers, 'attach_to_dataset', _attach):
+        response = asyncio.run(controllers.ingest_excel_from_s3_controller(
+            dynamodb_resource = None,
+            file_key = 'ingest/raw/plantilla.xlsx',
+            file_name = 'plantilla.xlsx',
+            current_user = 'tester@bearsoft.com.bo',
+            request = None
+        ))
+
+    assert response.status == 'validated'
+    assert response.summary.valid_rows == 30
+    assert response.collections is not None
+    assert response.collections.valid_rows == 2
+    assert response.stock is not None
+    assert response.stock.valid_rows == 2
+    assert response.stock.products == 2
+    # Both loads hang off the dataset, where analytics reads them from.
+    assert attached['collections_s3_key'].startswith('ingest/collections/')
+    assert attached['stock_s3_key'].startswith('ingest/stock/')
 
 
 def _dataset(owner: str) -> dict:

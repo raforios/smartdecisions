@@ -20,7 +20,6 @@
           issue with a code — never dropped in silence.
 '''
 from dataclasses import dataclass
-from io import BytesIO
 from typing import Final, Optional
 
 import pandas as pd
@@ -36,6 +35,7 @@ from services.ingest import (
     COLLECTIONS_SCHEMA,
     normalize_frame,
     read_file,
+    read_workbook,
     validate
 )
 from services.logger_config import custom_logger as logger
@@ -75,8 +75,7 @@ def _collections_sheet(file_bytes: bytes) -> Optional[pd.DataFrame]:
             pd.DataFrame | None: The sheet, or None when the workbook does not
                 carry one.
     '''
-    sheets = pd.read_excel(BytesIO(file_bytes), sheet_name = None, engine = 'openpyxl')
-    for name, frame in sheets.items():
+    for name, frame in read_workbook(file_bytes).items():
         if str(name).strip().lower() == COLLECTIONS_SHEET.lower():
             return frame
     return None

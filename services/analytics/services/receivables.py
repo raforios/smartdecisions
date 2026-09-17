@@ -355,10 +355,14 @@ def _book(invoices: pd.DataFrame, payments: pd.DataFrame,
     days_past_due = (as_of - book['due_date']).dt.days
     book['days_past_due'] = days_past_due.where(book['is_open'], 0).fillna(0).clip(lower = 0)
     book['days_outstanding'] = (as_of - book['date']).dt.days.clip(lower = 0)
-    book['bucket'] = [
-        _bucket_of(float(days), policy.buckets) for days in book['days_past_due']
-    ]
-    book['loss_rate'] = [_loss_rate_of(bucket, policy) for bucket in book['bucket']]
+    # The bucket travels as plain text. A column of str-Enum members is stored
+    # as strings by pandas 3, and under its Python string storage —the Lambda
+    # has no pyarrow— comparing that column with an Enum member is False on
+    # every row: the aging came back empty in production while every test
+    # passed on a machine with pyarrow.
+    buckets = [_bucket_of(float(days), policy.buckets) for days in book['days_past_due']]
+    book['bucket'] = [bucket.value for bucket in buckets]
+    book['loss_rate'] = [_loss_rate_of(bucket, policy) for bucket in buckets]
     book['provision'] = (book['balance'].clip(lower = 0) * book['loss_rate']).round(2)
 
     # Behaviour of what was already collected: how many days late it was paid
@@ -385,7 +389,7 @@ def _aging(book: pd.DataFrame, policy: Policy) -> List[AgingRow]:
     rows: List[AgingRow] = []
 
     for bucket in _BUCKET_ORDER:
-        held = open_book.loc[open_book['bucket'] == bucket]
+        held = open_book.loc[open_book['bucket'] == bucket.value]
         if held.empty:
             continue
         amount = float(held['balance'].sum())

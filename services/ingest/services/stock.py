@@ -18,7 +18,6 @@
     wrong file, not a new product.
 '''
 from dataclasses import dataclass
-from io import BytesIO
 from typing import Optional
 
 import pandas as pd
@@ -30,6 +29,7 @@ from services.ingest import (
     fill_product_ids,
     normalize_frame,
     read_file,
+    read_workbook,
     validate
 )
 from services.logger_config import custom_logger as logger
@@ -71,8 +71,7 @@ def read_stock(file_bytes: bytes, filename: str,
             ValueError: On an unsupported extension or unreadable content.
     '''
     if filename.lower().endswith('.xlsx'):
-        sheets = pd.read_excel(BytesIO(file_bytes), sheet_name = None, engine = 'openpyxl')
-        for name, frame in sheets.items():
+        for name, frame in read_workbook(file_bytes).items():
             if str(name).strip().lower() == STOCK_SHEET.lower():
                 return frame
         return None if auto else read_file(file_bytes, filename)
