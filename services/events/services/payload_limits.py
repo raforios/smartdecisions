@@ -35,7 +35,10 @@ def _max_chars() -> int:
     return ENV_VARS.get('MAX_BODY_CHARS') or DEFAULT_MAX_BODY_CHARS
 
 
-def truncate_body(value: Any, max_chars: int = None) -> Any:
+def truncate_body(
+    value: Any,
+    max_chars: int = None
+) -> Any:
     '''
         Caps a single body field.
 
@@ -68,7 +71,10 @@ def truncate_body(value: Any, max_chars: int = None) -> Any:
     return rendered[:limit] + TRUNCATION_MARKER
 
 
-def cap_log_bodies(record: Dict[str, Any], max_chars: int = None) -> Dict[str, Any]:
+def cap_log_bodies(
+    record: Dict[str, Any],
+    max_chars: int = None
+) -> Dict[str, Any]:
     '''
         Caps every body field of a log record.
 
@@ -95,7 +101,10 @@ def cap_log_bodies(record: Dict[str, Any], max_chars: int = None) -> Dict[str, A
     return record
 
 
-def cap_many(records: List[Dict[str, Any]], max_chars: int = None) -> List[Dict[str, Any]]:
+def cap_many(
+    records: List[Dict[str, Any]],
+    max_chars: int = None
+) -> List[Dict[str, Any]]:
     '''
         Caps the bodies of a whole page of records before returning them.
 

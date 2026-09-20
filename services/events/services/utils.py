@@ -37,7 +37,10 @@ def handle_service_errors(func):
         Decorator to handle common exceptions in service functions.
     '''
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(
+        *args,
+        **kwargs
+    ):
         try:
             return func(*args, **kwargs)
         except AWSClientError as e:

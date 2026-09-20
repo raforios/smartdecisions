@@ -111,7 +111,10 @@ DEFAULT_DATE_ATTRIBUTE = 'timestamp'
 SCAN_TIME_BUDGET_SECONDS = 18
 
 
-def _build_filter_expression(filters: Dict[str, Any], date_attribute: str):
+def _build_filter_expression(
+    filters: Dict[str, Any],
+    date_attribute: str
+):
     '''
         Turns the query parameters into a DynamoDB FilterExpression.
 
@@ -190,7 +193,10 @@ def _find_usable_index(
     return None
 
 
-def _index_key_condition(index: Dict[str, str], filters: Dict[str, Any]):
+def _index_key_condition(
+    index: Dict[str, str],
+    filters: Dict[str, Any]
+):
     '''
         Builds the KeyConditionExpression for an index-backed listing: the
         partition value plus, when the index is sorted by date, the requested
@@ -212,7 +218,10 @@ def _index_key_condition(index: Dict[str, str], filters: Dict[str, Any]):
     return condition
 
 
-def _cursor_from_item(item: Dict[str, Any], key_schema: List[Dict[str, str]]) -> Dict[str, Any]:
+def _cursor_from_item(
+    item: Dict[str, Any],
+    key_schema: List[Dict[str, str]]
+) -> Dict[str, Any]:
     '''
         Builds the pagination cursor pointing at a specific item, so the next
         page resumes exactly where this one stopped.
@@ -227,7 +236,12 @@ def _cursor_from_item(item: Dict[str, Any], key_schema: List[Dict[str, str]]) ->
     return {key['AttributeName']: item[key['AttributeName']] for key in key_schema}
 
 
-def _build_read_plan(table, filters: Dict[str, Any], limit: int, options: Dict[str, Any]):
+def _build_read_plan(
+    table,
+    filters: Dict[str, Any],
+    limit: int,
+    options: Dict[str, Any]
+):
     '''
         Decides how the listing will be read and with which arguments.
 
@@ -266,7 +280,11 @@ def _build_read_plan(table, filters: Dict[str, Any], limit: int, options: Dict[s
     return table.query, read_kwargs
 
 
-def _read_until_full(read_page, read_kwargs: Dict[str, Any], limit: int):
+def _read_until_full(
+    read_page,
+    read_kwargs: Dict[str, Any],
+    limit: int
+):
     '''
         Reads pages until `limit` items are gathered, the data runs out or the
         time budget expires.

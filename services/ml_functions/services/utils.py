@@ -23,7 +23,10 @@ def handle_operation(
     '''
     def decorator(func: Callable):
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any):
+        async def wrapper(
+            *args: Any,
+            **kwargs: Any
+        ):
             try:
                 context = kwargs.get('_context', None)
                 if not context and args:

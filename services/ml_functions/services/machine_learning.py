@@ -12,7 +12,12 @@ from services.logger_config import custom_logger as logger
 # LINEAR REGRESSION
 # ----------------------------------------------------------------
 
-def compute_cost(x, y, w, b):
+def compute_cost(
+    x,
+    y,
+    w,
+    b
+):
     '''
     Computes the cost function for linear regression.
     Args:
@@ -31,7 +36,12 @@ def compute_cost(x, y, w, b):
 
     return cost
 
-def compute_gradient(x, y, w, b):
+def compute_gradient(
+    x,
+    y,
+    w,
+    b
+):
     '''
     Computes the gradient for linear regression
 
@@ -57,7 +67,13 @@ def compute_gradient(x, y, w, b):
 
     return dj_dw, dj_db
 
-def gradient_descent(x, y, w_in, b_in, config):
+def gradient_descent(
+    x,
+    y,
+    w_in,
+    b_in,
+    config
+):
     '''
     Performs gradient descent to fit w,b. Updates w,b by taking
     num_iters gradient steps with learning rate alpha
@@ -124,7 +140,11 @@ def gradient_descent(x, y, w_in, b_in, config):
 # MULTIPLE LINEAR REGRESSION
 # ----------------------------------------------------------------
 
-def predict_dot(x_matrix, w, b):
+def predict_dot(
+    x_matrix,
+    w,
+    b
+):
     '''
     single predict using linear regression
     Args:
@@ -138,7 +158,12 @@ def predict_dot(x_matrix, w, b):
     p = np.dot(x_matrix, w) + b
     return p
 
-def compute_cost_matrix(x_matrix, y, w, b):
+def compute_cost_matrix(
+    x_matrix,
+    y,
+    w,
+    b
+):
     '''
     compute cost
 
@@ -161,7 +186,12 @@ def compute_cost_matrix(x_matrix, y, w, b):
     return cost
     # return(np.squeeze(cost))
 
-def compute_gradient_matrix(x_matrix, y, w, b):
+def compute_gradient_matrix(
+    x_matrix,
+    y,
+    w,
+    b
+):
     '''
     Computes the gradient for linear regression 
 
@@ -183,7 +213,13 @@ def compute_gradient_matrix(x_matrix, y, w, b):
 
     return dj_dw, dj_db
 
-def gradient_descent_matrix(x_matrix, y, w_in, b_in, config):
+def gradient_descent_matrix(
+    x_matrix,
+    y,
+    w_in,
+    b_in,
+    config
+):
     '''
     Performs batch gradient descent to learn w and b. Updates w and b by taking 
     num_iters gradient steps with learning rate alpha
@@ -313,7 +349,12 @@ def sigmoid(z):
 
     return g
 
-def compute_cost_logistic(x_matrix, y, w, b):
+def compute_cost_logistic(
+    x_matrix,
+    y,
+    w,
+    b
+):
     '''
     Computes the cost over all examples
     Args:
@@ -338,7 +379,12 @@ def compute_cost_logistic(x_matrix, y, w, b):
 
     return cost
 
-def compute_gradient_logistic(x_matrix, y, w, b):
+def compute_gradient_logistic(
+    x_matrix,
+    y,
+    w,
+    b
+):
     '''
     Computes the gradient for logistic regression
     Args:
@@ -364,7 +410,13 @@ def compute_gradient_logistic(x_matrix, y, w, b):
     return dj_dw, dj_db
 
 
-def gradient_descent_logistic(x_matrix, y, w_in, b_in, config):
+def gradient_descent_logistic(
+    x_matrix,
+    y,
+    w_in,
+    b_in,
+    config
+):
     '''
     Performs batch gradient descent to learn theta. Updates theta by taking
     num_iters gradient steps with learning rate alpha
@@ -454,7 +506,11 @@ def gradient_descent_logistic(x_matrix, y, w_in, b_in, config):
 
     return w_in, b_in, j_history, w_history
 
-def predict_logistic(x_matrix, w, b):
+def predict_logistic(
+    x_matrix,
+    w,
+    b
+):
     '''
     Predict whether the label is 0 or 1 using learned logistic
     regression parameters w

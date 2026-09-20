@@ -10,7 +10,11 @@ class NumPyValidatorBase(BaseModel):
     '''
     @field_validator('x_matrix', 'x', 'x_test', mode='before', check_fields = False)
     @classmethod
-    def validate_numpy_array(cls, v, info):
+    def validate_numpy_array(
+        cls,
+        v,
+        info
+    ):
         '''
         Validates that a list of lists can be safely converted to a NumPy array.
         '''

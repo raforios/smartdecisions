@@ -23,7 +23,8 @@ router = APIRouter(prefix = '/v1/common', tags = ['ML Common Functions'])
 )
 async def normalize_features_algorithm(
     request: NormalizeFeaturesRequest,
-    current_user: str = Depends(get_current_user)):
+    current_user: str = Depends(get_current_user)
+):
     '''
         Normalizes a feature matrix X using Z-score normalization.
 

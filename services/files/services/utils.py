@@ -64,7 +64,10 @@ def handle_aws_operation(
         Decorator to handle AWS-related exceptions and map them to custom exceptions.
     '''
     @wraps(func)
-    async def wrapper(*args, **kwargs) -> Any:
+    async def wrapper(
+        *args,
+        **kwargs
+    ) -> Any:
         try:
             return await func(*args, **kwargs)
         except ClientError as e:
