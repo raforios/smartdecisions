@@ -184,6 +184,34 @@ def _sample_stock(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return list(seen.values())
 
 
+def _sample_visits(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    '''
+        Builds the sample visits: one per sale of the sheet, in the order the
+        seller would have made them, with the hour and the outcome filled in
+        so the two optional columns are visible in the template.
+
+        Args:
+            rows (List[Dict[str, Any]]): Rows of the sales sheet.
+
+        Returns:
+            List[Dict[str, Any]]: Rows of the visits sheet.
+    '''
+    visits: List[Dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        sold = index % 4 != 3
+        visits.append({
+            'Fecha': row['Fecha'],
+            'Hora': f'{9 + (index % 8):02d}:{(index * 7) % 60:02d}',
+            'Vendedor': row['Vendedor'],
+            'Cliente': row['Cliente'],
+            'Latitud': row['Latitud'],
+            'Longitud': row['Longitud'],
+            'Resultado': 'VENTA' if sold else 'SIN_VENTA',
+            'Nro Factura': row['Nro Factura'] if sold else '',
+        })
+    return visits
+
+
 def _build(path: Path, rows: int) -> List[str]:
     '''
         Writes the template file to disk.
@@ -203,7 +231,10 @@ def _build(path: Path, rows: int) -> List[str]:
         STOCK_HEADERS,
         STOCK_SHEET,
         TEMPLATE_COLUMNS,
-        TEMPLATE_HEADERS
+        TEMPLATE_HEADERS,
+        VISIT_COLUMNS,
+        VISIT_HEADERS,
+        VISITS_SHEET
     )
 
     sample = _sample_rows(rows)
@@ -226,6 +257,13 @@ def _build(path: Path, rows: int) -> List[str]:
             _sample_stock(sample), columns = list(STOCK_HEADERS)
         ).to_excel(writer, index = False, sheet_name = STOCK_SHEET)
 
+        # The visits are the executed side of the routes: what the seller's
+        # system registered on the street. Coordinates and outcome are optional
+        # there; the sample fills them so the reader sees what they look like.
+        pd.DataFrame(
+            _sample_visits(sample), columns = list(VISIT_HEADERS)
+        ).to_excel(writer, index = False, sheet_name = VISITS_SHEET)
+
         # A second sheet with the rules. The client opening the template needs
         # to know what is mandatory before filling it in, not after the
         # validator rejects it.
@@ -241,7 +279,8 @@ def _build(path: Path, rows: int) -> List[str]:
             }
             for sheet, columns in ((SHEET_NAME, TEMPLATE_COLUMNS),
                                    (COLLECTIONS_SHEET, COLLECTION_COLUMNS),
-                                   (STOCK_SHEET, STOCK_COLUMNS))
+                                   (STOCK_SHEET, STOCK_COLUMNS),
+                                   (VISITS_SHEET, VISIT_COLUMNS))
             for column in columns
             if not column.filled_by_service
         ])

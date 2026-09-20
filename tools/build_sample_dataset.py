@@ -56,6 +56,7 @@ from tools.build_receivables import (
     describe as describe_credit,
     describe_stock
 )
+from tools.build_visits import VISITS_SHEET, build_visits_sheet, describe_visits
 
 
 # --- Source contract -------------------------------------------------------
@@ -788,6 +789,12 @@ def build_provenance_sheet(frame: pd.DataFrame, book: CreditBook,
                        'de cada producto, con quiebres, faltantes, exceso y '
                        'capital inmovilizado. «Comprometido» es lo que un ERP '
                        'tendría reservado en pedidos: se lee, no se decide acá.'),
+        ('Hoja Visitas', 'SIMULADA a partir de las ventas de las últimas ocho '
+                         'semanas: cada factura es una visita con venta, y se '
+                         'añaden visitas sin venta, locales cerrados, clientes no '
+                         'encontrados y ventas tomadas por teléfono. Las horas '
+                         'siguen un recorrido por cercanía; el GPS lleva el ruido '
+                         'de un celular y algunas filas no lo traen.'),
     ]
     return pd.DataFrame(notes, columns = ['Campo', 'Origen'])
 
@@ -815,17 +822,22 @@ def build(config: BuildConfig) -> pd.DataFrame:
     # a day gets the units its situation calls for at that pace. Drawn at random
     # it would produce coverages nobody can read.
     stock = build_stock_snapshot(book.sales, config.stock_scenario, config.seed)
+    # The visit log is drawn FROM the sales too: an invoice is a visit that
+    # ended in a sale, and around it go the calls a ledger never records.
+    visits = build_visits_sheet(book.sales, config.seed)
 
     config.output.parent.mkdir(parents = True, exist_ok = True)
     with pd.ExcelWriter(config.output, engine = 'openpyxl') as writer:
         book.sales.to_excel(writer, sheet_name = 'Ventas', index = False)
         book.collections.to_excel(writer, sheet_name = COLLECTIONS_SHEET, index = False)
         stock.to_excel(writer, sheet_name = STOCK_SHEET, index = False)
+        visits.to_excel(writer, sheet_name = VISITS_SHEET, index = False)
         build_provenance_sheet(sheet, book, config.stock_scenario).to_excel(
             writer, sheet_name = 'Origen de los datos', index = False
         )
     describe_credit(book)
     describe_stock(stock, config.stock_scenario)
+    describe_visits(visits)
     return book.sales
 
 
