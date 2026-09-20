@@ -333,7 +333,11 @@ def download_bytes(file_key: str) -> bytes:
         ) from error
 
 
-def upload_bytes(file_key: str, data: bytes, content_type: str) -> str:
+def upload_bytes(
+    file_key: str,
+    data: bytes,
+    content_type: str
+) -> str:
     '''
         Writes bytes to the ingest bucket and returns the object key.
 
@@ -382,7 +386,10 @@ def _content_type_for(filename: str) -> str:
     return 'application/octet-stream'
 
 
-def _key_from_url(raw_url: str, bucket_name: str) -> Optional[str]:
+def _key_from_url(
+    raw_url: str,
+    bucket_name: str
+) -> Optional[str]:
     '''
         Extracts the S3 object key from a FILES URL, preserving any folder
         prefix so downstream S3 downloads do not fail with NoSuchKey.
@@ -409,7 +416,10 @@ def _key_from_url(raw_url: str, bucket_name: str) -> Optional[str]:
     return None
 
 
-def _extract_s3_key(payload: dict, bucket_name: str) -> Optional[str]:
+def _extract_s3_key(
+    payload: dict,
+    bucket_name: str
+) -> Optional[str]:
     '''
         Extracts the FULL S3 object key from the FILES upload response.
 
@@ -506,11 +516,11 @@ def upload_excel(
     if not s3_key:
         # Last-resort fallback: rebuild the conventional key from what we sent.
         s3_key = f'{target_folder}/{filename}' if target_folder else filename
-        message = (
+        error_msg = (
             f'FILES response did not include a key; falling back to constructed '
             f'key "{s3_key}". Raw response: {payload}'
         )
-        logger.warning(message)
+        logger.warning(error_msg)
 
     message = f'Excel "{filename}" uploaded via FILES; s3_key={s3_key}.'
     logger.info(message)

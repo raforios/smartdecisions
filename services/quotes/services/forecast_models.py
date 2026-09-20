@@ -51,7 +51,10 @@ MOVING_WINDOW = ENV_VARS['RATE_MOVING_AVERAGE_WINDOW']
 THETA_ALPHA = ENV_VARS['RATE_THETA_ALPHA']
 
 
-def naive(values: List[float], days_ahead: int) -> List[float]:
+def naive(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Repite la última observación.
 
@@ -69,7 +72,10 @@ def naive(values: List[float], days_ahead: int) -> List[float]:
     return [float(values[-1])] * days_ahead
 
 
-def mean(values: List[float], days_ahead: int) -> List[float]:
+def mean(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Repite el promedio de toda la serie.
 
@@ -86,7 +92,10 @@ def mean(values: List[float], days_ahead: int) -> List[float]:
     return [float(np.mean(values))] * days_ahead
 
 
-def drift(values: List[float], days_ahead: int) -> List[float]:
+def drift(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Camino aleatorio con deriva: extiende la pendiente entre el primer y el
         último punto.
@@ -104,7 +113,10 @@ def drift(values: List[float], days_ahead: int) -> List[float]:
     return [float(values[-1] + slope * step) for step in range(1, days_ahead + 1)]
 
 
-def linear(values: List[float], days_ahead: int) -> List[float]:
+def linear(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Recta de mínimos cuadrados sobre toda la serie.
 
@@ -128,7 +140,10 @@ def linear(values: List[float], days_ahead: int) -> List[float]:
     return [float(value) for value in slope * future + intercept]
 
 
-def moving_average(values: List[float], days_ahead: int) -> List[float]:
+def moving_average(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Repite el promedio de los últimos días.
 
@@ -143,7 +158,10 @@ def moving_average(values: List[float], days_ahead: int) -> List[float]:
     return [float(np.mean(window))] * days_ahead
 
 
-def simple_exponential(values: List[float], days_ahead: int) -> List[float]:
+def simple_exponential(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Suavizado exponencial simple: nivel que sigue a la serie, sin tendencia.
 
@@ -160,7 +178,10 @@ def simple_exponential(values: List[float], days_ahead: int) -> List[float]:
     return [float(level)] * days_ahead
 
 
-def holt(values: List[float], days_ahead: int) -> List[float]:
+def holt(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Suavizado de Holt con tendencia lineal, sin amortiguar.
 
@@ -178,7 +199,10 @@ def holt(values: List[float], days_ahead: int) -> List[float]:
     return _holt(values, days_ahead, phi = 1.0)
 
 
-def damped_trend(values: List[float], days_ahead: int) -> List[float]:
+def damped_trend(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Suavizado de Holt con la tendencia amortiguada.
 
@@ -197,7 +221,11 @@ def damped_trend(values: List[float], days_ahead: int) -> List[float]:
     return _holt(values, days_ahead, phi = PHI)
 
 
-def _holt(values: List[float], days_ahead: int, phi: float) -> List[float]:
+def _holt(
+    values: List[float],
+    days_ahead: int,
+    phi: float
+) -> List[float]:
     '''
         Mecánica común de Holt, con y sin amortiguación.
 
@@ -222,7 +250,10 @@ def _holt(values: List[float], days_ahead: int, phi: float) -> List[float]:
     return [float(value) for value in level + damping * trend]
 
 
-def theta(values: List[float], days_ahead: int) -> List[float]:
+def theta(
+    values: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Método Theta: promedia una recta de largo plazo con un suavizado que
         sigue los movimientos recientes.

@@ -148,12 +148,47 @@ STOCK_COLUMNS: tuple[SalesColumn, ...] = (
 STOCK_HEADERS: tuple[str, ...] = tuple(
     column.header for column in STOCK_COLUMNS if not column.filled_by_service
 )
+
+# A visit is what the seller's system registered on the street: who was
+# visited, when, and —if that system knows it— what came of it. It is the
+# EXECUTED side of the route; the planned side comes from OPTIMIZATION. The
+# sheet is optional like the other companions: without it the route module
+# plans and nothing else. Coordinates and the outcome are optional because
+# most systems export the visit and not the GPS reading; with the outcome the
+# comparison goes from "was there" to "was there and sold".
+VISIT_COLUMNS: tuple[SalesColumn, ...] = (
+    SalesColumn('visit_date', 'Fecha', True, 'datetime64[ns]',
+                template_required = True),
+    SalesColumn('visit_time', 'Hora', False, 'object',
+                rules = ValueRules(max_length = 8)),
+    SalesColumn('seller', 'Vendedor', True, 'object',
+                rules = ValueRules(max_length = 128), template_required = True),
+    SalesColumn('pos_id', 'Cliente ID', True, 'object',
+                rules = ValueRules(max_length = 64), filled_by_service = True),
+    SalesColumn('pos_name', 'Cliente', False, 'object', template_required = True),
+    SalesColumn('latitude', 'Latitud', False, 'float64',
+                rules = ValueRules(value_range = (-90.0, 90.0))),
+    SalesColumn('longitude', 'Longitud', False, 'float64',
+                rules = ValueRules(value_range = (-180.0, 180.0))),
+    SalesColumn('outcome', 'Resultado', False, 'object',
+                rules = ValueRules(max_length = 16,
+                                   allowed = ('VENTA', 'SIN_VENTA', 'CERRADO',
+                                              'NO_ENCONTRADO'))),
+    SalesColumn('order_id', 'Nro Factura', False, 'object',
+                rules = ValueRules(max_length = 64)),
+)
+
+VISIT_HEADERS: tuple[str, ...] = tuple(
+    column.header for column in VISIT_COLUMNS if not column.filled_by_service
+)
+
 # Sheet names of the workbook the client downloads and returns filled in.
 SALES_SHEET: str = 'Ventas'
 COLLECTIONS_SHEET: str = 'Cobros'
 STOCK_SHEET: str = 'Stock'
+VISITS_SHEET: str = 'Visitas'
 
-TEMPLATE_VERSION: str = 'v3'
+TEMPLATE_VERSION: str = 'v4'
 
 REQUIRED_COLUMNS: tuple[str, ...] = tuple(
     column.canonical for column in SALES_COLUMNS if column.required
@@ -195,6 +230,10 @@ class ValidationRule(str, Enum):
     OVERPAID_INVOICE = 'OVERPAID_INVOICE'
     # Stock: the product in the snapshot is not in the sales catalogue.
     UNKNOWN_PRODUCT = 'UNKNOWN_PRODUCT'
+    # Visits: the client or the seller is not in the sales dataset. Reported,
+    # never dropped: a visit to a prospect is a fact worth keeping.
+    UNKNOWN_CLIENT = 'UNKNOWN_CLIENT'
+    UNKNOWN_SELLER = 'UNKNOWN_SELLER'
 
 
 class IngestError(str, Enum):
@@ -273,6 +312,40 @@ class StockSummary(BaseModel):
     snapshot_end: Optional[str] = Field(None, description = 'ISO date, if any.')
 
 
+class VisitsSummary(BaseModel):
+    '''
+        What a visits load contains.
+
+        `unknown_clients` and `unknown_sellers` travel because they say whether
+        the file belongs to this dataset: a load where nobody matches is the
+        wrong file, not a new sales force.
+    '''
+    total_rows: int = Field(0, ge = 0)
+    valid_rows: int = Field(0, ge = 0)
+    error_rows: int = Field(0, ge = 0)
+    sellers: int = Field(0, ge = 0)
+    clients: int = Field(0, ge = 0)
+    unknown_clients: int = Field(0, ge = 0)
+    unknown_sellers: int = Field(0, ge = 0)
+    with_coordinates: int = Field(0, ge = 0, description = 'Rows carrying a GPS pair.')
+    with_outcome: int = Field(0, ge = 0, description = 'Rows carrying a result code.')
+    visit_date_start: Optional[str] = Field(None, description = 'ISO date, if any.')
+    visit_date_end: Optional[str] = Field(None, description = 'ISO date, if any.')
+
+
+class VisitsResponse(BaseModel):
+    '''
+        Answer of a visits upload: what got in, what did not, and why.
+    '''
+    dataset_id: str = Field(..., description = 'Sales dataset the visits belong to.')
+    status: str = Field(..., description = "'validated' or 'failed'.")
+    visits_s3_key: Optional[str] = Field(
+        None, description = 'Object key of the stored visits file.'
+    )
+    summary: VisitsSummary = VisitsSummary()
+    issues: List[ValidationIssue] = Field(default_factory = list)
+
+
 class StockResponse(BaseModel):
     '''
         Answer of a stock upload: what got in, what did not, and why.
@@ -327,6 +400,11 @@ class IngestResponse(BaseModel):
         None,
         description = 'Filled when the uploaded workbook also carried a stock '
                       'sheet: the same upload feeds the stock module too.'
+    )
+    visits: Optional[VisitsSummary] = Field(
+        None,
+        description = 'Filled when the uploaded workbook also carried a visits '
+                      'sheet: the executed side of the routes.'
     )
     created_at: datetime
 
@@ -385,6 +463,11 @@ class IngestStatusResponse(BaseModel):
         None,
         description = 'Latest stock snapshot loaded against this dataset, when '
                       'there is one. A new load replaces the previous snapshot.'
+    )
+    visits: Optional[VisitsSummary] = Field(
+        None,
+        description = 'Visits loaded against this dataset, when there are any: '
+                      'the executed side of the routes.'
     )
     created_at: datetime
 

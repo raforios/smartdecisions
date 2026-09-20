@@ -152,8 +152,8 @@ app.include_router(quotes_router)
 
 
 if __name__ == '__main__':
-    MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
-    logger.info(MESSAGE)
+    message = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
+    logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 
@@ -185,7 +185,10 @@ def _is_scheduled_sync(event: Dict[str, Any]) -> bool:
             or event.get('task') == _SYNC_TASK)
 
 
-def handler(event: Dict[str, Any], context: Any) -> Any:
+def handler(
+    event: Dict[str, Any],
+    context: Any
+) -> Any:
     '''
         Lambda entry point.
 

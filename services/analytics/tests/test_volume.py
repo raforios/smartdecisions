@@ -15,8 +15,13 @@ from services.volume import build_volume_source
 _CATEGORY = 'Galletas'
 
 
-def _row(client: str, product: str, amount: float, units: float = 1.0,
-         date: str = '2026-03-10') -> dict:
+def _row(
+    client: str,
+    product: str,
+    amount: float,
+    units: float = 1.0,
+    date: str = '2026-03-10'
+) -> dict:
     '''
         One sales line. The category test overrides `category` on the result,
         so the helper stays inside the five-argument limit.

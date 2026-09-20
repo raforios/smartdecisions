@@ -129,7 +129,10 @@ def put_mineral(mineral: MineralItem) -> None:
         raise ServiceUnavailableError(detail = error_msg) from error
 
 
-def get_price(mineral_id: str, day: date_type) -> Optional[MiningPriceItem]:
+def get_price(
+    mineral_id: str,
+    day: date_type
+) -> Optional[MiningPriceItem]:
     '''
         Returns the quotation of one mineral on one date.
 

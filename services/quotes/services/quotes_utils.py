@@ -68,7 +68,10 @@ def _table():
         raise ServiceUnavailableError(detail = error_msg) from error
 
 
-def get_rate(currency: str, day: date_type) -> Optional[ExchangeRateItem]:
+def get_rate(
+    currency: str,
+    day: date_type
+) -> Optional[ExchangeRateItem]:
     '''
         Returns the stored rate of one currency on one date.
 

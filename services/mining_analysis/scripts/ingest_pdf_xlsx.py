@@ -104,7 +104,10 @@ def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[st
     return matched, unmatched
 
 
-def _iter_daily_rows(sheet, sheet_name: str) -> List[Tuple[date, Dict[str, float]]]:
+def _iter_daily_rows(
+    sheet,
+    sheet_name: str
+) -> List[Tuple[date, Dict[str, float]]]:
     '''
     Yields (price_date, {normalized_mineral: price}) for every numeric day row
     in a Diario sheet. Returns [] if the sheet does not match the expected
@@ -139,7 +142,11 @@ def _iter_daily_rows(sheet, sheet_name: str) -> List[Tuple[date, Dict[str, float
     return parsed
 
 
-def _row_date(row: Tuple[Any, ...], year: int, month: int) -> Optional[date]:
+def _row_date(
+    row: Tuple[Any, ...],
+    year: int,
+    month: int
+) -> Optional[date]:
     '''
     Reads the day number in the first cell and builds the quotation date.
 
@@ -161,7 +168,10 @@ def _row_date(row: Tuple[Any, ...], year: int, month: int) -> Optional[date]:
         return None
 
 
-def _row_prices(row: Tuple[Any, ...], mineral_cols: Dict[int, str]) -> Dict[str, float]:
+def _row_prices(
+    row: Tuple[Any, ...],
+    mineral_cols: Dict[int, str]
+) -> Dict[str, float]:
     '''
     Reads the quotations of one day row, skipping blanks and unparseable cells.
 

@@ -28,7 +28,10 @@ from scripts.cli_support import database_session, report
 from services import crud_dyb
 
 
-def _read_minerals(session, mineral_id: Optional[int]) -> List[MineralItem]:
+def _read_minerals(
+    session,
+    mineral_id: Optional[int]
+) -> List[MineralItem]:
     '''
         Reads the catalogue from the relational database.
 
@@ -56,7 +59,10 @@ def _read_minerals(session, mineral_id: Optional[int]) -> List[MineralItem]:
     ]
 
 
-def _read_prices(session, mineral_id: Optional[int]) -> List[MiningPriceItem]:
+def _read_prices(
+    session,
+    mineral_id: Optional[int]
+) -> List[MiningPriceItem]:
     '''
         Reads the quotations from the relational database.
 
@@ -82,7 +88,10 @@ def _read_prices(session, mineral_id: Optional[int]) -> List[MiningPriceItem]:
     ]
 
 
-def _describe(minerals: List[MineralItem], prices: List[MiningPriceItem]) -> None:
+def _describe(
+    minerals: List[MineralItem],
+    prices: List[MiningPriceItem]
+) -> None:
     '''
         Reports what was read, so a dry run is worth something.
 
@@ -100,7 +109,10 @@ def _describe(minerals: List[MineralItem], prices: List[MiningPriceItem]) -> Non
         report(f'  [{mineral.mineral_id}] {mineral.name}: {own} quotation(s).')
 
 
-def _copy(minerals: List[MineralItem], prices: List[MiningPriceItem]) -> None:
+def _copy(
+    minerals: List[MineralItem],
+    prices: List[MiningPriceItem]
+) -> None:
     '''
         Writes the catalogue and the quotations into DynamoDB.
 
@@ -116,7 +128,10 @@ def _copy(minerals: List[MineralItem], prices: List[MiningPriceItem]) -> None:
     report(f'Quotations written: {written} row(s).')
 
 
-def _verify(minerals: List[MineralItem], prices: List[MiningPriceItem]) -> bool:
+def _verify(
+    minerals: List[MineralItem],
+    prices: List[MiningPriceItem]
+) -> bool:
     '''
         Reads DynamoDB back and compares the counts against the source.
 

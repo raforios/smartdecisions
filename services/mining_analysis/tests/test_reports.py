@@ -8,15 +8,15 @@ import pytest
 
 from models.mining_analysis import Mineral, MiningPrice
 from services.reports_renderer import _format_price
-from services.mining_analysis import (
-    OFFICIAL_MINERALS,
+from services.mining_analysis import OFFICIAL_MINERALS
+from services.official_reports import (
+    biweekly_period_bounds,
     ensure_official_minerals,
     get_biweekly_history_service,
     get_biweekly_report_service,
     get_daily_report_service,
-    _biweekly_period_bounds,
-    _normalize_name,
-    _prev_biweekly_period,
+    normalize_name,
+    prev_biweekly_period,
 )
 
 
@@ -28,10 +28,16 @@ def _run(coro):
 def _seed_catalog(session) -> dict:
     '''Inserts the official catalog and returns {normalized_name: mineral_id}.'''
     ensure_official_minerals(session)
-    return {_normalize_name(m.name): m.id for m in session.query(Mineral).all()}
+    return {normalize_name(m.name): m.id for m in session.query(Mineral).all()}
 
 
-def _add_price(session, mineral_id: int, day: date, low: float, high: float = None):
+def _add_price(
+    session,
+    mineral_id: int,
+    day: date,
+    low: float,
+    high: float = None
+):
     session.add(MiningPrice(
         mineral_id = mineral_id,
         date = day,
@@ -50,9 +56,14 @@ def _add_price(session, mineral_id: int, day: date, low: float, high: float = No
     (2026, 1, 1, (date(2026, 1, 1), date(2026, 1, 15))),
     (2026, 12, 2, (date(2026, 12, 16), date(2026, 12, 31))),
 ])
-def test_biweekly_period_bounds(year, month, half, expected):
+def test_biweekly_period_bounds(
+    year,
+    month,
+    half,
+    expected
+):
     '''Halves are fixed: 1 covers days 1-15 and 2 covers 16 to month end.'''
-    assert _biweekly_period_bounds(year, month, half) == expected
+    assert biweekly_period_bounds(year, month, half) == expected
 
 
 @pytest.mark.parametrize('cur, expected', [
@@ -60,9 +71,12 @@ def test_biweekly_period_bounds(year, month, half, expected):
     ((2026, 4, 1), (2026, 3, 2)),
     ((2026, 1, 1), (2025, 12, 2)),
 ])
-def test_prev_biweekly_period(cur, expected):
+def test_prev_biweekly_period(
+    cur,
+    expected
+):
     '''Walking back one period crosses month and year boundaries.'''
-    assert _prev_biweekly_period(*cur) == expected
+    assert prev_biweekly_period(*cur) == expected
 
 
 # --- biweekly average -------------------------------------------------------
@@ -72,7 +86,7 @@ def test_biweekly_average_partial_days(db_session):
     Bismuto has prices on days 1, 8 and 15. The average must divide by 3.
     '''
     ids = _seed_catalog(db_session)
-    bismuto_id = ids[_normalize_name('Bismuto')]
+    bismuto_id = ids[normalize_name('Bismuto')]
     _add_price(db_session, bismuto_id, date(2026, 4, 1), 13.2)
     _add_price(db_session, bismuto_id, date(2026, 4, 8), 13.3)
     _add_price(db_session, bismuto_id, date(2026, 4, 15), 13.3)
@@ -94,7 +108,7 @@ def test_biweekly_average_falls_back_to_prior_period(db_session):
     must reuse that average and flag is_fallback = True.
     '''
     ids = _seed_catalog(db_session)
-    estano_id = ids[_normalize_name('Estaño')]
+    estano_id = ids[normalize_name('Estaño')]
     _add_price(db_session, estano_id, date(2026, 4, 5), 21.0)
     _add_price(db_session, estano_id, date(2026, 4, 10), 22.0)
     db_session.commit()
@@ -139,7 +153,7 @@ def test_daily_report_returns_latest_on_date(db_session):
     When a price exists exactly on ref_date, is_fallback must be False.
     '''
     ids = _seed_catalog(db_session)
-    plata_id = ids[_normalize_name('Plata')]
+    plata_id = ids[normalize_name('Plata')]
     _add_price(db_session, plata_id, date(2026, 5, 10), 73.5, 74.5)
     _add_price(db_session, plata_id, date(2026, 5, 11), 75.0, 76.0)
     db_session.commit()
@@ -159,7 +173,7 @@ def test_daily_report_falls_back_to_prior_date(db_session):
     is_fallback = True.
     '''
     ids = _seed_catalog(db_session)
-    oro_id = ids[_normalize_name('Oro')]
+    oro_id = ids[normalize_name('Oro')]
     _add_price(db_session, oro_id, date(2026, 5, 8), 4700)
     db_session.commit()
 
@@ -206,7 +220,7 @@ def test_daily_report_includes_previous_price_and_change_pct(db_session):
     the variation %, computed against the most recent prior day with data.
     '''
     ids = _seed_catalog(db_session)
-    estano_id = ids[_normalize_name('Estaño')]
+    estano_id = ids[normalize_name('Estaño')]
     _add_price(db_session, estano_id, date(2026, 5, 10), 20.0)
     _add_price(db_session, estano_id, date(2026, 5, 11), 22.0)
     db_session.commit()
@@ -225,7 +239,7 @@ def test_daily_report_change_pct_zero_when_no_history(db_session):
     raising or returning a misleading negative value.
     '''
     ids = _seed_catalog(db_session)
-    plata_id = ids[_normalize_name('Plata')]
+    plata_id = ids[normalize_name('Plata')]
     _add_price(db_session, plata_id, date(2026, 5, 11), 75.0)
     db_session.commit()
 
@@ -245,7 +259,7 @@ def test_biweekly_history_lists_only_periods_with_data(db_session):
     Fully-fallback rows are excluded.
     '''
     ids = _seed_catalog(db_session)
-    estano_id = ids[_normalize_name('Estaño')]
+    estano_id = ids[normalize_name('Estaño')]
     _add_price(db_session, estano_id, date(2026, 4, 3), 21.0)
     _add_price(db_session, estano_id, date(2026, 4, 20), 22.0)
     db_session.commit()

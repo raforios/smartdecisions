@@ -300,7 +300,10 @@ def _index_pdv_products(dataframe: pd.DataFrame) -> Dict[str, set]:
     )
 
 
-def _drop_size_for(consequent_id: str, data: _EngineData) -> Tuple[float, Optional[float]]:
+def _drop_size_for(
+    consequent_id: str,
+    data: _EngineData
+) -> Tuple[float, Optional[float]]:
     '''
         Returns (expected units, expected amount) for a recommended product.
         The amount is None when the source provided no pricing.
@@ -352,7 +355,10 @@ def _build_candidate(
     )
 
 
-def _candidates_for_pdv(basket: _PdvBasket, data: _EngineData) -> List[Opportunity]:
+def _candidates_for_pdv(
+    basket: _PdvBasket,
+    data: _EngineData
+) -> List[Opportunity]:
     '''
         Builds every candidate opportunity for a single PdV: rules only fire
         when the PdV already buys all antecedents, and products it already
@@ -442,7 +448,10 @@ def _build_summary(
     )
 
 
-def _apply_item_level(dataframe: pd.DataFrame, item_level: str) -> pd.DataFrame:
+def _apply_item_level(
+    dataframe: pd.DataFrame,
+    item_level: str
+) -> pd.DataFrame:
     '''
         Chooses the granularity of the market-basket item. At SKU level ('product')
         real retail baskets are too sparse to yield rules (thousands of unique SKUs

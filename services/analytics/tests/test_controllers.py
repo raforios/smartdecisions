@@ -106,7 +106,11 @@ def _dataset(monkeypatch) -> str:
     return 'test-dataset-id'
 
 
-def _call(controller, dataset_id: str, params: dict | None = None):
+def _call(
+    controller,
+    dataset_id: str,
+    params: dict | None = None
+):
     '''
         Invokes a controller with the arguments every endpoint passes.
 
@@ -142,7 +146,10 @@ def test_commercial_summary_returns_a_full_response(dataset):
     assert response.margin.available is True
 
 
-def test_receivables_returns_a_full_response(dataset, monkeypatch):
+def test_receivables_returns_a_full_response(
+    dataset,
+    monkeypatch
+):
     '''
         The receivables endpoint must build its response with the payments the
         dataset carries, not with the sales alone.
@@ -172,7 +179,10 @@ def test_receivables_returns_a_full_response(dataset, monkeypatch):
     assert response.margin.available is True
 
 
-def test_receivables_says_so_when_the_dataset_has_no_payments(dataset, monkeypatch):
+def test_receivables_says_so_when_the_dataset_has_no_payments(
+    dataset,
+    monkeypatch
+):
     '''
         Without a collections file every credit invoice is open. That is a fact
         of the data, not a failure, and the view has to build anyway.
@@ -249,17 +259,26 @@ def test_segmentation_returns_a_full_response(dataset):
 class _FakeTable: # pylint: disable=too-few-public-methods
     '''A DynamoDB table that applies the scan filter it is given.'''
 
-    def __init__(self, items):
+    def __init__(
+        self,
+        items
+    ):
         self._items = items
 
-    def scan(self, **kwargs):
+    def scan(
+        self,
+        **kwargs
+    ):
         '''Filters the stored items the way DynamoDB would.'''
         condition = kwargs.get('FilterExpression')
         expression = condition.get_expression() if condition else None
         return {'Items': [item for item in self._items if _matches(item, expression)]}
 
 
-def _matches(item, expression):
+def _matches(
+    item,
+    expression
+):
     '''
         Evaluates the boto3 condition tree against one item.
 
@@ -279,10 +298,16 @@ def _matches(item, expression):
 class _FakeResource: # pylint: disable=too-few-public-methods
     '''Stands in for the DynamoDB resource.'''
 
-    def __init__(self, items):
+    def __init__(
+        self,
+        items
+    ):
         self._items = items
 
-    def Table(self, _name): # pylint: disable=invalid-name
+    def Table( # pylint: disable=invalid-name
+        self,
+        _name
+    ):
         '''Mirrors the boto3 resource API.'''
         return _FakeTable(self._items)
 
@@ -356,10 +381,16 @@ def test_the_owner_reads_their_own_run():
 class _RunsTable: # pylint: disable=too-few-public-methods
     '''A DynamoDB table that applies the owner filter of a scan.'''
 
-    def __init__(self, items):
+    def __init__(
+        self,
+        items
+    ):
         self._items = items
 
-    def scan(self, **kwargs):
+    def scan(
+        self,
+        **kwargs
+    ):
         '''Returns the rows whose owner matches the filter.'''
         attribute, expected = kwargs['FilterExpression'].get_expression()['values']
         return {'Items': [item for item in self._items
@@ -369,15 +400,25 @@ class _RunsTable: # pylint: disable=too-few-public-methods
 class _RunsResource: # pylint: disable=too-few-public-methods
     '''Stands in for the DynamoDB resource.'''
 
-    def __init__(self, items):
+    def __init__(
+        self,
+        items
+    ):
         self._items = items
 
-    def Table(self, _name): # pylint: disable=invalid-name
+    def Table( # pylint: disable=invalid-name
+        self,
+        _name
+    ):
         '''Mirrors the boto3 resource API.'''
         return _RunsTable(self._items)
 
 
-def _stored_run(owner: str, run_id: str, created_at: str) -> dict:
+def _stored_run(
+    owner: str,
+    run_id: str,
+    created_at: str
+) -> dict:
     '''
         A persisted run row.
 

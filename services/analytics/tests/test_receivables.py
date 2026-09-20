@@ -12,8 +12,13 @@ from schemas.receivables import AgingBucket, CreditRisk, ReceivablesUnavailable
 from services.receivables import build_receivables, resolve_policy
 
 
-def _sale(order: str, client: str, date: str, amount: float,
-          terms: str = 'CREDITO') -> dict:
+def _sale(
+    order: str,
+    client: str,
+    date: str,
+    amount: float,
+    terms: str = 'CREDITO'
+) -> dict:
     '''
         One sales line of an invoice.
 
@@ -36,7 +41,11 @@ def _sale(order: str, client: str, date: str, amount: float,
     }
 
 
-def _payment(order: str, date: str, amount: float) -> dict:
+def _payment(
+    order: str,
+    date: str,
+    amount: float
+) -> dict:
     '''
         One payment row.
 

@@ -38,8 +38,11 @@ def excel_date_to_py_date(
     if isinstance(excel_date, str):
         try:
             return pd.to_datetime(excel_date).date()
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as error:
+            # Not an ISO-like date: it may still be an Excel serial number,
+            # which the next step reads. Say so rather than swallow it.
+            error_msg = f'Date "{excel_date}" is not a calendar date ({error}); trying serial.'
+            logger.warning(error_msg)
     try:
         delta_days = pd.to_timedelta(float(excel_date), unit='D')
         return (pd.to_datetime('1899-12-30') + delta_days).date()

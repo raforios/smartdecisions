@@ -162,7 +162,11 @@ def _kmeans(
     return labels
 
 
-def _balance_clusters(points: np.ndarray, labels: np.ndarray, clusters: int) -> np.ndarray:
+def _balance_clusters(
+    points: np.ndarray,
+    labels: np.ndarray,
+    clusters: int
+) -> np.ndarray:
     '''
         Evens out the cluster sizes so no day carries the whole city.
 
@@ -230,7 +234,10 @@ def _nearest_neighbour(distances: np.ndarray) -> List[int]:
     return tour
 
 
-def _two_opt(tour: List[int], distances: np.ndarray) -> List[int]:
+def _two_opt(
+    tour: List[int],
+    distances: np.ndarray
+) -> List[int]:
     '''
         Removes crossings from a tour by reversing any segment that shortens it.
 
@@ -282,7 +289,10 @@ def order_stops(points: np.ndarray) -> List[int]:
     return _two_opt(_nearest_neighbour(distances), distances)
 
 
-def _value_tier(amount: float, thresholds: Tuple[float, float]) -> str:
+def _value_tier(
+    amount: float,
+    thresholds: Tuple[float, float]
+) -> str:
     '''
         Labels a client by purchase value, using the same cut-offs as the
         segmentation module.
@@ -301,7 +311,10 @@ def _value_tier(amount: float, thresholds: Tuple[float, float]) -> str:
     return 'LOW'
 
 
-def build_client_points(dataframe: pd.DataFrame, seller: Optional[str] = None) -> pd.DataFrame:
+def build_client_points(
+    dataframe: pd.DataFrame,
+    seller: Optional[str] = None
+) -> pd.DataFrame:
     '''
         Collapses the sales rows into one geolocated row per client, carrying
         what the visit is worth.
@@ -354,7 +367,10 @@ def build_client_points(dataframe: pd.DataFrame, seller: Optional[str] = None) -
     return clients.reset_index().rename(columns = {CLIENT_ID: 'client_id'})
 
 
-def assign_days(clients: pd.DataFrame, days: int) -> pd.DataFrame:
+def assign_days(
+    clients: pd.DataFrame,
+    days: int
+) -> pd.DataFrame:
     '''
         Splits the clients into daily routes by geographic proximity.
 
@@ -381,7 +397,10 @@ def assign_days(clients: pd.DataFrame, days: int) -> pd.DataFrame:
     return clients
 
 
-def _stop_payload(row: pd.Series, position: int) -> RouteStop:
+def _stop_payload(
+    row: pd.Series,
+    position: int
+) -> RouteStop:
     '''
         Shapes one stop of the visit plan.
 
@@ -405,7 +424,10 @@ def _stop_payload(row: pd.Series, position: int) -> RouteStop:
     )
 
 
-def plan_day(clients: pd.DataFrame, day: int) -> List[RouteStop]:
+def plan_day(
+    clients: pd.DataFrame,
+    day: int
+) -> List[RouteStop]:
     '''
         Orders one day's stops and shapes them for the response.
 
@@ -480,7 +502,10 @@ def build_distance_matrix(dtf: pd.DataFrame) -> pd.DataFrame:
     return dtf_distances.reset_index(drop = True)
 
 
-def order_route(dtf: pd.DataFrame, dtf_distances: pd.DataFrame) -> pd.DataFrame:
+def order_route(
+    dtf: pd.DataFrame,
+    dtf_distances: pd.DataFrame
+) -> pd.DataFrame:
     '''
         Creates the dataframe with the optimized and organized route.
     '''
@@ -670,7 +695,10 @@ def parse_route_csv(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
     return rows, canonical_set, next(iter(route_id_set)), next(iter(day_set))
 
 
-def scope_to_period(dataframe: pd.DataFrame, params: dict) -> pd.DataFrame:
+def scope_to_period(
+    dataframe: pd.DataFrame,
+    params: dict
+) -> pd.DataFrame:
     '''
         Narrows the sales rows to the requested date window.
 
@@ -715,7 +743,10 @@ def available_sellers(dataframe: pd.DataFrame) -> List[str]:
     return sorted({name for name in names if name})
 
 
-def build_day(clients: pd.DataFrame, day: int) -> DayRoute:
+def build_day(
+    clients: pd.DataFrame,
+    day: int
+) -> DayRoute:
     '''
         Orders one day's stops and projects the trip onto the road network.
 

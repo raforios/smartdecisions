@@ -129,7 +129,10 @@ def test_an_empty_payload_is_refused(model):
     assert not model
 
 
-def test_the_backend_response_travels_whole(model, cache): # pylint: disable=unused-argument
+def test_the_backend_response_travels_whole(
+    model, # pylint: disable=unused-argument
+    cache # pylint: disable=unused-argument
+):
     '''
         The input is the response of the producing service, untouched.
 
@@ -149,7 +152,10 @@ def test_the_backend_response_travels_whole(model, cache): # pylint: disable=unu
 
 
 
-def test_a_second_identical_request_is_served_from_cache(model, cache):
+def test_a_second_identical_request_is_served_from_cache(
+    model,
+    cache
+):
     '''
         A demo clicks the same button repeatedly. The difference between a
         fresh answer and a stored one is the difference between paying for it
@@ -167,7 +173,10 @@ def test_a_second_identical_request_is_served_from_cache(model, cache):
     assert len(cache) == 1
 
 
-def test_retuning_the_role_stops_serving_what_the_old_one_produced(model, cache): # pylint: disable=unused-argument
+def test_retuning_the_role_stops_serving_what_the_old_one_produced(
+    model, # pylint: disable=unused-argument
+    cache # pylint: disable=unused-argument
+):
     '''
         The prompt version is part of the cache key, so a retuned role does not
         keep answering with text written under the previous rules — and nothing
@@ -200,7 +209,10 @@ def test_a_model_that_says_nothing_is_not_published_as_an_answer(cache): # pylin
     assert AIError.MODEL_REFUSED.value in str(failure.value.detail)
 
 
-def test_the_prompt_carries_the_role_and_every_rule(model, cache): # pylint: disable=unused-argument
+def test_the_prompt_carries_the_role_and_every_rule(
+    model, # pylint: disable=unused-argument
+    cache # pylint: disable=unused-argument
+):
     '''
         The rules are what keep the answers honest — not inventing figures, not
         recommending. If they stopped reaching the model nothing would break
@@ -278,7 +290,10 @@ def test_storing_a_role_retires_the_previous_version():
     assert (ViewName.RATE_FORECAST.value, 1) in stored
 
 
-def test_a_long_response_is_sampled_instead_of_refused(model, cache): # pylint: disable=unused-argument
+def test_a_long_response_is_sampled_instead_of_refused(
+    model, # pylint: disable=unused-argument
+    cache # pylint: disable=unused-argument
+):
     """
         Some responses are long by nature — the opportunities run answers with
         545 rows and 246 KB. Refusing it leaves the button broken on the screen
@@ -302,7 +317,10 @@ def test_a_long_response_is_sampled_instead_of_refused(model, cache): # pylint: 
     assert 'no mostrados' in sent
 
 
-def test_a_response_that_fits_is_not_touched(model, cache): # pylint: disable=unused-argument
+def test_a_response_that_fits_is_not_touched(
+    model, # pylint: disable=unused-argument
+    cache # pylint: disable=unused-argument
+):
     """Trimming is a last resort, not something that happens on every call."""
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
         _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
@@ -322,7 +340,10 @@ def test_an_empty_payload_is_still_refused(model):
     assert not model
 
 
-def test_a_long_list_is_trimmed_at_any_depth(model, cache): # pylint: disable=unused-argument
+def test_a_long_list_is_trimmed_at_any_depth(
+    model, # pylint: disable=unused-argument
+    cache # pylint: disable=unused-argument
+):
     """
         A route plan is days[].stops[]: trimming only the top level cut a list
         of five and left eighty thousand stops underneath, which reached the

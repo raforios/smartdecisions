@@ -163,8 +163,8 @@ app.include_router(public_reports_router)
 app.include_router(mining_router)
 
 if __name__ == '__main__':
-    MESSAGE = f'Starting Mining Analysis Service at {UVICORN_HOST}:{UVICORN_PORT}'
-    logger.info(MESSAGE)
+    message = f'Starting Mining Analysis Service at {UVICORN_HOST}:{UVICORN_PORT}'
+    logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 handler = Mangum(app)

@@ -82,7 +82,10 @@ def _load_dataframe(
     return _route_points_to_df(items)
 
 
-def _df_to_pydantic(df: pd.DataFrame, model) -> list:
+def _df_to_pydantic(
+    df: pd.DataFrame,
+    model
+) -> list:
     '''
         Transforms a dataframe into a list of Pydantic instances.
     '''

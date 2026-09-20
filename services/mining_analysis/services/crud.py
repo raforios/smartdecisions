@@ -12,7 +12,11 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 
-def handle_db_exception(e: Exception, operation: str, entity_id: Any = None):
+def handle_db_exception(
+    e: Exception,
+    operation: str,
+    entity_id: Any = None
+):
     '''
         Handles various database exceptions and re-raises appropriate
         custom exceptions or generic errors.
@@ -191,7 +195,11 @@ def update_record(
         handle_db_exception(e, 'update', db_record.id)
         raise
 
-def delete_record(db: Session, model: Type[DeclarativeBase], record_id: int):
+def delete_record(
+    db: Session,
+    model: Type[DeclarativeBase],
+    record_id: int
+):
     '''
         Generic function to delete a record by ID.
 

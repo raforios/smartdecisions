@@ -90,7 +90,10 @@ def _system_prompt(prompt: PromptItem) -> str:
     return f'{prompt.role}\n\n{prompt.instructions}\n\nReglas:\n{rules}'
 
 
-def _trim(value: Any, budget_hit: List[bool]) -> Any:
+def _trim(
+    value: Any,
+    budget_hit: List[bool]
+) -> Any:
     '''
         Walks a structure and cuts every long list, at any depth.
 
@@ -162,7 +165,10 @@ def _fit_to_budget(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @handle_service_errors('AI')
-async def explain_service(view: ViewName, data: Dict[str, Any]) -> Dict[str, Any]:
+async def explain_service(
+    view: ViewName,
+    data: Dict[str, Any]
+) -> Dict[str, Any]:
     '''
     Explains what a view is showing, from the point of view of its expert.
 

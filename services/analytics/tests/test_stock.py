@@ -13,8 +13,13 @@ from schemas.stock import StockStatus, StockUnavailable
 from services.stock import build_stock
 
 
-def _sales(product: str, units: float, date: str, amount: float = 100.0,
-           cost: float = 5.0) -> dict:
+def _sales(
+    product: str,
+    units: float,
+    date: str,
+    amount: float = 100.0,
+    cost: float = 5.0
+) -> dict:
     '''
         One sales line.
 
@@ -36,8 +41,13 @@ def _sales(product: str, units: float, date: str, amount: float = 100.0,
     }
 
 
-def _snapshot(product: str, on_hand: float, date: str = '2026-06-30',
-              committed: float = 0.0, cost: float = 5.0) -> dict:
+def _snapshot(
+    product: str,
+    on_hand: float,
+    date: str = '2026-06-30',
+    committed: float = 0.0,
+    cost: float = 5.0
+) -> dict:
     '''
         One stock snapshot row.
 
@@ -58,8 +68,12 @@ def _snapshot(product: str, on_hand: float, date: str = '2026-06-30',
     }
 
 
-def _daily_sales(product: str, units_per_day: float, days: int = 30,
-                 end: str = '2026-06-30') -> list:
+def _daily_sales(
+    product: str,
+    units_per_day: float,
+    days: int = 30,
+    end: str = '2026-06-30'
+) -> list:
     '''
         A steady sales history, so the measured daily demand is predictable.
 

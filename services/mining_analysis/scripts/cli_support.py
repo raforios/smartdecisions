@@ -77,7 +77,7 @@ def source_is_missing(source: Path) -> bool:
     '''
     if source.exists():
         return False
-    message = f'Source file not found: {source}'
-    logger.error(message)
-    print(message, file = sys.stderr)
+    error_msg = f'Source file not found: {source}'
+    logger.error(error_msg)
+    print(error_msg, file = sys.stderr)
     return True

@@ -12,11 +12,11 @@ import pytest
 from schemas.ingest import ValidationRule
 from services.ingest import (
     _coerce_dates,
-    _sanitize_geo,
-    map_columns,
+    sanitize_geo,
     parse_and_validate,
     parse_and_validate_partial
 )
+from services.ingest_contract import map_columns
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +227,7 @@ def test_placeholder_coordinates_are_cleared():
         'latitude': [-16.5, 0.0, -16.4, 95.0],
         'longitude': [-68.1, -68.2, 0.0, -68.3],
     })
-    cleaned = _sanitize_geo(frame)
+    cleaned = sanitize_geo(frame)
     assert cleaned['latitude'].notna().tolist() == [True, False, False, False]
     assert cleaned['longitude'].notna().tolist() == [True, False, False, False]
 

@@ -9,7 +9,10 @@ import pandas as pd
 from services.growth import build_growth
 
 
-def _monthly_frame(months: int, amount: float = 100.0) -> pd.DataFrame:
+def _monthly_frame(
+    months: int,
+    amount: float = 100.0
+) -> pd.DataFrame:
     '''
         One sale on the first of each month, all of the same amount.
 

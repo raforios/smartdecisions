@@ -42,12 +42,12 @@ from schemas.mining_analysis import (
 )
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
-from services.mining_analysis import (
-    OFFICIAL_MINERALS,
-    _biweekly_period_bounds,
-    _normalize_name,
-    _prev_biweekly_period,
-    _resolve_mineral_id_map
+from services.mining_analysis import OFFICIAL_MINERALS
+from services.official_reports import (
+    biweekly_period_bounds,
+    normalize_name,
+    prev_biweekly_period,
+    resolve_mineral_id_map
 )
 from services.prices_store import PriceRecord, prices_in_window
 from services.utils import get_current_time_gmt, handle_service_errors
@@ -153,7 +153,10 @@ def confidence_for(sample_size: int) -> ForecastConfidence:
     return ForecastConfidence.LOW
 
 
-def _project_damped(prices: List[float], days_ahead: int) -> List[float]:
+def _project_damped(
+    prices: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Extends the series with exponential smoothing and a damped trend.
 
@@ -218,7 +221,10 @@ def _backtest(
     return round(float(np.mean(errors)), ERROR_DECIMALS)
 
 
-def _project_linear(prices: List[float], days_ahead: int) -> Optional[List[float]]:
+def _project_linear(
+    prices: List[float],
+    days_ahead: int
+) -> Optional[List[float]]:
     '''
         Extends the least-squares line fitted over the series.
 
@@ -245,7 +251,10 @@ def _project_linear(prices: List[float], days_ahead: int) -> Optional[List[float
     return projected
 
 
-def _project_moving_average(prices: List[float], days_ahead: int) -> List[float]:
+def _project_moving_average(
+    prices: List[float],
+    days_ahead: int
+) -> List[float]:
     '''
         Projects the mean of the most recent days as a flat line.
 
@@ -262,7 +271,10 @@ def _project_moving_average(prices: List[float], days_ahead: int) -> List[float]
     return [max(level, 0.0)] * days_ahead
 
 
-def _future_dates(last_day: date_type, days_ahead: int) -> List[date_type]:
+def _future_dates(
+    last_day: date_type,
+    days_ahead: int
+) -> List[date_type]:
     '''
         Builds the calendar dates a projection covers.
 
@@ -366,7 +378,11 @@ def _official_round(value: float) -> float:
     return float(Decimal(str(value)).quantize(_OFFICIAL_QUANTUM, rounding = ROUND_HALF_UP))
 
 
-def _next_biweekly_period(year: int, month: int, half: int) -> Tuple[int, int, int]:
+def _next_biweekly_period(
+    year: int,
+    month: int,
+    half: int
+) -> Tuple[int, int, int]:
     '''
     Returns the biweekly period immediately after the one given.
 
@@ -469,7 +485,7 @@ def _validity_of(period: Tuple[int, int, int]) -> Tuple[date_type, date_type]:
     Returns:
         Tuple[date, date]: First and last day the average is in force.
     '''
-    return _biweekly_period_bounds(*_next_biweekly_period(*period))
+    return biweekly_period_bounds(*_next_biweekly_period(*period))
 
 
 def _projected_officials(
@@ -497,14 +513,14 @@ def _projected_officials(
     entries: List[Dict[str, Any]] = []
     period = _period_of(reference)
     while True:
-        entry = _official_average(_biweekly_period_bounds(*period), observed, projected)
+        entry = _official_average(biweekly_period_bounds(*period), observed, projected)
         if entry is None:
             break
         entry['valid_from'], entry['valid_to'] = _validity_of(period)
         entries.append(entry)
         period = _next_biweekly_period(*period)
         # Stop once the projection no longer reaches the next window.
-        if _biweekly_period_bounds(*period)[0] > horizon_end:
+        if biweekly_period_bounds(*period)[0] > horizon_end:
             break
     return entries
 
@@ -532,13 +548,13 @@ def _official_history(
     entries: List[Dict[str, Any]] = []
     # Two steps back: one lands on the period in force, which already travels
     # as `official_current` and would only repeat itself here.
-    period = _prev_biweekly_period(*_prev_biweekly_period(*_period_of(reference)))
+    period = prev_biweekly_period(*prev_biweekly_period(*_period_of(reference)))
     for _ in range(periods):
-        entry = _official_average(_biweekly_period_bounds(*period), observed, {})
+        entry = _official_average(biweekly_period_bounds(*period), observed, {})
         if entry is not None:
             entry['valid_from'], entry['valid_to'] = _validity_of(period)
             entries.append(entry)
-        period = _prev_biweekly_period(*period)
+        period = prev_biweekly_period(*period)
     return entries
 
 
@@ -574,13 +590,13 @@ def _official_block(
     horizon_end = max(projected) if projected else reference
 
     # The average in force today is the one of the period that already closed.
-    current_period = _prev_biweekly_period(*_period_of(reference))
+    current_period = prev_biweekly_period(*_period_of(reference))
     # Read from the oldest fortnight the history shows through the horizon:
     # everything the averages below may need, in a single pass over storage.
     oldest = current_period
     for _ in range(OFFICIAL_HISTORY_PERIODS):
-        oldest = _prev_biweekly_period(*oldest)
-    read_from = _biweekly_period_bounds(*oldest)[0]
+        oldest = prev_biweekly_period(*oldest)
+    read_from = biweekly_period_bounds(*oldest)[0]
     observed = {
         record.date: record.price_low
         for record in prices_in_window(mineral_id, read_from, horizon_end, db = db)
@@ -588,7 +604,7 @@ def _official_block(
     }
 
     current = _official_average(
-        _biweekly_period_bounds(*current_period), observed, {}
+        biweekly_period_bounds(*current_period), observed, {}
     )
     if current is not None:
         current['valid_from'], current['valid_to'] = _validity_of(current_period)
@@ -635,7 +651,7 @@ async def get_price_forecast_service(
     Returns:
         Dict[str, Any]: Payload matching PriceForecastResponse shape.
     '''
-    mineral_ids = _resolve_mineral_id_map(db)
+    mineral_ids = resolve_mineral_id_map(db)
     minerals: List[Dict[str, Any]] = []
     observed_dates: List[date_type] = []
     # One reference for every mineral, so the whole payload agrees on which
@@ -643,7 +659,7 @@ async def get_price_forecast_service(
     reference = get_current_time_gmt().date()
 
     for catalog in OFFICIAL_MINERALS:
-        mineral_id = mineral_ids.get(_normalize_name(catalog['name']))
+        mineral_id = mineral_ids.get(normalize_name(catalog['name']))
         history = (
             prices_in_window(mineral_id, _HISTORY_FLOOR, date_type.max, db = db)
             if mineral_id is not None else []

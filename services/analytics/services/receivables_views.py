@@ -70,7 +70,10 @@ class DueCalendar:
     dates: List[DueDateRow]
 
 
-def risk_of(oldest_days: float, delinquent_days: int) -> CreditRisk:
+def risk_of(
+    oldest_days: float,
+    delinquent_days: int
+) -> CreditRisk:
     '''
         Reads a debtor's risk from the age of its oldest open balance.
 
@@ -110,7 +113,10 @@ def _weighted_late(group: pd.DataFrame) -> float:
     )
 
 
-def build_debtors(book: pd.DataFrame, delinquent_days: int) -> List[DebtorRow]:
+def build_debtors(
+    book: pd.DataFrame,
+    delinquent_days: int
+) -> List[DebtorRow]:
     '''
         Who owes, largest open balance first.
 
@@ -200,7 +206,10 @@ def build_collectors(book: pd.DataFrame) -> List[CollectorRow]:
     return rows[:_TOP_COLLECTORS]
 
 
-def _due_windows(open_book: pd.DataFrame, as_of: pd.Timestamp) -> List[DueWindow]:
+def _due_windows(
+    open_book: pd.DataFrame,
+    as_of: pd.Timestamp
+) -> List[DueWindow]:
     '''
         The open balance split into the windows a cash projection needs.
 
@@ -247,7 +256,10 @@ def _due_windows(open_book: pd.DataFrame, as_of: pd.Timestamp) -> List[DueWindow
     return windows
 
 
-def build_due_calendar(book: pd.DataFrame, as_of: pd.Timestamp) -> DueCalendar:
+def build_due_calendar(
+    book: pd.DataFrame,
+    as_of: pd.Timestamp
+) -> DueCalendar:
     '''
         What falls due and when: the windows and the day-by-day agenda.
 
@@ -278,8 +290,10 @@ def build_due_calendar(book: pd.DataFrame, as_of: pd.Timestamp) -> DueCalendar:
     return DueCalendar(windows = _due_windows(open_book, as_of), dates = dates)
 
 
-def build_collection_curve(book: pd.DataFrame,
-                           collections: Optional[pd.DataFrame]) -> List[CollectionCurvePoint]:
+def build_collection_curve(
+    book: pd.DataFrame,
+    collections: Optional[pd.DataFrame]
+) -> List[CollectionCurvePoint]:
     '''
         How fast each month's credit sales came back.
 
@@ -345,7 +359,10 @@ def build_collection_curve(book: pd.DataFrame,
     return points
 
 
-def build_priority(book: pd.DataFrame, delinquent_days: int) -> List[PriorityRow]:
+def build_priority(
+    book: pd.DataFrame,
+    delinquent_days: int
+) -> List[PriorityRow]:
     '''
         Who to call today.
 

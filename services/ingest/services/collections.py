@@ -30,14 +30,9 @@ from schemas.ingest import (
     ValidationIssue,
     ValidationRule
 )
-from services.ingest import (
-    COLLECTION_HEADER_LOOKUP,
-    COLLECTIONS_SCHEMA,
-    normalize_frame,
-    read_file,
-    read_workbook,
-    validate
-)
+from services.ingest import normalize_frame
+from services.ingest_contract import COLLECTION_HEADER_LOOKUP, COLLECTIONS_SCHEMA, validate
+from services.ingest_files import read_sheet
 from services.logger_config import custom_logger as logger
 
 _ORDER = 'order_id'
@@ -64,33 +59,14 @@ class CollectionsResult:
     summary: CollectionsSummary
 
 
-def _collections_sheet(file_bytes: bytes) -> Optional[pd.DataFrame]:
+def read_collections(
+    file_bytes: bytes,
+    filename: str,
+    auto: bool = False
+) -> Optional[pd.DataFrame]:
     '''
-        Returns the collections sheet of a workbook, if it has one.
-
-        Args:
-            file_bytes (bytes): Raw .xlsx content.
-
-        Returns:
-            pd.DataFrame | None: The sheet, or None when the workbook does not
-                carry one.
-    '''
-    for name, frame in read_workbook(file_bytes).items():
-        if str(name).strip().lower() == COLLECTIONS_SHEET.lower():
-            return frame
-    return None
-
-
-def read_collections(file_bytes: bytes, filename: str,
-                     auto: bool = False) -> Optional[pd.DataFrame]:
-    '''
-        Reads the payments rows out of an upload.
-
-        `auto` is the difference between "this file IS a collections file" and
-        "look inside this sales workbook in case it also brings payments". It
-        matters: read in auto mode, a sales CSV would be parsed as payments and
-        reported as a broken collections contract, when the client simply sells
-        cash.
+        Reads the payments rows out of an upload: the `Cobros` sheet of a
+        workbook, or the whole file when it was uploaded as a payments file.
 
         Args:
             file_bytes (bytes): Raw uploaded file content.
@@ -101,18 +77,8 @@ def read_collections(file_bytes: bytes, filename: str,
         Returns:
             pd.DataFrame | None: The raw frame, or None when there is nothing
                 to read.
-
-        Raises:
-            ValueError: On an unsupported extension or unreadable content.
     '''
-    if filename.lower().endswith('.xlsx'):
-        sheet = _collections_sheet(file_bytes)
-        if sheet is not None:
-            return sheet
-        # A file uploaded AS a collections file may name its sheet something
-        # else; one being scanned in passing may not.
-        return None if auto else read_file(file_bytes, filename)
-    return None if auto else read_file(file_bytes, filename)
+    return read_sheet(file_bytes, filename, COLLECTIONS_SHEET, auto = auto)
 
 
 def _normalize(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -128,8 +94,10 @@ def _normalize(dataframe: pd.DataFrame) -> pd.DataFrame:
     return normalize_frame(dataframe, COLLECTION_HEADER_LOOKUP)
 
 
-def _unmatched_issues(payments: pd.DataFrame,
-                      invoices: pd.Series) -> list[ValidationIssue]:
+def _unmatched_issues(
+    payments: pd.DataFrame,
+    invoices: pd.Series
+) -> list[ValidationIssue]:
     '''
         Flags payments whose invoice is not in the sales dataset.
 
@@ -152,8 +120,10 @@ def _unmatched_issues(payments: pd.DataFrame,
     ]
 
 
-def _overpaid_issues(payments: pd.DataFrame,
-                     invoices: pd.Series) -> list[ValidationIssue]:
+def _overpaid_issues(
+    payments: pd.DataFrame,
+    invoices: pd.Series
+) -> list[ValidationIssue]:
     '''
         Flags invoices collected for more than they were issued for.
 
@@ -181,8 +151,11 @@ def _overpaid_issues(payments: pd.DataFrame,
     ]
 
 
-def _summarize(payments: pd.DataFrame, invoices: pd.Series,
-               error_rows: int) -> CollectionsSummary:
+def _summarize(
+    payments: pd.DataFrame,
+    invoices: pd.Series,
+    error_rows: int
+) -> CollectionsSummary:
     '''
         Derives the summary of a collections load.
 
@@ -211,8 +184,12 @@ def _summarize(payments: pd.DataFrame, invoices: pd.Series,
     )
 
 
-def parse_and_validate(file_bytes: bytes, filename: str, sales: pd.DataFrame,
-                       auto: bool = False) -> CollectionsResult:
+def parse_and_validate(
+    file_bytes: bytes,
+    filename: str,
+    sales: pd.DataFrame,
+    auto: bool = False
+) -> CollectionsResult:
     '''
         End-to-end collections pipeline: read, validate, marry, summarize.
 

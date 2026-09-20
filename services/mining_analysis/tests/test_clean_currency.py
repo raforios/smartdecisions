@@ -39,7 +39,10 @@ from services.mining_analysis import clean_currency_pro
     ('$1,234.56', 1234.56),
     ('Bs. 26.500,00', 26500.00),
 ])
-def test_clean_currency_pro_variants(raw, expected):
+def test_clean_currency_pro_variants(
+    raw,
+    expected
+):
     '''
     Verifies decimal-format detection across anglo, european and noisy inputs.
     '''

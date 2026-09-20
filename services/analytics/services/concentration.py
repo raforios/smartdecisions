@@ -45,7 +45,10 @@ _TOP_CLIENTS = _SETTINGS['CONCENTRATION_TOP_CLIENTS']
 _HHI_MODERATE = _SETTINGS['CONCENTRATION_HHI_MODERATE']
 _HHI_HIGH = _SETTINGS['CONCENTRATION_HHI_HIGH']
 
-def _sorted_totals(dataframe: pd.DataFrame, labels: Optional[pd.Series]) -> Optional[pd.Series]:
+def _sorted_totals(
+    dataframe: pd.DataFrame,
+    labels: Optional[pd.Series]
+) -> Optional[pd.Series]:
     '''
         Aggregates amounts by label, descending, dropping non-positive rows.
 

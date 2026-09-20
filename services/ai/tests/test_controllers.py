@@ -16,7 +16,10 @@ from controllers import ai as controllers
 
 def test_explain_controller_returns_its_model():
     '''The explain endpoint answers a fully built ExplainResponse.'''
-    async def _explain(view, data): # pylint: disable=unused-argument
+    async def _explain(
+        view, # pylint: disable=unused-argument
+        data # pylint: disable=unused-argument
+    ):
         return {
             'view': ViewName.RATE_FORECAST,
             'text': 'Una explicación.',

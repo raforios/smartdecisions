@@ -9,10 +9,12 @@
 import uuid
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 import boto3
 import pandas as pd
+from pydantic import BaseModel
 from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
@@ -76,7 +78,10 @@ def money(value: float) -> float:
     return round(float(value), AMOUNT_DECIMALS) if pd.notna(value) else 0.0
 
 
-def ratio(numerator: float, denominator: float) -> float:
+def ratio(
+    numerator: float,
+    denominator: float
+) -> float:
     '''
         Safe division used across the engines for shares and averages.
 
@@ -92,7 +97,11 @@ def ratio(numerator: float, denominator: float) -> float:
     return float(numerator) / float(denominator)
 
 
-def hhi_level(index: float, moderate: float, high: float) -> ConcentrationLevel:
+def hhi_level(
+    index: float,
+    moderate: float,
+    high: float
+) -> ConcentrationLevel:
     '''
         Reads a Herfindahl-Hirschman index as a concentration level.
 
@@ -116,7 +125,34 @@ def hhi_level(index: float, moderate: float, high: float) -> ConcentrationLevel:
     return ConcentrationLevel.LOW
 
 
-def percent_change(current: float, previous: Optional[float]) -> Optional[float]:
+def unavailable_block(
+    model: Type[BaseModel],
+    label: str,
+    code: Enum
+) -> BaseModel:
+    '''
+        The block a dataset gets when the analysis cannot be built: not
+        available, with the reason as a code. One helper for every block
+        that can be skipped, so the log line and the shape never drift.
+
+        Args:
+            model (Type[BaseModel]): Block model with `available` and
+                `reason_code` fields.
+            label (str): Block name for the log.
+            code (Enum): Why it cannot be built.
+
+        Returns:
+            BaseModel: The block, not available, with its reason code.
+    '''
+    message = f'{label} block skipped: {code.value}.'
+    logger.info(message)
+    return model(available = False, reason_code = code.value)
+
+
+def percent_change(
+    current: float,
+    previous: Optional[float]
+) -> Optional[float]:
     '''
         Percentage variation between two periods.
 
@@ -138,7 +174,11 @@ def percent_change(current: float, previous: Optional[float]) -> Optional[float]
     )
 
 
-def label_series(dataframe: pd.DataFrame, id_col: str, name_col: str) -> Optional[pd.Series]:
+def label_series(
+    dataframe: pd.DataFrame,
+    id_col: str,
+    name_col: str
+) -> Optional[pd.Series]:
     '''
         Returns a readable label per row: the human name when available, else
         the id. Lets rankings show 'Tienda Doña Rosa' instead of 'PDV-007'.
@@ -198,7 +238,10 @@ def order_count(dataframe: pd.DataFrame) -> int:
 # Date range filter
 # ---------------------------------------------------------------------------
 
-def _parse_boundary(raw: Optional[str], field: str) -> Optional[pd.Timestamp]:
+def _parse_boundary(
+    raw: Optional[str],
+    field: str
+) -> Optional[pd.Timestamp]:
     '''
         Parses an ISO date coming from the query string.
 
@@ -222,9 +265,11 @@ def _parse_boundary(raw: Optional[str], field: str) -> Optional[pd.Timestamp]:
     return parsed
 
 
-def _describe(available: Tuple[Any, Any],
-              applied: Tuple[Any, Any],
-              rows: int) -> PeriodInfo:
+def _describe(
+    available: Tuple[Any, Any],
+    applied: Tuple[Any, Any],
+    rows: int
+) -> PeriodInfo:
     '''
         Builds the period descriptor returned alongside every report.
 
@@ -419,7 +464,10 @@ def get_dataset_metadata(
     return item
 
 
-def _read_dataframe(file_bytes: bytes, s3_key: str) -> pd.DataFrame:
+def _read_dataframe(
+    file_bytes: bytes,
+    s3_key: str
+) -> pd.DataFrame:
     '''
         Parses the downloaded bytes into a DataFrame based on the key suffix.
     '''

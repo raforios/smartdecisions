@@ -46,7 +46,10 @@ class PromptItem: # pylint: disable=too-many-instance-attributes
     created_at: str
 
     @classmethod
-    def from_item(cls, item: Dict[str, Any]) -> 'PromptItem':
+    def from_item(
+        cls,
+        item: Dict[str, Any]
+    ) -> 'PromptItem':
         '''
             Builds the record from a raw DynamoDB item.
 
@@ -110,7 +113,10 @@ class ExplanationItem: # pylint: disable=too-many-instance-attributes
     expires_at: int
 
     @classmethod
-    def from_item(cls, item: Dict[str, Any]) -> 'ExplanationItem':
+    def from_item(
+        cls,
+        item: Dict[str, Any]
+    ) -> 'ExplanationItem':
         '''
             Builds the record from a raw DynamoDB item.
 

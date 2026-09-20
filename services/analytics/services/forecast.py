@@ -37,7 +37,10 @@ _AMOUNT = 'total_amount'
 METHOD_LINEAR = 'linear'
 METHOD_MOVING_AVERAGE = 'moving_average'
 _VALID_METHODS = (METHOD_LINEAR, METHOD_MOVING_AVERAGE)
-def _next_months(last_month: str, count: int) -> List[str]:
+def _next_months(
+    last_month: str,
+    count: int
+) -> List[str]:
     '''
         Returns the `count` month labels (YYYY-MM) following `last_month`.
     '''
@@ -45,7 +48,11 @@ def _next_months(last_month: str, count: int) -> List[str]:
     return [str(period + offset) for offset in range(1, count + 1)]
 
 
-def _forecast_values(history: List[float], months_ahead: int, method: str) -> List[float]:
+def _forecast_values(
+    history: List[float],
+    months_ahead: int,
+    method: str
+) -> List[float]:
     '''
         Projects `months_ahead` values from the historical series using the
         chosen method. Negative projections are clamped to 0 (sales can't be
@@ -82,8 +89,12 @@ def _monthly_totals(dataframe: pd.DataFrame) -> pd.Series:
     return frame.groupby('_month')[_AMOUNT].sum().sort_index()
 
 
-def _series_block(name: str, monthly: pd.Series, months_ahead: int, method: str
-                  ) -> Optional[Dict[str, Any]]:
+def _series_block(
+    name: str,
+    monthly: pd.Series,
+    months_ahead: int,
+    method: str
+) -> Optional[Dict[str, Any]]:
     '''
         Builds one forecast block (historical + projected) for a named series.
         Returns None when there are fewer than two months (nothing to project).

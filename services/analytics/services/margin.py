@@ -125,9 +125,11 @@ def _kpis(frame: pd.DataFrame) -> List[KpiCard]:
     ]
 
 
-def _breakdown(frame: pd.DataFrame,
-               labels: Optional[pd.Series],
-               top: int) -> List[MarginRow]:
+def _breakdown(
+    frame: pd.DataFrame,
+    labels: Optional[pd.Series],
+    top: int
+) -> List[MarginRow]:
     '''
         Aggregates revenue, cost and margin by an arbitrary label series.
 

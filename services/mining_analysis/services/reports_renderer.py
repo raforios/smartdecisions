@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 from fpdf import FPDF
 
 from services.environment import load_and_validate_env_vars
+from services.logger_config import custom_logger as logger
 
 
 _ASSETS_DIR = Path(__file__).resolve().parent.parent / 'assets' / 'templates'
@@ -63,7 +64,10 @@ MONTH_NAMES_ES = {
 }
 
 
-def _load_font(image_height: int, size_fraction: float) -> ImageFont.ImageFont:
+def _load_font(
+    image_height: int,
+    size_fraction: float
+) -> ImageFont.ImageFont:
     '''
     Resolves the first available TTF candidate at the requested size; falls
     back to PIL's bundled bitmap font when no system font is reachable.
@@ -160,7 +164,10 @@ def _draw_subtitle(
     draw.text((x, y), subtitle, font = font, fill = SUBTITLE_COLOR)
 
 
-def render_daily_png(rows: List[Dict[str, Any]], subtitle: Optional[str] = None) -> bytes:
+def render_daily_png(
+    rows: List[Dict[str, Any]],
+    subtitle: Optional[str] = None
+) -> bytes:
     '''Renders the daily report (Minerales_01) and returns PNG bytes.'''
     image = _open_template(DAILY_TEMPLATE_PATH)
     draw = ImageDraw.Draw(image)
@@ -186,7 +193,10 @@ def render_daily_png(rows: List[Dict[str, Any]], subtitle: Optional[str] = None)
     return buffer.getvalue()
 
 
-def render_biweekly_png(rows: List[Dict[str, Any]], subtitle: Optional[str] = None) -> bytes:
+def render_biweekly_png(
+    rows: List[Dict[str, Any]],
+    subtitle: Optional[str] = None
+) -> bytes:
     '''Renders the biweekly report (Minerales_02) and returns PNG bytes.'''
     image = _open_template(BIWEEKLY_TEMPLATE_PATH)
     draw = ImageDraw.Draw(image)
@@ -204,6 +214,24 @@ def render_biweekly_png(rows: List[Dict[str, Any]], subtitle: Optional[str] = No
     buffer = io.BytesIO()
     image.save(buffer, format = 'PNG', optimize = True)
     return buffer.getvalue()
+
+
+def _remove_quietly(path: str) -> None:
+    '''
+        Removes a temporary file. A leftover is not a failed report: it is
+        logged and the document is still returned.
+
+        Args:
+            path (str): File to remove.
+
+        Returns:
+            None
+    '''
+    try:
+        os.unlink(path)
+    except OSError as error:
+        error_msg = f'Could not remove temporary image {path}: {error}'
+        logger.warning(error_msg)
 
 
 def png_to_pdf(png_bytes: bytes) -> bytes:
@@ -229,15 +257,11 @@ def png_to_pdf(png_bytes: bytes) -> bytes:
     try:
         pdf.image(tmp_path, x = x_offset, y = y_offset, w = target_w, h = target_h)
     finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        _remove_quietly(tmp_path)
 
-    output = pdf.output(dest = 'S')
-    if isinstance(output, str):
-        return output.encode('latin-1')
-    return bytes(output)
+    # fpdf2 returns the document as bytes; the `dest` argument of the old
+    # PyFPDF API was removed in 2.8 and the Lambda installs the latest.
+    return bytes(pdf.output())
 
 
 def _model_to_dict(payload: Any) -> Dict[str, Any]:

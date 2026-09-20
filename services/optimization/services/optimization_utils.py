@@ -41,7 +41,11 @@ FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 
 
 
-def _build_route_day_key(owner_email: str, route_id: int, day: int) -> str:
+def _build_route_day_key(
+    owner_email: str,
+    route_id: int,
+    day: int
+) -> str:
     '''
         Builds the partition key of the routes table.
 
@@ -298,7 +302,10 @@ def get_dataset_metadata(
     return item
 
 
-def _read_dataframe(file_bytes: bytes, s3_key: str) -> pd.DataFrame:
+def _read_dataframe(
+    file_bytes: bytes,
+    s3_key: str
+) -> pd.DataFrame:
     '''
         Parses the downloaded bytes into a DataFrame based on the key suffix.
     '''

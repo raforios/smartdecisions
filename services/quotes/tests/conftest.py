@@ -20,8 +20,11 @@ from services import bcb_source, quotes
 FLOAT_START = date(2026, 6, 27)
 
 
-def build_history(days: int, start_rate: float = 9.73,
-                  step: float = 0.04) -> list[ExchangeRateItem]:
+def build_history(
+    days: int,
+    start_rate: float = 9.73,
+    step: float = 0.04
+) -> list[ExchangeRateItem]:
     '''
         Builds a rate history that climbs steadily, like the float regime did.
 
@@ -56,7 +59,11 @@ def _store():
     '''
     items: dict = {}
 
-    def _query(currency: str, start = None, end = None) -> list[ExchangeRateItem]:
+    def _query(
+        currency: str,
+        start = None,
+        end = None
+    ) -> list[ExchangeRateItem]:
         return sorted(
             (item for (code, day), item in items.items()
              if code == currency

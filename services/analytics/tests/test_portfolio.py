@@ -7,7 +7,11 @@ from schemas.analytics import RiskReason
 from services.portfolio import build_portfolio
 
 
-def _purchase(client: str, date: str, amount: float = 100.0) -> dict:
+def _purchase(
+    client: str,
+    date: str,
+    amount: float = 100.0
+) -> dict:
     '''
         Builds one purchase row.
 

@@ -1,7 +1,6 @@
 '''
     Ingest controllers.
 '''
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, Optional
 from uuid import uuid4
@@ -9,15 +8,23 @@ from uuid import uuid4
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from controllers.collections import SPEC as COLLECTIONS
+from controllers.common import (
+    CSV_CONTENT_TYPE,
+    MAX_ISSUES_ON_RESPONSE,
+    TEMPLATE_S3_KEY,
+    native_numbers,
+    store_companion
+)
+from controllers.stock import SPEC as STOCK
+from controllers.visits import SPEC as VISITS
 from schemas.ingest import (
     OPTIONAL_COLUMNS,
     REQUIRED_COLUMNS,
     TEMPLATE_VERSION,
-    CollectionsResponse,
     CollectionsSummary,
-    IngestError,
-    StockResponse,
     StockSummary,
+    VisitsSummary,
     DatasetListResponse,
     DatasetSummary,
     IngestResponse,
@@ -31,16 +38,12 @@ from services.logger_config import custom_logger as logger
 from services.ingest_utils import HISTORY_DEFAULT_LIMIT
 from services.collections import parse_and_validate as parse_collections
 from services.stock import parse_and_validate as parse_stock
-from services.ingest import (
-    parse_and_validate,
-    parse_and_validate_partial,
-    read_file,
-    serialize_dataframe
-)
+from services.visits import parse_and_validate as parse_visits
+from services.ingest import parse_and_validate, parse_and_validate_partial
+from services.ingest_files import serialize_dataframe
 from services.ingest_utils import (
-    attach_to_dataset,
-    download_bytes,
     content_fingerprint,
+    download_bytes,
     find_dataset_by_fingerprint,
     get_owned_dataset,
     list_datasets_for_owner,
@@ -48,42 +51,15 @@ from services.ingest_utils import (
     upload_bytes,
     upload_excel
 )
-from services.environment import load_and_validate_env_vars
 from services.utils import handle_service_errors
 
-# Only a slice of the issues travels in the JSON response / DynamoDB item
-# (400 KB limit); the full set lives in the rejected CSV in S3.
-ENV_VARS = load_and_validate_env_vars({
-    'MAX_ISSUES_ON_RESPONSE': int,
-    'TEMPLATE_S3_KEY': str,
-})
-MAX_ISSUES_ON_RESPONSE = ENV_VARS['MAX_ISSUES_ON_RESPONSE']
-# The MIME type of the rejected-rows download. It stays in the code because it
-# describes the format of the file, not a decision anybody would take
-# differently: a CSV is served as a CSV.
-CSV_CONTENT_TYPE = 'text/csv'
-# The template is a static object in the default bucket, not something the
-# service builds: the format is fixed and the client is the one who complies
-# with it. Changing it means changing business logic, so it moves over time and
-# never at runtime.
-TEMPLATE_S3_KEY = ENV_VARS['TEMPLATE_S3_KEY']
-
-
-def _native_numbers(stored: Dict[str, Any]) -> Dict[str, Any]:
-    '''
-        Turns the Decimals DynamoDB returns back into plain numbers.
-
-        Args:
-            stored (Dict[str, Any]): Attribute map as it came from the table.
-
-        Returns:
-            Dict[str, Any]: The same map, with numbers Pydantic accepts.
-    '''
-    return {
-        key: float(value) if isinstance(value, Decimal) else value
-        for key, value in stored.items()
-    }
-
+# The companion sheets of a sales upload, in the order they are read. Each
+# one is a pipeline over its own sheet and the spec that says how to store it.
+_COMPANIONS = (
+    (parse_collections, COLLECTIONS),
+    (parse_stock, STOCK),
+    (parse_visits, VISITS),
+)
 
 def _to_response(
     item: Dict[str, Any],
@@ -305,9 +281,10 @@ async def _companion_sheets_in_upload(
     response: IngestResponse
 ) -> None:
     '''
-        Loads the payments and stock sheets that came inside a sales upload.
+        Loads the payments, stock and visits sheets that came inside a sales
+        upload.
 
-        The workbook the client downloads carries the three sheets, so
+        The workbook the client downloads carries the four sheets, so
         returning it filled answers every contract in one upload — which is
         the product's thesis: one load feeds every module. A file without a
         companion sheet reports nothing about it: whoever sells cash or keeps
@@ -323,230 +300,17 @@ async def _companion_sheets_in_upload(
             upload (tuple[bytes, str]): The uploaded content and its filename.
             sales (pd.DataFrame): The accepted sales rows.
             response (IngestResponse): The response being assembled; its
-                `collections` and `stock` summaries are filled in place.
+                `collections`, `stock` and `visits` summaries are filled in
+                place.
     '''
     file_bytes, filename = upload
 
-    collections = parse_collections(file_bytes, filename, sales, auto = True)
-    if len(collections.accepted) > 0:
-        stored = await _store_collections(dynamodb_resource, dataset, collections, filename)
-        response.collections = stored.summary
-
-    stock = parse_stock(file_bytes, filename, sales, auto = True)
-    if len(stock.accepted) > 0:
-        stored_stock = await _store_stock(dynamodb_resource, dataset, stock, filename)
-        response.stock = stored_stock.summary
-
-
-def _load_sales_frame(dataset: Dict[str, Any]) -> Any:
-    '''
-        Reads the normalized sales rows of a dataset back from S3.
-
-        The payments have to be married against what was actually stored, not
-        against the file the client happens to be holding: the stored frame is
-        the one every other service reads.
-
-        Args:
-            dataset (Dict[str, Any]): The dataset item.
-
-        Returns:
-            pd.DataFrame: The normalized sales rows.
-
-        Raises:
-            ResourceNotFoundError: If the dataset has no stored file.
-    '''
-    file_key = dataset.get('file_s3_key')
-    if not file_key:
-        raise ResourceNotFoundError(detail = IngestError.DATASET_NOT_FOUND.value)
-    return read_file(download_bytes(file_key), str(file_key))
-
-
-async def _store_collections(
-    dynamodb_resource: ServiceResource,
-    dataset: Dict[str, Any],
-    result: Any,
-    filename: str
-) -> CollectionsResponse:
-    '''
-        Stores an accepted collections load and attaches it to its dataset.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset (Dict[str, Any]): Dataset the payments belong to.
-            result (CollectionsResult): Outcome of the collections pipeline.
-            filename (str): Original filename, for the log.
-
-        Returns:
-            CollectionsResponse: What got in, what did not, and why.
-    '''
-    dataset_id = str(dataset['dataset_id'])
-    has_rows = len(result.accepted) > 0
-
-    collections_key: Optional[str] = None
-    if has_rows:
-        collections_key = upload_bytes(
-            file_key = f'ingest/collections/{uuid4().hex}.csv',
-            data = serialize_dataframe(result.accepted, 'collections.csv'),
-            content_type = CSV_CONTENT_TYPE
-        )
-        attach_to_dataset(
-            dynamodb_resource = dynamodb_resource,
-            dataset_id = dataset_id,
-            payload = {
-                'collections_s3_key': collections_key,
-                'collections_summary': result.summary.model_dump(),
-                'collections_issues': [
-                    issue.model_dump(mode = 'json')
-                    for issue in result.issues[:MAX_ISSUES_ON_RESPONSE]
-                ]
-            }
-        )
-
-    message = (f'Collections load for dataset {dataset_id} from "{filename}": '
-               f'{result.summary.valid_rows} row(s), '
-               f'{len(result.issues)} issue(s).')
-    logger.info(message)
-
-    return CollectionsResponse(
-        dataset_id = dataset_id,
-        status = 'validated' if has_rows else 'failed',
-        collections_s3_key = collections_key,
-        summary = result.summary,
-        issues = result.issues[:MAX_ISSUES_ON_RESPONSE]
-    )
-
-
-@handle_service_errors('INGEST')
-async def ingest_collections_controller(
-    dynamodb_resource: ServiceResource,
-    dataset_id: str,
-    file_bytes: bytes,
-    filename: str,
-    current_user: str,
-    request: Request # pylint: disable=unused-argument
-) -> CollectionsResponse:
-    '''
-        Loads a payments file against an existing sales dataset.
-
-            1. Read the dataset the caller owns, and its stored sales rows.
-            2. Validate the payments and marry them by invoice number.
-            3. Store the accepted rows and attach them to the dataset.
-
-        A separate call and not part of the sales upload because of when the
-        data exists: an invoice at 90 days is collected three months after the
-        file that registered it, and in instalments.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset_id (str): Sales dataset the payments belong to.
-            file_bytes (bytes): Raw content of the uploaded file.
-            filename (str): Original filename.
-            current_user (str): Authenticated caller and owner of the dataset.
-
-        Returns:
-            CollectionsResponse: Summary of the load and its issues.
-    '''
-    dataset = get_owned_dataset(
-        dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id,
-        owner_email = current_user
-    )
-    result = parse_collections(file_bytes, filename, _load_sales_frame(dataset))
-    return await _store_collections(dynamodb_resource, dataset, result, filename)
-
-
-@handle_service_errors('INGEST')
-async def ingest_stock_controller(
-    dynamodb_resource: ServiceResource,
-    dataset_id: str,
-    file_bytes: bytes,
-    filename: str,
-    current_user: str,
-    request: Request # pylint: disable=unused-argument
-) -> StockResponse:
-    '''
-        Loads a stock snapshot against an existing sales dataset.
-
-            1. Read the dataset the caller owns, and its stored sales rows.
-            2. Validate the snapshot and marry it to the product catalogue.
-            3. Store the accepted rows and attach them to the dataset.
-
-        Its own endpoint because of cadence: the sales file is loaded once and
-        the stock changes every day. A new load REPLACES the previous snapshot
-        —the dataset keeps one `stock_s3_key`— so what is reported is always
-        the latest photo and not an accumulation nobody can tell apart.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset_id (str): Sales dataset the snapshot belongs to.
-            file_bytes (bytes): Raw content of the uploaded file.
-            filename (str): Original filename.
-            current_user (str): Authenticated caller and owner of the dataset.
-
-        Returns:
-            StockResponse: Summary of the load and its issues.
-    '''
-    dataset = get_owned_dataset(
-        dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id,
-        owner_email = current_user
-    )
-    result = parse_stock(file_bytes, filename, _load_sales_frame(dataset))
-    return await _store_stock(dynamodb_resource, dataset, result, filename)
-
-
-async def _store_stock(
-    dynamodb_resource: ServiceResource,
-    dataset: Dict[str, Any],
-    result: Any,
-    filename: str
-) -> StockResponse:
-    '''
-        Stores an accepted stock snapshot and attaches it to its dataset.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset (Dict[str, Any]): Dataset the snapshot belongs to.
-            result (StockResult): Outcome of the stock pipeline.
-            filename (str): Original filename, for the log.
-
-        Returns:
-            StockResponse: Summary of the load and its issues.
-    '''
-    dataset_id = str(dataset['dataset_id'])
-    has_rows = len(result.accepted) > 0
-
-    stock_key: Optional[str] = None
-    if has_rows:
-        stock_key = upload_bytes(
-            file_key = f'ingest/stock/{uuid4().hex}.csv',
-            data = serialize_dataframe(result.accepted, 'stock.csv'),
-            content_type = CSV_CONTENT_TYPE
-        )
-        attach_to_dataset(
-            dynamodb_resource = dynamodb_resource,
-            dataset_id = dataset_id,
-            payload = {
-                'stock_s3_key': stock_key,
-                'stock_summary': result.summary.model_dump(),
-                'stock_issues': [
-                    issue.model_dump(mode = 'json')
-                    for issue in result.issues[:MAX_ISSUES_ON_RESPONSE]
-                ]
-            }
-        )
-
-    message = (f'Stock load for dataset {dataset_id} from "{filename}": '
-               f'{result.summary.valid_rows} row(s), {len(result.issues)} issue(s).')
-    logger.info(message)
-
-    return StockResponse(
-        dataset_id = dataset_id,
-        status = 'validated' if has_rows else 'failed',
-        stock_s3_key = stock_key,
-        summary = result.summary,
-        issues = result.issues[:MAX_ISSUES_ON_RESPONSE]
-    )
+    for parse, spec in _COMPANIONS:
+        result = parse(file_bytes, filename, sales, auto = True)
+        if len(result.accepted) == 0:
+            continue
+        stored = await store_companion(dynamodb_resource, dataset, result, filename, spec)
+        setattr(response, spec.name, stored.summary)
 
 
 @handle_service_errors('INGEST', with_log = False)
@@ -554,7 +318,7 @@ async def download_rejected_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     request: Request, # pylint: disable=unused-argument
-    current_user: str
+    current_user: str # pylint: disable=unused-argument
 ) -> bytes:
     '''
         Returns the CSV of rows that could not be loaded, each carrying the
@@ -580,7 +344,7 @@ async def download_rejected_controller(
 async def list_datasets_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
-    current_user: str,
+    current_user: str, # pylint: disable=unused-argument
     limit: int = HISTORY_DEFAULT_LIMIT
 ) -> DatasetListResponse:
     '''
@@ -626,7 +390,7 @@ async def get_dataset_status_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     request: Request, # pylint: disable=unused-argument
-    current_user: str
+    current_user: str # pylint: disable=unused-argument
 ) -> IngestStatusResponse:
     '''
         Controller to retrieve the status of a previously ingested dataset.
@@ -638,18 +402,23 @@ async def get_dataset_status_controller(
     )
     stored_collections = item.get('collections_summary')
     stored_stock = item.get('stock_summary')
+    stored_visits = item.get('visits_summary')
     return IngestStatusResponse(
         dataset_id = item['dataset_id'],
         status = item['status'],
         owner_email = item['owner_email'],
         file_s3_key = item.get('file_s3_key') or '',
         collections = (
-            CollectionsSummary(**_native_numbers(stored_collections))
+            CollectionsSummary(**native_numbers(stored_collections))
             if stored_collections else None
         ),
         stock = (
-            StockSummary(**_native_numbers(stored_stock))
+            StockSummary(**native_numbers(stored_stock))
             if stored_stock else None
+        ),
+        visits = (
+            VisitsSummary(**native_numbers(stored_visits))
+            if stored_visits else None
         ),
         summary = IngestSummary(
             total_rows = item.get('total_rows', 0),

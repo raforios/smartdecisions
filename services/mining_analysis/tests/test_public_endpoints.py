@@ -14,7 +14,8 @@ from sqlalchemy.pool import StaticPool
 from models.mining_analysis import Mineral, MiningPrice
 from routes.public_reports import router as public_reports_router
 from services.db_connection import Base, GET_DB_DEPENDENCY
-from services.mining_analysis import OFFICIAL_MINERALS, _normalize_name
+from services.mining_analysis import OFFICIAL_MINERALS
+from services.official_reports import normalize_name
 
 
 @pytest.fixture(name = 'public_client')
@@ -43,14 +44,14 @@ def _public_client():
         ))
     session.commit()
     mineral_id = {
-        _normalize_name(m.name): m.id for m in session.query(Mineral).all()
+        normalize_name(m.name): m.id for m in session.query(Mineral).all()
     }
     session.add(MiningPrice(
-        mineral_id = mineral_id[_normalize_name('Estaño')],
+        mineral_id = mineral_id[normalize_name('Estaño')],
         date = date(2026, 4, 10), price_low = 21.0, price_high = 21.0,
     ))
     session.add(MiningPrice(
-        mineral_id = mineral_id[_normalize_name('Estaño')],
+        mineral_id = mineral_id[normalize_name('Estaño')],
         date = date(2026, 4, 11), price_low = 22.0, price_high = 22.0,
     ))
     session.commit()

@@ -36,7 +36,8 @@ from services.analytics_utils import (
     PRODUCT_NAME,
     QUANTITY,
     money,
-    ratio
+    ratio,
+    unavailable_block
 )
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
@@ -196,7 +197,11 @@ def _abc_classes(sales: pd.DataFrame) -> pd.Series:
     )
 
 
-def _status_of(coverage: Optional[float], on_hand: float, demand: float) -> StockStatus:
+def _status_of(
+    coverage: Optional[float],
+    on_hand: float,
+    demand: float
+) -> StockStatus:
     '''
         Reads one product's situation.
 
@@ -224,8 +229,13 @@ def _status_of(coverage: Optional[float], on_hand: float, demand: float) -> Stoc
     return StockStatus.HEALTHY
 
 
-def _rows(snapshot: pd.DataFrame, demand: pd.Series, costs: pd.Series,
-          classes: pd.Series, as_of: Optional[pd.Timestamp]) -> List[StockRow]:
+def _rows(
+    snapshot: pd.DataFrame,
+    demand: pd.Series,
+    costs: pd.Series,
+    classes: pd.Series,
+    as_of: Optional[pd.Timestamp]
+) -> List[StockRow]:
     '''
         Builds one row per product in the warehouse.
 
@@ -276,7 +286,11 @@ class _Context:
     as_of: Optional[pd.Timestamp]
 
 
-def _excess_units(on_hand: float, daily: float, coverage: Optional[float]) -> float:
+def _excess_units(
+    on_hand: float,
+    daily: float,
+    coverage: Optional[float]
+) -> float:
     '''
         Units above the configured coverage ceiling.
 
@@ -297,8 +311,12 @@ def _excess_units(on_hand: float, daily: float, coverage: Optional[float]) -> fl
     return 0.0
 
 
-def _row_of(product: object, row: pd.Series, present: dict,
-            context: _Context) -> StockRow:
+def _row_of(
+    product: object,
+    row: pd.Series,
+    present: dict,
+    context: _Context
+) -> StockRow:
     '''
         Builds one product's row.
 
@@ -353,7 +371,10 @@ _AT_RISK = (StockStatus.OUT_OF_STOCK, StockStatus.CRITICAL, StockStatus.LOW)
 _EXCESS = (StockStatus.EXCESS, StockStatus.NO_DEMAND)
 
 
-def _kpis(rows: List[StockRow], as_of: Optional[pd.Timestamp]) -> StockKpis:
+def _kpis(
+    rows: List[StockRow],
+    as_of: Optional[pd.Timestamp]
+) -> StockKpis:
     '''
         The headline figures of the warehouse.
 
@@ -393,23 +414,10 @@ def _kpis(rows: List[StockRow], as_of: Optional[pd.Timestamp]) -> StockKpis:
     )
 
 
-def _unavailable(code: StockUnavailable) -> StockBlock:
-    '''
-        Returns the block a dataset without a usable snapshot gets.
-
-        Args:
-            code (StockUnavailable): Why it cannot be built.
-
-        Returns:
-            StockBlock: Not available, with its reason code.
-    '''
-    message = f'Stock block skipped: {code.value}.'
-    logger.info(message)
-    return StockBlock(available = False, reason_code = code.value)
-
-
-def build_stock(sales: pd.DataFrame,
-                stock: Optional[pd.DataFrame] = None) -> StockBlock:
+def build_stock(
+    sales: pd.DataFrame,
+    stock: Optional[pd.DataFrame] = None
+) -> StockBlock:
     '''
         Builds the stock view from the snapshot and the sales that measure it.
 
@@ -424,13 +432,13 @@ def build_stock(sales: pd.DataFrame,
             StockBlock: The whole view, or an unavailable block with its code.
     '''
     if stock is None or stock.empty:
-        return _unavailable(StockUnavailable.NO_SNAPSHOT)
+        return unavailable_block(StockBlock, 'Stock', StockUnavailable.NO_SNAPSHOT)
     if PRODUCT_ID not in stock.columns or ON_HAND not in stock.columns:
-        return _unavailable(StockUnavailable.NO_SNAPSHOT)
+        return unavailable_block(StockBlock, 'Stock', StockUnavailable.NO_SNAPSHOT)
 
     snapshot, as_of = _latest_snapshot(stock)
     if snapshot.empty:
-        return _unavailable(StockUnavailable.NO_PRODUCTS)
+        return unavailable_block(StockBlock, 'Stock', StockUnavailable.NO_PRODUCTS)
 
     rows = _rows(
         snapshot = snapshot,
@@ -440,7 +448,7 @@ def build_stock(sales: pd.DataFrame,
         as_of = as_of
     )
     if not rows:
-        return _unavailable(StockUnavailable.NO_PRODUCTS)
+        return unavailable_block(StockBlock, 'Stock', StockUnavailable.NO_PRODUCTS)
 
     kpis = _kpis(rows, as_of)
     message = (f'Building stock block: {kpis.products} product(s) as of '

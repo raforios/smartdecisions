@@ -13,7 +13,10 @@ from geopy.distance import geodesic
 # ----------------------------------------------------------------
 # Distance calculation given 2 points
 # ----------------------------------------------------------------
-def distance_between_points(node_1: tuple, node_2: tuple) -> float:
+def distance_between_points(
+    node_1: tuple,
+    node_2: tuple
+) -> float:
     '''
         Distance between node1 and node2 using geodesic distance.
 
@@ -88,7 +91,10 @@ class GeoAnalyzer:
         '''
         return len(self._df_locations)
 
-    def add_locations(self, df_locations: pd.DataFrame):
+    def add_locations(
+        self,
+        df_locations: pd.DataFrame
+    ):
         '''
             Stores the geo-location data needed for analysis.
 
@@ -103,7 +109,10 @@ class GeoAnalyzer:
         df_updated = pd.concat([df1, df2])
         self._df_locations = df_updated.drop_duplicates()
 
-    def get_distance_matrix(self, precision: int = 4) -> pd.DataFrame:
+    def get_distance_matrix(
+        self,
+        precision: int = 4
+    ) -> pd.DataFrame:
         '''
             Computes the distance matrix as a dataframe based on the provided
             location data.
@@ -134,7 +143,13 @@ class GeoAnalyzer:
 # ----------------------------------------------------------------
 # Building route between two points
 # ----------------------------------------------------------------
-def build_route_object(origins: list, data: dict, counter: int, values: list, df):
+def build_route_object(
+    origins: list,
+    data: dict,
+    counter: int,
+    values: list,
+    df
+):
     '''
         Build route object using data from a dataset.
     '''
@@ -149,7 +164,12 @@ def build_route_object(origins: list, data: dict, counter: int, values: list, df
 # ----------------------------------------------------------------
 # Filtering and ordering a given dataframe
 # ----------------------------------------------------------------
-def filter_order_df(filter_exp, orderby: str, df: pd.DataFrame, sort = True) -> pd.DataFrame:
+def filter_order_df(
+    filter_exp,
+    orderby: str,
+    df: pd.DataFrame,
+    sort = True
+) -> pd.DataFrame:
     '''
         Create a new dataframe from a given dataframe using a filter and
         ordering it.
@@ -162,8 +182,13 @@ def filter_order_df(filter_exp, orderby: str, df: pd.DataFrame, sort = True) -> 
 # ----------------------------------------------------------------
 # Optimal route algorithm
 # ----------------------------------------------------------------
-def optimal_route(size: int, origin: int, target: int, df_distances: pd.DataFrame,
-                  df_order: pd.DataFrame) -> pd.DataFrame:
+def optimal_route(
+    size: int,
+    origin: int,
+    target: int,
+    df_distances: pd.DataFrame,
+    df_order: pd.DataFrame
+) -> pd.DataFrame:
     '''
         Create traffic route data from a given dataframe.
     '''

@@ -8,21 +8,23 @@ from fastapi import (
 )
 from boto3.resources.base import ServiceResource
 
+from controllers.collections import ingest_collections_controller
 from controllers.ingest import (
     download_rejected_controller,
     download_template_controller,
     get_dataset_status_controller,
     get_template_info_controller,
-    ingest_collections_controller,
-    ingest_stock_controller,
     list_datasets_controller,
     ingest_excel_controller,
     ingest_excel_from_s3_controller
 )
+from controllers.stock import ingest_stock_controller
+from controllers.visits import ingest_visits_controller
 from schemas.ingest import (
     CollectionsResponse,
     IngestError,
     StockResponse,
+    VisitsResponse,
     IngestFromS3Request,
     IngestResponse,
     DatasetListResponse,
@@ -31,6 +33,7 @@ from schemas.ingest import (
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.exceptions import InvalidInputError
+from services.ingest_files import SUPPORTED_EXTENSIONS
 from services.ingest_utils import HISTORY_DEFAULT_LIMIT
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
@@ -38,7 +41,6 @@ from services.security import get_current_user
 router = APIRouter(prefix = '/v1/ingest', tags = ['Ingest'])
 
 SERVICE_ROOT = Path(__file__).resolve().parent.parent
-SUPPORTED_EXTENSIONS = ('.xlsx', '.csv')
 
 
 def _extract_bearer(authorization: str) -> str:
@@ -278,6 +280,51 @@ async def ingest_stock_endpoint(
     )
 
 
+@router.post(
+    '/{dataset_id}/visits',
+    response_model = VisitsResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Upload the visits of the sales force for a sales dataset',
+    description = (
+        'Accepts a .xlsx or .csv with the visits contract —one row per visit: '
+        'date, seller, client, and optionally hour, coordinates and outcome— '
+        'and marries it to the clients and sellers of an existing sales '
+        'dataset. It is the EXECUTED side of the routes: OPTIMIZATION compares '
+        'it against the plan. A new load replaces the previous one.'
+    )
+)
+async def ingest_visits_endpoint(
+    request: Request,
+    dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
+    file: UploadFile = File(...),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_user)
+):
+    '''
+        Endpoint to ingest the visits of a sales dataset.
+    '''
+    filename = file.filename or ''
+    if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+        raise InvalidInputError(detail = IngestError.UNSUPPORTED_FILE_FORMAT.value)
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise InvalidInputError(detail = IngestError.EMPTY_UPLOAD.value)
+
+    message = (f'Ingesting visits "{filename}" ({len(file_bytes)} bytes) for '
+               f'dataset {dataset_id} from {current_user}.')
+    logger.info(message)
+
+    return await ingest_visits_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        file_bytes = file_bytes,
+        filename = filename,
+        current_user = current_user,
+        request = request
+    )
+
+
 @router.get(
     '/datasets',
     response_model = DatasetListResponse,
@@ -290,8 +337,7 @@ async def ingest_stock_endpoint(
 async def list_datasets_endpoint(
     request: Request,
     limit: int = Query(
-        HISTORY_DEFAULT_LIMIT, ge = 1, le = 100,
-        description = 'Most rows to return.'
+        HISTORY_DEFAULT_LIMIT, ge = 1, le = 100, description = 'Most rows to return.'
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)

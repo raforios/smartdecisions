@@ -10,7 +10,11 @@
 from services import optimization_utils
 
 
-def _build(owner: str, route_id: int, day: int) -> str:
+def _build(
+    owner: str,
+    route_id: int,
+    day: int
+) -> str:
     '''
         Builds a partition key.
 

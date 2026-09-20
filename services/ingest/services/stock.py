@@ -23,15 +23,14 @@ from typing import Optional
 import pandas as pd
 
 from schemas.ingest import STOCK_SHEET, StockSummary, ValidationIssue, ValidationRule
-from services.ingest import (
+from services.ingest import fill_product_ids, normalize_frame
+from services.ingest_contract import (
     STOCK_HEADER_LOOKUP,
     STOCK_SCHEMA,
-    fill_product_ids,
-    normalize_frame,
-    read_file,
-    read_workbook,
+    unknown_value_issues,
     validate
 )
+from services.ingest_files import read_sheet
 from services.logger_config import custom_logger as logger
 
 _PRODUCT = 'product_id'
@@ -52,10 +51,14 @@ class StockResult:
     summary: StockSummary
 
 
-def read_stock(file_bytes: bytes, filename: str,
-               auto: bool = False) -> Optional[pd.DataFrame]:
+def read_stock(
+    file_bytes: bytes,
+    filename: str,
+    auto: bool = False
+) -> Optional[pd.DataFrame]:
     '''
-        Reads the stock rows out of an upload.
+        Reads the stock rows out of an upload: the `Stock` sheet of a
+        workbook, or the whole file when it was uploaded as a stock file.
 
         Args:
             file_bytes (bytes): Raw uploaded file content.
@@ -66,42 +69,15 @@ def read_stock(file_bytes: bytes, filename: str,
         Returns:
             pd.DataFrame | None: The raw frame, or None when there is nothing
                 to read.
-
-        Raises:
-            ValueError: On an unsupported extension or unreadable content.
     '''
-    if filename.lower().endswith('.xlsx'):
-        for name, frame in read_workbook(file_bytes).items():
-            if str(name).strip().lower() == STOCK_SHEET.lower():
-                return frame
-        return None if auto else read_file(file_bytes, filename)
-    return None if auto else read_file(file_bytes, filename)
+    return read_sheet(file_bytes, filename, STOCK_SHEET, auto = auto)
 
 
-def _unknown_issues(stock: pd.DataFrame, catalogue: set) -> list[ValidationIssue]:
-    '''
-        Flags snapshot rows whose product is not in the sales catalogue.
-
-        Args:
-            stock (pd.DataFrame): Validated snapshot rows.
-            catalogue (set): Product ids known by the dataset.
-
-        Returns:
-            list[ValidationIssue]: One issue per unknown product row.
-    '''
-    unknown = stock.loc[~stock[_PRODUCT].isin(catalogue)]
-    return [
-        ValidationIssue(
-            row = int(position) + 2,
-            column = _PRODUCT,
-            value = str(row[_PRODUCT]),
-            rule_code = ValidationRule.UNKNOWN_PRODUCT
-        )
-        for position, row in unknown.iterrows()
-    ]
-
-
-def _summarize(stock: pd.DataFrame, catalogue: set, error_rows: int) -> StockSummary:
+def _summarize(
+    stock: pd.DataFrame,
+    catalogue: set,
+    error_rows: int
+) -> StockSummary:
     '''
         Derives the summary of a snapshot load.
 
@@ -131,8 +107,12 @@ def _summarize(stock: pd.DataFrame, catalogue: set, error_rows: int) -> StockSum
     )
 
 
-def parse_and_validate(file_bytes: bytes, filename: str, sales: pd.DataFrame,
-                       auto: bool = False) -> StockResult:
+def parse_and_validate(
+    file_bytes: bytes,
+    filename: str,
+    sales: pd.DataFrame,
+    auto: bool = False
+) -> StockResult:
     '''
         End-to-end stock pipeline: read, validate, marry, summarize.
 
@@ -167,7 +147,8 @@ def parse_and_validate(file_bytes: bytes, filename: str, sales: pd.DataFrame,
     ) if _PRODUCT in sales.columns else set()
 
     if not accepted.empty and catalogue:
-        issues.extend(_unknown_issues(accepted, catalogue))
+        issues.extend(unknown_value_issues(accepted, _PRODUCT, catalogue,
+                                           ValidationRule.UNKNOWN_PRODUCT))
 
     summary = _summarize(accepted, catalogue, error_rows = len(validation.issues))
     message = (f'Stock pipeline processed "{filename}": {summary.valid_rows} row(s) over '

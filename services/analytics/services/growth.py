@@ -42,7 +42,10 @@ _SETTINGS = load_and_validate_env_vars({
 _MIN_MONTHS_FOR_SEASONALITY = _SETTINGS['GROWTH_MIN_MONTHS_FOR_SEASONALITY']
 
 
-def _monthly_series(dataframe: pd.DataFrame, parsed_dates: pd.Series) -> pd.Series:
+def _monthly_series(
+    dataframe: pd.DataFrame,
+    parsed_dates: pd.Series
+) -> pd.Series:
     '''
         Aggregates sales by calendar month.
 

@@ -65,8 +65,11 @@ _MAX_RISK_CLIENTS = _SETTINGS['PORTFOLIO_MAX_RISK_CLIENTS']
 _MAX_LOST_CLIENTS = _SETTINGS['PORTFOLIO_MAX_LOST_CLIENTS']
 
 
-def _monthly_client_sets(dataframe: pd.DataFrame, parsed_dates: pd.Series,
-                         labels: pd.Series) -> Dict[str, Set[str]]:
+def _monthly_client_sets(
+    dataframe: pd.DataFrame,
+    parsed_dates: pd.Series,
+    labels: pd.Series
+) -> Dict[str, Set[str]]:
     '''
         Groups the clients that bought on each calendar month.
 
@@ -128,8 +131,11 @@ def _movement(monthly_sets: Dict[str, Set[str]]) -> List[PortfolioMovement]:
     return rows
 
 
-def _client_history(dataframe: pd.DataFrame, parsed_dates: pd.Series,
-                    labels: pd.Series) -> pd.DataFrame:
+def _client_history(
+    dataframe: pd.DataFrame,
+    parsed_dates: pd.Series,
+    labels: pd.Series
+) -> pd.DataFrame:
     '''
         Per-client history: total amount, months active, last purchase date and
         the amount bought in the most recent month of the dataset.
@@ -160,7 +166,10 @@ def _client_history(dataframe: pd.DataFrame, parsed_dates: pd.Series,
     return history
 
 
-def _classify(silence_days: int, drop: float) -> tuple[str, RiskReason] | None:
+def _classify(
+    silence_days: int,
+    drop: float
+) -> tuple[str, RiskReason] | None:
     '''
         Decides which list a client belongs to, and why.
 
@@ -187,9 +196,11 @@ def _classify(silence_days: int, drop: float) -> tuple[str, RiskReason] | None:
     return None
 
 
-def _client_row(client: Any,
-                record: pd.Series,
-                reference_date: pd.Timestamp) -> tuple[Optional[str], ClientAtRisk]:
+def _client_row(
+    client: Any,
+    record: pd.Series,
+    reference_date: pd.Timestamp
+) -> tuple[Optional[str], ClientAtRisk]:
     '''
         Builds one row of the risk / lost tables.
 
@@ -221,8 +232,10 @@ def _client_row(client: Any,
     return (verdict[0] if verdict else None), row
 
 
-def _split_by_risk(history: pd.DataFrame,
-                   reference_date: pd.Timestamp) -> tuple[List[ClientAtRisk], ...]:
+def _split_by_risk(
+    history: pd.DataFrame,
+    reference_date: pd.Timestamp
+) -> tuple[List[ClientAtRisk], ...]:
     '''
         Splits the client base into those worth chasing now and those already
         lost, each ordered by the monthly revenue at stake.
@@ -247,9 +260,12 @@ def _split_by_risk(history: pd.DataFrame,
     return buckets['at_risk'][:_MAX_RISK_CLIENTS], buckets['lost'][:_MAX_LOST_CLIENTS]
 
 
-def _portfolio_kpis(history: pd.DataFrame, movement: List[PortfolioMovement],
-                    dataframe: pd.DataFrame,
-                    counts: tuple[int, int]) -> List[KpiCard]:
+def _portfolio_kpis(
+    history: pd.DataFrame,
+    movement: List[PortfolioMovement],
+    dataframe: pd.DataFrame,
+    counts: tuple[int, int]
+) -> List[KpiCard]:
     '''
         Headline cards describing the health of the client base.
 

@@ -47,7 +47,8 @@ from services.analytics_utils import (
     QUANTITY,
     label_series,
     money,
-    ratio
+    ratio,
+    unavailable_block
 )
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
@@ -190,7 +191,10 @@ def resolve_policy(stored: Optional[Dict[str, Any]]) -> Policy:
     )
 
 
-def _bucket_of(days_past_due: float, buckets: Tuple[int, ...]) -> AgingBucket:
+def _bucket_of(
+    days_past_due: float,
+    buckets: Tuple[int, ...]
+) -> AgingBucket:
     '''
         Places a balance on the aging scale.
 
@@ -209,7 +213,10 @@ def _bucket_of(days_past_due: float, buckets: Tuple[int, ...]) -> AgingBucket:
     return _BUCKET_ORDER[min(len(buckets) + 1, len(_BUCKET_ORDER) - 1)]
 
 
-def _loss_rate_of(bucket: AgingBucket, policy: Policy) -> float:
+def _loss_rate_of(
+    bucket: AgingBucket,
+    policy: Policy
+) -> float:
     '''
         The expected loss of a bucket under a policy.
 
@@ -268,7 +275,10 @@ def _invoice_frame(sales: pd.DataFrame) -> Optional[pd.DataFrame]:
     return aggregated
 
 
-def _with_terms(invoices: pd.DataFrame, policy: Policy) -> pd.DataFrame:
+def _with_terms(
+    invoices: pd.DataFrame,
+    policy: Policy
+) -> pd.DataFrame:
     '''
         Fills the due date of every credit invoice.
 
@@ -329,8 +339,12 @@ def _payments_by_invoice(collections: Optional[pd.DataFrame]) -> pd.DataFrame:
     )
 
 
-def _book(invoices: pd.DataFrame, payments: pd.DataFrame,
-          as_of: pd.Timestamp, policy: Policy) -> pd.DataFrame:
+def _book(
+    invoices: pd.DataFrame,
+    payments: pd.DataFrame,
+    as_of: pd.Timestamp,
+    policy: Policy
+) -> pd.DataFrame:
     '''
         Builds the credit book: every invoice with its balance and its age.
 
@@ -373,7 +387,10 @@ def _book(invoices: pd.DataFrame, payments: pd.DataFrame,
     return book
 
 
-def _aging(book: pd.DataFrame, policy: Policy) -> List[AgingRow]:
+def _aging(
+    book: pd.DataFrame,
+    policy: Policy
+) -> List[AgingRow]:
     '''
         The aging of the open book, bucket by bucket.
 
@@ -405,7 +422,11 @@ def _aging(book: pd.DataFrame, policy: Policy) -> List[AgingRow]:
     return rows
 
 
-def _dso(book: pd.DataFrame, as_of: pd.Timestamp, receivable: float) -> Optional[float]:
+def _dso(
+    book: pd.DataFrame,
+    as_of: pd.Timestamp,
+    receivable: float
+) -> Optional[float]:
     '''
         Days sales outstanding over the configured window.
 
@@ -426,8 +447,11 @@ def _dso(book: pd.DataFrame, as_of: pd.Timestamp, receivable: float) -> Optional
     return round(receivable / float(recent) * _DSO_WINDOW, 1)
 
 
-def _balance_at(book: pd.DataFrame, collections: Optional[pd.DataFrame],
-                moment: pd.Timestamp) -> float:
+def _balance_at(
+    book: pd.DataFrame,
+    collections: Optional[pd.DataFrame],
+    moment: pd.Timestamp
+) -> float:
     '''
         The open balance of the book at a past date.
 
@@ -455,8 +479,11 @@ def _balance_at(book: pd.DataFrame, collections: Optional[pd.DataFrame],
     return issued - paid
 
 
-def _collection_effectiveness(book: pd.DataFrame, collections: Optional[pd.DataFrame],
-                              as_of: pd.Timestamp) -> Optional[float]:
+def _collection_effectiveness(
+    book: pd.DataFrame,
+    collections: Optional[pd.DataFrame],
+    as_of: pd.Timestamp
+) -> Optional[float]:
     '''
         Collection Effectiveness Index over the configured window.
 
@@ -489,7 +516,10 @@ def _collection_effectiveness(book: pd.DataFrame, collections: Optional[pd.DataF
     return round(max(min(ratio(collected, collectable) * _PERCENT, _PERCENT), 0.0), 1)
 
 
-def _weighted(values: pd.Series, weights: pd.Series) -> float:
+def _weighted(
+    values: pd.Series,
+    weights: pd.Series
+) -> float:
     '''
         Weighted mean, guarding against an empty or zero-weight series.
 
@@ -511,9 +541,13 @@ def _weighted(values: pd.Series, weights: pd.Series) -> float:
     return round(float((values.loc[mask] * weights.loc[mask]).sum()) / total, 1)
 
 
-def _kpis(book: pd.DataFrame, cash_amount: float, as_of: pd.Timestamp,
-          aging: List[AgingRow],
-          collections: Optional[pd.DataFrame] = None) -> ReceivablesKpis:
+def _kpis(
+    book: pd.DataFrame,
+    cash_amount: float,
+    as_of: pd.Timestamp,
+    aging: List[AgingRow],
+    collections: Optional[pd.DataFrame] = None
+) -> ReceivablesKpis:
     '''
         The headline figures of the book: position, speed and recoverability.
 
@@ -577,7 +611,10 @@ def _kpis(book: pd.DataFrame, cash_amount: float, as_of: pd.Timestamp,
     )
 
 
-def _gross_margin(sales: pd.DataFrame, credit_rows: pd.Series) -> Tuple[float, float, float]:
+def _gross_margin(
+    sales: pd.DataFrame,
+    credit_rows: pd.Series
+) -> Tuple[float, float, float]:
     '''
         Gross margin of the credit sales and of the cash ones.
 
@@ -606,8 +643,12 @@ def _gross_margin(sales: pd.DataFrame, credit_rows: pd.Series) -> Tuple[float, f
     return credit_revenue, float(credit['_margin'].sum()), round(cash_rate, 1)
 
 
-def _credit_margin(book: pd.DataFrame, sales: pd.DataFrame,
-                   policy: Policy, uncollectible: float) -> CreditMargin:
+def _credit_margin(
+    book: pd.DataFrame,
+    sales: pd.DataFrame,
+    policy: Policy,
+    uncollectible: float
+) -> CreditMargin:
     '''
         What the credit leaves once financed and provisioned.
 
@@ -652,24 +693,11 @@ def _credit_margin(book: pd.DataFrame, sales: pd.DataFrame,
     )
 
 
-def _unavailable(code: ReceivablesUnavailable) -> ReceivablesBlock:
-    '''
-        Returns the block a dataset without credit data gets.
-
-        Args:
-            code (ReceivablesUnavailable): Why it cannot be built.
-
-        Returns:
-            ReceivablesBlock: Not available, with its reason code.
-    '''
-    message = f'Receivables block skipped: {code.value}.'
-    logger.info(message)
-    return ReceivablesBlock(available = False, reason_code = code.value)
-
-
-def build_receivables(sales: pd.DataFrame,
-                      collections: Optional[pd.DataFrame] = None,
-                      stored_policy: Optional[Dict[str, Any]] = None) -> ReceivablesBlock:
+def build_receivables(
+    sales: pd.DataFrame,
+    collections: Optional[pd.DataFrame] = None,
+    stored_policy: Optional[Dict[str, Any]] = None
+) -> ReceivablesBlock:
     '''
         Builds the receivables view from the sales and their payments.
 
@@ -686,16 +714,19 @@ def build_receivables(sales: pd.DataFrame,
                 code when the dataset carries no credit information.
     '''
     if TERMS not in sales.columns:
-        return _unavailable(ReceivablesUnavailable.NO_CREDIT_COLUMNS)
+        return unavailable_block(ReceivablesBlock, 'Receivables',
+                                 ReceivablesUnavailable.NO_CREDIT_COLUMNS)
 
     policy = resolve_policy(stored_policy)
     invoices = _invoice_frame(sales)
     if invoices is None or invoices.empty:
-        return _unavailable(ReceivablesUnavailable.NO_CREDIT_COLUMNS)
+        return unavailable_block(ReceivablesBlock, 'Receivables',
+                                 ReceivablesUnavailable.NO_CREDIT_COLUMNS)
 
     invoices = _with_terms(invoices, policy)
     if not invoices['is_credit'].any():
-        return _unavailable(ReceivablesUnavailable.NO_CREDIT_SALES)
+        return unavailable_block(ReceivablesBlock, 'Receivables',
+                                 ReceivablesUnavailable.NO_CREDIT_SALES)
 
     payments = _payments_by_invoice(collections)
     # The cut-off is the last day with activity in the file, payments included.

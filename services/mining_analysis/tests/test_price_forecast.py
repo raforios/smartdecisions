@@ -114,7 +114,10 @@ def test_moving_average_carries_no_trend():
     (MEDIUM_CONFIDENCE_DAYS, ForecastConfidence.MEDIUM),
     (HIGH_CONFIDENCE_DAYS, ForecastConfidence.HIGH),
 ])
-def test_confidence_follows_the_amount_of_history(sample_size, expected):
+def test_confidence_follows_the_amount_of_history(
+    sample_size,
+    expected
+):
     '''The same arithmetic over three weeks and four months is not equal.'''
     assert confidence_for(sample_size) is expected
 

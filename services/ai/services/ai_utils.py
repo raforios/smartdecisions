@@ -49,7 +49,11 @@ def _table(name: str):
     return _resource.Table(name)
 
 
-def build_cache_key(view: str, payload: Dict[str, Any], prompt_version: int) -> str:
+def build_cache_key(
+    view: str,
+    payload: Dict[str, Any],
+    prompt_version: int
+) -> str:
     '''
         Builds the key an answer is stored under.
 

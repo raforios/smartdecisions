@@ -151,8 +151,8 @@ app.include_router(optimization_router)
 
 
 if __name__ == '__main__':
-    MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
-    logger.info(MESSAGE)
+    message = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
+    logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 

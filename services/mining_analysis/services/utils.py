@@ -128,7 +128,10 @@ class CustomJSONEncoder(json.JSONEncoder):
         JSON encoder to handle date, datetime and time objects, Pydantic
         models, Decimals and custom Enums.
     '''
-    def default(self, o):
+    def default(
+        self,
+        o
+    ):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
         # datetime.time is not a subclass of date, so it must be handled
@@ -330,13 +333,19 @@ def _handle_exception(
 
     return status_code, detail
 
-def handle_service_errors(microservice_name: str, with_log: bool = True):
+def handle_service_errors(
+    microservice_name: str,
+    with_log: bool = True
+):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
     '''
     def decorator(func):
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(
+            *args,
+            **kwargs
+        ):
             db: Session = kwargs.get('db')
             request: Request = kwargs.get('request')
             set_request_user_id(request)
@@ -374,7 +383,10 @@ def handle_service_errors(microservice_name: str, with_log: bool = True):
         return wrapper
     return decorator
 
-def _resolve_audit_data(final_result: Any, new_values: Any) -> Tuple[Any, Any]:
+def _resolve_audit_data(
+    final_result: Any,
+    new_values: Any
+) -> Tuple[Any, Any]:
     '''
         Helper to resolve entity_id and new_values for the audit decorator,
         reducing cyclomatic complexity.
@@ -420,7 +432,10 @@ def audit_event(
     # pylint: disable=too-many-locals
     def decorator(func: Callable):
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(
+            *args,
+            **kwargs
+        ):
             # The current_user/user_id is often an email or a string identifier.
             # Do not force conversion to int to avoid errors in the audit service.
             # The header identifies the client's end user; without it, the

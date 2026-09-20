@@ -90,11 +90,9 @@ def _is_promedio_cell(day_value) -> bool:
     return isinstance(day_value, str) and 'promedio' in day_value.lower()
 
 
-def _analyze_sheet(sheet) -> Tuple[
-    List[Dict],   # mineral_columns analysis
-    Dict[str, float],  # promedio_row by mineral
-    Dict[str, List[float]]  # daily values by mineral
-]:
+def _analyze_sheet(
+    sheet # mineral_columns analysis # promedio_row by mineral # daily values by mineral
+) -> Tuple[ List[Dict], Dict[str, float], Dict[str, List[float]] ]:
     '''
         Walks one Diario sheet and returns the per-column type counters,
         the `Promedio` row content and the list of daily values.
@@ -268,7 +266,10 @@ def _report_average_crosscheck(
     return warnings
 
 
-def audit(source: Path, tolerance: float) -> int:
+def audit(
+    source: Path,
+    tolerance: float
+) -> int:
     '''
         Top-level orchestration. Returns the total number of warnings raised
         (used as the process exit code).

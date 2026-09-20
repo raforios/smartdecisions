@@ -39,7 +39,12 @@ def _dynamo_backend():
         for day, price in QUOTES
     ]
 
-    def _query(mineral_id, start = None, end = None, descending = False):
+    def _query(
+        mineral_id,
+        start = None,
+        end = None,
+        descending = False
+    ):
         found = [
             item for item in items
             if item.mineral_id == mineral_id
@@ -86,7 +91,10 @@ def test_sql_backend_is_the_default():
     assert prices_store.uses_dynamodb() is False
 
 
-def test_both_backends_agree_on_the_same_quotations(db_session, dynamo_backend): # pylint: disable=unused-argument
+def test_both_backends_agree_on_the_same_quotations(
+    db_session, # pylint: disable=unused-argument
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''
         The equivalence that matters: relational and DynamoDB must return the
         same average for the same data.
@@ -140,15 +148,21 @@ def test_batch_write_sends_every_quotation_once():
         def __enter__(self):
             return self
 
-        def __exit__(self, *_):
+        def __exit__(
+            self,
+            *_
+        ):
             return False
 
-        def put_item(self, Item): # pylint: disable=invalid-name
+        def put_item(
+            self,
+            Item # pylint: disable=invalid-name
+        ):
             '''Records one item, mirroring the boto3 keyword.'''
             written.append(Item)
 
-    class _Table:
-        '''Stands in for the DynamoDB table resource.'''
+    class _Table: # pylint: disable=too-few-public-methods
+        '''Stands in for the DynamoDB table resource: only batch_writer is used.'''
 
         def batch_writer(self):
             '''Returns the capturing batch.'''

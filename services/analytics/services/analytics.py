@@ -50,7 +50,11 @@ def _money(value: float) -> float:
     return round(float(value), AMOUNT_DECIMALS) if pd.notna(value) else 0.0
 
 
-def _label_series(dataframe: pd.DataFrame, id_col: str, name_col: str) -> pd.Series:
+def _label_series(
+    dataframe: pd.DataFrame,
+    id_col: str,
+    name_col: str
+) -> pd.Series:
     '''
         Returns a readable label per row: the human name when available, else the
         id. Lets rankings show "Tienda Doña Rosa" instead of "PDV-007".
@@ -90,8 +94,12 @@ def _kpis(dataframe: pd.DataFrame) -> List[KpiCard]:
     ]
 
 
-def _ranking(dataframe: pd.DataFrame, label_series: pd.Series, top: int, ascending: bool
-             ) -> List[RankRow]:
+def _ranking(
+    dataframe: pd.DataFrame,
+    label_series: pd.Series,
+    top: int,
+    ascending: bool
+) -> List[RankRow]:
     '''
         Aggregates total_amount by a label and returns the top (or bottom) N as
         {label, amount} rows. Shared by best/worst client and top/bottom products.
@@ -108,7 +116,10 @@ def _ranking(dataframe: pd.DataFrame, label_series: pd.Series, top: int, ascendi
     return rows
 
 
-def _distribution(dataframe: pd.DataFrame, dimension: str) -> List[DistRow]:
+def _distribution(
+    dataframe: pd.DataFrame,
+    dimension: str
+) -> List[DistRow]:
     '''
         Sales share by a categorical dimension (category/channel/region/...),
         returned as {label, amount, percentage} sorted by amount desc. Empty when

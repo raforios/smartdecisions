@@ -122,7 +122,10 @@ def confidence_for(sample_size: int) -> RateConfidence:
     return RateConfidence.LOW
 
 
-def backtest_windows(values: List[float], days_ahead: int) -> int:
+def backtest_windows(
+    values: List[float],
+    days_ahead: int
+) -> int:
     '''
         How many replays a series affords at a horizon.
 
@@ -136,7 +139,10 @@ def backtest_windows(values: List[float], days_ahead: int) -> int:
     return max(0, len(values) - days_ahead + 1 - BACKTEST_MIN_TRAIN)
 
 
-def backtest_error(values: List[float], days_ahead: int) -> Optional[float]:
+def backtest_error(
+    values: List[float],
+    days_ahead: int
+) -> Optional[float]:
     '''
         Measures how far this model has missed, on this very series.
 
@@ -164,7 +170,10 @@ def backtest_error(values: List[float], days_ahead: int) -> Optional[float]:
     return round(float(np.mean(errors)), ERROR_DECIMALS)
 
 
-def baseline_error(values: List[float], days_ahead: int) -> Optional[float]:
+def baseline_error(
+    values: List[float],
+    days_ahead: int
+) -> Optional[float]:
     '''
         The same measurement for the model that has to be beaten.
 
@@ -195,7 +204,11 @@ def baseline_error(values: List[float], days_ahead: int) -> Optional[float]:
     return round(float(np.mean(errors)), ERROR_DECIMALS)
 
 
-def error_of(model: str, values: List[float], days_ahead: int) -> Optional[float]:
+def error_of(
+    model: str,
+    values: List[float],
+    days_ahead: int
+) -> Optional[float]:
     '''
         Mide cuánto ha errado un modelo sobre esta misma serie.
 
@@ -290,7 +303,10 @@ def run_bench(
     return results
 
 
-def project(rates: List[ExchangeRateItem], days_ahead: int) -> RateProjection:
+def project(
+    rates: List[ExchangeRateItem],
+    days_ahead: int
+) -> RateProjection:
     '''
         Projects the exchange rate forward from the stored history.
 

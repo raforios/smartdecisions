@@ -21,9 +21,11 @@ from schemas.ingest import (
     IngestResponse,
     SALES_SHEET,
     STOCK_SHEET,
-    TEMPLATE_COLUMNS
+    TEMPLATE_COLUMNS,
+    VISITS_SHEET
 )
 from services import ingest_utils
+from controllers import common
 from controllers import ingest as controllers
 
 
@@ -61,10 +63,10 @@ def _template_file() -> bytes:
 
 def _full_workbook() -> bytes:
     '''
-        Builds the three-sheet workbook the client downloads and returns filled.
+        Builds the four-sheet workbook the client downloads and returns filled.
 
         Returns:
-            bytes: An .xlsx with sales, payments and a stock snapshot.
+            bytes: An .xlsx with sales, payments, a stock snapshot and visits.
     '''
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine = 'openpyxl') as writer:
@@ -77,6 +79,14 @@ def _full_workbook() -> bytes:
             {'Fecha': '2026-02-15', 'Producto': 'Producto 0', 'Existencia': 40},
             {'Fecha': '2026-02-15', 'Producto': 'Producto 1', 'Existencia': 12}
         ]).to_excel(writer, sheet_name = STOCK_SHEET, index = False)
+        pd.DataFrame([
+            {'Fecha': '2026-01-05', 'Hora': '09:10', 'Vendedor': 'Mario',
+             'Cliente': 'Tienda 0', 'Resultado': 'VENTA'},
+            {'Fecha': '2026-01-05', 'Hora': '10:40', 'Vendedor': 'Mario',
+             'Cliente': 'Tienda 1', 'Resultado': 'SIN_VENTA'},
+            {'Fecha': '2026-01-05', 'Hora': '11:20', 'Vendedor': 'Mario',
+             'Cliente': 'Tienda 2'}
+        ]).to_excel(writer, sheet_name = VISITS_SHEET, index = False)
     return buffer.getvalue()
 
 
@@ -90,7 +100,10 @@ def _stored():
     '''
     persisted: dict = {}
 
-    def _persist(dynamodb_resource, payload):  # pylint: disable=unused-argument
+    def _persist(
+        dynamodb_resource, # pylint: disable=unused-argument
+        payload
+    ):
         persisted.update(payload)
         persisted.setdefault('dataset_id', 'test-dataset-id')
         persisted.setdefault('created_at', '2026-01-05T10:00:00Z')
@@ -126,6 +139,7 @@ def test_ingest_from_s3_returns_a_full_response(stored):
     # A plain sales file carries no companion sheets and says so by absence.
     assert response.collections is None
     assert response.stock is None
+    assert response.visits is None
 
 
 def test_the_s3_upload_loads_the_payments_and_stock_sheets_too():
@@ -136,17 +150,27 @@ def test_the_s3_upload_loads_the_payments_and_stock_sheets_too():
     '''
     attached: dict = {}
 
-    def _persist(dynamodb_resource, payload):  # pylint: disable=unused-argument
+    def _persist(
+        dynamodb_resource, # pylint: disable=unused-argument
+        payload
+    ):
         return {**payload, 'dataset_id': 'ds-full', 'created_at': '2026-02-15T10:00:00Z'}
 
-    def _attach(dynamodb_resource, dataset_id, payload):  # pylint: disable=unused-argument
+    def _attach(
+        dynamodb_resource, # pylint: disable=unused-argument
+        dataset_id, # pylint: disable=unused-argument
+        payload
+    ):
         attached.update(payload)
 
+    # The companion loads are stored through controllers/common.py, so the
+    # S3 and DynamoDB doubles go there as well as on the sales controller.
     with patch.object(controllers, 'download_bytes', lambda _: _full_workbook()), \
          patch.object(controllers, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
          patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
          patch.object(controllers, 'persist_dataset', _persist), \
-         patch.object(controllers, 'attach_to_dataset', _attach):
+         patch.object(common, 'attach_to_dataset', _attach):
         response = asyncio.run(controllers.ingest_excel_from_s3_controller(
             dynamodb_resource = None,
             file_key = 'ingest/raw/plantilla.xlsx',
@@ -162,9 +186,15 @@ def test_the_s3_upload_loads_the_payments_and_stock_sheets_too():
     assert response.stock is not None
     assert response.stock.valid_rows == 2
     assert response.stock.products == 2
-    # Both loads hang off the dataset, where analytics reads them from.
+    assert response.visits is not None
+    assert response.visits.valid_rows == 3
+    assert response.visits.with_outcome == 2
+    # The sales fixture has no seller column, so nobody is unknown there.
+    assert response.visits.unknown_sellers == 0
+    # Every load hangs off the dataset, where the analysis services read it.
     assert attached['collections_s3_key'].startswith('ingest/collections/')
     assert attached['stock_s3_key'].startswith('ingest/stock/')
+    assert attached['visits_s3_key'].startswith('ingest/visits/')
 
 
 def _dataset(owner: str) -> dict:
@@ -252,10 +282,16 @@ def test_the_owner_reads_their_own_dataset():
 class _ListTable: # pylint: disable=too-few-public-methods
     '''A DynamoDB table that applies the owner filter of a scan.'''
 
-    def __init__(self, items):
+    def __init__(
+        self,
+        items
+    ):
         self._items = items
 
-    def scan(self, **kwargs):
+    def scan(
+        self,
+        **kwargs
+    ):
         '''Returns the rows whose owner matches the filter.'''
         expression = kwargs['FilterExpression'].get_expression()
         attribute, expected = expression['values']
@@ -266,15 +302,25 @@ class _ListTable: # pylint: disable=too-few-public-methods
 class _ListResource: # pylint: disable=too-few-public-methods
     '''Stands in for the DynamoDB resource.'''
 
-    def __init__(self, items):
+    def __init__(
+        self,
+        items
+    ):
         self._items = items
 
-    def Table(self, _name): # pylint: disable=invalid-name
+    def Table( # pylint: disable=invalid-name
+        self,
+        _name
+    ):
         '''Mirrors the boto3 resource API.'''
         return _ListTable(self._items)
 
 
-def _dataset_row(owner: str, dataset_id: str, created_at: str) -> dict:
+def _dataset_row(
+    owner: str,
+    dataset_id: str,
+    created_at: str
+) -> dict:
     '''
         A stored dataset row.
 

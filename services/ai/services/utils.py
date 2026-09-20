@@ -88,7 +88,10 @@ class CustomJSONEncoder(json.JSONEncoder):
         JSON encoder to handle datetime, Decimal, Pydantic models and Enums so
         audit / usage-log payloads serialize DynamoDB items without surprises.
     '''
-    def default(self, o):
+    def default(
+        self,
+        o
+    ):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
         if isinstance(o, decimal.Decimal):
@@ -246,7 +249,10 @@ def _safe_schedule(coro) -> None:
             logger.warning(error_msg)
 
 
-def handle_service_errors(microservice_name: str, with_log: bool = True):
+def handle_service_errors(
+    microservice_name: str,
+    with_log: bool = True
+):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
         Applied to the controller layer, where `request` and `current_user`
@@ -254,7 +260,10 @@ def handle_service_errors(microservice_name: str, with_log: bool = True):
     '''
     def decorator(func: Callable):
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(
+            *args,
+            **kwargs
+        ):
             request: Request = kwargs.get('request')
             start_time = time.perf_counter()
             response_data = None
@@ -361,7 +370,11 @@ def _schedule_audit(
     _safe_schedule(send_audit_event(audit_payload))
 
 
-def audit_event(microservice_name: str, entity_name: str, action: str):
+def audit_event(
+    microservice_name: str,
+    entity_name: str,
+    action: str
+):
     '''
         Decorator factory to send an audit event after a service function call.
         Supports both synchronous and asynchronous wrapped callables.
@@ -370,13 +383,19 @@ def audit_event(microservice_name: str, entity_name: str, action: str):
         is_coroutine = inspect.iscoroutinefunction(func)
 
         @wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(
+            *args,
+            **kwargs
+        ):
             result = func(*args, **kwargs)
             _schedule_audit(result, kwargs, microservice_name, entity_name, action)
             return result
 
         @wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(
+            *args,
+            **kwargs
+        ):
             result = await func(*args, **kwargs)
             _schedule_audit(result, kwargs, microservice_name, entity_name, action)
             return result

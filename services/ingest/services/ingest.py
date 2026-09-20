@@ -1,312 +1,37 @@
 '''
-    Ingest business logic: reads the uploaded sales file, maps its headers to
-    the canonical contract, validates it and derives the summary metrics.
+    The sales ingest pipeline: reads the uploaded file, maps its headers to the
+    canonical contract, validates it, derives identifiers and totals, and
+    produces the summary metrics. Partial acceptance is the rule: invalid rows
+    are set aside with their reason codes and the rest is loaded.
 
-    Everything here is driven by SALES_COLUMNS in schemas/ingest.py, which is
-    the single definition of the format: the header mapping, the DataFrame
-    schema and the required/optional split are all derived from it, so the
-    contract is stated once and cannot drift between layers.
-
-    Supports .xlsx (via openpyxl) and .csv. Failures are reported as stable
-    CODES, never as sentences: the wording the user reads belongs to whoever
-    renders it.
+    The contract machinery (lookups, schemas, validation) lives in
+    `ingest_contract`; the file boundary (reading uploads, writing the
+    normalized CSV) in `ingest_files`. This module is the sales pipeline that
+    puts them together; the payments, stock and visits pipelines reuse the
+    same pieces over their own sheets.
 '''
-import csv
-import re
-import unicodedata
 from dataclasses import dataclass
-from io import BytesIO
-from functools import lru_cache
-from typing import Final, Optional
+from typing import Final
 
 import pandas as pd
-import pandera.pandas as pa
-from pandera.errors import SchemaErrors
 
 from schemas.ingest import (
     COLLECTION_COLUMNS,
-    REQUIRED_COLUMNS,
-    OPTIONAL_COLUMNS,
     SALES_COLUMNS,
     STOCK_COLUMNS,
-    TEMPLATE_VERSION,
+    VISIT_COLUMNS,
     IngestSummary,
-    SalesColumn,
     ValidationIssue,
     ValidationRule
 )
+from services.ingest_contract import (
+    SALES_HEADER_LOOKUP,
+    map_columns,
+    normalize_header,
+    validate
+)
+from services.ingest_files import read_file
 from services.logger_config import custom_logger as logger
-
-
-# ---------------------------------------------------------------------------
-# Header mapping
-# ---------------------------------------------------------------------------
-
-def _normalize_header(header: object) -> str:
-    '''
-        Lowercases, strips accents and asterisks, and collapses whitespace so a
-        header matches regardless of formatting (e.g. 'Código SAP *' ->
-        'codigo sap').
-
-        Args:
-            header (object): Raw header as written in the source file.
-
-        Returns:
-            str: Normalized form used for matching.
-    '''
-    text = unicodedata.normalize('NFKD', str(header))
-    text = ''.join(char for char in text if not unicodedata.combining(char))
-    text = text.lower().replace('*', ' ')
-    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9]+', ' ', text)).strip()
-
-
-def _build_header_lookup(columns: tuple[SalesColumn, ...]) -> dict[str, str]:
-    '''
-        Builds the {normalized header: canonical name} lookup of a contract.
-
-        Both the template header the client fills in and the canonical name
-        itself are accepted, so a file already using the contract's names also
-        ingests.
-
-        Args:
-            columns (tuple[SalesColumn, ...]): The contract to read.
-
-        Returns:
-            dict[str, str]: Lookup used by map_columns.
-    '''
-    lookup: dict[str, str] = {}
-    for column in columns:
-        lookup[_normalize_header(column.header)] = column.canonical
-        lookup[_normalize_header(column.canonical)] = column.canonical
-    return lookup
-
-
-_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(SALES_COLUMNS)
-COLLECTION_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(COLLECTION_COLUMNS)
-STOCK_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(STOCK_COLUMNS)
-
-
-def map_columns(dataframe: pd.DataFrame,
-                lookup: Optional[dict[str, str]] = None) -> pd.DataFrame:
-    '''
-        Renames the source columns to the canonical contract names.
-
-        Columns outside the contract are left as-is; the schema's
-        `strict='filter'` drops them afterwards. If two source columns map to
-        the same canonical name the first wins, so nothing is silently
-        overwritten.
-
-        Args:
-            dataframe (pd.DataFrame): Raw frame parsed from the user's file.
-            lookup (dict[str, str] | None): Contract lookup; the sales one by
-                default, so every existing caller keeps its behaviour.
-
-        Returns:
-            pd.DataFrame: The same frame with recognized columns renamed.
-    '''
-    headers = lookup if lookup is not None else _HEADER_LOOKUP
-    rename_map: dict[object, str] = {}
-    already_taken: set[str] = set()
-    for original in dataframe.columns:
-        canonical = headers.get(_normalize_header(original))
-        if canonical and canonical not in already_taken:
-            rename_map[original] = canonical
-            already_taken.add(canonical)
-    return dataframe.rename(columns = rename_map)
-
-
-# ---------------------------------------------------------------------------
-# Validation
-# ---------------------------------------------------------------------------
-
-def _checks_for(column: SalesColumn) -> list[pa.Check]:
-    '''
-        Translates the contract's value rules into pandera checks.
-
-        Args:
-            column (SalesColumn): Contract definition of the column.
-
-        Returns:
-            list[pa.Check]: Checks to attach to the pandera column.
-    '''
-    rules = column.rules
-    checks: list[pa.Check] = []
-    if rules.max_length is not None:
-        checks.append(pa.Check.str_length(min_value = 1, max_value = rules.max_length))
-    if rules.exclusive_minimum is not None:
-        checks.append(pa.Check.greater_than(rules.exclusive_minimum))
-    if rules.minimum is not None:
-        checks.append(pa.Check.greater_than_or_equal_to(rules.minimum))
-    if rules.value_range is not None:
-        checks.append(pa.Check.in_range(*rules.value_range))
-    if rules.allowed is not None:
-        checks.append(pa.Check.isin(rules.allowed))
-    return checks
-
-
-def _build_schema(columns: tuple[SalesColumn, ...], description: str) -> pa.DataFrameSchema:
-    '''
-        Builds the DataFrame schema of a contract.
-
-        Args:
-            columns (tuple[SalesColumn, ...]): The contract to enforce.
-            description (str): What the schema is, for the error report.
-
-        Returns:
-            pa.DataFrameSchema: Schema in 'filter' mode, so unknown columns are
-                dropped instead of failing the whole file.
-    '''
-    declared = {
-        column.canonical: pa.Column(
-            dtype = column.dtype,
-            nullable = not column.required,
-            required = column.required,
-            coerce = True,
-            checks = _checks_for(column)
-        )
-        for column in columns
-    }
-    return pa.DataFrameSchema(
-        columns = declared,
-        strict = 'filter',
-        coerce = True,
-        ordered = False,
-        description = description
-    )
-
-
-SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
-    SALES_COLUMNS,
-    f'SmartDecisions sales contract {TEMPLATE_VERSION}. Required: '
-    f'{", ".join(REQUIRED_COLUMNS)}. Optional: {", ".join(OPTIONAL_COLUMNS)}.'
-)
-
-# The other two contracts are validated with the same machinery: they are the
-# same kind of declaration read over a different sheet.
-COLLECTIONS_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
-    COLLECTION_COLUMNS,
-    f'SmartDecisions collections contract {TEMPLATE_VERSION}. Required: '
-    f'{", ".join(column.canonical for column in COLLECTION_COLUMNS if column.required)}.'
-)
-
-STOCK_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
-    STOCK_COLUMNS,
-    f'SmartDecisions stock contract {TEMPLATE_VERSION}. Required: '
-    f'{", ".join(column.canonical for column in STOCK_COLUMNS if column.required)}.'
-)
-
-# Pandera reports parameterized check names ("greater_than(0)",
-# "coerce_dtype('datetime64[ns]')"). They map to a stable code by prefix; the
-# wording the user reads lives in the frontend catalogue.
-_RULE_CODES: Final[tuple[tuple[str, ValidationRule], ...]] = (
-    ('not_nullable', ValidationRule.REQUIRED_VALUE),
-    ('coerce_dtype', ValidationRule.INVALID_TYPE),
-    ('dtype', ValidationRule.INVALID_TYPE),
-    ('str_length', ValidationRule.TEXT_LENGTH),
-    ('greater_than_or_equal_to', ValidationRule.BELOW_MINIMUM),
-    ('greater_than', ValidationRule.BELOW_MINIMUM),
-    ('in_range', ValidationRule.OUT_OF_RANGE),
-    ('column_in_schema', ValidationRule.UNKNOWN_COLUMN),
-    ('column_in_dataframe', ValidationRule.MISSING_COLUMN),
-)
-
-
-@dataclass(frozen = True)
-class ValidationResult:
-    '''
-        Outcome of validating a sales frame: the coerced rows and every issue
-        found. A dataclass rather than a tuple so callers read `result.issues`
-        instead of `result[1]`, and rather than a Pydantic model because it
-        carries a DataFrame, which is not serializable.
-    '''
-    frame: pd.DataFrame
-    issues: list[ValidationIssue]
-
-    @property
-    def is_valid(self) -> bool:
-        '''
-            Whether the frame passed the contract with no issues.
-
-            Returns:
-                bool: True when nothing failed validation.
-        '''
-        return not self.issues
-
-
-def _rule_code(check_name: Optional[str]) -> ValidationRule:
-    '''
-        Maps a pandera check name to the stable code the API exposes.
-
-        Args:
-            check_name (str | None): Pandera check identifier.
-
-        Returns:
-            ValidationRule: The matching code, or INVALID_VALUE as a fallback.
-    '''
-    if not check_name:
-        return ValidationRule.INVALID_VALUE
-    for prefix, code in _RULE_CODES:
-        if check_name.startswith(prefix):
-            return code
-    return ValidationRule.INVALID_VALUE
-
-
-def validate(dataframe: pd.DataFrame,
-             schema: Optional[pa.DataFrameSchema] = None) -> ValidationResult:
-    '''
-        Validates a DataFrame against a published contract.
-
-        Lazy mode: collects all errors instead of failing on the first.
-
-        Args:
-            dataframe (pd.DataFrame): Raw DataFrame parsed from the user's file.
-            schema (pa.DataFrameSchema | None): Contract to enforce; the sales
-                one by default.
-
-        Returns:
-            ValidationResult: The coerced frame (or the original on full
-                failure) and every issue found, empty when the file is valid.
-    '''
-    issues: list[ValidationIssue] = []
-
-    if dataframe.empty:
-        issues.append(ValidationIssue(
-            row = 0, column = '', value = None,
-            rule_code = ValidationRule.EMPTY_FILE
-        ))
-        return ValidationResult(frame = dataframe, issues = issues)
-
-    contract = schema if schema is not None else SCHEMA
-    try:
-        return ValidationResult(frame = contract.validate(dataframe, lazy = True), issues = [])
-    except SchemaErrors as schema_errors:
-        failure_cases = schema_errors.failure_cases
-        for _, failure in failure_cases.iterrows():
-            row_idx = failure.get('index')
-            row_number = int(row_idx) + 2 if pd.notna(row_idx) else 0
-            check_name = failure.get('check') or 'unknown'
-            raw_failure_value = failure.get('failure_case')
-            # Schema-level checks (e.g. missing/extra column) carry the
-            # offending column name in `failure_case`, not in `column`.
-            if check_name in ('column_in_dataframe', 'column_in_schema'):
-                column_name = str(raw_failure_value)
-                value_repr = None
-            else:
-                column_name = str(failure.get('column') or '(global)')
-                value_repr = None if pd.isna(raw_failure_value) else str(raw_failure_value)
-            issues.append(ValidationIssue(
-                row = row_number,
-                column = column_name,
-                value = value_repr,
-                rule_code = _rule_code(str(check_name))
-            ))
-
-        message = (
-            f'Validation of "{contract.description}" found {len(issues)} issue(s) '
-            f'across {failure_cases["column"].nunique()} column(s).'
-        )
-        logger.info(message)
-        return ValidationResult(frame = dataframe, issues = issues)
 
 
 # ---------------------------------------------------------------------------
@@ -329,79 +54,10 @@ class ParseResult:
     summary: IngestSummary
 
 
-SUPPORTED_EXTENSIONS: Final[tuple[str, ...]] = ('.xlsx', '.csv')
-
 # Column added to the rejected-rows file. It carries ValidationRule codes,
 # not sentences: whoever shows them (frontend today, interpretation layer
 # tomorrow) owns the wording.
 _RULE_CODES_COLUMN: Final[str] = 'rule_codes'
-
-# Delimiters a Latin-American CSV export may use. Excel in es-locale defaults to
-# ';' (because ',' is the decimal separator), so we auto-detect rather than
-# assume ','.
-_CSV_DELIMITERS: Final[str] = ',;\t|'
-
-
-def _detect_decimal(sample: str, delimiter: str) -> str:
-    '''
-        Detects the decimal separator FROM THE DATA (not from the delimiter): a
-        ';'-delimited file may still use '.' decimals (e.g. an ERP export) or ','
-        decimals (Excel es-locale). When the delimiter is ',' the decimal must be
-        '.'; otherwise we compare how often digits are separated by ',' vs '.'.
-    '''
-    if delimiter == ',':
-        return '.'
-    comma_decimals = len(re.findall(r'\d,\d', sample))
-    dot_decimals = len(re.findall(r'\d\.\d', sample))
-    return ',' if comma_decimals > dot_decimals else '.'
-
-
-def _read_csv(file_bytes: bytes) -> pd.DataFrame:
-    '''
-        Reads a CSV robustly: strips the BOM, auto-detects the delimiter (comma,
-        semicolon, tab or pipe) and the decimal separator from the data, and
-        skips the odd malformed line instead of failing the whole file.
-    '''
-    sample = file_bytes[:65536].decode('utf-8-sig', errors = 'replace')
-    try:
-        delimiter = csv.Sniffer().sniff(sample, delimiters = _CSV_DELIMITERS).delimiter
-    except csv.Error:
-        delimiter = ','
-    decimal = _detect_decimal(sample, delimiter)
-    message = f'CSV delimiter detected: {delimiter!r} (decimal={decimal!r}).'
-    logger.info(message)
-    return pd.read_csv(
-        BytesIO(file_bytes), sep = delimiter, decimal = decimal,
-        encoding = 'utf-8-sig', on_bad_lines = 'skip'
-    )
-
-
-def _read_dataframe(file_bytes: bytes, filename: str) -> pd.DataFrame:
-    '''
-        Reads the uploaded file into a pandas DataFrame based on its extension.
-
-        Args:
-            file_bytes (bytes): Raw file content received from the upload.
-            filename (str): Original filename, used to detect format by extension.
-
-        Returns:
-            pd.DataFrame: Raw DataFrame (no validation yet).
-
-        Raises:
-            ValueError: If the file extension is not supported.
-    '''
-    lower = filename.lower()
-
-    if lower.endswith('.xlsx'):
-        sheets = read_workbook(file_bytes)
-        return next(iter(sheets.values())) if sheets else pd.DataFrame()
-    if lower.endswith('.csv'):
-        return _read_csv(file_bytes)
-
-    raise ValueError(
-        f'Formato de archivo no soportado: "{filename}". Use {", ".join(SUPPORTED_EXTENSIONS)}.'
-    )
-
 
 _ID_COLUMNS = ('order_id', 'pos_id', 'product_id')
 
@@ -467,7 +123,7 @@ def _coerce_dates(values: pd.Series) -> pd.Series:
 # the payment date arrive in the same formats and through the same door.
 _DATE_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
     column.canonical
-    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS
+    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS
     if column.dtype.startswith('datetime64')
 ))
 
@@ -476,7 +132,7 @@ _DATE_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
 # over an accent would be rejecting correct data.
 _OPTION_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
     column.canonical
-    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS
+    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS
     if column.rules.allowed is not None
 ))
 
@@ -502,7 +158,9 @@ def _parse_dates(dataframe: pd.DataFrame) -> pd.DataFrame:
 def _normalize_options(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
         Brings closed-option columns to the contract's spelling: uppercase, no
-        accents, trimmed. A blank stays blank so the column remains optional.
+        accents, trimmed, and words joined by underscore the way the codes are
+        written ('sin venta' and 'Sin-Venta' both read SIN_VENTA). A blank
+        stays blank so the column remains optional.
 
         Args:
             dataframe (pd.DataFrame): Mapped DataFrame.
@@ -515,7 +173,7 @@ def _normalize_options(dataframe: pd.DataFrame) -> pd.DataFrame:
             continue
         dataframe[column] = dataframe[column].map(
             lambda value: pd.NA if pd.isna(value) or not str(value).strip()
-            else _normalize_header(value).upper()
+            else normalize_header(value).upper().replace(' ', '_')
         )
     return dataframe
 
@@ -539,8 +197,26 @@ def fill_product_ids(dataframe: pd.DataFrame) -> pd.DataFrame:
     return _fill_from_name(dataframe, 'product_id', 'product_name')
 
 
-def _fill_from_name(dataframe: pd.DataFrame, id_column: str,
-                    name_column: str) -> pd.DataFrame:
+def fill_pos_ids(dataframe: pd.DataFrame) -> pd.DataFrame:
+    '''
+        Derives `pos_id` from the client name, the same way the sales pipeline
+        does. Public because the visits contract marries the client catalogue
+        by the identifier the sales rows were given.
+
+        Args:
+            dataframe (pd.DataFrame): Frame with canonical column names.
+
+        Returns:
+            pd.DataFrame: Same frame with `pos_id` ensured.
+    '''
+    return _fill_from_name(dataframe, 'pos_id', 'pos_name')
+
+
+def _fill_from_name(
+    dataframe: pd.DataFrame,
+    id_column: str,
+    name_column: str
+) -> pd.DataFrame:
     '''
         Fills one identifier column from its name column.
 
@@ -587,10 +263,11 @@ def _fill_ids_from_names(dataframe: pd.DataFrame) -> pd.DataFrame:
 _GEO_COLUMNS: Final[tuple[str, str]] = ('latitude', 'longitude')
 
 
-def _sanitize_geo(dataframe: pd.DataFrame) -> pd.DataFrame:
+def sanitize_geo(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
         Nulls out unusable coordinate pairs so the route map never plots a
-        placeholder as a real location.
+        placeholder as a real location. Public because the visits contract
+        carries the same pair and gets the same placeholders.
 
         ERP exports fill missing GPS readings with a literal 0, which would
         otherwise render as a valid point off the coast of Africa and drag the
@@ -653,7 +330,10 @@ def _derive_total_amount(dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe
 
 
-def _summarize(dataframe: pd.DataFrame, error_rows: int) -> IngestSummary:
+def _summarize(
+    dataframe: pd.DataFrame,
+    error_rows: int
+) -> IngestSummary:
     '''
         Computes the IngestSummary metrics from a validated DataFrame.
 
@@ -688,65 +368,10 @@ def _summarize(dataframe: pd.DataFrame, error_rows: int) -> IngestSummary:
     )
 
 
-def serialize_dataframe(dataframe: pd.DataFrame, filename: str) -> bytes:
-    '''
-        Serializes a (normalized) DataFrame back to bytes, matching the original
-        file's format so the object stored in S3 keeps its extension. This lets
-        downstream services (analytics, forecast, routes) read the canonical
-        columns directly — normalization happens once, here at ingest.
-
-        Args:
-            dataframe (pd.DataFrame): The validated, canonical-column DataFrame.
-            filename (str): Original filename (drives the output format).
-
-        Returns:
-            bytes: The serialized file content.
-    '''
-    if filename.lower().endswith('.csv'):
-        return dataframe.to_csv(index = False).encode('utf-8')
-    buffer = BytesIO()
-    dataframe.to_excel(buffer, index = False, engine = 'openpyxl')
-    return buffer.getvalue()
-
-
-@lru_cache(maxsize = 1)
-def read_workbook(file_bytes: bytes) -> dict[str, pd.DataFrame]:
-    '''
-        Opens an .xlsx once and returns every sheet by name.
-
-        The sales, payments and stock pipelines each look for their own sheet
-        in the same workbook, and opening a 2.6 MB book with openpyxl takes
-        about ten seconds: three opens blew the 30 s Lambda budget. Keyed on
-        the content, so the three reads of one upload share a single parse.
-
-        Args:
-            file_bytes (bytes): Raw .xlsx content.
-
-        Returns:
-            dict[str, pd.DataFrame]: Sheets in workbook order.
-    '''
-    return pd.read_excel(BytesIO(file_bytes), sheet_name = None, engine = 'openpyxl')
-
-
-def read_file(file_bytes: bytes, filename: str) -> pd.DataFrame:
-    '''
-        Reads an uploaded file into a DataFrame. Public because the collections
-        pipeline reads the same formats through the same door.
-
-        Args:
-            file_bytes (bytes): Raw uploaded file content.
-            filename (str): Original filename; drives format detection.
-
-        Returns:
-            pd.DataFrame: Raw DataFrame, no validation yet.
-
-        Raises:
-            ValueError: If the file extension is not supported.
-    '''
-    return _read_dataframe(file_bytes, filename)
-
-
-def normalize_frame(dataframe: pd.DataFrame, lookup: dict[str, str]) -> pd.DataFrame:
+def normalize_frame(
+    dataframe: pd.DataFrame,
+    lookup: dict[str, str]
+) -> pd.DataFrame:
     '''
         Brings a raw frame to a canonical contract: headers, ids, dates and
         closed options.
@@ -767,7 +392,10 @@ def normalize_frame(dataframe: pd.DataFrame, lookup: dict[str, str]) -> pd.DataF
     return _normalize_options(mapped)
 
 
-def _normalize(file_bytes: bytes, filename: str) -> pd.DataFrame:
+def _normalize(
+    file_bytes: bytes,
+    filename: str
+) -> pd.DataFrame:
     '''
         Reads the file and brings it to the canonical column contract.
 
@@ -781,12 +409,15 @@ def _normalize(file_bytes: bytes, filename: str) -> pd.DataFrame:
     # Map the published template's headers to the canonical names before
     # validating, then clean numeric codes and fill the required id columns
     # from the client and product names, which is all the template carries.
-    mapped = normalize_frame(_read_dataframe(file_bytes, filename), _HEADER_LOOKUP)
+    mapped = normalize_frame(read_file(file_bytes, filename), SALES_HEADER_LOOKUP)
     mapped = _fill_ids_from_names(mapped)
-    return _sanitize_geo(mapped)
+    return sanitize_geo(mapped)
 
 
-def parse_and_validate(file_bytes: bytes, filename: str) -> ParseResult:
+def parse_and_validate(
+    file_bytes: bytes,
+    filename: str
+) -> ParseResult:
     '''
         End-to-end ingest pipeline: read, validate, derive, summarize.
 
@@ -832,8 +463,10 @@ _FILE_LEVEL_RULES: Final[tuple[ValidationRule, ...]] = (
 )
 
 
-def _whole_file_rejection(mapped: pd.DataFrame,
-                          issues: list[ValidationIssue]) -> ParseResult:
+def _whole_file_rejection(
+    mapped: pd.DataFrame,
+    issues: list[ValidationIssue]
+) -> ParseResult:
     '''
         Builds the result for a file that cannot be processed at all.
 
@@ -880,7 +513,10 @@ def _codes_by_row(issues: list[ValidationIssue]) -> dict[int, list[str]]:
     return codes
 
 
-def parse_and_validate_partial(file_bytes: bytes, filename: str) -> ParseResult:
+def parse_and_validate_partial(
+    file_bytes: bytes,
+    filename: str
+) -> ParseResult:
     '''
         Partial-acceptance pipeline: keeps the usable rows and sets the rest
         aside so the client can fix and re-upload just those.

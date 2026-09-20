@@ -45,7 +45,10 @@ class ExchangeRateItem:
     retrieved_at: Optional[str] = None
 
     @classmethod
-    def from_item(cls, item: Dict[str, Any]) -> 'ExchangeRateItem':
+    def from_item(
+        cls,
+        item: Dict[str, Any]
+    ) -> 'ExchangeRateItem':
         '''
             Builds the record from a raw DynamoDB item.
 

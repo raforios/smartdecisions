@@ -46,7 +46,10 @@ class MineralItem:
     created_at: Optional[str] = None
 
     @classmethod
-    def from_item(cls, item: Dict[str, Any]) -> 'MineralItem':
+    def from_item(
+        cls,
+        item: Dict[str, Any]
+    ) -> 'MineralItem':
         '''
             Builds the record from a raw DynamoDB item.
 
@@ -82,7 +85,10 @@ class MiningPriceItem:
     created_at: Optional[str] = None
 
     @classmethod
-    def from_item(cls, item: Dict[str, Any]) -> 'MiningPriceItem':
+    def from_item(
+        cls,
+        item: Dict[str, Any]
+    ) -> 'MiningPriceItem':
         '''
             Builds the record from a raw DynamoDB item.
 

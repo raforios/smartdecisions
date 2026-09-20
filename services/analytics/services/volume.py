@@ -159,8 +159,9 @@ def _pareto_point(cumulative: pd.Series) -> int:
     return min(int((cumulative < _PARETO_TARGET).sum()) + 1, len(cumulative))
 
 
-def _product_rows(frame: pd.DataFrame) -> Tuple[List[VolumeProduct], VolumeHeadline,
-                                                List[AbcClass]]:
+def _product_rows(
+    frame: pd.DataFrame
+) -> Tuple[List[VolumeProduct], VolumeHeadline, List[AbcClass]]:
     '''
         The Pareto of products with its headline figures and ABC summary.
 
@@ -329,8 +330,11 @@ def _matrix_rows(frame: pd.DataFrame) -> List[VolumeMatrixCell]:
     ]
 
 
-def _category_mix(frame: pd.DataFrame, parsed_dates: pd.Series,
-                  months: Tuple[str, str]) -> List[CategoryMix]:
+def _category_mix(
+    frame: pd.DataFrame,
+    parsed_dates: pd.Series,
+    months: Tuple[str, str]
+) -> List[CategoryMix]:
     '''
         Category shares of the last month against the previous one, so a shift
         inside a flat total becomes visible.
@@ -366,8 +370,11 @@ def _category_mix(frame: pd.DataFrame, parsed_dates: pd.Series,
     return sorted(rows, key = lambda row: row.share_change, reverse = True)
 
 
-def _mix_row(category: str, amounts: Tuple[pd.Series, pd.Series],
-             totals: Tuple[float, float]) -> CategoryMix:
+def _mix_row(
+    category: str,
+    amounts: Tuple[pd.Series, pd.Series],
+    totals: Tuple[float, float]
+) -> CategoryMix:
     '''
         Builds one category row of the mix comparison.
 
@@ -397,7 +404,10 @@ def _mix_row(category: str, amounts: Tuple[pd.Series, pd.Series],
     )
 
 
-def _effects(terms: List[Tuple[str, float]], change: float) -> List[VolumeEffect]:
+def _effects(
+    terms: List[Tuple[str, float]],
+    change: float
+) -> List[VolumeEffect]:
     '''
         Turns raw decomposition terms into rows with their weight.
 
@@ -425,7 +435,10 @@ def _effects(terms: List[Tuple[str, float]], change: float) -> List[VolumeEffect
     return sorted(rows, key = lambda row: abs(row.amount), reverse = True)
 
 
-def _product_effects(current: pd.DataFrame, previous: pd.DataFrame) -> List[Tuple[str, float]]:
+def _product_effects(
+    current: pd.DataFrame,
+    previous: pd.DataFrame
+) -> List[Tuple[str, float]]:
     '''
         Splits the move into price, quantity, their joint term and the products
         that entered or left.
@@ -468,7 +481,10 @@ def _product_effects(current: pd.DataFrame, previous: pd.DataFrame) -> List[Tupl
             (_ENTRY, entry), (_EXIT, exit_amount)]
 
 
-def _client_effects(current: pd.Series, previous: pd.Series) -> List[Tuple[str, float]]:
+def _client_effects(
+    current: pd.Series,
+    previous: pd.Series
+) -> List[Tuple[str, float]]:
     '''
         Splits the same move into new, lost and retained clients.
 
@@ -488,7 +504,10 @@ def _client_effects(current: pd.Series, previous: pd.Series) -> List[Tuple[str, 
             (_RETAINED_CLIENTS, retained)]
 
 
-def _monthly_keys(frame: pd.DataFrame, parsed_dates: pd.Series) -> Optional[Tuple[str, str]]:
+def _monthly_keys(
+    frame: pd.DataFrame,
+    parsed_dates: pd.Series
+) -> Optional[Tuple[str, str]]:
     '''
         The last two months with sales, or None when there is only one.
 
@@ -510,8 +529,11 @@ def _monthly_keys(frame: pd.DataFrame, parsed_dates: pd.Series) -> Optional[Tupl
     return str(months[-1]), str(months[-2])
 
 
-def _decomposition(frame: pd.DataFrame, parsed_dates: pd.Series,
-                   months: Tuple[str, str]) -> VolumeDecomposition:
+def _decomposition(
+    frame: pd.DataFrame,
+    parsed_dates: pd.Series,
+    months: Tuple[str, str]
+) -> VolumeDecomposition:
     '''
         Where the change between the last two months came from, split two ways.
 
