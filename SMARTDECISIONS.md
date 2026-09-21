@@ -386,10 +386,10 @@ Al **17 de septiembre de 2026**.
 
 | Pieza | Estado | Pendiente |
 |---|---|---|
-| INGEST | ✅ desplegado 16-sep | Lee `Cobros` y `Stock` en la subida por S3; libro abierto una sola vez (13,8 s) |
-| ANALYTICS | ⏳ pendiente de redeploy | Tramos de antigüedad vacíos bajo pandas 3 sin pyarrow (comparación por `.value`) |
+| INGEST | ⏳ pendiente de redeploy | Contrato `Visitas`, plantilla v4, reparto por proceso |
+| ANALYTICS | ⏳ pendiente de redeploy | Tramos de antigüedad (pandas 3) + `unavailable_block` |
 | OPTIMIZATION | ✅ desplegado | — (los puntos viejos se borraron el 16-sep) |
-| MINING_ANALYSIS | ✅ desplegado | El ETL escribe sólo en el relacional (opción **b** pendiente) |
+| MINING_ANALYSIS | ⏳ pendiente de redeploy | Boletín PDF con fpdf2 2.8; `official_reports.py`. El ETL escribe sólo en el relacional (opción **b** pendiente) |
 | QUOTES | ✅ desplegado | Redesplegar por la ventana del bloque del BCB |
 | AI | ✅ desplegado, 9 roles cargados | Encender `AI_URL` en el portal |
 | Portal demo | ✅ publicado 17-sep | Cerrar la verificación de Cartera y Cuentas por cobrar tras el deploy de ANALYTICS |
@@ -470,32 +470,43 @@ Las que siguen condicionando el código. Las que se revirtieron no están.
 
 ## 8. Estado al día
 
-**17 de septiembre de 2026.** El detalle de cada cambio está en git y en la
-memoria de sesión; aquí sólo lo que hace falta para retomar.
+**20 de septiembre de 2026.** El detalle está en git y en la memoria de
+sesión; aquí sólo lo que hace falta para retomar.
 
-**Hecho en la ronda de observaciones del 16-sep:**
-- INGEST lee `Cobros` y `Stock` en la subida que usa el portal (antes sólo
-  en el multipart) y abre el libro una sola vez: 13,8 s las tres hojas.
-- ANALYTICS: tramos de antigüedad vacíos en producción por pandas 3 sin
-  pyarrow; corregido con comparación por `.value` y test de regresión.
-- Portal: paginador único a 10 filas en todas las tablas (Cotizaciones
-  incluido), gráficos sin deformar, semáforo de concentración, "menos
-  vendidos" en barras, tablas pareadas al 50 %, menú en pirámide, "Rutas",
-  badges de stock/riesgo con color, panel de IA oculto hasta pedirlo.
-- Backtest de minerales (808 cotizaciones, 8 quincenas): pronosticar a 15
-  días desde la serie no supera a "el precio se queda" (2,5 %); anticipar la
-  oficial con los días ya cotizados sí: 0,6 % a mitad de quincena, 0,12 %
-  en la víspera.
+**Desplegados los diez el 20-sep;** Cartera y Cuentas por cobrar verificados
+en el demo. Firmas a un parámetro por línea en los diez, boilerplate incluido.
 
-**Pendiente de Rafael:** desplegar **ANALYTICS**; entrar en la pestaña de
-prueba para cerrar la verificación de Cartera y Cuentas por cobrar.
+**RUTAS — LOCALIZATION dentro de OPTIMIZATION: backend completo (20-sep).**
+Procesos paralelos `*/localization*.py` y `*/daily_stock.py` sobre DynamoDB,
+sin tocar `optimization.*`; lo compartido en `services/common.py` y
+`routes/common.py`. Planificadas (CRUD, puntos, estado, carga masiva CSV, plan
+inferido de las visitas), ejecutadas (geocercas, visitas con resultado y
+líneas de venta, reabrir, última ubicación), comparación y estadísticas,
+stock del día de la empresa con descuento transaccional desde la visita.
+84 tests con moto. Tablas creadas con `create_dynamodb_tables.sh`:
+`optimization_planned_routes`, `optimization_executed_routes`,
+`optimization_daily_stock`. Probado en producción (201/409/404 con códigos).
 
-**Siguiente:**
-1. RUTAS en dos fases: hoja `Visitas` (plan vs ejecución, BI puro) y luego
-   registro de ubicación por web sin app móvil, portado de LOCALIZATION a
-   DynamoDB dentro de OPTIMIZATION. Las planificadas se crean a partir de la
-   ejecución salvo que exista una previa.
-2. Minerales sin gastar: cobre, estaño, plomo y zinc diarios desde Westmetall
-   (leer sus términos primero), regalías con las fórmulas del Art. 227 como
-   parámetros en base, y el resto de minerales sólo del informe quincenal.
-   La proyección a 30/60/90 días pasa a secundaria.
+**Usuarios por cliente y roles (20-sep).** AUTH mete `client` en el JWT
+(campo que ya existía en el usuario; lo asigna el ADMIN por PATCH) y suma los
+roles `MANAGER` y `SELLER`. Los seis servicios de SmartDecisions agregan al
+final de `security.py`: `get_current_payload`, `resolve_owner`,
+`get_current_owner` (= `client` o, sin él, el email: las cuentas de hoy
+siguen viendo lo suyo) y `require_roles`; todas sus rutas usan el dueño.
+OPTIMIZATION guarda por rol: gerencia (ADMIN/MANAGER/REQUESTER) planifica y
+carga stock; el SELLER sólo corre rutas como él mismo, registra visitas y
+lee su plan y el stock. Pendiente de desplegar: AUTH y los seis.
+
+**Minerales (después de RUTAS).** La oficial promedia la quincena anterior:
+oro = London Fix AM, plata = fix (6/6 días exactos), Cu/Sn/Pb/Zn = LME cash
+buyer (Westmetall ≤ 5 $/t); Sb/W/Bi quincenales. Art. 227 a parámetros.
+
+**Contrato de errores (20-sep):** `handle_service_errors` conserva status y
+`detail` exacto en los seis (regresión en `test_error_contract.py`).
+
+**Pendiente de Rafael:** qué hacer con `mining_analysis/services/utils.py`
+(815 líneas, variante MySQL con carga masiva sin uso).
+
+**Frontend pendiente:** "Plantilla v1" y `template_ventas_v1.xlsx` fijos en
+`excel/index.html` y `excel.js`; INGEST publica la v4 y expone la versión en
+`GET /v1/ingest/template`. Va con el frontend de RUTAS.

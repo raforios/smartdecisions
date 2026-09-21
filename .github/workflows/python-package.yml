@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"] # Usamos la versión 3.13 que es la que usas en el proyecto
+        python-version: ["3.14"] # Usamos la versión 3.13 que es la que usas en el proyecto
         # Lista de los directorios de microservicios para que el workflow los recorra
         service-directory:
           - "services/auth"
