@@ -7,7 +7,8 @@
     filters differently here than in production would make the suite agree with
     itself and disagree with AWS.
 '''
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -95,3 +96,18 @@ def _seeded_store(store: dict) -> dict:
     for item in build_history(60):
         store[(item.currency, item.date)] = item
     return store
+
+
+@pytest.fixture(name = 'midweek')
+def _midweek():
+    '''
+        Pins "today" to a Wednesday for the sync tests.
+
+        The sync window runs to the end of the block today belongs to, so on a
+        Saturday or Sunday it reaches Monday and covers one day more than
+        `days_back`. The tests that count the window assume a plain weekday;
+        without this pin they pass Tuesday to Friday and fail on the weekend.
+    '''
+    with patch.object(quotes, 'get_current_time_gmt',
+                      lambda: datetime(2026, 9, 16, 10, 0, tzinfo = timezone.utc)):
+        yield

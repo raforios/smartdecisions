@@ -10,6 +10,8 @@
 import asyncio
 from unittest.mock import patch
 
+import pytest
+
 from models.quotes import USD
 from schemas.quotes import (
     ExchangeRateHistory,
@@ -46,6 +48,7 @@ def test_history_controller_returns_its_model(seeded_store): # pylint: disable=u
     assert response.rates[0].date < response.rates[-1].date
 
 
+@pytest.mark.usefixtures('midweek')
 def test_sync_controller_returns_its_model(seeded_store): # pylint: disable=unused-argument
     '''The sync endpoint answers a fully built SyncResult.'''
     with patch.object(quotes, 'fetch_official_rate', lambda day: 12.32):

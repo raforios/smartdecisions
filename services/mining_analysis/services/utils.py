@@ -313,12 +313,12 @@ def _handle_exception(
         logger.error(error_msg, exc_info=True)
         status_code = 500
         detail = str(e)
-    elif isinstance(e, RegisterNotFoundError):
-        status_code = 404
-        detail = str(e)
-    elif isinstance(e, (InvalidInputError, RegisterAlreadyExistsError)):
-        status_code = 400
-        detail = str(e)
+    elif isinstance(e, (InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError)):
+        # Our own HTTP errors already carry the right status (400/404/409) and
+        # a stable code as detail. Keep both: the frontend only recognises the
+        # code when the detail is exactly the code, never "404: CODE".
+        status_code = e.status_code
+        detail = e.detail
     elif isinstance(e, HTTPException):
         status_code = e.status_code
         detail = e.detail

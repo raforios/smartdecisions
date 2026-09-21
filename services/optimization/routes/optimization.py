@@ -7,7 +7,7 @@
     frontend clients only need to swap the base URL.
 '''
 from typing import Dict, List
-from fastapi import APIRouter, Depends, File, Path, Request, UploadFile, status
+from fastapi import APIRouter, Depends, Path, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.optimization import (
@@ -19,7 +19,6 @@ from controllers.optimization import (
     simulation_algorithm_controller
 )
 from schemas.optimization import (
-    OptimizationError,
     PlanQueryParams,
     RoutePlanResponse,
     BulkUploadResponse,
@@ -28,7 +27,7 @@ from schemas.optimization import (
     OptimizationResponse,
     RouteResponse
 )
-from services.exceptions import InvalidInputError
+from routes.common import csv_upload_text
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_user
@@ -207,26 +206,14 @@ async def get_route_endpoint(
 )
 async def bulk_upload_routes_endpoint(
     request: Request,
-    file: UploadFile = File(...),
+    csv_text: str = Depends(csv_upload_text),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_user)
 ):
     '''
         Endpoint to bulk-upload route points via CSV.
     '''
-    filename = file.filename or ''
-    if not filename.lower().endswith(('.csv', '.txt')):
-        raise InvalidInputError(detail = 'Solo se aceptan archivos .csv o .txt.')
-    raw_bytes = await file.read()
-    if not raw_bytes:
-        raise InvalidInputError(detail = OptimizationError.EMPTY_UPLOAD.value)
-    try:
-        csv_text = raw_bytes.decode('utf-8-sig')
-    except UnicodeDecodeError as e:
-        raise InvalidInputError(
-            detail = 'El archivo no pudo decodificarse como UTF-8.'
-        ) from e
-    message = f'Bulk-uploading routes CSV "{filename}" from {current_user}.'
+    message = f'Bulk-uploading routes CSV from {current_user}.'
     logger.info(message)
     return await bulk_upload_routes_controller(
         dynamodb_resource = dynamodb_resource,

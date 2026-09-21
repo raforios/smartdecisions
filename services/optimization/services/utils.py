@@ -286,9 +286,13 @@ def handle_service_errors(
                     detail = 'A database client error occurred.'
                 ) from e
             except (InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError) as e:
-                status_code = 400
-                response_data = {'detail': str(e)}
-                raise HTTPException(status_code = status_code, detail = str(e)) from e
+                # Our own HTTP errors already carry the right status (400/404/
+                # 409) and a stable code as detail. Re-raise them intact: the
+                # frontend only recognises the code when the detail is exactly
+                # the code, never "409: CODE".
+                status_code = e.status_code
+                response_data = {'detail': e.detail}
+                raise
             except HTTPException as e:
                 status_code = e.status_code
                 response_data = {'detail': e.detail}

@@ -24,6 +24,8 @@ class OptimizationError(str, Enum):
         client renders its own wording, same contract as INGEST and ANALYTICS.
     '''
     EMPTY_UPLOAD = 'EMPTY_UPLOAD'
+    UNSUPPORTED_FILE_TYPE = 'UNSUPPORTED_FILE_TYPE'
+    INVALID_ENCODING = 'INVALID_ENCODING'
     EMPTY_CSV = 'EMPTY_CSV'
     NO_GEOCODED_CLIENTS = 'NO_GEOCODED_CLIENTS'
     EMPTY_PERIOD = 'EMPTY_PERIOD'

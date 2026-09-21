@@ -35,6 +35,7 @@ def _run(coroutine):
     return asyncio.run(coroutine)
 
 
+@pytest.mark.usefixtures('midweek')
 def test_sync_stores_what_the_source_publishes(store):
     '''Every published date is written once, with its source recorded.'''
     with patch.object(quotes, 'fetch_official_rate', lambda day: 12.26):
@@ -46,6 +47,7 @@ def test_sync_stores_what_the_source_publishes(store):
     assert all(item.source == bcb_source.SOURCE_NAME for item in store.values())
 
 
+@pytest.mark.usefixtures('midweek')
 def test_sync_does_not_refetch_what_is_already_stored(store): # pylint: disable=unused-argument
     '''
         A published rate is never revised, so re-reading it would only spend
@@ -68,6 +70,7 @@ def test_sync_does_not_refetch_what_is_already_stored(store): # pylint: disable=
     assert result['stored'] == 0
 
 
+@pytest.mark.usefixtures('midweek')
 def test_dates_without_publication_are_counted_not_failed(store):
     '''A weekend with no table is an absence, never an error.'''
     with patch.object(quotes, 'fetch_official_rate', lambda day: None):
@@ -295,6 +298,7 @@ def test_forecast_refuses_a_horizon_beyond_the_bound(store):
     assert QuotesError.INVALID_DATE_RANGE.value in str(failure.value.detail)
 
 
+@pytest.mark.usefixtures('midweek')
 def test_scheduled_sync_repairs_more_than_one_day(store):
     '''
         Each scheduled run covers a window, not just yesterday.
@@ -314,6 +318,7 @@ def test_scheduled_sync_repairs_more_than_one_day(store):
     assert len(store) == quotes.SCHEDULED_SYNC_DAYS
 
 
+@pytest.mark.usefixtures('midweek')
 def test_scheduled_sync_does_not_refetch_what_is_stored(store):
     '''
         Running it every day must not re-ask the source for dates already held:
@@ -511,7 +516,7 @@ def test_the_bench_runs_every_model_and_ranks_them_by_error(store):
 
 
 def test_the_bench_can_run_a_subset(store):
-    """El banco corre lo que se le pida, para poder ir sumando modelos."""
+    '''The bench runs whatever subset it is asked for, so models can be added one by one.'''
     for item in build_history(60):
         store[(item.currency, item.date)] = item
 
