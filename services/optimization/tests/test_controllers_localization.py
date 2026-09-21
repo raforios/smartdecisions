@@ -14,11 +14,18 @@ from schemas.localization import LocalizationError, PlannedRouteStatusEnum
 from services import daily_stock, localization, localization_executed as executed
 from services.utils import get_current_time_gmt
 from services.db_connection import GET_DB_DEPENDENCY
-from services.security import get_current_user
+from services.security import get_current_payload
 from tests.dynamo_helpers import build_resource
 
 OWNER = 'yo@miempresa.com'
 BASE = '/v1/optimization/routes/planned'
+# Token claims of the callers the tests impersonate. OWNER signed up before
+# roles existed (REQUESTER, no client); the others belong to one client.
+CALLERS = {
+    'owner': {'email': OWNER, 'role': 'REQUESTER', 'client': None},
+    'manager': {'email': 'gerente@acme.com', 'role': 'MANAGER', 'client': 'acme'},
+    'seller': {'email': 'ana@acme.com', 'role': 'SELLER', 'client': 'acme'}
+}
 EXECUTED = '/v1/optimization/routes/executed'
 
 ROUTE_BODY = {
@@ -32,6 +39,13 @@ ROUTE_BODY = {
 }
 
 
+def act_as(who: str) -> None:
+    '''
+        Makes every request carry the claims of CALLERS[who].
+    '''
+    app.dependency_overrides[get_current_payload] = lambda: dict(CALLERS[who])
+
+
 @pytest.fixture(name = 'client')
 def client_fixture():
     '''A test client whose caller is OWNER and whose Dynamo is moto's.'''
@@ -42,7 +56,7 @@ def client_fixture():
             (daily_stock.DAILY_STOCK_TABLE, 'owner_email', 'stock_key')
         ])
         app.dependency_overrides[GET_DB_DEPENDENCY] = lambda: resource
-        app.dependency_overrides[get_current_user] = lambda: OWNER
+        act_as('owner')
         try:
             yield TestClient(app)
         finally:
@@ -137,7 +151,9 @@ def test_delete_planned_route_and_missing_route_is_404(client):
     deleted = client.delete(f'{BASE}/{created["id"]}')
     assert deleted.status_code == 200
     assert deleted.json()['id'] == created['id']
-    assert client.get(f'{BASE}/{created["id"]}').status_code == 404
+    gone = client.get(f'{BASE}/{created["id"]}')
+    assert gone.status_code == 404
+    assert gone.json()['detail'] == LocalizationError.ROUTE_NOT_FOUND.value
 
 
 def test_bulk_upload_planned_routes_from_a_csv_file(client):
@@ -365,3 +381,59 @@ def test_daily_stock_load_sale_on_visit_and_remaining(client):
     assert refused.status_code == 400
     assert refused.json()['detail'] == 'INSUFFICIENT_STOCK'
     assert client.get(f'{EXECUTED}/{started["id"]}').json()['points_count'] == 1
+
+
+# ---------------------------------------------------------------------------
+# Roles and the client grouping
+# ---------------------------------------------------------------------------
+def test_manager_and_seller_of_one_client_share_the_data(client):
+    '''
+        The manager plans; the seller sees that plan, because both are keyed by
+        the client and not by their emails. The lone REQUESTER account sees
+        nothing of it: its key is its own email.
+    '''
+    act_as('manager')
+    plan = _create(client)
+    _activate(client, plan)
+
+    act_as('seller')
+    seen = client.get(BASE)
+    assert seen.status_code == 200
+    assert [route['id'] for route in seen.json()] == [plan['id']]
+
+    act_as('owner')
+    assert client.get(BASE).json() == []
+
+
+def test_seller_is_kept_to_field_work(client):
+    '''
+        A seller cannot plan, load stock or read the live view (403 with a
+        code); can run a route, but only as themselves.
+    '''
+    act_as('seller')
+    for refused in (
+        client.post(BASE, json = ROUTE_BODY),
+        client.put('/v1/optimization/stock/day',
+                   json = {'date': '2026-09-21', 'items': [{'sku': 'A', 'quantity': 1}]}),
+        client.get(f'{EXECUTED}/last-location', params = {'sellers': ['ana@acme.com']})
+    ):
+        assert refused.status_code == 403, refused.text
+        assert refused.json()['detail'] == 'ROLE_NOT_ALLOWED'
+
+    started = client.post(EXECUTED, json = {
+        'seller': 'Otro Vendedor', 'start_time': _now_iso(8),
+        'start_latitude': -16.5, 'start_longitude': -68.1, 'max_distance_start_point': 100
+    })
+    assert started.status_code == 201, started.text
+    assert started.json()['seller'] == 'ana@acme.com'
+
+    act_as('manager')
+    other = client.post(EXECUTED, json = {
+        'seller': 'juan@acme.com', 'start_time': _now_iso(8),
+        'start_latitude': -16.5, 'start_longitude': -68.1, 'max_distance_start_point': 100
+    })
+    assert other.status_code == 201
+
+    act_as('seller')
+    mine = client.get(EXECUTED, params = {'seller': 'juan@acme.com'})
+    assert [route['seller'] for route in mine.json()] == ['ana@acme.com']

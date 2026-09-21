@@ -23,7 +23,7 @@ from schemas.quotes import (
     SyncResult
 )
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import get_current_owner
 
 
 router = APIRouter(prefix = '/v1/quotes', tags = ['Quotes'])
@@ -50,7 +50,7 @@ async def get_exchange_rates_endpoint(
     ),
     currency: str = Query(USD, min_length = 3, max_length = 3,
                           description = 'ISO 4217 code.'),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> ExchangeRateHistory:
     ''' Endpoint returning the stored exchange-rate series. '''
     message = f'User: {current_user}. Requested the {currency} rate history.'
@@ -80,7 +80,7 @@ async def sync_exchange_rates_endpoint(
                            description = 'Days back from today to cover.'),
     currency: str = Query(USD, min_length = 3, max_length = 3,
                           description = 'ISO 4217 code.'),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> SyncResult:
     ''' Endpoint that refreshes the stored exchange-rate history. '''
     message = (f'User: {current_user}. Requested a {days_back}-day '
@@ -109,7 +109,7 @@ async def sync_exchange_rates_endpoint(
 async def sale_scenario_endpoint(
     request: Request,
     scenario: SaleScenarioRequest,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> SaleScenario:
     ''' Endpoint comparing a sale settled today against one settled later. '''
     message = (f'User: {current_user}. Requested a sale scenario over '
@@ -139,7 +139,7 @@ async def get_rate_forecast_endpoint(
                             description = 'Days to project.'),
     currency: str = Query(USD, min_length = 3, max_length = 3,
                           description = 'ISO 4217 code.'),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> RateForecast:
     ''' Endpoint projecting the official exchange rate. '''
     message = (f'User: {current_user}. Requested a {days_ahead}-day '
@@ -174,7 +174,7 @@ async def get_bench_endpoint(
     ),
     currency: str = Query(USD, min_length = 3, max_length = 3,
                           description = 'Código ISO 4217.'),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> ModelBench:
     ''' Endpoint que compara modelos de proyección. '''
     message = (f'User: {current_user}. Requested a {days_ahead}-day '

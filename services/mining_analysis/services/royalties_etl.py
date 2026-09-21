@@ -17,9 +17,7 @@ from services.utils import handle_service_errors
 from services.logger_config import custom_logger as logger
 
 
-def normalize_string(
-    val: Any
-) -> str:
+def normalize_string(val: Any) -> str:
     ''' Removes accents, special characters, and converts to uppercase. '''
     if not isinstance(val, str) or pd.isna(val):
         return ""
@@ -27,9 +25,7 @@ def normalize_string(
     return normalized.upper().strip()
 
 
-def excel_date_to_py_date(
-    excel_date: Any
-) -> date:
+def excel_date_to_py_date(excel_date: Any) -> date:
     ''' Converts an Excel serial date number or string into a Python date. '''
     if pd.isna(excel_date):
         return date.today()

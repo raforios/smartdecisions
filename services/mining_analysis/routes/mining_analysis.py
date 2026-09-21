@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from services.logger_config import custom_logger as logger
 from services.db_connection import GET_DB_DEPENDENCY
 from services.environment import load_and_validate_env_vars
-from services.security import get_current_user
+from services.security import get_current_owner
 from controllers.mining_analysis import (
     bulk_upload_mining_controller,
     get_mineral_prices_controller,
@@ -75,7 +75,7 @@ async def upload_mining_data_endpoint(
     file: UploadFile = File(...),
     delimiter: str = Query(',', description = 'Separador de campos del CSV'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> BulkUploadMiningResponseSchema:
     '''
         Endpoint to trigger the mining data ETL process from a CSV file.
@@ -105,7 +105,7 @@ async def upload_mining_data_endpoint(
 async def get_mining_prices_endpoint(
     request: Request,
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> List[MiningPriceResponseSchema]:
     ''' Endpoint to retrieve processed prices. '''
     message = f'User: {current_user}. Requested all mineral prices.'
@@ -123,7 +123,7 @@ async def upload_royalties_excel(
     request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> Dict[str, Any]:
     ''' Endpoint to trigger the Excel ETL process directly in memory. '''
     message = f'User: {current_user}. Uploading file: {file.filename}'
@@ -145,7 +145,7 @@ async def get_royalties_summary(
     request: Request,
     year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> RoyaltySummaryResponse:
     ''' Retrieves aggregated royalties data. '''
     message = f'User: {current_user}. Requested royalties summary.'
@@ -166,7 +166,7 @@ async def get_royalties_transactions(
     request: Request,
     year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> TransactionSummaryResponse:
     ''' Retrieves aggregated transactions data by company. '''
     message = f'User: {current_user}. Requested transactions summary.'
@@ -192,7 +192,7 @@ async def get_daily_report_endpoint(
     ref_date: date_type = Query(..., alias = 'date',
                                 description = 'Reference date (YYYY-MM-DD).'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> DailyReportResponse:
     ''' Endpoint for the daily mineral report. '''
     message = f'User: {current_user}. Requested daily report for {ref_date}.'
@@ -217,7 +217,7 @@ async def get_biweekly_report_endpoint(
     request: Request,
     period: BiweeklyPeriod = Depends(),
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> BiweeklyReportResponse:
     ''' Endpoint for the biweekly official mineral report. '''
     message = (f'User: {current_user}. Requested biweekly report for '
@@ -251,7 +251,7 @@ async def get_price_forecast_endpoint(
     method: ForecastMethod = Query(ForecastMethod.DAMPED_TREND,
                                    description = 'Projection method.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> PriceForecastResponse:
     ''' Endpoint for the mineral price projection. '''
     message = f'User: {current_user}. Requested a {days_ahead}-day price forecast.'

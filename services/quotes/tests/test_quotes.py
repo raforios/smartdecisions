@@ -48,7 +48,9 @@ def test_sync_stores_what_the_source_publishes(store):
 
 
 @pytest.mark.usefixtures('midweek')
-def test_sync_does_not_refetch_what_is_already_stored(store): # pylint: disable=unused-argument
+def test_sync_does_not_refetch_what_is_already_stored(
+    store # pylint: disable=unused-argument
+):
     '''
         A published rate is never revised, so re-reading it would only spend
         requests against a source that answers one date at a time.
@@ -81,7 +83,9 @@ def test_dates_without_publication_are_counted_not_failed(store):
     assert not store
 
 
-def test_sync_rejects_an_out_of_bounds_window(store): # pylint: disable=unused-argument
+def test_sync_rejects_an_out_of_bounds_window(
+    store # pylint: disable=unused-argument
+):
     '''
         One call cannot walk the source for an unbounded number of days.
 
@@ -124,7 +128,9 @@ def test_history_can_be_asked_for_the_fixed_regime_explicitly(store):
     assert result['rates'][0]['rate'] == 6.86
 
 
-def test_history_rejects_an_inverted_window(store): # pylint: disable=unused-argument
+def test_history_rejects_an_inverted_window(
+    store # pylint: disable=unused-argument
+):
     '''An end before the start is a caller mistake, not an empty series.'''
     with pytest.raises(HTTPException) as excinfo:
         _run(quotes.get_history_service(
@@ -244,7 +250,9 @@ def test_scenario_refuses_a_horizon_beyond_the_bound(store):
     assert QuotesError.INVALID_DATE_RANGE.value in str(failure.value.detail)
 
 
-def test_scenario_reports_no_rate_when_nothing_is_stored(store): # pylint: disable=unused-argument
+def test_scenario_reports_no_rate_when_nothing_is_stored(
+    store # pylint: disable=unused-argument
+):
     '''
         Without a published rate there is no figure to settle at, and saying so
         is the only honest answer.
@@ -478,7 +486,9 @@ def test_the_sync_reaches_the_end_of_the_block_not_today(store):
     assert date(2026, 9, 7) in {rate.date for rate in store.values()}
 
 
-def test_the_sync_of_a_weekday_stops_at_today(store): # pylint: disable=unused-argument
+def test_the_sync_of_a_weekday_stops_at_today(
+    store # pylint: disable=unused-argument
+):
     '''
         Outside a block there is nothing published ahead, so the window must not
         reach into the future asking the source for dates it has no answer for.

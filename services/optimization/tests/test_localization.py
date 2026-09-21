@@ -117,8 +117,9 @@ def test_get_planned_route_of_another_owner_is_not_found(
     route
 ):
     '''A foreign route answers exactly like a missing one.'''
-    with pytest.raises(RegisterNotFoundError):
+    with pytest.raises(RegisterNotFoundError) as failure:
         localization.get_planned_route(dynamodb, OTHER, route['id'])
+    assert failure.value.detail == LocalizationError.ROUTE_NOT_FOUND.value
 
 
 def test_list_planned_routes_returns_only_the_owners(

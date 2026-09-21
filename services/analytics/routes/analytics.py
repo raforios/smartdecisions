@@ -41,7 +41,7 @@ from services.analytics_utils import (
 )
 from services.forecast import MAX_MONTHS_AHEAD
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import get_current_owner
 
 router = APIRouter(prefix = '/v1/analytics', tags = ['Analytics'])
 
@@ -135,8 +135,8 @@ async def commercial_summary_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     window: DateWindow = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> CommercialSummaryResponse:
     '''
         Endpoint returning the commercial summary for a dataset_id.
     '''
@@ -167,8 +167,8 @@ async def forecast_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     options: ForecastOptions = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> ForecastResponse:
     '''
         Endpoint returning the demand forecast for a dataset_id.
     '''
@@ -201,8 +201,8 @@ async def segmentation_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     window: DateWindow = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> SegmentationResponse:
     '''
         Endpoint returning the customer segmentation for a dataset_id.
     '''
@@ -235,8 +235,8 @@ async def run_analytics_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     window: DateWindow = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> AnalyticsRunResponse:
     '''
         Endpoint to run the analytics pipeline on a dataset_id.
     '''
@@ -268,7 +268,7 @@ async def list_runs_endpoint(
         description = 'Most rows to return.'
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> RunListResponse:
     ''' Endpoint listing the caller\'s own analyses. '''
     message = f'User: {current_user}. Requested their analysis history.'
@@ -293,8 +293,8 @@ async def get_results_endpoint(
     request: Request,
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> RunListResponse:
     '''
         Endpoint to retrieve the latest analytics results for a dataset.
     '''
@@ -320,8 +320,8 @@ async def get_pdv_opportunities_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     pdv_id: str = Path(..., min_length = 1, max_length = 64),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> AnalyticsPdvResponse:
     '''
         Endpoint to retrieve opportunities filtered by point of sale.
     '''
@@ -358,8 +358,8 @@ async def receivables_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     window: DateWindow = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> ReceivablesResponse:
     '''
         Endpoint returning the receivables view for a dataset_id.
     '''
@@ -394,8 +394,8 @@ async def stock_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     window: DateWindow = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> StockResponse:
     '''
         Endpoint returning the stock view for a dataset_id.
     '''
@@ -425,8 +425,8 @@ async def stock_endpoint(
 async def get_credit_policy_endpoint(
     request: Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> CreditPolicyResponse:
     '''
         Endpoint returning the caller's credit policy.
     '''
@@ -456,8 +456,8 @@ async def save_credit_policy_endpoint(
     request: Request,
     policy: CreditPolicyRequest,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> CreditPolicyResponse:
     '''
         Endpoint storing the caller's credit policy.
     '''
@@ -489,8 +489,8 @@ async def portfolio_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     window: DateWindow = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> PortfolioResponse:
     '''
         Endpoint returning the portfolio health for a dataset_id.
     '''

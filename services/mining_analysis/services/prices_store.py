@@ -245,9 +245,7 @@ def latest_prices_before(
     ]
 
 
-def date_bounds(
-    db: Optional[Session] = None
-) -> Tuple[Optional[date_type], Optional[date_type]]:
+def date_bounds(db: Optional[Session] = None) -> Tuple[Optional[date_type], Optional[date_type]]:
     '''
         Returns the first and last dates with a stored quotation.
 

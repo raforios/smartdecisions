@@ -58,7 +58,9 @@ def _dynamo_backend():
         yield
 
 
-def test_dynamodb_average_matches_the_documented_rule(dynamo_backend): # pylint: disable=unused-argument
+def test_dynamodb_average_matches_the_documented_rule(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''
         DynamoDB cannot average, so the store does it: the mean must divide by
         the number of distinct days with a price, not by the days in the window.
@@ -69,7 +71,9 @@ def test_dynamodb_average_matches_the_documented_rule(dynamo_backend): # pylint:
     assert average == pytest.approx(EXPECTED_AVERAGE)
 
 
-def test_dynamodb_window_excludes_dates_outside_the_period(dynamo_backend): # pylint: disable=unused-argument
+def test_dynamodb_window_excludes_dates_outside_the_period(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''A window covering only part of the month averages only those days.'''
     average, days = prices_store.average_low('7', date(2026, 8, 17), date(2026, 8, 20))
 
@@ -77,7 +81,9 @@ def test_dynamodb_window_excludes_dates_outside_the_period(dynamo_backend): # py
     assert average == pytest.approx((12.80 + 12.85) / 2)
 
 
-def test_dynamodb_empty_window_returns_none(dynamo_backend): # pylint: disable=unused-argument
+def test_dynamodb_empty_window_returns_none(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''A period with no quotations reports nothing, never a zero.'''
     assert prices_store.average_low('7', date(2026, 7, 1), date(2026, 7, 15)) is None
 
@@ -193,7 +199,9 @@ def test_batch_write_of_nothing_writes_nothing():
     table.assert_not_called()
 
 
-def test_latest_prices_before_returns_newest_first(dynamo_backend): # pylint: disable=unused-argument
+def test_latest_prices_before_returns_newest_first(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''
         The daily report needs the last quotation and the one before it.
 
@@ -206,7 +214,9 @@ def test_latest_prices_before_returns_newest_first(dynamo_backend): # pylint: di
     assert found[0].price_low == 12.82
 
 
-def test_latest_prices_before_ignores_dates_after_the_reference(dynamo_backend): # pylint: disable=unused-argument
+def test_latest_prices_before_ignores_dates_after_the_reference(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''
         Asking for an older date must answer with what was known back then, not
         with the latest quotation on file.
@@ -216,7 +226,9 @@ def test_latest_prices_before_ignores_dates_after_the_reference(dynamo_backend):
     assert [record.date for record in found] == [date(2026, 8, 20), date(2026, 8, 17)]
 
 
-def test_latest_prices_before_of_an_unknown_mineral_is_empty(dynamo_backend): # pylint: disable=unused-argument
+def test_latest_prices_before_of_an_unknown_mineral_is_empty(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''A mineral with no quotations yields nothing, not an error.'''
     assert prices_store.latest_prices_before('999', date(2026, 8, 27), 2) == []
 
@@ -247,7 +259,9 @@ def test_date_bounds_of_an_empty_table_is_undefined():
         assert prices_store.date_bounds() == (None, None)
 
 
-def test_all_quotations_carries_the_mineral_name(dynamo_backend): # pylint: disable=unused-argument
+def test_all_quotations_carries_the_mineral_name(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''
         The full export publishes the quotation with its mineral.
 
@@ -272,7 +286,9 @@ def test_all_quotations_carries_the_mineral_name(dynamo_backend): # pylint: disa
     assert named['99'] == ''
 
 
-def test_all_quotations_comes_back_in_date_order(dynamo_backend): # pylint: disable=unused-argument
+def test_all_quotations_comes_back_in_date_order(
+    dynamo_backend # pylint: disable=unused-argument
+):
     '''
         The export is read as a series, so the order is part of the contract:
         the Streamlit report sorts by date and takes the last row per mineral.

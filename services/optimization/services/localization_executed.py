@@ -180,11 +180,14 @@ def get_executed_route(
         Returns:
             ExecutedRouteItem: The route item with native numbers.
     '''
-    item = get_item_by_key(
-        dynamodb_resource = dynamodb_resource,
-        table_name = EXECUTED_ROUTES_TABLE,
-        key = {'owner_email': owner_email, 'id': executed_route_id}
-    )
+    try:
+        item = get_item_by_key(
+            dynamodb_resource = dynamodb_resource,
+            table_name = EXECUTED_ROUTES_TABLE,
+            key = {'owner_email': owner_email, 'id': executed_route_id}
+        )
+    except RegisterNotFoundError as error:
+        raise RegisterNotFoundError(detail = LocalizationError.ROUTE_NOT_FOUND.value) from error
     return from_dynamo(item)
 
 

@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, Path, Request, status
 
 from controllers.daily_stock import get_daily_stock_controller, load_daily_stock_controller
 from schemas.daily_stock import DailyStockLoadSchema, DailyStockResponseSchema
+from schemas.localization import FIELD_ROLES, MANAGEMENT_ROLES
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/optimization', tags = ['Daily stock'])
 
@@ -29,8 +30,8 @@ async def load_daily_stock_endpoint(
     request: Request,
     load: DailyStockLoadSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> DailyStockResponseSchema:
     '''
         Endpoint to load the day's stock.
     '''
@@ -54,8 +55,8 @@ async def get_daily_stock_endpoint(
     request: Request,
     day: str = _DAY,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> DailyStockResponseSchema:
     '''
         Endpoint to read the day's stock.
     '''

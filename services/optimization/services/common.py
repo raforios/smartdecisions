@@ -5,6 +5,7 @@
 '''
 import math
 from decimal import Decimal
+from typing import Any
 from uuid import uuid4
 
 from schemas.optimization import OptimizationError
@@ -63,16 +64,16 @@ def now_iso() -> str:
     return get_current_time_gmt().isoformat(timespec = 'seconds')
 
 
-def from_dynamo(value):
+def from_dynamo(value: Any) -> Any:
     '''
         Turns the Decimals DynamoDB hands back into native numbers, recursively,
         so DTOs and arithmetic never meet a Decimal.
 
         Args:
-            value: An item, a list of items or a scalar as returned by boto3.
+            value (Any): An item, a list of items or a scalar as returned by boto3.
 
         Returns:
-            The same structure with int/float instead of Decimal.
+            Any: The same structure with int/float instead of Decimal.
     '''
     if isinstance(value, Decimal):
         return int(value) if value == value.to_integral_value() else float(value)
@@ -83,16 +84,16 @@ def from_dynamo(value):
     return value
 
 
-def to_dynamo(value):
+def to_dynamo(value: Any) -> Any:
     '''
         The inverse of `from_dynamo`: floats become Decimal so boto3 accepts the
         item. Ints and everything else pass through.
 
         Args:
-            value: An item, a list or a scalar about to be written.
+            value (Any): An item, a list or a scalar about to be written.
 
         Returns:
-            The same structure with Decimal instead of float.
+            Any: The same structure with Decimal instead of float.
     '''
     if isinstance(value, float):
         return Decimal(str(value))

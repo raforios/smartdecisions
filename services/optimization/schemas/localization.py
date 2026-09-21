@@ -20,6 +20,7 @@ class LocalizationError(str, Enum):
         alone, or as the `code` of a dict that also carries the facts (a
         distance and its limit, for instance).
     '''
+    ROUTE_NOT_FOUND = 'ROUTE_NOT_FOUND'
     ROUTE_CODE_ALREADY_EXISTS = 'ROUTE_CODE_ALREADY_EXISTS'
     ROUTE_NOT_IN_CREATION = 'ROUTE_NOT_IN_CREATION'
     INVALID_STATUS_TRANSITION = 'INVALID_STATUS_TRANSITION'
@@ -36,6 +37,36 @@ class LocalizationError(str, Enum):
     INVALID_ROW = 'INVALID_ROW'
     MISSING_COLUMNS = 'MISSING_COLUMNS'
     NO_VISITS_TO_INFER = 'NO_VISITS_TO_INFER'
+
+
+class TrackingRole(str, Enum):
+    '''
+        Roles AUTH issues that matter here. ADMIN and MANAGER run the account;
+        REQUESTER is what every account signed up with before roles existed, so
+        it keeps full rights over its own data; SELLER works the street.
+    '''
+    ADMIN = 'ADMIN'
+    MANAGER = 'MANAGER'
+    REQUESTER = 'REQUESTER'
+    SELLER = 'SELLER'
+
+
+class CallerClaims(BaseModel):
+    '''
+        What the token says about the caller, as the routes need it.
+    '''
+    email: str
+    role: Optional[str] = None
+    client: Optional[str] = None
+
+
+# Who may do what. Management builds plans, loads stock and reads everything;
+# the field additionally runs routes, reports visits and reads its plan and
+# the stock it can sell from.
+MANAGEMENT_ROLES: tuple[str, ...] = (
+    TrackingRole.ADMIN.value, TrackingRole.MANAGER.value, TrackingRole.REQUESTER.value
+)
+FIELD_ROLES: tuple[str, ...] = MANAGEMENT_ROLES + (TrackingRole.SELLER.value,)
 
 
 class PlannedRouteStatusEnum(str, Enum):

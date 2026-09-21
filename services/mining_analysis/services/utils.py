@@ -207,9 +207,7 @@ class UsageLogData(BaseModel):
     response_body: dict | list | None = None
     response_time_ms: int
 
-async def _process_and_send_usage_log(
-    log_data: UsageLogData
-):
+async def _process_and_send_usage_log(log_data: UsageLogData):
     '''
        Processes and sends a usage log to the event service.
     '''

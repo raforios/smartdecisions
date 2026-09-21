@@ -36,7 +36,9 @@ def _run(coroutine):
     return asyncio.run(coroutine)
 
 
-def test_history_controller_returns_its_model(seeded_store): # pylint: disable=unused-argument
+def test_history_controller_returns_its_model(
+    seeded_store # pylint: disable=unused-argument
+):
     '''The history endpoint answers a fully built ExchangeRateHistory.'''
     response = _run(controllers.get_history_controller(
         date_from = None, date_to = None,
@@ -49,7 +51,9 @@ def test_history_controller_returns_its_model(seeded_store): # pylint: disable=u
 
 
 @pytest.mark.usefixtures('midweek')
-def test_sync_controller_returns_its_model(seeded_store): # pylint: disable=unused-argument
+def test_sync_controller_returns_its_model(
+    seeded_store # pylint: disable=unused-argument
+):
     '''The sync endpoint answers a fully built SyncResult.'''
     with patch.object(quotes, 'fetch_official_rate', lambda day: 12.32):
         response = _run(controllers.sync_rates_controller(
@@ -62,7 +66,9 @@ def test_sync_controller_returns_its_model(seeded_store): # pylint: disable=unus
         response.without_publication == response.requested_days
 
 
-def test_scenario_controller_returns_its_model(seeded_store): # pylint: disable=unused-argument
+def test_scenario_controller_returns_its_model(
+    seeded_store # pylint: disable=unused-argument
+):
     '''
         The scenario endpoint answers a fully built SaleScenario, nested
         outcomes included: the failure this guards against is exactly a nested

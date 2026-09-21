@@ -78,11 +78,16 @@ def get_planned_route(
         Returns:
             PlannedRouteItem: The route item with native numbers.
     '''
-    item = get_item_by_key(
-        dynamodb_resource = dynamodb_resource,
-        table_name = PLANNED_ROUTES_TABLE,
-        key = {'owner_email': owner_email, 'id': route_id}
-    )
+    try:
+        item = get_item_by_key(
+            dynamodb_resource = dynamodb_resource,
+            table_name = PLANNED_ROUTES_TABLE,
+            key = {'owner_email': owner_email, 'id': route_id}
+        )
+    except RegisterNotFoundError as error:
+        # The shared crud names the key and the table in its detail; the
+        # client gets the bare code and nothing about how we store things.
+        raise RegisterNotFoundError(detail = LocalizationError.ROUTE_NOT_FOUND.value) from error
     return from_dynamo(item)
 
 
@@ -581,9 +586,7 @@ def parse_planned_routes_csv(csv_text: str) -> List[PlannedRouteBulkRowSchema]:
     return rows
 
 
-def group_rows_into_routes(
-    rows: List[PlannedRouteBulkRowSchema]
-) -> List[PlannedRouteCreateSchema]:
+def group_rows_into_routes(rows: List[PlannedRouteBulkRowSchema]) -> List[PlannedRouteCreateSchema]:
     '''
         Folds the stop rows into one route per `route_code`, keeping the header
         of the first row of each code and the stops in file order.

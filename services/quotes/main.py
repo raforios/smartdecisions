@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse
 
 from mangum import Mangum
 import uvicorn
@@ -130,7 +131,7 @@ def root() -> Dict[str, Any]:
 
 
 @app.get('/openapi.json', include_in_schema = False)
-def custom_openapi():
+def custom_openapi() -> Dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
     '''
@@ -138,7 +139,7 @@ def custom_openapi():
 
 
 @app.get('/docs', include_in_schema = False)
-async def custom_swagger_ui():
+async def custom_swagger_ui() -> HTMLResponse:
     '''
         Serves the Swagger UI documentation interface.
     '''

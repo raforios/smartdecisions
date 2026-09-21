@@ -6,6 +6,7 @@
     interfaces are unchanged so existing notebook contracts keep working.
 '''
 import random
+from typing import Any, Tuple
 import pandas as pd
 from geopy.distance import geodesic
 
@@ -78,14 +79,14 @@ class GeoAnalyzer:
         self._name_index = ''
 
     @property
-    def locations(self):
+    def locations(self) -> pd.DataFrame:
         '''
             Returns the geographical coordinates DataFrame.
         '''
         return self._df_locations
 
     @property
-    def num_locations(self):
+    def num_locations(self) -> int:
         '''
             Returns the number of geographical coordinates stored.
         '''
@@ -94,7 +95,7 @@ class GeoAnalyzer:
     def add_locations(
         self,
         df_locations: pd.DataFrame
-    ):
+    ) -> None:
         '''
             Stores the geo-location data needed for analysis.
 
@@ -133,7 +134,7 @@ class GeoAnalyzer:
         df_dist_matrix.index.name = self._name_index
         return df_dist_matrix
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         '''
             Display number of currently considered locations.
         '''
@@ -148,8 +149,8 @@ def build_route_object(
     data: dict,
     counter: int,
     values: list,
-    df
-):
+    df: pd.DataFrame
+) -> Tuple[pd.DataFrame, Any, Any, list]:
     '''
         Build route object using data from a dataset.
     '''
@@ -165,10 +166,10 @@ def build_route_object(
 # Filtering and ordering a given dataframe
 # ----------------------------------------------------------------
 def filter_order_df(
-    filter_exp,
+    filter_exp: pd.Series,
     orderby: str,
     df: pd.DataFrame,
-    sort = True
+    sort: bool = True
 ) -> pd.DataFrame:
     '''
         Create a new dataframe from a given dataframe using a filter and

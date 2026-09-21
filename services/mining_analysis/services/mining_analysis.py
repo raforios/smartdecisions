@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Tuple
 from fastapi import Request
 import pandas as pd
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 from models.mining_analysis import (
     Company,
     Mineral,
@@ -415,7 +415,7 @@ async def get_royalties_summary_service(
         Returns data for the target year AND the previous year to allow
         dynamic YoY calculation in frontend.
     '''
-    def fetch_data(target_year: int):
+    def fetch_data(target_year: int) -> Query:
         query = db.query(
             RoyaltyPayment.year.label('year'),
             RoyaltyPayment.month.label('month'),

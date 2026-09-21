@@ -7,6 +7,7 @@ from typing import List
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Body, Depends, Path, Query, Request, status
+from pydantic import BaseModel
 
 from controllers.localization import (
     add_planned_point_controller,
@@ -34,6 +35,7 @@ from controllers.localization import (
 )
 from schemas.localization import (
     BulkUploadPlannedResponseSchema,
+    CallerClaims,
     ExecutedPointCreateSchema,
     ExecutedPointResponseSchema,
     ExecutedRouteCreateSchema,
@@ -52,19 +54,43 @@ from schemas.localization import (
     PlannedRouteResponseSchema,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
+    FIELD_ROLES,
+    MANAGEMENT_ROLES,
     PointsVisitedResponseSchema,
+    TrackingRole,
     RouteComparisonFullResponseSchema,
     RouteComparisonsResponseSchema
 )
-from routes.common import csv_upload_text
+from routes.common import csv_upload_text, get_caller
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/optimization', tags = ['Route tracking'])
 
 _ROUTE_ID = Path(..., min_length = 8, max_length = 64, description = 'Planned route id.')
 _EXECUTED_ID = Path(..., min_length = 8, max_length = 64, description = 'Executed route id.')
+
+
+def own_seller(
+    caller: CallerClaims,
+    payload: BaseModel
+) -> BaseModel:
+    '''
+        For a SELLER, pins `seller` to their own email on whatever they send —
+        a route start or a listing filter — so they neither run routes as
+        somebody else nor read somebody else's. Anyone else passes through.
+
+        Args:
+            caller (CallerClaims): Who is calling.
+            payload (BaseModel): A model with a `seller` field.
+
+        Returns:
+            BaseModel: The same model, `seller` overridden when it must be.
+    '''
+    if caller.role == TrackingRole.SELLER.value:
+        return payload.model_copy(update = {'seller': caller.email})
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -81,8 +107,8 @@ async def create_planned_route_endpoint(
     request: Request,
     route_data: PlannedRouteCreateSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedRouteResponseSchema:
     '''
         Endpoint to create a planned route.
     '''
@@ -105,8 +131,8 @@ async def create_planned_route_endpoint(
 async def get_all_planned_routes_endpoint(
     request: Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> List[PlannedRouteResponseSchema]:
     '''
         Endpoint to list planned routes.
     '''
@@ -132,8 +158,8 @@ async def filter_planned_routes_endpoint(
         default_factory = PlannedRouteFilterRequestSchema
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> List[PlannedRouteResponseSchema]:
     '''
         Endpoint to filter planned routes.
     '''
@@ -162,8 +188,8 @@ async def bulk_upload_planned_routes_endpoint(
     request: Request,
     csv_text: str = Depends(csv_upload_text),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> BulkUploadPlannedResponseSchema:
     '''
         Endpoint to bulk-upload planned routes.
     '''
@@ -191,8 +217,8 @@ async def infer_planned_route_endpoint(
     request: Request,
     request_data: InferPlannedRouteSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedRouteResponseSchema:
     '''
         Endpoint to infer a planned route.
     '''
@@ -218,8 +244,8 @@ async def get_planned_route_endpoint(
     request: Request,
     planned_route_id: str = _ROUTE_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> PlannedRouteResponseSchema:
     '''
         Endpoint to read a planned route.
     '''
@@ -244,8 +270,8 @@ async def update_planned_route_endpoint(
     route_data: PlannedRouteUpdateSchema,
     planned_route_id: str = _ROUTE_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedRouteResponseSchema:
     '''
         Endpoint to update a planned route.
     '''
@@ -272,8 +298,8 @@ async def update_planned_route_status_endpoint(
     status_data: PlannedRouteUpdateStatusSchema,
     planned_route_id: str = _ROUTE_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedRouteResponseSchema:
     '''
         Endpoint to change a planned route's status.
     '''
@@ -300,8 +326,8 @@ async def delete_planned_route_endpoint(
     request: Request,
     planned_route_id: str = _ROUTE_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedRouteResponseSchema:
     '''
         Endpoint to delete a planned route.
     '''
@@ -329,8 +355,8 @@ async def add_planned_point_endpoint(
     point_data: PlannedPointSchema,
     planned_route_id: str = _ROUTE_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedPointResponseSchema:
     '''
         Endpoint to add a stop.
     '''
@@ -356,8 +382,8 @@ async def update_planned_point_endpoint(
     point_data: PlannedPointUpdateSchema,
     point_ref: PlannedPointRef = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedPointResponseSchema:
     '''
         Endpoint to edit a stop.
     '''
@@ -385,8 +411,8 @@ async def delete_planned_point_endpoint(
     request: Request,
     point_ref: PlannedPointRef = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedRouteResponseSchema:
     '''
         Endpoint to remove a stop.
     '''
@@ -417,12 +443,15 @@ async def delete_planned_point_endpoint(
 async def create_executed_route_endpoint(
     request: Request,
     route_data: ExecutedRouteCreateSchema,
+    caller: CallerClaims = Depends(get_caller),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> ExecutedRouteResponseSchema:
     '''
-        Endpoint to open an executed route.
+        Endpoint to open an executed route. A seller can only open their own:
+        the route is theirs whatever the body says.
     '''
+    route_data = own_seller(caller, route_data)
     message = f'User: {current_user}. {route_data.seller} starts a route.'
     logger.info(message)
     return await create_executed_route_controller(
@@ -443,12 +472,14 @@ async def create_executed_route_endpoint(
 async def list_executed_routes_endpoint(
     request: Request,
     filters: ExecutedRouteFilterSchema = Depends(),
+    caller: CallerClaims = Depends(get_caller),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> List[ExecutedRouteResponseSchema]:
     '''
-        Endpoint to list executed routes.
+        Endpoint to list executed routes. A seller only sees their own.
     '''
+    filters = own_seller(caller, filters)
     message = f'User: {current_user}. Listing executed routes.'
     logger.info(message)
     return await list_executed_routes_controller(
@@ -469,8 +500,8 @@ async def register_executed_point_endpoint(
     request: Request,
     point_data: ExecutedPointCreateSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> ExecutedPointResponseSchema:
     '''
         Endpoint to register an executed point.
     '''
@@ -495,8 +526,8 @@ async def get_last_known_locations_endpoint(
     request: Request,
     sellers: List[str] = Query(..., min_length = 1),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> GroupLastKnownLocationsResponseSchema:
     '''
         Endpoint for the live view.
     '''
@@ -520,8 +551,8 @@ async def get_executed_route_endpoint(
     request: Request,
     executed_route_id: str = _EXECUTED_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> ExecutedRouteDetailSchema:
     '''
         Endpoint to read an executed route.
     '''
@@ -548,8 +579,8 @@ async def close_executed_route_endpoint(
     update_data: ExecutedRouteUpdateSchema,
     executed_route_id: str = _EXECUTED_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> ExecutedRouteResponseSchema:
     '''
         Endpoint to close an executed route.
     '''
@@ -574,8 +605,8 @@ async def reopen_executed_route_endpoint(
     request: Request,
     executed_route_id: str = _EXECUTED_ID,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*FIELD_ROLES))
+) -> ExecutedRouteResponseSchema:
     '''
         Endpoint to reopen an executed route.
     '''
@@ -605,8 +636,8 @@ async def get_full_route_comparison_endpoint(
     planned_route_id: str = _ROUTE_ID,
     filters: ExecutedRouteFilterSchema = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> RouteComparisonFullResponseSchema:
     '''
         Endpoint for the full comparison.
     '''
@@ -634,8 +665,8 @@ async def get_route_comparisons_endpoint(
     planned_route_id: str = _ROUTE_ID,
     filters: ExecutedRouteFilterSchema = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> RouteComparisonsResponseSchema:
     '''
         Endpoint for the scored comparisons.
     '''
@@ -661,8 +692,8 @@ async def get_points_visited_endpoint(
     seller: str = Path(..., min_length = 1, max_length = 128),
     filters: ExecutedRouteFilterSchema = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PointsVisitedResponseSchema:
     '''
         Endpoint for a seller's visited points.
     '''

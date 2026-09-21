@@ -38,9 +38,10 @@ import argparse
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import openpyxl
+from openpyxl.worksheet.worksheet import Worksheet
 
 
 DEFAULT_SOURCE = (
@@ -59,7 +60,7 @@ def _normalize_mineral_label(raw: str) -> str:
     return str(raw).split('\n', maxsplit = 1)[0].strip()
 
 
-def _classify(value) -> str:
+def _classify(value: Any) -> str:
     '''
         Returns one of {'int', 'whole_float', 'clean_float'} for a numeric cell.
     '''
@@ -72,7 +73,7 @@ def _classify(value) -> str:
     return 'int'
 
 
-def _format_value(value) -> str:
+def _format_value(value: Any) -> str:
     '''
         Pretty-print helper that keeps decimals visible.
     '''
@@ -83,7 +84,7 @@ def _format_value(value) -> str:
     return str(value)
 
 
-def _is_promedio_cell(day_value) -> bool:
+def _is_promedio_cell(day_value: Any) -> bool:
     '''
         True when the row label denotes the trailing average row.
     '''
@@ -91,7 +92,7 @@ def _is_promedio_cell(day_value) -> bool:
 
 
 def _analyze_sheet(
-    sheet # mineral_columns analysis # promedio_row by mineral # daily values by mineral
+    sheet: Worksheet # mineral_columns analysis # promedio_row by mineral # daily values by mineral
 ) -> Tuple[ List[Dict], Dict[str, float], Dict[str, List[float]] ]:
     '''
         Walks one Diario sheet and returns the per-column type counters,

@@ -16,7 +16,7 @@ from schemas.ai import (
     RoleSummary
 )
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import get_current_owner
 
 
 router = APIRouter(prefix = '/v1/ai', tags = ['AI'])
@@ -36,7 +36,7 @@ router = APIRouter(prefix = '/v1/ai', tags = ['AI'])
 async def explain_endpoint(
     request: Request,
     payload: ExplainRequest,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> ExplainResponse:
     ''' Endpoint returning the interpretation of a view. '''
     message = f'User: {current_user}. Requested an explanation of {payload.view.value}.'
@@ -60,7 +60,7 @@ async def explain_endpoint(
 )
 async def list_roles_endpoint(
     request: Request,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> RoleListResponse:
     ''' Endpoint listing the configured expert roles. '''
     message = f'User: {current_user}. Requested the configured roles.'
@@ -88,7 +88,7 @@ async def list_roles_endpoint(
 async def save_role_endpoint(
     request: Request,
     definition: RoleDefinition,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> RoleSummary:
     ''' Endpoint storing a version of an expert role. '''
     message = (f'User: {current_user}. Stored role {definition.view.value} '

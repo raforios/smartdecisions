@@ -34,6 +34,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import openpyxl
+from openpyxl.worksheet.worksheet import Worksheet
+from sqlalchemy.orm import Session
 
 from models.mining_analysis import Mineral, MiningPrice
 from scripts.cli_support import database_session, report, source_is_missing
@@ -105,7 +107,7 @@ def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[st
 
 
 def _iter_daily_rows(
-    sheet,
+    sheet: Worksheet,
     sheet_name: str
 ) -> List[Tuple[date, Dict[str, float]]]:
     '''
@@ -195,7 +197,7 @@ def _row_prices(
 
 
 def _upsert_prices(
-    session,
+    session: Session,
     mineral_id_by_norm: Dict[str, int],
     parsed_rows: List[Tuple[date, Dict[str, float]]]
 ) -> Tuple[int, int]:

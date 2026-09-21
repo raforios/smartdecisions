@@ -10,7 +10,7 @@
 import calendar
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -322,7 +322,7 @@ async def get_biweekly_report_service(
 def _iter_biweekly_periods(
     period_from: date,
     period_to: date
-):
+) -> Iterator[Tuple[int, int, int]]:
     '''
     Yields (year, month, half) tuples covering every biweekly period between
     `period_from` and `period_to` (inclusive) in chronological order.

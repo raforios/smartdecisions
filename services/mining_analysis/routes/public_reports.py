@@ -2,7 +2,7 @@
     Public, unauthenticated endpoints for the official mineral reports.
 
     Mirror the JWT-protected variants in routes.mining_analysis but skip
-    `Depends(get_current_user)` so the institutional website (mineria.gob.bo)
+    `Depends(get_current_owner)` so the institutional website (mineria.gob.bo)
     can consume them anonymously.
 '''
 from datetime import date as date_type
@@ -47,7 +47,7 @@ async def public_daily_report(
     ref_date: date_type = Query(..., alias = 'date',
                                 description = 'Reference date (YYYY-MM-DD).'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-):
+) -> DailyReportResponse:
     '''Anonymous version of /reports/daily — same payload, no JWT.'''
     logger.info('Public daily report requested for %s.', ref_date)
     return await get_daily_report_controller(
@@ -67,7 +67,7 @@ async def public_biweekly_report(
     half: int = Query(..., ge = 1, le = 2,
                       description = '1 = days 1-15, 2 = 16-end.'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-):
+) -> BiweeklyReportResponse:
     '''Anonymous version of /reports/biweekly — same payload, no JWT.'''
     logger.info('Public biweekly report requested for %s-%02d Q%s.',
                 year, month, half)
@@ -92,7 +92,7 @@ async def public_biweekly_history(
     period_to: Optional[date_type] = Query(
         None, alias = 'to', description = 'Inclusive upper bound (YYYY-MM-DD).'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-):
+) -> BiweeklyHistoryResponse:
     '''Anonymous endpoint feeding the historical line chart in mercados.html.'''
     logger.info('Public biweekly history requested %s → %s.', period_from, period_to)
     return await get_biweekly_history_controller(
@@ -110,7 +110,7 @@ async def public_daily_png(
     request: Request,
     ref_date: date_type = Query(..., alias = 'date'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-):
+) -> Response:
     '''Returns the daily report rendered on the Minerales_01 template.'''
     payload = await get_daily_report_controller(
         db = db, request = request, current_user = PUBLIC_USER, ref_date = ref_date,
@@ -128,7 +128,7 @@ async def public_daily_pdf(
     request: Request,
     ref_date: date_type = Query(..., alias = 'date'),
     db: Session = Depends(GET_DB_DEPENDENCY),
-):
+) -> Response:
     '''Returns the daily report rendered as a single-page PDF.'''
     payload = await get_daily_report_controller(
         db = db, request = request, current_user = PUBLIC_USER, ref_date = ref_date,
@@ -148,7 +148,7 @@ async def public_biweekly_png(
     month: int = Query(..., ge = 1, le = 12),
     half: int = Query(..., ge = 1, le = 2),
     db: Session = Depends(GET_DB_DEPENDENCY),
-):
+) -> Response:
     '''Returns the biweekly report rendered on the Minerales_02 template.'''
     payload = await get_biweekly_report_controller(
         db = db, request = request, current_user = PUBLIC_USER,
@@ -169,7 +169,7 @@ async def public_biweekly_pdf(
     month: int = Query(..., ge = 1, le = 12),
     half: int = Query(..., ge = 1, le = 2),
     db: Session = Depends(GET_DB_DEPENDENCY),
-):
+) -> Response:
     '''Returns the biweekly report rendered as a single-page PDF.'''
     payload = await get_biweekly_report_controller(
         db = db, request = request, current_user = PUBLIC_USER,

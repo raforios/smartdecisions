@@ -36,7 +36,7 @@ CACHE_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_AI_EXPLANATIONS']
 _resource = boto3.resource('dynamodb')
 
 
-def _table(name: str):
+def _table(name: str) -> Any:
     '''
         Returns a table handle.
 

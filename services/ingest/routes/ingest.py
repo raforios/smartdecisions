@@ -36,7 +36,7 @@ from services.exceptions import InvalidInputError
 from services.ingest_files import SUPPORTED_EXTENSIONS
 from services.ingest_utils import HISTORY_DEFAULT_LIMIT
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import get_current_owner
 
 router = APIRouter(prefix = '/v1/ingest', tags = ['Ingest'])
 
@@ -65,8 +65,8 @@ def _extract_bearer(authorization: str) -> str:
 )
 async def get_template_info_endpoint(
     request: Request,
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> TemplateInfo:
     '''
         Endpoint to retrieve template metadata.
     '''
@@ -88,8 +88,8 @@ async def get_template_info_endpoint(
 )
 async def download_template_endpoint(
     request: Request,
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> Response:
     '''
         Endpoint that streams the canonical .xlsx template.
     '''
@@ -125,8 +125,8 @@ async def ingest_excel_endpoint(
     file: UploadFile = File(...),
     authorization: str = Header(...),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> IngestResponse:
     '''
         Endpoint to ingest a sales Excel/CSV file.
     '''
@@ -169,8 +169,8 @@ async def ingest_excel_from_s3_endpoint(
     request: Request,
     payload: IngestFromS3Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> IngestResponse:
     '''
         Endpoint to ingest a sales file already staged in S3 by key.
     '''
@@ -206,8 +206,8 @@ async def ingest_collections_endpoint(
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     file: UploadFile = File(...),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> CollectionsResponse:
     '''
         Endpoint to ingest the payments of a sales dataset.
     '''
@@ -253,8 +253,8 @@ async def ingest_stock_endpoint(
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     file: UploadFile = File(...),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> StockResponse:
     '''
         Endpoint to ingest the stock snapshot of a sales dataset.
     '''
@@ -298,8 +298,8 @@ async def ingest_visits_endpoint(
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     file: UploadFile = File(...),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> VisitsResponse:
     '''
         Endpoint to ingest the visits of a sales dataset.
     '''
@@ -340,7 +340,7 @@ async def list_datasets_endpoint(
         HISTORY_DEFAULT_LIMIT, ge = 1, le = 100, description = 'Most rows to return.'
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_owner)
 ) -> DatasetListResponse:
     ''' Endpoint listing the caller\'s own uploads. '''
     message = f'User: {current_user}. Requested their dataset history.'
@@ -366,8 +366,8 @@ async def download_rejected_endpoint(
     request: Request,
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> DatasetListResponse:
     '''
         Endpoint that streams the rejected-rows CSV for a dataset.
     '''
@@ -395,8 +395,8 @@ async def get_dataset_endpoint(
     request: Request,
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> IngestStatusResponse:
     '''
         Endpoint to retrieve dataset status/metadata.
     '''

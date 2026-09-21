@@ -30,7 +30,7 @@ from schemas.optimization import (
 from routes.common import csv_upload_text
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user
+from services.security import get_current_owner
 
 router = APIRouter(prefix = '/v1/optimization', tags = ['Optimization'])
 
@@ -46,8 +46,8 @@ async def get_base_data_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> List[DataMapResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/data_model.
     '''
@@ -76,8 +76,8 @@ async def get_distances_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> List[OptimizationResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/distances.
     '''
@@ -109,8 +109,8 @@ async def get_optimal_route_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> List[RouteResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/optimal_route.
     '''
@@ -142,8 +142,8 @@ async def get_distance_matrix_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> Dict:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/distance_matrix.
     '''
@@ -172,8 +172,8 @@ async def get_route_endpoint(
     request: Request,
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> List[RouteResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/route.
     '''
@@ -208,8 +208,8 @@ async def bulk_upload_routes_endpoint(
     request: Request,
     csv_text: str = Depends(csv_upload_text),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> BulkUploadResponse:
     '''
         Endpoint to bulk-upload route points via CSV.
     '''
@@ -242,8 +242,8 @@ async def route_plan_endpoint(
     dataset_id: str = Path(..., min_length = 8, max_length = 64),
     query_params: PlanQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_owner)
+) -> RoutePlanResponse:
     '''
         Endpoint returning the visit plan for a dataset_id.
     '''

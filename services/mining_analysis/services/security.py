@@ -2,14 +2,14 @@
     Security service
 '''
 import os
-from typing import Optional
-from fastapi import Header
+from typing import Any, Awaitable, Callable, Dict, Iterable, Optional
+from fastapi import Depends, Header
 from jose import jwt, JWTError
 
 from dotenv import dotenv_values
 
 from services.logger_config import custom_logger as logger
-from services.exceptions import UnauthorizedError, ServiceUnavailableError
+from services.exceptions import ForbiddenError, UnauthorizedError, ServiceUnavailableError
 
 _LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
 
@@ -17,20 +17,20 @@ SECRET_KEY = os.environ.get('SECRET_KEY') or \
                       _LOCAL_ENV_PARAMS.get('SECRET_KEY')
 
 if not SECRET_KEY:
-    error_msg = 'SECRET_KEY is not configured in environment or .env.'
-    logger.critical(error_msg)
+    startup_error = 'SECRET_KEY is not configured in environment or .env.'
+    logger.critical(startup_error)
     raise ServiceUnavailableError(
-        detail = error_msg
+        detail = startup_error
     )
 
 ALGORITHM = os.environ.get('ALGORITHM') or \
                       _LOCAL_ENV_PARAMS.get('ALGORITHM')
 
 if not ALGORITHM:
-    error_msg = 'ALGORITHM for JWT is not configured in environment or .env.'
-    logger.critical(error_msg)
+    startup_error = 'ALGORITHM for JWT is not configured in environment or .env.'
+    logger.critical(startup_error)
     raise ServiceUnavailableError(
-        detail = error_msg
+        detail = startup_error
     )
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
@@ -97,3 +97,82 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
             headers = {'WWW-Authenticate': 'Bearer'},
         )
     return email
+
+
+# --------------------------------------------------------------------------- #
+# Roles and the client an account belongs to                                  #
+# --------------------------------------------------------------------------- #
+# AUTH issues the token with three claims: `email` (the user), `role` (what
+# they may do) and `client` (the customer that groups them). Data is keyed by
+# the client, so a manager and their sellers share routes, plans and stock;
+# accounts created before the grouping have no client and keep their email as
+# the key, which is exactly how their data was stored.
+async def get_current_payload(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    '''
+        Validates the token exactly like `get_current_user` and returns its
+        whole payload (email, role, client, exp).
+
+        Args:
+            authorization (Optional[str]): The 'Authorization' header.
+
+        Returns:
+            Dict[str, Any]: The decoded claims.
+    '''
+    await get_current_user(authorization)
+    token = authorization.split(' ', 1)[1]
+    return jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM])
+
+
+def resolve_owner(payload: Dict[str, Any]) -> str:
+    '''
+        The key the caller's data lives under: their client, or their email
+        when they belong to none.
+
+        Args:
+            payload (Dict[str, Any]): Decoded token claims.
+
+        Returns:
+            str: Owner key.
+    '''
+    return payload.get('client') or payload['email']
+
+
+async def get_current_owner(payload: Dict[str, Any] = Depends(get_current_payload)) -> str:
+    '''
+        FastAPI dependency: the owner key of the caller's data.
+
+        Args:
+            payload (Dict[str, Any]): Decoded token claims.
+
+        Returns:
+            str: Owner key.
+    '''
+    return resolve_owner(payload)
+
+
+def require_roles(*allowed_roles: str) -> Callable[..., Awaitable[str]]:
+    '''
+        Dependency factory: the caller's owner key when their role is one of
+        `allowed_roles`, ForbiddenError otherwise. Same contract as
+        `get_current_owner`, so an endpoint swaps one for the other.
+
+        Args:
+            *allowed_roles (str): Role values accepted by the endpoint.
+
+        Returns:
+            Callable[..., Awaitable[str]]: A FastAPI dependency resolving to the owner key.
+    '''
+    allowed: Iterable[str] = tuple(allowed_roles)
+
+    async def _checker(payload: Dict[str, Any] = Depends(get_current_payload)) -> str:
+        role: Optional[str] = payload.get('role')
+        if role not in allowed:
+            error_msg = (
+                f'Forbidden: {payload["email"]} with role {role} called an endpoint '
+                f'restricted to {list(allowed)}.'
+            )
+            logger.warning(error_msg)
+            raise ForbiddenError(detail = 'ROLE_NOT_ALLOWED')
+        return resolve_owner(payload)
+
+    return _checker

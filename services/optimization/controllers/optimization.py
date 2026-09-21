@@ -8,10 +8,11 @@
     while this microservice reads the same shape from DynamoDB via
     `services.optimization_utils.get_route_points`.
 '''
-from typing import List, Optional
+from typing import List, Optional, Type
 import pandas as pd
 from boto3.resources.base import ServiceResource
 from fastapi import Request
+from pydantic import BaseModel
 
 from schemas.optimization import (
     BulkUploadResponse,
@@ -84,7 +85,7 @@ def _load_dataframe(
 
 def _df_to_pydantic(
     df: pd.DataFrame,
-    model
+    model: Type[BaseModel]
 ) -> list:
     '''
         Transforms a dataframe into a list of Pydantic instances.

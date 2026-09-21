@@ -22,6 +22,8 @@
 import argparse
 from typing import List, Optional
 
+from sqlalchemy.orm import Session
+
 from models.mining_analysis import Mineral, MiningPrice
 from models.mining_analysis_dyb import MineralItem, MiningPriceItem
 from scripts.cli_support import database_session, report
@@ -29,7 +31,7 @@ from services import crud_dyb
 
 
 def _read_minerals(
-    session,
+    session: Session,
     mineral_id: Optional[int]
 ) -> List[MineralItem]:
     '''
@@ -60,7 +62,7 @@ def _read_minerals(
 
 
 def _read_prices(
-    session,
+    session: Session,
     mineral_id: Optional[int]
 ) -> List[MiningPriceItem]:
     '''

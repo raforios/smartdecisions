@@ -193,12 +193,16 @@ def test_retuning_the_role_stops_serving_what_the_old_one_produced(
     assert len(model) == 2
 
 
-def test_a_model_that_says_nothing_is_not_published_as_an_answer(cache): # pylint: disable=unused-argument
+def test_a_model_that_says_nothing_is_not_published_as_an_answer(
+    cache # pylint: disable=unused-argument
+):
     '''
         A refusal carries no text block. Returning an empty explanation would
         put a blank box on the screen as if it were a finding.
     '''
-    def _silent(**kwargs): # pylint: disable=unused-argument
+    def _silent(
+        **kwargs # pylint: disable=unused-argument
+    ):
         return {'text': '', 'input_tokens': 100, 'output_tokens': 0}
 
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()), \

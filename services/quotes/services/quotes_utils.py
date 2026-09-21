@@ -50,7 +50,7 @@ def _floats_to_decimal(value: Any) -> Any:
     return value
 
 
-def _table():
+def _table() -> Any:
     '''
         Returns the exchange-rate table reference.
 
