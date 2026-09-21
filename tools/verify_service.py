@@ -7,6 +7,7 @@
         tests        pytest, all green
         pylint       10.00/10 over services/ controllers/ routes/ schemas/ tests/
         signatures   one parameter per line (tools/check_signatures.py)
+        type-hints   every parameter and return annotated (tests exempt)
         size         no own file at or above the split threshold (800 lines)
         duplicates   no two functions with the same body inside the service
         except-pass  no `except ...: pass`
@@ -184,10 +185,43 @@ def check_log_vars(service: Path) -> tuple[bool, str]:
     return not hits, ', '.join(hits[:5]) if hits else 'none'
 
 
+def check_type_hints(service: Path) -> tuple[bool, str]:
+    '''
+        Every parameter and every return annotated (`.claude/rules/python.md`).
+        `self`/`cls` and `__init__` returns are exempt; endpoints are not — the
+        return is the response model, and QUOTES writes it.
+    '''
+    hits = []
+    for path in _own_files(service):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            args = node.args
+            params = (args.posonlyargs + args.args + args.kwonlyargs
+                      + ([args.vararg] if args.vararg else [])
+                      + ([args.kwarg] if args.kwarg else []))
+            untyped = [param.arg for param in params
+                       if param.annotation is None and param.arg not in ('self', 'cls')]
+            problems = []
+            if untyped:
+                problems.append('params ' + ','.join(untyped))
+            if node.returns is None and node.name != '__init__':
+                problems.append('return')
+            if problems:
+                where = f'{path.relative_to(service)}:{node.lineno} {node.name}'
+                hits.append(f'{where} ({"; ".join(problems)})')
+    if not hits:
+        return True, 'none'
+    more = f' … +{len(hits) - 5}' if len(hits) > 5 else ''
+    return False, ', '.join(hits[:5]) + more
+
+
 CHECKS = (
     ('tests', check_tests),
     ('pylint', check_pylint),
     ('signatures', check_signatures),
+    ('type-hints', check_type_hints),
     ('size', check_size),
     ('duplicates', check_duplicates),
     ('except-pass', check_except_pass),
