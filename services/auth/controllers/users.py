@@ -50,9 +50,7 @@ async def get_user_payload(
 
     return payload
 
-async def get_current_user(
-    payload: Dict[str, Any] = Depends(get_user_payload)
-) -> UserResponse:
+async def get_current_user(payload: Dict[str, Any] = Depends(get_user_payload)) -> UserResponse:
     '''
         Function to get the full User object from the JWT token.
     '''
@@ -80,8 +78,8 @@ async def get_current_active_user(
         Function to check if the authenticated user is active.
     '''
     if not current_user.status:
-        message = f'Inactive user {current_user.email} attempted access.'
-        logger.warning(message)
+        error_msg = f'Inactive user {current_user.email} attempted access.'
+        logger.warning(error_msg)
         raise InvalidInputError(
             detail = 'Inactive user'
         )
@@ -98,9 +96,9 @@ async def get_current_admin_user(
         non-admin promoting itself to ADMIN.
     '''
     if current_user.role != Role.ADMIN:
-        message = (f'Forbidden: user {current_user.email} with role '
-                   f'{current_user.role} attempted a user-management operation.')
-        logger.warning(message)
+        error_msg = (f'Forbidden: user {current_user.email} with role '
+                     f'{current_user.role} attempted a user-management operation.')
+        logger.warning(error_msg)
         raise ForbiddenError(
             detail = 'Administrator role required for this operation.'
         )
@@ -115,22 +113,20 @@ async def authenticate_user(
     '''
     user_item = get_user_by_email(email)
     if not user_item or not verify_password(password, user_item['hashed_password']):
-        message = f'Authentication failed for user {email}.'
-        logger.warning(message)
+        error_msg = f'Authentication failed for user {email}.'
+        logger.warning(error_msg)
         return None
 
     return InternalUser(**user_item)
 
-async def create_user(
-    user_data: UserRequest
-) -> Dict[str, Any]:
+async def create_user(user_data: UserRequest) -> Dict[str, Any]:
     '''
         Create User
     '''
     existing_user = get_user_by_email(user_data.email)
     if existing_user:
-        message = f'Registration failed: User with email {user_data.email} already exists.'
-        logger.warning(message)
+        error_msg = f'Registration failed: User with email {user_data.email} already exists.'
+        logger.warning(error_msg)
         raise RegisterAlreadyExistsError(detail = 'Email already registered')
 
     hashed_pw = hash_password(user_data.password)
@@ -159,9 +155,7 @@ async def read_users() -> List[UserResponse]:
     user_items = scan_all_users()
     return [UserResponse(**item) for item in user_items]
 
-async def read_user_by_email(
-    email: str
-) -> Optional[UserResponse]:
+async def read_user_by_email(email: str) -> Optional[UserResponse]:
     '''
         Read user by email.
     '''
@@ -170,9 +164,7 @@ async def read_user_by_email(
         return UserResponse(**user_item)
     return None
 
-def build_user_update_params(
-    user_update_data: UserUpdateRequest
-) -> tuple[str, dict, dict]:
+def build_user_update_params(user_update_data: UserUpdateRequest) -> tuple[str, dict, dict]:
     '''
         Helper function that builds DynamoDB update expressions and attribute values
         from a UserUpdateRequest object.
@@ -227,8 +219,8 @@ async def update_user(
     '''
     current_user_item = get_user_by_email(email)
     if not current_user_item:
-        message = f'Update failed: User {email} not found.'
-        logger.warning(message)
+        error_msg = f'Update failed: User {email} not found.'
+        logger.warning(error_msg)
         return None
 
     final_update_expression, expression_attribute_values, expression_attribute_names = \
@@ -250,9 +242,7 @@ async def update_user(
         return UserResponse(**updated_item)
     return None
 
-async def delete_user(
-    email: str
-) -> bool:
+async def delete_user(email: str) -> bool:
     '''
         Delete user
     '''

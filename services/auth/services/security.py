@@ -6,9 +6,7 @@ from passlib.context import CryptContext
 # Usar bcrypt como el algoritmo de hashing preferido
 pwd_context = CryptContext(schemes = ['bcrypt'], deprecated = 'auto')
 
-def hash_password(
-    password: str
-) -> str:
+def hash_password(password: str) -> str:
     ''' 
         Hashing password
     '''

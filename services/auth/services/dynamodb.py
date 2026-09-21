@@ -14,7 +14,7 @@ dynamodb = boto3.resource('dynamodb')
 ENV_VARS = load_and_validate_env_vars({'TABLE_NAME': str})
 TABLE_NAME = ENV_VARS['TABLE_NAME']
 
-def get_table():
+def get_table() -> Any:
     '''
         Returns a reference to the DynamoDB table.
     '''
@@ -46,9 +46,7 @@ def get_table():
             detail = 'Unexpected database initialization error.'
         ) from e
 
-def create_user_item(
-    user_data: Dict[str, Any]
-) -> Dict[str, Any]:
+def create_user_item(user_data: Dict[str, Any]) -> Dict[str, Any]:
     '''
         Create a new user item in the DynamoDB table.
         user_data must contain 'email' (Partition Key), 'hashed_password', etc.
@@ -65,8 +63,8 @@ def create_user_item(
         return user_data
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            message = f'User with email "{user_email}" already exists.'
-            logger.warning(message)
+            error_msg = f'User with email "{user_email}" already exists.'
+            logger.warning(error_msg)
             raise ValueError(message) from e
         error_msg = f'Error creating user "{user_email}" in DynamoDB: {e}'
         logger.error(error_msg, exc_info = True)
@@ -80,9 +78,7 @@ def create_user_item(
             detail='Unexpected database write error.'
         ) from e
 
-def get_user_by_email(
-    email: str
-) -> Optional[Dict[str, Any]]:
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     '''
         Gets a user from the DynamoDB table by their email (Partition Key).
     '''
@@ -143,8 +139,8 @@ def update_user_item(
             message = f'User "{email}" updated successfully in DynamoDB.'
             logger.info(message)
         else:
-            message = f'User "{email}" not found for update in DynamoDB.'
-            logger.warning(message)
+            error_msg = f'User "{email}" not found for update in DynamoDB.'
+            logger.warning(error_msg)
         return updated_user
     except ClientError as e:
         error_msg = f'Error updating user "{email}" in DynamoDB: {e}'
@@ -153,9 +149,7 @@ def update_user_item(
             detail = 'Unexpected database update error.'
         ) from e
 
-def delete_user_item(
-    email: str
-) -> bool:
+def delete_user_item(email: str) -> bool:
     '''
         Deletes a user item from the DynamoDB table.
     '''
@@ -169,8 +163,8 @@ def delete_user_item(
             message = f'User "{email}" deleted successfully from DynamoDB.'
             logger.info(message)
             return True
-        message = f'User "{email}" not found for deletion in DynamoDB.'
-        logger.warning(message)
+        error_msg = f'User "{email}" not found for deletion in DynamoDB.'
+        logger.warning(error_msg)
         return False
     except ClientError as e:
         error_msg = f'Error deleting user "{email}" from DynamoDB: {e}'

@@ -29,6 +29,17 @@ TABLES=(
     "analytics_runs:id:S"
     # Clave compuesta: cada ítem es un punto de una ruta de un día concreto.
     "optimization_routes:route_day_key:S:client_id:N"
+    # Seguimiento de rutas (LOCALIZATION portado a OPTIMIZATION). El dueño es
+    # la partición: sólo se consulta la propia y una ruta ajena no existe. En
+    # las ejecutadas el id empieza por la fecha de inicio, así "las de hoy" es
+    # una Query acotada sin índice.
+    "optimization_planned_routes:owner_email:S:id:S"
+    "optimization_executed_routes:owner_email:S:id:S"
+    # Stock del día de la empresa: la clave de orden es "{fecha}#{sku}", y el
+    # descuento de cada venta es una transacción condicionada sobre
+    # available_quantity (el rol Lambda ya tiene AmazonDynamoDBFullAccess, que
+    # incluye dynamodb:TransactWriteItems).
+    "optimization_daily_stock:owner_email:S:stock_key:S"
     # Clave compuesta: toda lectura es "esta moneda entre estas dos fechas".
     "exchange_rates:currency:S:date:S"
     # MINING_ANALYSIS sobre DynamoDB. El catálogo se lee por mineral; las

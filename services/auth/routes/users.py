@@ -23,7 +23,7 @@ router = APIRouter(prefix = '/v1/users', tags = ['Users'])
     status_code = status.HTTP_200_OK,
     dependencies = [Depends(get_current_admin_user)]
 )
-async def read_all_users():
+async def read_all_users() -> List[UserResponse]:
     '''
         Endpoint to read all users. Restricted to ADMIN.
     '''
@@ -37,16 +37,14 @@ async def read_all_users():
     status_code = status.HTTP_200_OK,
     dependencies = [Depends(get_current_admin_user)]
 )
-async def read_user(
-    email: str
-):
+async def read_user(email: str) -> List[UserResponse]:
     '''
         Endpoint to read a single user by email. Restricted to ADMIN.
     '''
     user = await read_user_by_email(email)
     if not user:
-        message = f'Attempt to read non-existent user: {email}'
-        logger.warning(message)
+        error_msg = f'Attempt to read non-existent user: {email}'
+        logger.warning(error_msg)
         raise RegisterNotFoundError(
             detail = 'User not found'
         )
@@ -85,16 +83,14 @@ async def patch_user(
     dependencies = [Depends(get_current_admin_user)],
     response_model = SignupResponse
 )
-async def del_user(
-    email: str
-) -> SignupResponse:
+async def del_user(email: str) -> SignupResponse:
     '''
     Endpoint para eliminar un usuario.
     '''
     deleted = await delete_user(email)
     if not deleted:
-        message = f'User "{email}" not found for deletion.'
-        logger.warning(message)
+        error_msg = f'User "{email}" not found for deletion.'
+        logger.warning(error_msg)
         raise RegisterNotFoundError(detail = 'User not found')
 
     message = f'User: {email} was deleted'

@@ -15,3 +15,8 @@ class Role(str, Enum):
     # Mining Summit (Cumbre Minera) roles.
     REGISTRATION = 'REGISTRATION'
     REPORTS = 'REPORTS'
+    # SmartDecisions roles. Users of one client share a `client`; MANAGER runs
+    # the account (plans, stock, analysis), SELLER works the street from the
+    # phone (their own routes, visits and sales).
+    MANAGER = 'MANAGER'
+    SELLER = 'SELLER'

@@ -18,9 +18,7 @@ router = APIRouter(prefix = '/v1/auth', tags = ['Authentication'])
     response_model = Token,
     status_code = status.HTTP_200_OK
 )
-async def login(
-    request: LoginRequest
-):
+async def login(request: LoginRequest) -> Token:
     '''
         Login route for obtaining an access token after verifying credentials.
     '''
@@ -32,7 +30,12 @@ async def login(
             detail = 'Incorrect email or password.'
         )
 
-    access_token = create_access_token({'email': user.email, 'role': user.role})
+    # `client` groups every user of one customer: downstream services key
+    # their data by it, so a manager and their sellers see the same routes,
+    # plans and stock. Users without a client keep their email as the key.
+    access_token = create_access_token(
+        {'email': user.email, 'role': user.role, 'client': user.client}
+    )
     message = f'User {user.email} logged in successfully.'
     logger.info(message)
     return Token(access_token = access_token, token_type = 'bearer')
@@ -42,9 +45,7 @@ async def login(
     response_model = SignupResponse,
     status_code = status.HTTP_201_CREATED
 )
-async def signup(
-    user_data: UserRequest
-):
+async def signup(user_data: UserRequest) -> SignupResponse:
     '''
         Sign-up route for creating a new user and storing their credentials securely.
     '''

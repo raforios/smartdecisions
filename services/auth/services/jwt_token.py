@@ -48,9 +48,7 @@ def create_access_token(
             detail = 'Failed to create authentication token.'
         ) from e
 
-def decode_access_token(
-    token: str
-) -> Optional[Dict[str, Any]]:
+def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     '''
         Decodes and validates a JWT access token.
         Returns the token data if valid, None if not.
@@ -61,6 +59,6 @@ def decode_access_token(
         logger.info(message)
         return payload
     except JWTError as e:
-        message = f'Invalid JWT token: {e}'
-        logger.warning(message)
+        error_msg = f'Invalid JWT token: {e}'
+        logger.warning(error_msg)
         return None
