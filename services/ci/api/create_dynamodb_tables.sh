@@ -47,6 +47,12 @@ TABLES=(
     # que es exactamente para lo que sirve la clave de ordenamiento.
     "minerals:mineral_id:S"
     "mining_prices:mineral_id:S:date:S"
+    # Mercado: los fixes de la LBMA y el cash de la LME leídos a diario antes de
+    # que el Ministerio publique; misma clave que mining_prices en tabla aparte
+    # para no mezclar la serie oficial con un sustituto. Las escalas del Art.
+    # 227 son nueve filas que se leen enteras en cada estimación.
+    "mining_market_prices:mineral_id:S:date:S"
+    "mining_royalty_rules:mineral_id:S"
     # Capa de IA. Los roles se versionan, así que la clave de ordenamiento es la
     # versión; el caché es una sola clave porque solo se busca por ella exacta.
     "ai_prompts:view:S:version:N"

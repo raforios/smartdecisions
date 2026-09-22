@@ -24,6 +24,11 @@ RULES=(
     # (SCHEDULED_SYNC_DAYS), no acá: el disparador dice CUÁNDO, el dominio dice
     # CUÁNTO reparar.
     "quotes-daily-rate-sync|quotes-handler-service|cron(0 13 * * ? *)|{\"task\":\"sync_rates\"}|Sync diario del tipo de cambio oficial del BCB"
+    # La LBMA fija el oro AM a las 10:30 y la plata al mediodía de Londres; la
+    # LME cierra el cash a las 17:00 de Londres y Westmetall lo publica esa
+    # tarde. A las 19:00 de La Paz (23:00 UTC) ya está todo el día; la ventana
+    # MARKET_SYNC_DAYS del servicio repara lo que un día fallido dejó.
+    "mining-analysis-daily-market-sync|mining-analysis-handler-service|cron(0 23 * * ? *)|{\"task\":\"sync_market\"}|Sync diario de LBMA y LME para anticipar la cotización oficial"
 )
 
 REGION="us-east-1"
