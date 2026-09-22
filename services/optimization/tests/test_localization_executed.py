@@ -343,3 +343,15 @@ def test_link_routes_to_plan_only_touches_routes_without_a_plan(
     assert executed.get_executed_route(
         dynamodb, OWNER, open_route['id']
     )['planned_route_id'] == open_route['planned_route_id']
+
+
+def test_parse_timestamp_moves_device_time_to_the_service_day():
+    '''
+        A phone reporting 01:15 UTC on the 22nd is still on the 21st in La Paz:
+        the route key, the stock day and the reopen check must all say the 21st.
+    '''
+    local = executed.parse_timestamp('2026-09-22T01:15:56Z')
+    assert local.date().isoformat() == '2026-09-21'
+    assert executed.build_executed_id('2026-09-22T01:15:56Z').startswith('20260921T2115')
+    naive = executed.parse_timestamp('2026-09-21T21:15:56')
+    assert naive.tzinfo is not None and naive.hour == 21

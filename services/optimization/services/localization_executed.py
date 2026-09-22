@@ -12,6 +12,7 @@
     the owner's partition.
 '''
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Tuple
 
 from boto3.resources.base import ServiceResource
@@ -41,7 +42,7 @@ from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.localization import get_planned_route
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
+from services.utils import TARGET_TIMEZONE, get_current_time_gmt
 
 _SETTINGS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES': str,
@@ -59,23 +60,32 @@ _ID_STAMP = '%Y%m%dT%H%M%S'
 # ---------------------------------------------------------------------------
 def parse_timestamp(value: str) -> datetime:
     '''
-        The ISO 8601 stamp a device sent, or INVALID_ROW.
+        The ISO 8601 stamp a device sent, in the service timezone.
+
+        Devices report in UTC ("...Z") or with their own offset; the day a
+        route belongs to, the day a sale draws stock from and the "same day"
+        of a reopen are all the operation's local day, so the stamp is moved
+        to TARGET_TIMEZONE here once. A naive stamp is taken as already local.
 
         Args:
             value (str): Timestamp as received.
 
         Returns:
-            datetime: Parsed value.
+            datetime: Parsed value, timezone-aware, in the service timezone.
 
         Raises:
             InvalidInputError: If `value` is not ISO 8601.
     '''
     try:
-        return datetime.fromisoformat(value)
+        moment = datetime.fromisoformat(value)
     except ValueError as error:
         error_msg = f'Timestamp is not ISO 8601: {value!r}.'
         logger.warning(error_msg)
         raise InvalidInputError(detail = LocalizationError.INVALID_ROW.value) from error
+    local_zone = ZoneInfo(TARGET_TIMEZONE)
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo = local_zone)
+    return moment.astimezone(local_zone)
 
 
 def build_executed_id(start_time: str) -> str:
@@ -323,17 +333,21 @@ def create_executed_route(
             route_data.max_distance_start_point,
             LocalizationError.OUTSIDE_START_GEOFENCE
         )
+    # Stored stamps are all in the service timezone, so "which is later" is
+    # a plain string comparison whatever offset each device reported in.
+    start_time = parse_timestamp(route_data.start_time).isoformat()
     item: ExecutedRouteItem = {
         'owner_email': owner_email,
         'id': build_executed_id(route_data.start_time),
         **route_data.model_dump(),
+        'start_time': start_time,
         'end_time': None,
         'end_latitude': None,
         'end_longitude': None,
         'max_distance_end_point': None,
         'last_latitude': route_data.start_latitude,
         'last_longitude': route_data.start_longitude,
-        'last_timestamp': route_data.start_time,
+        'last_timestamp': start_time,
         'points': []
     }
     put_unique_composite_item(
@@ -372,15 +386,17 @@ def register_executed_point(
     # The sale draws from the company's stock of the day the visit happened;
     # if the units are not there the visit is not recorded either, so the
     # seller learns it on the spot and does not promise what cannot ship.
+    reported_at = parse_timestamp(point_data.timestamp)
     draw_down_stock(
         dynamodb_resource = dynamodb_resource,
         owner_email = owner_email,
-        day = parse_timestamp(point_data.timestamp).date().isoformat(),
+        day = reported_at.date().isoformat(),
         items = point_data.items
     )
     point: ExecutedPointItem = {
         'id': new_id(),
-        **point_data.model_dump(exclude = {'executed_route_id'}, mode = 'json')
+        **point_data.model_dump(exclude = {'executed_route_id'}, mode = 'json'),
+        'timestamp': reported_at.isoformat()
     }
     route.setdefault('points', []).append(point)
     route['last_latitude'] = point['latitude']
@@ -423,8 +439,9 @@ def close_executed_route(
             LocalizationError.OUTSIDE_END_GEOFENCE
         )
     route.update(update_data.model_dump())
+    route['end_time'] = parse_timestamp(update_data.end_time).isoformat()
     _save_executed_route(dynamodb_resource, route)
-    message = f'Executed route {executed_route_id} closed at {update_data.end_time}.'
+    message = f'Executed route {executed_route_id} closed at {route["end_time"]}.'
     logger.info(message)
     return route
 
@@ -451,7 +468,7 @@ def reopen_executed_route(
         error_msg = f'Executed route {executed_route_id} is already open.'
         logger.warning(error_msg)
         raise InvalidInputError(detail = LocalizationError.ROUTE_ALREADY_OPEN.value)
-    started = datetime.fromisoformat(route['start_time']).date()
+    started = parse_timestamp(route['start_time']).date()
     if started != get_current_time_gmt().date():
         error_msg = f'Executed route {executed_route_id} started on {started}; reopen refused.'
         logger.warning(error_msg)
