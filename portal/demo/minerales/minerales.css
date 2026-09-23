@@ -452,3 +452,13 @@
     }
     .estimate-detail .rule-formula { grid-column: 1 / -1; }
 }
+
+/* The contrast against the projected table. Framed like a note, not like the
+   rule: it explains a difference the reader is about to notice, and hiding it
+   would cost more than explaining it. */
+.estimate-contrast {
+    border-left: 3px solid #d3dae6;
+    padding-left: .75rem;
+    margin: -.4rem 0 1rem;
+    max-width: 52rem;
+}

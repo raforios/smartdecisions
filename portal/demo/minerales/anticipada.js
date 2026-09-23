@@ -61,8 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (value === null || value === undefined) {
             return '<td class="num muted-cell">—</td>';
         }
+        // `money`, not `percent`: an alícuota is a level, not a change, and the
+        // leading + of a variation made 5 % read as "subió cinco".
         return `<td class="num">
-            <span class="official-value">${percent(value, 2)}</span>
+            <span class="official-value">${money(value, 2)} %</span>
             ${basis ? `<span class="official-window">${BASIS_LABELS[basis] || basis}</span>` : ''}
         </td>`;
     }
@@ -136,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formula = rule
             ? `regalía = ${money(rule.slope, 5)} × cotización ${
                 rule.intercept < 0 ? '−' : '+'} ${money(Math.abs(rule.intercept), 5)},
-               acotada entre ${percent(rule.min_rate)} y ${percent(rule.max_rate)};
+               acotada entre ${money(rule.min_rate, 2)} % y ${money(rule.max_rate, 2)} %;
                venta interna = ${money(rule.internal_factor * 100, 0)} % de la de exportación`
             : 'sin escala cargada para este mineral';
 
