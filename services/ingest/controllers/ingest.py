@@ -51,7 +51,7 @@ from services.ingest_utils import (
     upload_bytes,
     upload_excel
 )
-from services.utils import handle_service_errors
+from services.utils import audit_event, handle_service_errors
 
 # The companion sheets of a sales upload, in the order they are read. Each
 # one is a pipeline over its own sheet and the spec that says how to store it.
@@ -98,6 +98,7 @@ def _to_response(
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 @handle_service_errors('INGEST')
+@audit_event('INGEST', 'Dataset', 'UPLOAD')
 async def ingest_excel_controller(
     dynamodb_resource: ServiceResource,
     file_bytes: bytes,
@@ -177,6 +178,7 @@ async def ingest_excel_controller(
 
 
 @handle_service_errors('INGEST')
+@audit_event('INGEST', 'Dataset', 'UPLOAD_S3')
 async def ingest_excel_from_s3_controller(
     dynamodb_resource: ServiceResource,
     file_key: str,

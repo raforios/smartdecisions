@@ -74,7 +74,7 @@ def test_scenario_controller_returns_its_model(
         outcomes included: the failure this guards against is exactly a nested
         payload that never gets coerced into its model.
     '''
-    response = _run(controllers.sale_scenario_controller(
+    response = _run(controllers.preview_sale_scenario_controller(
         scenario = SaleScenarioRequest(
             quantity = 10, unit_price_usd = 100,
             days_ahead = 30, mineral_change_percent = -5.0

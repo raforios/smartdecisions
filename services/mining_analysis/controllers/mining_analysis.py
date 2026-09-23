@@ -7,10 +7,7 @@ from typing import Any, Dict, List
 from fastapi import Request
 from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
-from services.utils import (
-    _trigger_bulk_audit,
-    handle_service_errors,
-)
+from services.utils import audit_event, handle_service_errors
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 from services.price_forecast import get_price_forecast_service
@@ -47,6 +44,7 @@ DEFAULT_EXCHANGE_RATE = Decimal(_SETTINGS['ROYALTIES_DEFAULT_EXCHANGE_RATE'])
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 @handle_service_errors('MINING_ANALYSIS')
+@audit_event('MINING_ANALYSIS', 'MiningPrices', 'BULK_UPLOAD')
 async def bulk_upload_mining_controller(
     db: Session,
     file_content: bytes,
@@ -106,10 +104,11 @@ async def get_royalties_summary_controller(
     return RoyaltySummaryResponse(**result)
 
 @handle_service_errors('MINING_ANALYSIS')
+@audit_event('MINING_ANALYSIS', 'Royalties', 'UPLOAD')
 async def upload_royalties_controller(
     db: Session,
     request: Request, # pylint: disable=unused-argument
-    current_user: str,
+    current_user: str, # pylint: disable=unused-argument
     file_name: str,
     file_content: bytes,
     exchange_rate: Decimal = DEFAULT_EXCHANGE_RATE
@@ -122,13 +121,6 @@ async def upload_royalties_controller(
 
     # Procesamiento con tipo de cambio
     result = await process_royalties_excel_service(db, file_content, exchange_rate)
-
-    _trigger_bulk_audit(
-        microservice = 'MINING_ANALYSIS',
-        entity = 'RoyaltyPayment',
-        user = current_user,
-        result = result
-    )
 
     return result
 

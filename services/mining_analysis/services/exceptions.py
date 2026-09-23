@@ -72,7 +72,7 @@ class InvalidInputError(HTTPException):
 
 class UnauthorizedError(HTTPException):
     '''
-        Exception thrown when a user attempts to access a protected resource without 
+        Exception thrown when a user attempts to access a protected resource without
         valid or required authentication credentials.
         Returns HTTP 401 Unauthorized.
         This means that authentication is required and has failed or has not been provided.

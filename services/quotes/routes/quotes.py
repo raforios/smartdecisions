@@ -10,7 +10,7 @@ from controllers.quotes import (
     get_bench_controller,
     get_forecast_controller,
     get_history_controller,
-    sale_scenario_controller,
+    preview_sale_scenario_controller,
     sync_rates_controller
 )
 from models.quotes import USD
@@ -116,7 +116,7 @@ async def sale_scenario_endpoint(
                f'{scenario.days_ahead} day(s).')
     logger.info(message)
 
-    return await sale_scenario_controller(
+    return await preview_sale_scenario_controller(
         scenario = scenario,
         current_user = current_user,
         request = request

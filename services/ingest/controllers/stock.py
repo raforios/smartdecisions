@@ -10,7 +10,7 @@ from controllers.common import CompanionSpec, load_sales_frame, store_companion
 from schemas.ingest import StockResponse
 from services.ingest_utils import get_owned_dataset
 from services.stock import parse_and_validate
-from services.utils import handle_service_errors
+from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
 # name, caller, request— and the three companion controllers are the same
@@ -22,6 +22,7 @@ SPEC = CompanionSpec(name = 'stock', response_model = StockResponse)
 
 
 @handle_service_errors('INGEST')
+@audit_event('INGEST', 'Stock', 'UPLOAD')
 async def ingest_stock_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,

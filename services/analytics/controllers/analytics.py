@@ -48,7 +48,7 @@ from services.analytics_utils import (
     save_credit_policy
 )
 from services.environment import load_and_validate_env_vars
-from services.utils import handle_service_errors
+from services.utils import audit_event, handle_service_errors
 
 
 # Caps on opportunities kept in the run (DynamoDB item limit + usable table)
@@ -294,6 +294,7 @@ async def get_credit_policy_controller(
 
 
 @handle_service_errors('ANALYTICS')
+@audit_event('ANALYTICS', 'CreditPolicy', 'UPSERT')
 async def save_credit_policy_controller(
     dynamodb_resource: ServiceResource,
     policy: CreditPolicyRequest,
@@ -380,6 +381,7 @@ async def segmentation_controller(
 
 
 @handle_service_errors('ANALYTICS')
+@audit_event('ANALYTICS', 'AnalyticsRun', 'RUN')
 async def run_analytics_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,

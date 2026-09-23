@@ -11,10 +11,11 @@ from schemas.ai import (
     RoleSummary
 )
 from services.ai import explain_service, list_roles_service, save_role_service
-from services.utils import handle_service_errors
+from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('AI')
+@audit_event('AI', 'Explanation', 'GENERATE')
 async def explain_controller(
     payload: ExplainRequest,
     current_user: str, # pylint: disable=unused-argument
@@ -55,6 +56,7 @@ async def list_roles_controller(
 
 
 @handle_service_errors('AI')
+@audit_event('AI', 'Role', 'UPSERT')
 async def save_role_controller(
     definition: RoleDefinition,
     current_user: str, # pylint: disable=unused-argument

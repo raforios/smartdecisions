@@ -22,10 +22,11 @@ from services.quotes import (
     sale_scenario_service,
     sync_rates_service
 )
-from services.utils import handle_service_errors
+from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('QUOTES')
+@audit_event('QUOTES', 'ExchangeRate', 'SYNC')
 async def sync_rates_controller(
     days_back: int,
     currency: str,
@@ -76,7 +77,7 @@ async def get_history_controller(
 
 
 @handle_service_errors('QUOTES')
-async def sale_scenario_controller(
+async def preview_sale_scenario_controller(
     scenario: SaleScenarioRequest,
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument

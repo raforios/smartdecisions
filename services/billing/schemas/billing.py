@@ -78,6 +78,18 @@ class ProductIn(BaseModel):
     min_stock: float = Field(0, ge = 0)
     requires_prescription: bool = False
     is_active: bool = True
+    # Homologación ante el SIN. Sin estos tres códigos la factura electrónica
+    # se rechaza, así que se piden desde ya aunque hoy no se envíe nada: pedirlos
+    # después obligaría a revisar un catálogo entero producto por producto.
+    sin_activity_code: Optional[str] = Field(
+        None, max_length = 20, description = 'Actividad económica del emisor (ej. 451010).'
+    )
+    sin_product_code: Optional[str] = Field(
+        None, max_length = 20, description = 'Código de producto/servicio del SIN.'
+    )
+    sin_unit_code: Optional[int] = Field(
+        None, ge = 1, le = 200, description = 'Unidad de medida del catálogo del SIN.'
+    )
 
 
 class ProductPatch(BaseModel):
@@ -92,6 +104,9 @@ class ProductPatch(BaseModel):
     min_stock: Optional[float] = Field(None, ge = 0)
     requires_prescription: Optional[bool] = None
     is_active: Optional[bool] = None
+    sin_activity_code: Optional[str] = Field(None, max_length = 20)
+    sin_product_code: Optional[str] = Field(None, max_length = 20)
+    sin_unit_code: Optional[int] = Field(None, ge = 1, le = 200)
 
 
 class ProductOut(BaseModel):
@@ -110,10 +125,16 @@ class ProductOut(BaseModel):
     min_stock: float
     requires_prescription: bool
     is_active: bool
+    sin_activity_code: Optional[str] = None
+    sin_product_code: Optional[str] = None
+    sin_unit_code: Optional[int] = None
     available_quantity: float = 0
     sale_price: Optional[float] = None
     next_expiry: Optional[date] = None
     below_minimum: bool = False
+    ready_to_invoice: bool = Field(
+        False, description = 'Tiene los tres códigos del SIN homologados.'
+    )
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -414,3 +435,41 @@ class BillingDashboard(BaseModel):
     expired: List[ExpiringLot]
     low_stock: List[LowStockProduct]
     top_products: List[TopProduct]
+
+
+# --- grouped arguments -------------------------------------------------------
+
+class DateWindow(BaseModel):
+    '''
+        The days a listing covers. The two bounds are one concept: they travel
+        together and neither is useful alone.
+    '''
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+
+
+class LotQuery(BaseModel):
+    '''
+        Which SKU's batches are being asked for, and whether the exhausted ones
+        count.
+    '''
+    sku: str = Field(..., min_length = 1, max_length = 40)
+    only_available: bool = True
+
+
+class ProductEdit(BaseModel):
+    '''
+        Which SKU is being edited and what changes about it.
+    '''
+    sku: str = Field(..., min_length = 1, max_length = 40)
+    patch: ProductPatch
+
+
+class LotEdit(BaseModel):
+    '''
+        Which batch is being re-priced and to what. The SKU and the lot address
+        one row; neither means anything without the other.
+    '''
+    sku: str = Field(..., min_length = 1, max_length = 40)
+    lot_id: str = Field(..., min_length = 1, max_length = 60)
+    sale_price: float = Field(..., gt = 0)
