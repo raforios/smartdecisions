@@ -160,6 +160,33 @@ Los dos trabajos que entraron en ese despliegue:
    acceso de dominio es `prices_dyb.py`. **104 tests en verde y
    `/verificar-servicio` en ALL PASS** (Pylint 10.00, firmas, type hints).
 
+**Pendiente de un redespliegue de MINING_ANALYSIS.** Al probar el botón
+"Actualizar del mercado" desde el portal, el endpoint devolvió 500: el
+decorador de auditoría leía `.id` sobre cualquier modelo Pydantic y
+`MarketSyncResult` es un resumen, no una fila. Corregido en
+`services/utils.py` —que en este servicio sigue siendo la variante MySQL, no
+la estándar— con dos tests de regresión. La corrida programada nunca pasó por
+ahí, por eso el sync nocturno funcionaba y el botón no.
+
+**Frontend de minerales terminado y publicado (22-sep).** Panel "Cotización
+anticipada" en `portal/demo/minerales/`: promedio corriente contra la oficial
+vigente, alícuotas del Art. 227 con la parte de la escala que las decidió
+(techo/piso/fórmula), días cotizados y confianza; al desplegar un mineral, los
+días que construyeron el promedio y la fórmula legal que produjo la alícuota.
+Selector "Al día" para verificar el corte de quincena sin esperar al
+calendario, y botón de sync para ADMIN/MANAGER. Los formatos y el catálogo de
+códigos se extrajeron a `minerales_shared.js`, compartido con el panel viejo.
+
+**Flujo de Solicitudes eliminado de SUPPLIES (23-sep).** Como pediste: no lo
+usa el producto de farmacias y no tenía sentido cargarlo. Se fueron
+`routes/request.py`, `controllers/request.py`, `schemas/request.py` y
+`tests/test_reservations.py` (1.116 líneas), más la máquina de estados y las
+reservas de stock de `supplies_logic.py`, el campo `reserved_stock`, el rol
+REQUESTER y el origen REQUEST del kardex. **Consecuencia a decidir:** el
+dashboard del almacén perdió tres de sus KPI y el feed de solicitudes —eran
+suyos—, y el reporte de salidas ya no nombra un destinatario, sólo quién
+registró el movimiento.
+
 **Reunión comercial del jueves.** Lo que se demuestra —módulo comercial y
 RUTAS— ya está desplegado y probado; el minerales queda como avance.
 
@@ -169,27 +196,32 @@ RUTAS— ya está desplegado y probado; el minerales queda como avance.
 
 En orden.
 
-1. **Frontend "Cotización anticipada"** en el módulo de minerales — el backend
-   ya sirve los datos.
-2. **Facturador para farmacias sobre SUPPLIES** — hay clientes esperando. Notas
-   de venta que mueven inventario y notas de compra/recepción de laboratorios y
-   proveedores, sobre el inventario que ya existe (SKU, descripción,
-   laboratorio, costo, precio de venta al público, cantidad disponible).
-   Decidido con Rafael: portarlo a **DynamoDB**; SaaS multicliente desde el
-   inicio (~20 USD por usuario al mes, mil farmacias potenciales sólo en La
-   Paz), accesible desde el celular; **costo y precio de venta por lote**,
-   porque los fija el laboratorio o el importador en cada compra; comprador con
-   nombre y NIT/CI; descuentos por línea, habilitables; forma de pago
-   (efectivo/QR/tarjeta); numeración propia por farmacia; lote con vencimiento y
-   **PEPS que vende primero lo que vence antes**; nota de venta imprimible en
-   térmica de 58 y 80 mm desde el navegador (HTML/CSS, como en MINING_SUMMIT);
-   estilo visual de SmartDecisions. El flujo de solicitudes internas de SUPPLIES
-   **se elimina**: no aplica y no se deja código muerto. Ambos productos deben
-   funcionar sincronizados **y** por separado, porque se venden por separado o
-   juntos. Fase siguiente: factura electrónica según la RND 11 (SIAT, SOAP/XML).
-3. **Sección "Usuarios"** para que un MANAGER cree y administre a su gente.
-4. **Decidir qué hacer con `mining_analysis/services/utils.py`** — 815 líneas de
-   la variante MySQL con carga masiva que ya nadie llama.
+1. **Facturador para farmacias (SUPPLIES) — backend terminado, falta
+   desplegar y la pantalla.** Módulo paralelo dentro de SUPPLIES sobre
+   DynamoDB, con el mismo patrón que RUTAS dentro de OPTIMIZATION: archivos
+   `*/pharmacy*.py` nuevos, `db_connection.py` y `crud.py` estándar de Dynamo,
+   y lo relacional del almacén movido a `*_sql.py`. Cinco tablas ya creadas en
+   AWS. 22 tests propios y `/verificar-servicio` en ALL PASS.
+
+   Reglas acordadas que ya están implementadas: multicliente desde el inicio
+   (el dueño es la farmacia y es parte de cada clave); **costo y precio de
+   venta por lote**, porque los fija el laboratorio en cada compra; **PEPS con
+   el reloj (FEFO)** — sale primero lo que vence antes, y una línea que abarca
+   dos lotes se cobra al precio de cada uno; comprador con nombre y NIT/CI;
+   descuentos por línea sólo si la farmacia los habilita; forma de pago
+   (efectivo/QR/tarjeta); numeración propia por farmacia, atómica; anular una
+   nota devuelve las unidades a los lotes exactos de los que salieron.
+
+   Falta: despliegue de Rafael, y el frontend (mostrador, catálogo, recepción,
+   e impresión térmica de 58 y 80 mm desde el navegador, como en
+   MINING_SUMMIT) con el estilo visual de SmartDecisions. Fase siguiente:
+   factura electrónica según la RND 11 (SIAT, SOAP/XML).
+
+2. **Sección "Usuarios"** para que un MANAGER cree y administre a su gente.
+3. **Alinear `mining_analysis/services/utils.py` al boilerplate estándar** — es
+   la variante MySQL (828 líneas contra 408 del estándar); de ahí salió el 500
+   del sync. Las 420 líneas extra son la carga masiva que `/etl/upload` y
+   `/royalties/upload` todavía usan, así que no es un reemplazo directo.
 
 **Lo que falta para vender, no para demostrar:** control de suscripción,
 retención de datos y persistencia de lo que produce la capa de IA.
