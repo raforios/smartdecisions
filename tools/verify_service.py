@@ -11,7 +11,7 @@
         size         no own file at or above the split threshold (800 lines)
         duplicates   no two functions with the same body inside the service
         except-pass  no `except ...: pass`
-        env-commas   no comma inside a .env value
+        env-shorthand  no comma and no brace inside a .env value
         getenv       no `os.getenv` / `os.environ` outside environment.py
         log-vars     WARNING/ERROR logs use `error_msg`, INFO uses `message`
 
@@ -147,16 +147,28 @@ def check_except_pass(service: Path) -> tuple[bool, str]:
     return not hits, ', '.join(hits) if hits else 'none'
 
 
-def check_env_commas(service: Path) -> tuple[bool, str]:
-    '''No comma inside a .env value: the deploy splits variables on commas.'''
+def check_env_shorthand(service: Path) -> tuple[bool, str]:
+    '''
+        No comma and no brace inside a .env value.
+
+        The deploy hands the whole file to `--environment Variables={...}`,
+        where a comma separates variables and a brace opens a nested
+        structure. A URL template written as `LME_{symbol}_cash` aborted a
+        deployment after the code had already been uploaded.
+    '''
     env = service / '.env'
     if not env.exists():
         return True, 'no .env'
     bad = []
     for number, line in enumerate(env.read_text().splitlines(), 1):
         code = line.split('#', 1)[0]
-        if '=' in code and ',' in code.split('=', 1)[1]:
-            bad.append(f'.env:{number}')
+        if '=' not in code:
+            continue
+        value = code.split('=', 1)[1]
+        offenders = [name for character, name in ((',', 'coma'), ('{', 'llave'),
+                                                  ('}', 'llave')) if character in value]
+        if offenders:
+            bad.append(f'.env:{number} ({offenders[0]})')
     return not bad, ', '.join(bad) if bad else 'none'
 
 
@@ -225,7 +237,7 @@ CHECKS = (
     ('size', check_size),
     ('duplicates', check_duplicates),
     ('except-pass', check_except_pass),
-    ('env-commas', check_env_commas),
+    ('env-shorthand', check_env_shorthand),
     ('getenv', check_getenv),
     ('log-vars', check_log_vars),
 )

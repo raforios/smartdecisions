@@ -101,8 +101,10 @@ misma disposición, mismas soluciones para los mismos problemas.
 3. **Toda decisión de negocio va al `.env`.** Plazos, decimales, umbrales,
    parámetros de modelos, tamaños de página. Se quedan en el código sólo las
    constantes físicas y las conversiones de unidad.
-4. **Ningún valor del `.env` puede llevar coma.** El despliegue lo pasa entero a
-   `--environment Variables={...}`, donde la coma separa variables.
+4. **Ningún valor del `.env` puede llevar coma ni llave.** El despliegue lo pasa
+   entero a `--environment Variables={...}`: la coma separa variables y la llave
+   abre una estructura anidada. Una plantilla de URL va con `%s`, nunca con
+   `{nombre}`.
 5. **Nunca** credenciales, tokens ni ARNs en el código fuente.
 
 ---
