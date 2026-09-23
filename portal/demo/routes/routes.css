@@ -248,3 +248,47 @@
 /* Cuando el panel se abre entre la cabecera y la tabla necesita aire de los
    dos lados, o queda pegado al encabezado de columnas. */
 .card-head + .ai-answer { margin-bottom: 1.4rem; }
+
+/* --- Sections (Planificar, Planes, Stock del día, En vivo, Comparación) --- */
+.routes-section { margin-top: 1.5rem; }
+.card-head .form-actions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; }
+.card-head select, .card-head input[type="date"] { padding: 0.35rem 0.5rem; }
+#saveDayActions { align-items: center; gap: 0.8rem; margin-bottom: 0.8rem; }
+#saveDayActions .form-note { margin: 0; }
+
+/* Plan status badges reuse the tier badge shape; colours say the state. */
+.tier-badge.status-in-creation { background: #eef1f7; color: #3a4466; }
+.tier-badge.status-active { background: #2d7d46; }
+.tier-badge.status-inactive { background: #5e6580; }
+
+.data-table tr.is-selected td { background: #eef6f5; }
+.data-table tr.is-out td { color: #a33a3a; }
+.data-table td a { color: var(--accent, #0d5c55); font-weight: 600; text-decoration: none; }
+.data-table td a:hover { text-decoration: underline; }
+.routes-sidebar textarea { width: 100%; font: inherit; padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; }
+.legend-row input[type="checkbox"] { margin-right: 0.4rem; }
+
+/* --- Mi ruta (seller's phone screen) --- */
+.seller-container { max-width: 640px; }
+.seller-page .day-summary { margin-bottom: 1rem; }
+.seller-stops { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.8rem 0; }
+.seller-stop {
+    display: flex; align-items: center; gap: 0.8rem;
+    padding: 0.6rem 0.7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
+}
+.seller-stop.is-done { opacity: 0.75; }
+.seller-stop .stop-pin { position: static; flex: 0 0 26px; }
+.seller-stop-name { flex: 1; display: flex; flex-direction: column; font-weight: 600; }
+.seller-stop-name small { font-weight: 400; color: var(--muted); font-size: 0.8rem; }
+.seller-items { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.4rem 0; }
+.seller-item-row { display: grid; grid-template-columns: 1fr 5.5rem auto; gap: 0.4rem; align-items: center; }
+.seller-item-row input, .seller-item-row select { width: 100%; padding: 0.45rem 0.5rem; font: inherit; }
+.field-label { display: block; font-weight: 600; margin-top: 0.4rem; }
+.seller-page .btn { min-height: 44px; }   /* thumbs, not mouse pointers */
+.seller-page .btn-small { min-height: 36px; }
+@media (max-width: 540px) {
+    .seller-page .page-title { font-size: 1.6rem; }
+    .seller-page .day-summary { grid-template-columns: repeat(3, 1fr); }
+}
+.position-line { margin-top: -0.6rem; font-variant-numeric: tabular-nums; }
+.position-line.is-poor { color: #a33a3a; }

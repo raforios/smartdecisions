@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi ruta — SmartDecisions</title>
+    <link rel="stylesheet" href="/styles/demo.css?v=c008b19c74">
+    <link rel="stylesheet" href="/routes/routes.css?v=e7b6c53aab">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="/js/config.js?v=3db97325c2"></script>
+    <script src="/js/auth.js?v=514e2dbfb8" defer></script>
+    <script src="/js/api.js?v=91a5d11ed5" defer></script>
+    <script src="/js/ui.js?v=bd318da6b9" defer></script>
+    <script src="/js/session.js?v=91bb432af9" defer></script>
+    <script src="/routes/routes_tracking.js?v=b028a9f6a2" defer></script>
+    <script src="/routes/vendedor.js?v=f6c1292c0e" defer></script>
+</head>
+<body class="seller-page">
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="/routes/vendedor.html" class="brand">
+            <img src="/assets/bear-face.jpg?v=e028b9fcd7" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <span class="session-chip" id="sessionChip" hidden></span>
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container seller-container">
+        <h1 class="page-title">Mi ruta</h1>
+        <p class="page-subtitle" id="dayLine"></p>
+        <p class="legend-hint position-line" id="positionLine" hidden></p>
+
+        <!-- ====== No route open: pick the plan and start ====== -->
+        <section class="card" id="startCard" hidden>
+            <h3>Empezar el día</h3>
+            <label class="form-stack">
+                <span>Plan de hoy</span>
+                <select id="planSelect"><option value="">Sin plan (ruta libre)</option></select>
+            </label>
+            <p class="legend-hint" id="planHint"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" id="startButton">Iniciar ruta</button>
+            </div>
+            <p class="form-note" id="startNote" aria-live="polite"></p>
+        </section>
+
+        <!-- ====== Route open: stops, visit form, position, close ====== -->
+        <section id="routePanel" hidden>
+            <div class="day-summary" id="routeSummary"></div>
+
+            <div class="card">
+                <div class="card-head">
+                    <h3 id="stopsTitle">Paradas</h3>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-ghost btn-small" id="pingButton">Reportar posición</button>
+                    </div>
+                </div>
+                <div class="seller-stops" id="stopList"></div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary btn-small" id="freeVisitButton">Visita fuera del plan</button>
+                </div>
+            </div>
+
+            <div class="card" id="visitCard" hidden>
+                <h3 id="visitTitle">Registrar visita</h3>
+                <form class="form-stack" id="visitForm" autocomplete="off">
+                    <label><span>Cliente</span><input type="text" id="visitClient" maxlength="64"></label>
+                    <label><span>Resultado</span>
+                        <select id="visitOutcome">
+                            <option value="VENTA">Venta</option>
+                            <option value="SIN_VENTA">Sin venta</option>
+                            <option value="CERRADO">Cerrado</option>
+                            <option value="NO_ENCONTRADO">No encontrado</option>
+                        </select>
+                    </label>
+                    <label id="orderField"><span>Nro. de pedido / factura</span><input type="text" id="visitOrder" maxlength="64"></label>
+                    <div id="itemsField">
+                        <span class="field-label">Productos vendidos</span>
+                        <div class="seller-items" id="itemRows"></div>
+                        <button type="button" class="btn btn-ghost btn-small" id="addItemButton">+ Producto</button>
+                        <p class="legend-hint" id="stockHint"></p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary" id="visitSaveButton">Guardar visita</button>
+                        <button type="button" class="btn btn-ghost" id="visitCancelButton">Cancelar</button>
+                    </div>
+                    <p class="form-note" id="visitNote" aria-live="polite"></p>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Terminar el día</h3>
+                <p class="legend-hint">Cierra la ruta cuando hayas hecho la última visita. Si te equivocas, puedes reabrirla hoy mismo.</p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" id="closeButton">Cerrar ruta</button>
+                </div>
+                <p class="form-note" id="closeNote" aria-live="polite"></p>
+            </div>
+        </section>
+
+        <section class="card" id="closedCard" hidden>
+            <h3>Ruta cerrada</h3>
+            <p id="closedLine"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-ghost" id="reopenButton">Reabrir</button>
+                <button type="button" class="btn btn-primary" id="newRouteButton">Empezar otra ruta</button>
+            </div>
+            <p class="form-note" id="reopenNote" aria-live="polite"></p>
+        </section>
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        <p>Una iniciativa de <strong>BearSoft</strong> · SmartDecisions</p>
+    </div>
+</footer>
+
+</body>
+</html>

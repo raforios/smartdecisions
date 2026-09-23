@@ -165,6 +165,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- Step 1: template download ----------
+    // The version is INGEST's, not ours: the card title and the file name
+    // follow what the service publishes, so a new contract never ships with a
+    // stale "v1" on the screen.
+    const template = { version: '' };
+    window.SD_API.get(`${INGEST_URL}/v1/ingest/template`)
+        .then((info) => {
+            template.version = info.template_version || '';
+            qs('#templateTitle').textContent = template.version
+                ? `Plantilla ${template.version}` : 'Plantilla';
+        })
+        .catch(() => { /* the title stays generic; the download still works */ });
+
     qs('#downloadTemplateButton').addEventListener('click', async () => {
         const button = qs('#downloadTemplateButton');
         const note = qs('#templateNote');
@@ -188,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const downloadUrl = URL.createObjectURL(blob);
             const anchor = document.createElement('a');
             anchor.href = downloadUrl;
-            anchor.download = 'template_ventas_v1.xlsx';
+            anchor.download = `template_ventas_${template.version || 'actual'}.xlsx`;
             document.body.appendChild(anchor);
             anchor.click();
             anchor.remove();

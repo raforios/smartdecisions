@@ -41,5 +41,15 @@ window.SD_CONFIG = {
     // Absolute path to the login page, used by auth/api helpers when they
     // need to bounce the user back. Adjust if the demo is mounted under
     // a different prefix (e.g. '/portal/demo/index.html').
-    LOGIN_PATH:         '/index.html'
+    LOGIN_PATH:         '/index.html',
+
+    // Where a SELLER lands: the phone screen of Rutas, not the module menu.
+    SELLER_HOME:        '/routes/vendedor.html',
+    // How far (metres) the phone may be from the plan's first/last stop to
+    // open or close a route. Sent with each request; the service enforces it.
+    GEOFENCE_METERS:    150,
+    // A reading worse than this (metres of accuracy reported by the device) is
+    // refused: a laptop located by Wi-Fi or IP can be kilometres off, and a
+    // visit registered there is worse than none.
+    GPS_MAX_ACCURACY_METERS: 100
 };

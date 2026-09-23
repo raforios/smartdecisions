@@ -29,17 +29,32 @@
      * that as "no information", never as "expired".
      */
     function getSessionExpiry() {
+        const payload = getClaims();
+        return payload && payload.exp ? new Date(payload.exp * 1000) : null;
+    }
+
+    /**
+     * The decoded JWT payload: email, role, client, exp. AUTH issues the three
+     * claims and every service keys its data by `client` (or the email when
+     * there is none), so the UI reads them from here and never guesses.
+     * Returns null when there is no readable token.
+     */
+    function getClaims() {
         const token = getToken();
         const parts = token.split('.');
         if (parts.length !== 3) return null;
         try {
             let base64 = parts[1].replaceAll('-', '+').replaceAll('_', '/');
             while (base64.length % 4 !== 0) base64 += '=';
-            const payload = JSON.parse(atob(base64));
-            return payload.exp ? new Date(payload.exp * 1000) : null;
+            return JSON.parse(atob(base64));
         } catch (decodeError) {
             return null;
         }
+    }
+
+    function getRole() {
+        const claims = getClaims();
+        return (claims && claims.role) || '';
     }
 
     function clearSession() {
@@ -108,6 +123,8 @@
         getToken,
         getEmail,
         getSessionExpiry,
+        getClaims,
+        getRole,
         isAuthenticated,
         clearSession,
         login,

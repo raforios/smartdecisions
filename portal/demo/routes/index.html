@@ -4,24 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rutas — SmartDecisions</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=b715e581c6">
+    <link rel="stylesheet" href="/styles/demo.css?v=c008b19c74">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="">
-    <link rel="stylesheet" href="routes.css?v=32c696ddf7">
+    <link rel="stylesheet" href="/routes/routes.css?v=e7b6c53aab">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
-    <script src="../js/config.js?v=cea826bc9c"></script>
-    <script src="../js/auth.js?v=33efdcbe59" defer></script>
-    <script src="../js/api.js?v=3ed1e6bc89" defer></script>
-    <script src="../js/ui.js?v=bd318da6b9" defer></script>
-    <script src="../js/session.js?v=91bb432af9" defer></script>
-    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="/js/config.js?v=3db97325c2"></script>
+    <script src="/js/auth.js?v=514e2dbfb8" defer></script>
+    <script src="/js/api.js?v=91a5d11ed5" defer></script>
+    <script src="/js/ui.js?v=bd318da6b9" defer></script>
+    <script src="/js/session.js?v=91bb432af9" defer></script>
+    <script src="/js/ai.js?v=ee4edb4da5" defer></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin="" defer></script>
-    <script src="routes.js?v=cd79b1022b" defer></script>
+    <script src="/routes/routes_tracking.js?v=b028a9f6a2" defer></script>
+    <script src="/routes/routes.js?v=90b840bdad" defer></script>
+    <script src="/routes/routes_plans.js?v=342ec54586" defer></script>
+    <script src="/routes/routes_stock.js?v=26dcb8e1ce" defer></script>
+    <script src="/routes/routes_live.js?v=3e259f19e7" defer></script>
+    <script src="/routes/routes_compare.js?v=7c9b4d7215" defer></script>
 </head>
 <body>
 
@@ -33,6 +38,7 @@
         </a>
         <div class="demo-nav-actions">
             <a href="/home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <a href="/routes/vendedor.html" class="btn btn-ghost btn-small" title="La pantalla del vendedor en el teléfono">Mi ruta</a>
             <span class="session-chip" id="sessionChip" hidden></span>
             <span class="user-chip" id="userChip">…</span>
             <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
@@ -43,8 +49,37 @@
 <main>
     <div class="container">
         <h1 class="page-title">Rutas</h1>
-        <p class="page-subtitle">Días de visita y orden de paradas sobre la red vial, a partir de la cartera de clientes.</p>
+        <p class="page-subtitle">Planifica las visitas, sigue a los vendedores en el día y compara lo planificado con lo que pasó.</p>
 
+        <div class="analysis-menu" id="sectionMenu">
+            <button type="button" class="analysis-card is-active" data-section="planner">
+                <span class="analysis-icon">🗺️</span>
+                <span class="analysis-title">Planificar</span>
+                <span class="analysis-desc">Días de visita y orden de paradas a partir de la cartera de clientes.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="plans">
+                <span class="analysis-icon">📋</span>
+                <span class="analysis-title">Planes</span>
+                <span class="analysis-desc">Rutas guardadas, importadas o inferidas; asígnalas y actívalas.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="stock">
+                <span class="analysis-icon">📦</span>
+                <span class="analysis-title">Stock del día</span>
+                <span class="analysis-desc">Lo que hay por producto al empezar el día y lo que va quedando.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="live">
+                <span class="analysis-icon">📍</span>
+                <span class="analysis-title">En vivo</span>
+                <span class="analysis-desc">Dónde está cada vendedor ahora y qué reportó hoy.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="compare">
+                <span class="analysis-icon">🎯</span>
+                <span class="analysis-title">Comparación</span>
+                <span class="analysis-desc">Plan contra ejecución: paradas cumplidas, visitas y ventas.</span>
+            </button>
+        </div>
+
+        <div class="routes-section" data-section="planner">
         <!-- Shown when no sales file has been uploaded yet. -->
         <section class="card empty-state" id="noDataset" hidden>
             <h3>Primero sube tu archivo de ventas</h3>
@@ -111,6 +146,12 @@
             <!-- ====== Map + stops ====== -->
             <section class="routes-main">
                 <div class="day-summary" id="daySummary" hidden></div>
+                <div class="form-actions" id="saveDayActions" hidden>
+                    <button type="button" class="btn btn-secondary btn-small" id="saveDayButton">
+                        Guardar este día como plan
+                    </button>
+                    <span class="form-note" id="saveDayNote" aria-live="polite"></span>
+                </div>
                 <div class="routes-map-wrapper">
                     <div id="map" class="routes-map"></div>
                     <div class="map-overlay" id="mapOverlay">
@@ -147,6 +188,211 @@
                 </div>
             </section>
         </section>
+        </div>
+
+        <!-- ====== Planes ====== -->
+        <div class="routes-section" data-section="plans" hidden>
+            <section class="routes-layout">
+                <aside class="routes-sidebar">
+                    <article class="card">
+                        <h3>Importar un plan</h3>
+                        <p class="legend-hint">
+                            CSV con una fila por parada: <code>route_code, route_name,
+                            point_name, secuencial, latitude, longitude</code> y opcionales
+                            <code>description, seller, reference_data, client_id</code>.
+                        </p>
+                        <form class="form-stack" id="bulkPlanForm">
+                            <input type="file" id="bulkPlanFile" accept=".csv,.txt">
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small" id="bulkPlanButton">Importar</button>
+                            </div>
+                            <p class="form-note" id="bulkPlanNote" aria-live="polite"></p>
+                        </form>
+                    </article>
+                    <article class="card">
+                        <h3>Inferir del día trabajado</h3>
+                        <p class="legend-hint">
+                            Si un vendedor salió sin plan, sus visitas se vuelven el plan de ese día.
+                        </p>
+                        <form class="form-stack" id="inferForm">
+                            <label><span>Vendedor</span><input type="text" id="inferSeller" placeholder="Nombre o email"></label>
+                            <label><span>Fecha</span><input type="date" id="inferDate"></label>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small" id="inferButton">Crear plan</button>
+                            </div>
+                            <p class="form-note" id="inferNote" aria-live="polite"></p>
+                        </form>
+                    </article>
+                </aside>
+                <section class="routes-main">
+                    <div class="card stops-card">
+                        <div class="card-head">
+                            <h3>Planes guardados</h3>
+                            <div class="form-actions">
+                                <select id="plansStatusFilter">
+                                    <option value="">Todos los estados</option>
+                                    <option value="IN CREATION">En creación</option>
+                                    <option value="ACTIVE">Activos</option>
+                                    <option value="INACTIVE">Inactivos</option>
+                                </select>
+                                <button type="button" class="btn btn-ghost btn-small" id="plansRefresh">Actualizar</button>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="plansTable">
+                                <thead><tr>
+                                    <th>Código</th><th>Ruta</th><th>Vendedor</th>
+                                    <th class="numeric">Paradas</th><th>Estado</th><th>Creado</th><th></th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <p class="form-note" id="plansNote" aria-live="polite"></p>
+                    </div>
+                    <div class="card stops-card" id="planDetailCard" hidden>
+                        <div class="card-head"><h3 id="planDetailTitle">Paradas del plan</h3></div>
+                        <div class="routes-map-wrapper"><div id="planMap" class="routes-map"></div></div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="planStopsTable">
+                                <thead><tr><th>#</th><th>Parada</th><th>Cliente</th><th class="numeric">Lat</th><th class="numeric">Lon</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+        <!-- ====== Stock del día ====== -->
+        <div class="routes-section" data-section="stock" hidden>
+            <section class="routes-layout">
+                <aside class="routes-sidebar">
+                    <article class="card">
+                        <h3>Cargar el stock de un día</h3>
+                        <p class="legend-hint">
+                            Una línea por producto: <code>SKU, cantidad</code> y opcionalmente el
+                            nombre. Volver a cargar el mismo día lo reemplaza y conserva lo ya vendido.
+                        </p>
+                        <form class="form-stack" id="stockForm">
+                            <label><span>Fecha</span><input type="date" id="stockDate"></label>
+                            <label><span>Productos</span>
+                                <textarea id="stockLines" rows="8" placeholder="SKU-001, 120, Agua 2L&#10;SKU-002, 40"></textarea>
+                            </label>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small" id="stockLoadButton">Cargar</button>
+                            </div>
+                            <p class="form-note" id="stockNote" aria-live="polite"></p>
+                        </form>
+                    </article>
+                </aside>
+                <section class="routes-main">
+                    <div class="day-summary" id="stockSummary" hidden></div>
+                    <div class="card stops-card">
+                        <div class="card-head">
+                            <h3>Disponible por producto</h3>
+                            <div class="form-actions">
+                                <input type="date" id="stockViewDate">
+                                <button type="button" class="btn btn-ghost btn-small" id="stockRefresh">Actualizar</button>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="stockTable">
+                                <thead><tr>
+                                    <th>SKU</th><th>Producto</th>
+                                    <th class="numeric">Inicial</th><th class="numeric">Vendido</th><th class="numeric">Disponible</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <p class="form-note" id="stockViewNote" aria-live="polite"></p>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+        <!-- ====== En vivo ====== -->
+        <div class="routes-section" data-section="live" hidden>
+            <section class="routes-layout">
+                <aside class="routes-sidebar">
+                    <article class="card">
+                        <h3>Vendedores</h3>
+                        <p class="legend-hint">Se toman de los planes activos y de las rutas de hoy; agrega otros si hace falta.</p>
+                        <form class="form-stack" id="liveForm">
+                            <label><span>Vendedores (uno por línea)</span>
+                                <textarea id="liveSellers" rows="5"></textarea>
+                            </label>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small" id="liveRefresh">Actualizar</button>
+                                <label class="legend-row"><input type="checkbox" id="liveAuto" checked> cada 30 s</label>
+                            </div>
+                            <p class="form-note" id="liveNote" aria-live="polite"></p>
+                        </form>
+                    </article>
+                    <article class="card">
+                        <h3>Rutas de hoy</h3>
+                        <div class="day-list" id="liveRoutes"></div>
+                    </article>
+                </aside>
+                <section class="routes-main">
+                    <div class="routes-map-wrapper"><div id="liveMap" class="routes-map"></div></div>
+                    <div class="card stops-card">
+                        <div class="card-head"><h3>Última posición</h3></div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="liveTable">
+                                <thead><tr><th>Vendedor</th><th>Hace</th><th>Ruta</th><th class="numeric">Lat</th><th class="numeric">Lon</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+        <!-- ====== Comparación ====== -->
+        <div class="routes-section" data-section="compare" hidden>
+            <section class="routes-layout">
+                <aside class="routes-sidebar">
+                    <article class="card">
+                        <h3>Plan a comparar</h3>
+                        <form class="form-stack" id="compareForm">
+                            <label><span>Plan</span><select id="comparePlan"></select></label>
+                            <div class="grid-2">
+                                <label><span>Desde</span><input type="date" id="compareFrom"></label>
+                                <label><span>Hasta</span><input type="date" id="compareTo"></label>
+                            </div>
+                            <label><span>Vendedor (opcional)</span><input type="text" id="compareSeller"></label>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small" id="compareButton">Comparar</button>
+                            </div>
+                            <p class="form-note" id="compareNote" aria-live="polite"></p>
+                        </form>
+                    </article>
+                    <article class="card">
+                        <h3>Leyenda</h3>
+                        <div class="legend-row"><span class="swatch tier-medio"></span> Parada planificada</div>
+                        <div class="legend-row"><span class="swatch tier-alto"></span> Visita con venta</div>
+                        <div class="legend-row"><span class="swatch tier-bajo"></span> Otra posición reportada</div>
+                    </article>
+                </aside>
+                <section class="routes-main">
+                    <div class="day-summary" id="compareSummary" hidden></div>
+                    <div class="routes-map-wrapper"><div id="compareMap" class="routes-map"></div></div>
+                    <div class="card stops-card">
+                        <div class="card-head"><h3>Ejecuciones del plan</h3></div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="compareTable">
+                                <thead><tr>
+                                    <th>Inicio</th><th>Vendedor</th>
+                                    <th class="numeric">Planificadas</th><th class="numeric">Cumplidas</th>
+                                    <th class="numeric">Puntos</th><th class="numeric">Cumplimiento</th><th></th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </div>
     </div>
 </main>
 

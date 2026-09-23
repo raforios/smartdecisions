@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar sesión — SmartDecisions</title>
-    <link rel="stylesheet" href="/styles/demo.css?v=b715e581c6">
+    <link rel="stylesheet" href="/styles/demo.css?v=c008b19c74">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
-    <script src="/js/config.js?v=cea826bc9c"></script>
-    <script src="/js/auth.js?v=33efdcbe59" defer></script>
+    <script src="/js/config.js?v=3db97325c2"></script>
+    <script src="/js/auth.js?v=514e2dbfb8" defer></script>
     <script src="/js/ui.js?v=bd318da6b9" defer></script>
 </head>
 <body>
@@ -73,6 +73,10 @@
             const next = new URLSearchParams(location.search).get('next');
             if (next && next.startsWith('/') && !next.startsWith('//')) {
                 return next;
+            }
+            // A seller has one screen: their day on the street.
+            if (window.SD_AUTH.getRole() === 'SELLER') {
+                return window.SD_CONFIG.SELLER_HOME;
             }
             return '/home.html';
         }

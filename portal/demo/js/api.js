@@ -84,6 +84,26 @@
     }
 
     /**
+     * JSON request with any method. PUT/PATCH/DELETE share one path so every
+     * module answers the same way to the same status codes.
+     */
+    async function send(method, url, body) {
+        const response = await fetch(url, {
+            method,
+            headers: _buildHeaders({
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }),
+            body: body == null ? undefined : JSON.stringify(body)
+        });
+        return _handleResponse(response);
+    }
+
+    function put(url, body) { return send('PUT', url, body); }
+    function patch(url, body) { return send('PATCH', url, body); }
+    function del(url) { return send('DELETE', url); }
+
+    /**
      * POST helper for multipart form data (file uploads).
      */
     async function postFormData(url, formData) {
@@ -95,5 +115,5 @@
         return _handleResponse(response);
     }
 
-    window.SD_API = { get, post, postFormData };
+    window.SD_API = { get, post, put, patch, del, postFormData };
 })();

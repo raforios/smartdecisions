@@ -375,3 +375,80 @@
 /* La fila del modelo elegido, destacada: la tabla explica por qué está
    seleccionado, no compite con el selector. */
 .model-on td { font-weight: 600; background: #f4f8fd; }
+
+/* --- Cotización anticipada -------------------------------------------------
+   The panel reuses the official-quotation cells and the verification drawer;
+   what follows is only what this panel adds. */
+
+/* Controls sit at the right end of the head, where the AI slot sits on the
+   other panels: the eye finds the actions in the same place on every card. */
+.panel-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+}
+
+.inline-control {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .8rem;
+    color: var(--muted, #5e6580);
+}
+
+.inline-control input[type="date"] {
+    font: inherit;
+    padding: .25rem .4rem;
+    border: 1px solid #d3dae6;
+    border-radius: 6px;
+    color: var(--text, #0d1e4c);
+}
+
+/* Which feed produced the series. It rides next to the mineral because the
+   answer to "¿de dónde sale?" belongs with the name, not in a legend. */
+.source-chip {
+    display: inline-block;
+    margin-left: .4rem;
+    padding: .05rem .4rem;
+    border-radius: 999px;
+    background: #eef3fa;
+    color: #255a94;
+    font-size: .68rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.source-chip.muted { background: #eceff5; color: #5e6580; }
+
+/* A mineral with no free daily source is not a low-quality estimate: it has
+   none, and the grey says so without competing with the red of a bad one. */
+.tag-NONE { background: #eceff5; color: #5e6580; }
+
+.estimate-detail { display: grid; gap: .9rem; }
+
+.detail-spark { max-width: 26rem; }
+
+.detail-spark .spark { height: 60px; }
+
+.history-table-holder { max-width: 26rem; }
+
+.rule-formula { margin: 0; max-width: 46rem; }
+
+.rule-formula .legal {
+    display: block;
+    margin-top: .25rem;
+    font-size: .72rem;
+    color: var(--muted, #5e6580);
+}
+
+@media (min-width: 900px) {
+    /* Side by side once there is room: the days that built the average and the
+       scale that turns it into a rate are read together. */
+    .estimate-detail {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+    }
+    .estimate-detail .rule-formula { grid-column: 1 / -1; }
+}

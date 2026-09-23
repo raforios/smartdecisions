@@ -20,20 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
     if (window.SD_SESSION) window.SD_SESSION.mountChip('sessionChip', false);
 
-    const MINING_URL = window.SD_CONFIG.MINING_URL;
     const QUOTES_URL = window.SD_CONFIG.QUOTES_URL;
 
-    // Confidence and method travel as codes; the wording is ours.
-    const CONFIDENCE_LABELS = {
-        HIGH: 'Alta', MEDIUM: 'Media', LOW: 'Baja',
-        INSUFFICIENT: 'Datos insuficientes'
-    };
-    const METHOD_LABELS = {
-        DAMPED_TREND: 'Tendencia amortiguada',
-        LINEAR: 'Tendencia lineal',
-        MOVING_AVERAGE: 'Promedio móvil',
-        NAIVE: 'Sin cambio'
-    };
+    // Formatters, code wording and the sparkline live in `minerales_shared.js`,
+    // shared with the anticipated-quotation panel: the same figure has to read
+    // the same way on both.
+    const {
+        MINING_BASE, CONFIDENCE_LABELS, METHOD_LABELS, errorText,
+        money, percent, changeClass, shortDate, sparkline
+    } = window.SD_MIN;
 
     /**
      * How far the model has actually missed, next to the same measurement for
@@ -52,19 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
             : ` · sin cambio erraría ±${money(baselineError)}`;
         return `${name} · error medido ±${money(error)}${versus}`;
     }
-    const SERVICE_ERRORS = {
-        NO_RATE_PUBLISHED: 'Todavía no hay cotizaciones del dólar guardadas.',
-        SOURCE_UNAVAILABLE: 'El Banco Central no respondió.',
-        SOURCE_UNREADABLE: 'La página del Banco Central cambió de forma y no se ' +
-            'puede leer con seguridad.',
-        INVALID_DATE_RANGE: 'El plazo pedido está fuera de rango.',
-        EMPTY_PERIOD: 'No hay datos en ese período.'
-    };
-
-    function errorText(error, fallback) {
-        return SERVICE_ERRORS[error && error.code] || (error && error.message) || fallback;
-    }
-
     // `modelPicked` distingue el modelo que eligió el usuario del que elegimos
     // por él. Mientras no elija, el que manda es el de menor error medido, que
     // puede cambiar al cambiar el plazo; en cuanto elige, su elección se
@@ -78,68 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- formatting -------------------------------------------------------
 
-    /**
-     * Two decimals everywhere, matching the published bulletin. The service
-     * already rounds the official price HALF_UP, so this only pads and groups —
-     * it never re-rounds, which is where a browser and Python disagree.
-     */
-    function money(value, digits = 2) {
-        if (value === null || value === undefined) return '—';
-        return Number(value).toLocaleString('es-BO', {
-            minimumFractionDigits: digits, maximumFractionDigits: digits
-        });
-    }
-
-    function percent(value) {
-        if (value === null || value === undefined) return '—';
-        const sign = value > 0 ? '+' : '';
-        return `${sign}${Number(value).toFixed(2)}%`;
-    }
-
-    function changeClass(value) {
-        if (value === null || value === undefined) return '';
-        if (value > 0) return 'up';
-        return value < 0 ? 'down' : '';
-    }
-
-    /**
-     * Draws a sparkline as inline SVG. No chart library: the shape of a series
-     * is a line between points, and pulling a dependency for that would be the
-     * heaviest thing on the page.
-     */
-    function sparkline(observed, projected, width = 220, height = 44) {
-        const all = observed.concat(projected);
-        if (all.length < 2) return '';
-        const min = Math.min(...all);
-        const max = Math.max(...all);
-        const span = (max - min) || 1;
-        const step = width / (all.length - 1);
-        const point = (value, index) => {
-            const x = (index * step).toFixed(1);
-            const y = (height - ((value - min) / span) * height).toFixed(1);
-            return `${x},${y}`;
-        };
-        const observedPath = observed.map(point).join(' ');
-        // The projection starts at the last observed point so the two lines meet.
-        const projectedPath = projected
-            .map((value, index) => point(value, observed.length - 1 + index + 1));
-        const joined = observed.length
-            ? [point(observed[observed.length - 1], observed.length - 1)]
-                .concat(projectedPath).join(' ')
-            : projectedPath.join(' ');
-
-        return `<svg class="spark" viewBox="0 0 ${width} ${height}"
-                     preserveAspectRatio="none" aria-hidden="true">
-            <polyline class="spark-observed" points="${observedPath}"></polyline>
-            <polyline class="spark-projected" points="${joined}"></polyline>
-        </svg>`;
-    }
-
     // --- minerals ---------------------------------------------------------
 
     async function loadMinerals(days) {
         const data = await window.SD_API.get(
-            `${MINING_URL}/v1/mining-analysis/forecast/prices`,
+            `${MINING_BASE}/forecast/prices`,
             { days_ahead: days, method: qs('#mineralModel').value }
         );
         state.minerals = data;
@@ -172,12 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 · ${composition}${partial}
             </span>
         </td>`;
-    }
-
-    function shortDate(value) {
-        if (!value) return '—';
-        const [, month, day] = value.split('-');
-        return `${day}/${month}`;
     }
 
     /**

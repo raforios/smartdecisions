@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.requireAuth()) return;
 
     const { qs, toast, setButtonBusy } = window.SD_UI;
+    const { escapeHtml, formatMoney, formatDecimal, todayIso, note } = window.SD_TRACK;
 
     qs('#userChip').textContent = window.SD_AUTH.getEmail() || 'usuario';
     qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
@@ -236,7 +237,44 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDaySummary(day);
         renderStops(day);
         drawDay(day);
+        qs('#saveDayActions').hidden = false;
+        note(qs('#saveDayNote'), '');
     }
+
+    /**
+     * The generated day becomes a saved plan: the stops in visiting order, the
+     * seller of the filter as its owner. From there it is activated, run and
+     * compared like any plan the client typed or imported.
+     */
+    async function saveDayAsPlan() {
+        const day = state.plan && state.plan.days.find((item) => item.day === state.day);
+        if (!day) return;
+        const seller = qs('#sellerSelect').value || '';
+        const codeSeller = (seller || 'TODOS').replace(/[^A-Za-z0-9@._-]/g, '_').slice(0, 20);
+        const done = setButtonBusy(qs('#saveDayButton'), 'Guardando…');
+        try {
+            const plan = await window.SD_TRACK.planned.create({
+                route_name: `Plan ${seller || 'general'} · día ${day.day}`,
+                route_code: `${codeSeller}-${todayIso()}-D${day.day}`,
+                description: `Generado desde la cartera el ${todayIso()}`,
+                seller: seller || null,
+                points: day.stops.map((stop) => ({
+                    point_name: stop.client,
+                    secuencial: stop.stop_order,
+                    latitude: stop.latitude,
+                    longitude: stop.longitude,
+                    client_id: stop.client_id
+                }))
+            });
+            note(qs('#saveDayNote'), `Guardado como ${plan.route_code}. Actívalo en Planes.`, 'success');
+            toast('Plan guardado.', 'success');
+        } catch (error) {
+            note(qs('#saveDayNote'), window.SD_TRACK.errorText(error, 'No se pudo guardar el plan.'), 'error');
+        } finally {
+            done();
+        }
+    }
+    qs('#saveDayButton').addEventListener('click', saveDayAsPlan);
 
     qs('#dayList').addEventListener('click', (event) => {
         const chip = event.target.closest('.day-chip');
@@ -297,25 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     qs('#planButton').addEventListener('click', buildPlan);
-
-    // ---------- helpers ----------
-    function formatMoney(value) {
-        if (value == null || isNaN(value)) return '—';
-        return Number(value).toLocaleString('es-BO',
-            { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    function formatDecimal(value) {
-        if (value == null || isNaN(value)) return '—';
-        return Number(value).toLocaleString('es-BO',
-            { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-    }
-
-    function escapeHtml(value) {
-        return String(value == null ? '' : value)
-            .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
-    }
 
     window.SD_SESSION.mountChip(
         'sessionChip',
