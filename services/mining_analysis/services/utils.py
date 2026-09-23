@@ -381,6 +381,80 @@ def handle_service_errors(
         return wrapper
     return decorator
 
+# What a result may call its identifier, in the order the audit service reads
+# them. Same list as the standard `utils.py` of the DynamoDB services.
+AUDIT_ID_KEYS = ('id', 'run_id', 'dataset_id', 'client_id')
+
+
+def _pick_entity_id(values: Dict[str, Any]) -> Optional[Any]:
+    '''
+        The identifier of an audited result, or None when it names no row.
+
+        Args:
+            values (Dict[str, Any]): The result as a dictionary.
+
+        Returns:
+            Any | None: First candidate key present, or None.
+    '''
+    for key in AUDIT_ID_KEYS:
+        if values.get(key) is not None:
+            return values[key]
+    return None
+
+
+def _audit_new_values(final_result: Any) -> Any:
+    '''
+        The audited result as plain values, whatever shape it came in.
+
+        Args:
+            final_result (Any): What the wrapped function returned.
+
+        Returns:
+            Any: A dictionary, a list of dictionaries, or None.
+    '''
+    if isinstance(final_result, list):
+        values = []
+        for item in final_result:
+            if isinstance(item, BaseModel):
+                values.append(item.model_dump())
+            elif hasattr(item, '__dict__'):
+                values.append(sqlalchemy_object_as_dict(item))
+        return values
+    if not final_result:
+        return None
+    if isinstance(final_result, BaseModel):
+        return final_result.model_dump()
+    if hasattr(final_result, '__dict__'):
+        return sqlalchemy_object_as_dict(final_result)
+    return None
+
+
+def _audit_entity_id(final_result: Any) -> Optional[Any]:
+    '''
+        The row the audited action touched, or None when it touched no single
+        row.
+
+        Not every audited result names one: a sync or a bulk load answers with
+        a summary, and reading `.id` off it raised AttributeError inside the
+        decorator — a 500 on an endpoint that had already done its work.
+
+        Args:
+            final_result (Any): What the wrapped function returned.
+
+        Returns:
+            Any | None: The identifier, or None.
+    '''
+    if isinstance(final_result, list):
+        return None
+    if isinstance(final_result, int):
+        return final_result
+    if isinstance(final_result, BaseModel):
+        return _pick_entity_id(final_result.model_dump())
+    if isinstance(final_result, dict):
+        return _pick_entity_id(final_result)
+    return getattr(final_result, 'id', None)
+
+
 def _resolve_audit_data(
     final_result: Any,
     new_values: Any
@@ -388,35 +462,17 @@ def _resolve_audit_data(
     '''
         Helper to resolve entity_id and new_values for the audit decorator,
         reducing cyclomatic complexity.
+
+        Args:
+            final_result (Any): What the wrapped function returned.
+            new_values (Any): Values the caller already supplied, if any.
+
+        Returns:
+            Tuple[Any, Any]: (entity_id, new_values).
     '''
-    entity_id = None
-
-    # Resolve new_values if not provided
     if new_values is None:
-        if isinstance(final_result, list):
-            calculated_new_values = []
-            for item in final_result:
-                if isinstance(item, BaseModel):
-                    calculated_new_values.append(item.model_dump())
-                elif hasattr(item, '__dict__'):
-                    calculated_new_values.append(sqlalchemy_object_as_dict(item))
-            new_values = calculated_new_values
-
-        elif final_result:
-            if isinstance(final_result, BaseModel):
-                new_values = final_result.model_dump()
-            elif hasattr(final_result, '__dict__'):
-                new_values = sqlalchemy_object_as_dict(final_result)
-
-    # Resolve entity_id
-    if not isinstance(final_result, list):
-        if isinstance(final_result, (BaseModel, int)):
-            entity_id = final_result.id if isinstance(final_result, BaseModel) \
-            else final_result
-        elif hasattr(final_result, 'id'):
-            entity_id = final_result.id
-
-    return entity_id, new_values
+        new_values = _audit_new_values(final_result)
+    return _audit_entity_id(final_result), new_values
 
 # pylint: disable=too-many-locals
 def audit_event(

@@ -15,10 +15,11 @@ from schemas.market import (
     EstimateConfidence,
     MarketError,
     MarketSource,
+    MarketSyncResult,
     RateBasis,
     RoyaltyRuleSchema
 )
-from services import market_sources, official_estimate, prices_dyb, royalty_rules
+from services import market_sources, official_estimate, prices_dyb, royalty_rules, utils
 from services.exceptions import InvalidInputError, RegisterNotFoundError, ServiceUnavailableError
 from services.prices_store import MineralRecord
 
@@ -264,3 +265,35 @@ def test_market_series_answers_codes_for_bad_requests(dynamodb):
     assert missing.value.detail == MarketError.UNKNOWN_MINERAL.value
     assert paid.value.detail == MarketError.MINERAL_NOT_MARKET_QUOTED.value
     assert inverted.value.detail == MarketError.INVALID_DATE_RANGE.value
+
+
+def test_audit_resolver_survives_a_result_without_id():
+    '''
+        A summary result must not blow up the audit decorator.
+
+        `MarketSyncResult` names no row, and `_resolve_audit_data` used to read
+        `.id` on any Pydantic model: the sync ran, wrote its days and then
+        answered 500 from the decorator. The endpoint was unusable while the
+        scheduled run — which never crosses the controller — worked fine.
+    '''
+    summary = MarketSyncResult(
+        requested_days = 10, date_from = date(2026, 9, 13), date_to = date(2026, 9, 22),
+        stored = 42, already_present = 0, without_publication = 18
+    )
+
+    entity_id, new_values = utils._resolve_audit_data(summary, None) # pylint: disable=protected-access
+
+    assert entity_id is None
+    assert new_values['stored'] == 42
+
+
+def test_audit_resolver_prefers_the_identifier_when_there_is_one():
+    '''A result that does name a row still audits against that row.'''
+    rule = RoyaltyRuleSchema(
+        mineral_id = '4', slope = 3.0769, intercept = -1.1538, min_rate = 1.0,
+        max_rate = 5.0, internal_factor = 0.6, legal_basis = 'Ley 535 Art. 227'
+    )
+
+    entity_id, _ = utils._resolve_audit_data({'id': rule.mineral_id}, None) # pylint: disable=protected-access
+
+    assert entity_id == '4'
