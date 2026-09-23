@@ -7,7 +7,7 @@ JS (módulos ES) + CSS3, responsive con drawer hamburguesa.
 ## Layout
 
 ```
-demo/supplies/
+portal/supplies/
 ├── index.html            shell (sidebar + topbar + page host + modal + toasts)
 ├── login.html            login → AUTH
 ├── css/supplies.css      design system A (sidebar + cards + tablas + badges)
