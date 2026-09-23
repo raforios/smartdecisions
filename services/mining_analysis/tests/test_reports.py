@@ -92,7 +92,7 @@ def test_biweekly_average_partial_days(db_session):
     _add_price(db_session, bismuto_id, date(2026, 4, 15), 13.3)
     db_session.commit()
 
-    result = _run(get_biweekly_report_service(db_session, 2026, 4, 1))
+    result = _run(get_biweekly_report_service(None, (2026, 4, 1), db = db_session))
     row = next(r for r in result['rows'] if r['mineral'] == 'Bismuto')
 
     assert row['sample_size'] == 3
@@ -113,7 +113,7 @@ def test_biweekly_average_falls_back_to_prior_period(db_session):
     _add_price(db_session, estano_id, date(2026, 4, 10), 22.0)
     db_session.commit()
 
-    result = _run(get_biweekly_report_service(db_session, 2026, 4, 2))
+    result = _run(get_biweekly_report_service(None, (2026, 4, 2), db = db_session))
     row = next(r for r in result['rows'] if r['mineral'] == 'Estaño')
 
     assert row['is_fallback'] is True
@@ -128,7 +128,7 @@ def test_biweekly_average_no_data_anywhere(db_session):
     '''
     _seed_catalog(db_session)
 
-    result = _run(get_biweekly_report_service(db_session, 2026, 4, 1))
+    result = _run(get_biweekly_report_service(None, (2026, 4, 1), db = db_session))
 
     assert len(result['rows']) == len(OFFICIAL_MINERALS)
     assert all(r['avg_price_low'] == 0.0 for r in result['rows'])
@@ -143,7 +143,7 @@ def test_biweekly_invalid_half_raises(db_session):
     '''
     _seed_catalog(db_session)
     with pytest.raises(Exception):
-        _run(get_biweekly_report_service(db_session, 2026, 4, 3))
+        _run(get_biweekly_report_service(None, (2026, 4, 3), db = db_session))
 
 
 # --- daily report ----------------------------------------------------------
@@ -158,7 +158,7 @@ def test_daily_report_returns_latest_on_date(db_session):
     _add_price(db_session, plata_id, date(2026, 5, 11), 75.0, 76.0)
     db_session.commit()
 
-    result = _run(get_daily_report_service(db_session, date(2026, 5, 11)))
+    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
     row = next(r for r in result['rows'] if r['mineral'] == 'Plata')
 
     assert row['price_date'] == date(2026, 5, 11)
@@ -177,7 +177,7 @@ def test_daily_report_falls_back_to_prior_date(db_session):
     _add_price(db_session, oro_id, date(2026, 5, 8), 4700)
     db_session.commit()
 
-    result = _run(get_daily_report_service(db_session, date(2026, 5, 11)))
+    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
     row = next(r for r in result['rows'] if r['mineral'] == 'Oro')
 
     assert row['price_date'] == date(2026, 5, 8)
@@ -191,7 +191,7 @@ def test_daily_report_no_data_marks_all_fallback(db_session):
     '''
     _seed_catalog(db_session)
 
-    result = _run(get_daily_report_service(db_session, date(2026, 5, 11)))
+    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
 
     assert len(result['rows']) == len(OFFICIAL_MINERALS)
     assert all(r['is_fallback'] for r in result['rows'])
@@ -225,7 +225,7 @@ def test_daily_report_includes_previous_price_and_change_pct(db_session):
     _add_price(db_session, estano_id, date(2026, 5, 11), 22.0)
     db_session.commit()
 
-    result = _run(get_daily_report_service(db_session, date(2026, 5, 11)))
+    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
     row = next(r for r in result['rows'] if r['mineral'] == 'Estaño')
 
     assert row['previous_price_low'] == pytest.approx(20.0)
@@ -243,7 +243,7 @@ def test_daily_report_change_pct_zero_when_no_history(db_session):
     _add_price(db_session, plata_id, date(2026, 5, 11), 75.0)
     db_session.commit()
 
-    result = _run(get_daily_report_service(db_session, date(2026, 5, 11)))
+    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
     row = next(r for r in result['rows'] if r['mineral'] == 'Plata')
 
     assert row['previous_price_low'] == 0.0
@@ -264,7 +264,7 @@ def test_biweekly_history_lists_only_periods_with_data(db_session):
     _add_price(db_session, estano_id, date(2026, 4, 20), 22.0)
     db_session.commit()
 
-    result = _run(get_biweekly_history_service(db_session))
+    result = _run(get_biweekly_history_service(None, db = db_session))
     keys = [(p['year'], p['month'], p['half']) for p in result['periods']]
     assert keys == [(2026, 4, 1), (2026, 4, 2)]
     assert result['period_from'] == date(2026, 4, 3)
@@ -277,7 +277,7 @@ def test_biweekly_history_empty_when_no_data(db_session):
     instead of raising.
     '''
     _seed_catalog(db_session)
-    result = _run(get_biweekly_history_service(db_session))
+    result = _run(get_biweekly_history_service(None, db = db_session))
     assert result['periods'] == []
 
 

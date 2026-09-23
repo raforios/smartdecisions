@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List
 from fastapi import Request
+from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 from services.utils import (
     _trigger_bulk_audit,
@@ -70,7 +71,7 @@ async def bulk_upload_mining_controller(
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_mineral_prices_controller(
-    db: Session,
+    dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str
 ) -> List[MiningPriceResponseSchema]:
@@ -79,7 +80,7 @@ async def get_mineral_prices_controller(
     '''
     message = f'User {current_user} requested all mineral prices.'
     logger.info(message)
-    prices = await get_all_prices_service(db = db)
+    prices = await get_all_prices_service(dynamodb_resource)
     return [MiningPriceResponseSchema.model_validate(p) for p in prices]
 
 @handle_service_errors('MINING_ANALYSIS')
@@ -153,7 +154,7 @@ async def get_transactions_summary_controller(
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_daily_report_controller(
-    db: Session,
+    dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str,
     ref_date: date,
@@ -163,12 +164,12 @@ async def get_daily_report_controller(
     '''
     message = f'User: {current_user} requesting daily report for {ref_date}.'
     logger.info(message)
-    result = await get_daily_report_service(db = db, ref_date = ref_date)
+    result = await get_daily_report_service(dynamodb_resource, ref_date)
     return DailyReportResponse(**result)
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_biweekly_report_controller(
-    db: Session,
+    dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str,
     year: int,
@@ -182,13 +183,13 @@ async def get_biweekly_report_controller(
                f'{year}-{month:02d} half {half}.')
     logger.info(message)
     result = await get_biweekly_report_service(
-        db = db, year = year, month = month, half = half
+        dynamodb_resource, (year, month, half)
     )
     return BiweeklyReportResponse(**result)
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_biweekly_history_controller(
-    db: Session,
+    dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str,
     period_from: date = None,
@@ -201,13 +202,13 @@ async def get_biweekly_history_controller(
                f'{period_from} → {period_to}.')
     logger.info(message)
     result = await get_biweekly_history_service(
-        db = db, period_from = period_from, period_to = period_to,
+        dynamodb_resource, period_from = period_from, period_to = period_to,
     )
     return BiweeklyHistoryResponse(**result)
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_price_forecast_controller(
-    db: Session,
+    dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str,
     days_ahead: int,
@@ -220,6 +221,6 @@ async def get_price_forecast_controller(
                f'forecast with {method.value}.')
     logger.info(message)
     result = await get_price_forecast_service(
-        db = db, days_ahead = days_ahead, method = method
+        dynamodb_resource, days_ahead = days_ahead, method = method
     )
     return PriceForecastResponse(**result)

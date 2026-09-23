@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 
 from models.mining_analysis import Mineral
@@ -48,6 +49,42 @@ def biweekly_period_bounds(
     return date(year, month, 16), date(year, month, last_day)
 
 
+def period_of(day: date) -> Tuple[int, int, int]:
+    '''
+    Returns the biweekly period a date falls into.
+
+    Args:
+        day (date): Any calendar date.
+
+    Returns:
+        Tuple[int, int, int]: Its (year, month, half).
+    '''
+    return day.year, day.month, 1 if day.day <= 15 else 2
+
+
+def next_biweekly_period(
+    year: int,
+    month: int,
+    half: int
+) -> Tuple[int, int, int]:
+    '''
+    Returns the biweekly period immediately after the one given.
+
+    Args:
+        year (int): Year of the period.
+        month (int): Month of the period.
+        half (int): 1 for days 1-15, 2 for 16-end.
+
+    Returns:
+        Tuple[int, int, int]: The following (year, month, half).
+    '''
+    if half == 1:
+        return year, month, 2
+    if month == 12:
+        return year + 1, 1, 1
+    return year, month + 1, 1
+
+
 def prev_biweekly_period(
     year: int,
     month: int,
@@ -64,7 +101,10 @@ def prev_biweekly_period(
     return year, month - 1, 2
 
 
-def resolve_mineral_id_map(db: Session) -> Dict[str, str]:
+def resolve_mineral_id_map(
+    dynamodb_resource: Optional[ServiceResource],
+    db: Optional[Session] = None
+) -> Dict[str, str]:
     '''
     Builds {normalized_name: mineral_id} for the official catalog. Minerals
     missing from the catalog are simply absent from the map; callers must
@@ -72,7 +112,7 @@ def resolve_mineral_id_map(db: Session) -> Dict[str, str]:
     '''
     return {
         normalize_name(record.name): record.mineral_id
-        for record in list_minerals(db = db)
+        for record in list_minerals(dynamodb_resource, db = db)
     }
 
 
@@ -100,8 +140,9 @@ def _empty_daily_row(
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_daily_report_service(
-    db: Session,
-    ref_date: date
+    dynamodb_resource: Optional[ServiceResource],
+    ref_date: date,
+    db: Optional[Session] = None
 ) -> Dict[str, Any]:
     '''
     Builds the daily mineral report (template Minerales_01).
@@ -117,7 +158,7 @@ async def get_daily_report_service(
     Returns:
         Dict[str, Any]: Payload matching DailyReportResponse shape.
     '''
-    mineral_ids = resolve_mineral_id_map(db)
+    mineral_ids = resolve_mineral_id_map(dynamodb_resource, db = db)
     rows: List[Dict[str, Any]] = []
 
     for catalog in OFFICIAL_MINERALS:
@@ -128,7 +169,7 @@ async def get_daily_report_service(
             continue
 
         # Through the store, so the report reads the same on either backend.
-        latest_two = latest_prices_before(str(mineral_id), ref_date, 2, db = db)
+        latest_two = latest_prices_before(dynamodb_resource, str(mineral_id), ref_date, 2, db = db)
         if not latest_two:
             rows.append(_empty_daily_row(catalog, ref_date))
             continue
@@ -166,10 +207,10 @@ async def get_daily_report_service(
 
 
 def _compute_biweekly_average(
-    db: Session,
+    dynamodb_resource: Optional[ServiceResource],
     mineral_id: int,
-    period_start: date,
-    period_end: date
+    window: Tuple[date, date],
+    db: Optional[Session] = None
 ) -> Optional[Tuple[float, int]]:
     '''
     Returns (avg_price_low, sample_size) for the mineral within the window,
@@ -182,7 +223,7 @@ def _compute_biweekly_average(
     # Delegated to the store so the same rule holds on either backend: the
     # relational one aggregates with SQL, DynamoDB reads the partition and
     # averages in Python. This function no longer knows which is active.
-    return average_low(str(mineral_id), period_start, period_end, db = db)
+    return average_low(dynamodb_resource, str(mineral_id), window, db = db)
 
 
 # How far back the report looks for the last published quotation of a mineral,
@@ -224,9 +265,10 @@ class _BiweeklyAverage:
 
 
 def _average_with_fallback(
-    db: Session,
+    dynamodb_resource: Optional[ServiceResource],
     mineral_id: Optional[str],
-    period: Tuple[int, int, int]
+    period: Tuple[int, int, int],
+    db: Optional[Session] = None
 ) -> _BiweeklyAverage:
     '''
     Returns the mineral's average for the requested period, or the most recent
@@ -247,7 +289,7 @@ def _average_with_fallback(
     if mineral_id is None:
         return _BiweeklyAverage(0.0, 0, start, end, is_fallback = True)
 
-    calc = _compute_biweekly_average(db, mineral_id, start, end)
+    calc = _compute_biweekly_average(dynamodb_resource, mineral_id, (start, end), db = db)
     if calc is not None:
         return _BiweeklyAverage(calc[0], calc[1], start, end, is_fallback = False)
 
@@ -255,7 +297,9 @@ def _average_with_fallback(
     for _ in range(_MAX_FALLBACK_PERIODS):
         current = prev_biweekly_period(*current)
         past_start, past_end = biweekly_period_bounds(*current)
-        calc = _compute_biweekly_average(db, mineral_id, past_start, past_end)
+        calc = _compute_biweekly_average(
+            dynamodb_resource, mineral_id, (past_start, past_end), db = db
+        )
         if calc is not None:
             return _BiweeklyAverage(
                 calc[0], calc[1], past_start, past_end, is_fallback = True
@@ -266,10 +310,9 @@ def _average_with_fallback(
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_biweekly_report_service(
-    db: Session,
-    year: int,
-    month: int,
-    half: int
+    dynamodb_resource: Optional[ServiceResource],
+    period: Tuple[int, int, int],
+    db: Optional[Session] = None
 ) -> Dict[str, Any]:
     '''
     Builds the biweekly official report (template Minerales_02).
@@ -290,8 +333,9 @@ async def get_biweekly_report_service(
     Returns:
         Dict[str, Any]: Payload matching BiweeklyReportResponse shape.
     '''
+    year, month, half = period
     period_start, period_end = biweekly_period_bounds(year, month, half)
-    mineral_ids = resolve_mineral_id_map(db)
+    mineral_ids = resolve_mineral_id_map(dynamodb_resource, db = db)
     rows: List[Dict[str, Any]] = [
         {
             'mineral': catalog['name'],
@@ -299,9 +343,10 @@ async def get_biweekly_report_service(
             'unit': catalog['unit'],
             'quoted_in': catalog['quoted_in'],
             **_average_with_fallback(
-                db,
+                dynamodb_resource,
                 mineral_ids.get(normalize_name(catalog['name'])),
-                (year, month, half)
+                (year, month, half),
+                db = db
             ).as_row()
         }
         for catalog in OFFICIAL_MINERALS
@@ -347,9 +392,10 @@ def _iter_biweekly_periods(
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_biweekly_history_service(
-    db: Session,
+    dynamodb_resource: Optional[ServiceResource],
     period_from: Optional[date] = None,
     period_to: Optional[date] = None,
+    db: Optional[Session] = None
 ) -> Dict[str, Any]:
     '''
     Returns every biweekly period inside the requested window that has at
@@ -369,7 +415,7 @@ async def get_biweekly_history_service(
     Returns:
         Dict[str, Any]: Payload matching BiweeklyHistoryResponse shape.
     '''
-    oldest, newest = date_bounds(db = db)
+    oldest, newest = date_bounds(dynamodb_resource, db = db)
     if oldest is None:
         today = date.today()
         return {
@@ -387,7 +433,9 @@ async def get_biweekly_history_service(
 
     periods: List[Dict[str, Any]] = []
     for year, month, half in _iter_biweekly_periods(period_from, period_to):
-        snapshot = await get_biweekly_report_service(db, year, month, half)
+        snapshot = await get_biweekly_report_service(
+            dynamodb_resource, (year, month, half), db = db
+        )
         # Skip purely-fallback snapshots — they carry no information about
         # the requested period itself, only about a recovered prior one.
         if all(row['is_fallback'] for row in snapshot['rows']):

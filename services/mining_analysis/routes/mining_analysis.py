@@ -12,9 +12,11 @@ from fastapi import (
     status,
     Query
 )
+from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 from services.logger_config import custom_logger as logger
 from services.db_connection import GET_DB_DEPENDENCY
+from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.environment import load_and_validate_env_vars
 from services.security import get_current_owner
 from controllers.mining_analysis import (
@@ -74,7 +76,7 @@ async def upload_mining_data_endpoint(
     request: Request,
     file: UploadFile = File(...),
     delimiter: str = Query(',', description = 'Separador de campos del CSV'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> BulkUploadMiningResponseSchema:
     '''
@@ -104,7 +106,7 @@ async def upload_mining_data_endpoint(
 )
 async def get_mining_prices_endpoint(
     request: Request,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> List[MiningPriceResponseSchema]:
     ''' Endpoint to retrieve processed prices. '''
@@ -113,7 +115,7 @@ async def get_mining_prices_endpoint(
     logger.info(message)
 
     return await get_mineral_prices_controller(
-        db = db,
+        dynamodb_resource = dynamodb_resource,
         request = request,
         current_user = current_user
     )
@@ -122,7 +124,7 @@ async def get_mining_prices_endpoint(
 async def upload_royalties_excel(
     request: Request,
     file: UploadFile = File(...),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> Dict[str, Any]:
     ''' Endpoint to trigger the Excel ETL process directly in memory. '''
@@ -144,7 +146,7 @@ async def upload_royalties_excel(
 async def get_royalties_summary(
     request: Request,
     year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> RoyaltySummaryResponse:
     ''' Retrieves aggregated royalties data. '''
@@ -165,7 +167,7 @@ async def get_royalties_summary(
 async def get_royalties_transactions(
     request: Request,
     year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> TransactionSummaryResponse:
     ''' Retrieves aggregated transactions data by company. '''
@@ -191,7 +193,7 @@ async def get_daily_report_endpoint(
     request: Request,
     ref_date: date_type = Query(..., alias = 'date',
                                 description = 'Reference date (YYYY-MM-DD).'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> DailyReportResponse:
     ''' Endpoint for the daily mineral report. '''
@@ -199,7 +201,7 @@ async def get_daily_report_endpoint(
     logger.info(message)
 
     return await get_daily_report_controller(
-        db = db,
+        dynamodb_resource = dynamodb_resource,
         request = request,
         current_user = current_user,
         ref_date = ref_date,
@@ -216,7 +218,7 @@ async def get_daily_report_endpoint(
 async def get_biweekly_report_endpoint(
     request: Request,
     period: BiweeklyPeriod = Depends(),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> BiweeklyReportResponse:
     ''' Endpoint for the biweekly official mineral report. '''
@@ -225,7 +227,7 @@ async def get_biweekly_report_endpoint(
     logger.info(message)
 
     return await get_biweekly_report_controller(
-        db = db,
+        dynamodb_resource = dynamodb_resource,
         request = request,
         current_user = current_user,
         year = period.year,
@@ -250,7 +252,7 @@ async def get_price_forecast_endpoint(
                             description = 'Days to project ahead.'),
     method: ForecastMethod = Query(ForecastMethod.DAMPED_TREND,
                                    description = 'Projection method.'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> PriceForecastResponse:
     ''' Endpoint for the mineral price projection. '''
@@ -258,7 +260,7 @@ async def get_price_forecast_endpoint(
     logger.info(message)
 
     return await get_price_forecast_controller(
-        db = db,
+        dynamodb_resource = dynamodb_resource,
         request = request,
         current_user = current_user,
         days_ahead = days_ahead,

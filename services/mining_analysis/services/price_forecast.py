@@ -32,6 +32,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 
 from schemas.mining_analysis import (
@@ -45,7 +46,9 @@ from services.logger_config import custom_logger as logger
 from services.mining_analysis import OFFICIAL_MINERALS
 from services.official_reports import (
     biweekly_period_bounds,
+    next_biweekly_period,
     normalize_name,
+    period_of,
     prev_biweekly_period,
     resolve_mineral_id_map
 )
@@ -360,7 +363,7 @@ def project(
 _OFFICIAL_QUANTUM: Decimal = Decimal(1).scaleb(-PUBLISHED_PRICE_DECIMALS)
 
 
-def _official_round(value: float) -> float:
+def official_round(value: float) -> float:
     '''
     Rounds an official average to two decimals, HALF_UP.
 
@@ -376,42 +379,6 @@ def _official_round(value: float) -> float:
         float: The same figure with two decimals.
     '''
     return float(Decimal(str(value)).quantize(_OFFICIAL_QUANTUM, rounding = ROUND_HALF_UP))
-
-
-def _next_biweekly_period(
-    year: int,
-    month: int,
-    half: int
-) -> Tuple[int, int, int]:
-    '''
-    Returns the biweekly period immediately after the one given.
-
-    Args:
-        year (int): Year of the period.
-        month (int): Month of the period.
-        half (int): 1 for days 1-15, 2 for 16-end.
-
-    Returns:
-        Tuple[int, int, int]: The following (year, month, half).
-    '''
-    if half == 1:
-        return year, month, 2
-    if month == 12:
-        return year + 1, 1, 1
-    return year, month + 1, 1
-
-
-def _period_of(day: date_type) -> Tuple[int, int, int]:
-    '''
-    Returns the biweekly period a date falls into.
-
-    Args:
-        day (date): Any calendar date.
-
-    Returns:
-        Tuple[int, int, int]: Its (year, month, half).
-    '''
-    return day.year, day.month, 1 if day.day <= 15 else 2
 
 
 def _official_average(
@@ -459,7 +426,7 @@ def _official_average(
     return {
         'period_start': start,
         'period_end': end,
-        'avg_price_low': _official_round(sum(values) / len(values)),
+        'avg_price_low': official_round(sum(values) / len(values)),
         'sample_size': len(values),
         'observed_days': observed_days,
         'projected_days': projected_days,
@@ -485,7 +452,7 @@ def _validity_of(period: Tuple[int, int, int]) -> Tuple[date_type, date_type]:
     Returns:
         Tuple[date, date]: First and last day the average is in force.
     '''
-    return biweekly_period_bounds(*_next_biweekly_period(*period))
+    return biweekly_period_bounds(*next_biweekly_period(*period))
 
 
 def _projected_officials(
@@ -511,14 +478,14 @@ def _projected_officials(
         List[Dict[str, Any]]: One entry per period, chronologically.
     '''
     entries: List[Dict[str, Any]] = []
-    period = _period_of(reference)
+    period = period_of(reference)
     while True:
         entry = _official_average(biweekly_period_bounds(*period), observed, projected)
         if entry is None:
             break
         entry['valid_from'], entry['valid_to'] = _validity_of(period)
         entries.append(entry)
-        period = _next_biweekly_period(*period)
+        period = next_biweekly_period(*period)
         # Stop once the projection no longer reaches the next window.
         if biweekly_period_bounds(*period)[0] > horizon_end:
             break
@@ -548,7 +515,7 @@ def _official_history(
     entries: List[Dict[str, Any]] = []
     # Two steps back: one lands on the period in force, which already travels
     # as `official_current` and would only repeat itself here.
-    period = prev_biweekly_period(*prev_biweekly_period(*_period_of(reference)))
+    period = prev_biweekly_period(*prev_biweekly_period(*period_of(reference)))
     for _ in range(periods):
         entry = _official_average(biweekly_period_bounds(*period), observed, {})
         if entry is not None:
@@ -562,6 +529,7 @@ def _official_block(
     mineral_id: Optional[str],
     projection: Projection,
     reference: date_type,
+    dynamodb_resource: Optional[ServiceResource] = None,
     db: Optional[Session] = None
 ) -> Dict[str, Any]:
     '''
@@ -590,7 +558,7 @@ def _official_block(
     horizon_end = max(projected) if projected else reference
 
     # The average in force today is the one of the period that already closed.
-    current_period = prev_biweekly_period(*_period_of(reference))
+    current_period = prev_biweekly_period(*period_of(reference))
     # Read from the oldest fortnight the history shows through the horizon:
     # everything the averages below may need, in a single pass over storage.
     oldest = current_period
@@ -599,7 +567,9 @@ def _official_block(
     read_from = biweekly_period_bounds(*oldest)[0]
     observed = {
         record.date: record.price_low
-        for record in prices_in_window(mineral_id, read_from, horizon_end, db = db)
+        for record in prices_in_window(
+            dynamodb_resource, mineral_id, (read_from, horizon_end), db = db
+        )
         if record.price_low is not None
     }
 
@@ -630,9 +600,10 @@ def _official_block(
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_price_forecast_service(
-    db: Session,
+    dynamodb_resource: Optional[ServiceResource],
     days_ahead: int = 30,
-    method: ForecastMethod = ForecastMethod.DAMPED_TREND
+    method: ForecastMethod = ForecastMethod.DAMPED_TREND,
+    db: Optional[Session] = None
 ) -> Dict[str, Any]:
     '''
     Projects every official mineral forward and returns the payload the API
@@ -651,7 +622,7 @@ async def get_price_forecast_service(
     Returns:
         Dict[str, Any]: Payload matching PriceForecastResponse shape.
     '''
-    mineral_ids = resolve_mineral_id_map(db)
+    mineral_ids = resolve_mineral_id_map(dynamodb_resource, db = db)
     minerals: List[Dict[str, Any]] = []
     observed_dates: List[date_type] = []
     # One reference for every mineral, so the whole payload agrees on which
@@ -661,7 +632,9 @@ async def get_price_forecast_service(
     for catalog in OFFICIAL_MINERALS:
         mineral_id = mineral_ids.get(normalize_name(catalog['name']))
         history = (
-            prices_in_window(mineral_id, _HISTORY_FLOOR, date_type.max, db = db)
+            prices_in_window(
+                dynamodb_resource, mineral_id, (_HISTORY_FLOOR, date_type.max), db = db
+            )
             if mineral_id is not None else []
         )
         observed_dates.extend(record.date for record in history)
@@ -674,6 +647,7 @@ async def get_price_forecast_service(
                 mineral_id = mineral_id,
                 reference = reference
             ),
+            dynamodb_resource = dynamodb_resource,
             db = db
         ))
 
@@ -708,6 +682,7 @@ class ForecastRequest:
 
 def _forecast_row(
     request: ForecastRequest,
+    dynamodb_resource: Optional[ServiceResource] = None,
     db: Optional[Session] = None
 ) -> Dict[str, Any]:
     '''
@@ -751,6 +726,7 @@ def _forecast_row(
             request.mineral_id,
             result,
             request.reference or get_current_time_gmt().date(),
+            dynamodb_resource = dynamodb_resource,
             db = db
         ),
     }

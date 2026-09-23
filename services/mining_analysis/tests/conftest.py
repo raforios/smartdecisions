@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 # instantiates a MySQL engine), but the engine is lazy — no connection is
 # actually opened until we exercise it, so this is safe for unit tests.
 from services import prices_store
-from services.db_connection import Base
+from services.db_connection_sql import Base
 import models.mining_analysis  # noqa: F401  pylint: disable=unused-import
 # Imported for its side effect only: it registers every table on Base.metadata
 # before create_all runs. Removing it leaves the test database empty.

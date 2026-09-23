@@ -14,7 +14,7 @@ from typing import Iterator
 
 from sqlalchemy.orm import Session
 
-from services.db_connection import ENGINE, get_db_session
+from services.db_connection_sql import ENGINE, get_db_session
 from services.logger_config import custom_logger as logger
 
 

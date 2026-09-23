@@ -22,12 +22,14 @@
 import argparse
 from typing import List, Optional
 
+import boto3
+from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 
 from models.mining_analysis import Mineral, MiningPrice
 from models.mining_analysis_dyb import MineralItem, MiningPriceItem
 from scripts.cli_support import database_session, report
-from services import crud_dyb
+from services import prices_dyb
 
 
 def _read_minerals(
@@ -112,6 +114,7 @@ def _describe(
 
 
 def _copy(
+    dynamodb_resource: ServiceResource,
     minerals: List[MineralItem],
     prices: List[MiningPriceItem]
 ) -> None:
@@ -119,18 +122,20 @@ def _copy(
         Writes the catalogue and the quotations into DynamoDB.
 
         Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             minerals (List[MineralItem]): Catalogue to write.
             prices (List[MiningPriceItem]): Quotations to write.
     '''
     for mineral in minerals:
-        crud_dyb.put_mineral(mineral)
+        prices_dyb.put_mineral(dynamodb_resource, mineral)
     report(f'Catalogue written: {len(minerals)} mineral(s).')
 
-    written = crud_dyb.put_prices_batch(prices)
+    written = prices_dyb.put_prices_batch(dynamodb_resource, prices)
     report(f'Quotations written: {written} row(s).')
 
 
 def _verify(
+    dynamodb_resource: ServiceResource,
     minerals: List[MineralItem],
     prices: List[MiningPriceItem]
 ) -> bool:
@@ -138,14 +143,15 @@ def _verify(
         Reads DynamoDB back and compares the counts against the source.
 
         Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             minerals (List[MineralItem]): Catalogue that was written.
             prices (List[MiningPriceItem]): Quotations that were written.
 
         Returns:
             bool: True when both counts match.
     '''
-    stored_minerals = len(crud_dyb.list_minerals())
-    stored_prices = len(crud_dyb.scan_prices())
+    stored_minerals = len(prices_dyb.list_minerals(dynamodb_resource))
+    stored_prices = len(prices_dyb.scan_prices(dynamodb_resource))
     report(f'Verification: {stored_minerals} mineral(s), {stored_prices} quotation(s) '
            f'in DynamoDB.')
     return stored_minerals >= len(minerals) and stored_prices >= len(prices)
@@ -181,8 +187,10 @@ def main() -> int:
         report('Nothing to copy: the relational catalogue is empty.')
         return 1
 
-    _copy(minerals, prices)
-    return 0 if _verify(minerals, prices) else 1
+    # A local script owns its connection: there is no route to resolve it.
+    dynamodb_resource = boto3.resource('dynamodb')
+    _copy(dynamodb_resource, minerals, prices)
+    return 0 if _verify(dynamodb_resource, minerals, prices) else 1
 
 
 if __name__ == '__main__':

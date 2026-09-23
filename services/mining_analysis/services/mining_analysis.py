@@ -6,9 +6,10 @@ import io
 import re
 import unicodedata
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from fastapi import Request
 import pandas as pd
+from boto3.resources.base import ServiceResource
 from sqlalchemy import func
 from sqlalchemy.orm import Query, Session
 from models.mining_analysis import (
@@ -69,7 +70,7 @@ def normalize_name(name: str) -> str:
 # Canonical mineral catalog rendered in the official Minerales_0X templates.
 # Order is significant: the PNG report mirrors this sequence top-to-bottom.
 OFFICIAL_MINERALS: Tuple[Dict[str, str], ...] = (
-    {'name': 'Estaño',    'chemical_symbol': 'Sn', 'unit': 'LF',  'quoted_in': 'LFIX'},
+    {'name': 'Estaño',    'chemical_symbol': 'Sn', 'unit': 'LF',  'quoted_in': 'LME'},
     {'name': 'Plomo',     'chemical_symbol': 'Pb', 'unit': 'LF',  'quoted_in': 'LME'},
     {'name': 'Zinc',      'chemical_symbol': 'Zn', 'unit': 'LF',  'quoted_in': 'LME'},
     {'name': 'Cobre',     'chemical_symbol': 'Cu', 'unit': 'LF',  'quoted_in': 'LME'},
@@ -292,7 +293,10 @@ async def process_mining_etl_service(
         'skipped_records': skipped
     }
 
-async def get_all_prices_service(db: Session) -> List[Dict[str, Any]]:
+async def get_all_prices_service(
+    dynamodb_resource: Optional[ServiceResource],
+    db: Optional[Session] = None
+) -> List[Dict[str, Any]]:
     '''
     Retrieves every quotation with the metadata of its mineral.
 
@@ -311,7 +315,7 @@ async def get_all_prices_service(db: Session) -> List[Dict[str, Any]]:
         normalize_name(entry['name']): entry for entry in OFFICIAL_MINERALS
     }
     rows: List[Dict[str, Any]] = []
-    for record in all_quotations(db = db):
+    for record in all_quotations(dynamodb_resource, db = db):
         entry = catalog.get(normalize_name(record.mineral_name), {})
         rows.append({
             'date': record.date,

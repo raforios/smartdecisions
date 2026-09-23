@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from typing import List, Optional, Tuple
 
+from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 
 from services.environment import load_and_validate_env_vars
@@ -67,21 +68,26 @@ def uses_dynamodb() -> bool:
     return BACKEND == DYNAMODB_BACKEND
 
 
-def list_minerals(db: Optional[Session] = None) -> List[MineralRecord]:
+def list_minerals(
+    dynamodb_resource: Optional[ServiceResource] = None,
+    db: Optional[Session] = None
+) -> List[MineralRecord]:
     '''
         Returns the mineral catalogue.
 
         Args:
+            dynamodb_resource (ServiceResource | None): Resource the route
+                resolved; ignored on the relational backend.
             db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             List[MineralRecord]: Every mineral on record.
     '''
     if uses_dynamodb():
-        from services import crud_dyb # pylint: disable=import-outside-toplevel
+        from services import prices_dyb # pylint: disable=import-outside-toplevel
         return [
             MineralRecord(mineral_id = item.mineral_id, name = item.name)
-            for item in crud_dyb.list_minerals()
+            for item in prices_dyb.list_minerals(dynamodb_resource)
         ]
 
     from models.mining_analysis import Mineral # pylint: disable=import-outside-toplevel
@@ -92,9 +98,9 @@ def list_minerals(db: Optional[Session] = None) -> List[MineralRecord]:
 
 
 def prices_in_window(
+    dynamodb_resource: Optional[ServiceResource],
     mineral_id: str,
-    start: date_type,
-    end: date_type,
+    window: Tuple[date_type, date_type],
     db: Optional[Session] = None
 ) -> List[PriceRecord]:
     '''
@@ -102,16 +108,18 @@ def prices_in_window(
 
         Args:
             mineral_id (str): Mineral identifier.
-            start (date): First date of the window.
-            end (date): Last date of the window.
+            window (Tuple[date, date]): First and last date, inclusive.
+            dynamodb_resource (ServiceResource | None): Resource the route
+                resolved; ignored on the relational backend.
             db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             List[PriceRecord]: Quotations with a price, ordered by date.
     '''
     if uses_dynamodb():
-        from services import crud_dyb # pylint: disable=import-outside-toplevel
-        items = crud_dyb.query_prices(mineral_id, start, end)
+        from services import prices_dyb # pylint: disable=import-outside-toplevel
+        start, end = window
+        items = prices_dyb.query_prices(dynamodb_resource, mineral_id, {'from': start, 'to': end})
         return [
             PriceRecord(item.mineral_id, item.date, item.price_low, item.price_high)
             for item in items if item.price_low is not None
@@ -140,9 +148,9 @@ def prices_in_window(
 
 
 def average_low(
+    dynamodb_resource: Optional[ServiceResource],
     mineral_id: str,
-    start: date_type,
-    end: date_type,
+    window: Tuple[date_type, date_type],
     db: Optional[Session] = None
 ) -> Optional[Tuple[float, int]]:
     '''
@@ -154,17 +162,19 @@ def average_low(
 
         Args:
             mineral_id (str): Mineral identifier.
-            start (date): First date of the window.
-            end (date): Last date of the window.
+            window (Tuple[date, date]): First and last date, inclusive.
+            dynamodb_resource (ServiceResource | None): Resource the route
+                resolved; ignored on the relational backend.
             db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             tuple[float, int] | None: (average, days with data), or None when the
                 window holds no data.
     '''
+    start, end = window
     if uses_dynamodb():
         # DynamoDB cannot average: read the partition and aggregate here.
-        prices = prices_in_window(mineral_id, start, end)
+        prices = prices_in_window(dynamodb_resource, mineral_id, window)
         by_day = {price.date: price.price_low for price in prices}
         if not by_day:
             return None
@@ -193,6 +203,7 @@ def average_low(
 
 
 def latest_prices_before(
+    dynamodb_resource: Optional[ServiceResource],
     mineral_id: str,
     ref_date: date_type,
     limit: int = 2,
@@ -211,14 +222,17 @@ def latest_prices_before(
             mineral_id (str): Mineral identifier.
             ref_date (date): Latest date to consider, inclusive.
             limit (int): How many quotations to return, newest first.
+            dynamodb_resource (ServiceResource | None): Resource the route
+                resolved; ignored on the relational backend.
             db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             List[PriceRecord]: Quotations newest first, at most `limit` of them.
     '''
     if uses_dynamodb():
-        from services import crud_dyb # pylint: disable=import-outside-toplevel
-        items = crud_dyb.query_prices(mineral_id, None, ref_date, descending = True)
+        from services import prices_dyb # pylint: disable=import-outside-toplevel
+        items = prices_dyb.query_prices(dynamodb_resource, mineral_id,
+                                        {'to': ref_date}, descending = True)
         return [
             PriceRecord(item.mineral_id, item.date, item.price_low, item.price_high)
             for item in items
@@ -245,7 +259,10 @@ def latest_prices_before(
     ]
 
 
-def date_bounds(db: Optional[Session] = None) -> Tuple[Optional[date_type], Optional[date_type]]:
+def date_bounds(
+    dynamodb_resource: Optional[ServiceResource] = None,
+    db: Optional[Session] = None
+) -> Tuple[Optional[date_type], Optional[date_type]]:
     '''
         Returns the first and last dates with a stored quotation.
 
@@ -255,6 +272,8 @@ def date_bounds(db: Optional[Session] = None) -> Tuple[Optional[date_type], Opti
         item per mineral per day and the history screen is not a hot path.
 
         Args:
+            dynamodb_resource (ServiceResource | None): Resource the route
+                resolved; ignored on the relational backend.
             db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
@@ -262,8 +281,8 @@ def date_bounds(db: Optional[Session] = None) -> Tuple[Optional[date_type], Opti
                 (None, None) when nothing is stored.
     '''
     if uses_dynamodb():
-        from services import crud_dyb # pylint: disable=import-outside-toplevel
-        dates = [item.date for item in crud_dyb.scan_prices()]
+        from services import prices_dyb # pylint: disable=import-outside-toplevel
+        dates = [item.date for item in prices_dyb.scan_prices(dynamodb_resource)]
         return (min(dates), max(dates)) if dates else (None, None)
 
     from models.mining_analysis import MiningPrice # pylint: disable=import-outside-toplevel
@@ -292,7 +311,10 @@ class QuotationRecord:
     price_high: Optional[float] = None
 
 
-def all_quotations(db: Optional[Session] = None) -> List[QuotationRecord]:
+def all_quotations(
+    dynamodb_resource: Optional[ServiceResource] = None,
+    db: Optional[Session] = None
+) -> List[QuotationRecord]:
     '''
         Returns every stored quotation with its mineral.
 
@@ -302,21 +324,23 @@ def all_quotations(db: Optional[Session] = None) -> List[QuotationRecord]:
         that refreshes.
 
         Args:
+            dynamodb_resource (ServiceResource | None): Resource the route
+                resolved; ignored on the relational backend.
             db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             List[QuotationRecord]: Quotations ordered by date, then mineral.
     '''
     if uses_dynamodb():
-        from services import crud_dyb # pylint: disable=import-outside-toplevel
-        names = {item.mineral_id: item.name for item in crud_dyb.list_minerals()}
+        from services import prices_dyb # pylint: disable=import-outside-toplevel
+        names = {item.mineral_id: item.name for item in prices_dyb.list_minerals(dynamodb_resource)}
         return sorted(
             (
                 QuotationRecord(
                     item.mineral_id, names.get(item.mineral_id, ''),
                     item.date, item.price_low, item.price_high
                 )
-                for item in crud_dyb.scan_prices()
+                for item in prices_dyb.scan_prices(dynamodb_resource)
             ),
             key = lambda record: (record.date, record.mineral_name)
         )

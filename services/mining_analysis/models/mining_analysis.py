@@ -12,7 +12,7 @@ from sqlalchemy import (
     Date
 )
 from sqlalchemy.orm import relationship
-from services.db_connection import Base
+from services.db_connection_sql import Base
 from services.utils import get_current_time_gmt
 
 class Mineral(Base): # pylint: disable=too-few-public-methods

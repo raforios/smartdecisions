@@ -9,7 +9,7 @@ from datetime import date as date_type
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy.orm import Session
+from boto3.resources.base import ServiceResource
 
 from controllers.mining_analysis import (
     get_biweekly_history_controller,
@@ -46,12 +46,13 @@ async def public_daily_report(
     request: Request,
     ref_date: date_type = Query(..., alias = 'date',
                                 description = 'Reference date (YYYY-MM-DD).'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> DailyReportResponse:
     '''Anonymous version of /reports/daily — same payload, no JWT.'''
     logger.info('Public daily report requested for %s.', ref_date)
     return await get_daily_report_controller(
-        db = db, request = request, current_user = PUBLIC_USER, ref_date = ref_date,
+        dynamodb_resource = dynamodb_resource, request = request,
+        current_user = PUBLIC_USER, ref_date = ref_date,
     )
 
 
@@ -66,13 +67,13 @@ async def public_biweekly_report(
     month: int = Query(..., ge = 1, le = 12),
     half: int = Query(..., ge = 1, le = 2,
                       description = '1 = days 1-15, 2 = 16-end.'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> BiweeklyReportResponse:
     '''Anonymous version of /reports/biweekly — same payload, no JWT.'''
     logger.info('Public biweekly report requested for %s-%02d Q%s.',
                 year, month, half)
     return await get_biweekly_report_controller(
-        db = db, request = request, current_user = PUBLIC_USER,
+        dynamodb_resource = dynamodb_resource, request = request, current_user = PUBLIC_USER,
         year = year, month = month, half = half,
     )
 
@@ -91,12 +92,12 @@ async def public_biweekly_history(
         None, alias = 'from', description = 'Inclusive lower bound (YYYY-MM-DD).'),
     period_to: Optional[date_type] = Query(
         None, alias = 'to', description = 'Inclusive upper bound (YYYY-MM-DD).'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> BiweeklyHistoryResponse:
     '''Anonymous endpoint feeding the historical line chart in mercados.html.'''
     logger.info('Public biweekly history requested %s → %s.', period_from, period_to)
     return await get_biweekly_history_controller(
-        db = db, request = request, current_user = PUBLIC_USER,
+        dynamodb_resource = dynamodb_resource, request = request, current_user = PUBLIC_USER,
         period_from = period_from, period_to = period_to,
     )
 
@@ -109,11 +110,12 @@ async def public_biweekly_history(
 async def public_daily_png(
     request: Request,
     ref_date: date_type = Query(..., alias = 'date'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> Response:
     '''Returns the daily report rendered on the Minerales_01 template.'''
     payload = await get_daily_report_controller(
-        db = db, request = request, current_user = PUBLIC_USER, ref_date = ref_date,
+        dynamodb_resource = dynamodb_resource, request = request,
+        current_user = PUBLIC_USER, ref_date = ref_date,
     )
     png_bytes, _ = build_daily_report_assets(payload, formats = ('png',))
     return Response(content = png_bytes, media_type = 'image/png')
@@ -127,11 +129,12 @@ async def public_daily_png(
 async def public_daily_pdf(
     request: Request,
     ref_date: date_type = Query(..., alias = 'date'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> Response:
     '''Returns the daily report rendered as a single-page PDF.'''
     payload = await get_daily_report_controller(
-        db = db, request = request, current_user = PUBLIC_USER, ref_date = ref_date,
+        dynamodb_resource = dynamodb_resource, request = request,
+        current_user = PUBLIC_USER, ref_date = ref_date,
     )
     _, pdf_bytes = build_daily_report_assets(payload, formats = ('pdf',))
     return Response(content = pdf_bytes, media_type = 'application/pdf')
@@ -147,11 +150,11 @@ async def public_biweekly_png(
     year: int = Query(..., ge = 2000, le = 2100),
     month: int = Query(..., ge = 1, le = 12),
     half: int = Query(..., ge = 1, le = 2),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> Response:
     '''Returns the biweekly report rendered on the Minerales_02 template.'''
     payload = await get_biweekly_report_controller(
-        db = db, request = request, current_user = PUBLIC_USER,
+        dynamodb_resource = dynamodb_resource, request = request, current_user = PUBLIC_USER,
         year = year, month = month, half = half,
     )
     png_bytes, _ = build_biweekly_report_assets(payload, formats = ('png',))
@@ -168,11 +171,11 @@ async def public_biweekly_pdf(
     year: int = Query(..., ge = 2000, le = 2100),
     month: int = Query(..., ge = 1, le = 12),
     half: int = Query(..., ge = 1, le = 2),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> Response:
     '''Returns the biweekly report rendered as a single-page PDF.'''
     payload = await get_biweekly_report_controller(
-        db = db, request = request, current_user = PUBLIC_USER,
+        dynamodb_resource = dynamodb_resource, request = request, current_user = PUBLIC_USER,
         year = year, month = month, half = half,
     )
     _, pdf_bytes = build_biweekly_report_assets(payload, formats = ('pdf',))

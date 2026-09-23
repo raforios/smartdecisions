@@ -6,7 +6,7 @@ from datetime import datetime, date
 from typing import Dict, Any, AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
@@ -15,12 +15,16 @@ import uvicorn
 
 # Router of this microservice
 from routes.mining_analysis import router as mining_router
+from routes.market import router as market_router
 from routes.public_reports import router as public_reports_router
 
 from services.api_exceptions import setup_exception_handlers
-from services.db_connection import ENGINE, Base
+from services.db_connection_sql import ENGINE, Base
 from services.logger_config import custom_logger as logger
 from services.environment import load_and_validate_env_vars
+import boto3
+
+from services.market_sources import scheduled_sync
 from services.prices_store import uses_dynamodb
 
 # Environment variable configuration
@@ -162,10 +166,64 @@ app.add_middleware(
 # Router registration. The public one goes first so it shows up first in /docs.
 app.include_router(public_reports_router)
 app.include_router(mining_router)
+app.include_router(market_router)
 
 if __name__ == '__main__':
     message = f'Starting Mining Analysis Service at {UVICORN_HOST}:{UVICORN_PORT}'
     logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
-handler = Mangum(app)
+# The Lambda answers two kinds of caller. API Gateway sends HTTP events, which
+# Mangum turns into ASGI; EventBridge sends a scheduled event, which has no
+# request at all and would make Mangum fail looking for one. Same dispatch as
+# QUOTES: the only place that has to know the difference.
+_asgi_handler = Mangum(app)
+_SCHEDULED_SOURCE = 'aws.events'
+_SYNC_TASK = 'sync_market'
+
+
+def _is_scheduled_sync(event: Dict[str, Any]) -> bool:
+    '''
+        Tells a scheduled invocation apart from an HTTP one.
+
+        Args:
+            event (Dict[str, Any]): Raw Lambda event.
+
+        Returns:
+            bool: True when the event asks for the market sync.
+    '''
+    if not isinstance(event, dict):
+        return False
+    return event.get('source') == _SCHEDULED_SOURCE or event.get('task') == _SYNC_TASK
+
+
+def handler(
+    event: Dict[str, Any],
+    context: Any
+) -> Any:
+    '''
+        Lambda entry point.
+
+        Args:
+            event (Dict[str, Any]): Raw Lambda event.
+            context (Any): Lambda context, passed through to Mangum.
+
+        Returns:
+            Any: The HTTP response, or the sync result for a scheduled run.
+
+        Raises:
+            RuntimeError: If the scheduled sync could not complete, so the
+                invocation is marked failed and the retry policy applies.
+    '''
+    if _is_scheduled_sync(event):
+        try:
+            result = scheduled_sync(boto3.resource('dynamodb'))
+        except HTTPException as error:
+            error_msg = f'Scheduled market sync failed: {error.detail}'
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from error
+        message = (f'Scheduled market sync stored {result.stored} day(s), '
+                   f'skipped {result.already_present}, failed sources {result.failed_sources}.')
+        logger.info(message)
+        return result.model_dump(mode = 'json')
+    return _asgi_handler(event, context)

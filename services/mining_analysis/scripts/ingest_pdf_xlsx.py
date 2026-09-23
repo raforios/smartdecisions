@@ -40,11 +40,8 @@ from sqlalchemy.orm import Session
 from models.mining_analysis import Mineral, MiningPrice
 from scripts.cli_support import database_session, report, source_is_missing
 from services.logger_config import custom_logger as logger
-from services.mining_analysis import (
-    OFFICIAL_MINERALS,
-    _normalize_name,
-    ensure_official_minerals,
-)
+from services.mining_analysis import OFFICIAL_MINERALS, normalize_name
+from services.official_reports import ensure_official_minerals
 
 
 SPANISH_MONTHS = {
@@ -89,7 +86,7 @@ def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[st
             - Raw header labels that did not match the catalog (caller may
               choose to warn). Column A (the day number) is always skipped.
     '''
-    official = {_normalize_name(m['name']) for m in OFFICIAL_MINERALS}
+    official = {normalize_name(m['name']) for m in OFFICIAL_MINERALS}
     matched: Dict[int, str] = {}
     unmatched: List[str] = []
     for idx, cell in enumerate(header_row):
@@ -98,7 +95,7 @@ def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[st
         raw = str(cell).split('\n', maxsplit = 1)[0].strip()
         if not raw:
             continue
-        norm = _normalize_name(raw)
+        norm = normalize_name(raw)
         if norm in official:
             matched[idx] = norm
         else:
@@ -276,7 +273,7 @@ def main() -> int:
     with database_session() as session:
         ensure_official_minerals(session)
         mineral_id_by_norm = {
-            _normalize_name(r.name): r.id for r in session.query(Mineral).all()
+            normalize_name(r.name): r.id for r in session.query(Mineral).all()
         }
         inserted, skipped = _upsert_prices(session, mineral_id_by_norm, all_parsed)
         message = f'Ingest complete: inserted={inserted}, skipped={skipped}.'

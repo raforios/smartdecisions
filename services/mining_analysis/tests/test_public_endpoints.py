@@ -1,76 +1,82 @@
 '''
-    Smoke tests for the public mineral-report endpoints — verifies they are
-    reachable without a JWT and return 200 with the expected payload shape.
+    Smoke tests for the public mineral-report endpoints — reachable without a
+    JWT, answering 200 with the expected payload shape.
+
+    They run against DynamoDB (moto), which is what the deployment serves:
+    the route resolves the resource through GET_DB_DEPENDENCY and hands it
+    down, exactly as in production. The relational branch of the same reports
+    is covered by `test_reports.py`.
 '''
 from datetime import date
 
+import boto3
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from moto import mock_aws
 
-from models.mining_analysis import Mineral, MiningPrice
+from models.mining_analysis_dyb import MineralItem, MiningPriceItem
 from routes.public_reports import router as public_reports_router
-from services.db_connection import Base, GET_DB_DEPENDENCY
+from services import prices_dyb, prices_store
+from services.db_connection import GET_DB_DEPENDENCY
 from services.mining_analysis import OFFICIAL_MINERALS
-from services.official_reports import normalize_name
+
+# Two days of tin, the pair the assertions below read: 21.0 then 22.0.
+TIN_PRICES = ((date(2026, 4, 10), 21.0), (date(2026, 4, 11), 22.0))
 
 
 @pytest.fixture(name = 'public_client')
-def _public_client():
+def _public_client(monkeypatch):
     '''
-    Builds a FastAPI app mounting only the public router and a SQLite-backed
-    DB dependency override, returning the TestClient ready to hit the public
-    endpoints anonymously.
+        A client for the public router backed by a mocked DynamoDB holding the
+        official catalogue and two tin quotations.
+
+        Args:
+            monkeypatch: Pins the store to the DynamoDB backend, whatever
+                .env says, so the suite never depends on deployment config.
+
+        Returns:
+            TestClient: Ready to hit the public endpoints anonymously.
     '''
-    engine = create_engine(
-        'sqlite:///:memory:',
-        future = True,
-        connect_args = {'check_same_thread': False},
-        poolclass = StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind = engine, autocommit = False, autoflush = False)
-    session = session_factory()
-    # Seed catalog + a few prices so the endpoints have something to return.
-    for catalog in OFFICIAL_MINERALS:
-        session.add(Mineral(
-            name = catalog['name'],
-            unit = catalog['unit'],
-            chemical_symbol = catalog['chemical_symbol'],
-            quoted_in = catalog['quoted_in'],
-        ))
-    session.commit()
-    mineral_id = {
-        normalize_name(m.name): m.id for m in session.query(Mineral).all()
-    }
-    session.add(MiningPrice(
-        mineral_id = mineral_id[normalize_name('Estaño')],
-        date = date(2026, 4, 10), price_low = 21.0, price_high = 21.0,
-    ))
-    session.add(MiningPrice(
-        mineral_id = mineral_id[normalize_name('Estaño')],
-        date = date(2026, 4, 11), price_low = 22.0, price_high = 22.0,
-    ))
-    session.commit()
+    monkeypatch.setattr(prices_store, 'BACKEND', prices_store.DYNAMODB_BACKEND)
+    with mock_aws():
+        resource = boto3.resource('dynamodb', region_name = 'us-east-1')
+        resource.create_table(
+            TableName = prices_dyb.MINERALS_TABLE,
+            KeySchema = [{'AttributeName': 'mineral_id', 'KeyType': 'HASH'}],
+            AttributeDefinitions = [{'AttributeName': 'mineral_id', 'AttributeType': 'S'}],
+            BillingMode = 'PAY_PER_REQUEST'
+        )
+        resource.create_table(
+            TableName = prices_dyb.PRICES_TABLE,
+            KeySchema = [{'AttributeName': 'mineral_id', 'KeyType': 'HASH'},
+                         {'AttributeName': 'date', 'KeyType': 'RANGE'}],
+            AttributeDefinitions = [{'AttributeName': 'mineral_id', 'AttributeType': 'S'},
+                                    {'AttributeName': 'date', 'AttributeType': 'S'}],
+            BillingMode = 'PAY_PER_REQUEST'
+        )
+        for index, catalog in enumerate(OFFICIAL_MINERALS, start = 1):
+            prices_dyb.put_mineral(resource, MineralItem(
+                mineral_id = str(index), name = catalog['name'], unit = catalog['unit'],
+                chemical_symbol = catalog['chemical_symbol'], quoted_in = catalog['quoted_in']
+            ))
+        # Keyed by symbol rather than searched: a bare next() inside this
+        # generator fixture would raise StopIteration where pytest reads it.
+        catalogue_ids = {catalog['chemical_symbol']: str(index)
+                         for index, catalog in enumerate(OFFICIAL_MINERALS, start = 1)}
+        tin_id = catalogue_ids['Sn']
+        prices_dyb.put_prices_batch(resource, [
+            MiningPriceItem(mineral_id = tin_id, date = day, price_low = price, price_high = price)
+            for day, price in TIN_PRICES
+        ])
 
-    app = FastAPI()
-    app.include_router(public_reports_router)
-
-    def _override_db():
+        app = FastAPI()
+        app.include_router(public_reports_router)
+        app.dependency_overrides[GET_DB_DEPENDENCY] = lambda: resource
         try:
-            yield session
+            yield TestClient(app)
         finally:
-            pass
-
-    app.dependency_overrides[GET_DB_DEPENDENCY] = _override_db
-    try:
-        yield TestClient(app)
-    finally:
-        session.close()
-        engine.dispose()
+            app.dependency_overrides.clear()
 
 
 def test_public_daily_returns_200_without_auth(public_client):
