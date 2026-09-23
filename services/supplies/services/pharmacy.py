@@ -5,9 +5,6 @@
     Everything here takes the DynamoDB resource as its first argument: the
     route resolves it through GET_DB_DEPENDENCY and hands it down, so nothing
     in the service reaches for a connection of its own.
-
-    The relational side of SUPPLIES — the warehouse the Ministry runs — is
-    untouched by this module and keeps its own engine in `db_connection_sql`.
 '''
 from dataclasses import dataclass
 from decimal import Decimal

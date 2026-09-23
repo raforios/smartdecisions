@@ -33,7 +33,13 @@ from schemas.pharmacy import (
     SaleNoteIn,
     SaleStatus
 )
-from services import pharmacy, pharmacy_purchases, pharmacy_sales, pharmacy_stock
+from services import (
+    pharmacy,
+    pharmacy_purchases,
+    pharmacy_reports,
+    pharmacy_sales,
+    pharmacy_stock
+)
 from services.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError,
@@ -497,3 +503,96 @@ def test_a_pharmacy_without_settings_cannot_sell(dynamodb):
             SaleNoteIn(lines = [SaleLineIn(sku = 'PARA500', quantity = 1)]), CASHIER
         )
     assert error.value.detail == PharmacyError.SETTINGS_NOT_FOUND.value
+
+
+# --- counter dashboard -------------------------------------------------------
+
+def test_dashboard_reports_what_the_day_sold_and_left(dynamodb):
+    '''
+        The KPI a till asks for: what was charged, what it cost and the margin
+        between them — the cancelled note counted apart, never as money.
+    '''
+    _register(dynamodb)
+    _receive(dynamodb, [PurchaseLineIn(sku = 'PARA500', quantity = 20, unit_cost = 3.0,
+                                       sale_price = 6.0, expiry_date = LATER)])
+    _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 2)])
+    voided = _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 5)])
+    pharmacy_sales.cancel_sale(dynamodb, OWNER, voided.sale_id, CASHIER)
+
+    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = date.today())
+
+    assert summary.sales_count == 1
+    assert summary.sales_amount == 12.0
+    assert summary.sales_cost == 6.0
+    assert summary.margin == 6.0
+    assert summary.margin_percent == 50.0
+    assert summary.average_ticket == 12.0
+    assert summary.cancelled_count == 1
+
+
+def test_dashboard_separates_what_expires_soon_from_what_already_did(dynamodb):
+    '''
+        Two different actions: one batch can still be sold or returned, the
+        other has to come off the shelf today.
+    '''
+    _register(dynamodb)
+    reference = date(2026, 9, 23)
+    _receive(dynamodb, [
+        PurchaseLineIn(sku = 'PARA500', quantity = 5, unit_cost = 3.0, sale_price = 6.0,
+                       expiry_date = reference + timedelta(days = 20), lot_code = 'PRONTO'),
+        PurchaseLineIn(sku = 'PARA500', quantity = 4, unit_cost = 3.0, sale_price = 6.0,
+                       expiry_date = reference - timedelta(days = 5), lot_code = 'VENCIDO'),
+        PurchaseLineIn(sku = 'PARA500', quantity = 9, unit_cost = 3.0, sale_price = 6.0,
+                       expiry_date = reference + timedelta(days = 400), lot_code = 'LEJOS')
+    ])
+
+    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = reference)
+
+    assert [lot.lot_code for lot in summary.expiring_soon] == ['PRONTO']
+    assert summary.expiring_soon[0].days_left == 20
+    assert [lot.lot_code for lot in summary.expired] == ['VENCIDO']
+    assert summary.expired[0].value_at_cost == 12.0
+    # 5 + 4 + 9 units at 3,00 each, expired stock included: it is still capital
+    # sitting on the shelf until someone takes it off.
+    assert summary.stock_value_at_cost == 54.0
+
+
+def test_dashboard_lists_what_is_running_out(dynamodb):
+    '''
+        Only what the pharmacy asked to watch: a SKU with no minimum set is
+        not "low", it is simply not tracked.
+    '''
+    pharmacy.create_product(dynamodb, OWNER, ProductIn(
+        sku = 'IBU400', description = 'Ibuprofeno 400 mg', laboratory = 'Lab Demo',
+        min_stock = 10
+    ))
+    _register(dynamodb)
+    _receive(dynamodb, [
+        PurchaseLineIn(sku = 'IBU400', quantity = 3, unit_cost = 2.0, sale_price = 4.0),
+        PurchaseLineIn(sku = 'PARA500', quantity = 1, unit_cost = 3.0, sale_price = 6.0)
+    ])
+
+    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = date.today())
+
+    assert [row.sku for row in summary.low_stock] == ['IBU400']
+    assert summary.low_stock[0].available_quantity == 3
+
+
+def test_dashboard_ranks_products_by_what_they_charged(dynamodb):
+    '''What sold most is measured in money, not in boxes.'''
+    _register(dynamodb)
+    pharmacy.create_product(dynamodb, OWNER, ProductIn(
+        sku = 'VIT-C', description = 'Vitamina C 1 g', laboratory = 'Lab Demo'
+    ))
+    _receive(dynamodb, [
+        PurchaseLineIn(sku = 'PARA500', quantity = 50, unit_cost = 3.0, sale_price = 6.0),
+        PurchaseLineIn(sku = 'VIT-C', quantity = 50, unit_cost = 10.0, sale_price = 25.0)
+    ])
+    _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 10),
+                     SaleLineIn(sku = 'VIT-C', quantity = 4)])
+
+    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = date.today())
+
+    # 10 x 6 = 60 against 4 x 25 = 100: fewer boxes, more money.
+    assert [row.sku for row in summary.top_products] == ['VIT-C', 'PARA500']
+    assert summary.top_products[0].amount == 100.0

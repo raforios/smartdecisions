@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Path, Query, status
 
 from controllers.pharmacy import (
     cancel_sale_controller,
+    dashboard_controller,
     create_product_controller,
     get_product_controller,
     get_purchase_controller,
@@ -32,6 +33,7 @@ from controllers.pharmacy import (
 )
 from schemas.pharmacy import (
     LotPricePatch,
+    PharmacyDashboard,
     LotsResponse,
     PharmacySettings,
     ProductIn,
@@ -55,6 +57,19 @@ router = APIRouter(prefix = '/v1/supplies/pharmacy', tags = ['Pharmacy billing']
 # Running the shop: settings, catalogue, deliveries and voiding a note. A
 # cashier sells; they do not re-price the shelf or annul their own sale.
 MANAGERS = ('ADMIN', 'MANAGER')
+
+
+@router.get('/dashboard', response_model = PharmacyDashboard)
+async def dashboard_endpoint(
+    date_from: Optional[date_type] = Query(None, description = 'First day; today by default.'),
+    date_to: Optional[date_type] = Query(None, description = 'Last day; today by default.'),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    owner: str = Depends(get_current_owner)
+) -> PharmacyDashboard:
+    ''' Endpoint for the counter summary. '''
+    message = f'Pharmacy {owner} opened its dashboard.'
+    logger.info(message)
+    return await dashboard_controller(dynamodb_resource, owner, date_from, date_to)
 
 
 @router.get('/settings', response_model = SettingsResponse)

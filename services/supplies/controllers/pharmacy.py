@@ -6,12 +6,14 @@
     `services/pharmacy*.py`; here the owner and the caller are handed down and
     the DTO comes back.
 '''
+from datetime import date
 from typing import Optional
 
 from boto3.resources.base import ServiceResource
 
 from schemas.pharmacy import (
     LotPricePatch,
+    PharmacyDashboard,
     LotsResponse,
     PharmacySettings,
     ProductIn,
@@ -26,7 +28,28 @@ from schemas.pharmacy import (
     SaleNotesResponse,
     SettingsResponse
 )
-from services import pharmacy, pharmacy_purchases, pharmacy_sales, pharmacy_stock
+from services import (
+    pharmacy,
+    pharmacy_purchases,
+    pharmacy_reports,
+    pharmacy_sales,
+    pharmacy_stock
+)
+
+
+# --- counter dashboard -------------------------------------------------------
+
+async def dashboard_controller(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    date_from: Optional[date],
+    date_to: Optional[date]
+) -> PharmacyDashboard:
+    '''
+        What was sold, what it left, what is about to expire and what is about
+        to run out.
+    '''
+    return pharmacy_reports.dashboard(dynamodb_resource, owner, date_from, date_to)
 
 
 # --- settings ----------------------------------------------------------------

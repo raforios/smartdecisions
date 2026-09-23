@@ -1,9 +1,10 @@
 '''
     Supplies Microservice Main Handler.
 
-    Inventory management for materials and supplies. Wires the router for
-    catalog, entries (Nota de Ingreso), requests, kardex and dashboard
-    endpoints, and exposes the Lambda-friendly ASGI handler via Mangum.
+    Billing for pharmacies: the catalogue a shop sells, the batches it
+    receives, and the two documents that move them — the nota de compra and
+    the nota de venta. Wires the pharmacy router and exposes the
+    Lambda-friendly ASGI handler via Mangum.
 '''
 import socket
 from datetime import date, datetime
@@ -18,16 +19,9 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
-from routes.catalog import router as catalog_router
-from routes.dashboard import router as dashboard_router
-from routes.entry import router as entry_router
-from routes.kardex import router as kardex_router
 from routes.pharmacy import router as pharmacy_router
-from routes.reports import router as reports_router
-from routes.supplier import router as supplier_router
 
 from services.api_exceptions import setup_exception_handlers
-from services.db_connection_sql import ENGINE, Base
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -57,21 +51,15 @@ OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED els
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     '''
-        Initializes database tables at startup. Failing here aborts the
-        process so the service does not stay up serving against a half-
-        provisioned schema.
-    '''
-    message = 'Application startup: initializing database tables.'
-    logger.info(message)
-    try:
-        Base.metadata.create_all(bind = ENGINE)
-        message = 'Database tables created/verified successfully.'
-        logger.info(message)
-    except Exception as e:
-        error_msg = f'Database initialization failed on startup: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('Database initialization failed during application startup.') from e
+        Nothing to provision at startup.
 
+        The DynamoDB tables are created by `services/ci/api/
+        create_dynamodb_tables.sh`, which is reviewed and run on purpose. A
+        service that provisioned its own storage on every cold start would be
+        one deploy away from creating a table nobody agreed to.
+    '''
+    message = 'Application startup: pharmacy billing service ready.'
+    logger.info(message)
     yield
 
     message = 'Application shutdown: closing resources.'
@@ -82,17 +70,20 @@ APP_CONFIG = {
     'root_path': ROOT_PATH_NORMALIZED,
     'title': 'Supplies Service',
     'description': '''
-        Inventory microservice for the Ministry. Covers two main processes:
+        Billing for pharmacies, on DynamoDB and multi-tenant: the owner of
+        every row is the pharmacy the token names.
 
-        1. **Entries (Nota de Ingreso)**: register warehouse intake documents
-           whose detail lines are PEPS/FIFO cost layers, feeding a valued
-           kardex IN movement per line.
-        2. **Requests**: end-user supply requests with a full state machine,
-           stock validation against the minimum, role-based transitions and
-           PEPS/FIFO kardex OUT movements on delivery.
+        1. **Catálogo y lotes**: each SKU carries its batches, and each batch
+           its own cost and shelf price — the laboratory sets both per
+           purchase.
+        2. **Nota de compra**: what a laboratory or distributor delivered;
+           every line becomes a batch.
+        3. **Nota de venta**: sells oldest-expiry-first (FEFO), takes the
+           units out under a condition so two tills cannot oversell, and can
+           be cancelled back into the very batches it emptied.
 
-        Includes reports (low-stock, entries, requests) and a dashboard
-        summary.''',
+        Includes the counter dashboard: what was sold today, the margin it
+        left, and what is about to expire.''',
     'version': '1.0.0',
     'contact': {
         'name': 'API Support',
@@ -172,13 +163,7 @@ app.add_middleware(
     allow_headers = ['*'],
 )
 
-app.include_router(catalog_router)
-app.include_router(supplier_router)
-app.include_router(entry_router)
-app.include_router(kardex_router)
 app.include_router(pharmacy_router)
-app.include_router(reports_router)
-app.include_router(dashboard_router)
 
 
 if __name__ == '__main__':

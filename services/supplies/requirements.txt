@@ -4,8 +4,7 @@ pydantic
 pydantic-core
 python-multipart
 mangum
+boto3
 python-jose[cryptography]
-sqlalchemy
-pymysql
 python-dotenv
 requests
