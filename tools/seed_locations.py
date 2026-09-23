@@ -1,12 +1,20 @@
 '''
-    Script to seed the official catalog of Departments and Municipalities.
+    Seeds the official catalog of Departments and Municipalities of
+    MINING_ANALYSIS, which the year-on-year report maps its rows against.
+
+    It writes to the relational side, the one the Ministry's royalties and
+    biweekly load still use, so it asks for `db_connection_sql` — the DynamoDB
+    connection of that service is `db_connection`.
+
+    Usage:
+        python tools/seed_locations.py <ruta-al-excel>
 '''
 import sys
 import zipfile
 import pandas as pd
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from services.db_connection import ENGINE
+from services.db_connection_sql import ENGINE
 from services.logger_config import custom_logger as logger
 from models.mining_analysis import Department, Municipality
 

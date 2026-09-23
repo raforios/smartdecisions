@@ -196,8 +196,12 @@ RUTAS— ya está desplegado y probado; el minerales queda como avance.
 
 En orden.
 
-1. **Facturador para farmacias (SUPPLIES) — backend terminado, falta
-   desplegar y la pantalla.** Módulo paralelo dentro de SUPPLIES sobre
+1. **SUPPLIES es ahora el facturador para farmacias — backend terminado,
+   falta desplegar y rehacer la pantalla.** El 23-sep se eliminó todo el lado
+   relacional (catálogo de almacén, proveedores, ingresos, kardex, reportes y
+   dashboard del Ministerio): el microservicio corre **sólo sobre DynamoDB**.
+   MySQL queda únicamente en MINING_ANALYSIS hasta verificar la carga de fin
+   de mes. Módulo paralelo dentro de SUPPLIES sobre
    DynamoDB, con el mismo patrón que RUTAS dentro de OPTIMIZATION: archivos
    `*/pharmacy*.py` nuevos, `db_connection.py` y `crud.py` estándar de Dynamo,
    y lo relacional del almacén movido a `*_sql.py`. Cinco tablas ya creadas en
@@ -212,10 +216,17 @@ En orden.
    (efectivo/QR/tarjeta); numeración propia por farmacia, atómica; anular una
    nota devuelve las unidades a los lotes exactos de los que salieron.
 
-   Falta: despliegue de Rafael, y el frontend (mostrador, catálogo, recepción,
-   e impresión térmica de 58 y 80 mm desde el navegador, como en
-   MINING_SUMMIT) con el estilo visual de SmartDecisions. Fase siguiente:
-   factura electrónica según la RND 11 (SIAT, SOAP/XML).
+   El dashboard se rehízo sobre la nueva funcionalidad: vendido del día,
+   costo, margen y su porcentaje, ticket promedio, notas anuladas, capital en
+   estantería, lotes por vencer y ya vencidos (separados, porque piden
+   acciones distintas), productos bajo mínimo y los más vendidos por monto.
+
+   Falta: despliegue de Rafael, y **rehacer el frontend** — `portal/supplies/`
+   son 4.656 líneas construidas sobre el almacén (Catálogo, Ingresos, Kardex,
+   Solicitudes, Proveedores) y no sobre farmacia. Debe incluir la impresión
+   térmica de 58 y 80 mm desde el navegador, como en MINING_SUMMIT, con el
+   estilo visual de SmartDecisions. Fase siguiente: factura electrónica según
+   la RND 11 (SIAT, SOAP/XML).
 
 2. **Sección "Usuarios"** para que un MANAGER cree y administre a su gente.
 3. **Alinear `mining_analysis/services/utils.py` al boilerplate estándar** — es
