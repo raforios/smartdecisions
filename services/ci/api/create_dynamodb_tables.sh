@@ -62,6 +62,19 @@ TABLES=(
     # un filtro posterior — leer la de otro cambiaría sus provisiones.
     "analytics_credit_policies:owner_email:S"
 
+    # --- Facturación para farmacias (SUPPLIES) ---
+    # El dueño es la farmacia y es parte de cada clave, nunca un filtro
+    # posterior: una farmacia que pudiera leer la estantería de otra estaría
+    # leyendo sus márgenes. El lote se ordena por "sku#lot_id" para que los
+    # lotes de un producto salgan con un begins_with y no con un scan; la venta
+    # y la compra llevan la marca de tiempo al principio del identificador, que
+    # es lo que convierte un rango de fechas en una consulta acotada.
+    "pharmacy_products:owner:S:sku:S"
+    "pharmacy_lots:owner:S:lot_key:S"
+    "pharmacy_sales:owner:S:sale_id:S"
+    "pharmacy_purchases:owner:S:purchase_id:S"
+    "pharmacy_settings:owner:S:setting_key:S"
+
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"
     "mining_summit_registration:ci:S"
