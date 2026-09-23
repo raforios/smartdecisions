@@ -14,6 +14,8 @@
         env-shorthand  no comma and no brace inside a .env value
         getenv       no `os.getenv` / `os.environ` outside environment.py
         log-vars     WARNING/ERROR logs use `error_msg`, INFO uses `message`
+        events       every controller reports usage to EVENTS, and every
+                     write is audited
 
     Usage:
         python tools/verify_service.py services/ingest [services/analytics ...]
@@ -27,7 +29,8 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCT_SERVICES = ('ingest', 'analytics', 'optimization', 'mining_analysis', 'quotes', 'ai')
+PRODUCT_SERVICES = ('ingest', 'analytics', 'optimization', 'mining_analysis',
+                    'quotes', 'ai', 'billing')
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
                'utils.py'}
@@ -229,6 +232,119 @@ def check_type_hints(service: Path) -> tuple[bool, str]:
     return False, ', '.join(hits[:5]) + more
 
 
+# HTTP verbs that change something. What they change has to be auditable:
+# who did it, to which row, and what it looked like before.
+WRITING_VERBS = ('post', 'put', 'patch', 'delete')
+
+# A POST that only reads is a query: a filter whose criteria do not fit in a
+# URL, or a what-if calculation. Auditing those would fill the trail with
+# reads, so the convention is that a controller that changes nothing says so
+# in its name.
+QUERY_PREFIXES = ('get_', 'list_', 'filter_', 'search_', 'preview_')
+
+
+def _decorator_names(node: ast.AST) -> set[str]:
+    '''
+        The names of the decorators on a function, however they are written.
+
+        Args:
+            node (ast.AST): The function definition.
+
+        Returns:
+            set[str]: Decorator names, without their arguments.
+    '''
+    names = set()
+    for decorator in node.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        if isinstance(target, ast.Name):
+            names.add(target.id)
+        elif isinstance(target, ast.Attribute):
+            names.add(target.attr)
+    return names
+
+
+def _audited_controllers(service: Path) -> tuple[set[str], set[str]]:
+    '''
+        Which controllers carry each decorator.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            tuple[set[str], set[str]]: (with handle_service_errors, with audit_event).
+    '''
+    logged, audited = set(), set()
+    for path in (service / 'controllers').glob('*.py'):
+        tree = ast.parse(path.read_text(encoding = 'utf-8'))
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            names = _decorator_names(node)
+            if 'handle_service_errors' in names:
+                logged.add(node.name)
+            if 'audit_event' in names:
+                audited.add(node.name)
+    return logged, audited
+
+
+def _controllers_by_verb(service: Path) -> dict[str, set[str]]:
+    '''
+        The controllers each route calls, grouped by HTTP verb.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            dict[str, set[str]]: {verb: controller names}.
+    '''
+    found: dict[str, set[str]] = defaultdict(set)
+    for path in (service / 'routes').glob('*.py'):
+        tree = ast.parse(path.read_text(encoding = 'utf-8'))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            verbs = {name for name in _decorator_names(node) if name in WRITING_VERBS}
+            verbs |= {name for name in _decorator_names(node) if name == 'get'}
+            for call in ast.walk(node):
+                if isinstance(call, ast.Call) and isinstance(call.func, ast.Name) \
+                        and call.func.id.endswith('_controller'):
+                    for verb in verbs:
+                        found[verb].add(call.func.id)
+    return found
+
+
+def check_events(service: Path) -> tuple[bool, str]:
+    '''
+        Every controller reports to EVENTS, and every write is audited.
+
+        AUTH, EVENTS and FILES are the three services every product leans on,
+        and the two decorators of `utils.py` are how a service talks to EVENTS:
+        `handle_service_errors` sends the usage log, `audit_event` sends the
+        audit trail. A service that skips them is invisible: nobody can say who
+        cancelled that note or how often a screen is used.
+    '''
+    if not (service / 'controllers').is_dir():
+        return True, 'no controllers/'
+
+    logged, audited = _audited_controllers(service)
+    by_verb = _controllers_by_verb(service)
+    every = {name for names in by_verb.values() for name in names}
+
+    missing_log = sorted(every - logged)
+    writing = {name for verb in WRITING_VERBS for name in by_verb.get(verb, ())}
+    writing = {name for name in writing if not name.startswith(QUERY_PREFIXES)}
+    missing_audit = sorted(writing - audited)
+
+    problems = []
+    if missing_log:
+        problems.append(f'sin usage_log: {", ".join(missing_log[:4])}'
+                        + (f' … +{len(missing_log) - 4}' if len(missing_log) > 4 else ''))
+    if missing_audit:
+        problems.append(f'sin audit: {", ".join(missing_audit[:4])}'
+                        + (f' … +{len(missing_audit) - 4}' if len(missing_audit) > 4 else ''))
+    return not problems, '; '.join(problems) if problems else 'none'
+
+
 CHECKS = (
     ('tests', check_tests),
     ('pylint', check_pylint),
@@ -240,6 +356,7 @@ CHECKS = (
     ('env-shorthand', check_env_shorthand),
     ('getenv', check_getenv),
     ('log-vars', check_log_vars),
+    ('events', check_events),
 )
 
 

@@ -83,6 +83,10 @@ nombrados por funcionalidad.
 
 **SmartDecisions:** INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI.
 
+**BILLING** (antes SUPPLIES) es el otro producto propio: facturación de
+comercios sobre DynamoDB, con las farmacias como primer vertical. Se vende solo
+o junto a SmartDecisions.
+
 **De referencia al crear uno nuevo:** `quotes` para DynamoDB; `localization` o
 `trade` para MySQL. Todo debe ser uniforme entre servicios: mismos nombres,
 misma disposición, mismas soluciones para los mismos problemas.
@@ -120,7 +124,25 @@ catálogos de textos en el repositorio; lo parametrizable va a base de datos.
 
 ---
 
-## 7. Aislamiento por cliente
+## 7. Los tres servicios base se usan siempre
+
+**AUTH, EVENTS y FILES no son opcionales.** Todo producto nuevo los usa:
+
+1. **AUTH** — ningún endpoint sin `Depends` de `security.py`. No se inventan
+   usuarios ni sesiones propias.
+2. **EVENTS** — **todo controlador lleva `@handle_service_errors`**, que reporta
+   el uso, y **todo controlador que cambia algo lleva `@audit_event`**, que
+   registra quién lo hizo y sobre qué fila. Un servicio sin esto es invisible:
+   nadie puede decir quién anuló esa nota.
+3. **FILES** — cuando hay archivos, se suben ahí; no se escribe en disco ni se
+   inventa otro bucket.
+
+De referencia, `trade`, `forms` y `localization` los usan desde siempre.
+`/verificar-servicio` lo comprueba con el chequeo `events`.
+
+---
+
+## 8. Aislamiento por cliente
 
 El dueño es **parte de la consulta**, no un filtro posterior que se pueda
 olvidar. En OPTIMIZATION además es parte de la clave de partición, porque la
@@ -131,7 +153,7 @@ confirmar qué identificadores existen.
 
 ---
 
-## 8. Archivos estáticos
+## 9. Archivos estáticos
 
 Las plantillas que el cliente descarga son **archivos estáticos** en S3, no se
 generan en runtime. Se derivan del contrato (`tools/build_sales_template.py`)
@@ -139,7 +161,7 @@ para que no diverjan del validador.
 
 ---
 
-## 9. Protocolo de trabajo
+## 10. Protocolo de trabajo
 
 1. **Cero asunciones.** Si falta contexto, se pregunta antes de generar código.
 2. **No inventar** librerías, funciones, archivos, carpetas ni reglas.
@@ -163,7 +185,7 @@ ejecutar `build_and_deploy.sh`; se enumeran los servicios pendientes al terminar
 
 ---
 
-## 10. Antes de entregar
+## 11. Antes de entregar
 
 Corre `/verificar-servicio <nombre>`. Resumido: tests en verde, Pylint 10.00,
 sin hardcode, sin textos de UI, sin `except: pass`, logs con `message` y
