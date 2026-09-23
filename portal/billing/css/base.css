@@ -1,0 +1,547 @@
+/* SmartDecisions demo — light corporate theme aligned with BearSoft identity
+ * (navy + brown paw + cream). Used across login, home, excel, playground and
+ * routes pages. */
+
+:root {
+    /* Misma paleta que bearsoft.com.bo: azules fríos y un verde-azulado de
+       acento. Los cremas y marrones anteriores no jugaban con la marca. */
+    --bg:              #f7f9fc;
+    --bg-alt:          #eef3fa;
+    --panel:           #ffffff;
+    --panel-elevated:  #eef3fa;
+    --border:          #dbe4f0;
+    --border-strong:   #c2d2e8;
+    --text:            #152441;
+    --text-strong:     #0d1a31;
+    --muted:           #6b7590;
+
+    --accent:          #2f6fb5;   /* azul medio: enlaces y botones */
+    --accent-strong:   #255a94;
+    --accent-2:        #12796f;   /* verde-azulado: acento secundario */
+    --accent-2-strong: #0d5c55;
+    --accent-3:        #dceafa;   /* azul claro para fondos suaves */
+
+    --success:         #24693c;
+    --danger:          #b4373a;
+    --warning:         #a06a12;
+
+    --radius:          14px;
+    --radius-sm:       8px;
+    --max-width:       1140px;
+    --font:            'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --shadow-lg:       0 10px 40px rgba(13, 30, 76, 0.12);
+    --shadow-sm:       0 2px 8px rgba(13, 30, 76, 0.06);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; font-weight: 600; }
+a:hover { color: var(--accent-2); }
+
+code {
+    background: #f1ecd9;
+    border: 1px solid var(--border);
+    color: var(--accent-2-strong);
+    padding: 0.05rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.88em;
+}
+
+.container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+/* ============ Header / Nav ============ */
+.demo-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--border);
+}
+.demo-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 1.5rem;
+    gap: 1rem;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-weight: 800;
+    color: var(--text);
+    text-decoration: none;
+}
+.brand img {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+.brand-text { font-size: 1.15rem; letter-spacing: -0.01em; }
+.accent { color: var(--accent-2); }
+
+.demo-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+.demo-nav-actions .user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* ============ Buttons ============ */
+.btn {
+    display: inline-block;
+    padding: 0.8rem 1.4rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.2s ease,
+                border-color 0.2s ease, color 0.2s ease;
+    font-family: inherit;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-primary {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    transform: translateY(-1px);
+}
+.btn-ghost {
+    background: transparent;
+    color: var(--accent);
+    border-color: var(--border-strong);
+}
+.btn-ghost:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-alt);
+}
+.btn-secondary {
+    background: var(--accent-2);
+    color: #ffffff;
+    border-color: var(--accent-2);
+}
+.btn-secondary:hover:not(:disabled) {
+    background: var(--accent-2-strong);
+    border-color: var(--accent-2-strong);
+}
+.btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border-color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+    background: rgba(192, 57, 43, 0.08);
+}
+.btn-small { padding: 0.5rem 0.95rem; font-size: 0.88rem; }
+
+/* ============ Layout: page + cards ============ */
+main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg); }
+
+.page-title {
+    margin: 0 0 0.4rem;
+    font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+    letter-spacing: -0.015em;
+    color: var(--text);
+}
+.page-subtitle { color: var(--muted); margin: 0 0 2rem; max-width: 720px; }
+
+.card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.6rem;
+    box-shadow: var(--shadow-sm);
+}
+.card-elevated { background: var(--panel-elevated); box-shadow: var(--shadow-lg); }
+.card h3 { margin: 0 0 0.5rem; font-size: 1.15rem; color: var(--text); }
+.card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.2rem;
+}
+
+.module-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    padding: 1.8rem;
+    border-radius: var(--radius);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    color: var(--text);
+    text-decoration: none;
+    box-shadow: var(--shadow-sm);
+}
+.module-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--accent-2);
+    box-shadow: var(--shadow-lg);
+    color: var(--text);
+}
+.module-icon { font-size: 2rem; }
+.module-card h3 { margin: 0; color: var(--text); }
+.module-card p { color: var(--muted); margin: 0; font-size: 0.95rem; }
+.module-tag {
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent-2);
+    font-weight: 700;
+}
+
+/* ============ Forms ============ */
+.form-card {
+    max-width: 420px;
+    margin: 0 auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    box-shadow: var(--shadow-lg);
+}
+.form-stack { display: grid; gap: 0.9rem; }
+.form-stack label {
+    display: grid;
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+    font-weight: 600;
+}
+.form-stack input,
+.form-stack textarea,
+.form-stack select {
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.form-stack input:focus,
+.form-stack textarea:focus,
+.form-stack select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(13, 30, 76, 0.10);
+}
+.form-note { font-size: 0.85rem; color: var(--muted); min-height: 1.2em; margin: 0; }
+.form-note.error { color: var(--danger); font-weight: 600; }
+.form-note.success { color: var(--success); font-weight: 600; }
+
+/* ============ Upload zone (global, reused across modules) ============ */
+.upload-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 1.4rem 1rem;
+    margin: 0.6rem 0 1rem;
+    text-align: center;
+    background: var(--bg-alt);
+    transition: border-color 0.18s ease, background 0.18s ease;
+    cursor: pointer;
+}
+.upload-zone.dragover {
+    border-color: var(--accent);
+    background: #f1ecd9;
+}
+.upload-hint { color: var(--muted); margin: 0; font-size: 0.9rem; }
+.upload-hint a { font-weight: 700; }
+.file-chip {
+    margin: 0.7rem auto 0;
+    display: inline-block;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 0.3rem 0.85rem;
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* ============ Toasts ============ */
+.sd-toast-container {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-width: 360px;
+}
+.sd-toast {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    color: var(--text);
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.92rem;
+    box-shadow: var(--shadow-lg);
+    animation: sd-toast-in 0.2s ease;
+}
+.sd-toast-success { border-left-color: var(--success); }
+.sd-toast-error { border-left-color: var(--danger); }
+.sd-toast-info { border-left-color: var(--accent-2); }
+.sd-toast-leaving { opacity: 0; transform: translateX(20px); transition: all 0.2s ease; }
+
+@keyframes sd-toast-in {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* ============ Footer ============ */
+.demo-footer {
+    border-top: 1px solid var(--border);
+    padding: 1.4rem 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-align: center;
+    background: var(--bg);
+}
+.demo-footer strong { color: var(--accent); }
+
+/* ============ Responsive ============ */
+@media (max-width: 720px) {
+    .demo-nav-actions span:not(.user-chip) { display: none; }
+    main { padding: 1.5rem 0; }
+}
+
+/* Session countdown chip, shared by every module page. */
+.session-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+.session-chip.warning { color: var(--warning, #b8860b); border-color: var(--accent-3, #b8860b); }
+@media (max-width: 900px) {
+    .session-chip { display: none; }
+}
+
+/* --- "Tu actividad": what the account already has, above the modules ------ */
+.activity-card { margin-bottom: 1.75rem; }
+
+.activity-head {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.activity-head h2 { margin: 0; font-size: 1.15rem; }
+
+.activity-meta { font-size: .85rem; color: #5e6580; }
+
+.activity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: 1rem;
+}
+
+.activity-tile {
+    border: 1px solid #e3e8f0;
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+    background: #fbfcfe;
+}
+
+.tile-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-bottom: .7rem;
+}
+
+.tile-head h3 { margin: 0; font-size: .95rem; }
+
+.tile-when {
+    font-size: .78rem;
+    color: #5e6580;
+    white-space: nowrap;
+}
+
+.tile-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .28rem 0;
+    border-bottom: 1px solid #eef1f7;
+    font-size: .88rem;
+}
+
+.tile-row:last-of-type { border-bottom: 0; }
+
+.tile-label { color: #5e6580; }
+
+.tile-value { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+
+.tile-action {
+    display: inline-block;
+    margin-top: .75rem;
+    font-size: .85rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: #0d1e4c;
+}
+
+.tile-action:hover { text-decoration: underline; }
+
+.activity-tile-empty { background: #fff; }
+
+.tile-empty-text { margin: 0; font-size: .88rem; color: #5e6580; }
+
+
+/* --- Interpretación (capa de IA) ------------------------------------------ */
+.ai-ask { white-space: nowrap; }
+
+/* Panel de interpretación.
+   Los selectores llevan `.ai-answer` delante a propósito: `.card p` tiene
+   especificidad 0,1,1 y le ganaba a `.ai-text`, así que en los módulos cuyo
+   contenedor es una tarjeta —Cotizaciones y Rutas— el texto tomaba el tamaño y
+   el color de la tarjeta, y en Análisis Comercial no. De ahí que la misma nota
+   se viera distinta según la pantalla. */
+.ai-answer {
+    display: block;
+    flex-basis: 100%;
+    width: 100%;
+    margin: 1.25rem 0 0;
+    padding: 1.1rem 1.25rem;
+    background: #eef3fa;
+    border: 1px solid #dbe4f0;
+    border-left: 3px solid #2f6fb5;
+    border-radius: 0 10px 10px 0;
+}
+/* `display: block` above beats the `hidden` attribute, and the panel showed
+   as an empty box before anyone asked. */
+.ai-answer[hidden] { display: none; }
+
+.ai-answer .ai-text {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    font-weight: 400;
+    color: #152441;
+    white-space: pre-wrap;
+}
+
+/* Nota al pie: información sobre la respuesta, no parte de ella. */
+.ai-answer .ai-meta {
+    display: block;
+    margin: 1.75rem 0 0;
+    padding-top: 0.7rem;
+    border-top: 1px solid #dbe4f0;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    font-weight: 400;
+    color: #8a93a8;
+}
+
+.ai-answer .ai-loading {
+    font-size: 0.9rem;
+    color: #5e6580;
+}
+
+/* --- Section menu (Excel analyses, Rutas sections): shared by every module --- */
+/* Four cards per row on desktop and the last row centred, so an odd count
+   forms an inverted pyramid instead of leaving a hole at the end of a grid.
+   Narrower screens fall to two columns and then one, still centred. */
+.analysis-menu {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+/* Fixed basis and no grow: every card measures the same, so the shorter last
+   row is narrower as a whole instead of stretching its cards. */
+.analysis-menu .analysis-card { flex: 0 1 calc(20% - 0.8rem); }
+@media (max-width: 1200px) {
+    .analysis-menu .analysis-card { flex-basis: calc(25% - 0.75rem); }
+}
+@media (max-width: 900px) {
+    .analysis-menu .analysis-card { flex-basis: calc(50% - 0.5rem); }
+}
+@media (max-width: 540px) {
+    .analysis-menu .analysis-card { flex-basis: 100%; }
+}
+.analysis-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    text-align: left;
+    padding: 1.1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.analysis-card:hover:not([disabled]) {
+    border-color: var(--accent);
+    box-shadow: var(--shadow, 0 4px 14px rgba(13,30,76,0.1));
+    transform: translateY(-2px);
+}
+/* The chosen card stays marked while its panel is on screen (Rutas sections). */
+.analysis-card.is-active {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    background: var(--bg-alt, #f4f7fb);
+}
+.analysis-card[disabled] { opacity: 0.55; cursor: not-allowed; }
+.analysis-icon { font-size: 1.6rem; }
+.analysis-title { font-weight: 700; color: var(--text-strong); }
+.analysis-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.35; }
+.analysis-soon {
+    position: absolute; top: 0.6rem; right: 0.6rem;
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    color: var(--accent-2); background: var(--bg-alt);
+    padding: 0.15rem 0.45rem; border-radius: 999px;
+}

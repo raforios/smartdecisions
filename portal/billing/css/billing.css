@@ -1,0 +1,335 @@
+/*
+ * BILLING — lo que este producto agrega sobre la base de SmartDecisions.
+ *
+ * `base.css` trae la paleta, los botones, las tarjetas y la tipografía; acá
+ * sólo va lo propio del mostrador. Ningún componente de la base se redefine:
+ * si algo se ve distinto entre los dos productos, es un error, no un estilo.
+ */
+
+/* ---------------------------------------------------------------- Shell -- */
+
+.app-shell {
+    display: grid;
+    grid-template-columns: 232px 1fr;
+    min-height: 100vh;
+}
+
+.app-side {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 1.3rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.app-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0 0.4rem;
+}
+
+.app-brand img { width: 34px; height: 34px; border-radius: 9px; }
+
+.app-brand h1 {
+    margin: 0;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+}
+
+.app-brand small { color: var(--muted); font-size: 0.72rem; }
+
+.app-nav { display: flex; flex-direction: column; gap: 0.15rem; }
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.6rem 0.7rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.nav-item:hover { background: var(--bg-alt); }
+
+.nav-item[aria-current="page"] {
+    background: var(--accent-3);
+    color: var(--accent-strong);
+    font-weight: 600;
+}
+
+.nav-item .icon { width: 1.1rem; text-align: center; opacity: 0.8; }
+
+.app-side-foot { margin-top: auto; padding: 0 0.4rem; }
+
+.app-main { padding: 1.6rem 2rem 3rem; max-width: 1280px; }
+
+.app-top {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.4rem;
+}
+
+.app-top .spacer { margin-left: auto; }
+
+.page-head { margin-bottom: 1.1rem; }
+.page-head h2 { margin: 0 0 0.25rem; font-size: 1.3rem; color: var(--text-strong); }
+.page-head .muted { margin: 0; }
+
+.muted { color: var(--muted); }
+.small { font-size: 0.8rem; }
+
+/* --------------------------------------------------------------- Forms -- */
+
+.field { display: block; margin-bottom: 0.8rem; }
+.field > span { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.25rem; }
+
+.field input,
+.field select,
+.field textarea {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+}
+
+.field input:focus,
+.field select:focus { outline: 2px solid var(--accent-3); border-color: var(--accent); }
+
+.field-row { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+.field-row .field { flex: 1 1 150px; margin-bottom: 0.8rem; }
+
+.btn-block { width: 100%; justify-content: center; }
+
+.link-danger {
+    border: 0;
+    background: none;
+    color: var(--danger);
+    cursor: pointer;
+    font: inherit;
+    padding: 0 0 0 0.4rem;
+}
+
+/* -------------------------------------------------------------- Tables -- */
+
+.table-scroll { overflow-x: auto; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+
+.data-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 0.55rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.data-table .num { text-align: right; }
+.data-table tbody tr:hover { background: var(--bg-alt); }
+.data-table .empty td { color: var(--muted); text-align: center; padding: 1.6rem; }
+.data-table td .muted { display: block; font-size: 0.75rem; }
+
+.data-table input[type="number"] {
+    width: 5.5rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font: inherit;
+    text-align: right;
+}
+
+/* Un lote a punto de vencer se ve antes de leerse. */
+.warn { color: var(--warning); font-weight: 600; }
+.danger { color: var(--danger); font-weight: 600; }
+.ok { color: var(--success); font-weight: 600; }
+
+.chip {
+    display: inline-block;
+    padding: 0.08rem 0.45rem;
+    border-radius: 999px;
+    background: var(--accent-3);
+    color: var(--accent-strong);
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.chip-muted { background: var(--bg-alt); color: var(--muted); }
+.chip-danger { background: #f6e4e4; color: var(--danger); }
+.chip-warn { background: #f7eddb; color: var(--warning); }
+
+/* ------------------------------------------------------------ Mostrador -- */
+
+.counter { display: grid; grid-template-columns: 1fr 320px; gap: 1.2rem; align-items: start; }
+
+.counter-side { position: sticky; top: 1.6rem; }
+
+.results {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin: -0.4rem 0 1rem;
+    overflow: hidden;
+}
+
+.result {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.6rem;
+    align-items: baseline;
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.result:last-child { border-bottom: 0; }
+.result:hover { background: var(--accent-3); }
+.result-name { font-weight: 600; }
+.result-stock { font-size: 0.78rem; color: var(--muted); }
+.result-stock.out { color: var(--danger); }
+.result-price { font-weight: 600; white-space: nowrap; }
+.result-empty { padding: 0.7rem; margin: 0; }
+
+.totals { border-bottom: 1px solid var(--border); padding-bottom: 0.8rem; margin-bottom: 0.9rem; }
+.totals > div { display: flex; justify-content: space-between; padding: 0.15rem 0; font-size: 0.9rem; }
+.totals .grand { font-size: 1.15rem; margin-top: 0.4rem; color: var(--text-strong); }
+
+/* ------------------------------------------------------------- Tablero -- */
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.2rem;
+}
+
+.kpi { padding: 1rem 1.1rem; }
+.kpi .label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem; }
+.kpi .value { font-size: 1.5rem; font-weight: 700; color: var(--text-strong); }
+.kpi .foot { display: block; font-size: 0.76rem; color: var(--muted); margin-top: 0.2rem; }
+
+/* Las tarjetas del tablero llevan tablas de cinco columnas: por debajo de
+   430 px se cortan, así que el grid baja a una sola columna antes de eso. */
+.panel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+    gap: 1rem;
+}
+
+.panel-grid .data-table { font-size: 0.84rem; }
+.panel-grid .data-table th,
+.panel-grid .data-table td { padding: 0.4rem 0.45rem; }
+
+/* ------------------------------------------------------------- Ticket --- */
+
+.ticket-preview {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+}
+
+.ticket-preview iframe { width: 320px; height: 460px; border: 0; background: #fff; }
+
+/* -------------------------------------------------------------- Responsive */
+
+@media (max-width: 980px) {
+    .app-shell { grid-template-columns: 1fr; }
+    .app-side { flex-direction: row; align-items: center; overflow-x: auto; border-right: 0;
+                border-bottom: 1px solid var(--border); }
+    .app-nav { flex-direction: row; }
+    .app-side-foot { margin: 0; }
+    .app-main { padding: 1.2rem; }
+    .counter { grid-template-columns: 1fr; }
+    .counter-side { position: static; }
+}
+
+/* --------------------------------------------------------------- Toast -- */
+
+#toast-host {
+    position: fixed;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 50;
+}
+
+.toast {
+    padding: 0.65rem 0.95rem;
+    border-radius: var(--radius-sm);
+    background: var(--text-strong);
+    color: #fff;
+    font-size: 0.88rem;
+    box-shadow: var(--shadow-lg);
+    max-width: 340px;
+    transition: opacity 0.2s ease;
+}
+
+.toast.is-success { background: var(--success); }
+.toast.is-error { background: var(--danger); }
+
+/* Un producto del catálogo se despliega para ver sus lotes. */
+.link-toggle {
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: var(--accent-strong);
+    cursor: pointer;
+    text-align: left;
+}
+
+.lots-row > td { background: var(--bg-alt); padding: 0.9rem 1rem; }
+
+/* ---------------------------------------------------------------- Login -- */
+
+.login-page {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    background: var(--bg);
+}
+
+.login-box { width: min(380px, 92vw); display: grid; gap: 1rem; justify-items: center; }
+.login-box .card { width: 100%; }
+.login-box h2 { margin: 0 0 1rem; font-size: 1.25rem; }
+
+.form-error {
+    margin: 0 0 0.8rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: var(--radius-sm);
+    background: #f6e4e4;
+    color: var(--danger);
+    font-size: 0.85rem;
+}

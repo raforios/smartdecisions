@@ -1,54 +1,37 @@
 /**
- * Entry point for login.html.
+ * Pantalla de acceso.
  *
- * Reads the AUTH base URLs from data/config.json, wires the form, and
- * redirects to the supplies shell on success. Errors are surfaced inline.
+ * Contra AUTH, como todo producto de BearSoft. Si ya hay sesión, entra
+ * directo en vez de pedir las credenciales otra vez.
  */
-import { AuthService } from './services/AuthService.js';
+import { isTokenExpired } from './auth.js';
+import { isAuthenticated, login } from './services/AuthService.js';
 
-const CONFIG_URL = '../data/config.json';
-
-document.addEventListener('DOMContentLoaded', async () => {
-    const config = await fetch(CONFIG_URL, { cache: 'no-cache' })
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null);
-    if (!config?.api) {
-        _showError('No se pudo cargar la configuración del sitio.');
-        return;
-    }
-
-    const auth = new AuthService(config.api);
-    if (auth.isAuthenticated()) {
+document.addEventListener('DOMContentLoaded', () => {
+    if (isAuthenticated() && !isTokenExpired()) {
         window.location.replace('index.html');
         return;
     }
 
     const form = document.getElementById('login-form');
     const submit = document.getElementById('login-submit');
-    form.addEventListener('submit', async event => {
+    const error = document.getElementById('login-error');
+
+    form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        _hideError();
+        error.hidden = true;
+        const label = submit.textContent;
         submit.disabled = true;
-        const original = submit.textContent;
         submit.textContent = 'Entrando…';
         try {
             const data = new FormData(form);
-            await auth.login(data.get('email'), data.get('password'));
+            await login(data.get('email'), data.get('password'));
             window.location.replace('index.html');
-        } catch (err) {
-            _showError(err.message || 'Credenciales inválidas.');
+        } catch (failure) {
+            error.textContent = failure.message || 'Credenciales inválidas.';
+            error.hidden = false;
             submit.disabled = false;
-            submit.textContent = original;
+            submit.textContent = label;
         }
     });
 });
-
-function _showError(message) {
-    const el = document.getElementById('login-error');
-    el.textContent = message;
-    el.hidden = false;
-}
-
-function _hideError() {
-    document.getElementById('login-error').hidden = true;
-}

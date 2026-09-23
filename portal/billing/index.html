@@ -1,97 +1,61 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supplies — Panel</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="css/supplies.css">
+    <title>BILLING — Facturación</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/billing.css">
+    <link rel="icon" type="image/png" sizes="64x64" href="../demo/assets/favicon-bear-64.png">
+    <script type="module" src="js/app.js"></script>
 </head>
-<body class="sup-shell">
+<body>
 
-    <button id="sidebar-toggle" class="sup-sidebar-toggle" aria-label="Abrir menú">
-        <i class="fa-solid fa-bars"></i>
-    </button>
+<div class="app-shell">
 
-    <aside class="sup-sidebar" id="sup-sidebar">
-        <div class="sup-sidebar-brand">
-            <span class="sup-sidebar-logo"><i class="fa-solid fa-boxes-stacked"></i></span>
+    <aside class="app-side">
+        <div class="app-brand">
+            <img src="../demo/assets/bear-face.jpg" alt="" aria-hidden="true">
             <div>
-                <h1>SUPPLIES</h1>
-                <small>Inventarios</small>
+                <h1>BILLING</h1>
+                <small id="shopName">Facturación</small>
             </div>
         </div>
-        <nav class="sup-nav" id="sup-nav">
-            <button class="sup-nav-item" data-route="dashboard">
-                <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+
+        <nav class="app-nav" id="nav">
+            <button class="nav-item" data-section="counter">
+                <span class="icon" aria-hidden="true">🧾</span><span>Mostrador</span>
             </button>
-            <button class="sup-nav-item" data-route="catalog" data-roles="ADMIN,WAREHOUSE_MANAGER">
-                <i class="fa-solid fa-cubes"></i><span>Catálogo</span>
+            <button class="nav-item" data-section="sales">
+                <span class="icon" aria-hidden="true">📄</span><span>Ventas</span>
             </button>
-            <button class="sup-nav-item" data-route="requests">
-                <i class="fa-solid fa-clipboard-list"></i><span>Solicitudes</span>
+            <button class="nav-item" data-section="catalog">
+                <span class="icon" aria-hidden="true">💊</span><span>Catálogo</span>
             </button>
-            <button class="sup-nav-item" data-route="entries" data-roles="ADMIN,WAREHOUSE_MANAGER">
-                <i class="fa-solid fa-truck-ramp-box"></i><span>Notas de Ingreso</span>
+            <button class="nav-item" data-section="purchases" data-roles="ADMIN,MANAGER">
+                <span class="icon" aria-hidden="true">📦</span><span>Recepción</span>
             </button>
-            <button class="sup-nav-item" data-route="suppliers" data-roles="ADMIN,WAREHOUSE_MANAGER">
-                <i class="fa-solid fa-building"></i><span>Proveedores</span>
+            <button class="nav-item" data-section="dashboard">
+                <span class="icon" aria-hidden="true">📊</span><span>Tablero</span>
             </button>
-            <button class="sup-nav-item" data-route="kardex" data-roles="ADMIN,WAREHOUSE_MANAGER">
-                <i class="fa-solid fa-book-open"></i><span>Kárdex</span>
-            </button>
-            <button class="sup-nav-item" data-route="reports" data-roles="ADMIN,WAREHOUSE_MANAGER">
-                <i class="fa-solid fa-chart-line"></i><span>Reportes</span>
+            <button class="nav-item" data-section="settings" data-roles="ADMIN,MANAGER">
+                <span class="icon" aria-hidden="true">⚙️</span><span>Configuración</span>
             </button>
         </nav>
-        <div class="sup-sidebar-foot">
-            <div class="sup-user-chip">
-                <i class="fa-solid fa-user-circle"></i>
-                <div>
-                    <span id="current-user-email">—</span>
-                    <small id="current-user-role" class="sup-badge sup-badge-role">—</small>
-                </div>
-            </div>
-            <button id="logout-btn" class="sup-btn sup-btn-ghost sup-btn-block">
-                <i class="fa-solid fa-right-from-bracket"></i> Salir
-            </button>
+
+        <div class="app-side-foot">
+            <p class="muted small" id="userChip">…</p>
+            <button class="btn btn-ghost btn-small btn-block" id="logout">Salir</button>
         </div>
     </aside>
 
-    <div class="sup-sidebar-backdrop" id="sup-sidebar-backdrop" hidden></div>
-
-    <main class="sup-main">
-        <header class="sup-topbar">
-            <button id="sidebar-collapse" class="sup-icon-btn sup-collapse-btn"
-                    data-tip="Ocultar/mostrar el menú" aria-label="Ocultar o mostrar el menú">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-            <h2 id="page-title">—</h2>
-            <div class="sup-topbar-actions" id="page-actions"></div>
-        </header>
-        <section class="sup-page" id="sup-page">
-            <p class="sup-placeholder">Cargando…</p>
-        </section>
+    <main class="app-main" id="view">
+        <p class="muted">Cargando…</p>
     </main>
 
-    <div class="sup-modal-host" id="modal-host" hidden>
-        <div class="sup-modal-backdrop"></div>
-        <div class="sup-modal" role="dialog" aria-modal="true">
-            <header class="sup-modal-header">
-                <h3 id="modal-title">—</h3>
-                <button id="modal-close" class="sup-icon-btn" aria-label="Cerrar">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </header>
-            <div class="sup-modal-body" id="modal-body"></div>
-            <footer class="sup-modal-footer" id="modal-footer"></footer>
-        </div>
-    </div>
+</div>
 
-    <div class="sup-toast-host" id="toast-host" aria-live="polite"></div>
+<div id="toast-host" aria-live="polite"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script type="module" src="js/app.js"></script>
 </body>
 </html>

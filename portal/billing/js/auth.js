@@ -5,7 +5,7 @@
  * signature on every protected call, so the frontend only needs the public
  * claims (email, role) to render UI and gate routes.
  */
-const STORAGE_KEY = 'supplies_jwt';
+import { STORAGE_TOKEN_KEY as STORAGE_KEY } from './config.js';
 
 export function getToken() {
     return localStorage.getItem(STORAGE_KEY);

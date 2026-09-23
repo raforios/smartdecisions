@@ -1,173 +1,100 @@
 /**
- * Entry point for the Supplies shell (index.html).
+ * BILLING — arranque y navegación.
  *
- * Boot sequence:
- *   1. Load config.json shared across the portal.
- *   2. Redirect to login.html if no JWT is present.
- *   3. Instantiate AuthService + SuppliesService.
- *   4. Wire sidebar nav, role-based visibility, logout, hamburger drawer.
- *   5. Register page mounts on the router and start it.
+ * Una sola página con secciones, no rutas: el mostrador se abre una vez al
+ * empezar el turno y no se recarga en todo el día. El menú esconde lo que el
+ * rol no puede hacer, pero quien manda es el backend — esto sólo evita
+ * mostrar un botón que iba a responder 403.
  */
-import { AuthService } from './services/AuthService.js';
-import { SuppliesService } from './services/SuppliesService.js';
-import { Router } from './router.js';
-import { clearSession, getEmail, getRole, hasRole, isTokenExpired, ROLES } from './auth.js';
-import { initModalBindings, showSessionExpiredModal } from './ui.js';
+import { clearSession, getEmail, getRole, isTokenExpired } from './auth.js';
+import { LOGIN_PATH } from './config.js';
+import { BillingService, errorText } from './services/BillingService.js';
+import { errorCard, escapeHtml, notify } from './ui.js';
 
-import { mountDashboard } from './pages/DashboardPage.js';
+import { mountCounter } from './pages/CounterPage.js';
+import { mountSales } from './pages/SalesPage.js';
 import { mountCatalog } from './pages/CatalogPage.js';
-import { mountRequests } from './pages/RequestsPage.js';
-import { mountEntries } from './pages/EntriesPage.js';
-import { mountSuppliers } from './pages/SuppliersPage.js';
-import { mountKardex } from './pages/KardexPage.js';
-import { mountReports } from './pages/ReportsPage.js';
+import { mountPurchases } from './pages/PurchasesPage.js';
+import { mountDashboard } from './pages/DashboardPage.js';
+import { mountSettings } from './pages/SettingsPage.js';
 
-const CONFIG_URL = '../data/config.json';
+const SECTIONS = {
+    counter: mountCounter,
+    sales: mountSales,
+    catalog: mountCatalog,
+    purchases: mountPurchases,
+    dashboard: mountDashboard,
+    settings: mountSettings
+};
+
+/** La sección abierta sobrevive a un F5: el turno no se pierde por recargar. */
+const LAST_SECTION_KEY = 'billing_section';
+
+async function show(name) {
+    const view = document.getElementById('view');
+    const mount = SECTIONS[name];
+    if (!mount) return;
+
+    document.querySelectorAll('.nav-item').forEach((item) => {
+        if (item.dataset.section === name) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+    });
+    sessionStorage.setItem(LAST_SECTION_KEY, name);
+
+    view.innerHTML = '<p class="muted">Cargando…</p>';
+    try {
+        await mount(view);
+    } catch (error) {
+        view.innerHTML = errorCard('No se pudo abrir la sección',
+                                   errorText(error, 'El servicio no respondió.'));
+    }
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const config = await fetch(CONFIG_URL, { cache: 'no-cache' })
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null);
-    if (!config?.api) {
-        document.body.innerHTML =
-            '<p class="sup-form-error">No se pudo cargar config.json</p>';
-        return;
-    }
-
-    const auth = new AuthService(config.api);
-    if (!auth.isAuthenticated() || isTokenExpired()) {
-        // Either no token at all or the local clock confirms expiry —
-        // bounce straight to login without flashing the shell.
+    if (isTokenExpired()) {
         clearSession();
-        window.location.replace('login.html');
+        window.location.replace(LOGIN_PATH);
         return;
     }
 
-    const supplies = new SuppliesService(config.api);
-
-    // Single global listener for 401-induced session expiry. The
-    // apiClient dispatches the event from any failed authenticated call;
-    // we block the UI and let the user re-login.
-    window.addEventListener('supplies:session-expired', () => {
-        showSessionExpiredModal({ onConfirm: () => auth.logout() });
+    const role = getRole();
+    document.getElementById('userChip').textContent = `${getEmail() || 'usuario'} · ${role || '—'}`;
+    document.getElementById('logout').addEventListener('click', () => {
+        clearSession();
+        window.location.replace(LOGIN_PATH);
     });
 
-    _renderCurrentUser();
-    _applyRoleVisibility();
-    _wireLogout(auth);
-    _wireSidebarToggle();
-    initModalBindings();
-
-    const router = new Router({
-        hostEl: document.getElementById('sup-page'),
-        titleEl: document.getElementById('page-title'),
-        actionsEl: document.getElementById('page-actions'),
-        defaultRoute: _defaultRouteForRole(),
+    // Un botón que el rol no puede usar no se muestra: pulsarlo sólo daría un
+    // 403 y la sensación de que el sistema está roto.
+    document.querySelectorAll('.nav-item[data-roles]').forEach((item) => {
+        if (!item.dataset.roles.split(',').includes(role)) item.hidden = true;
     });
 
-    router.setContext({ api: supplies, router });
-
-    router.register('dashboard', {
-        title: 'Dashboard',
-        mount: mountDashboard,
-        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER, ROLES.REQUESTER],
-    });
-    router.register('catalog', {
-        title: 'Catálogo',
-        mount: mountCatalog,
-        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER],
-    });
-    router.register('requests', {
-        title: 'Solicitudes',
-        mount: mountRequests,
-        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER, ROLES.REQUESTER],
-    });
-    router.register('entries', {
-        title: 'Notas de Ingreso',
-        mount: mountEntries,
-        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER],
-    });
-    router.register('suppliers', {
-        title: 'Proveedores',
-        mount: mountSuppliers,
-        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER],
-    });
-    router.register('kardex', {
-        title: 'Kárdex',
-        mount: mountKardex,
-        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER],
-    });
-    router.register('reports', {
-        title: 'Reportes',
-        mount: mountReports,
-        requiresRole: [ROLES.ADMIN, ROLES.WAREHOUSE_MANAGER],
+    document.getElementById('nav').addEventListener('click', (event) => {
+        const button = event.target.closest('.nav-item');
+        if (button && !button.hidden) show(button.dataset.section);
     });
 
-    document.querySelectorAll('#sup-nav .sup-nav-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const target = btn.dataset.route;
-            router.go(target);
-            _closeSidebarOnMobile();
-        });
-    });
+    // El nombre del comercio en la barra: es lo que distingue una farmacia de
+    // otra cuando alguien administra varias.
+    try {
+        const settings = await BillingService.getSettings();
+        document.getElementById('shopName').textContent = settings.trade_name;
+    } catch (error) {
+        if (error.code === 'SETTINGS_NOT_FOUND') {
+            document.getElementById('shopName').textContent = 'Sin configurar';
+            notify('Configura el comercio antes de vender.', 'info');
+            await show('settings');
+            return;
+        }
+        document.getElementById('view').innerHTML = errorCard(
+            'No se pudo conectar con el servicio',
+            errorText(error, 'Revisa que BILLING esté corriendo.')
+        );
+        return;
+    }
 
-    router.start();
+    const saved = sessionStorage.getItem(LAST_SECTION_KEY);
+    const visible = [...document.querySelectorAll('.nav-item')].filter((item) => !item.hidden);
+    await show(saved && SECTIONS[saved] ? saved : visible[0]?.dataset.section || 'counter');
 });
-
-
-function _renderCurrentUser() {
-    document.getElementById('current-user-email').textContent = getEmail() || '—';
-    document.getElementById('current-user-role').textContent = getRole() || '—';
-}
-
-function _applyRoleVisibility() {
-    document.querySelectorAll('#sup-nav .sup-nav-item').forEach(btn => {
-        const required = (btn.dataset.roles || '').split(',').map(s => s.trim()).filter(Boolean);
-        if (!required.length) return;
-        btn.hidden = !required.some(r => hasRole(r));
-    });
-}
-
-function _wireLogout(auth) {
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        auth.logout();
-        window.location.replace('login.html');
-    });
-}
-
-const COLLAPSE_KEY = 'supplies_sidebar_collapsed';
-
-function _wireSidebarToggle() {
-    const shell = document.querySelector('.sup-shell');
-    const toggle = document.getElementById('sidebar-toggle');
-    const backdrop = document.getElementById('sup-sidebar-backdrop');
-    toggle.addEventListener('click', () => shell.classList.toggle('sidebar-open'));
-    backdrop.addEventListener('click', () => shell.classList.remove('sidebar-open'));
-
-    // Desktop: fold the menu away for more table width, and remember the
-    // choice — someone who works on reports all day should not re-hide it
-    // on every page load.
-    const collapse = document.getElementById('sidebar-collapse');
-    if (localStorage.getItem(COLLAPSE_KEY) === '1') {
-        shell.classList.add('sidebar-collapsed');
-    }
-    collapse.addEventListener('click', () => {
-        const collapsed = shell.classList.toggle('sidebar-collapsed');
-        localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
-    });
-}
-
-function _closeSidebarOnMobile() {
-    const shell = document.querySelector('.sup-shell');
-    if (window.matchMedia('(max-width: 900px)').matches) {
-        shell.classList.remove('sidebar-open');
-    }
-}
-
-function _defaultRouteForRole() {
-    // REQUESTERS land on their request workspace directly; others on dashboard.
-    return hasRole(ROLES.REQUESTER)
-            && !hasRole(ROLES.ADMIN) && !hasRole(ROLES.WAREHOUSE_MANAGER)
-        ? 'requests'
-        : 'dashboard';
-}
