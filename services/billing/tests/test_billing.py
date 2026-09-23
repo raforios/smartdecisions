@@ -13,19 +13,19 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from models.pharmacy import (
+from models.billing import (
     LOTS_TABLE,
     PRODUCTS_TABLE,
     PURCHASES_TABLE,
     SALES_TABLE,
     SETTINGS_TABLE
 )
-from schemas.pharmacy import (
+from schemas.billing import (
     Buyer,
     LotPricePatch,
     PaymentMethod,
-    PharmacyError,
-    PharmacySettings,
+    BillingError,
+    BillingSettings,
     ProductIn,
     PurchaseLineIn,
     PurchaseNoteIn,
@@ -34,11 +34,11 @@ from schemas.pharmacy import (
     SaleStatus
 )
 from services import (
-    pharmacy,
-    pharmacy_purchases,
-    pharmacy_reports,
-    pharmacy_sales,
-    pharmacy_stock
+    billing,
+    billing_purchases,
+    billing_reports,
+    billing_sales,
+    billing_stock
 )
 from services.exceptions import (
     InvalidInputError,
@@ -87,7 +87,7 @@ def _dynamodb():
     with mock_aws():
         resource = boto3.resource('dynamodb', region_name = 'us-east-1')
         _create_tables(resource)
-        pharmacy.save_settings(resource, OWNER, PharmacySettings(
+        billing.save_settings(resource, OWNER, BillingSettings(
             trade_name = 'Farmacia Demo', document = '1234567', sale_series = 'A'
         ))
         yield resource
@@ -109,7 +109,7 @@ def _register(
         Returns:
             ProductOut: The stored product.
     '''
-    return pharmacy.create_product(resource, OWNER, ProductIn(
+    return billing.create_product(resource, OWNER, ProductIn(
         sku = sku, description = description, laboratory = 'Lab Demo'
     ))
 
@@ -130,7 +130,7 @@ def _receive(
         Returns:
             PurchaseNoteOut: The recorded note.
     '''
-    return pharmacy_purchases.receive_purchase(
+    return billing_purchases.receive_purchase(
         resource, OWNER, PurchaseNoteIn(supplier_name = supplier, lines = lines), CASHIER
     )
 
@@ -153,7 +153,7 @@ def _sell(
     '''
     note = SaleNoteIn(lines = lines, payment_method = PaymentMethod.EFECTIVO,
                       buyer = buyer or Buyer())
-    return pharmacy_sales.issue_sale(resource, OWNER, note, CASHIER)
+    return billing_sales.issue_sale(resource, OWNER, note, CASHIER)
 
 
 # --- catalogue ---------------------------------------------------------------
@@ -163,7 +163,7 @@ def test_a_sku_is_registered_once(dynamodb):
     _register(dynamodb)
     with pytest.raises(RegisterAlreadyExistsError) as error:
         _register(dynamodb)
-    assert error.value.detail == PharmacyError.SKU_ALREADY_EXISTS.value
+    assert error.value.detail == BillingError.SKU_ALREADY_EXISTS.value
 
 
 def test_catalogue_reports_stock_and_the_price_that_will_be_charged(dynamodb):
@@ -179,7 +179,7 @@ def test_catalogue_reports_stock_and_the_price_that_will_be_charged(dynamodb):
                        sale_price = 7.5, expiry_date = SOON)
     ])
 
-    catalogue = pharmacy.list_products(dynamodb, OWNER)
+    catalogue = billing.list_products(dynamodb, OWNER)
 
     assert catalogue.total == 1
     product = catalogue.items[0]
@@ -190,14 +190,14 @@ def test_catalogue_reports_stock_and_the_price_that_will_be_charged(dynamodb):
 
 def test_a_product_below_its_minimum_is_flagged(dynamodb):
     '''The pharmacy has to see what it is about to run out of.'''
-    pharmacy.create_product(dynamodb, OWNER, ProductIn(
+    billing.create_product(dynamodb, OWNER, ProductIn(
         sku = 'IBU400', description = 'Ibuprofeno 400 mg', laboratory = 'Lab Demo',
         min_stock = 20
     ))
     _receive(dynamodb, [PurchaseLineIn(sku = 'IBU400', quantity = 5,
                                        unit_cost = 2.0, sale_price = 4.0)])
 
-    product = pharmacy.get_product(dynamodb, OWNER, 'IBU400')
+    product = billing.get_product(dynamodb, OWNER, 'IBU400')
 
     assert product.available_quantity == 5
     assert product.below_minimum is True
@@ -282,9 +282,9 @@ def test_a_sale_without_stock_charges_nothing(dynamodb):
     with pytest.raises(InvalidInputError) as error:
         _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 3)])
 
-    assert error.value.detail == PharmacyError.INSUFFICIENT_STOCK.value
-    assert pharmacy_sales.list_sales(dynamodb, OWNER).total == 0
-    assert pharmacy_stock.lots_of(dynamodb, OWNER, 'PARA500').available_quantity == 2
+    assert error.value.detail == BillingError.INSUFFICIENT_STOCK.value
+    assert billing_sales.list_sales(dynamodb, OWNER).total == 0
+    assert billing_stock.lots_of(dynamodb, OWNER, 'PARA500').available_quantity == 2
 
 
 def test_selling_takes_the_units_off_the_shelf(dynamodb):
@@ -295,14 +295,14 @@ def test_selling_takes_the_units_off_the_shelf(dynamodb):
 
     _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 4)])
 
-    assert pharmacy_stock.lots_of(dynamodb, OWNER, 'PARA500').available_quantity == 6
+    assert billing_stock.lots_of(dynamodb, OWNER, 'PARA500').available_quantity == 6
 
 
 def test_an_unknown_sku_cannot_be_sold(dynamodb):
     '''Selling what is not in the catalogue would price nothing.'''
     with pytest.raises(RegisterNotFoundError) as error:
         _sell(dynamodb, [SaleLineIn(sku = 'NO_EXISTE', quantity = 1)])
-    assert error.value.detail == PharmacyError.PRODUCT_NOT_FOUND.value
+    assert error.value.detail == BillingError.PRODUCT_NOT_FOUND.value
 
 
 def test_the_same_sku_twice_in_one_note_is_refused(dynamodb):
@@ -318,7 +318,7 @@ def test_the_same_sku_twice_in_one_note_is_refused(dynamodb):
         _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 1),
                          SaleLineIn(sku = 'PARA500', quantity = 2)])
 
-    assert error.value.detail == PharmacyError.DUPLICATE_LINE.value
+    assert error.value.detail == BillingError.DUPLICATE_LINE.value
 
 
 def test_a_discount_is_refused_where_discounts_are_off(dynamodb):
@@ -333,12 +333,12 @@ def test_a_discount_is_refused_where_discounts_are_off(dynamodb):
     with pytest.raises(InvalidInputError) as error:
         _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 1, discount = 1.0)])
 
-    assert error.value.detail == PharmacyError.DISCOUNTS_DISABLED.value
+    assert error.value.detail == BillingError.DISCOUNTS_DISABLED.value
 
 
 def test_a_discount_applies_once_enabled(dynamodb):
     '''With discounts on, the line total drops by the amount given.'''
-    pharmacy.save_settings(dynamodb, OWNER, PharmacySettings(
+    billing.save_settings(dynamodb, OWNER, BillingSettings(
         trade_name = 'Farmacia Demo', discounts_enabled = True
     ))
     _register(dynamodb)
@@ -354,7 +354,7 @@ def test_a_discount_applies_once_enabled(dynamodb):
 
 def test_a_discount_larger_than_its_line_is_refused(dynamodb):
     '''A line cannot be worth less than nothing.'''
-    pharmacy.save_settings(dynamodb, OWNER, PharmacySettings(
+    billing.save_settings(dynamodb, OWNER, BillingSettings(
         trade_name = 'Farmacia Demo', discounts_enabled = True
     ))
     _register(dynamodb)
@@ -364,7 +364,7 @@ def test_a_discount_larger_than_its_line_is_refused(dynamodb):
     with pytest.raises(InvalidInputError) as error:
         _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 1, discount = 99.0)])
 
-    assert error.value.detail == PharmacyError.DISCOUNT_ABOVE_LINE.value
+    assert error.value.detail == BillingError.DISCOUNT_ABOVE_LINE.value
 
 
 def test_notes_are_numbered_per_pharmacy_and_never_repeat(dynamodb):
@@ -381,7 +381,7 @@ def test_notes_are_numbered_per_pharmacy_and_never_repeat(dynamodb):
                for _ in range(3)]
 
     assert numbers == ['A-000001', 'A-000002', 'A-000003']
-    assert pharmacy.get_settings(dynamodb, OWNER).next_sale_number == 4
+    assert billing.get_settings(dynamodb, OWNER).next_sale_number == 4
 
 
 def test_the_buyer_travels_with_the_note(dynamodb):
@@ -392,7 +392,7 @@ def test_the_buyer_travels_with_the_note(dynamodb):
 
     issued = _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 1)],
                    buyer = Buyer(name = 'Juan Pérez', document = '9876543'))
-    stored = pharmacy_sales.get_sale(dynamodb, OWNER, issued.sale_id)
+    stored = billing_sales.get_sale(dynamodb, OWNER, issued.sale_id)
 
     assert stored.buyer.name == 'Juan Pérez'
     assert stored.buyer.document == '9876543'
@@ -414,10 +414,10 @@ def test_cancelling_returns_the_units_to_their_own_batches(dynamodb):
                                        lot_code = 'LEJOS')])
     note = _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 5)])
 
-    cancelled = pharmacy_sales.cancel_sale(dynamodb, OWNER, note.sale_id, CASHIER)
+    cancelled = billing_sales.cancel_sale(dynamodb, OWNER, note.sale_id, CASHIER)
 
     assert cancelled.status == SaleStatus.CANCELLED
-    lots = pharmacy_stock.lots_of(dynamodb, OWNER, 'PARA500')
+    lots = billing_stock.lots_of(dynamodb, OWNER, 'PARA500')
     by_code = {lot.lot_code: lot.quantity_remaining for lot in lots.items}
     assert by_code == {'PRONTO': 3, 'LEJOS': 10}
 
@@ -428,13 +428,13 @@ def test_a_note_is_cancelled_once(dynamodb):
     _receive(dynamodb, [PurchaseLineIn(sku = 'PARA500', quantity = 10, unit_cost = 3.0,
                                        sale_price = 6.0)])
     note = _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 2)])
-    pharmacy_sales.cancel_sale(dynamodb, OWNER, note.sale_id, CASHIER)
+    billing_sales.cancel_sale(dynamodb, OWNER, note.sale_id, CASHIER)
 
     with pytest.raises(InvalidInputError) as error:
-        pharmacy_sales.cancel_sale(dynamodb, OWNER, note.sale_id, CASHIER)
+        billing_sales.cancel_sale(dynamodb, OWNER, note.sale_id, CASHIER)
 
-    assert error.value.detail == PharmacyError.SALE_ALREADY_CANCELLED.value
-    assert pharmacy_stock.lots_of(dynamodb, OWNER, 'PARA500').available_quantity == 10
+    assert error.value.detail == BillingError.SALE_ALREADY_CANCELLED.value
+    assert billing_stock.lots_of(dynamodb, OWNER, 'PARA500').available_quantity == 10
 
 
 def test_a_cancelled_note_stops_counting_as_money(dynamodb):
@@ -444,9 +444,9 @@ def test_a_cancelled_note_stops_counting_as_money(dynamodb):
                                        sale_price = 6.0)])
     kept = _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 1)])
     voided = _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 2)])
-    pharmacy_sales.cancel_sale(dynamodb, OWNER, voided.sale_id, CASHIER)
+    billing_sales.cancel_sale(dynamodb, OWNER, voided.sale_id, CASHIER)
 
-    listing = pharmacy_sales.list_sales(dynamodb, OWNER)
+    listing = billing_sales.list_sales(dynamodb, OWNER)
 
     assert listing.total == 2
     assert listing.total_amount == kept.total
@@ -461,9 +461,9 @@ def test_one_pharmacy_never_sees_another(dynamodb):
     '''
     _register(dynamodb)
 
-    assert pharmacy.list_products(dynamodb, OTHER_OWNER).total == 0
+    assert billing.list_products(dynamodb, OTHER_OWNER).total == 0
     with pytest.raises(RegisterNotFoundError):
-        pharmacy.get_product(dynamodb, OTHER_OWNER, 'PARA500')
+        billing.get_product(dynamodb, OTHER_OWNER, 'PARA500')
 
 
 def test_repricing_a_batch_leaves_its_cost_alone(dynamodb):
@@ -476,12 +476,12 @@ def test_repricing_a_batch_leaves_its_cost_alone(dynamodb):
                                               unit_cost = 3.0, sale_price = 6.0)])
     lot_id = note.lines[0].lot_id
 
-    updated = pharmacy_stock.reprice_lot(dynamodb, OWNER, 'PARA500', lot_id,
+    updated = billing_stock.reprice_lot(dynamodb, OWNER, 'PARA500', lot_id,
                                          LotPricePatch(sale_price = 8.0))
 
     assert updated.sale_price == 8.0
     assert updated.unit_cost == 3.0
-    assert pharmacy_stock.lots_of(dynamodb, OWNER, 'PARA500').items[0].sale_price == 8.0
+    assert billing_stock.lots_of(dynamodb, OWNER, 'PARA500').items[0].sale_price == 8.0
 
 
 def test_a_delivery_of_an_unknown_sku_is_refused(dynamodb):
@@ -489,7 +489,7 @@ def test_a_delivery_of_an_unknown_sku_is_refused(dynamodb):
     with pytest.raises(RegisterNotFoundError) as error:
         _receive(dynamodb, [PurchaseLineIn(sku = 'NO_EXISTE', quantity = 1,
                                            unit_cost = 1.0, sale_price = 2.0)])
-    assert error.value.detail == PharmacyError.PRODUCT_NOT_FOUND.value
+    assert error.value.detail == BillingError.PRODUCT_NOT_FOUND.value
 
 
 def test_a_pharmacy_without_settings_cannot_sell(dynamodb):
@@ -498,11 +498,11 @@ def test_a_pharmacy_without_settings_cannot_sell(dynamodb):
         before the shop exists would print a paper belonging to nobody.
     '''
     with pytest.raises(RegisterNotFoundError) as error:
-        pharmacy_sales.issue_sale(
+        billing_sales.issue_sale(
             dynamodb, OTHER_OWNER,
             SaleNoteIn(lines = [SaleLineIn(sku = 'PARA500', quantity = 1)]), CASHIER
         )
-    assert error.value.detail == PharmacyError.SETTINGS_NOT_FOUND.value
+    assert error.value.detail == BillingError.SETTINGS_NOT_FOUND.value
 
 
 # --- counter dashboard -------------------------------------------------------
@@ -517,9 +517,9 @@ def test_dashboard_reports_what_the_day_sold_and_left(dynamodb):
                                        sale_price = 6.0, expiry_date = LATER)])
     _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 2)])
     voided = _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 5)])
-    pharmacy_sales.cancel_sale(dynamodb, OWNER, voided.sale_id, CASHIER)
+    billing_sales.cancel_sale(dynamodb, OWNER, voided.sale_id, CASHIER)
 
-    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = date.today())
+    summary = billing_reports.dashboard(dynamodb, OWNER, today = date.today())
 
     assert summary.sales_count == 1
     assert summary.sales_amount == 12.0
@@ -546,7 +546,7 @@ def test_dashboard_separates_what_expires_soon_from_what_already_did(dynamodb):
                        expiry_date = reference + timedelta(days = 400), lot_code = 'LEJOS')
     ])
 
-    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = reference)
+    summary = billing_reports.dashboard(dynamodb, OWNER, today = reference)
 
     assert [lot.lot_code for lot in summary.expiring_soon] == ['PRONTO']
     assert summary.expiring_soon[0].days_left == 20
@@ -562,7 +562,7 @@ def test_dashboard_lists_what_is_running_out(dynamodb):
         Only what the pharmacy asked to watch: a SKU with no minimum set is
         not "low", it is simply not tracked.
     '''
-    pharmacy.create_product(dynamodb, OWNER, ProductIn(
+    billing.create_product(dynamodb, OWNER, ProductIn(
         sku = 'IBU400', description = 'Ibuprofeno 400 mg', laboratory = 'Lab Demo',
         min_stock = 10
     ))
@@ -572,7 +572,7 @@ def test_dashboard_lists_what_is_running_out(dynamodb):
         PurchaseLineIn(sku = 'PARA500', quantity = 1, unit_cost = 3.0, sale_price = 6.0)
     ])
 
-    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = date.today())
+    summary = billing_reports.dashboard(dynamodb, OWNER, today = date.today())
 
     assert [row.sku for row in summary.low_stock] == ['IBU400']
     assert summary.low_stock[0].available_quantity == 3
@@ -581,7 +581,7 @@ def test_dashboard_lists_what_is_running_out(dynamodb):
 def test_dashboard_ranks_products_by_what_they_charged(dynamodb):
     '''What sold most is measured in money, not in boxes.'''
     _register(dynamodb)
-    pharmacy.create_product(dynamodb, OWNER, ProductIn(
+    billing.create_product(dynamodb, OWNER, ProductIn(
         sku = 'VIT-C', description = 'Vitamina C 1 g', laboratory = 'Lab Demo'
     ))
     _receive(dynamodb, [
@@ -591,7 +591,7 @@ def test_dashboard_ranks_products_by_what_they_charged(dynamodb):
     _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 10),
                      SaleLineIn(sku = 'VIT-C', quantity = 4)])
 
-    summary = pharmacy_reports.dashboard(dynamodb, OWNER, today = date.today())
+    summary = billing_reports.dashboard(dynamodb, OWNER, today = date.today())
 
     # 10 x 6 = 60 against 4 x 25 = 100: fewer boxes, more money.
     assert [row.sku for row in summary.top_products] == ['VIT-C', 'PARA500']

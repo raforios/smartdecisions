@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from boto3.resources.base import ServiceResource
 
-from models.pharmacy import (
+from models.billing import (
     LOTS_TABLE,
     OWNER_KEY,
     SALES_TABLE,
@@ -22,9 +22,9 @@ from models.pharmacy import (
     SALE_SORT_KEY,
     SaleItem
 )
-from schemas.pharmacy import (
+from schemas.billing import (
     Buyer,
-    PharmacyError,
+    BillingError,
     SaleAllocation,
     SaleLineIn,
     SaleLineOut,
@@ -35,7 +35,7 @@ from schemas.pharmacy import (
 )
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.pharmacy import (
+from services.billing import (
     SortBounds,
     date_window,
     document_id,
@@ -47,7 +47,7 @@ from services.pharmacy import (
     read_partition,
     write_item
 )
-from services.pharmacy_stock import allocate, draw_down, give_back
+from services.billing_stock import allocate, draw_down, give_back
 
 # Money is rounded where it is charged, never where it is added: totals come
 # from already-rounded line amounts, so the printed note adds up.
@@ -141,9 +141,9 @@ def _price_lines(
     for line in note.lines:
         product = products.get(line.sku)
         if product is None:
-            raise RegisterNotFoundError(detail = PharmacyError.PRODUCT_NOT_FOUND.value)
+            raise RegisterNotFoundError(detail = BillingError.PRODUCT_NOT_FOUND.value)
         if not product.get('is_active', True):
-            raise InvalidInputError(detail = PharmacyError.PRODUCT_INACTIVE.value)
+            raise InvalidInputError(detail = BillingError.PRODUCT_INACTIVE.value)
 
         allocations = allocate(lots.get(line.sku, []), line.quantity)
         consumption[line.sku] = allocations
@@ -197,9 +197,9 @@ def cancel_sale(
     '''
     stored = _read_sale(dynamodb_resource, owner, sale_id)
     if stored is None:
-        raise RegisterNotFoundError(detail = PharmacyError.SALE_NOT_FOUND.value)
+        raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     if stored['status'] == SaleStatus.CANCELLED.value:
-        raise InvalidInputError(detail = PharmacyError.SALE_ALREADY_CANCELLED.value)
+        raise InvalidInputError(detail = BillingError.SALE_ALREADY_CANCELLED.value)
 
     consumption = {
         line['sku']: [SaleAllocation(**allocation) for allocation in line['allocations']]
@@ -238,7 +238,7 @@ def get_sale(
     '''
     stored = _read_sale(dynamodb_resource, owner, sale_id)
     if stored is None:
-        raise RegisterNotFoundError(detail = PharmacyError.SALE_NOT_FOUND.value)
+        raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     return _sale_out(stored)
 
 
@@ -289,7 +289,7 @@ def _reject_repeated_lines(lines: List[SaleLineIn]) -> None:
     '''
     seen = {line.sku for line in lines}
     if len(seen) != len(lines):
-        raise InvalidInputError(detail = PharmacyError.DUPLICATE_LINE.value)
+        raise InvalidInputError(detail = BillingError.DUPLICATE_LINE.value)
 
 
 def _line_out(
@@ -315,11 +315,11 @@ def _line_out(
                 one larger than the line it is discounting.
     '''
     if line.discount and not discounts_enabled:
-        raise InvalidInputError(detail = PharmacyError.DISCOUNTS_DISABLED.value)
+        raise InvalidInputError(detail = BillingError.DISCOUNTS_DISABLED.value)
 
     subtotal = round(sum(allocation.amount for allocation in allocations), MONEY_DECIMALS)
     if line.discount > subtotal:
-        raise InvalidInputError(detail = PharmacyError.DISCOUNT_ABOVE_LINE.value)
+        raise InvalidInputError(detail = BillingError.DISCOUNT_ABOVE_LINE.value)
 
     cost = round(sum(allocation.quantity * allocation.unit_cost
                      for allocation in allocations), MONEY_DECIMALS)

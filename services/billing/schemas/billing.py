@@ -18,7 +18,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-class PharmacyError(str, Enum):
+class BillingError(str, Enum):
     '''
         Why a pharmacy request could not be served.
     '''
@@ -324,7 +324,7 @@ class SaleNotesResponse(BaseModel):
 
 # --- settings ----------------------------------------------------------------
 
-class PharmacySettings(BaseModel):
+class BillingSettings(BaseModel):
     '''
         What the pharmacy prints on its notes and what its counter allows.
 
@@ -343,7 +343,7 @@ class PharmacySettings(BaseModel):
     ticket_footer: Optional[str] = Field(None, max_length = 200)
 
 
-class SettingsResponse(PharmacySettings):
+class SettingsResponse(BillingSettings):
     '''
         The settings plus the counters they drive.
     '''
@@ -388,7 +388,7 @@ class TopProduct(BaseModel):
     amount: float
 
 
-class PharmacyDashboard(BaseModel):
+class BillingDashboard(BaseModel):
     '''
         What the person behind the counter needs to see when they open the
         screen: what was sold, what it left, what is about to expire and what

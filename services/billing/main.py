@@ -3,7 +3,7 @@
 
     Billing for pharmacies: the catalogue a shop sells, the batches it
     receives, and the two documents that move them — the nota de compra and
-    the nota de venta. Wires the pharmacy router and exposes the
+    the nota de venta. Wires the billing router and exposes the
     Lambda-friendly ASGI handler via Mangum.
 '''
 import socket
@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
-from routes.pharmacy import router as pharmacy_router
+from routes.billing import router as billing_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
@@ -58,7 +58,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         service that provisioned its own storage on every cold start would be
         one deploy away from creating a table nobody agreed to.
     '''
-    message = 'Application startup: pharmacy billing service ready.'
+    message = 'Application startup: billing service ready.'
     logger.info(message)
     yield
 
@@ -71,7 +71,7 @@ APP_CONFIG = {
     'title': 'Supplies Service',
     'description': '''
         Billing for pharmacies, on DynamoDB and multi-tenant: the owner of
-        every row is the pharmacy the token names.
+        every row is the shop the token names.
 
         1. **Catálogo y lotes**: each SKU carries its batches, and each batch
            its own cost and shelf price — the laboratory sets both per
@@ -163,7 +163,7 @@ app.add_middleware(
     allow_headers = ['*'],
 )
 
-app.include_router(pharmacy_router)
+app.include_router(billing_router)
 
 
 if __name__ == '__main__':

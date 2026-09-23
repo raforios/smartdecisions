@@ -1,17 +1,17 @@
 '''
-    Pharmacy billing: the DynamoDB items.
+    Billing: the DynamoDB items.
 
-    Five tables, all partitioned by owner — the pharmacy. The owner is part of
-    every key and never a filter applied afterwards: a pharmacy that could read
+    Five tables, all partitioned by owner — the shop. The owner is part of every
+    key and never a filter applied afterwards: a shop that could read
     another's shelf would be reading its margins.
 
     | Table                | Partition | Sort                  |
     |----------------------|-----------|-----------------------|
-    | pharmacy_products    | owner     | sku                   |
-    | pharmacy_lots        | owner     | lot_key = sku#lot_id  |
-    | pharmacy_sales       | owner     | sale_id (time-sorted) |
-    | pharmacy_purchases   | owner     | purchase_id           |
-    | pharmacy_settings    | owner     | setting_key           |
+    | billing_products     | owner     | sku                   |
+    | billing_lots         | owner     | lot_key = sku#lot_id  |
+    | billing_sales        | owner     | sale_id (time-sorted) |
+    | billing_purchases    | owner     | purchase_id           |
+    | billing_settings     | owner     | setting_key           |
 
     `lot_key` puts every lot of one SKU together, so the batches to sell next
     come back with a single `begins_with` query instead of a scan. The sale and
@@ -25,19 +25,19 @@ from services.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars(
     {
-        'DYNAMODB_TABLE_NAME_PHARMACY_PRODUCTS': str,
-        'DYNAMODB_TABLE_NAME_PHARMACY_LOTS': str,
-        'DYNAMODB_TABLE_NAME_PHARMACY_SALES': str,
-        'DYNAMODB_TABLE_NAME_PHARMACY_PURCHASES': str,
-        'DYNAMODB_TABLE_NAME_PHARMACY_SETTINGS': str
+        'DYNAMODB_TABLE_NAME_BILLING_PRODUCTS': str,
+        'DYNAMODB_TABLE_NAME_BILLING_LOTS': str,
+        'DYNAMODB_TABLE_NAME_BILLING_SALES': str,
+        'DYNAMODB_TABLE_NAME_BILLING_PURCHASES': str,
+        'DYNAMODB_TABLE_NAME_BILLING_SETTINGS': str
     }
 )
 
-PRODUCTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_PHARMACY_PRODUCTS']
-LOTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_PHARMACY_LOTS']
-SALES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_PHARMACY_SALES']
-PURCHASES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_PHARMACY_PURCHASES']
-SETTINGS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_PHARMACY_SETTINGS']
+PRODUCTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_PRODUCTS']
+LOTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_LOTS']
+SALES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_SALES']
+PURCHASES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_PURCHASES']
+SETTINGS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_SETTINGS']
 
 OWNER_KEY = 'owner'
 PRODUCT_SORT_KEY = 'sku'
@@ -46,7 +46,7 @@ SALE_SORT_KEY = 'sale_id'
 PURCHASE_SORT_KEY = 'purchase_id'
 SETTING_SORT_KEY = 'setting_key'
 
-# The single settings row of a pharmacy, and the two counters that number its
+# The single settings row of a shop, and the two counters that number its
 # documents. Counters live beside the settings because they are the same kind
 # of thing: per-tenant parameters, read and written by the same owner.
 CONFIG_KEY = 'config'
@@ -74,7 +74,7 @@ def lot_key(
 @dataclass
 class ProductItem:
     '''
-        A SKU in one pharmacy's catalogue.
+        A SKU in one shop's catalogue.
     '''
     owner: str
     sku: str

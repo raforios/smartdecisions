@@ -14,20 +14,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from boto3.resources.base import ServiceResource
 
-from models.pharmacy import LOTS_TABLE
-from schemas.pharmacy import (
+from models.billing import LOTS_TABLE
+from schemas.billing import (
     ExpiringLot,
     LowStockProduct,
-    PharmacyDashboard,
+    BillingDashboard,
     SaleStatus,
     TopProduct
 )
 from services.environment import load_and_validate_env_vars
-from services.pharmacy import products_by_sku, read_partition
-from services.pharmacy_sales import list_sales
+from services.billing import products_by_sku, read_partition
+from services.billing_sales import list_sales
 
-ENV_VARS = load_and_validate_env_vars({'PHARMACY_EXPIRY_ALERT_DAYS': int})
-EXPIRY_ALERT_DAYS = ENV_VARS['PHARMACY_EXPIRY_ALERT_DAYS']
+ENV_VARS = load_and_validate_env_vars({'BILLING_EXPIRY_ALERT_DAYS': int})
+EXPIRY_ALERT_DAYS = ENV_VARS['BILLING_EXPIRY_ALERT_DAYS']
 
 MONEY_DECIMALS = 2
 # How many rows each list carries. A counter screen is read at a glance; the
@@ -42,7 +42,7 @@ def dashboard(
     date_from: Optional[date_type] = None,
     date_to: Optional[date_type] = None,
     today: Optional[date_type] = None
-) -> PharmacyDashboard:
+) -> BillingDashboard:
     '''
         The counter summary for a window, today by default.
 
@@ -55,7 +55,7 @@ def dashboard(
                 one when absent. Injected so the tests are not a calendar.
 
         Returns:
-            PharmacyDashboard: Sales, margin, expiries and low stock.
+            BillingDashboard: Sales, margin, expiries and low stock.
     '''
     reference = today or date_type.today()
     start = date_from or reference
@@ -68,7 +68,7 @@ def dashboard(
     lots = read_partition(dynamodb_resource, LOTS_TABLE, owner)
     expiring, expired = _expiry_lists(lots, products, reference)
 
-    return PharmacyDashboard(
+    return BillingDashboard(
         date_from = start,
         date_to = end,
         cancelled_count = len(sales.items) - len(issued),

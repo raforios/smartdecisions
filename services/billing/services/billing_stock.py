@@ -17,11 +17,11 @@ from typing import Any, Dict, List, Optional
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
 
-from models.pharmacy import LOTS_TABLE, LotItem, OWNER_KEY, LOT_SORT_KEY, lot_key
-from schemas.pharmacy import LotOut, LotPricePatch, LotsResponse, PharmacyError, SaleAllocation
+from models.billing import LOTS_TABLE, LotItem, OWNER_KEY, LOT_SORT_KEY, lot_key
+from schemas.billing import LotOut, LotPricePatch, LotsResponse, BillingError, SaleAllocation
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.pharmacy import (
+from services.billing import (
     SortBounds,
     expiry_order,
     from_dynamo,
@@ -114,7 +114,7 @@ def reprice_lot(
     '''
     stored = _read_lot(dynamodb_resource, owner, sku, lot_id)
     if stored is None:
-        raise RegisterNotFoundError(detail = PharmacyError.LOT_NOT_FOUND.value)
+        raise RegisterNotFoundError(detail = BillingError.LOT_NOT_FOUND.value)
 
     stored['sale_price'] = patch.sale_price
     write_item(dynamodb_resource, LOTS_TABLE, stored)
@@ -158,7 +158,7 @@ def allocate(
         pending -= units
 
     if pending > 0:
-        raise InvalidInputError(detail = PharmacyError.INSUFFICIENT_STOCK.value)
+        raise InvalidInputError(detail = BillingError.INSUFFICIENT_STOCK.value)
     return taken
 
 
@@ -234,7 +234,7 @@ def _apply(
                      f'{error.response["Error"].get("Message")}')
         logger.warning(error_msg)
         raise InvalidInputError(
-            detail = PharmacyError.INSUFFICIENT_STOCK.value
+            detail = BillingError.INSUFFICIENT_STOCK.value
         ) from error
 
 

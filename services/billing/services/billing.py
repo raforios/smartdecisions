@@ -14,7 +14,7 @@ from uuid import uuid4
 from boto3.dynamodb.conditions import Key
 from boto3.resources.base import ServiceResource
 
-from models.pharmacy import (
+from models.billing import (
     CONFIG_KEY,
     LOTS_TABLE,
     OWNER_KEY,
@@ -26,9 +26,9 @@ from models.pharmacy import (
     SETTINGS_TABLE,
     SETTING_SORT_KEY
 )
-from schemas.pharmacy import (
-    PharmacyError,
-    PharmacySettings,
+from schemas.billing import (
+    BillingError,
+    BillingSettings,
     ProductIn,
     ProductOut,
     ProductPatch,
@@ -291,7 +291,7 @@ def get_settings(
     )
     stored = from_dynamo(response.get('Item'))
     if not stored:
-        raise RegisterNotFoundError(detail = PharmacyError.SETTINGS_NOT_FOUND.value)
+        raise RegisterNotFoundError(detail = BillingError.SETTINGS_NOT_FOUND.value)
 
     return SettingsResponse(
         **{key: value for key, value in stored.items()
@@ -304,7 +304,7 @@ def get_settings(
 def save_settings(
     dynamodb_resource: ServiceResource,
     owner: str,
-    settings: PharmacySettings
+    settings: BillingSettings
 ) -> SettingsResponse:
     '''
         Creates or replaces the pharmacy's parameters. Counters are not
@@ -313,7 +313,7 @@ def save_settings(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The pharmacy.
-            settings (PharmacySettings): Parameters as edited.
+            settings (BillingSettings): Parameters as edited.
 
         Returns:
             SettingsResponse: What was stored.
@@ -404,7 +404,7 @@ def create_product(
             RegisterAlreadyExistsError: The SKU is already in the catalogue.
     '''
     if _read_product(dynamodb_resource, owner, product.sku) is not None:
-        raise RegisterAlreadyExistsError(detail = PharmacyError.SKU_ALREADY_EXISTS.value)
+        raise RegisterAlreadyExistsError(detail = BillingError.SKU_ALREADY_EXISTS.value)
 
     stamp = now_iso()
     item = ProductItem(
@@ -441,7 +441,7 @@ def update_product(
     '''
     stored = _read_product(dynamodb_resource, owner, sku)
     if stored is None:
-        raise RegisterNotFoundError(detail = PharmacyError.PRODUCT_NOT_FOUND.value)
+        raise RegisterNotFoundError(detail = BillingError.PRODUCT_NOT_FOUND.value)
 
     changes = patch.model_dump(mode = 'json', exclude_none = True)
     stored.update(changes)
@@ -510,7 +510,7 @@ def get_product(
     '''
     stored = _read_product(dynamodb_resource, owner, sku)
     if stored is None:
-        raise RegisterNotFoundError(detail = PharmacyError.PRODUCT_NOT_FOUND.value)
+        raise RegisterNotFoundError(detail = BillingError.PRODUCT_NOT_FOUND.value)
     lots = [lot for lot in read_partition(
                 dynamodb_resource, LOTS_TABLE, owner,
                 bounds = SortBounds(sort_key = 'lot_key', begins_with = f'{sku}#'))

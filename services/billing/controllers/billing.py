@@ -11,11 +11,11 @@ from typing import Optional
 
 from boto3.resources.base import ServiceResource
 
-from schemas.pharmacy import (
+from schemas.billing import (
     LotPricePatch,
-    PharmacyDashboard,
+    BillingDashboard,
     LotsResponse,
-    PharmacySettings,
+    BillingSettings,
     ProductIn,
     ProductOut,
     ProductPatch,
@@ -29,11 +29,11 @@ from schemas.pharmacy import (
     SettingsResponse
 )
 from services import (
-    pharmacy,
-    pharmacy_purchases,
-    pharmacy_reports,
-    pharmacy_sales,
-    pharmacy_stock
+    billing,
+    billing_purchases,
+    billing_reports,
+    billing_sales,
+    billing_stock
 )
 
 
@@ -44,12 +44,12 @@ async def dashboard_controller(
     owner: str,
     date_from: Optional[date],
     date_to: Optional[date]
-) -> PharmacyDashboard:
+) -> BillingDashboard:
     '''
         What was sold, what it left, what is about to expire and what is about
         to run out.
     '''
-    return pharmacy_reports.dashboard(dynamodb_resource, owner, date_from, date_to)
+    return billing_reports.dashboard(dynamodb_resource, owner, date_from, date_to)
 
 
 # --- settings ----------------------------------------------------------------
@@ -61,18 +61,18 @@ async def get_settings_controller(
     '''
         The pharmacy's own parameters and counters.
     '''
-    return pharmacy.get_settings(dynamodb_resource, owner)
+    return billing.get_settings(dynamodb_resource, owner)
 
 
 async def save_settings_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
-    settings: PharmacySettings
+    settings: BillingSettings
 ) -> SettingsResponse:
     '''
         Creates or replaces the pharmacy's parameters.
     '''
-    return pharmacy.save_settings(dynamodb_resource, owner, settings)
+    return billing.save_settings(dynamodb_resource, owner, settings)
 
 
 # --- catalogue ---------------------------------------------------------------
@@ -85,7 +85,7 @@ async def create_product_controller(
     '''
         Registers a SKU.
     '''
-    return pharmacy.create_product(dynamodb_resource, owner, product)
+    return billing.create_product(dynamodb_resource, owner, product)
 
 
 async def update_product_controller(
@@ -97,7 +97,7 @@ async def update_product_controller(
     '''
         Changes what a SKU says about itself.
     '''
-    return pharmacy.update_product(dynamodb_resource, owner, sku, patch)
+    return billing.update_product(dynamodb_resource, owner, sku, patch)
 
 
 async def list_products_controller(
@@ -108,7 +108,7 @@ async def list_products_controller(
     '''
         The catalogue with availability and the price that would be charged.
     '''
-    return pharmacy.list_products(dynamodb_resource, owner, only_active)
+    return billing.list_products(dynamodb_resource, owner, only_active)
 
 
 async def get_product_controller(
@@ -119,7 +119,7 @@ async def get_product_controller(
     '''
         One SKU with its availability.
     '''
-    return pharmacy.get_product(dynamodb_resource, owner, sku)
+    return billing.get_product(dynamodb_resource, owner, sku)
 
 
 # --- lots --------------------------------------------------------------------
@@ -133,7 +133,7 @@ async def lots_controller(
     '''
         The batches of one SKU, in the order they will be sold.
     '''
-    return pharmacy_stock.lots_of(dynamodb_resource, owner, sku, only_available)
+    return billing_stock.lots_of(dynamodb_resource, owner, sku, only_available)
 
 
 async def reprice_lot_controller(
@@ -146,8 +146,8 @@ async def reprice_lot_controller(
     '''
         Re-prices one batch and answers with the SKU's batches as they stand.
     '''
-    pharmacy_stock.reprice_lot(dynamodb_resource, owner, sku, lot_id, patch)
-    return pharmacy_stock.lots_of(dynamodb_resource, owner, sku)
+    billing_stock.reprice_lot(dynamodb_resource, owner, sku, lot_id, patch)
+    return billing_stock.lots_of(dynamodb_resource, owner, sku)
 
 
 # --- purchase notes ----------------------------------------------------------
@@ -161,7 +161,7 @@ async def receive_purchase_controller(
     '''
         Records a delivery and puts its batches on the shelf.
     '''
-    return pharmacy_purchases.receive_purchase(
+    return billing_purchases.receive_purchase(
         dynamodb_resource, owner, note, current_user
     )
 
@@ -175,7 +175,7 @@ async def list_purchases_controller(
     '''
         Delivery notes of a window.
     '''
-    return pharmacy_purchases.list_purchases(
+    return billing_purchases.list_purchases(
         dynamodb_resource, owner, date_from, date_to
     )
 
@@ -188,7 +188,7 @@ async def get_purchase_controller(
     '''
         One delivery note.
     '''
-    return pharmacy_purchases.get_purchase(dynamodb_resource, owner, purchase_id)
+    return billing_purchases.get_purchase(dynamodb_resource, owner, purchase_id)
 
 
 # --- sale notes --------------------------------------------------------------
@@ -202,7 +202,7 @@ async def issue_sale_controller(
     '''
         Registers a sale and takes the units out of stock.
     '''
-    return pharmacy_sales.issue_sale(dynamodb_resource, owner, note, current_user)
+    return billing_sales.issue_sale(dynamodb_resource, owner, note, current_user)
 
 
 async def cancel_sale_controller(
@@ -214,7 +214,7 @@ async def cancel_sale_controller(
     '''
         Cancels a note and returns its units to the batches they left.
     '''
-    return pharmacy_sales.cancel_sale(dynamodb_resource, owner, sale_id, current_user)
+    return billing_sales.cancel_sale(dynamodb_resource, owner, sale_id, current_user)
 
 
 async def list_sales_controller(
@@ -226,7 +226,7 @@ async def list_sales_controller(
     '''
         Sale notes of a window, newest first.
     '''
-    return pharmacy_sales.list_sales(dynamodb_resource, owner, date_from, date_to)
+    return billing_sales.list_sales(dynamodb_resource, owner, date_from, date_to)
 
 
 async def get_sale_controller(
@@ -237,4 +237,4 @@ async def get_sale_controller(
     '''
         One note, as it prints.
     '''
-    return pharmacy_sales.get_sale(dynamodb_resource, owner, sale_id)
+    return billing_sales.get_sale(dynamodb_resource, owner, sale_id)

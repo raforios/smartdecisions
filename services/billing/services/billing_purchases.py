@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from boto3.resources.base import ServiceResource
 
-from models.pharmacy import (
+from models.billing import (
     LotItem,
     OWNER_KEY,
     PURCHASES_TABLE,
@@ -21,8 +21,8 @@ from models.pharmacy import (
     PURCHASE_SORT_KEY,
     PurchaseItem
 )
-from schemas.pharmacy import (
-    PharmacyError,
+from schemas.billing import (
+    BillingError,
     PurchaseLineOut,
     PurchaseNoteIn,
     PurchaseNoteOut,
@@ -30,7 +30,7 @@ from schemas.pharmacy import (
 )
 from services.exceptions import RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.pharmacy import (
+from services.billing import (
     SortBounds,
     date_window,
     document_id,
@@ -43,7 +43,7 @@ from services.pharmacy import (
     read_partition,
     write_item
 )
-from services.pharmacy_stock import create_lot
+from services.billing_stock import create_lot
 
 MONEY_DECIMALS = 2
 
@@ -78,7 +78,7 @@ def receive_purchase(
     lines: List[PurchaseLineOut] = []
     for line in note.lines:
         if line.sku not in products:
-            raise RegisterNotFoundError(detail = PharmacyError.PRODUCT_NOT_FOUND.value)
+            raise RegisterNotFoundError(detail = BillingError.PRODUCT_NOT_FOUND.value)
 
         lot = LotItem(
             owner = owner, sku = line.sku, lot_id = new_id(),
@@ -139,7 +139,7 @@ def get_purchase(
     )
     stored = from_dynamo(response.get('Item'))
     if not stored:
-        raise RegisterNotFoundError(detail = PharmacyError.PURCHASE_NOT_FOUND.value)
+        raise RegisterNotFoundError(detail = BillingError.PURCHASE_NOT_FOUND.value)
     return _purchase_out(stored)
 
 

@@ -13,7 +13,7 @@ from typing import Optional
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path, Query, status
 
-from controllers.pharmacy import (
+from controllers.billing import (
     cancel_sale_controller,
     dashboard_controller,
     create_product_controller,
@@ -31,11 +31,11 @@ from controllers.pharmacy import (
     save_settings_controller,
     update_product_controller
 )
-from schemas.pharmacy import (
+from schemas.billing import (
     LotPricePatch,
-    PharmacyDashboard,
+    BillingDashboard,
     LotsResponse,
-    PharmacySettings,
+    BillingSettings,
     ProductIn,
     ProductOut,
     ProductPatch,
@@ -52,20 +52,20 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner, get_current_user, require_roles
 
-router = APIRouter(prefix = '/v1/supplies/pharmacy', tags = ['Pharmacy billing'])
+router = APIRouter(prefix = '/v1/billing', tags = ['Pharmacy billing'])
 
 # Running the shop: settings, catalogue, deliveries and voiding a note. A
 # cashier sells; they do not re-price the shelf or annul their own sale.
 MANAGERS = ('ADMIN', 'MANAGER')
 
 
-@router.get('/dashboard', response_model = PharmacyDashboard)
+@router.get('/dashboard', response_model = BillingDashboard)
 async def dashboard_endpoint(
     date_from: Optional[date_type] = Query(None, description = 'First day; today by default.'),
     date_to: Optional[date_type] = Query(None, description = 'Last day; today by default.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     owner: str = Depends(get_current_owner)
-) -> PharmacyDashboard:
+) -> BillingDashboard:
     ''' Endpoint for the counter summary. '''
     message = f'Pharmacy {owner} opened its dashboard.'
     logger.info(message)
@@ -85,7 +85,7 @@ async def get_settings_endpoint(
 
 @router.put('/settings', response_model = SettingsResponse)
 async def save_settings_endpoint(
-    settings: PharmacySettings,
+    settings: BillingSettings,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     owner: str = Depends(require_roles(*MANAGERS))
 ) -> SettingsResponse:
