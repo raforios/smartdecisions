@@ -428,9 +428,13 @@
 
 .estimate-detail { display: grid; gap: .9rem; }
 
-.detail-spark { max-width: 26rem; }
+.detail-spark { max-width: 24rem; }
 
 .detail-spark .spark { height: 60px; }
+
+/* The caption is a span, so without this it flows beside the sparkline and
+   lands on top of the table in the next grid column. */
+.detail-spark .control-hint { display: block; margin-top: .4rem; }
 
 .history-table-holder { max-width: 26rem; }
 

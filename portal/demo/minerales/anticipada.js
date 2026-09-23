@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? `<span class="source-chip">${SOURCE_LABELS[row.source] || row.source}</span>`
                     : '<span class="source-chip muted">informe quincenal</span>'}
             </td>
-            <td class="num">${money(row.previous_official, 4)}</td>
+            <td class="num">${money(row.previous_official, 2)}</td>
             <td class="num">
                 <span class="official-value">${money(row.running_average, 4)}</span>
                 ${row.latest_date
