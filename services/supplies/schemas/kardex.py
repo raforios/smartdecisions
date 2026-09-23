@@ -11,7 +11,6 @@ from schemas.enums import (
     EntryTypeEnum,
     MovementTypeEnum,
     ReferenceTypeEnum,
-    RequestStatusEnum,
 )
 
 
@@ -99,19 +98,6 @@ class EntryReportRowSchema(_Base):
     created_at: datetime
 
 
-class RequestReportRowSchema(_Base):
-    '''
-        Aggregated row for the requests report.
-    '''
-    request_id: int
-    code: str
-    requester_email: str
-    status: RequestStatusEnum
-    total_items: int
-    requested_at: datetime
-    closed_at: Optional[datetime]
-
-
 # --------------------------------------------------------------------------- #
 # Dashboard                                                                   #
 # --------------------------------------------------------------------------- #
@@ -122,9 +108,6 @@ class DashboardSummarySchema(_Base):
     total_items: int
     active_items: int
     items_below_min: int
-    open_requests: int
-    requests_in_process: int
-    requests_delivered_pending_close: int
     total_entries: int
     entries_last_30_days: int
 
@@ -133,6 +116,5 @@ class DashboardRecentActivitySchema(_Base):
     '''
         Latest events to render the activity feed.
     '''
-    recent_requests: List[RequestReportRowSchema]
     recent_entries: List[EntryReportRowSchema]
     recent_movements: List[KardexMovementResponseSchema]

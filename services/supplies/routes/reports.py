@@ -24,7 +24,7 @@ from schemas.reports import (
     PhysicalValuedReportSchema,
     StockOnHandReportSchema,
 )
-from services.db_connection import GET_DB_DEPENDENCY
+from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.security import require_roles
 
 
@@ -43,9 +43,9 @@ async def report_physical_valued(
     date_to: Optional[datetime] = Query(None),
     group_code: Optional[str] = Query(None, description = 'Filter to a single accounting group.'),
     include_zero: bool = Query(True, description = 'Include items with no movements/stock.'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(*_ROLES)),
-):
+) -> PhysicalValuedReportSchema:
     '''
         Physical + valued inventory per accounting group over a date range.
     '''
@@ -65,9 +65,9 @@ async def report_stock_on_hand(
     date_to: Optional[datetime] = Query(
         None, description = 'Cut-off date; omit for the live stock.'),
     include_zero: bool = Query(False, description = 'Include items whose balance is zero.'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(*_ROLES)),
-):
+) -> StockOnHandReportSchema:
     '''
         Stock valued from PEPS/FIFO layers, grouped by accounting group.
     '''
@@ -84,9 +84,9 @@ async def report_stock_on_hand(
 async def report_in_out_by_group(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(*_ROLES)),
-):
+) -> InOutByGroupReportSchema:
     '''
         Valued ins/outs per accounting group over the range.
     '''
@@ -105,9 +105,9 @@ async def report_kardex_valued(
     date_to: Optional[datetime] = Query(None),
     item_id: Optional[int] = Query(None, ge = 1, description = 'Restrict to a single item.'),
     group_code: Optional[str] = Query(None, description = 'Filter to a single accounting group.'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(*_ROLES)),
-):
+) -> KardexValuedReportSchema:
     '''
         Physical + valued kardex for one item, one group or all, with opening
         balances.
@@ -126,9 +126,9 @@ async def report_kardex_valued(
 async def report_outflow_stats(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(*_ROLES)),
-):
+) -> OutflowReportSchema:
     '''
         Per-item deliveries over the range with recipient and quantity.
     '''

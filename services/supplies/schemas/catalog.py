@@ -147,7 +147,6 @@ class ItemResponseSchema(SuppliesBaseSchema):
     unit_id: int
     min_stock: Decimal
     current_stock: Decimal
-    reserved_stock: Decimal
     default_replenishment_qty: Decimal
     is_active: bool
     created_at: datetime
@@ -157,10 +156,9 @@ class ItemResponseSchema(SuppliesBaseSchema):
     @property
     def available_stock(self) -> Decimal:
         '''
-            Units a new request may still ask for: physical stock minus what
-            open requests reserved minus the minimum the warehouse keeps.
-            Exposed here so every consumer reads the same number instead of
-            recomputing the rule in the UI.
+            Units that may still be taken out: physical stock minus the minimum
+            the warehouse keeps. Exposed here so every consumer reads the same
+            number instead of recomputing the rule in the UI.
         '''
-        free = self.current_stock - self.reserved_stock - self.min_stock
+        free = self.current_stock - self.min_stock
         return free if free > 0 else Decimal('0')

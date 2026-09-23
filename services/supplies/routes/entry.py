@@ -18,7 +18,7 @@ from schemas.entry import (
     EntryResponseSchema,
 )
 from schemas.enums import RoleEnum
-from services.db_connection import GET_DB_DEPENDENCY
+from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.security import require_roles
 
 
@@ -33,11 +33,11 @@ router = APIRouter(prefix = '/v1/supplies', tags = ['Entries'])
 )
 async def create_entry(
     payload: EntryCreateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(
         require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)
     ),
-):
+) -> EntryDetailedResponseSchema:
     '''
         Registers a Nota de Ingreso with its cost layers and valued kardex IN
         movements. ADMIN or WAREHOUSE_MANAGER only.
@@ -52,9 +52,9 @@ async def create_entry(
 )
 async def list_entries(
     filters: EntryFilterSchema = Depends(),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
+) -> List[EntryResponseSchema]:
     '''
         Lists entry headers with optional type and date-range filters.
     '''
@@ -68,9 +68,9 @@ async def list_entries(
 )
 async def get_entry(
     entry_id: int,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
+) -> EntryDetailedResponseSchema:
     '''
         Returns a single entry (Nota de Ingreso) with its lines, for the
         detail and print views.

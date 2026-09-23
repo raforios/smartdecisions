@@ -12,18 +12,16 @@ from controllers.kardex import (
     entries_report_controller,
     list_kardex_for_item_controller,
     list_low_stock_controller,
-    request_report_controller,
 )
-from schemas.enums import RequestStatusEnum, RoleEnum
+from schemas.enums import RoleEnum
 from schemas.kardex import (
     KardexFilterSchema,
     EntryReportRowSchema,
     KardexAdjustmentSchema,
     KardexMovementResponseSchema,
     LowStockItemSchema,
-    RequestReportRowSchema,
 )
-from services.db_connection import GET_DB_DEPENDENCY
+from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.security import get_current_user, require_roles
 
 
@@ -38,9 +36,9 @@ router = APIRouter(prefix = '/v1/supplies', tags = ['Kardex'])
 async def list_kardex(
     item_id: int,
     filters: KardexFilterSchema = Depends(),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
+) -> List[KardexMovementResponseSchema]:
     '''
         Returns the kardex ledger for a single item, ordered by most recent.
     '''
@@ -55,11 +53,11 @@ async def list_kardex(
 )
 async def create_adjustment(
     payload: KardexAdjustmentSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(
         require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)
     ),
-):
+) -> KardexMovementResponseSchema:
     '''
         Records a manual ADJUSTMENT row. Positive quantities add stock,
         negative quantities subtract.
@@ -78,9 +76,9 @@ async def create_adjustment(
     summary = 'Items at or below the configured minimum',
 )
 async def report_low_stock(
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
-):
+) -> List[LowStockItemSchema]:
     '''
         Aggregated low-stock report.
     '''
@@ -95,32 +93,12 @@ async def report_low_stock(
 async def report_entries(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
+) -> List[EntryReportRowSchema]:
     '''
         Returns Notas de Ingreso with line counts and valued totals.
     '''
     return await entries_report_controller(
         db, date_from = date_from, date_to = date_to,
-    )
-
-
-@router.get(
-    '/reports/requests',
-    response_model = List[RequestReportRowSchema],
-    summary = 'Requests report bounded by date and status',
-)
-async def report_requests(
-    date_from: Optional[datetime] = Query(None),
-    date_to: Optional[datetime] = Query(None),
-    status_filter: Optional[RequestStatusEnum] = Query(None, alias = 'status'),
-    db: Session = Depends(GET_DB_DEPENDENCY),
-    _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
-    '''
-        Aggregated requests report with the number of lines per request.
-    '''
-    return await request_report_controller(
-        db, date_from = date_from, date_to = date_to, status = status_filter,
     )

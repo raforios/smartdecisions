@@ -12,8 +12,8 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session, joinedload
 
-from models.supplies import EntryDetail, Item, KardexMovement, Request
-from schemas.enums import MovementTypeEnum, ReferenceTypeEnum
+from models.supplies import EntryDetail, Item, KardexMovement
+from schemas.enums import MovementTypeEnum
 from schemas.reports import (
     InOutByGroupReportSchema,
     InOutByGroupRowSchema,
@@ -96,7 +96,10 @@ def _unit_of(item: Item) -> str:
     return item.unit.abbreviation if item.unit else ''
 
 
-def _bucket_of(groups: Dict[str, Dict], item: Item) -> Dict:
+def _bucket_of(
+    groups: Dict[str, Dict],
+    item: Item
+) -> Dict:
     '''
         Returns (creating it on first use) the accumulator bucket of the item's
         accounting group. Items without a group fall into a single placeholder
@@ -115,7 +118,10 @@ def _bucket_of(groups: Dict[str, Dict], item: Item) -> Dict:
     return groups.setdefault(code, {'name': name, 'rows': []})
 
 
-def _in_group(item: Item, group_code: Optional[str]) -> bool:
+def _in_group(
+    item: Item,
+    group_code: Optional[str]
+) -> bool:
     '''
         Whether the item belongs to the requested accounting group. No filter
         means every item passes.
@@ -178,7 +184,10 @@ def _period_totals(
     return totals
 
 
-def _physical_row(item: Item, totals: _PeriodTotals) -> PhysicalValuedItemSchema:
+def _physical_row(
+    item: Item,
+    totals: _PeriodTotals
+) -> PhysicalValuedItemSchema:
     '''
         Builds one row of the physical + valued inventory, where
         agregado = inicio + ingreso and final = agregado - egreso.
@@ -297,7 +306,10 @@ def _stock_from_layers(db: Session) -> Dict[int, Dict[str, Decimal]]:
     return per_item
 
 
-def _stock_at_date(db: Session, date_to: datetime) -> Dict[int, Dict[str, Decimal]]:
+def _stock_at_date(
+    db: Session,
+    date_to: datetime
+) -> Dict[int, Dict[str, Decimal]]:
     '''
         Stock as it stood on a past cut-off date, replayed from the kardex.
 
@@ -316,7 +328,10 @@ def _stock_at_date(db: Session, date_to: datetime) -> Dict[int, Dict[str, Decima
     return per_item
 
 
-def _stock_row(item: Item, balance: Dict[str, Decimal]) -> StockOnHandItemSchema:
+def _stock_row(
+    item: Item,
+    balance: Dict[str, Decimal]
+) -> StockOnHandItemSchema:
     '''
         Builds one row of the stock-on-hand report from an item's balance.
 
@@ -558,8 +573,8 @@ async def outflow_report_controller(
     date_to: Optional[datetime] = None,
 ) -> OutflowReportSchema:
     '''
-        Per-item outflow (deliveries) over the range, listing recipient and
-        quantity for each OUT movement sourced from a request.
+        Per-item outflow over the range, listing who took the units out and
+        how many, for every OUT movement of the kardex.
     '''
     _, item_map = _items_by_group(db)
 
@@ -572,28 +587,17 @@ async def outflow_report_controller(
         query = query.filter(KardexMovement.created_at <= date_to)
     out_movements = query.order_by(KardexMovement.created_at.asc()).all()
 
-    # Resolve recipient (requester email + code) for request-sourced rows.
-    request_ids = {
-        m.reference_id for m in out_movements
-        if m.reference_type == ReferenceTypeEnum.REQUEST and m.reference_id
-    }
-    requests: Dict[int, Request] = {}
-    if request_ids:
-        for request in db.query(Request).filter(Request.id.in_(request_ids)).all():
-            requests[request.id] = request
-
     per_item: Dict[int, Dict] = {}
     for movement in out_movements:
         item = item_map.get(movement.item_id)
         if item is None:
             continue
-        request = requests.get(movement.reference_id) if movement.reference_id else None
         acc = per_item.setdefault(movement.item_id, {'item': item, 'total': ZERO, 'lines': []})
         acc['total'] += Decimal(movement.quantity)
         acc['lines'].append(OutflowLineSchema(
             created_at = movement.created_at,
-            recipient = request.requester_email if request else (movement.created_by or '—'),
-            request_code = request.code if request else None,
+            recipient = movement.created_by or '—',
+            request_code = None,
             quantity = Decimal(movement.quantity),
         ))
 

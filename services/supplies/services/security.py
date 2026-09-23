@@ -1,37 +1,22 @@
 '''
     Security service
 '''
-import os
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Awaitable, Callable, Dict, Iterable, Optional
 from fastapi import Depends, Header
 from jose import jwt, JWTError
 
-from dotenv import dotenv_values
-
 from services.logger_config import custom_logger as logger
-from services.exceptions import ForbiddenError, UnauthorizedError, ServiceUnavailableError
+from services.exceptions import ForbiddenError, UnauthorizedError
+from services.environment import load_and_validate_env_vars
 
-_LOCAL_ENV_PARAMS = dotenv_values('.env') if os.path.exists('.env') else {}
-
-SECRET_KEY = os.environ.get('SECRET_KEY') or \
-                      _LOCAL_ENV_PARAMS.get('SECRET_KEY')
-
-if not SECRET_KEY:
-    error_msg = 'SECRET_KEY is not configured in environment or .env.'
-    logger.critical(error_msg)
-    raise ServiceUnavailableError(
-        detail = error_msg
-    )
-
-ALGORITHM = os.environ.get('ALGORITHM') or \
-                      _LOCAL_ENV_PARAMS.get('ALGORITHM')
-
-if not ALGORITHM:
-    error_msg = 'ALGORITHM for JWT is not configured in environment or .env.'
-    logger.critical(error_msg)
-    raise ServiceUnavailableError(
-        detail = error_msg
-    )
+ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'SECRET_KEY': str,
+        'ALGORITHM': str,
+    }
+)
+SECRET_KEY = ENV_VARS['SECRET_KEY']
+ALGORITHM = ENV_VARS['ALGORITHM']
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
     '''
@@ -100,114 +85,79 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Supplies-specific additions                                                 #
-#                                                                             #
-# Everything above is the shared boilerplate, byte-identical to the reference #
-# (localization). Supplies also enforces role-based access — the warehouse    #
-# flows differ for REQUESTER, WAREHOUSE_MANAGER and ADMIN — which needs the   #
-# full JWT payload, not just the email. These three helpers provide that and  #
-# are appended here so a diff against the reference stays readable.           #
-#                                                                             #
-# If another service ends up needing role guards, promote this block into the #
-# shared boilerplate instead of copying it.                                   #
+# Roles and the client an account belongs to                                  #
 # --------------------------------------------------------------------------- #
-def _decode_token(authorization: Optional[str]) -> Dict[str, Any]:
-    '''
-        Decodes the Bearer JWT from the Authorization header and returns its
-        payload, applying the same validation as get_current_user.
-
-        Args:
-            authorization (Optional[str]): The 'Authorization' header.
-
-        Returns:
-            Dict[str, Any]: The decoded JWT payload.
-
-        Raises:
-            UnauthorizedError: If the token is missing, malformed or invalid.
-    '''
-    if not authorization:
-        raise UnauthorizedError(
-            detail = 'Authentication token not provided',
-            headers = {'WWW-Authenticate': 'Bearer'},
-        )
-
-    try:
-        token_prefix, token = authorization.split(' ', 1)
-        if token_prefix.lower() != 'bearer':
-            raise UnauthorizedError(
-                detail = 'Invalid token format, expected "Bearer"',
-                headers = {'WWW-Authenticate': 'Bearer'},
-            )
-    except ValueError as e:
-        raise UnauthorizedError(
-            detail = 'Invalid token format, expected "Bearer"',
-            headers = {'WWW-Authenticate': 'Bearer'},
-        ) from e
-
-    try:
-        return jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM])
-    except JWTError as e:
-        raise UnauthorizedError(
-            detail = 'Invalid credentials',
-            headers = {'WWW-Authenticate': 'Bearer'},
-        ) from e
-
-
+# AUTH issues the token with three claims: `email` (the user), `role` (what
+# they may do) and `client` (the customer that groups them). Data is keyed by
+# the client, so a manager and their sellers share routes, plans and stock;
+# accounts created before the grouping have no client and keep their email as
+# the key, which is exactly how their data was stored.
 async def get_current_payload(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
     '''
-        Validates the JWT and returns the full payload (email, role, exp, ...).
-
-        Used by endpoints that need the role, where get_current_user's email
-        alone is not enough.
+        Validates the token exactly like `get_current_user` and returns its
+        whole payload (email, role, client, exp).
 
         Args:
             authorization (Optional[str]): The 'Authorization' header.
 
         Returns:
-            Dict[str, Any]: The decoded JWT payload.
-
-        Raises:
-            UnauthorizedError: If the token is invalid or carries no email.
+            Dict[str, Any]: The decoded claims.
     '''
-    payload = _decode_token(authorization)
-    if not payload.get('email'):
-        raise UnauthorizedError(
-            detail = 'No user email was found in the token',
-            headers = {'WWW-Authenticate': 'Bearer'},
-        )
-    return payload
+    await get_current_user(authorization)
+    token = authorization.split(' ', 1)[1]
+    return jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM])
 
 
-def require_roles(*allowed_roles: str):
+def resolve_owner(payload: Dict[str, Any]) -> str:
     '''
-        Dependency factory that enforces role-based access control.
-
-        The JWT issued by AUTH carries the user's role under the 'role' claim.
-        The returned dependency resolves to the user's email — matching the
-        get_current_user contract, so endpoints can use it as a drop-in — and
-        raises ForbiddenError when the role is not allowed.
-
-        Example:
-            @router.post('/items', dependencies = [Depends(require_roles('ADMIN'))])
+        The key the caller's data lives under: their client, or their email
+        when they belong to none.
 
         Args:
-            *allowed_roles (str): One or more role values accepted by the endpoint.
+            payload (Dict[str, Any]): Decoded token claims.
 
         Returns:
-            Callable: A FastAPI dependency resolving to the caller's email.
+            str: Owner key.
+    '''
+    return payload.get('client') or payload['email']
+
+
+async def get_current_owner(payload: Dict[str, Any] = Depends(get_current_payload)) -> str:
+    '''
+        FastAPI dependency: the owner key of the caller's data.
+
+        Args:
+            payload (Dict[str, Any]): Decoded token claims.
+
+        Returns:
+            str: Owner key.
+    '''
+    return resolve_owner(payload)
+
+
+def require_roles(*allowed_roles: str) -> Callable[..., Awaitable[str]]:
+    '''
+        Dependency factory: the caller's owner key when their role is one of
+        `allowed_roles`, ForbiddenError otherwise. Same contract as
+        `get_current_owner`, so an endpoint swaps one for the other.
+
+        Args:
+            *allowed_roles (str): Role values accepted by the endpoint.
+
+        Returns:
+            Callable[..., Awaitable[str]]: A FastAPI dependency resolving to the owner key.
     '''
     allowed: Iterable[str] = tuple(allowed_roles)
 
     async def _checker(payload: Dict[str, Any] = Depends(get_current_payload)) -> str:
-        user_role: Optional[str] = payload.get('role')
-        email: str = payload.get('email')
-        if user_role not in allowed:
-            message = (f'Forbidden: user {email} with role {user_role} attempted '
-                       f'to access an endpoint restricted to {list(allowed)}.')
-            logger.warning(message)
-            raise ForbiddenError(
-                detail = f'Role "{user_role}" is not authorized for this operation.'
+        role: Optional[str] = payload.get('role')
+        if role not in allowed:
+            error_msg = (
+                f'Forbidden: {payload["email"]} with role {role} called an endpoint '
+                f'restricted to {list(allowed)}.'
             )
-        return email
+            logger.warning(error_msg)
+            raise ForbiddenError(detail = 'ROLE_NOT_ALLOWED')
+        return resolve_owner(payload)
 
     return _checker

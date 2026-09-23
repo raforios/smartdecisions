@@ -10,7 +10,7 @@ from controllers.dashboard import (
 )
 from schemas.enums import RoleEnum
 from schemas.kardex import DashboardRecentActivitySchema, DashboardSummarySchema
-from services.db_connection import GET_DB_DEPENDENCY
+from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.security import require_roles
 
 
@@ -23,9 +23,9 @@ router = APIRouter(prefix = '/v1/supplies', tags = ['Dashboard'])
     summary = 'Top-level KPIs for the supplies dashboard',
 )
 async def dashboard_summary(
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
+) -> DashboardSummarySchema:
     '''
         Returns the dashboard KPIs (items, requests, entries).
     '''
@@ -39,9 +39,9 @@ async def dashboard_summary(
 )
 async def dashboard_recent_activity(
     limit: int = Query(10, ge = 1, le = 50),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
+) -> DashboardRecentActivitySchema:
     '''
         Returns the latest activity to render the dashboard feed.
     '''

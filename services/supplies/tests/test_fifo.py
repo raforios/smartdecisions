@@ -16,21 +16,33 @@ from services.supplies_logic import MovementReference, OutflowSpec, consume_stoc
 from tests.conftest import make_catalog_item, register_entry
 
 
-def _make_item(session, code = 'IT-1') -> Item:
+def _make_item(
+    session,
+    code = 'IT-1'
+) -> Item:
     '''
         Creates a minimal active catalog (group + unit + item) and returns it.
     '''
     return make_catalog_item(session, code = code)
 
 
-def _register_layer(session, item, quantity, unit_cost) -> None:
+def _register_layer(
+    session,
+    item,
+    quantity,
+    unit_cost
+) -> None:
     '''
         Registers a one-line Nota de Ingreso creating a single cost layer.
     '''
     register_entry(session, item, quantity, unit_cost)
 
 
-def _kardex(session, item, movement_type = None):
+def _kardex(
+    session,
+    item,
+    movement_type = None
+):
     query = session.query(KardexMovement).filter(KardexMovement.item_id == item.id)
     if movement_type is not None:
         query = query.filter(KardexMovement.movement_type == movement_type)
@@ -71,7 +83,7 @@ def test_fifo_consumes_oldest_first_across_layers(db_session):
     movements = consume_stock_fifo(
         db_session, item, Decimal('15'),
         OutflowSpec(created_by = 'admin', reference = MovementReference(
-            kind = ReferenceTypeEnum.REQUEST, identifier = 999)),
+            kind = ReferenceTypeEnum.MANUAL, identifier = 999)),
     )
     db_session.commit()
 
@@ -105,7 +117,7 @@ def test_fifo_within_single_layer_yields_one_row(db_session):
     movements = consume_stock_fifo(
         db_session, item, Decimal('4'),
         OutflowSpec(created_by = 'admin', reference = MovementReference(
-            kind = ReferenceTypeEnum.REQUEST, identifier = 1)),
+            kind = ReferenceTypeEnum.MANUAL)),
     )
     db_session.commit()
 
@@ -124,5 +136,5 @@ def test_fifo_insufficient_layers_raises(db_session):
         consume_stock_fifo(
             db_session, item, Decimal('10'),
             OutflowSpec(created_by = 'admin', reference = MovementReference(
-                kind = ReferenceTypeEnum.REQUEST, identifier = 1)),
+                kind = ReferenceTypeEnum.MANUAL)),
         )

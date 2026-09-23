@@ -6,7 +6,6 @@
         - Suppliers: the registered vendors a Nota de Ingreso can point to.
         - Entries: warehouse intake documents (Nota de Ingreso) whose detail
           lines are the PEPS/FIFO cost layers consumed on delivery.
-        - Requests: end-user requests for materials, with full state history.
         - Kardex: append-only, valued ledger of stock movements.
 '''
 from sqlalchemy import (
@@ -20,18 +19,12 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
-from services.db_connection import Base
+from services.db_connection_sql import Base
 from services.utils import get_current_time_gmt
-from schemas.enums import (
-    EntryTypeEnum,
-    MovementTypeEnum,
-    ReferenceTypeEnum,
-    RequestStatusEnum,
-)
+from schemas.enums import EntryTypeEnum, MovementTypeEnum, ReferenceTypeEnum
 
 
 class Category(Base):  # pylint: disable=too-few-public-methods
@@ -87,10 +80,6 @@ class Item(Base):  # pylint: disable=too-few-public-methods
                      nullable = False, index = True)
     min_stock = Column(Numeric(14, 4), nullable = False, default = 0)
     current_stock = Column(Numeric(14, 4), nullable = False, default = 0)
-    # Units committed to open requests (CREATED / IN_PROCESS) but not yet
-    # delivered. Held so two requests cannot promise the same physical units;
-    # released when the request is rejected, cancelled, deleted or delivered.
-    reserved_stock = Column(Numeric(14, 4), nullable = False, default = 0)
     default_replenishment_qty = Column(Numeric(14, 4), nullable = False, default = 0)
     is_active = Column(Boolean, nullable = False, default = True)
     created_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
@@ -199,87 +188,6 @@ class EntryDetail(Base):  # pylint: disable=too-few-public-methods
 
     entry = relationship('Entry', back_populates = 'details')
     item = relationship('Item', back_populates = 'entry_details')
-
-
-class Request(Base):  # pylint: disable=too-few-public-methods
-    '''
-        End-user request for supplies. Status transitions are validated in
-        the service layer; the status_history relationship preserves the
-        full audit trail.
-    '''
-    __tablename__ = 't_supplies_request'
-
-    id = Column(Integer, primary_key = True, index = True)
-    code = Column(String(50), nullable = False, unique = True, index = True)
-    requester_email = Column(String(150), nullable = False, index = True)
-    # Printed on the SOLICITUD / ENTREGA forms, which are signed on paper and
-    # need a person, a job title and a unit, not just a login address.
-    requester_name = Column(String(200), nullable = True)
-    requester_position = Column(String(200), nullable = True)
-    requester_unit = Column(String(200), nullable = True)
-    status = Column(
-        Enum(RequestStatusEnum),
-        nullable = False,
-        default = RequestStatusEnum.CREATED,
-        index = True,
-    )
-    notes = Column(Text, nullable = True)
-    requested_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
-    processed_at = Column(DateTime, nullable = True)
-    processed_by = Column(String(150), nullable = True)
-    delivered_at = Column(DateTime, nullable = True)
-    delivered_by = Column(String(150), nullable = True)
-    closed_at = Column(DateTime, nullable = True)
-
-    details = relationship(
-        'RequestDetail',
-        back_populates = 'request',
-        cascade = 'all, delete-orphan',
-    )
-    status_history = relationship(
-        'RequestStatusHistory',
-        back_populates = 'request',
-        cascade = 'all, delete-orphan',
-        order_by = 'RequestStatusHistory.changed_at',
-    )
-
-
-class RequestDetail(Base):  # pylint: disable=too-few-public-methods
-    '''
-        Line item inside a supply request.
-    '''
-    __tablename__ = 't_supplies_request_detail'
-
-    id = Column(Integer, primary_key = True, index = True)
-    request_id = Column(Integer, ForeignKey('t_supplies_request.id'),
-                        nullable = False, index = True)
-    item_id = Column(Integer, ForeignKey('t_supplies_item.id'),
-                     nullable = False, index = True)
-    requested_qty = Column(Numeric(14, 4), nullable = False)
-    delivered_qty = Column(Numeric(14, 4), nullable = False, default = 0)
-
-    request = relationship('Request', back_populates = 'details')
-    item = relationship('Item')
-
-    __table_args__ = (UniqueConstraint('request_id', 'item_id'),)
-
-
-class RequestStatusHistory(Base):  # pylint: disable=too-few-public-methods
-    '''
-        Append-only history of state transitions for a request.
-    '''
-    __tablename__ = 't_supplies_request_status_history'
-
-    id = Column(Integer, primary_key = True, index = True)
-    request_id = Column(Integer, ForeignKey('t_supplies_request.id'),
-                        nullable = False, index = True)
-    from_status = Column(Enum(RequestStatusEnum), nullable = True)
-    to_status = Column(Enum(RequestStatusEnum), nullable = False)
-    changed_by = Column(String(150), nullable = False)
-    changed_at = Column(DateTime, nullable = False, default = get_current_time_gmt)
-    reason = Column(Text, nullable = True)
-
-    request = relationship('Request', back_populates = 'status_history')
 
 
 class KardexMovement(Base):  # pylint: disable=too-few-public-methods

@@ -24,7 +24,10 @@ from services.exceptions import (
 from tests.conftest import make_catalog_item, register_entry
 
 
-def _supplier_payload(name = 'COMERCIAL ANDINA SRL', nit = '1023456789') -> SupplierCreateSchema:
+def _supplier_payload(
+    name = 'COMERCIAL ANDINA SRL',
+    nit = '1023456789'
+) -> SupplierCreateSchema:
     '''
         Valid supplier payload; the email is the only optional field.
     '''

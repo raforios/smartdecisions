@@ -9,28 +9,8 @@ class RoleEnum(str, Enum):
         Roles consumed from the JWT payload. Mirrors the AUTH service enum.
     '''
     ADMIN = 'ADMIN'
+    MANAGER = 'MANAGER'
     WAREHOUSE_MANAGER = 'WAREHOUSE_MANAGER'
-    REQUESTER = 'REQUESTER'
-
-
-class RequestStatusEnum(str, Enum):
-    '''
-        State machine for supply requests.
-
-        Allowed transitions:
-            CREATED      -> IN_PROCESS (warehouse picks up the request)
-            CREATED      -> (physical delete by REQUESTER/ADMIN)
-            IN_PROCESS   -> DELIVERED  (warehouse delivers; triggers kardex OUT)
-            IN_PROCESS   -> REJECTED   (warehouse declines)
-            IN_PROCESS   -> CANCELLED  (warehouse/admin annuls)
-            DELIVERED    -> CLOSED     (requester confirms receipt)
-    '''
-    CREATED = 'CREATED'
-    IN_PROCESS = 'IN_PROCESS'
-    DELIVERED = 'DELIVERED'
-    CLOSED = 'CLOSED'
-    REJECTED = 'REJECTED'
-    CANCELLED = 'CANCELLED'
 
 
 class EntryTypeEnum(str, Enum):
@@ -58,5 +38,4 @@ class ReferenceTypeEnum(str, Enum):
         reconstruct the source document of any stock change.
     '''
     ENTRY = 'ENTRY'
-    REQUEST = 'REQUEST'
     MANUAL = 'MANUAL'

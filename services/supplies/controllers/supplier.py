@@ -17,7 +17,7 @@ from schemas.supplier import (
     SupplierResponseSchema,
     SupplierUpdateSchema,
 )
-from services.crud import create_record, get_record, update_record
+from services.crud_sql import create_record, get_record, update_record
 from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from services.logger_config import custom_logger as logger
 
@@ -85,7 +85,10 @@ async def list_suppliers_controller(
     return [SupplierResponseSchema.model_validate(row) for row in rows]
 
 
-async def get_supplier_controller(db: Session, supplier_id: int) -> SupplierResponseSchema:
+async def get_supplier_controller(
+    db: Session,
+    supplier_id: int
+) -> SupplierResponseSchema:
     '''
         Returns a single supplier by id.
     '''
@@ -115,7 +118,10 @@ async def update_supplier_controller(
         ) from exc
 
 
-async def delete_supplier_controller(db: Session, supplier_id: int) -> int:
+async def delete_supplier_controller(
+    db: Session,
+    supplier_id: int
+) -> int:
     '''
         Deletes a supplier that never issued a Nota de Ingreso.
 

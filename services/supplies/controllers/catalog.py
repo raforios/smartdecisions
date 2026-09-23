@@ -23,7 +23,7 @@ from schemas.catalog import (
     UnitResponseSchema,
     UnitUpdateSchema,
 )
-from services.crud import (
+from services.crud_sql import (
     create_record,
     delete_record,
     get_all_records_paginated,
@@ -75,7 +75,10 @@ async def update_category_controller(
     return CategoryResponseSchema.model_validate(updated)
 
 
-async def delete_category_controller(db: Session, category_id: int) -> int:
+async def delete_category_controller(
+    db: Session,
+    category_id: int
+) -> int:
     '''
         Hard-deletes a category. Relies on FK constraints to block removal
         when items still reference it.
@@ -127,7 +130,10 @@ async def update_unit_controller(
     return UnitResponseSchema.model_validate(updated)
 
 
-async def delete_unit_controller(db: Session, unit_id: int) -> int:
+async def delete_unit_controller(
+    db: Session,
+    unit_id: int
+) -> int:
     '''
         Hard-deletes a unit of measure.
     '''
@@ -186,14 +192,17 @@ async def list_items_controller(
     if filters.only_available:
         # Availability is what is left after other open requests reserved
         # their share, otherwise the picker would offer units already promised.
-        query = query.filter(Item.current_stock - Item.reserved_stock > Item.min_stock,
+        query = query.filter(Item.current_stock > Item.min_stock,
                              Item.is_active.is_(True))
 
     rows = query.order_by(Item.code.asc()).offset(filters.skip).limit(filters.limit).all()
     return [ItemResponseSchema.model_validate(row) for row in rows]
 
 
-async def get_item_controller(db: Session, item_id: int) -> ItemResponseSchema:
+async def get_item_controller(
+    db: Session,
+    item_id: int
+) -> ItemResponseSchema:
     '''
         Returns a single item by id.
     '''
@@ -230,7 +239,10 @@ async def update_item_parameters_controller(
     return ItemResponseSchema.model_validate(updated)
 
 
-async def delete_item_controller(db: Session, item_id: int) -> int:
+async def delete_item_controller(
+    db: Session,
+    item_id: int
+) -> int:
     '''
         Soft-deletes by deactivating. Hard delete is rejected because
         kardex history must be preserved.

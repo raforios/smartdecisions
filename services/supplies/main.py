@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse
 
 from mangum import Mangum
 import uvicorn
@@ -21,12 +22,12 @@ from routes.catalog import router as catalog_router
 from routes.dashboard import router as dashboard_router
 from routes.entry import router as entry_router
 from routes.kardex import router as kardex_router
+from routes.pharmacy import router as pharmacy_router
 from routes.reports import router as reports_router
-from routes.request import router as request_router
 from routes.supplier import router as supplier_router
 
 from services.api_exceptions import setup_exception_handlers
-from services.db_connection import ENGINE, Base
+from services.db_connection_sql import ENGINE, Base
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -130,7 +131,7 @@ def root() -> Dict[str, Any]:
 
 
 @app.get('/openapi.json', include_in_schema = False)
-def custom_openapi():
+def custom_openapi() -> Dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
     '''
@@ -138,7 +139,7 @@ def custom_openapi():
 
 
 @app.get('/docs', include_in_schema = False)
-async def custom_swagger_ui():
+async def custom_swagger_ui() -> HTMLResponse:
     '''
         Serves the Swagger UI documentation interface.
     '''
@@ -174,15 +175,15 @@ app.add_middleware(
 app.include_router(catalog_router)
 app.include_router(supplier_router)
 app.include_router(entry_router)
-app.include_router(request_router)
 app.include_router(kardex_router)
+app.include_router(pharmacy_router)
 app.include_router(reports_router)
 app.include_router(dashboard_router)
 
 
 if __name__ == '__main__':
-    MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
-    logger.info(MESSAGE)
+    message = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}' # pylint: disable=invalid-name
+    logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 handler = Mangum(app)

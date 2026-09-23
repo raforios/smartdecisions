@@ -6,22 +6,17 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from models.supplies import Entry, Item, KardexMovement, Request
-from schemas.enums import (
-    MovementTypeEnum,
-    ReferenceTypeEnum,
-    RequestStatusEnum,
-)
+from models.supplies import Entry, Item, KardexMovement
+from schemas.enums import MovementTypeEnum, ReferenceTypeEnum
 from schemas.kardex import (
     EntryReportRowSchema,
     KardexAdjustmentSchema,
     KardexFilterSchema,
     KardexMovementResponseSchema,
     LowStockItemSchema,
-    RequestReportRowSchema,
 )
-from services.crud import get_record
-from services.report_rows import build_entry_rows, build_request_rows
+from services.crud_sql import get_record
+from services.report_rows import build_entry_rows
 from services.supplies_logic import MovementReference, MovementSpec, post_kardex_movement
 
 
@@ -115,23 +110,3 @@ async def entries_report_controller(
         query = query.filter(Entry.created_at <= date_to)
 
     return build_entry_rows(db, query.order_by(Entry.created_at.desc()).all())
-
-
-async def request_report_controller(
-    db: Session,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-    status: Optional[RequestStatusEnum] = None,
-) -> List[RequestReportRowSchema]:
-    '''
-        Aggregated requests report, with line count per request.
-    '''
-    query = db.query(Request)
-    if date_from:
-        query = query.filter(Request.requested_at >= date_from)
-    if date_to:
-        query = query.filter(Request.requested_at <= date_to)
-    if status:
-        query = query.filter(Request.status == status)
-
-    return build_request_rows(db, query.order_by(Request.requested_at.desc()).all())

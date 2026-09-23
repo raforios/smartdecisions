@@ -17,9 +17,9 @@ from controllers.reports import (
     physical_valued_report_controller,
     stock_on_hand_report_controller,
 )
-from models.supplies import Category, Item, Request, Unit
+from models.supplies import Category, Item, Unit
 from schemas.entry import EntryCreateSchema, EntryDetailCreateSchema
-from schemas.enums import EntryTypeEnum, ReferenceTypeEnum, RequestStatusEnum
+from schemas.enums import EntryTypeEnum, ReferenceTypeEnum
 from services.supplies_logic import MovementReference, OutflowSpec, consume_stock_fifo
 
 
@@ -43,15 +43,10 @@ def _build_scenario(session):
         )
         asyncio.run(create_entry_controller(session, payload, created_by = 'admin'))
 
-    request = Request(code = 'SOL-1', requester_email = 'user@x.com',
-                      status = RequestStatusEnum.CREATED)
-    session.add(request)
-    session.commit()
-
     consume_stock_fifo(
         session, item, Decimal('15'),
-        OutflowSpec(created_by = 'almacen', reference = MovementReference(
-            kind = ReferenceTypeEnum.REQUEST, identifier = request.id)),
+        OutflowSpec(created_by = 'almacen',
+                    reference = MovementReference(kind = ReferenceTypeEnum.MANUAL)),
     )
     session.commit()
     return item
@@ -114,15 +109,14 @@ def test_kardex_valued_report(db_session):
 
 
 def test_outflow_report(db_session):
-    '''Each outflow line names the recipient and its source request.'''
+    '''Each outflow line names who took the units out and how many.'''
     _build_scenario(db_session)
     report = asyncio.run(outflow_report_controller(db_session))
 
     item = report.items[0]
     assert item.total_salida == Decimal('15')
     assert len(item.lines) == 2                        # one per consumed layer
-    assert all(line.recipient == 'user@x.com' for line in item.lines)
-    assert all(line.request_code == 'SOL-1' for line in item.lines)
+    assert all(line.recipient == 'almacen' for line in item.lines)
     assert report.grand_total_salida == Decimal('15')
 
 
@@ -132,7 +126,7 @@ def test_stock_on_hand_hides_zero_balance_by_default(db_session):
     consume_stock_fifo(
         db_session, item, Decimal('5'),
         OutflowSpec(created_by = 'almacen', reference = MovementReference(
-            kind = ReferenceTypeEnum.REQUEST)),
+            kind = ReferenceTypeEnum.MANUAL)),
     )
     db_session.commit()
 

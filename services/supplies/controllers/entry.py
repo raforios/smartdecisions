@@ -69,7 +69,10 @@ def _serialize_detailed(record: Entry) -> EntryDetailedResponseSchema:
     )
 
 
-def _resolve_supplier(db: Session, payload: EntryCreateSchema) -> Optional[Supplier]:
+def _resolve_supplier(
+    db: Session,
+    payload: EntryCreateSchema
+) -> Optional[Supplier]:
     '''
         Resolves the registered supplier a note is issued against.
 
@@ -192,7 +195,10 @@ async def list_entries_controller(
     return [EntryResponseSchema.model_validate(row) for row in rows]
 
 
-async def get_entry_controller(db: Session, entry_id: int) -> EntryDetailedResponseSchema:
+async def get_entry_controller(
+    db: Session,
+    entry_id: int
+) -> EntryDetailedResponseSchema:
     '''
         Returns a single entry with its detail lines.
     '''

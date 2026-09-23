@@ -20,7 +20,7 @@ from schemas.supplier import (
     SupplierResponseSchema,
     SupplierUpdateSchema,
 )
-from services.db_connection import GET_DB_DEPENDENCY
+from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.security import get_current_user, require_roles
 
 
@@ -37,9 +37,9 @@ WAREHOUSE_ROLES = (RoleEnum.WAREHOUSE_MANAGER.value, RoleEnum.ADMIN.value)
 )
 async def create_supplier(
     payload: SupplierCreateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(*WAREHOUSE_ROLES)),
-):
+) -> SupplierResponseSchema:
     '''
         Registers a supplier. Restricted to warehouse staff and ADMIN.
     '''
@@ -53,9 +53,9 @@ async def create_supplier(
 )
 async def list_suppliers(
     filters: SupplierFilterSchema = Depends(),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
-):
+) -> List[SupplierResponseSchema]:
     '''
         Lists suppliers, optionally filtered by free text or active status.
     '''
@@ -69,9 +69,9 @@ async def list_suppliers(
 )
 async def get_supplier(
     supplier_id: int,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
-):
+) -> SupplierResponseSchema:
     '''
         Returns a single supplier by id.
     '''
@@ -86,9 +86,9 @@ async def get_supplier(
 async def update_supplier(
     supplier_id: int,
     payload: SupplierUpdateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(*WAREHOUSE_ROLES)),
-):
+) -> SupplierResponseSchema:
     '''
         Partially updates a supplier. Restricted to warehouse staff and ADMIN.
     '''
@@ -101,9 +101,9 @@ async def update_supplier(
 )
 async def delete_supplier(
     supplier_id: int,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> None:
     '''
         Deletes a supplier that never issued a Nota de Ingreso. Restricted to
         ADMIN; vendors with documents must be deactivated instead.

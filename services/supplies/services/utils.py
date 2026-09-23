@@ -122,7 +122,10 @@ class CustomJSONEncoder(json.JSONEncoder):
         JSON encoder to handle date, datetime and time objects, Pydantic
         models, Decimals and custom Enums.
     '''
-    def default(self, o):
+    def default(
+        self,
+        o
+    ):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
         # datetime.time is not a subclass of date, so it must be handled
@@ -194,13 +197,19 @@ async def _get_request_body_for_logging(request: Request) -> dict | None:
 
     return {'detail': f'Content-Type {content_type} not logged.'}
 
-def handle_service_errors(microservice_name: str, with_log: bool = True):
+def handle_service_errors(
+    microservice_name: str,
+    with_log: bool = True
+):
     '''
         Decorator factory to handle common exceptions and log usage metrics.
     '''
     def decorator(func):
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(
+            *args,
+            **kwargs
+        ):
             db: Session = kwargs.get('db')
             request: Request = kwargs.get('request')
 
@@ -280,7 +289,10 @@ def audit_event(
     '''
     def decorator(func: Callable):
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(
+            *args,
+            **kwargs
+        ):
             user_id = kwargs.get('user_id', 'usr_test')
             result = await func(*args, **kwargs)
 

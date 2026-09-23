@@ -2,11 +2,8 @@
     Domain logic for the Supplies service.
 
     Centralizes:
-        - The supply-request state machine and the per-role permissions
-          attached to each transition.
-        - Stock validation against the configured minimum, and the stock
-          reservations that keep two open requests from promising the same
-          units.
+        - Stock validation against the configured minimum.
+        - PEPS/FIFO consumption of the cost layers a Nota de Ingreso created.
         - Append-only kardex insertion together with the materialized
           balance update on Item.
 
@@ -20,20 +17,8 @@ from typing import Iterable, List, Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from models.supplies import (
-    EntryDetail,
-    Item,
-    KardexMovement,
-    Request,
-    RequestDetail,
-    RequestStatusHistory,
-)
-from schemas.enums import (
-    MovementTypeEnum,
-    ReferenceTypeEnum,
-    RequestStatusEnum,
-    RoleEnum,
-)
+from models.supplies import EntryDetail, Item, KardexMovement
+from schemas.enums import MovementTypeEnum, ReferenceTypeEnum, RoleEnum
 from services.exceptions import (
     ForbiddenError,
     InvalidInputError,
@@ -41,298 +26,26 @@ from services.exceptions import (
     RegisterNotFoundError,
 )
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
-
-
-# --------------------------------------------------------------------------- #
-# Request state machine                                                       #
-# --------------------------------------------------------------------------- #
-# Maps each transition to the roles allowed to perform it. Used both by the
-# controllers (for permission checks) and by the unit tests (as documentation
-# of expected behavior).
-ALLOWED_TRANSITIONS: dict[tuple[RequestStatusEnum, RequestStatusEnum], tuple[RoleEnum, ...]] = {
-    (RequestStatusEnum.CREATED, RequestStatusEnum.IN_PROCESS): (
-        RoleEnum.WAREHOUSE_MANAGER, RoleEnum.ADMIN,
-    ),
-    (RequestStatusEnum.IN_PROCESS, RequestStatusEnum.DELIVERED): (
-        RoleEnum.WAREHOUSE_MANAGER, RoleEnum.ADMIN,
-    ),
-    (RequestStatusEnum.IN_PROCESS, RequestStatusEnum.REJECTED): (
-        RoleEnum.WAREHOUSE_MANAGER, RoleEnum.ADMIN,
-    ),
-    (RequestStatusEnum.IN_PROCESS, RequestStatusEnum.CANCELLED): (
-        RoleEnum.WAREHOUSE_MANAGER, RoleEnum.ADMIN,
-    ),
-    (RequestStatusEnum.DELIVERED, RequestStatusEnum.CLOSED): (
-        RoleEnum.REQUESTER, RoleEnum.ADMIN,
-    ),
-}
-
-
-def assert_transition_allowed(
-    current: RequestStatusEnum,
-    target: RequestStatusEnum,
-    role: str,
-) -> None:
-    '''
-        Raises InvalidInputError if the transition is not part of the state
-        machine, or ForbiddenError if the role cannot perform it.
-    '''
-    allowed_roles = ALLOWED_TRANSITIONS.get((current, target))
-    if allowed_roles is None:
-        raise InvalidInputError(
-            detail = f'Transition {current.value} -> {target.value} is not allowed.'
-        )
-    if role not in {r.value for r in allowed_roles}:
-        raise ForbiddenError(
-            detail = (
-                f'Role "{role}" cannot move a request from '
-                f'{current.value} to {target.value}.'
-            )
-        )
-
-
-def assert_can_delete_request(
-    request: Request,
-    requester_email: str,
-    role: str,
-) -> None:
-    '''
-        Raises if the request cannot be physically deleted by the caller.
-        Only CREATED requests can be deleted, and only by the original
-        REQUESTER or an ADMIN.
-    '''
-    if request.status != RequestStatusEnum.CREATED:
-        raise InvalidInputError(
-            detail = (
-                f'Only CREATED requests can be deleted. Current status: '
-                f'{request.status.value}.'
-            )
-        )
-    is_owner = request.requester_email == requester_email
-    is_admin = role == RoleEnum.ADMIN.value
-    if not (is_owner or is_admin):
-        raise ForbiddenError(
-            detail = 'Only the original requester or an ADMIN can delete a request.'
-        )
-
-
-def record_status_change(
-    db: Session,
-    request: Request,
-    new_status: RequestStatusEnum,
-    changed_by: str,
-    reason: Optional[str] = None,
-) -> None:
-    '''
-        Updates the request status and appends a status-history row inside
-        the same transaction. Caller is responsible for db.commit().
-    '''
-    history = RequestStatusHistory(
-        request_id = request.id,
-        from_status = request.status,
-        to_status = new_status,
-        changed_by = changed_by,
-        reason = reason,
-    )
-    db.add(history)
-    request.status = new_status
-
-    timestamp = get_current_time_gmt()
-    if new_status == RequestStatusEnum.IN_PROCESS:
-        request.processed_at = timestamp
-        request.processed_by = changed_by
-    elif new_status == RequestStatusEnum.DELIVERED:
-        request.delivered_at = timestamp
-        request.delivered_by = changed_by
-    elif new_status == RequestStatusEnum.CLOSED:
-        request.closed_at = timestamp
-
-
-# --------------------------------------------------------------------------- #
-# Stock validation and reservations                                           #
-# --------------------------------------------------------------------------- #
-# Requests in these states hold their quantities reserved: the units are still
-# physically in the warehouse but already promised to someone.
-RESERVING_STATUSES: tuple[RequestStatusEnum, ...] = (
-    RequestStatusEnum.CREATED,
-    RequestStatusEnum.IN_PROCESS,
-)
 
 
 def available_stock(item: Item) -> Decimal:
     '''
-        Units that can still be promised to a new request.
+        Units that can still be taken out of the warehouse.
 
-        Physical stock minus what other open requests already reserved and
-        minus the minimum the warehouse must keep. Never returns a negative
-        number: an over-committed item reads as 0 available, not as debt.
+        Physical stock minus the minimum the warehouse must keep. Never returns
+        a negative number: an item below its floor reads as 0 available, not as
+        debt.
 
         Args:
             item (Item): Item to measure.
 
         Returns:
-            Decimal: Requestable quantity, floored at zero.
+            Decimal: Available quantity, floored at zero.
     '''
-    free = (Decimal(item.current_stock)
-            - Decimal(item.reserved_stock or 0)
-            - Decimal(item.min_stock))
+    free = Decimal(item.current_stock) - Decimal(item.min_stock)
     return free if free > 0 else Decimal('0')
 
 
-def assert_item_requestable(item: Item, requested_qty: Decimal) -> None:
-    '''
-        Enforces the business rules for putting an item into a request:
-            - the item must be active,
-            - its current_stock must be strictly above the minimum,
-            - the requested quantity must fit in what is left after other open
-              requests took their reservations.
-    '''
-    if not item.is_active:
-        raise InvalidInputError(detail = f'Item {item.code} is inactive.')
-
-    if item.current_stock <= item.min_stock:
-        raise InvalidInputError(
-            detail = (
-                f'Item {item.code} is at or below the minimum stock '
-                f'({item.current_stock}/{item.min_stock}); it cannot be requested.'
-            )
-        )
-
-    available = available_stock(item)
-    if requested_qty > available:
-        reserved = Decimal(item.reserved_stock or 0)
-        detail = (
-            f'Requested quantity {requested_qty} for item {item.code} '
-            f'exceeds the available quantity ({available}).'
-        )
-        if reserved > 0:
-            detail += f' {reserved} unit(s) are reserved by other open requests.'
-        raise InvalidInputError(detail = detail)
-
-
-def assert_item_deliverable(item: Item, quantity: Decimal) -> None:
-    '''
-        Checks an item can still serve a quantity that is already reserved.
-
-        Deliberately does NOT subtract reserved_stock: the request being
-        served owns part of that reservation, so counting it again would make
-        every request block itself. What must still hold is that handing the
-        units over does not push the physical balance below the minimum.
-
-        Args:
-            item (Item): Item about to be moved out.
-            quantity (Decimal): Quantity to hand over.
-
-        Raises:
-            InvalidInputError: If the item is inactive or the physical stock
-                above the minimum no longer covers the quantity.
-    '''
-    if not item.is_active:
-        raise InvalidInputError(detail = f'Item {item.code} is inactive.')
-
-    serviceable = Decimal(item.current_stock) - Decimal(item.min_stock)
-    if quantity > serviceable:
-        raise InvalidInputError(
-            detail = (
-                f'Item {item.code} no longer covers {quantity} unit(s) without '
-                f'falling below its minimum ({item.current_stock}/{item.min_stock}).'
-            )
-        )
-
-
-def reserve_stock(item: Item, quantity: Decimal) -> None:
-    '''
-        Commits `quantity` of an item to an open request.
-
-        Args:
-            item (Item): Item whose reservation grows.
-            quantity (Decimal): Positive quantity to hold.
-    '''
-    item.reserved_stock = Decimal(item.reserved_stock or 0) + Decimal(quantity)
-
-
-def release_stock(item: Item, quantity: Decimal) -> None:
-    '''
-        Gives `quantity` back to the available pool.
-
-        Floors at zero so a double release — a bug elsewhere — degrades into
-        an accurate reading instead of a negative reservation that would
-        silently inflate availability.
-
-        Args:
-            item (Item): Item whose reservation shrinks.
-            quantity (Decimal): Positive quantity to release.
-    '''
-    remaining = Decimal(item.reserved_stock or 0) - Decimal(quantity)
-    item.reserved_stock = remaining if remaining > 0 else Decimal('0')
-
-
-def release_request_reservations(db: Session, request: Request) -> None:
-    '''
-        Releases everything a request still holds.
-
-        Used by reject, cancel and delete. Each line releases the part that
-        was never delivered, so a partially delivered request does not give
-        back units that already left the warehouse.
-
-        Args:
-            db (Session): Active session; the caller commits.
-            request (Request): Request whose lines are released.
-    '''
-    for detail in request.details:
-        pending = Decimal(detail.requested_qty) - Decimal(detail.delivered_qty or 0)
-        if pending <= 0:
-            continue
-        item = db.query(Item).filter(Item.id == detail.item_id).first()
-        if item is None:
-            continue
-        release_stock(item, pending)
-        db.add(item)
-
-    message = f'Reservations released for request {request.code}.'
-    logger.info(message)
-
-
-def recalculate_reserved_stock(db: Session) -> int:
-    '''
-        Rebuilds Item.reserved_stock from the open requests.
-
-        The reservation is materialized on the item so the catalog can answer
-        "how many can I ask for" in one read; this recomputes it from the
-        source of truth when a manual fix or an old dataset leaves it stale.
-
-        Args:
-            db (Session): Active session; the caller commits.
-
-        Returns:
-            int: Number of items whose stored reservation changed.
-    '''
-    pending: dict[int, Decimal] = {}
-    rows = (
-        db.query(RequestDetail)
-        .join(Request, Request.id == RequestDetail.request_id)
-        .filter(Request.status.in_(RESERVING_STATUSES))
-        .all()
-    )
-    for row in rows:
-        outstanding = Decimal(row.requested_qty) - Decimal(row.delivered_qty or 0)
-        if outstanding > 0:
-            pending[row.item_id] = pending.get(row.item_id, Decimal('0')) + outstanding
-
-    changed = 0
-    for item in db.query(Item).all():
-        expected = pending.get(item.id, Decimal('0'))
-        if Decimal(item.reserved_stock or 0) != expected:
-            item.reserved_stock = expected
-            db.add(item)
-            changed += 1
-    return changed
-
-
-# --------------------------------------------------------------------------- #
-# Kardex                                                                      #
-# --------------------------------------------------------------------------- #
 @dataclass
 class MovementReference:
     '''
@@ -537,7 +250,10 @@ def consume_stock_fifo(
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #
-def fetch_active_item(db: Session, item_id: int) -> Item:
+def fetch_active_item(
+    db: Session,
+    item_id: int
+) -> Item:
     '''
         Returns an active item or raises RegisterNotFoundError / InvalidInputError.
     '''
@@ -560,7 +276,10 @@ def collect_role_from_payload(payload: dict) -> str:
     return role
 
 
-def assert_role_in(role: str, allowed: Iterable[RoleEnum]) -> None:
+def assert_role_in(
+    role: str,
+    allowed: Iterable[RoleEnum]
+) -> None:
     '''
         Convenience guard used inside controllers when require_roles cannot
         be expressed declaratively at the route level.
@@ -575,7 +294,10 @@ def assert_role_in(role: str, allowed: Iterable[RoleEnum]) -> None:
 # --------------------------------------------------------------------------- #
 # Persistence                                                                 #
 # --------------------------------------------------------------------------- #
-def commit_or_conflict(db: Session, detail: str) -> None:
+def commit_or_conflict(
+    db: Session,
+    detail: str
+) -> None:
     '''
         Commits the session, turning a uniqueness violation into a domain
         error instead of leaking the driver exception.

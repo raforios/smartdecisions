@@ -36,7 +36,7 @@ from schemas.catalog import (
     UnitUpdateSchema,
 )
 from schemas.enums import RoleEnum
-from services.db_connection import GET_DB_DEPENDENCY
+from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.security import get_current_user, require_roles
 
 
@@ -54,9 +54,9 @@ router = APIRouter(prefix = '/v1/supplies', tags = ['Catalog'])
 )
 async def create_category(
     payload: CategoryCreateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> CategoryResponseSchema:
     '''
         Creates a new supply category. Restricted to ADMIN.
     '''
@@ -71,9 +71,9 @@ async def create_category(
 async def list_categories(
     skip: int = Query(0, ge = 0),
     limit: int = Query(100, ge = 1, le = 500),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
-):
+) -> List[CategoryResponseSchema]:
     '''
         Lists all supply categories. Available to any authenticated user.
     '''
@@ -88,9 +88,9 @@ async def list_categories(
 async def update_category(
     category_id: int,
     payload: CategoryUpdateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> CategoryResponseSchema:
     '''
         Partial update of a category. Restricted to ADMIN.
     '''
@@ -104,9 +104,9 @@ async def update_category(
 )
 async def delete_category(
     category_id: int,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> None:
     '''
         Hard-deletes a category. Restricted to ADMIN.
     '''
@@ -125,9 +125,9 @@ async def delete_category(
 )
 async def create_unit(
     payload: UnitCreateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> UnitResponseSchema:
     '''
         Creates a new unit of measure. Restricted to ADMIN.
     '''
@@ -142,9 +142,9 @@ async def create_unit(
 async def list_units(
     skip: int = Query(0, ge = 0),
     limit: int = Query(100, ge = 1, le = 500),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
-):
+) -> List[UnitResponseSchema]:
     '''
         Lists all units of measure. Available to any authenticated user.
     '''
@@ -159,9 +159,9 @@ async def list_units(
 async def update_unit(
     unit_id: int,
     payload: UnitUpdateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> UnitResponseSchema:
     '''
         Partial update of a unit of measure. Restricted to ADMIN.
     '''
@@ -175,9 +175,9 @@ async def update_unit(
 )
 async def delete_unit(
     unit_id: int,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> None:
     '''
         Hard-deletes a unit of measure. Restricted to ADMIN.
     '''
@@ -196,9 +196,9 @@ async def delete_unit(
 )
 async def create_item(
     payload: ItemCreateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> ItemResponseSchema:
     '''
         Creates a new supply item with current_stock = 0. Restricted to ADMIN.
     '''
@@ -212,9 +212,9 @@ async def create_item(
 )
 async def list_items(
     filters: ItemFilterSchema = Depends(),
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
-):
+) -> List[ItemResponseSchema]:
     '''
         Lists supply items filtered by text, accounting group and availability.
     '''
@@ -228,9 +228,9 @@ async def list_items(
 )
 async def get_item(
     item_id: int,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(get_current_user),
-):
+) -> ItemResponseSchema:
     '''
         Returns a single item by id.
     '''
@@ -245,9 +245,9 @@ async def get_item(
 async def update_item(
     item_id: int,
     payload: ItemUpdateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> ItemResponseSchema:
     '''
         Partial update of an item's descriptive fields. Restricted to ADMIN.
     '''
@@ -262,9 +262,9 @@ async def update_item(
 async def update_item_parameters(
     item_id: int,
     payload: ItemParametersUpdateSchema,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value, RoleEnum.WAREHOUSE_MANAGER.value)),
-):
+) -> ItemResponseSchema:
     '''
         Updates min_stock and/or default_replenishment_qty for an item.
         Available to ADMIN and WAREHOUSE_MANAGER.
@@ -279,9 +279,9 @@ async def update_item_parameters(
 )
 async def delete_item(
     item_id: int,
-    db: Session = Depends(GET_DB_DEPENDENCY),
+    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     _: str = Depends(require_roles(RoleEnum.ADMIN.value)),
-):
+) -> None:
     '''
         Soft-deletes an item by setting is_active = False. Restricted to ADMIN.
         Kardex history is preserved by design.

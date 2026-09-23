@@ -40,7 +40,11 @@ def db_session():
         engine.dispose()
 
 
-def make_catalog_item(session: Session, code: str = 'IT-1', min_stock: int = 0) -> Item:
+def make_catalog_item(
+    session: Session,
+    code: str = 'IT-1',
+    min_stock: int = 0
+) -> Item:
     '''
         Creates a minimal active catalog (group + unit + item) and returns the
         item. Shared by every suite that needs something to move around.
@@ -60,7 +64,7 @@ def make_catalog_item(session: Session, code: str = 'IT-1', min_stock: int = 0) 
     item = Item(
         code = code, name = 'Item de prueba',
         category_id = category.id, unit_id = unit.id,
-        min_stock = Decimal(min_stock), current_stock = 0, reserved_stock = 0,
+        min_stock = Decimal(min_stock), current_stock = 0,
         default_replenishment_qty = 0, is_active = True,
     )
     session.add(item)
