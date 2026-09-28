@@ -45,7 +45,8 @@ from services.environment import load_and_validate_env_vars
 # Loads the environment variables this module needs
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
-        'TARGET_TIMEZONE': str
+        'TARGET_TIMEZONE': str,
+        'REQUEST_TIMEOUT_SECONDS': int
     },
     optional_env_vars = {
         'EVENTS_SERVICE_URL': str
@@ -57,7 +58,10 @@ EVENTS_SERVICE_URL = ENV_VARS.get('EVENTS_SERVICE_URL') or None
 EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL else None
 EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
 
-REQUEST_TIMEOUT_SECONDS = 10
+# Seconds a notification to EVENTS waits for. A decision, not a number the
+# code picks: it cuts before the API Gateway timeout so a slow EVENTS never
+# takes down the answer to the client.
+REQUEST_TIMEOUT_SECONDS = ENV_VARS['REQUEST_TIMEOUT_SECONDS']
 
 
 def get_current_time_gmt() -> datetime:

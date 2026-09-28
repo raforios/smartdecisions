@@ -50,7 +50,7 @@ def get_audit_records(
         dynamodb_resource = dynamodb_resource,
         table_name = AUDIT_TABLE_NAME,
         query_params = processed_params,
-        # Estas tablas tienen un índice por microservicio + fecha:
-        # declararlo convierte el listado en consulta directa.
+        # These tables carry an index on microservice + date: declaring it
+        # turns the listing into a direct query instead of a scan.
         index_partition_attribute = 'microservice'
     )

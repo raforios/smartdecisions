@@ -539,7 +539,7 @@ def test_the_bench_can_run_a_subset(store):
 
 
 def test_an_unknown_model_is_refused(store):
-    """Pedir solo un modelo que no existe es un error, no un banco vacio."""
+    """Asking for only a model that does not exist is an error, not an empty bench."""
     for item in build_history(60):
         store[(item.currency, item.date)] = item
 

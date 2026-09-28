@@ -30,7 +30,7 @@ def create_audit_record_controller(
     # table expensive; they are capped before being persisted.
     record_dict = cap_log_bodies(record_dict)
 
-    # Llama al servicio para crear el registro
+    # Hands it to the service that stores it.
     audit_record = create_audit_record(
         dynamodb_resource = dynamodb_resource,
         record_data = record_dict

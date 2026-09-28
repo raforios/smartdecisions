@@ -7,6 +7,7 @@
     the name the sales file uses. Failure reasons travel as codes in
     `LocalizationError`, never as sentences.
 '''
+from datetime import date
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
@@ -153,6 +154,12 @@ class PlannedRouteCreateSchema(BaseModel):
         None, max_length = 128,
         description = 'Salesperson the route is assigned to, by name.'
     )
+    plan_date: Optional[date] = Field(
+        None,
+        description = 'The day the route is meant to be run. Optional, because a '
+                      'route can also be a reusable template with no date; what '
+                      'carries one is a plan for a given day.'
+    )
     points: List[PlannedPointSchema] = Field(..., min_length = 1)
 
 
@@ -165,6 +172,7 @@ class PlannedRouteResponseSchema(BaseModel):
     route_code: str
     description: Optional[str] = None
     seller: Optional[str] = None
+    plan_date: Optional[str] = None
     status: PlannedRouteStatusEnum
     created_at: str
     points: List[PlannedPointResponseSchema]
@@ -178,6 +186,7 @@ class PlannedRouteUpdateSchema(BaseModel):
     route_code: Optional[str] = Field(None, max_length = 50)
     description: Optional[str] = Field(None, max_length = 500)
     seller: Optional[str] = Field(None, max_length = 128)
+    plan_date: Optional[date] = None
 
 
 class PlannedRouteUpdateStatusSchema(BaseModel):
@@ -196,6 +205,18 @@ class PlannedRouteFilterRequestSchema(BaseModel):
     route_name: Optional[str] = Field(None, description = 'Case-insensitive substring.')
     route_status: Optional[PlannedRouteStatusEnum] = None
     seller: Optional[str] = None
+    # The window the caller is asking about. What separates "what is coming"
+    # from "what already happened": the planning screen asks from today on,
+    # the history screen asks backwards. Without a date on the plan there was
+    # no way to tell one from the other, and the past was shown as a plan.
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    undated: bool = Field(
+        True,
+        description = 'Whether routes with no date —the reusable templates— come '
+                      'back too. They belong to no window, so a date filter would '
+                      'otherwise hide them for good.'
+    )
 
 
 class PlannedRouteBulkRowSchema(PointBase):

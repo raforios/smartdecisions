@@ -30,7 +30,7 @@ def create_usage_log_controller(
     # table expensive; they are capped before being persisted.
     log_dict = cap_log_bodies(log_dict)
 
-    # Llama al servicio para crear el registro
+    # Hands it to the service that stores it.
     usage_log = create_usage_log(
         dynamodb_resource = dynamodb_resource,
         log_data = log_dict

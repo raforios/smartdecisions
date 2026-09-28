@@ -56,6 +56,7 @@ from services.logger_config import custom_logger as logger
 # to products instead of clients — so a distributor can move one without
 # moving the other.
 _SETTINGS = load_and_validate_env_vars({
+    'VOLUME_SHARE_DECIMALS': int,
     'VOLUME_PARETO_TARGET': float,
     'VOLUME_ABC_A_LIMIT': float,
     'VOLUME_ABC_B_LIMIT': float,
@@ -80,7 +81,7 @@ _HHI_HIGH = _SETTINGS['VOLUME_HHI_HIGH']
 # long-tail SKU weighs 0.35% of the volume and rounded to one decimal it reads
 # as 0.4% or disappears. The Pareto curve needs the second decimal for the
 # cumulative column to keep closing at 100.
-_SHARE_DECIMALS = 2
+_SHARE_DECIMALS = _SETTINGS['VOLUME_SHARE_DECIMALS']
 
 # Codes of the decomposition terms. They travel as codes because the sentence
 # that explains "the joint term" to a manager belongs to the frontend.

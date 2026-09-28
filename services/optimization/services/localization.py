@@ -164,6 +164,7 @@ def to_route_response(route: PlannedRouteItem) -> PlannedRouteResponseSchema:
         route_code = route['route_code'],
         description = route.get('description'),
         seller = route.get('seller'),
+        plan_date = route.get('plan_date'),
         status = route['status'],
         created_at = route['created_at'],
         points = [to_point_response(route['id'], point) for point in route.get('points', [])]
@@ -253,7 +254,8 @@ def build_route_item(
 
         Args:
             owner_email (str): Authenticated account.
-            header (Dict[str, Any]): route_name, route_code, description, seller.
+            header (Dict[str, Any]): route_name, route_code, description,
+                seller and the optional plan_date.
             points (List[PlannedPointItem]): Stop items.
 
         Returns:
@@ -266,6 +268,9 @@ def build_route_item(
         'route_code': header['route_code'],
         'description': header.get('description'),
         'seller': header.get('seller'),
+        # ISO text, not a date object: DynamoDB stores strings, and a plain
+        # 'YYYY-MM-DD' compares and sorts correctly as one.
+        'plan_date': header['plan_date'].isoformat() if header.get('plan_date') else None,
         'status': PlannedRouteStatusEnum.IN_CREATION.value,
         'created_at': now_iso(),
         'points': sorted(points, key = lambda point: point['secuencial'])
@@ -345,7 +350,46 @@ def filter_planned_routes(
         routes = [route for route in routes if route['status'] == filters.route_status.value]
     if filters.seller:
         routes = [route for route in routes if route.get('seller') == filters.seller]
-    return routes
+    return _within_window(routes, filters)
+
+
+def _within_window(
+    routes: List[PlannedRouteItem],
+    filters: PlannedRouteFilterRequestSchema
+) -> List[PlannedRouteItem]:
+    '''
+        Narrows routes to the window the caller asked about.
+
+        This is what separates the two screens: planning asks from today on,
+        history asks backwards. A route with no date is a reusable template,
+        so it belongs to no window and only drops out when the caller says it
+        should — otherwise a date filter would hide the templates for good.
+
+        Args:
+            routes (List[PlannedRouteItem]): Routes already narrowed by the
+                other criteria.
+            filters (PlannedRouteFilterRequestSchema): The window asked for.
+
+        Returns:
+            List[PlannedRouteItem]: Routes inside it.
+    '''
+    if filters.date_from is None and filters.date_to is None:
+        return routes
+    since = filters.date_from.isoformat() if filters.date_from else None
+    until = filters.date_to.isoformat() if filters.date_to else None
+    kept = []
+    for route in routes:
+        when = route.get('plan_date')
+        if not when:
+            if filters.undated:
+                kept.append(route)
+            continue
+        if since and when < since:
+            continue
+        if until and when > until:
+            continue
+        kept.append(route)
+    return kept
 
 
 def update_planned_route(

@@ -46,6 +46,9 @@ from services.logger_config import custom_logger as logger
 # distributor with weekly deliveries reads 10 days very differently from one
 # importing by sea— so they are configured, never literals.
 _SETTINGS = load_and_validate_env_vars({
+    'STOCK_COVERAGE_DECIMALS': int,
+    'STOCK_ABC_A_LIMIT': float,
+    'STOCK_ABC_B_LIMIT': float,
     'STOCK_DEMAND_WINDOW_DAYS': int,
     'STOCK_CRITICAL_COVERAGE_DAYS': int,
     'STOCK_LOW_COVERAGE_DAYS': int,
@@ -67,13 +70,13 @@ COMMITTED = 'committed'
 IN_TRANSIT = 'in_transit'
 UNIT_COST = 'unit_cost'
 
-_COVERAGE_DECIMALS = 1
+_COVERAGE_DECIMALS = _SETTINGS['STOCK_COVERAGE_DECIMALS']
 
 # ABC cut points of the catalogue: the first 80% of the sales is A, the next
 # 15% is B and the tail is C. They match the volume block's so a product is not
 # an A on one screen and a B on another.
-_ABC_A_LIMIT = 0.80
-_ABC_B_LIMIT = 0.95
+_ABC_A_LIMIT = _SETTINGS['STOCK_ABC_A_LIMIT']
+_ABC_B_LIMIT = _SETTINGS['STOCK_ABC_B_LIMIT']
 
 # What is looked at first. The order is the order of action: what already ran
 # out, what is about to, and only at the end what there is too much of.
