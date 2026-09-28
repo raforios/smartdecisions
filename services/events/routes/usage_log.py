@@ -28,7 +28,7 @@ router = APIRouter(prefix='/v1/events', tags=['Events'])
 def create_usage_log_endpoint(
     log_data: UsageLogCreateSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY)
-):
+) -> UsageLogResponseSchema:
     '''
         Endpoint to create a new usage log.
     '''
@@ -54,7 +54,7 @@ def create_usage_log_endpoint(
 def get_usage_logs_endpoint(
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     query_params: UsageLogQuerySchema = Depends()
-):
+) -> Dict[str, Any]:
     '''
         Endpoint to retrieve a paginated list of usage logs with filters.
     '''

@@ -28,7 +28,7 @@ router = APIRouter(prefix='/v1/events', tags=['Events'])
 def create_audit_record_endpoint(
     record_data: AuditRecordCreateSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY)
-):
+) -> AuditRecordResponseSchema:
     '''
         Endpoint to create a new audit record.
     '''
@@ -54,7 +54,7 @@ def create_audit_record_endpoint(
 def get_audit_records_endpoint(
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     query_params: AuditRecordQuerySchema = Depends()
-):
+) -> Dict[str, Any]:
     '''
         Endpoint to retrieve a paginated list of audit records with filters.
     '''

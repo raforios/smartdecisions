@@ -7,7 +7,7 @@ from typing import Dict, Any, AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 
 from mangum import Mangum
@@ -83,7 +83,7 @@ app = FastAPI(**APP_CONFIG)
 setup_exception_handlers(app)
 
 @app.get('/favicon.ico', include_in_schema = False)
-async def favicon():
+async def favicon() -> FileResponse:
     '''
         Serves the favicon.ico file to prevent 404 errors from browsers.
     '''
@@ -114,14 +114,14 @@ def root() -> Dict[str, Any]:
     return output
 
 @app.get('/openapi.json', include_in_schema = False)
-def custom_openapi():
+def custom_openapi() -> Dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
     '''
     return app.openapi()
 
 @app.get('/docs', include_in_schema = False)
-async def custom_swagger_ui():
+async def custom_swagger_ui() -> HTMLResponse:
     '''
         Serves the Swagger UI documentation interface.
     '''
@@ -135,8 +135,8 @@ app.include_router(usage_log_router, tags = ['Events'])
 
 # Entry point to run the app
 if __name__ == '__main__':
-    MESSAGE = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
-    logger.info(MESSAGE)
+    message = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
+    logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
 
 handler = Mangum(app)
