@@ -1,6 +1,8 @@
 '''
     Classification controller
 '''
+from typing import List
+
 import numpy as np
 from services.logger_config import custom_logger as logger
 from services.utils import handle_operation
@@ -23,7 +25,7 @@ from schemas.classification import (
 @handle_operation(exc_type = (ValueError, TypeError))
 async def calculating_sigmoid(
     request_body: SigmoidBatchRequest
-):
+) -> List[float]:
     '''
     Calculates the sigmoid function for a given input value or array of values.
     '''

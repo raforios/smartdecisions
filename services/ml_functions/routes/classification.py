@@ -1,6 +1,8 @@
 '''
     Classification: routes handler
 '''
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
@@ -32,7 +34,7 @@ router = APIRouter(prefix = '/v1/classification', tags = ['ML Classification'])
 async def sigmoid_batch_algorithm(
     request: SigmoidBatchRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> List[float]:
     '''
     Calculates the sigmoid function for each value in a list of `z_values`.
 
@@ -64,7 +66,7 @@ async def sigmoid_batch_algorithm(
 async def compute_cost_logistic_route(
     request: ComputeCostLogisticRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> float:
     '''
     Calculates the cost for logistic regression based on provided data, weights, and bias.
 
@@ -99,7 +101,7 @@ async def compute_cost_logistic_route(
 async def compute_gradient_logistic_route(
     request: ComputeGradientLogisticRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> Dict[str, Any]:
     '''
     Calculates the gradient for logistic regression based on provided data, weights, and bias.
 
@@ -134,7 +136,7 @@ async def compute_gradient_logistic_route(
 async def train_logistic_regression_route(
     request: GradientDescentLogisticRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> Dict[str, Any]:
     '''
     Performs logistic regression gradient descent to find optimal parameters (w, b).
 
@@ -172,7 +174,7 @@ async def train_logistic_regression_route(
 async def predict_logistic_classification_route(
     request: PredictLogisticRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> PredictLogisticResponse:
     '''
     Predicts values using learned logistic regression parameters (w, b) and new data.
 

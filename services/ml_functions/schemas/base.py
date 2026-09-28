@@ -1,7 +1,9 @@
 '''
     Base schemas for common validations.
 '''
-from pydantic import BaseModel, field_validator
+from typing import Any
+
+from pydantic import BaseModel, ValidationInfo, field_validator
 import numpy as np
 
 class NumPyValidatorBase(BaseModel):
@@ -12,9 +14,9 @@ class NumPyValidatorBase(BaseModel):
     @classmethod
     def validate_numpy_array(
         cls,
-        v,
-        info
-    ):
+        v: Any,
+        info: ValidationInfo
+    ) -> Any:
         '''
         Validates that a list of lists can be safely converted to a NumPy array.
         '''

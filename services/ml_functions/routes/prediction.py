@@ -33,7 +33,7 @@ router = APIRouter(prefix = '/v1/prediction', tags = ['ML Prediction'])
 async def compute_cost_linear_regression_route(
     request: ComputeCostLinearRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> ComputeCostLinearResponse:
     '''
         Calculates the cost for linear regression based on provided data, weights, and bias.
 
@@ -69,7 +69,7 @@ async def compute_cost_linear_regression_route(
 async def compute_gradient_linear_regression_route(
     request: ComputeGradientLinearRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> ComputeGradientLinearResponse:
     '''
         Calculates the gradient for linear regression based on provided data, weights, and bias.
 
@@ -105,7 +105,7 @@ async def compute_gradient_linear_regression_route(
 async def train_linear_regression_route(
     request: TrainLinearRegressionRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> TrainLinearRegressionResponse:
     '''
         Performs linear regression gradient descent to find optimal parameters (w, b).
 
@@ -143,7 +143,7 @@ async def train_linear_regression_route(
 async def predict_linear_regression_route(
     request: PredictLinearRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> PredictLinearResponse:
     '''
         Predicts values using learned linear regression parameters (w, b) and new data.
 
