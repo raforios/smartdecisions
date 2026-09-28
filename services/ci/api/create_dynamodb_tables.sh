@@ -26,6 +26,11 @@ TABLES=(
 
     # --- SmartDecisions ---
     "ingest_datasets:id:S"
+    # Maestro de clientes: quién compra, dicho una vez y no repetido en cada
+    # fila de venta. El dueño es la partición y el código del cliente en el
+    # sistema del propio cliente es la clave de orden, así que una recarga
+    # reconoce al mismo cliente y un cliente ajeno no existe.
+    "ingest_clients:owner_email:S:id:S"
     "analytics_runs:id:S"
     # Clave compuesta: cada ítem es un punto de una ruta de un día concreto.
     "optimization_routes:route_day_key:S:client_id:N"
