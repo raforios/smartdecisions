@@ -46,17 +46,17 @@ import numpy as np
 import pandas as pd
 
 from tools.build_receivables import (
-    COLLECTIONS_SHEET,
+    COLLECTIONS_TEMPLATE,
     SCENARIOS,
     STOCK_SCENARIOS,
-    STOCK_SHEET,
+    STOCK_TEMPLATE,
     CreditBook,
     build_credit_book,
     build_stock_snapshot,
     describe as describe_credit,
     describe_stock
 )
-from tools.build_visits import VISITS_SHEET, build_visits_sheet, describe_visits
+from tools.build_visits import VISITS_TEMPLATE, build_visits_sheet, describe_visits
 
 
 # --- Source contract -------------------------------------------------------
@@ -826,15 +826,21 @@ def build(config: BuildConfig) -> pd.DataFrame:
     # ended in a sale, and around it go the calls a ledger never records.
     visits = build_visits_sheet(book.sales, config.seed)
 
+    # One file per contract, as the client uploads them: the four-sheet book
+    # this used to write no longer exists anywhere. The sales file keeps the
+    # provenance sheet, which is documentation and not a contract.
     config.output.parent.mkdir(parents = True, exist_ok = True)
+    stem = config.output.with_suffix('')
     with pd.ExcelWriter(config.output, engine = 'openpyxl') as writer:
-        book.sales.to_excel(writer, sheet_name = 'Ventas', index = False)
-        book.collections.to_excel(writer, sheet_name = COLLECTIONS_SHEET, index = False)
-        stock.to_excel(writer, sheet_name = STOCK_SHEET, index = False)
-        visits.to_excel(writer, sheet_name = VISITS_SHEET, index = False)
+        book.sales.to_excel(writer, sheet_name = 'Datos', index = False)
         build_provenance_sheet(sheet, book, config.stock_scenario).to_excel(
             writer, sheet_name = 'Origen de los datos', index = False
         )
+    for contract, frame in ((COLLECTIONS_TEMPLATE, book.collections),
+                            (STOCK_TEMPLATE, stock),
+                            (VISITS_TEMPLATE, visits)):
+        companion = Path(f'{stem}_{contract}.xlsx')
+        frame.to_excel(companion, sheet_name = 'Datos', index = False)
     describe_credit(book)
     describe_stock(stock, config.stock_scenario)
     describe_visits(visits)

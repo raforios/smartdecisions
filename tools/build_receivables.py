@@ -32,7 +32,7 @@ import pandas as pd
 # The sheet names are part of the microservice's contract and not a decision of
 # this tool: they are read from there so the two cannot diverge.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'services' / 'ingest'))
-from schemas.ingest import COLLECTIONS_SHEET, STOCK_SHEET   # noqa: E402  pylint: disable=wrong-import-position
+from schemas.ingest import COLLECTIONS_TEMPLATE, STOCK_TEMPLATE   # noqa: E402  pylint: disable=wrong-import-position
 
 # Terms seen in the Bolivian mass-consumption market, with the weight of each.
 # The 5- and 15-day ones belong to corner shops; 90 and 120, to chains.

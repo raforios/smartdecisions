@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'services' / 'ingest'))
-from schemas.ingest import VISITS_SHEET   # noqa: E402  pylint: disable=wrong-import-position
+from schemas.ingest import VISITS_TEMPLATE   # noqa: E402  pylint: disable=wrong-import-position
 
 # What a week on the street looks like, as shares of the visits drawn.
 _OFF_PLAN_SHARE = 0.18      # calls to clients that did not buy that day
@@ -178,7 +178,7 @@ def describe_visits(sheet: pd.DataFrame) -> None:
     '''
     outcomes = sheet['Resultado'].replace('', np.nan).value_counts(dropna = False)
     with_geo = int(sheet['Latitud'].notna().sum())
-    print(f'  {VISITS_SHEET.lower():<16} {len(sheet)} visitas · '
+    print(f'  {VISITS_TEMPLATE:<16} {len(sheet)} visitas · '
           f'{sheet["Vendedor"].nunique()} vendedores · '
           f'{sheet["Fecha"].min()} a {sheet["Fecha"].max()}')
     print(f'  con gps          {with_geo} · resultados '

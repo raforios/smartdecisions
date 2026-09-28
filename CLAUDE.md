@@ -31,6 +31,13 @@ DynamoDB, AWS, integración de modelos.
   de toda plantilla**. Entre ambos idiomas hay un mapeador, nunca una cabecera
   en inglés en un archivo de cliente.
 
+### Sobre el arquitecto y guía del proyecto
+
+Se llama Rafael y es Ingeniero de Sistemas y se ha especializado en desarrollo de software y programación, también tiene mucho conocimiento sobre DevOps. El lenguaje que más utiliza es Python, no es principiante, pero tampoco se considera experto, conozce mucho de bases de datos y de Ingeniería se Software, más no se considera experto, después de 26 años en el rubro es Senior
+
+Le gusta que respetes los archivos "md" que se crearon y configuraron para el entorno y las instrucciones que te da son lo más precisas que puede, si no entiendes algo preguntas, si sugieres algo dilo como sugerencia no añadas nada sin consultar, debes ser muy crítico, pero siempre respetando sus instrucciones y pedidos.
+
+
 ---
 
 ## 2. Stack
@@ -168,6 +175,17 @@ repetido en cada fila. El detalle está en `.claude/rules/datos.md`.
 **API** que consume su ERP. Un endpoint que sólo acepta archivo está a medias.
 El archivo sube por **FILES** a S3 y el servicio lo lee por su clave: el binario
 no atraviesa API Gateway.
+
+**FILES es quien toca el bucket.** Subir, bajar y **leer los datos** de un
+archivo de S3 se hace a través de FILES, nunca con un `boto3.client('s3')`
+propio. Única excepción, y se dice en voz alta: cuando ese rodeo perjudique el
+tiempo o la calidad del servicio que llama.
+
+Se agrega **sólo al servicio que lo necesita**, no a todos por simetría.
+**El modelo vive en `services/ingest/services/utils.py`** —lectura, escritura,
+borrado y carga masiva contra FILES, reenviando el token del que llama— y es la
+versión DynamoDB de lo que `trade/services/utils.py` es para MySQL: mismos
+nombres y mismo flujo de dos pasos, sin `Session` que confirmar.
 
 Las plantillas que el cliente descarga son **archivos estáticos** en S3, no se
 generan en runtime. Se derivan del contrato (`tools/build_sales_template.py`)

@@ -150,6 +150,109 @@ def check_duplicates(service: Path) -> tuple[bool, str]:
     return not dupes, ('; '.join(dupes) + ' — parametrizar una sola función') if dupes else 'none'
 
 
+# A function has to be this long before the same body in two services means
+# duplication rather than coincidence: a three-line getter repeats honestly.
+_CROSS_SERVICE_MIN_LINES = 8
+
+# Copied into several services and genuinely duplicated, but they are
+# boilerplate that was never promoted to `utils.py`: the Decimal conversion
+# DynamoDB forces on everyone. Listed here so the debt is visible instead of
+# drowning every other finding. Promoting them touches the boilerplate, which
+# needs Rafael's go-ahead.
+_PENDING_BOILERPLATE = ('to_dynamo', 'from_dynamo', 'get_caller')
+
+# ANALYTICS and OPTIMIZATION read the dataset INGEST produced, straight from
+# S3 and with the same two helpers. It is real duplication and a real crossing
+# of the bucket rule, and it predates the rule. Rafael's call on 28-09-2026:
+# FILES goes into the service that needs it —INGEST— and these two follow when
+# each is worked on, not by symmetry. Listed so the debt stays visible.
+_PENDING_DATASET_READERS = ('_read_dataframe', 'get_dataset_metadata')
+
+
+def _service_bodies(service: Path) -> tuple[tuple[str, str], ...]:
+    '''
+        The comparable body of every own function of a service.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            tuple[tuple[str, str], ...]: Pairs of body dump and where it lives.
+    '''
+    bodies = []
+    for path in _own_files(service):
+        # `main.py` is the service shell —health check, CORS, the scheduled
+        # entry point— and it is identical on purpose: that is the uniformity
+        # rule, not duplication.
+        if 'tests' in path.parts or path.name == 'main.py':
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                    and node.name not in _PENDING_BOILERPLATE \
+                    and node.name not in _PENDING_DATASET_READERS \
+                    and node.end_lineno - node.lineno >= _CROSS_SERVICE_MIN_LINES:
+                bodies.append((_body_signature(node),
+                               f'{path.relative_to(service)}:{node.name}'))
+    return tuple(bodies)
+
+
+def check_cross_service_duplicates(service: Path) -> tuple[bool, str]:
+    '''
+        No function of this service repeated in another one.
+
+        `check_duplicates` only ever looked inside a single service, so on
+        27-09-2026 a client master copied into a second microservice —571
+        lines, the business rule among them— passed every check. Two services
+        holding one rule is not DRY, it is two rules waiting to disagree:
+        whoever owns the capability serves it and the rest ask.
+    '''
+    mine = dict(_service_bodies(service))
+    hits = []
+    for other in (ROOT / 'services' / name for name in PRODUCT_SERVICES):
+        if other.name == service.name or not other.is_dir():
+            continue
+        for body, where in _service_bodies(other):
+            if body in mine:
+                hits.append(f'{mine[body]} = {other.name}/{where}')
+    return not hits, ('; '.join(sorted(set(hits))[:4])
+                      + ' — un dueño lo sirve, el resto lo piden') if hits else 'none'
+
+
+# FILES is the bucket's owner, so it is the one service that holds an S3
+# client. The single line allowed elsewhere is INGEST reading a STATIC
+# template: FILES cannot hand a file back AS a file —its reader parses and
+# returns rows— and `CLAUDE.md` §9 names exactly that case.
+_S3_ALLOWED: dict[str, tuple[str, ...]] = {
+    'files': ('controllers/files.py',),
+    'ingest': ('services/ingest_utils.py',),
+    # Pending, by Rafael's decision of 28-09-2026: they read the dataset
+    # INGEST produced and they migrate when each is worked on.
+    'analytics': ('services/analytics_utils.py',),
+    'optimization': ('services/optimization_utils.py',),
+}
+
+
+def check_direct_s3(service: Path) -> tuple[bool, str]:
+    '''
+        Only FILES talks to the bucket.
+
+        Every other service asks FILES, forwarding the caller's token. INGEST
+        grew its own S3 client because the four-sheet workbook it used to read
+        could not come back through a reader that returns one flat table; the
+        workbook is gone and so is the reason.
+    '''
+    allowed = _S3_ALLOWED.get(service.name, ())
+    hits = []
+    for path in _own_files(service):
+        where = str(path.relative_to(service))
+        if where in allowed:
+            continue
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if "boto3.client('s3')" in line or 'boto3.resource(\'s3\')' in line:
+                hits.append(f'{where}:{number}')
+    return not hits, (', '.join(hits) + ' — se pide a FILES') if hits else 'none'
+
+
 def check_except_pass(service: Path) -> tuple[bool, str]:
     '''No silent except.'''
     hits = []
@@ -193,7 +296,8 @@ _SPANISH_MARKERS = re.compile(
     r'\b(el|la|los|las|del|una|unos|unas|por|para|que|con|su|sus|sin|más|'
     r'cuando|porque|esta|este|esto|acá|allá|desde|hasta|pero|aunque|cada|'
     r'como|donde|ya|así|sólo|solo|también|entre|sobre|hacia|según|debe|'
-    r'puede|tiene|hay|son|está|están|ser|estar)\b',
+    r'puede|tiene|hay|son|está|están|ser|estar|un|unos|se|al|lo|les|ni|'
+    r'muy|sus|nunca|siempre|entonces|además)\b',
     re.IGNORECASE
 )
 # A comment may quote the Spanish rule it implements; the quote is evidence,
@@ -233,21 +337,31 @@ def check_comment_language(service: Path) -> tuple[bool, str]:
         docstring through on 27-09-2026.
     '''
     hits = []
-    # Unlike the other checks this one includes the tests: a Spanish docstring
-    # is a Spanish docstring wherever it lives.
+    # Unlike every other check this one looks at EVERY file: the tests, and
+    # the boilerplate too. Language is not a property of who owns the file.
+    # Skipping the boilerplate is how six Spanish comments landed in
+    # `services/utils.py` on 28-09-2026 with the check reporting green.
     for path in sorted(service.rglob('*.py')):
-        if path.name in BOILERPLATE or '__pycache__' in path.parts:
+        if '__pycache__' in path.parts:
             continue
         source = path.read_text()
-        for number, line in enumerate(source.splitlines(), 1):
+        # Contiguous `#` lines are ONE comment and are judged as one. Judged
+        # line by line, a two-line comment in plain Spanish slipped through on
+        # 28-09-2026 because neither half reached the threshold on its own —
+        # and the green that check produced is what let it ship.
+        block, block_line = [], 0
+        for number, line in enumerate(source.splitlines() + [''], 1):
             stripped = line.lstrip()
-            if not stripped.startswith('#'):
+            if stripped.startswith('#'):
+                if not block:
+                    block_line = number
+                # A quote left open runs to the end of the line: the comment is
+                # English quoting a Spanish rule across two lines.
+                block.append(re.split(r'["\'`]', stripped.lstrip('#'), maxsplit = 1)[0])
                 continue
-            # A quote left open runs to the end of the line: the comment is
-            # English quoting a Spanish rule across two lines.
-            body = re.split(r'["\'`]', stripped.lstrip('#'), maxsplit = 1)[0]
-            if _is_spanish(body, _SPANISH_THRESHOLD):
-                hits.append(f'{path.relative_to(service)}:{number}')
+            if block and _is_spanish(' '.join(block), _SPANISH_THRESHOLD):
+                hits.append(f'{path.relative_to(service)}:{block_line}')
+            block = []
         try:
             tree = ast.parse(source)
         except SyntaxError:
@@ -452,6 +566,8 @@ CHECKS = (
     ('getenv', check_getenv),
     ('log-vars', check_log_vars),
     ('comment-language', check_comment_language),
+    ('cross-duplicates', check_cross_service_duplicates),
+    ('direct-s3', check_direct_s3),
     ('events', check_events),
 )
 

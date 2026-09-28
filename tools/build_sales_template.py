@@ -1,5 +1,5 @@
 '''
-    Builds and publishes the sales template the client downloads.
+    Builds and publishes the four templates the client downloads.
 
     It is generated **from the contract** and not by hand: `TEMPLATE_COLUMNS` in
     `schemas/ingest.py` is the single source of truth about which columns exist,
@@ -20,7 +20,7 @@ import argparse
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import boto3
 import pandas as pd
@@ -33,7 +33,6 @@ sys.path.insert(0, str(INGEST_PATH))
 
 BUCKET = 'ml-data-file-handler'
 PROFILE = 'deploy_ml'
-SHEET_NAME = 'Ventas'
 
 # Sample rows: enough for the format of each column to be understood —the date
 # and the decimals above all— without anybody mistaking the example for real
@@ -212,81 +211,94 @@ def _sample_visits(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return visits
 
 
-def _build(path: Path, rows: int) -> List[str]:
-    '''
-        Writes the template file to disk.
+def _contracts() -> List[Tuple[str, Any, Any, Any]]:
+    """
+        The four contracts a client fills in, each one its own template.
 
-        Args:
-            path (Path): Where to write it.
-            rows (int): Sample rows to include.
+        One file per contract and not one workbook with four sheets: the sheets
+        were our own idea, and they are what stopped the service from reading
+        through FILES —whose reader returns one flat table, correctly— and sent
+        it to S3 on its own. They also forced a client who only wanted to send
+        yesterday's stock to hand over the whole book again.
 
         Returns:
-            List[str]: The headers written, in order.
-    '''
+            List[Tuple[str, Any, Any, Any]]: Name, columns, headers and the
+                function that builds sample rows from the sales sample.
+    """
     from schemas.ingest import ( # pylint: disable=import-outside-toplevel
         COLLECTION_COLUMNS,
         COLLECTION_HEADERS,
-        COLLECTIONS_SHEET,
+        COLLECTIONS_TEMPLATE,
+        SALES_TEMPLATE,
         STOCK_COLUMNS,
         STOCK_HEADERS,
-        STOCK_SHEET,
+        STOCK_TEMPLATE,
         TEMPLATE_COLUMNS,
         TEMPLATE_HEADERS,
         VISIT_COLUMNS,
         VISIT_HEADERS,
-        VISITS_SHEET
+        VISITS_TEMPLATE
     )
+    return [
+        (SALES_TEMPLATE, TEMPLATE_COLUMNS, TEMPLATE_HEADERS, lambda sample: sample),
+        (COLLECTIONS_TEMPLATE, COLLECTION_COLUMNS, COLLECTION_HEADERS, _sample_collections),
+        (STOCK_TEMPLATE, STOCK_COLUMNS, STOCK_HEADERS, _sample_stock),
+        (VISITS_TEMPLATE, VISIT_COLUMNS, VISIT_HEADERS, _sample_visits),
+    ]
 
-    sample = _sample_rows(rows)
-    frame = pd.DataFrame(sample, columns = list(TEMPLATE_HEADERS))
 
+def _guide(columns: Any) -> pd.DataFrame:
+    """
+        The rules of one contract, as the client needs to read them BEFORE
+        filling the file in and not after the validator rejects it.
+
+        Args:
+            columns (tuple): The contract's columns.
+
+        Returns:
+            pd.DataFrame: One row per column the client fills in.
+    """
+    return pd.DataFrame([
+        {
+            'Columna': column.header,
+            'Obligatoria': 'Sí' if column.template_required else 'No',
+            'Formato': _human_type(column.dtype),
+            'Valores admitidos': (
+                ' / '.join(column.rules.allowed) if column.rules.allowed else ''
+            ),
+        }
+        for column in columns
+        if not column.filled_by_service
+    ])
+
+
+def _build_one(
+    path: Path,
+    headers: Any,
+    data_rows: List[Dict[str, Any]],
+    columns: Any
+) -> List[str]:
+    """
+        Writes one template: its data sheet first, its rules second.
+
+        The data sheet goes first because that is the one the reader takes; the
+        client may leave the rules sheet in place when uploading.
+
+        Args:
+            path (Path): Where to write it.
+            headers (tuple): Headers of the contract, in contract order.
+            data_rows (List[Dict[str, Any]]): Sample rows.
+            columns (tuple): The contract's columns, for the rules sheet.
+
+        Returns:
+            List[str]: The headers written, in order.
+    """
     with pd.ExcelWriter(path, engine = 'openpyxl') as writer:
-        frame.to_excel(writer, index = False, sheet_name = SHEET_NAME)
-
-        # The payments travel in the same workbook, on their own sheet: they
-        # are filled in later —an invoice at 90 days is collected three months
-        # on— but the client should not have to ask for a second file for that.
-        pd.DataFrame(
-            _sample_collections(sample), columns = list(COLLECTION_HEADERS)
-        ).to_excel(writer, index = False, sheet_name = COLLECTIONS_SHEET)
-
-        # The stock sheet is a snapshot: one row per product and day. It is
-        # filled in daily while the sales sheet is filled in once, which is why
-        # it also has its own upload endpoint.
-        pd.DataFrame(
-            _sample_stock(sample), columns = list(STOCK_HEADERS)
-        ).to_excel(writer, index = False, sheet_name = STOCK_SHEET)
-
-        # The visits are the executed side of the routes: what the seller's
-        # system registered on the street. Coordinates and outcome are optional
-        # there; the sample fills them so the reader sees what they look like.
-        pd.DataFrame(
-            _sample_visits(sample), columns = list(VISIT_HEADERS)
-        ).to_excel(writer, index = False, sheet_name = VISITS_SHEET)
-
-        # A second sheet with the rules. The client opening the template needs
-        # to know what is mandatory before filling it in, not after the
-        # validator rejects it.
-        guide = pd.DataFrame([
-            {
-                'Hoja': sheet,
-                'Columna': column.header,
-                'Obligatoria': 'Sí' if column.template_required else 'No',
-                'Formato': _human_type(column.dtype),
-                'Valores admitidos': (
-                    ' / '.join(column.rules.allowed) if column.rules.allowed else ''
-                ),
-            }
-            for sheet, columns in ((SHEET_NAME, TEMPLATE_COLUMNS),
-                                   (COLLECTIONS_SHEET, COLLECTION_COLUMNS),
-                                   (STOCK_SHEET, STOCK_COLUMNS),
-                                   (VISITS_SHEET, VISIT_COLUMNS))
-            for column in columns
-            if not column.filled_by_service
-        ])
-        guide.to_excel(writer, index = False, sheet_name = 'Instrucciones')
-
-    return list(TEMPLATE_HEADERS)
+        pd.DataFrame(data_rows, columns = list(headers)).to_excel(
+            writer, index = False, sheet_name = 'Datos'
+        )
+        _guide(columns).to_excel(writer, index = False, sheet_name = 'Instrucciones')
+    return list(headers)
 
 
 def _human_type(dtype: str) -> str:
@@ -309,43 +321,49 @@ def _human_type(dtype: str) -> str:
 
 
 def main() -> int:
-    '''
+    """
         Entry point.
 
         Returns:
             int: 0 when it finished cleanly.
-    '''
+    """
     parser = argparse.ArgumentParser(
-        description = 'Construye la plantilla de ventas desde el contrato.'
+        description = 'Construye las plantillas de carga desde el contrato.'
     )
     parser.add_argument('--yes', action = 'store_true',
                         help = 'Construye y sube. Sin esto sólo informa.')
     parser.add_argument('--rows', type = int, default = 6,
                         help = 'Filas de ejemplo. Por defecto 6.')
-    parser.add_argument('--key', default = 'ingest/templates/template_ventas_v1.xlsx',
-                        help = 'Clave en S3. Debe coincidir con TEMPLATE_S3_KEY del .env.')
+    parser.add_argument('--prefix', default = 'ingest/templates',
+                        help = 'Carpeta en S3. Debe coincidir con TEMPLATES_S3_PREFIX del .env.')
     args = parser.parse_args()
 
-    target = Path('/tmp/template_ventas.xlsx')
-    headers = _build(target, args.rows)
+    sample = _sample_rows(args.rows)
+    built: List[Tuple[str, Path, List[str]]] = []
 
-    print(f'Columnas ({len(headers)}): {", ".join(headers)}')
-    print(f'Filas de ejemplo: {args.rows}')
-    print(f'Archivo: {target} ({target.stat().st_size:,} bytes)')
-    print(f'Destino: s3://{BUCKET}/{args.key}')
+    for name, columns, headers, rows_for in _contracts():
+        target = Path(f'/tmp/plantilla_{name}.xlsx')
+        written = _build_one(target, headers, rows_for(sample), columns)
+        built.append((name, target, written))
+        print(f'{name:12s} {len(written):2d} columnas · {target.stat().st_size:,} bytes '
+              f'→ s3://{BUCKET}/{args.prefix}/plantilla_{name}.xlsx')
 
     if not args.yes:
         print('Simulación: no se subió nada. Repite con --yes.')
         return 0
 
-    boto3.Session(profile_name = PROFILE, region_name = 'us-east-1').client('s3').upload_file(
-        str(target), BUCKET, args.key,
-        ExtraArgs = {
-            'ContentType': ('application/vnd.openxmlformats-officedocument'
-                            '.spreadsheetml.sheet')
-        }
-    )
-    print('Plantilla publicada.')
+    client = boto3.Session(
+        profile_name = PROFILE, region_name = 'us-east-1'
+    ).client('s3')
+    for name, target, _headers in built:
+        client.upload_file(
+            str(target), BUCKET, f'{args.prefix}/plantilla_{name}.xlsx',
+            ExtraArgs = {
+                'ContentType': ('application/vnd.openxmlformats-officedocument'
+                                '.spreadsheetml.sheet')
+            }
+        )
+    print(f'{len(built)} plantillas publicadas.')
     return 0
 
 
