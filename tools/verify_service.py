@@ -29,8 +29,20 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCT_SERVICES = ('ingest', 'analytics', 'optimization', 'mining_analysis',
-                    'quotes', 'ai', 'billing')
+# The eleven services BearSoft owns, in the four groups of SMARTDECISIONS.md.
+# AUTH, EVENTS, FILES and ML_FUNCTIONS were missing until 27-09-2026, so they
+# accumulated findings nobody ever saw: a sweep that skips a service is a
+# sweep that certifies it by omission.
+PRODUCT_SERVICES = (
+    # SmartDecisions
+    'ingest', 'analytics', 'optimization', 'mining_analysis', 'quotes', 'ai',
+    # SmartBilling
+    'billing',
+    # Genéricos y obligatorios
+    'auth', 'events', 'files',
+    # Capacitación
+    'ml_functions',
+)
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
                'utils.py'}
@@ -173,6 +185,83 @@ def check_env_shorthand(service: Path) -> tuple[bool, str]:
         if offenders:
             bad.append(f'.env:{number} ({offenders[0]})')
     return not bad, ', '.join(bad) if bad else 'none'
+
+
+# Spanish function words that do not also read as English, code or a quoted
+# rule. A comment carrying one of them was written in the wrong language.
+_SPANISH_MARKERS = re.compile(
+    r'\b(el|la|los|las|del|una|unos|unas|por|para|que|con|su|sus|sin|más|'
+    r'cuando|porque|esta|este|esto|acá|allá|desde|hasta|pero|aunque|cada|'
+    r'como|donde|ya|así|sólo|solo|también|entre|sobre|hacia|según|debe|'
+    r'puede|tiene|hay|son|está|están|ser|estar)\b',
+    re.IGNORECASE
+)
+# A comment may quote the Spanish rule it implements; the quote is evidence,
+# not prose. Only unquoted Spanish counts.
+_QUOTED = re.compile(r'"[^"]*"|\'[^\']*\'|`[^`]*`')
+# How many Spanish markers a line needs before it is called Spanish. One is a
+# borrowed noun ("la paz", "el alto"); three is a sentence.
+_SPANISH_THRESHOLD = 3
+_DOCSTRING_THRESHOLD = 4
+
+
+def _is_spanish(
+    text: str,
+    threshold: int
+) -> bool:
+    '''
+        Whether a piece of prose reads as Spanish rather than English.
+
+        Args:
+            text (str): Comment or docstring body.
+            threshold (int): How many markers make it Spanish.
+
+        Returns:
+            bool: True when it is Spanish.
+    '''
+    stripped = _QUOTED.sub(' ', text)
+    return len(_SPANISH_MARKERS.findall(stripped)) >= threshold
+
+
+def check_comment_language(service: Path) -> tuple[bool, str]:
+    '''
+        Comments AND docstrings in English.
+
+        `CLAUDE.md` §1: the code and its internal documentation are in English,
+        strictly; Spanish is for what the user reads. Docstrings count — they
+        are the documentation, and scanning only `#` lines let a whole Spanish
+        docstring through on 27-09-2026.
+    '''
+    hits = []
+    # Unlike the other checks this one includes the tests: a Spanish docstring
+    # is a Spanish docstring wherever it lives.
+    for path in sorted(service.rglob('*.py')):
+        if path.name in BOILERPLATE or '__pycache__' in path.parts:
+            continue
+        source = path.read_text()
+        for number, line in enumerate(source.splitlines(), 1):
+            stripped = line.lstrip()
+            if not stripped.startswith('#'):
+                continue
+            # A quote left open runs to the end of the line: the comment is
+            # English quoting a Spanish rule across two lines.
+            body = re.split(r'["\'`]', stripped.lstrip('#'), maxsplit = 1)[0]
+            if _is_spanish(body, _SPANISH_THRESHOLD):
+                hits.append(f'{path.relative_to(service)}:{number}')
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Module, ast.ClassDef,
+                                     ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            doc = ast.get_docstring(node)
+            # A docstring is several sentences, so it needs a higher bar than a
+            # one-line comment before a borrowed noun makes it look Spanish.
+            if doc and _is_spanish(doc, _DOCSTRING_THRESHOLD):
+                hits.append(f'{path.relative_to(service)}:{getattr(node, "lineno", 1)}')
+    return not hits, ', '.join(sorted(hits)[:5]) if hits else 'none'
 
 
 def check_getenv(service: Path) -> tuple[bool, str]:
@@ -322,7 +411,13 @@ def check_events(service: Path) -> tuple[bool, str]:
         `handle_service_errors` sends the usage log, `audit_event` sends the
         audit trail. A service that skips them is invisible: nobody can say who
         cancelled that note or how often a screen is used.
+
+        EVENTS itself is the exception, and the only one: it is the service the
+        decorators post TO. Auditing the creation of an audit record would
+        write an audit record per audit record, without end.
     '''
+    if service.name == 'events':
+        return True, 'EVENTS no se audita a sí mismo'
     if not (service / 'controllers').is_dir():
         return True, 'no controllers/'
 
@@ -356,6 +451,7 @@ CHECKS = (
     ('env-shorthand', check_env_shorthand),
     ('getenv', check_getenv),
     ('log-vars', check_log_vars),
+    ('comment-language', check_comment_language),
     ('events', check_events),
 )
 

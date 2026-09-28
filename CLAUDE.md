@@ -13,6 +13,9 @@
 >
 > **Estándares de código** viven en `.claude/rules/`, y se cargan solos cuando
 > se tocan los archivos que gobiernan.
+>
+> **Revisiones que no gastan contexto** viven en `.claude/agents/`:
+> `revisor-servicio` y `auditor-hardcode`.
 
 ---
 
@@ -24,6 +27,9 @@ DynamoDB, AWS, integración de modelos.
 
 - **Interacción:** español neutro, tratando de tú. Nunca voseo.
 - **Código y su documentación interna:** inglés, estricto.
+- **Lo que el cliente ve o llena:** castellano — UI, reportes y las **cabeceras
+  de toda plantilla**. Entre ambos idiomas hay un mapeador, nunca una cabecera
+  en inglés en un archivo de cliente.
 
 ---
 
@@ -142,18 +148,26 @@ De referencia, `trade`, `forms` y `localization` los usan desde siempre.
 
 ---
 
-## 8. Aislamiento por cliente
+## 8. Propiedad y forma de los datos
 
 El dueño es **parte de la consulta**, no un filtro posterior que se pueda
-olvidar. En OPTIMIZATION además es parte de la clave de partición, porque la
-carga borra la partición antes de escribir.
+olvidar; en OPTIMIZATION además es parte de la clave de partición. Un recurso
+ajeno responde **igual que uno inexistente**.
 
-Un recurso ajeno responde **igual que uno inexistente**: distinguirlos permitiría
-confirmar qué identificadores existen.
+**Toda carga tiene dueño:** el usuario autenticado que la ejecuta, venga por
+archivo o por API. Nunca se deriva del contenido.
+
+**Lo que describe al cliente vive una vez**, en el maestro de clientes, no
+repetido en cada fila. El detalle está en `.claude/rules/datos.md`.
 
 ---
 
-## 9. Archivos estáticos
+## 9. Cómo entran los datos
+
+**Dos canales, los dos obligatorios:** el **archivo** que el cliente llena y el
+**API** que consume su ERP. Un endpoint que sólo acepta archivo está a medias.
+El archivo sube por **FILES** a S3 y el servicio lo lee por su clave: el binario
+no atraviesa API Gateway.
 
 Las plantillas que el cliente descarga son **archivos estáticos** en S3, no se
 generan en runtime. Se derivan del contrato (`tools/build_sales_template.py`)
