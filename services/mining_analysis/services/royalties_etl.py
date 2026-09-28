@@ -58,8 +58,8 @@ def build_municipality_maps(
         (e.g., matching the wrong 'San Pedro').
     '''
     munis = db_session.query(Municipality).all()
-    # Aseguramos que el código en el diccionario sea un entero para evitar
-    # fallos de cruce 'str' vs 'int'
+    # The code in the map is forced to an integer so the join does not fail
+    # on 'str' vs 'int'.
     code_map = {}
     for m in munis:
         try:
@@ -84,7 +84,7 @@ def build_municipality_maps(
         if sin_code in code_map:
             alias_map[sin_code] = code_map[sin_code]
         else:
-            # RECHAZO ESTRICTO: Eliminamos la búsqueda difusa por nombre para evitar colisiones.
+            # Strict rejection: no fuzzy match by name, which would collide.
             rejected_records.append({
                 'Codigo_SIN': sin_code,
                 'Municipio_SIN': raw_name,

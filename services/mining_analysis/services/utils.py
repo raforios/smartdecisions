@@ -576,7 +576,7 @@ async def send_usage_log(log_data: dict):
     url = EVENTS_LOG_URL
     response = await _perform_request('POST', url, headers = {}, payload = log_data)
 
-    # Validamos que la respuesta exista antes de invocar métodos sobre ella
+    # Check the response exists before calling anything on it.
     if response is not None:
         response.raise_for_status()
         message = f'Usage log sent successfully. Status: {response.status_code}'

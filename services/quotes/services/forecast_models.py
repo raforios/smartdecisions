@@ -35,19 +35,19 @@ ENV_VARS = load_and_validate_env_vars({
     'RATE_THETA_ALPHA': float,
 })
 
-# Suavizado de Holt: nivel, tendencia y amortiguación. Ajustados minimizando el
-# error del backtest sobre la serie guardada.
+# Holt smoothing: level, trend and damping. Fitted by minimising the backtest
+# error over the stored series.
 ALPHA = ENV_VARS['RATE_HOLT_ALPHA']
 BETA = ENV_VARS['RATE_HOLT_BETA']
 PHI = ENV_VARS['RATE_HOLT_PHI']
 
-# Suavizado exponencial simple: sin tendencia, sólo nivel.
+# Simple exponential smoothing: no trend, level only.
 SES_ALPHA = ENV_VARS['RATE_SES_ALPHA']
 
-# Ventana del promedio móvil.
+# Window of the moving average.
 MOVING_WINDOW = ENV_VARS['RATE_MOVING_AVERAGE_WINDOW']
 
-# Suavizado de la línea theta.
+# Smoothing of the theta line.
 THETA_ALPHA = ENV_VARS['RATE_THETA_ALPHA']
 
 
@@ -273,11 +273,11 @@ def theta(
     if len(values) < 3:
         return naive(values, days_ahead)
 
-    # Línea theta-cero: la recta de regresión, extendida.
+    # Theta-zero line: the regression straight line, extended.
     straight = linear(values, days_ahead)
 
-    # Línea theta-dos: suavizado exponencial sobre la serie, que carga el peso
-    # en lo reciente.
+    # Theta-two line: exponential smoothing over the series, which puts the
+    # weight on what is recent.
     level = values[0]
     for value in values[1:]:
         level = THETA_ALPHA * value + (1 - THETA_ALPHA) * level
@@ -286,8 +286,9 @@ def theta(
     return [(one + two) / 2 for one, two in zip(straight, smoothed)]
 
 
-# El registro es el contrato: agregar un modelo es agregar una entrada, y todo
-# lo que compara, mide y publica lo recorre sin conocer ninguno en particular.
+# The registry is the contract: adding a model is adding an entry, and
+# everything that compares, measures and publishes walks it without knowing
+# any model in particular.
 MODELS: Dict[str, Callable[[List[float], int], List[float]]] = {
     'NAIVE': naive,
     'MEAN': mean,

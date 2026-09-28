@@ -49,9 +49,9 @@ class ViewName(str, Enum):
     SEGMENTATION = 'segmentation'
     SALES_FORECAST = 'sales_forecast'
     PORTFOLIO = 'portfolio'
-    # Optimización de rutas
+    # Route optimization
     ROUTE_PLAN = 'route_plan'
-    # Cotizaciones y proyecciones
+    # Quotes and projections
     MINERALS_FORECAST = 'minerals_forecast'
     RATE_FORECAST = 'rate_forecast'
     SALE_SCENARIO = 'sale_scenario'

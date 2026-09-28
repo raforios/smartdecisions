@@ -62,7 +62,7 @@ class Department(Base):# pylint: disable=too-few-public-methods
     id = Column(Integer, primary_key = True, index = True)
     name = Column(String(100), unique=True, index = True, nullable = False)
 
-    # Relación uno a muchos con Municipios
+    # One-to-many with municipalities.
     municipalities = relationship('Municipality', back_populates='department')
 
 class Municipality(Base):# pylint: disable=too-few-public-methods
@@ -95,7 +95,7 @@ class Company(Base):# pylint: disable=too-few-public-methods
     nit = Column(String(50), unique = True, index = True, nullable = False)
     name = Column(String(250), nullable = False)
 
-    # Relación con las transacciones de pago
+    # Relationship with the payment transactions.
     transactions = relationship('RoyaltyTransaction', back_populates = 'company')
 
 class RoyaltyTransaction(Base):# pylint: disable=too-few-public-methods
@@ -109,12 +109,12 @@ class RoyaltyTransaction(Base):# pylint: disable=too-few-public-methods
     company_id = Column(Integer, ForeignKey('t_companies.id'), nullable = False)
     municipality_id = Column(Integer, ForeignKey('t_municipalities.id'), nullable = False)
 
-    # Referencias del pago
+    # References of the payment.
     order_number = Column(String(100), index = True, nullable = False)
     form_code = Column(String(50))
     bank_code = Column(String(50))
 
-    # Temporalidad (Fecha de documento y particiones)
+    # Time (document date and partitions).
     payment_date = Column(Date, index = True, nullable = False)
     year = Column(Integer, index = True, nullable = False)
     month = Column(Integer, index = True, nullable = False)
@@ -153,14 +153,14 @@ class RoyaltyPayment(Base):# pylint: disable=too-few-public-methods
     gov_dept_bob = Column(Numeric(18, 4), default = 0)
     gov_muni_bob = Column(Numeric(18, 4), default = 0)
 
-    # Métricas Financieras (USD) calculadas dinámicamente en el ETL
+    # Financial metrics (USD), computed on the fly by the ETL.
     total_collected_usd = Column(Numeric(18, 4), default = 0)
     commission_usd = Column(Numeric(18, 4), default = 0)
     subtotal_usd = Column(Numeric(18, 4), default = 0)
     gov_dept_usd = Column(Numeric(18, 4), default = 0)
     gov_muni_usd = Column(Numeric(18, 4), default = 0)
 
-    # Restricción: Un solo registro por municipio y mes en el resumen
+    # Constraint: one row per municipality and month in the summary.
     __table_args__ = (
         UniqueConstraint('municipality_id', 'period_date', name = 'uq_municipality_period'),
     )

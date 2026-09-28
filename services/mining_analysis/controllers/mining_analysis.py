@@ -119,7 +119,7 @@ async def upload_royalties_controller(
     message = f'Starting in-memory ETL for file: {file_name} with rate: {exchange_rate}'
     logger.info(message)
 
-    # Procesamiento con tipo de cambio
+    # Processing with the exchange rate.
     result = await process_royalties_excel_service(db, file_content, exchange_rate)
 
     return result

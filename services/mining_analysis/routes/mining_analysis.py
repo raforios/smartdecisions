@@ -131,7 +131,7 @@ async def upload_royalties_excel(
     message = f'User: {current_user}. Uploading file: {file.filename}'
     logger.info(message)
 
-    # Extraemos los bytes físicos en la capa de rutas
+    # The raw bytes are pulled in the routes layer.
     content = await file.read()
 
     return await upload_royalties_controller(

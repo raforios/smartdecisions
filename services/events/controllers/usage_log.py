@@ -21,13 +21,13 @@ def create_usage_log_controller(
     '''
         Controller to create a new usage log record.
     '''
-    # Genera un ID único y la marca de tiempo para el registro
+    # A unique id and the timestamp of the record.
     log_dict = log_data.model_dump()
     log_dict['id'] = str(uuid.uuid4())
     timestamp = get_current_time_gmt()
     log_dict['timestamp'] = timestamp.isoformat()
-    # Los bodies completos son lo que infla cada registro y encarece
-    # toda lectura de la tabla; se acotan antes de persistir.
+    # Full bodies are what inflates every record and makes any read of the
+    # table expensive; they are capped before being persisted.
     log_dict = cap_log_bodies(log_dict)
 
     # Llama al servicio para crear el registro
@@ -51,8 +51,8 @@ def get_usage_logs_controller(
         query_params = query_params.model_dump(exclude_none = True)
     )
 
-    # Los registros anteriores al truncado conservan sus bodies completos:
-    # una página de 100 superaba el límite de 6 MB de respuesta del Lambda.
+    # Records written before the cap still carry their full bodies: a page of
+    # 100 went past the Lambda's 6 MB response limit.
     records = cap_many(response['items'])
     last_key = response['last_evaluated_key']
 

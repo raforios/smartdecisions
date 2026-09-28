@@ -294,8 +294,8 @@ def run_bench(
             ],
         })
 
-    # Los que no se pudieron medir van al final: un modelo sin error conocido no
-    # puede presentarse como el mejor.
+    # The ones that could not be measured go last: a model with no known error
+    # cannot present itself as the best.
     results.sort(key = lambda item: (
         item['mean_absolute_error'] is None,
         item['mean_absolute_error'] or 0.0
