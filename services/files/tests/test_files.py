@@ -2,7 +2,7 @@
     services/files/tests/test_files.py
 '''
 
-def test_placeholder():
+def test_placeholder() -> None:
     '''
         A simple placeholder test to ensure pytest finds a test to run.
     '''

@@ -15,7 +15,7 @@ class BaseS3FileModel(BaseModel):
     file_name: str = Field(..., description = 'Name of the file.')
 
     @property
-    def file_key(self):
+    def file_key(self) -> str:
         '''
             Generates the full S3 object key (path + filename).
         '''

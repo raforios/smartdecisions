@@ -21,11 +21,20 @@ from schemas.files import (
     PresignedUrlRequest,
     PresignedUrlResponse
 )
+from services.environment import load_and_validate_env_vars
 from services.security import get_current_user
 from services.logger_config import custom_logger as logger
 from services.exceptions import InvalidInputError
 
 router = APIRouter(prefix = '/v1/s3', tags = ['Management S3 File System'])
+
+ENV_VARS = load_and_validate_env_vars({
+    'ML_DATA_BUCKET_NAME': str,
+})
+# The bucket a listing falls back to when the caller names none. Required, not
+# optional: a service that lists "whatever bucket the environment happened to
+# have" cannot say whose files it just showed.
+ML_DATA_BUCKET_NAME = ENV_VARS['ML_DATA_BUCKET_NAME']
 
 ALLOWED_EXTENSIONS = ['.csv', '.xls', '.xlsx', '.txt', '.doc', '.docx', '.pdf',
                       '.jpg', '.jpeg', '.png']
@@ -50,7 +59,7 @@ async def read_s3_file_route(
     file_key: str,
     current_user: str = Depends(get_current_user),
     delimiter: Optional[str] = Query(None, description = 'The delimiter used for CSV files.')
-):
+) -> Dict[str, Any]:
     '''
         Reads a file from an S3 bucket, processes it, and returns the data.
 
@@ -81,7 +90,7 @@ async def upload_file_to_s3_route(
     bucket_name: str = Form(..., description = 'Name of the S3 bucket.'),
     file_path: str = Form('', description='Path within the S3 bucket.'),
     current_user: str = Depends(get_current_user)
-):
+) -> Dict[str, str]:
     '''
         Uploads a file to a specified S3 bucket.
 
@@ -123,7 +132,7 @@ async def upload_file_to_s3_route(
 async def delete_file_from_s3_route(
     request: S3FileRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> Dict[str, str]:
     '''
         Deletes a specified file from an S3 bucket.
 
@@ -147,7 +156,7 @@ async def delete_file_from_s3_route(
 async def list_files_s3_route(
     request: ListFilesRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> ListFilesResponse:
     '''
         Lists files in the predefined ML data S3 bucket with an optional prefix.
 
@@ -158,8 +167,7 @@ async def list_files_s3_route(
         Returns:
             ListFilesResponse: A dictionary with the list of files.
     '''
-    predefined_ml_data_bucket = os.environ.get('ML_DATA_BUCKET_NAME')
-    target_bucket = request.bucket_name if request.bucket_name else predefined_ml_data_bucket
+    target_bucket = request.bucket_name or ML_DATA_BUCKET_NAME
 
     message = f'User: {current_user} attempting to list files in bucket: {
             target_bucket} with prefix: {request.prefix}.'
@@ -190,7 +198,7 @@ def get_content_type_from_filename(
 async def get_presigned_upload_url_route(
     request: PresignedUrlRequest,
     current_user: str = Depends(get_current_user)
-):
+) -> PresignedUrlResponse:
     '''
         Generates an S3 pre-signed URL for direct file upload from the client.
 
