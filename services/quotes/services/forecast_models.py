@@ -56,18 +56,18 @@ def naive(
     days_ahead: int
 ) -> List[float]:
     '''
-        Repite la última observación.
+        Repeats the last observation.
 
-        Es el rival a vencer, no un relleno: en tipos de cambio, a horizontes
-        cortos, casi ningún modelo le gana de forma sostenida. Cualquier
-        proyección que no lo supere no se está ganando su lugar.
+        It is the rival to beat, not a filler: on exchange rates, at short
+        horizons, almost no model beats it consistently. A projection that does
+        not clear it is not earning its place.
 
         Args:
-            values (List[float]): Serie observada, la más antigua primero.
-            days_ahead (int): Pasos a proyectar.
+            values (List[float]): Observed series, oldest first.
+            days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Valores proyectados.
+            List[float]: Projected values.
     '''
     return [float(values[-1])] * days_ahead
 
@@ -77,17 +77,17 @@ def mean(
     days_ahead: int
 ) -> List[float]:
     '''
-        Repite el promedio de toda la serie.
+        Repeats the mean of the whole series.
 
-        Sirve de contraste: si le gana a los demás, la serie no tiene tendencia
-        y cualquier proyección con pendiente está leyendo ruido.
+        It works as a contrast: if it beats the others, the series has no trend
+        and any projection with a slope is reading noise.
 
         Args:
-            values (List[float]): Serie observada.
-            days_ahead (int): Pasos a proyectar.
+            values (List[float]): Observed series.
+            days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Valores proyectados.
+            List[float]: Projected values.
     '''
     return [float(np.mean(values))] * days_ahead
 
@@ -97,15 +97,15 @@ def drift(
     days_ahead: int
 ) -> List[float]:
     '''
-        Camino aleatorio con deriva: extiende la pendiente entre el primer y el
-        último punto.
+        Random walk with drift: extends the slope between the first and the
+        last point.
 
         Args:
-            values (List[float]): Serie observada.
-            days_ahead (int): Pasos a proyectar.
+            values (List[float]): Observed series.
+            days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Valores proyectados.
+            List[float]: Projected values.
     '''
     if len(values) < 2:
         return naive(values, days_ahead)
@@ -118,19 +118,18 @@ def linear(
     days_ahead: int
 ) -> List[float]:
     '''
-        Recta de mínimos cuadrados sobre toda la serie.
+        Least-squares straight line over the whole series.
 
-        Está aquí para poder mostrarla perdiendo: fue el modelo por defecto
-        hasta que el backtest mostró que erraba el doble que la tendencia
-        amortiguada, porque extrapola para siempre una pendiente que el mercado
-        no respeta.
+        It is here so it can be shown losing: it was the default model until
+        the backtest showed it erred twice as much as the damped trend, because
+        it extrapolates forever a slope the market does not respect.
 
         Args:
-            values (List[float]): Serie observada.
-            days_ahead (int): Pasos a proyectar.
+            values (List[float]): Observed series.
+            days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Valores proyectados.
+            List[float]: Projected values.
     '''
     if len(values) < 2:
         return naive(values, days_ahead)
@@ -183,18 +182,18 @@ def holt(
     days_ahead: int
 ) -> List[float]:
     '''
-        Suavizado de Holt con tendencia lineal, sin amortiguar.
+        Holt smoothing with a linear trend, undamped.
 
-        El contraste directo de la tendencia amortiguada: misma mecánica, pero
-        la tendencia no se apaga. En una serie que se aplana, esta se pasa de
-        largo y la otra no; verlas juntas muestra cuánto pesa la amortiguación.
+        The direct contrast to the damped trend: same mechanics, but the trend
+        never fades. On a series that flattens this one overshoots and the other
+        does not; seeing them together shows how much the damping is worth.
 
         Args:
-            values (List[float]): Serie observada.
-            days_ahead (int): Pasos a proyectar.
+            values (List[float]): Observed series.
+            days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Valores proyectados.
+            List[float]: Projected values.
     '''
     return _holt(values, days_ahead, phi = 1.0)
 
@@ -204,19 +203,18 @@ def damped_trend(
     days_ahead: int
 ) -> List[float]:
     '''
-        Suavizado de Holt con la tendencia amortiguada.
+        Holt smoothing with a damped trend.
 
-        El nivel sigue a las últimas observaciones y la tendencia **se
-        desvanece**: cada día más lejano hereda menos de la deriva reciente. Eso
-        es lo que impide que la proyección se dispare, y por lo que este es el
-        modelo por defecto.
+        The level follows the latest observations and the trend FADES: every
+        day further out inherits less of the recent drift. That is what keeps
+        the projection from running away, and why this is the default model.
 
         Args:
-            values (List[float]): Serie observada.
-            days_ahead (int): Pasos a proyectar.
+            values (List[float]): Observed series.
+            days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Valores proyectados.
+            List[float]: Projected values.
     '''
     return _holt(values, days_ahead, phi = PHI)
 
@@ -255,20 +253,20 @@ def theta(
     days_ahead: int
 ) -> List[float]:
     '''
-        Método Theta: promedia una recta de largo plazo con un suavizado que
-        sigue los movimientos recientes.
+        Theta method: averages a long-term straight line with a smoothing that
+        follows the recent movements.
 
-        Ganó la competencia M3 y sigue siendo difícil de superar en series
-        cortas, que es exactamente el caso aquí. La idea es simple: una mitad de
-        la respuesta la pone la tendencia de fondo y la otra el nivel actual, así
-        que ni ignora la dirección ni la extrapola sin freno.
+        It won the M3 competition and is still hard to beat on short series,
+        which is exactly the case here. The idea is simple: half the answer
+        comes from the underlying trend and half from the current level, so it
+        neither ignores the direction nor extrapolates it without a brake.
 
         Args:
-            values (List[float]): Serie observada.
-            days_ahead (int): Pasos a proyectar.
+            values (List[float]): Observed series.
+            days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Valores proyectados.
+            List[float]: Projected values.
     '''
     if len(values) < 3:
         return naive(values, days_ahead)

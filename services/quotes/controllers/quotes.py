@@ -135,17 +135,17 @@ async def get_bench_controller(
     request: Request # pylint: disable=unused-argument
 ) -> ModelBench:
     '''
-        Corre varios modelos sobre la serie y los devuelve medidos.
+        Runs several models over the series and returns them measured.
 
         Args:
-            days_ahead (int): Días a proyectar.
-            currency (str): Código ISO 4217.
-            models (List[str] | None): Modelos a correr; None corre todos.
-            current_user (str): Llamador autenticado.
-            request (Request): Petición entrante, usada por el decorador de auditoría.
+            days_ahead (int): Days to project.
+            currency (str): ISO 4217 code.
+            models (List[str] | None): Models to run; None runs them all.
+            current_user (str): Authenticated caller.
+            request (Request): Incoming request, used by the audit decorator.
 
         Returns:
-            ModelBench: Los modelos corridos, del que menos erró al que más.
+            ModelBench: The models run, from the one that erred least to most.
     '''
     result = await get_bench_service(
         days_ahead = days_ahead, currency = currency, models = models

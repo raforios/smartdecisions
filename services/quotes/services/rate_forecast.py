@@ -210,20 +210,20 @@ def error_of(
     days_ahead: int
 ) -> Optional[float]:
     '''
-        Mide cuánto ha errado un modelo sobre esta misma serie.
+        Measures how much a model has erred over this very series.
 
-        No es un intervalo de confianza asumido: la serie se vuelve a correr
-        desde cada punto de partida que deje espacio al horizonte, el modelo
-        proyecta desde ahí y se promedian los fallos absolutos. Es la única
-        medida que no se puede maquillar.
+        It is not an assumed confidence interval: the series is re-run from
+        every starting point that leaves room for the horizon, the model
+        projects from there and the absolute misses are averaged. It is the one
+        measure that cannot be dressed up.
 
         Args:
-            model (str): Nombre del modelo en el registro.
-            values (List[float]): Serie observada.
-            days_ahead (int): Horizonte a medir.
+            model (str): Name of the model in the registry.
+            values (List[float]): Observed series.
+            days_ahead (int): Horizon to measure.
 
         Returns:
-            float | None: Error absoluto medio, o None si hay muy pocas ventanas.
+            float | None: Mean absolute error, or None with too few windows.
     '''
     projector = MODELS.get(model)
     if projector is None:
@@ -246,24 +246,24 @@ def run_bench(
     models: List[str]
 ) -> List[Dict[str, Any]]:
     '''
-        Corre varios modelos sobre la misma serie y los devuelve medidos.
+        Runs several models over the same series and returns them measured.
 
-        Existe para poder verlos juntos, que responde una pregunta mejor que
-        cualquiera por separado: **cuánto depende la respuesta del modelo**.
-        Donde las proyecciones coinciden, la cifra es del negocio; donde se
-        separan, es del modelo, y ahí es donde hay que desconfiar.
+        It exists so they can be seen together, which answers a better question
+        than any of them alone: HOW MUCH THE ANSWER DEPENDS ON THE MODEL. Where
+        the projections agree the figure belongs to the business; where they
+        separate, to the model, and that is where to distrust it.
 
-        Vienen ordenados por su error medido, del mejor al peor. Eso los expone
-        a todos, incluido el que está por defecto cuando pierde — que es
-        precisamente lo que hay que poder ver.
+        They come ordered by their measured error, best to worst. That exposes
+        all of them, the default one included when it loses — which is
+        precisely what has to be visible.
 
         Args:
-            rates (List[ExchangeRateItem]): Cotizaciones observadas.
-            days_ahead (int): Días a proyectar.
-            models (List[str]): Modelos a correr; los desconocidos se ignoran.
+            rates (List[ExchangeRateItem]): Observed quotes.
+            days_ahead (int): Days to project.
+            models (List[str]): Models to run; unknown ones are ignored.
 
         Returns:
-            List[Dict[str, Any]]: Un bloque por modelo, mejor primero.
+            List[Dict[str, Any]]: One block per model, best first.
     '''
     observed = sorted(rates, key = lambda item: item.date)
     values = [float(item.official_rate) for item in observed]

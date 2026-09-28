@@ -506,11 +506,11 @@ def test_the_sync_of_a_weekday_stops_at_today(
 
 def test_the_bench_runs_every_model_and_ranks_them_by_error(store):
     """
-        Los modelos se devuelven ordenados por lo que erraron de verdad.
+        Models come back ordered by what they actually got wrong.
 
-        El orden es el contrato: lo primero que se lee es el mejor, y por eso el
-        modelo por defecto tiene que poder aparecer abajo. Un banco que siempre
-        pusiera al favorito primero no serviria para elegir.
+        The order is the contract: the first thing read is the best one, which
+        is why the default model has to be able to appear at the bottom. A
+        bench that always put the favourite first would be useless for choosing.
     """
     for item in build_history(60):
         store[(item.currency, item.date)] = item
@@ -551,8 +551,8 @@ def test_an_unknown_model_is_refused(store):
 
 def test_every_model_answers_the_horizon_asked_for():
     """
-        Todo modelo devuelve tantos valores como pasos se le piden. Es la unica
-        garantia que el banco necesita para recorrerlos sin conocerlos.
+        Every model returns as many values as steps asked of it. That is the
+        only guarantee the bench needs to walk them without knowing any.
     """
     series = [10.0 + 0.05 * index for index in range(40)]
 
@@ -564,8 +564,8 @@ def test_every_model_answers_the_horizon_asked_for():
 
 def test_a_flat_series_is_projected_flat_by_every_model():
     """
-        Sin movimiento no hay tendencia que arrastrar. Un modelo que invente
-        pendiente sobre una serie plana esta leyendo ruido.
+        With no movement there is no trend to carry. A model that invents a
+        slope over a flat series is reading noise.
     """
     flat = [10.0] * 40
 

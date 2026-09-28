@@ -108,12 +108,12 @@ class ForecastAccuracy(BaseModel):
 
 class ModelRun(BaseModel):
     '''
-        Un modelo corrido sobre la serie, con lo que ha errado de verdad.
+        One model run over the series, with what it has actually got wrong.
 
-        `mean_absolute_error` viene de re-correr la serie desde cada punto de
-        partida, no de un intervalo asumido. Es None cuando la historia no deja
-        suficientes ventanas para medirlo: mejor sin número que con uno que
-        parece medido y no lo está.
+        `mean_absolute_error` comes from re-running the series from every
+        starting point, not from an assumed interval. It is None when the
+        history leaves too few windows to measure it: better no number than one
+        that looks measured and is not.
     '''
     model: str
     change_percent: Optional[float] = None
@@ -124,11 +124,11 @@ class ModelRun(BaseModel):
 
 class ModelBench(BaseModel):
     '''
-        Varios modelos sobre la misma serie, ordenados por su error.
+        Several models over the same series, ordered by their error.
 
-        Verlos juntos responde algo que ninguno responde solo: **cuánto depende
-        la respuesta del modelo**. Donde las proyecciones coinciden, la cifra es
-        del negocio; donde se separan, es del modelo.
+        Seeing them together answers something none of them answers alone: HOW
+        MUCH THE ANSWER DEPENDS ON THE MODEL. Where the projections agree the
+        figure belongs to the business; where they separate, to the model.
     '''
     currency: str
     days_ahead: int = Field(..., ge = 1)
