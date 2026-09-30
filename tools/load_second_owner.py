@@ -45,6 +45,7 @@ from services.clients import CLIENT_FRAME_COLUMNS, sync_master  # noqa: E402
 from services.ingest import parse_and_validate_partial  # noqa: E402
 from services.ingest_files import serialize_dataframe  # noqa: E402
 from services.ingest_utils import persist_dataset  # noqa: E402
+from services.ingest_utils import to_dynamo  # noqa: E402
 from services.objectives import parse_and_validate as parse_objectives  # noqa: E402
 
 BUCKET = 'ml-data-file-handler'
@@ -177,9 +178,12 @@ def main(argument_list: Optional[list] = None) -> int:
             resource.Table('ingest_datasets').update_item(
                 Key = {'id': dataset_id},
                 UpdateExpression = 'SET objectives_s3_key = :k, objectives_summary = :s',
+                # Through `to_dynamo`: DynamoDB refuses floats, and the
+                # summary carries amounts. The service converts with this same
+                # function, so the item looks identical whichever door wrote it.
                 ExpressionAttributeValues = {
                     ':k': key,
-                    ':s': objectives.summary.model_dump(mode = 'json')
+                    ':s': to_dynamo(objectives.summary.model_dump(mode = 'json'))
                 }
             )
             print('objetivos enganchados al dataset')
