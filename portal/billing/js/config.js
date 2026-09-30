@@ -11,10 +11,11 @@
 export const AUTH_URL = 'https://32652ile50.execute-api.us-east-1.amazonaws.com';
 export const AUTH_URL_LOCAL = 'https://32652ile50.execute-api.us-east-1.amazonaws.com';
 
-// Filled in with the API Gateway URL once BILLING is deployed. Until then the
-// local service answers on 3004.
-export const BILLING_URL = 'http://localhost:3004/billing';
-export const BILLING_URL_LOCAL = 'http://localhost:3004/billing';
+// Production, verified against the deployed API Gateway: the service answers
+// under /v1/billing. The local one stays on 3004 and only takes effect when the
+// page itself is served from localhost.
+export const BILLING_URL = 'https://l2z2r6v7cf.execute-api.us-east-1.amazonaws.com';
+export const BILLING_URL_LOCAL = 'http://localhost:3004';
 
 /** Where an unauthenticated visitor is sent. */
 export const LOGIN_PATH = 'login.html';
