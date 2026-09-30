@@ -1,0 +1,164 @@
+'''
+    Reading a report in another currency.
+
+    Every money column of the sales frame is converted at the rate of **its
+    own row's day**, never at today's. A sale of March and a sale of September
+    are not the same dollars, and converting a whole year at one rate turns a
+    devaluation into growth — which is the mistake this module exists to stop.
+
+    The rates come from QUOTES, which owns them: this service asks, it does
+    not read that table. One call brings the window the frame covers and the
+    series is forward-filled, because the BCB does not publish every day and
+    a Sunday settles at Friday's figure.
+
+    Before the float began the rate was fixed. Those rows convert at the fixed
+    figure and the answer says so, so nobody reads a decreed stability as a
+    market fact.
+'''
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
+import requests
+
+from schemas.analytics import AnalyticsError
+from services.environment import load_and_validate_env_vars
+from services.exceptions import ServiceUnavailableError
+from services.logger_config import custom_logger as logger
+
+ENV_VARS = load_and_validate_env_vars({
+    'QUOTES_SERVICE_URL': str,
+    'QUOTES_TIMEOUT_SECONDS': int,
+    'BASE_CURRENCY': str,
+})
+QUOTES_SERVICE_URL = ENV_VARS['QUOTES_SERVICE_URL'].rstrip('/')
+QUOTES_TIMEOUT_SECONDS = ENV_VARS['QUOTES_TIMEOUT_SECONDS']
+# What the file is written in. Asking for it is asking for no conversion.
+BASE_CURRENCY = ENV_VARS['BASE_CURRENCY']
+
+# The columns that hold money. A rate applies to an amount, not to a quantity
+# or a coordinate, so the list is explicit: converting a latitude would be
+# silent nonsense.
+MONEY_COLUMNS: Tuple[str, ...] = (
+    'unit_price', 'unit_cost', 'total_amount', 'credit_limit'
+)
+_DATE = 'date'
+
+
+def _fetch_rates(
+    currency: str,
+    auth_token: str,
+    window: Tuple[str, str]
+) -> List[Dict[str, Any]]:
+    '''
+        The published series of one currency over a window, from QUOTES.
+
+        Args:
+            currency (str): ISO 4217 code.
+            auth_token (str): The caller's Authorization header.
+            window (Tuple[str, str]): First and last day the frame covers.
+
+        Returns:
+            List[Dict[str, Any]]: Published rates, oldest first.
+
+        Raises:
+            ServiceUnavailableError: QUOTES unreachable or refusing.
+    '''
+    start, end = window
+    try:
+        response = requests.get(
+            f'{QUOTES_SERVICE_URL}/v1/quotes/exchange-rates',
+            headers = {'Authorization': auth_token},
+            params = {'currency': currency, 'start': start, 'end': end},
+            timeout = QUOTES_TIMEOUT_SECONDS
+        )
+    except requests.exceptions.RequestException as error:
+        error_msg = f'Network error asking QUOTES for {currency}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(
+            detail = AnalyticsError.RATES_UNAVAILABLE.value
+        ) from error
+
+    if not response.ok:
+        error_msg = (f'QUOTES refused the {currency} series: '
+                     f'status={response.status_code} body={response.text[:200]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = AnalyticsError.RATES_UNAVAILABLE.value)
+    return (response.json() or {}).get('rates') or []
+
+
+def _rate_series(
+    rates: List[Dict[str, Any]],
+    days: pd.Series
+) -> pd.Series:
+    '''
+        The rate in force on each day the frame mentions.
+
+        Forward-filled on purpose: the BCB does not publish every day, and the
+        rate of a Friday governs until the next publication. A day before the
+        first publication stays empty and its rows are left in the original
+        currency rather than converted at a figure nobody published.
+
+        Args:
+            rates (List[Dict[str, Any]]): Published rates.
+            days (pd.Series): The dates of the frame, as datetime64.
+
+        Returns:
+            pd.Series: One rate per row, aligned to `days`.
+    '''
+    published = pd.Series(
+        {pd.Timestamp(rate['date']): float(rate['official_rate']) for rate in rates}
+    ).sort_index()
+    if published.empty:
+        return pd.Series(index = days.index, dtype = 'float64')
+    calendar = published.reindex(
+        pd.date_range(published.index.min(), max(published.index.max(), days.max()))
+    ).ffill()
+    return days.dt.normalize().map(calendar)
+
+
+def convert_frame(
+    dataframe: pd.DataFrame,
+    currency: str,
+    auth_token: str
+) -> Tuple[pd.DataFrame, Optional[Dict[str, Any]]]:
+    '''
+        The same rows, with every amount read in another currency.
+
+        Args:
+            dataframe (pd.DataFrame): Normalized sales rows.
+            currency (str): ISO 4217 code to read the report in.
+            auth_token (str): The caller's Authorization header, for QUOTES.
+
+        Returns:
+            Tuple[pd.DataFrame, Optional[Dict[str, Any]]]: The converted frame
+                and what the conversion was based on. The descriptor is None
+                when nothing was converted, so a caller can say so instead of
+                implying a rate that was never applied.
+    '''
+    if currency == BASE_CURRENCY or dataframe.empty or _DATE not in dataframe.columns:
+        return dataframe, None
+
+    days = pd.to_datetime(dataframe[_DATE])
+    rates = _fetch_rates(
+        currency, auth_token,
+        (days.min().date().isoformat(), days.max().date().isoformat())
+    )
+    series = _rate_series(rates, days)
+    converted = dataframe.copy()
+    for column in MONEY_COLUMNS:
+        if column in converted.columns:
+            converted[column] = converted[column] / series
+
+    applied = int(series.notna().sum())
+    message = (f'Converted {applied}/{len(series)} row(s) to {currency} at the rate '
+               f'of each row\'s own day.')
+    logger.info(message)
+    return converted, {
+        'currency': currency,
+        'base_currency': BASE_CURRENCY,
+        'rows_converted': applied,
+        'rows_total': int(len(series)),
+        # Rows before the first published rate keep their original amounts.
+        # Saying so is the difference between a gap and a silent lie.
+        'rows_without_rate': int(len(series) - applied)
+    }

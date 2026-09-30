@@ -8,19 +8,35 @@
     only when the endpoint runs. The domain stayed green; the API returned 500.
 '''
 import asyncio
+from datetime import date
 from unittest.mock import patch
 
 import pytest
 
 from models.quotes import USD
+from schemas.factors import (
+    FactorDefinitionSchema,
+    FactorListResponseSchema,
+    FactorResponseSchema,
+    FactorSeriesResponseSchema,
+    FactorStateSchema,
+    FactorStatus,
+    FactorValueSchema,
+    FactorValuesLoadSchema,
+    TransportCostSchema
+)
 from schemas.quotes import (
     ExchangeRateHistory,
+    ModelBench,
+    RateForecast,
+    RateOnDate,
     SaleScenario,
     SaleScenarioRequest,
     SyncResult
 )
 from controllers import quotes as controllers
-from services import quotes
+from routes import factors as factor_routes
+from services import factors, quotes
 
 
 def _run(coroutine):
@@ -88,3 +104,104 @@ def test_scenario_controller_returns_its_model(
     assert response.projected is not None
     assert response.projected.mineral_price == 95.0
     assert response.difference_bob is not None
+
+
+def test_declaring_a_factor_answers_its_model(factor_store):
+    '''
+        The ROUTE, not just the controller, must survive a declaration.
+
+        This is where a removed field hid: the endpoint logged
+        `definition.weight` after `weight` was taken out of the schema, so
+        every declaration raised AttributeError while the domain suite stayed
+        green. Controller tests could not see it — the line was in the route.
+    '''
+    response = _run(factor_routes.declare_factor_endpoint(
+        request = None,
+        definition = FactorDefinitionSchema(
+            code = 'DIESEL', name = 'Precio del diesel', unit = 'Bs/litro'
+        ),
+        dynamodb_resource = factor_store,
+        current_user = 'tester'
+    ))
+
+    assert isinstance(response, FactorResponseSchema)
+    assert (response.code, response.status) == ('DIESEL', FactorStatus.ACTIVE)
+
+
+def test_every_read_only_factor_route_answers_its_model(factor_store):
+    '''
+        Listing, series, state and transport cost, called as the API calls
+        them. One reading of each factor is enough: what is under test is the
+        wiring of the route, not the arithmetic, which `test_factors` owns.
+    '''
+    for code, name, unit, value in (
+        ('DIESEL', 'Precio del diesel', 'Bs/litro', 20.0),
+        (factors.FUEL_EFFICIENCY_CODE, 'Rendimiento', 'Km/litro', 10.0)
+    ):
+        _run(factor_routes.declare_factor_endpoint(
+            request = None,
+            definition = FactorDefinitionSchema(
+                code = code, name = name, unit = unit,
+                effective_from = date(2026, 1, 1)
+            ),
+            dynamodb_resource = factor_store, current_user = 'tester'
+        ))
+        _run(factor_routes.load_factor_values_endpoint(
+            request = None, code = code,
+            load = FactorValuesLoadSchema(
+                values = [FactorValueSchema(factor_date = date(2026, 9, 1), value = value)]
+            ),
+            dynamodb_resource = factor_store, current_user = 'tester'
+        ))
+
+    listed = _run(factor_routes.list_factors_endpoint(
+        request = None, only_active = True,
+        dynamodb_resource = factor_store, current_user = 'tester'
+    ))
+    series = _run(factor_routes.read_factor_series_endpoint(
+        request = None, code = 'DIESEL', start = None, end = None,
+        dynamodb_resource = factor_store, current_user = 'tester'
+    ))
+    state = _run(factor_routes.read_factor_state_endpoint(
+        request = None, code = 'DIESEL', day = date(2026, 9, 15),
+        dynamodb_resource = factor_store, current_user = 'tester'
+    ))
+    cost = _run(factor_routes.transport_cost_endpoint(
+        request = None, km = 100.0, day = date(2026, 9, 15), units = 1000.0,
+        dynamodb_resource = factor_store, current_user = 'tester'
+    ))
+
+    assert isinstance(listed, FactorListResponseSchema) and listed.total == 2
+    assert isinstance(series, FactorSeriesResponseSchema) and series.values[0].value == 20.0
+    assert isinstance(state, FactorStateSchema) and state.active and state.value == 20.0
+    assert isinstance(cost, TransportCostSchema)
+    assert (cost.round_trip_km, cost.cost, cost.cost_per_unit) == (200.0, 400.0, 0.4)
+
+
+def test_rate_on_a_day_controller_returns_its_model(
+    seeded_store # pylint: disable=unused-argument
+):
+    '''The rate in force on one day, which every dated report reads.'''
+    response = _run(controllers.get_rate_on_controller(
+        day = date(2026, 7, 15), currency = USD,
+        current_user = 'tester', request = None
+    ))
+
+    assert isinstance(response, RateOnDate)
+    assert response.rate > 0
+
+
+def test_forecast_and_bench_controllers_return_their_models(
+    seeded_store # pylint: disable=unused-argument
+):
+    '''The projection and the model comparison behind it.'''
+    forecast = _run(controllers.get_forecast_controller(
+        days_ahead = 30, currency = USD, current_user = 'tester', request = None
+    ))
+    bench = _run(controllers.get_bench_controller(
+        days_ahead = 30, currency = USD, models = None,
+        current_user = 'tester', request = None
+    ))
+
+    assert isinstance(forecast, RateForecast)
+    assert isinstance(bench, ModelBench)

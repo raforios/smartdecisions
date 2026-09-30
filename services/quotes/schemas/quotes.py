@@ -24,12 +24,30 @@ class QuotesError(str, Enum):
     EMPTY_PERIOD = 'EMPTY_PERIOD'
     INVALID_DATE_RANGE = 'INVALID_DATE_RANGE'
     UNKNOWN_MODEL = 'UNKNOWN_MODEL'
+    NO_RATE_FOR_DATE = 'NO_RATE_FOR_DATE'
 
 
 class ExchangeRatePoint(BaseModel):
     '''The official rate on one date, observed or projected.'''
     date: date
     rate: float
+
+
+class RateOnDate(BaseModel):
+    """
+        The rate in force on one day, and where it comes from.
+
+        `regime` matters as much as the figure: a day before the float carries
+        the fixed rate, and saying so stops a reader from taking 6.86 for a
+        market quote that never existed.
+    """
+    date: str
+    currency: str
+    rate: float
+    published_on: Optional[str] = Field(
+        None, description = 'The day the BCB published it. None under the fixed regime.'
+    )
+    regime: str = Field(..., description = 'FIXED or FLOAT.')
 
 
 class ExchangeRateHistory(BaseModel):

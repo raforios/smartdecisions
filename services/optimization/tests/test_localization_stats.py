@@ -8,6 +8,7 @@ from moto import mock_aws
 
 from schemas.localization import (
     ExecutedPointCreateSchema,
+    LocalizationError,
     ExecutedRouteCreateSchema,
     ExecutedRouteFilterSchema,
     PlannedPointSchema,
@@ -16,9 +17,12 @@ from schemas.localization import (
     VisitOutcome
 )
 from services import localization, localization_executed as executed, localization_stats as stats
-from services.exceptions import RegisterNotFoundError
+from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.utils import get_current_time_gmt
 from tests.dynamo_helpers import build_resource
+
+# Wide enough that no reading is ever outside it: the file door has no fence.
+_NO_FENCE_M = 100_000_000.0
 
 OWNER = 'yo@miempresa.com'
 STOPS = [
@@ -67,10 +71,15 @@ def plan_fixture(dynamodb):
 def _run_route(
     dynamodb,
     plan: dict,
-    visits: list
+    visits: list,
+    fenced: bool = True
 ) -> dict:
     '''
         Opens a route against `plan` and reports `visits` as (lat, lon, client_id).
+
+        `fenced` False skips the stop geofence, to build the state a visits
+        FILE produces: those rows are loaded whole and were never policed at
+        the door, and the comparison has to score them all the same.
     '''
     route = executed.create_executed_route(dynamodb, OWNER, ExecutedRouteCreateSchema(
         seller = 'Ana', start_time = _at(8), planned_route_id = plan['id'],
@@ -78,11 +87,14 @@ def _run_route(
         max_distance_start_point = 100
     ))
     for hour, (lat, lon, client) in enumerate(visits, start = 9):
-        route, _ = executed.register_executed_point(dynamodb, OWNER, ExecutedPointCreateSchema(
+        point = ExecutedPointCreateSchema(
             executed_route_id = route['id'], timestamp = _at(hour),
             latitude = lat, longitude = lon, client_id = client,
             outcome = VisitOutcome.SALE if client else None
-        ))
+        )
+        if not fenced:
+            point = point.model_copy(update = {'max_distance_stop_point': _NO_FENCE_M})
+        route, _ = executed.register_executed_point(dynamodb, OWNER, point)
     return route
 
 
@@ -93,8 +105,13 @@ def test_score_execution_matches_by_client_or_proximity(
     '''
         Stop 1 by client id from far away, stop 4 (no client) by proximity,
         stop 2 by neither, stop 3 not visited: 2 of 4.
+
+        The far-away visit can no longer be REGISTERED by a device —the stop
+        geofence refuses it— but it still arrives in a visits file, which is
+        loaded whole. The comparison scores what is stored, whichever door it
+        came through.
     '''
-    route = _run_route(dynamodb, plan, [
+    route = _run_route(dynamodb, plan, fenced = False, visits = [
         (-16.4000, -68.0000, 'PDV-1'),          # names the client, 15 km away
         (-16.5301, -68.1300, None),             # ~11 m from stop 4
         (-16.5150, -68.1150, None)              # between 2 and 3, ~780 m from each
@@ -168,3 +185,32 @@ def test_points_visited_gathers_a_sellers_points_across_routes(
     assert ana.total_points_visited == 3
     assert sorted(point.client_id for point in ana.points_details) == ['PDV-1', 'PDV-2', 'PDV-3']
     assert nobody.total_points_visited == 0 and nobody.points_details == []
+
+
+def test_a_visit_far_from_its_planned_stop_is_refused(
+    dynamodb,
+    plan
+):
+    '''
+        Registering attendance from anywhere was the hole.
+
+        A seller could mark a client without going near them and the
+        comparison reported the route as met. Naming the stop is not enough:
+        the reading has to be at it.
+    '''
+    with pytest.raises(InvalidInputError) as refused:
+        _run_route(dynamodb, plan, [(-16.4000, -68.0000, 'PDV-1')])
+    assert refused.value.detail == LocalizationError.OUTSIDE_STOP_GEOFENCE.value
+
+
+def test_a_stop_the_plan_does_not_know_is_never_fenced(
+    dynamodb,
+    plan
+):
+    '''
+        A place the plan never mentioned is a NEW client, which is exactly
+        what has to be reported — blocking it would throw away the only
+        evidence that the route should grow.
+    '''
+    route = _run_route(dynamodb, plan, [(-16.4000, -68.0000, 'PDV-NUEVO')])
+    assert len(route['points']) == 1

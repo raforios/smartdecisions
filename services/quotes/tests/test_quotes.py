@@ -572,3 +572,32 @@ def test_a_flat_series_is_projected_flat_by_every_model():
     for name, projector in forecast_models.MODELS.items():
         projected = projector(flat, 10)
         assert all(abs(value - 10.0) < 1e-6 for value in projected), name
+
+
+def test_a_day_before_the_float_answers_with_the_fixed_rate():
+    '''
+        The years of 6.86 are another regime, not a market quote.
+
+        Saying so is the point: a reader who takes the fixed figure for a
+        market rate would read a stability that was a decree, not a fact.
+    '''
+    answer = asyncio.run(quotes.rate_on_service(date(2026, 3, 15)))
+    assert answer['rate'] == quotes.FIXED_REGIME_RATE
+    assert answer['regime'] == 'FIXED'
+    assert answer['published_on'] is None
+
+
+def test_the_rate_in_force_is_the_last_one_published_before_the_day(store):
+    '''
+        The BCB does not publish every day, so a Sunday settles at Friday's
+        figure — and a report of that Sunday has to convert with it.
+    '''
+    for item in build_history(30):
+        store[(item.currency, item.date)] = item
+    published = sorted(item.date for item in store.values())
+    asked = published[-1] + timedelta(days = 2)
+
+    answer = asyncio.run(quotes.rate_on_service(asked))
+    assert answer['published_on'] == published[-1].isoformat()
+    assert answer['regime'] == 'FLOAT'
+    assert answer['date'] == asked.isoformat()

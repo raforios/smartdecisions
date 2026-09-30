@@ -13,11 +13,12 @@ from schemas.localization import (
     PlannedPointSchema,
     PlannedPointUpdateSchema,
     PlannedRouteCreateSchema,
+    RepeatPlannedRouteSchema,
     PlannedRouteFilterRequestSchema,
     PlannedRouteStatusEnum,
     PlannedRouteUpdateSchema
 )
-from services import localization
+from services import localization, localization_sources as sources
 from services.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError,
@@ -329,26 +330,26 @@ BULK_CSV = (
 
 def test_parse_planned_routes_csv_validates_rows_and_columns():
     '''Blank lines vanish; a missing column or a bad value refuses the file.'''
-    rows = localization.parse_planned_routes_csv(BULK_CSV)
+    rows = sources.parse_planned_routes_csv(BULK_CSV)
     assert [row.route_code for row in rows] == ['R-010', 'R-010', 'R-011']
     assert rows[1].client_id is None and rows[0].client_id == 'PDV-A'
 
     with pytest.raises(InvalidInputError) as failure:
-        localization.parse_planned_routes_csv('route_code,point_name\nR-1,X\n')
+        sources.parse_planned_routes_csv('route_code,point_name\nR-1,X\n')
     assert failure.value.detail == LocalizationError.MISSING_COLUMNS.value
 
     with pytest.raises(InvalidInputError) as failure:
-        localization.parse_planned_routes_csv(BULK_CSV.replace('-16.48', 'norte'))
+        sources.parse_planned_routes_csv(BULK_CSV.replace('-16.48', 'norte'))
     assert failure.value.detail == LocalizationError.INVALID_ROW.value
 
     with pytest.raises(InvalidInputError) as failure:
-        localization.parse_planned_routes_csv(BULK_CSV.splitlines()[0] + '\n\n')
+        sources.parse_planned_routes_csv(BULK_CSV.splitlines()[0] + '\n\n')
     assert failure.value.detail == LocalizationError.EMPTY_UPLOAD.value
 
 
 def test_group_rows_into_routes_folds_stops_under_their_code():
     '''One route per code, header from its first row, stops in file order.'''
-    routes = localization.group_rows_into_routes(localization.parse_planned_routes_csv(BULK_CSV))
+    routes = sources.group_rows_into_routes(sources.parse_planned_routes_csv(BULK_CSV))
     assert [(route.route_code, route.seller, len(route.points)) for route in routes] == [
         ('R-010', 'Ana', 2), ('R-011', 'Juan', 1)
     ]
@@ -362,10 +363,10 @@ def test_bulk_create_planned_routes_is_all_or_nothing(
     '''A single taken code refuses the whole file; a clean file creates every route.'''
     clashing = BULK_CSV.replace('R-011', route['route_code'])
     with pytest.raises(RegisterAlreadyExistsError):
-        localization.bulk_create_planned_routes(dynamodb, OWNER, clashing)
+        sources.bulk_create_planned_routes(dynamodb, OWNER, clashing)
     assert len(localization.list_planned_routes(dynamodb, OWNER)) == 1
 
-    result = localization.bulk_create_planned_routes(dynamodb, OWNER, BULK_CSV)
+    result = sources.bulk_create_planned_routes(dynamodb, OWNER, BULK_CSV)
     assert (result.routes_created, result.points_created) == (2, 3)
     stored = {item['route_code']: item
               for item in localization.list_planned_routes(dynamodb, OWNER)}
@@ -400,25 +401,112 @@ def _executed_day() -> list:
     ]
 
 
-def test_visits_as_stops_orders_by_time_and_dedupes_clients():
-    '''PDV-1, PDV-2, PDV-3 in the order first reached; the breadcrumb is dropped.'''
-    stops = localization.visits_as_stops(_executed_day())
+def test_visits_as_stops_keeps_the_stop_that_names_no_client():
+    '''
+        In the order first reached, and the breadcrumb is a stop too.
+
+        It used to be dropped, and that is why a day spent at addresses the
+        sales file never mentioned answered NO_VISITS_TO_INFER: the stops
+        worth keeping —the ones that are new clients— were the ones thrown
+        away. Its identity is where it was, so two readings at the same door
+        are one stop.
+    '''
+    stops = sources.visits_as_stops(_executed_day())
     assert [(stop.secuencial, stop.client_id) for stop in stops] == [
-        (1, 'PDV-1'), (2, 'PDV-2'), (3, 'PDV-3')
+        (1, None), (2, 'PDV-1'), (3, 'PDV-2'), (4, 'PDV-3')
     ]
-    assert stops[0].point_name == 'PDV-1'
+    assert stops[0].point_name == '-16.49,-68.09'
+    assert stops[1].point_name == 'PDV-1'
 
 
 def test_infer_planned_route_creates_the_plan_or_refuses_an_empty_day(dynamodb):
     '''The day's visits become an IN CREATION plan named after seller and date.'''
     request = InferPlannedRouteSchema(seller = 'Ana', date = '2026-09-21')
-    plan = localization.infer_planned_route(dynamodb, OWNER, request, _executed_day())
+    plan = sources.infer_planned_route(dynamodb, OWNER, request, _executed_day())
     assert plan['route_code'] == 'Ana-2026-09-21'
     assert plan['route_name'] == 'Ana-2026-09-21'
     assert plan['seller'] == 'Ana'
     assert plan['status'] == PlannedRouteStatusEnum.IN_CREATION.value
-    assert [stop['client_id'] for stop in plan['points']] == ['PDV-1', 'PDV-2', 'PDV-3']
+    # The plan belongs to the day it was inferred from; without a date it
+    # would land among the undated templates and the planning screen would
+    # show yesterday as if it were coming.
+    assert plan['plan_date'] == '2026-09-21'
+    assert [stop['client_id'] for stop in plan['points']] == [
+        None, 'PDV-1', 'PDV-2', 'PDV-3'
+    ]
 
     with pytest.raises(InvalidInputError) as failure:
-        localization.infer_planned_route(dynamodb, OWNER, request, [])
+        sources.infer_planned_route(dynamodb, OWNER, request, [])
     assert failure.value.detail == LocalizationError.NO_VISITS_TO_INFER.value
+
+
+def test_repeating_a_route_copies_its_stops_onto_another_day(dynamodb):
+    '''
+        Yesterday worked, do it again.
+
+        The stops are what a route IS, so repeating one copies them whole and
+        only the day changes. Making somebody retype thirty stops to run the
+        same route on Thursday is what the history screen exists to avoid.
+    '''
+    original = localization.create_planned_route(dynamodb, OWNER, PlannedRouteCreateSchema(
+        route_name = 'Zona Sur', route_code = 'R-SUR', seller = 'Ana',
+        plan_date = '2026-09-21', points = [
+            PlannedPointSchema(point_name = 'Tienda 1', secuencial = 1,
+                               latitude = -16.50, longitude = -68.10, client_id = 'PDV-1'),
+            PlannedPointSchema(point_name = 'Tienda 2', secuencial = 2,
+                               latitude = -16.51, longitude = -68.11, client_id = 'PDV-2')
+        ]
+    ))
+
+    repeated = sources.repeat_planned_route(
+        dynamodb, OWNER, original['id'],
+        RepeatPlannedRouteSchema(plan_date = '2026-09-28', seller = 'Juan')
+    )
+
+    assert repeated['plan_date'] == '2026-09-28'
+    assert repeated['seller'] == 'Juan'
+    assert repeated['route_code'] == 'R-SUR-2026-09-28'
+    assert repeated['status'] == PlannedRouteStatusEnum.IN_CREATION.value
+    assert [stop['client_id'] for stop in repeated['points']] == ['PDV-1', 'PDV-2']
+    # The original is untouched: repeating is not moving.
+    still = localization.get_planned_route(dynamodb, OWNER, original['id'])
+    assert still['plan_date'] == '2026-09-21' and still['seller'] == 'Ana'
+
+
+def test_the_date_window_separates_what_is_coming_from_what_happened(dynamodb):
+    '''
+        The reason `plan_date` exists.
+
+        Planning asks from today on, history asks backwards. A route with no
+        date is a reusable template and belongs to no window, so a date filter
+        must not bury it.
+    '''
+    for code, when in (('R-AYER', '2026-09-21'), ('R-MANANA', '2026-09-30')):
+        localization.create_planned_route(dynamodb, OWNER, PlannedRouteCreateSchema(
+            route_name = code, route_code = code, plan_date = when,
+            points = [PlannedPointSchema(point_name = 'T', secuencial = 1,
+                                         latitude = -16.5, longitude = -68.1)]
+        ))
+    localization.create_planned_route(dynamodb, OWNER, PlannedRouteCreateSchema(
+        route_name = 'Plantilla', route_code = 'R-TPL',
+        points = [PlannedPointSchema(point_name = 'T', secuencial = 1,
+                                     latitude = -16.5, longitude = -68.1)]
+    ))
+
+    coming = localization.filter_planned_routes(
+        dynamodb, OWNER,
+        PlannedRouteFilterRequestSchema(date_from = '2026-09-28', undated = False)
+    )
+    assert [route['route_code'] for route in coming] == ['R-MANANA']
+
+    past = localization.filter_planned_routes(
+        dynamodb, OWNER,
+        PlannedRouteFilterRequestSchema(date_to = '2026-09-27', undated = False)
+    )
+    assert [route['route_code'] for route in past] == ['R-AYER']
+
+    # The template answers to no window unless it is asked for.
+    with_templates = localization.filter_planned_routes(
+        dynamodb, OWNER, PlannedRouteFilterRequestSchema(date_from = '2026-09-28')
+    )
+    assert sorted(route['route_code'] for route in with_templates) == ['R-MANANA', 'R-TPL']

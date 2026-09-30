@@ -46,10 +46,16 @@ from services.utils import TARGET_TIMEZONE, get_current_time_gmt
 
 _SETTINGS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES': str,
-    'ROUTES_LIVE_LOOKBACK_DAYS': int
+    'ROUTES_LIVE_LOOKBACK_DAYS': int,
+    'ROUTES_VISIT_MATCH_RADIUS_M': float
 })
 EXECUTED_ROUTES_TABLE = _SETTINGS['DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES']
 LIVE_LOOKBACK_DAYS = _SETTINGS['ROUTES_LIVE_LOOKBACK_DAYS']
+# Metres a reading may be from the stop it claims. The same radius the
+# comparison already uses to decide a stop was visited, so a visit that is
+# accepted here is a visit the comparison will count, and one refused here is
+# one it would not have counted anyway.
+VISIT_MATCH_RADIUS_M = _SETTINGS['ROUTES_VISIT_MATCH_RADIUS_M']
 
 # Sort-key prefix: compact timestamp, lexicographically ordered like the dates.
 _ID_STAMP = '%Y%m%dT%H%M%S'
@@ -383,6 +389,7 @@ def register_executed_point(
     '''
     route = get_executed_route(dynamodb_resource, owner_email, point_data.executed_route_id)
     _assert_open(route)
+    _assert_at_the_stop(dynamodb_resource, owner_email, route, point_data)
     # The sale draws from the company's stock of the day the visit happened;
     # if the units are not there the visit is not recorded either, so the
     # seller learns it on the spot and does not promise what cannot ship.
@@ -406,6 +413,79 @@ def register_executed_point(
     message = f'Point {point["id"]} registered on executed route {route["id"]}.'
     logger.info(message)
     return route, point
+
+
+def _assert_at_the_stop(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    route: ExecutedRouteItem,
+    point_data: ExecutedPointCreateSchema
+) -> None:
+    '''
+        A visit to a planned stop has to happen AT that stop.
+
+        Registering attendance from anywhere was the hole: a seller could mark
+        a client without going near them and the comparison against the plan
+        said the route was met. Only what the plan promised is fenced:
+
+          - a route running free of any plan is not judged against one;
+          - a point that names no planned client is a NEW place, which is
+            exactly what we want reported, not blocked;
+          - a plan for a day already past is history being loaded, not a
+            visit being made, so it is read and not policed.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): Authenticated account.
+            route (ExecutedRouteItem): The open route.
+            point_data (ExecutedPointCreateSchema): The report.
+
+        Raises:
+            InvalidInputError: OUTSIDE_STOP_GEOFENCE when it is too far.
+    '''
+    planned_route_id = route.get('planned_route_id')
+    if not planned_route_id or not point_data.client_id:
+        return
+    plan = get_planned_route(dynamodb_resource, owner_email, planned_route_id)
+    if _is_past(plan):
+        return
+    stop = next(
+        (point for point in plan.get('points', [])
+         if point.get('client_id') == point_data.client_id),
+        None
+    )
+    if stop is None:
+        return
+    _assert_within(
+        stop,
+        (point_data.latitude, point_data.longitude),
+        point_data.max_distance_stop_point or VISIT_MATCH_RADIUS_M,
+        LocalizationError.OUTSIDE_STOP_GEOFENCE
+    )
+
+
+def _today() -> str:
+    '''
+        The operation's local day, as the plan writes it.
+
+        Returns:
+            str: Today in TARGET_TIMEZONE, as 'YYYY-MM-DD'.
+    '''
+    return datetime.now(ZoneInfo(TARGET_TIMEZONE)).date().isoformat()
+
+
+def _is_past(plan: PlannedRouteItem) -> bool:
+    '''
+        Whether the plan is for a day already gone.
+
+        Args:
+            plan (PlannedRouteItem): The planned route.
+
+        Returns:
+            bool: True when its day is before today.
+    '''
+    when = plan.get('plan_date')
+    return bool(when) and when < _today()
 
 
 def close_executed_route(

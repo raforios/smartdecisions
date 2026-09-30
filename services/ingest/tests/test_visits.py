@@ -11,8 +11,8 @@ from io import BytesIO
 
 import pandas as pd
 
-from schemas.ingest import SALES_SHEET, VISITS_SHEET, ValidationRule
-from services.visits import parse_and_validate, read_visits
+from schemas.ingest import ValidationRule
+from services.visits import parse_and_validate
 
 
 def _sales_frame() -> pd.DataFrame:
@@ -141,31 +141,17 @@ def test_the_outcome_is_a_closed_list():
     assert any(issue.rule_code == ValidationRule.INVALID_VALUE for issue in result.issues)
 
 
-def test_the_visits_sheet_is_found_inside_the_workbook():
-    '''
-        The published template is one workbook; a client who returns it with
-        the visits sheet filled loads sales and visits in a single upload, and
-        one without that sheet loads nothing about visits and says nothing.
-    '''
+def test_a_visits_file_is_read_whole():
+    """
+        One file, one contract: the whole file is the visits.
+    """
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine = 'openpyxl') as writer:
         pd.DataFrame([
-            {'Fecha': '2026-03-10', 'Nro Factura': 'F-1', 'Cliente': 'Tienda Norte',
-             'Producto': 'Galleta', 'Cantidad': 2}
-        ]).to_excel(writer, sheet_name = SALES_SHEET, index = False)
-        pd.DataFrame([
             {'Fecha': '2026-03-10', 'Hora': '10:30', 'Vendedor': 'Mario',
              'Cliente': 'Tienda Norte'}
-        ]).to_excel(writer, sheet_name = VISITS_SHEET, index = False)
+        ]).to_excel(writer, sheet_name = 'Datos', index = False)
 
-    found = read_visits(buffer.getvalue(), 'plantilla.xlsx', auto = True)
-    assert found is not None and len(found) == 1
+    result = parse_and_validate(buffer.getvalue(), 'plantilla_visitas.xlsx', _sales_frame())
 
-    result = parse_and_validate(buffer.getvalue(), 'plantilla.xlsx', _sales_frame(), auto = True)
     assert result.summary.valid_rows == 1
-
-    without = BytesIO()
-    with pd.ExcelWriter(without, engine = 'openpyxl') as writer:
-        pd.DataFrame([{'Fecha': '2026-03-10'}]).to_excel(
-            writer, sheet_name = SALES_SHEET, index = False)
-    assert read_visits(without.getvalue(), 'plantilla.xlsx', auto = True) is None

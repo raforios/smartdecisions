@@ -9,37 +9,189 @@
     from drifting apart, which is exactly what happened when the S3 upload path
     forgot two of them.
 '''
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any, Dict, Optional, Type
 from uuid import uuid4
 
+import pandas as pd
 from boto3.resources.base import ServiceResource
 from pydantic import BaseModel
 
-from schemas.ingest import IngestError
+from schemas.ingest import (
+    IngestError,
+    IngestResponse,
+    IngestSummary,
+    ValidationIssue
+)
+from schemas.clients import ClientSource
+from services.clients import CLIENT_FRAME_COLUMNS, sync_master
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
-from services.ingest_files import read_file, serialize_dataframe
-from services.ingest_utils import attach_to_dataset, download_bytes, upload_bytes
+from services.ingest_files import serialize_dataframe
+from services.ingest_utils import (
+    attach_to_dataset,
+    read_stored_frame,
+    upload_bytes
+)
 from services.logger_config import custom_logger as logger
 
 # Only a slice of the issues travels in the JSON response / DynamoDB item
 # (400 KB limit); the full set lives in the rejected CSV in S3.
 ENV_VARS = load_and_validate_env_vars({
     'MAX_ISSUES_ON_RESPONSE': int,
-    'TEMPLATE_S3_KEY': str,
+    'TEMPLATES_S3_PREFIX': str,
 })
 MAX_ISSUES_ON_RESPONSE = ENV_VARS['MAX_ISSUES_ON_RESPONSE']
 # The MIME type of the rejected-rows download. It stays in the code because it
 # describes the format of the file, not a decision anybody would take
 # differently: a CSV is served as a CSV.
 CSV_CONTENT_TYPE = 'text/csv'
-# The template is a static object in the default bucket, not something the
+# What the log calls a load that came through the API instead of a file.
+API_ORIGIN = 'API'
+# The templates are static objects in the default bucket, not something the
 # service builds: the format is fixed and the client is the one who complies
-# with it. Changing it means changing business logic, so it moves over time and
-# never at runtime.
-TEMPLATE_S3_KEY = ENV_VARS['TEMPLATE_S3_KEY']
+# with it. There is one per contract —ventas, cobros, stock, visitas— because
+# a client who only sends yesterday's stock should not download a book with
+# three sheets they will never fill in.
+TEMPLATES_S3_PREFIX = ENV_VARS['TEMPLATES_S3_PREFIX'].strip('/')
+
+
+def template_key(contract: str) -> str:
+    '''
+        The S3 key of one contract's template.
+
+        Args:
+            contract (str): Contract name, as the schema declares it.
+
+        Returns:
+            str: Full object key.
+    '''
+    return f'{TEMPLATES_S3_PREFIX}/plantilla_{contract}.xlsx'
+
+
+def summary_of(item: Dict[str, Any]) -> IngestSummary:
+    '''
+        The summary a stored dataset carries.
+
+        Both the ingest response and the status response publish it, so it is
+        read out of the item once: written twice, the two would answer the
+        same question differently the first time a field is added.
+
+        Args:
+            item (Dict[str, Any]): Stored dataset record.
+
+        Returns:
+            IngestSummary: Its counts and its date range.
+    '''
+    return IngestSummary(
+        total_rows = item.get('total_rows', 0),
+        valid_rows = item.get('valid_rows', 0),
+        error_rows = item.get('error_rows', 0),
+        unique_points_of_sale = item.get('unique_points_of_sale', 0),
+        unique_products = item.get('unique_products', 0),
+        date_range_start = item.get('date_range_start'),
+        date_range_end = item.get('date_range_end')
+    )
+
+
+def to_ingest_response(
+    item: Dict[str, Any],
+    already_stored: bool = False
+) -> IngestResponse:
+    '''
+        Maps a persisted DynamoDB item into the public IngestResponse schema.
+
+        Args:
+            item (Dict[str, Any]): Stored dataset record.
+            already_stored (bool): True when the upload matched a dataset the
+                caller already had, so the client can say so instead of
+                reporting a load that did not happen.
+
+        Returns:
+            IngestResponse: Public payload.
+    '''
+    return IngestResponse(
+        already_stored = already_stored,
+        dataset_id = item['dataset_id'],
+        status = item['status'],
+        file_s3_key = item.get('file_s3_key') or '',
+        summary = summary_of(item),
+        issues = [ValidationIssue(**issue) for issue in item.get('issues', [])],
+        created_at = item['created_at']
+    )
+
+
+
+def store_frame(
+    frame: Any,
+    folder: str,
+    auth_token: str
+) -> Optional[str]:
+    '''
+        Stores a frame as a CSV under its folder and returns the object key.
+
+        The accepted rows and the rejected ones are stored the same way and
+        differ only in the folder, so it is one function and not two blocks
+        that drift.
+
+        Args:
+            frame (pd.DataFrame): Rows to store.
+            folder (str): Folder under the ingest prefix.
+            auth_token (str): The caller's Authorization header.
+
+        Returns:
+            Optional[str]: The object key, or None when there is nothing to store.
+    '''
+    if frame.empty:
+        return None
+    return upload_bytes(
+        file_key = f'ingest/{folder}/{uuid4().hex}.csv',
+        data = serialize_dataframe(frame, f'{folder}.csv'),
+        content_type = CSV_CONTENT_TYPE,
+        auth_token = auth_token
+    )
+
+
+def rows_frame(rows: Any) -> Any:
+    '''
+        Rows posted by an ERP as a canonical frame.
+
+        The DTOs already carry the canonical names, so there is no header
+        mapping to do: this is where the API skips the only step the file
+        needs and rejoins the shared path.
+
+        Args:
+            rows (List[BaseModel]): Rows as the ERP posted them.
+
+        Returns:
+            pd.DataFrame: One row per DTO, canonical columns.
+    '''
+    return pd.DataFrame([row.model_dump() for row in rows])
+
+
+def stored_companion_frame(
+    dataset: Dict[str, Any],
+    spec: 'CompanionSpec',
+    auth_token: str
+) -> Optional[Any]:
+    '''
+        The rows a dataset already holds for one companion.
+
+        Args:
+            dataset (Dict[str, Any]): The dataset item.
+            spec (CompanionSpec): Which companion to read.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+
+        Returns:
+            Optional[pd.DataFrame]: The stored rows, or None when there are
+                none or the companion cannot be merged.
+    '''
+    stored_key = dataset.get(f'{spec.name}_s3_key')
+    if not stored_key or not spec.merge_keys:
+        return None
+    previous = read_stored_frame(str(stored_key), auth_token)
+    return None if previous.empty else previous
 
 
 def native_numbers(stored: Dict[str, Any]) -> Dict[str, Any]:
@@ -58,7 +210,10 @@ def native_numbers(stored: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def load_sales_frame(dataset: Dict[str, Any]) -> Any:
+def load_sales_frame(
+    dataset: Dict[str, Any],
+    auth_token: str
+) -> Any:
     '''
         Reads the normalized sales rows of a dataset back from S3.
 
@@ -68,6 +223,7 @@ def load_sales_frame(dataset: Dict[str, Any]) -> Any:
 
         Args:
             dataset (Dict[str, Any]): The dataset item.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
             pd.DataFrame: The normalized sales rows.
@@ -78,7 +234,7 @@ def load_sales_frame(dataset: Dict[str, Any]) -> Any:
     file_key = dataset.get('file_s3_key')
     if not file_key:
         raise ResourceNotFoundError(detail = IngestError.DATASET_NOT_FOUND.value)
-    return read_file(download_bytes(file_key), str(file_key))
+    return read_stored_frame(str(file_key), auth_token)
 
 
 @dataclass(frozen = True)
@@ -92,14 +248,30 @@ class CompanionSpec:
     '''
     name: str
     response_model: Type[BaseModel]
+    # What makes two rows THE SAME row. It is what lets an ERP push every day
+    # without counting a payment twice on a retry, and what makes a stock push
+    # for today replace today and leave last week alone. Empty means the
+    # companion cannot be merged and a push always replaces.
+    merge_keys: tuple[str, ...] = ()
+    # Whether the sheet names clients and therefore feeds the master. Visits
+    # do —they are the ones that reach a prospect nobody billed, and the ones
+    # that carry the GPS reading of the door—; objectives do, because an
+    # objective is set for the client the company means to activate. Payments
+    # name invoices and the stock names products.
+    #
+    # It is READ here, in `store_companion`, and nowhere else. It used to be a
+    # comment pretending to be configuration: every door fed the master with
+    # its own copy of the call, and the `from-s3` door simply forgot, so the
+    # same file loaded through a different endpoint gave a different master.
+    names_clients: bool = False
 
 
 async def store_companion(
     dynamodb_resource: ServiceResource,
     dataset: Dict[str, Any],
     result: Any,
-    filename: str,
-    spec: CompanionSpec
+    spec: CompanionSpec,
+    origin: tuple[str, str]
 ) -> BaseModel:
     '''
         Stores an accepted companion load and attaches it to its dataset.
@@ -113,14 +285,24 @@ async def store_companion(
             dataset (Dict[str, Any]): Dataset the load belongs to.
             result (Any): Outcome of the companion pipeline: `accepted`,
                 `issues` and `summary`.
-            filename (str): Original filename, for the log.
             spec (CompanionSpec): Which companion this is.
+            origin (tuple[str, str]): Filename for the log and the caller's
+                Authorization header, forwarded to FILES.
 
         Returns:
             BaseModel: The companion's response: what got in, what did not,
                 and why.
     '''
+    filename, auth_token = origin
     dataset_id = str(dataset['dataset_id'])
+    if spec.names_clients and len(result.accepted) > 0:
+        result = replace(result, accepted = sync_master(
+            dynamodb_resource = dynamodb_resource,
+            owner_email = str(dataset['owner_email']),
+            frame = result.accepted,
+            columns = CLIENT_FRAME_COLUMNS,
+            source = ClientSource.API if filename == API_ORIGIN else ClientSource.FILE
+        ))
     has_rows = len(result.accepted) > 0
     issues = result.issues[:MAX_ISSUES_ON_RESPONSE]
 
@@ -129,7 +311,8 @@ async def store_companion(
         stored_key = upload_bytes(
             file_key = f'ingest/{spec.name}/{uuid4().hex}.csv',
             data = serialize_dataframe(result.accepted, f'{spec.name}.csv'),
-            content_type = CSV_CONTENT_TYPE
+            content_type = CSV_CONTENT_TYPE,
+            auth_token = auth_token
         )
         attach_to_dataset(
             dynamodb_resource = dynamodb_resource,

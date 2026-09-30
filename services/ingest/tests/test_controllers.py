@@ -7,7 +7,7 @@
 '''
 import asyncio
 from datetime import date, timedelta
-from io import BytesIO
+from importlib import import_module
 from unittest.mock import patch
 
 import pandas as pd
@@ -16,17 +16,18 @@ import pytest
 from fastapi import HTTPException
 
 from schemas.ingest import (
-    COLLECTIONS_SHEET,
     IngestError,
+    SALES_COLUMNS,
+    TemplateInfo,
     IngestResponse,
-    SALES_SHEET,
-    STOCK_SHEET,
-    TEMPLATE_COLUMNS,
-    VISITS_SHEET
+    ObjectivesResponse,
+    TEMPLATE_COLUMNS
 )
 from services import ingest_utils
+from services.ingest_files import read_file
 from controllers import common
 from controllers import ingest as controllers
+from controllers import objectives as objectives_controller
 
 
 def _template_rows() -> pd.DataFrame:
@@ -61,35 +62,6 @@ def _template_file() -> bytes:
     return _template_rows().to_csv(index = False).encode('utf-8')
 
 
-def _full_workbook() -> bytes:
-    '''
-        Builds the four-sheet workbook the client downloads and returns filled.
-
-        Returns:
-            bytes: An .xlsx with sales, payments, a stock snapshot and visits.
-    '''
-    buffer = BytesIO()
-    with pd.ExcelWriter(buffer, engine = 'openpyxl') as writer:
-        _template_rows().to_excel(writer, sheet_name = SALES_SHEET, index = False)
-        pd.DataFrame([
-            {'Nro Factura': 'F-0000', 'Fecha Cobro': '2026-02-10', 'Monto Cobrado': 20.0},
-            {'Nro Factura': 'F-0001', 'Fecha Cobro': '2026-02-12', 'Monto Cobrado': 51.0}
-        ]).to_excel(writer, sheet_name = COLLECTIONS_SHEET, index = False)
-        pd.DataFrame([
-            {'Fecha': '2026-02-15', 'Producto': 'Producto 0', 'Existencia': 40},
-            {'Fecha': '2026-02-15', 'Producto': 'Producto 1', 'Existencia': 12}
-        ]).to_excel(writer, sheet_name = STOCK_SHEET, index = False)
-        pd.DataFrame([
-            {'Fecha': '2026-01-05', 'Hora': '09:10', 'Vendedor': 'Mario',
-             'Cliente': 'Tienda 0', 'Resultado': 'VENTA'},
-            {'Fecha': '2026-01-05', 'Hora': '10:40', 'Vendedor': 'Mario',
-             'Cliente': 'Tienda 1', 'Resultado': 'SIN_VENTA'},
-            {'Fecha': '2026-01-05', 'Hora': '11:20', 'Vendedor': 'Mario',
-             'Cliente': 'Tienda 2'}
-        ]).to_excel(writer, sheet_name = VISITS_SHEET, index = False)
-    return buffer.getvalue()
-
-
 @pytest.fixture(name = 'stored')
 def _stored():
     '''
@@ -109,9 +81,15 @@ def _stored():
         persisted.setdefault('created_at', '2026-01-05T10:00:00Z')
         return persisted
 
-    with patch.object(controllers, 'download_bytes', lambda _: _template_file()), \
-         patch.object(controllers, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+    # FILES hands back rows, not bytes: the double answers at that level, and
+    # through the same reader, so a blank cell arrives as a null exactly as it
+    # would from the real service.
+    with patch.object(controllers, 'read_stored_frame',
+                      lambda *args, **kwargs: read_file(_template_file(), 'ventas.csv')), \
+         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
          patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
+         patch.object(controllers, 'sync_master', lambda **kwargs: kwargs['frame']), \
+         patch.object(controllers, 'delete_stored_file', lambda *args: None), \
          patch.object(controllers, 'persist_dataset', _persist):
         yield persisted
 
@@ -123,6 +101,7 @@ def test_ingest_from_s3_returns_a_full_response(stored):
         file_key = 'ingest/raw/test.csv',
         file_name = 'ventas.csv',
         current_user = 'tester@bearsoft.com.bo',
+        auth_token = 'Bearer t',
         request = None
     ))
 
@@ -142,59 +121,46 @@ def test_ingest_from_s3_returns_a_full_response(stored):
     assert response.visits is None
 
 
-def test_the_s3_upload_loads_the_payments_and_stock_sheets_too():
+def test_the_multipart_upload_also_feeds_the_client_master():
     '''
-        The portal uploads through the pre-signed S3 path, so that path has to
-        read the workbook's companion sheets: one load feeds every module. It
-        used to skip them, and receivables showed every invoice as open.
+        The other upload door has to do everything the S3 one does.
+
+        It had no test at all, and that is how an assignment to a frozen
+        dataclass —`result.accepted = ...`— got written on this path alone: the
+        suite stayed green and the endpoint would have raised
+        FrozenInstanceError on the first real upload.
     '''
-    attached: dict = {}
+    synced: list = []
+
+    def _sync(**kwargs):
+        synced.append(kwargs['owner_email'])
+        return kwargs['frame']
 
     def _persist(
         dynamodb_resource, # pylint: disable=unused-argument
         payload
     ):
-        return {**payload, 'dataset_id': 'ds-full', 'created_at': '2026-02-15T10:00:00Z'}
+        return {**payload, 'dataset_id': 'ds-multipart',
+                'created_at': '2026-02-15T10:00:00Z'}
 
-    def _attach(
-        dynamodb_resource, # pylint: disable=unused-argument
-        dataset_id, # pylint: disable=unused-argument
-        payload
-    ):
-        attached.update(payload)
-
-    # The companion loads are stored through controllers/common.py, so the
-    # S3 and DynamoDB doubles go there as well as on the sales controller.
-    with patch.object(controllers, 'download_bytes', lambda _: _full_workbook()), \
-         patch.object(controllers, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
-         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+    with patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
          patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
-         patch.object(controllers, 'persist_dataset', _persist), \
-         patch.object(common, 'attach_to_dataset', _attach):
-        response = asyncio.run(controllers.ingest_excel_from_s3_controller(
+         patch.object(controllers, 'sync_master', _sync), \
+         patch.object(controllers, 'persist_dataset', _persist):
+        response = asyncio.run(controllers.ingest_excel_controller(
             dynamodb_resource = None,
-            file_key = 'ingest/raw/plantilla.xlsx',
-            file_name = 'plantilla.xlsx',
+            file_bytes = _template_file(),
+            filename = 'ventas.csv',
             current_user = 'tester@bearsoft.com.bo',
+            auth_token = 'Bearer t',
             request = None
         ))
 
+    assert isinstance(response, IngestResponse)
     assert response.status == 'validated'
     assert response.summary.valid_rows == 30
-    assert response.collections is not None
-    assert response.collections.valid_rows == 2
-    assert response.stock is not None
-    assert response.stock.valid_rows == 2
-    assert response.stock.products == 2
-    assert response.visits is not None
-    assert response.visits.valid_rows == 3
-    assert response.visits.with_outcome == 2
-    # The sales fixture has no seller column, so nobody is unknown there.
-    assert response.visits.unknown_sellers == 0
-    # Every load hangs off the dataset, where the analysis services read it.
-    assert attached['collections_s3_key'].startswith('ingest/collections/')
-    assert attached['stock_s3_key'].startswith('ingest/stock/')
-    assert attached['visits_s3_key'].startswith('ingest/visits/')
+    # The owner of the load is the caller, never anything read off the file.
+    assert synced == ['tester@bearsoft.com.bo']
 
 
 def _dataset(owner: str) -> dict:
@@ -407,7 +373,9 @@ def test_uploading_the_same_file_twice_does_not_duplicate_it():
     already = _dataset('yo@miempresa.com')
     written = []
 
-    with patch.object(controllers, 'download_bytes', lambda _: b'las mismas ventas'), \
+    with patch.object(controllers, 'read_stored_frame',
+                      lambda *args, **kwargs: read_file(_template_file(), 'ventas.csv')), \
+         patch.object(controllers, 'delete_stored_file', lambda *args: None), \
          patch.object(controllers, 'find_dataset_by_fingerprint',
                       lambda **kwargs: already), \
          patch.object(controllers, 'persist_dataset',
@@ -417,6 +385,7 @@ def test_uploading_the_same_file_twice_does_not_duplicate_it():
             file_key = 'ingest/raw/otra-vez.csv',
             file_name = 'ventas.csv',
             current_user = 'yo@miempresa.com',
+            auth_token = 'Bearer t',
             request = None
         ))
 
@@ -434,3 +403,191 @@ def test_the_fingerprint_is_the_content_and_not_the_name():
     same = ingest_utils.content_fingerprint(b'fila1,fila2')
     assert same == ingest_utils.content_fingerprint(b'fila1,fila2')
     assert same != ingest_utils.content_fingerprint(b'fila1,fila2,fila3')
+
+
+def test_the_objectives_upload_returns_a_full_response():
+    '''
+        The objectives endpoint, end to end through its controller.
+
+        It exists for the reason the multipart test above exists: a route or
+        controller can name something the schema no longer has, and only
+        running the layer catches it. It also pins the two behaviours that
+        make the contract worth having — a month is kept as a month, and the
+        client an objective names is created even though nobody billed them.
+    '''
+    created: list = []
+
+    def _sync(**kwargs):
+        created.append(kwargs['frame'])
+        return kwargs['frame']
+
+    rows = pd.DataFrame([
+        {'Cliente': 'Tienda 1', 'Periodo': '2026-01', 'Objetivo': 15000.0},
+        {'Cliente': 'Prospecto Nuevo', 'Periodo': '2026-01', 'Objetivo': 5000.0}
+    ])
+
+    with patch.object(objectives_controller, 'get_owned_dataset',
+                      lambda **kwargs: {'dataset_id': 'test-dataset-id',
+                                        'owner_email': 'tester@bearsoft.com.bo'}), \
+         patch.object(objectives_controller, 'load_sales_frame',
+                      lambda *args, **kwargs: _template_rows().rename(
+                          columns = {'Cliente': 'pos_id'})), \
+         patch.object(common, 'sync_master', _sync), \
+         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(common, 'attach_to_dataset', lambda **kwargs: None):
+        response = asyncio.run(objectives_controller.ingest_objectives_controller(
+            dynamodb_resource = None,
+            dataset_id = 'test-dataset-id',
+            file_bytes = rows.to_csv(index = False).encode('utf-8'),
+            filename = 'objetivos.csv',
+            current_user = 'tester@bearsoft.com.bo',
+            auth_token = 'Bearer t',
+            request = None
+        ))
+
+    assert isinstance(response, ObjectivesResponse)
+    assert response.status == 'validated'
+    assert response.summary.valid_rows == 2
+    assert response.summary.target_amount == 20000.0
+    assert response.summary.periods_count == 1
+    # The prospect is reported, kept, and handed to the master.
+    assert response.summary.unmatched_rows == 1
+    assert 'Prospecto Nuevo' in set(created[0]['pos_id'])
+    assert response.objectives_s3_key
+
+
+def test_the_template_info_controller_returns_its_model():
+    '''
+        The contract the client downloads, described from the contract itself.
+        If a column is added and this drifts, the client fills in a template
+        the validator then rejects.
+    '''
+    response = asyncio.run(controllers.get_template_info_controller(
+        base_path = None, request = None, current_user = 'tester@bearsoft.com.bo'
+    ))
+
+    assert isinstance(response, TemplateInfo)
+    assert response.download_url.endswith('/ventas')
+    assert set(response.required_columns) <= {
+        column.canonical for column in SALES_COLUMNS
+    }
+
+
+def test_the_template_download_controller_serves_the_stored_file():
+    '''
+        The one documented direct-S3 read in the product: a static file FILES
+        cannot hand back as a file. It has to reach the caller as bytes.
+    '''
+    with patch.object(controllers, 'download_template_bytes',
+                      lambda key: f'contenido de {key}'.encode('utf-8')):
+        content = asyncio.run(controllers.download_template_controller(
+            contract = 'ventas', request = None,
+            current_user = 'tester@bearsoft.com.bo'
+        ))
+
+    assert b'ventas' in content
+
+
+def test_the_rejected_download_controller_serves_the_set_aside_rows():
+    '''
+        The rows the client has to fix. They are downloaded as a CSV, which
+        is the only artefact of the product that carries Spanish reasons.
+    '''
+    with patch.object(controllers, 'get_owned_dataset',
+                      lambda **kwargs: {'dataset_id': 'd', 'owner_email': 'o',
+                                        'rejected_s3_key': 'ingest/rejected/d.csv'}), \
+         patch.object(controllers, 'read_stored_frame',
+                      lambda *args, **kwargs: pd.DataFrame([{'Fecha': '2026-01-05',
+                                                             'rule_codes': 'x=Y'}])):
+        content = asyncio.run(controllers.download_rejected_controller(
+            dynamodb_resource = None, dataset_id = 'd', request = None,
+            current_user = 'tester@bearsoft.com.bo', auth_token = 'Bearer t'
+        ))
+
+    assert content.startswith(b'Fecha')
+
+
+def test_a_dataset_with_nothing_rejected_answers_a_code_and_not_a_sentence():
+    '''
+        It used to answer a Spanish sentence, which the backend has no
+        business writing: the wording belongs to whoever draws the screen,
+        and a phrase cannot be translated or branched on.
+    '''
+    with patch.object(controllers, 'get_owned_dataset',
+                      lambda **kwargs: {'dataset_id': 'd', 'owner_email': 'o'}):
+        with pytest.raises(HTTPException) as refused:
+            asyncio.run(controllers.download_rejected_controller(
+                dynamodb_resource = None, dataset_id = 'd', request = None,
+                current_user = 'tester@bearsoft.com.bo', auth_token = 'Bearer t'
+            ))
+
+    assert refused.value.detail == IngestError.NO_REJECTED_ROWS.value
+
+
+@pytest.mark.parametrize('controller_name,filename,rows,expected', [
+    ('ingest_collections_controller', 'cobros.csv',
+     'Nro Factura,Fecha Cobro,Monto Cobrado\nF-0000,2026-01-20,25.5\n', 1),
+    ('ingest_stock_controller', 'stock.csv',
+     'Fecha,Producto,Existencia\n2026-01-20,Producto 0,40\n', 1),
+    ('ingest_visits_controller', 'visitas.csv',
+     'Fecha,Vendedor,Cliente,Hora\n2026-01-20,Ana,Tienda 0,09:30\n', 1),
+])
+def test_every_companion_upload_controller_returns_its_model(
+    controller_name,
+    filename,
+    rows,
+    expected
+):
+    '''
+        The three file doors, each through its own controller.
+
+        They had no test at all. They are seven-line adapters, which is
+        exactly why nobody wrote one — and exactly how an adapter that names
+        a field its schema no longer has reaches production.
+    '''
+    module = import_module(f'controllers.{controller_name.split("_")[1]}')
+    controller = getattr(module, controller_name)
+
+    with patch.object(module, 'get_owned_dataset',
+                      lambda **kwargs: {'dataset_id': 'test-dataset-id',
+                                        'owner_email': 'tester@bearsoft.com.bo'}), \
+         patch.object(module, 'load_sales_frame',
+                      lambda *args, **kwargs: _normalized_sales()), \
+         patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
+         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(common, 'attach_to_dataset', lambda **kwargs: None):
+        response = asyncio.run(controller(
+            dynamodb_resource = None,
+            dataset_id = 'test-dataset-id',
+            file_bytes = rows.encode('utf-8'),
+            filename = filename,
+            current_user = 'tester@bearsoft.com.bo',
+            auth_token = 'Bearer t',
+            request = None
+        ))
+
+    assert response.dataset_id == 'test-dataset-id'
+    assert response.summary.valid_rows == expected
+    assert response.status == 'validated'
+
+
+def _normalized_sales() -> pd.DataFrame:
+    '''
+        The sales frame a companion is married against, canonical already.
+
+        Returns:
+            pd.DataFrame: Rows with the invoice, client and product a
+                companion file can refer to.
+    '''
+    frame = pd.DataFrame(_template_rows()).rename(columns = {
+        'Fecha': 'date', 'Nro Factura': 'order_id', 'Cliente': 'pos_name',
+        'Producto': 'product_name', 'Cantidad': 'quantity',
+        'Precio Unitario': 'unit_price', 'Vendedor': 'seller'
+    })
+    frame = pd.DataFrame(frame)
+    frame['date'] = pd.to_datetime(frame['date'])
+    frame['pos_id'] = frame['pos_name']
+    frame['product_id'] = frame['product_name']
+    frame['total_amount'] = frame['quantity'] * frame['unit_price']
+    frame['seller'] = 'Ana'
+    return frame

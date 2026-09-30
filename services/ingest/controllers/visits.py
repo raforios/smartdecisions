@@ -17,7 +17,14 @@ from services.utils import audit_event, handle_service_errors
 # spec, and folding them into one would hide which process each route runs.
 # pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
 
-SPEC = CompanionSpec(name = 'visits', response_model = VisitsResponse)
+# One seller cannot be at one client twice at the same hour; a visit with no
+# hour is one per seller, client and day.
+SPEC = CompanionSpec(
+    name = 'visits',
+    response_model = VisitsResponse,
+    merge_keys = ('visit_date', 'seller', 'pos_id', 'visit_time'),
+    names_clients = True
+)
 
 
 @handle_service_errors('INGEST')
@@ -28,6 +35,7 @@ async def ingest_visits_controller(
     file_bytes: bytes,
     filename: str,
     current_user: str,
+    auth_token: str,
     request: Request # pylint: disable=unused-argument
 ) -> VisitsResponse:
     '''
@@ -47,6 +55,7 @@ async def ingest_visits_controller(
             file_bytes (bytes): Raw content of the uploaded file.
             filename (str): Original filename.
             current_user (str): Authenticated caller and owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
             VisitsResponse: Summary of the load and its issues.
@@ -56,5 +65,6 @@ async def ingest_visits_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset))
-    return await store_companion(dynamodb_resource, dataset, result, filename, SPEC)
+    result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset, auth_token))
+    return await store_companion(dynamodb_resource, dataset, result, SPEC,
+                                 (filename, auth_token))

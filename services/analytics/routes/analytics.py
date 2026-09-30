@@ -1,11 +1,14 @@
 '''
     Analytics: routes handler.
 '''
-from fastapi import APIRouter, Depends, Path, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.analytics import (
     get_credit_policy_controller,
+    objectives_controller,
+    get_commercial_policy_controller,
+    save_commercial_policy_controller,
     receivables_controller,
     save_credit_policy_controller,
     stock_controller,
@@ -17,6 +20,11 @@ from controllers.analytics import (
     portfolio_controller,
     run_analytics_controller,
     segmentation_controller
+)
+from schemas.objectives import (
+    CommercialPolicyResponse,
+    CommercialPolicySchema,
+    ObjectivesResponse
 )
 from schemas.receivables import (
     CreditPolicyRequest,
@@ -65,19 +73,35 @@ class DateWindow: # pylint: disable=too-few-public-methods
         ),
         date_to: str = Query(
             None, pattern = _ISO_DATE, description = 'Inclusive end, YYYY-MM-DD.'
-        )
+        ),
+        currency: str = Query(
+            None, min_length = 3, max_length = 3,
+            description = 'ISO 4217 code to read the amounts in. Left out, the '
+                          'report comes in the currency the file was written in. '
+                          'Each amount converts at the rate of its OWN day.'
+        ),
+        authorization: str = Header(None)
     ):
         self.date_from = date_from
         self.date_to = date_to
+        self.currency = currency
+        # Forwarded so ANALYTICS can ask QUOTES for the rates as the real
+        # caller, the way every service-to-service call in the product does.
+        self.authorization = authorization
 
     def as_params(self) -> dict:
         '''
             Returns the window as the params dict the controllers expect.
 
             Returns:
-                dict: Keys 'date_from' and 'date_to'.
+                dict: The window, the currency and the caller's token.
         '''
-        return {'date_from': self.date_from, 'date_to': self.date_to}
+        return {
+            'date_from': self.date_from,
+            'date_to': self.date_to,
+            'currency': self.currency,
+            'auth_token': self.authorization
+        }
 
 
 class ForecastOptions: # pylint: disable=too-few-public-methods
@@ -371,6 +395,105 @@ async def receivables_endpoint(
         params = window.as_params(),
         current_user = current_user,
         request = request
+    )
+
+
+@router.get(
+    '/objectives/{dataset_id}',
+    response_model = ObjectivesResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Attainment against objective (semaphore, debt, points)',
+    description = (
+        'Reads the dataset with the objectives and payments attached to it '
+        'and reports, per client and per month, what was decided against '
+        'what happened. The objective is measured TWICE — against what was '
+        'invoiced and against what was actually collected — because a client '
+        'can hit their number on paper and owe every bolivian of it. A '
+        'payment counts in the month of the invoice it settles, which is the '
+        'only reading under which invoiced equals collected plus debt. The '
+        'cuts and the points rate applied travel in `policy`. Clients who '
+        'invoiced with no objective are counted, never scored. Read-only.'
+    )
+)
+async def objectives_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    window: DateWindow = Depends(),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_owner)
+) -> ObjectivesResponse:
+    '''
+        Endpoint returning the attainment view for a dataset_id.
+    '''
+    message = f'Attainment for dataset {dataset_id} requested by {current_user}.'
+    logger.info(message)
+    return await objectives_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        params = window.as_params(),
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/commercial-policy',
+    response_model = CommercialPolicyResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Commercial policy applied to the caller\'s attainment',
+    description = (
+        'Returns the cut where RED becomes YELLOW, the cut where YELLOW '
+        'becomes GREEN, and what a unit of currency is worth in points for '
+        'each cluster. The cluster names are the account\'s own: the product '
+        'declares none.'
+    )
+)
+async def get_commercial_policy_endpoint(
+    request: Request,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_owner)
+) -> CommercialPolicyResponse:
+    '''
+        Endpoint returning the caller's commercial policy.
+    '''
+    message = f'Commercial policy requested by {current_user}.'
+    logger.info(message)
+    return await get_commercial_policy_controller(
+        dynamodb_resource = dynamodb_resource,
+        request = request,
+        current_user = current_user
+    )
+
+
+@router.put(
+    '/commercial-policy',
+    response_model = CommercialPolicyResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Set the commercial policy of the caller\'s account',
+    description = (
+        'Stores the yardstick this account wants its attainment judged with. '
+        'Every field is optional and what is left out falls back to the '
+        'service default, field by field. The answer is the RESOLVED policy, '
+        'so the caller can see which defaults filled the gaps before a '
+        'semaphore is drawn with them.'
+    )
+)
+async def save_commercial_policy_endpoint(
+    request: Request,
+    policy: CommercialPolicySchema,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_owner)
+) -> CommercialPolicyResponse:
+    '''
+        Endpoint storing the caller's commercial policy.
+    '''
+    message = f'Commercial policy updated by {current_user}.'
+    logger.info(message)
+    return await save_commercial_policy_controller(
+        dynamodb_resource = dynamodb_resource,
+        policy = policy,
+        request = request,
+        current_user = current_user
     )
 
 

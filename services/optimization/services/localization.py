@@ -12,23 +12,17 @@
         IN CREATION; a route is deleted only in that state.
       - Status moves IN CREATION -> ACTIVE, then ACTIVE <-> INACTIVE.
 '''
-import csv
-import io
 from typing import Any, Dict, List, Optional, Tuple
 
 from boto3.resources.base import ServiceResource
-from pydantic import ValidationError
 
-from models.localization import ExecutedRouteItem, PlannedPointItem, PlannedRouteItem
+from models.localization import PlannedPointItem, PlannedRouteItem
 
 from schemas.localization import (
-    BulkUploadPlannedResponseSchema,
-    InferPlannedRouteSchema,
     LocalizationError,
     PlannedPointResponseSchema,
     PlannedPointSchema,
     PlannedPointUpdateSchema,
-    PlannedRouteBulkRowSchema,
     PlannedRouteCreateSchema,
     PlannedRouteFilterRequestSchema,
     PlannedRouteResponseSchema,
@@ -46,9 +40,14 @@ from services.exceptions import (
 from services.logger_config import custom_logger as logger
 
 _SETTINGS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES': str
+    'DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES': str,
+    'STOP_POSITION_DECIMALS': int
 })
 PLANNED_ROUTES_TABLE = _SETTINGS['DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES']
+# How close two readings have to be to count as the same stop when neither
+# names a client. A decision —it is the difference between one shop and two—
+# so it lives in the environment.
+_STOP_POSITION_DECIMALS = _SETTINGS['STOP_POSITION_DECIMALS']
 
 # Where a route may go from each status. IN CREATION only opens; ACTIVE and
 # INACTIVE toggle each other.
@@ -116,6 +115,31 @@ def list_planned_routes(
     return sorted(
         from_dynamo(items),
         key = lambda route: (route.get('created_at', ''), route.get('route_code', ''))
+    )
+
+
+def insert_planned_route(
+    dynamodb_resource: ServiceResource,
+    item: PlannedRouteItem
+) -> None:
+    '''
+        Writes a NEW planned route, refusing to overwrite one.
+
+        Public and here because the route also arrives from elsewhere —a CSV
+        another system exported, a day a seller worked— and those must reach
+        the table the same way. Two copies of this call is two chances to
+        write a route without its uniqueness check.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            item (PlannedRouteItem): The route to insert.
+    '''
+    put_unique_composite_item(
+        dynamodb_resource = dynamodb_resource,
+        table_name = PLANNED_ROUTES_TABLE,
+        item_data = item,
+        partition_key = 'owner_email',
+        sort_key = 'id'
     )
 
 
@@ -309,13 +333,7 @@ def create_planned_route(
         header = route_data.model_dump(exclude = {'points'}),
         points = points
     )
-    put_unique_composite_item(
-        dynamodb_resource = dynamodb_resource,
-        table_name = PLANNED_ROUTES_TABLE,
-        item_data = item,
-        partition_key = 'owner_email',
-        sort_key = 'id'
-    )
+    insert_planned_route(dynamodb_resource, item)
     message = f'Planned route {item["id"]} ({item["route_code"]}) created with {len(points)} stops.'
     logger.info(message)
     return item
@@ -578,200 +596,3 @@ def delete_planned_point(
     message = f'Stop {point_id} removed from planned route {route_id}.'
     logger.info(message)
     return route
-
-
-# ---------------------------------------------------------------------------
-# Bulk upload
-# ---------------------------------------------------------------------------
-# Columns of the CSV another system exports: the route header repeated on
-# every stop. Names are the API's own field names, so the file format and the
-# JSON contract never diverge.
-BULK_REQUIRED_COLUMNS = ('route_code', 'route_name', 'point_name', 'secuencial',
-                         'latitude', 'longitude')
-BULK_HEADER_FIELDS = ('route_name', 'route_code', 'description', 'seller')
-
-
-def parse_planned_routes_csv(csv_text: str) -> List[PlannedRouteBulkRowSchema]:
-    '''
-        Reads the bulk CSV into validated rows. Blank lines are skipped; a
-        missing required column or an invalid value refuses the whole file.
-
-        Args:
-            csv_text (str): The decoded CSV.
-
-        Returns:
-            List[PlannedRouteBulkRowSchema]: One validated row per stop.
-
-        Raises:
-            InvalidInputError: MISSING_COLUMNS, EMPTY_UPLOAD or INVALID_ROW.
-    '''
-    reader = csv.DictReader(io.StringIO(csv_text))
-    header = [name.strip() for name in (reader.fieldnames or [])]
-    missing = [column for column in BULK_REQUIRED_COLUMNS if column not in header]
-    if missing:
-        error_msg = f'Bulk CSV lacks columns {missing}; got {header}.'
-        logger.warning(error_msg)
-        raise InvalidInputError(detail = LocalizationError.MISSING_COLUMNS.value)
-    reader.fieldnames = header
-
-    rows: List[PlannedRouteBulkRowSchema] = []
-    for line_no, raw in enumerate(reader, start = 2):
-        cleaned = {key: (value or '').strip() or None for key, value in raw.items() if key}
-        if not any(cleaned.values()):
-            continue
-        try:
-            rows.append(PlannedRouteBulkRowSchema(**cleaned))
-        except ValidationError as error:
-            error_msg = f'Bulk CSV line {line_no} rejected: {error.error_count()} error(s).'
-            logger.warning(error_msg)
-            raise InvalidInputError(detail = LocalizationError.INVALID_ROW.value) from error
-    if not rows:
-        raise InvalidInputError(detail = LocalizationError.EMPTY_UPLOAD.value)
-    return rows
-
-
-def group_rows_into_routes(rows: List[PlannedRouteBulkRowSchema]) -> List[PlannedRouteCreateSchema]:
-    '''
-        Folds the stop rows into one route per `route_code`, keeping the header
-        of the first row of each code and the stops in file order.
-
-        Args:
-            rows (List[PlannedRouteBulkRowSchema]): Validated CSV rows.
-
-        Returns:
-            List[PlannedRouteCreateSchema]: Routes ready to be created.
-    '''
-    grouped: Dict[str, Dict[str, Any]] = {}
-    for row in rows:
-        bucket = grouped.setdefault(row.route_code, {
-            **row.model_dump(include = set(BULK_HEADER_FIELDS)), 'points': []
-        })
-        bucket['points'].append(PlannedPointSchema(
-            **row.model_dump(exclude = set(BULK_HEADER_FIELDS))
-        ))
-    return [PlannedRouteCreateSchema(**route) for route in grouped.values()]
-
-
-def bulk_create_planned_routes(
-    dynamodb_resource: ServiceResource,
-    owner_email: str,
-    csv_text: str
-) -> BulkUploadPlannedResponseSchema:
-    '''
-        Imports the plan another system exported. All-or-nothing: every code
-        must be new and every route valid before the first write.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            owner_email (str): Authenticated account.
-            csv_text (str): The decoded CSV.
-
-        Returns:
-            BulkUploadPlannedResponseSchema: Counts and the ids created.
-    '''
-    routes = group_rows_into_routes(parse_planned_routes_csv(csv_text))
-    existing = list_planned_routes(dynamodb_resource, owner_email)
-    items: List[PlannedRouteItem] = []
-    for route in routes:
-        _assert_route_code_free(existing, route.route_code)
-        points: List[PlannedPointItem] = []
-        for point in route.points:
-            _assert_sequence_free(points, point.secuencial)
-            points.append(build_point_item(point))
-        items.append(build_route_item(
-            owner_email = owner_email,
-            header = route.model_dump(exclude = {'points'}),
-            points = points
-        ))
-    for item in items:
-        put_unique_composite_item(
-            dynamodb_resource = dynamodb_resource,
-            table_name = PLANNED_ROUTES_TABLE,
-            item_data = item,
-            partition_key = 'owner_email',
-            sort_key = 'id'
-        )
-    points_created = sum(len(item['points']) for item in items)
-    message = f'Bulk upload created {len(items)} planned route(s) with {points_created} stops.'
-    logger.info(message)
-    return BulkUploadPlannedResponseSchema(
-        routes_created = len(items),
-        points_created = points_created,
-        route_ids = [item['id'] for item in items]
-    )
-
-
-# ---------------------------------------------------------------------------
-# Plan inferred from the execution
-# ---------------------------------------------------------------------------
-def visits_as_stops(routes: List[PlannedRouteItem]) -> List[PlannedPointSchema]:
-    '''
-        The clients a seller visited across `routes`, in the order they were
-        reached, each once. Positions that name no client are breadcrumbs, not
-        stops.
-
-        Args:
-            routes (List[ExecutedRouteItem]): Executed route items of one seller and day.
-
-        Returns:
-            List[PlannedPointSchema]: Stops with visiting order.
-    '''
-    visits = sorted(
-        (point for route in routes for point in route.get('points', []) if point.get('client_id')),
-        key = lambda point: point['timestamp']
-    )
-    stops: List[PlannedPointSchema] = []
-    seen: set = set()
-    for point in visits:
-        if point['client_id'] in seen:
-            continue
-        seen.add(point['client_id'])
-        stops.append(PlannedPointSchema(
-            point_name = point['client_id'],
-            secuencial = len(stops) + 1,
-            latitude = point['latitude'],
-            longitude = point['longitude'],
-            client_id = point['client_id']
-        ))
-    return stops
-
-
-def infer_planned_route(
-    dynamodb_resource: ServiceResource,
-    owner_email: str,
-    request: InferPlannedRouteSchema,
-    executed_routes: List[ExecutedRouteItem]
-) -> PlannedRouteItem:
-    '''
-        Creates the plan a seller's day implies and links that day's routes to
-        it. The caller hands over the executed routes (already scoped to the
-        seller and date) so this module does not depend on the executed one.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            owner_email (str): Authenticated account.
-            request (InferPlannedRouteSchema): Seller, date and optional naming.
-            executed_routes (List[ExecutedRouteItem]): That seller's routes that day.
-
-        Returns:
-            PlannedRouteItem: The stored plan, IN CREATION.
-
-        Raises:
-            InvalidInputError: NO_VISITS_TO_INFER when the day has no visits.
-    '''
-    stops = visits_as_stops(executed_routes)
-    if not stops:
-        error_msg = f'{request.seller} has no visits on {request.date}; nothing to infer.'
-        logger.warning(error_msg)
-        raise InvalidInputError(detail = LocalizationError.NO_VISITS_TO_INFER.value)
-    route_code = request.route_code or f'{request.seller}-{request.date}'
-    plan = create_planned_route(dynamodb_resource, owner_email, PlannedRouteCreateSchema(
-        route_name = request.route_name or route_code,
-        route_code = route_code,
-        description = None,
-        seller = request.seller,
-        points = stops
-    ))
-    message = f'Planned route {plan["id"]} inferred from {len(stops)} visit(s) of {request.seller}.'
-    logger.info(message)
-    return plan

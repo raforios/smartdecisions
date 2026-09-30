@@ -11,7 +11,7 @@ import csv
 import re
 from functools import lru_cache
 from io import BytesIO
-from typing import Final, Optional
+from typing import Final
 
 import pandas as pd
 
@@ -81,9 +81,12 @@ def read_dataframe(
     '''
     lower = filename.lower()
 
+    # One file, one contract: the first sheet IS the contract. The four-sheet
+    # workbook this used to scan was our own invention and it is what forced
+    # the service to read S3 by itself, because the FILES reader —correctly—
+    # returns one flat table.
     if lower.endswith('.xlsx'):
-        sheets = read_workbook(file_bytes)
-        return next(iter(sheets.values())) if sheets else pd.DataFrame()
+        return pd.read_excel(BytesIO(file_bytes), engine = 'openpyxl')
     if lower.endswith('.csv'):
         return _read_csv(file_bytes)
 
@@ -118,64 +121,6 @@ def serialize_dataframe(
 
 
 @lru_cache(maxsize = 1)
-def read_workbook(file_bytes: bytes) -> dict[str, pd.DataFrame]:
-    '''
-        Opens an .xlsx once and returns every sheet by name.
-
-        The sales, payments and stock pipelines each look for their own sheet
-        in the same workbook, and opening a 2.6 MB book with openpyxl takes
-        about ten seconds: three opens blew the 30 s Lambda budget. Keyed on
-        the content, so the three reads of one upload share a single parse.
-
-        Args:
-            file_bytes (bytes): Raw .xlsx content.
-
-        Returns:
-            dict[str, pd.DataFrame]: Sheets in workbook order.
-    '''
-    return pd.read_excel(BytesIO(file_bytes), sheet_name = None, engine = 'openpyxl')
-
-
-def read_sheet(
-    file_bytes: bytes,
-    filename: str,
-    sheet_name: str,
-    auto: bool = False
-) -> Optional[pd.DataFrame]:
-    '''
-        Reads one companion contract out of an upload: the sheet of that name
-        inside a workbook, or the whole file when it was uploaded on its own.
-
-        `auto` is the difference between "this file IS a payments/stock/visits
-        file" and "look inside this sales workbook in case it also brings that
-        sheet". It matters: read in auto mode, a sales CSV would be parsed as
-        payments and reported as a broken contract, when the client simply
-        sells cash.
-
-        Args:
-            file_bytes (bytes): Raw uploaded file content.
-            filename (str): Original filename; drives format detection.
-            sheet_name (str): Sheet the contract lives on, matched ignoring
-                case and surrounding blanks.
-            auto (bool): True when scanning a sales upload, so a file without
-                the sheet comes back empty and silent.
-
-        Returns:
-            pd.DataFrame | None: The raw frame, or None when there is nothing
-                to read.
-
-        Raises:
-            ValueError: On an unsupported extension or unreadable content.
-    '''
-    if filename.lower().endswith('.xlsx'):
-        for name, frame in read_workbook(file_bytes).items():
-            if str(name).strip().lower() == sheet_name.lower():
-                return frame
-    # A file uploaded AS the contract may name its sheet anything, or be a
-    # CSV; one being scanned in passing may not.
-    return None if auto else read_file(file_bytes, filename)
-
-
 def read_file(
     file_bytes: bytes,
     filename: str

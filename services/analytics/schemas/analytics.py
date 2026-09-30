@@ -22,6 +22,7 @@ class AnalyticsError(str, Enum):
     EMPTY_PERIOD = 'EMPTY_PERIOD'
     DATASET_UNREADABLE = 'DATASET_UNREADABLE'
     RUN_NOT_FOUND = 'RUN_NOT_FOUND'
+    RATES_UNAVAILABLE = 'RATES_UNAVAILABLE'
 
 
 class Opportunity(BaseModel):

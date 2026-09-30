@@ -8,6 +8,7 @@ from fastapi import Request
 
 from models.quotes import USD
 from schemas.quotes import (
+    RateOnDate,
     ExchangeRateHistory,
     ModelBench,
     RateForecast,
@@ -16,6 +17,7 @@ from schemas.quotes import (
     SyncResult
 )
 from services.quotes import (
+    rate_on_service,
     get_bench_service,
     get_forecast_service,
     get_history_service,
@@ -151,3 +153,25 @@ async def get_bench_controller(
         days_ahead = days_ahead, currency = currency, models = models
     )
     return ModelBench(**result)
+
+
+@handle_service_errors('QUOTES')
+async def get_rate_on_controller(
+    day: date_type,
+    currency: str,
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> RateOnDate:
+    '''
+        The rate in force on one day.
+
+        Args:
+            day (date): The day being asked about.
+            currency (str): ISO 4217 code.
+            current_user (str): Authenticated caller.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            RateOnDate: The rate, when it was published and under which regime.
+    '''
+    return RateOnDate(**await rate_on_service(day = day, currency = currency))

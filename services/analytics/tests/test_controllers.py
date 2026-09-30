@@ -17,11 +17,19 @@ from fastapi import HTTPException
 
 from schemas.analytics import (
     AnalyticsError,
+    AnalyticsPdvResponse,
+    AnalyticsRunResponse,
     CommercialSummaryResponse,
     ForecastResponse,
     PortfolioResponse,
     SegmentationResponse
 )
+from schemas.objectives import (
+    CommercialPolicyResponse,
+    CommercialPolicySchema,
+    ObjectivesResponse
+)
+from schemas.stock import StockResponse
 from schemas.receivables import CreditPolicyRequest, CreditPolicyResponse, ReceivablesResponse
 from controllers import analytics as controllers
 
@@ -473,3 +481,225 @@ def test_the_analysis_history_comes_back_newest_first():
     ))
 
     assert [run.run_id for run in response.runs] == ['nuevo', 'viejo']
+
+
+def _objectives_frame() -> pd.DataFrame:
+    '''
+        An objective for six of the eight clients, on the first month.
+
+        Two are deliberately left out: the endpoint has to count them without
+        scoring them, and that only shows on a frame where they exist.
+
+        Returns:
+            pd.DataFrame: Objective rows as ingest hands them over.
+    '''
+    return pd.DataFrame([
+        {'pos_id': f'PDV-{index}', 'period': '2026-01', 'target_amount': 200.0}
+        for index in range(6)
+    ])
+
+
+def test_objectives_returns_a_full_response(
+    dataset,
+    monkeypatch
+):
+    '''
+        The attainment endpoint must build its response from the objectives
+        and payments the dataset carries, and report the clients who invoiced
+        without one.
+    '''
+    monkeypatch.setattr(
+        controllers, 'get_dataset_metadata',
+        lambda **_: {
+            'file_s3_key': 'ingest/normalized/test.csv',
+            'collections_s3_key': 'ingest/collections/test.csv',
+            'objectives_s3_key': 'ingest/objectives/test.csv',
+            'status': 'validated'
+        }
+    )
+
+    def _load(key):
+        if 'objectives' in key:
+            return _objectives_frame()
+        return _collections_frame() if 'collections' in key else _sales_frame()
+
+    monkeypatch.setattr(controllers, 'load_dataframe_from_s3', _load)
+    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
+
+    response = _call(controllers.objectives_controller, dataset)
+
+    assert isinstance(response, ObjectivesResponse)
+    assert response.dataset_id == dataset
+    assert response.totals.clients_count == 6
+    assert response.clients_without_objective == 2
+    assert response.by_cluster
+    # The defaults have to reach the answer: a caller cannot read a semaphore
+    # without knowing which cuts drew it.
+    assert (response.policy.yellow_from, response.policy.green_from) == (0.5, 1.0)
+    # The identity the whole block rests on.
+    assert response.totals.invoiced_amount == round(
+        response.totals.collected_amount + response.totals.debt_amount, 2
+    )
+
+
+def test_objectives_without_any_loaded_is_empty_and_not_an_error(
+    dataset,
+    monkeypatch
+):
+    '''
+        Nobody has set a target yet: the ordinary starting state. The clients
+        who did invoice are still reported.
+    '''
+    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
+
+    response = _call(controllers.objectives_controller, dataset)
+
+    assert isinstance(response, ObjectivesResponse)
+    assert response.clients == []
+    assert response.clients_without_objective == 8
+
+
+def test_the_commercial_policy_round_trips_and_answers_resolved(monkeypatch):
+    '''
+        Saving must answer with the RESOLVED yardstick, not with what was
+        sent: the caller has to see which defaults filled the gaps before a
+        semaphore is drawn with them.
+    '''
+    stored: dict = {}
+    monkeypatch.setattr(controllers, 'save_commercial_policy',
+                        lambda **kwargs: stored.update(kwargs['policy']))
+    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: stored)
+
+    response = asyncio.run(controllers.save_commercial_policy_controller(
+        dynamodb_resource = None,
+        policy = CommercialPolicySchema(
+            green_from = 0.9, points_per_cluster = {'PLATINIUM': 20.0}
+        ),
+        request = None,
+        current_user = 'tester@bearsoft.com.bo'
+    ))
+
+    assert isinstance(response, CommercialPolicyResponse)
+    assert response.green_from == 0.9
+    assert response.points_per_cluster == {'PLATINIUM': 20.0}
+    # Untouched by the caller, so the default has to be showing.
+    assert response.yellow_from == 0.5
+
+
+def test_run_analytics_returns_a_full_response(
+    dataset,
+    monkeypatch
+):
+    '''
+        The one endpoint that WRITES: it persists the basket run other
+        endpoints then read. Untested until now, which means the shape it
+        stores was never checked against the shape that reads it back.
+    '''
+    monkeypatch.setattr(controllers, 'persist_run', lambda **kwargs: {
+        **kwargs['payload'], 'run_id': 'r-1', 'created_at': '2026-01-05T10:00:00Z'
+    })
+
+    response = _call(controllers.run_analytics_controller, dataset)
+
+    assert isinstance(response, AnalyticsRunResponse)
+    assert response.dataset_id == dataset
+
+
+def test_the_stored_run_reads_back_in_the_shape_it_was_written(
+    dataset,
+    monkeypatch
+):
+    '''
+        The pair that matters: what `run` writes is what `pdv` reads. They
+        were written months apart and never exercised together, so a field
+        renamed on one side would only surface in front of a client.
+    '''
+    persisted: dict = {}
+    monkeypatch.setattr(controllers, 'persist_run', lambda **kwargs: persisted.update(
+        {**kwargs['payload'], 'run_id': 'r-1',
+         'created_at': '2026-01-05T10:00:00Z'}) or persisted)
+    _call(controllers.run_analytics_controller, dataset)
+
+    monkeypatch.setattr(controllers, 'get_latest_run_for_dataset', lambda **_: persisted)
+    response = asyncio.run(controllers.get_pdv_opportunities_controller(
+        dynamodb_resource = None,
+        dataset_id = dataset,
+        pdv_id = 'PDV-0',
+        request = None,
+        current_user = 'tester@bearsoft.com.bo'
+    ))
+
+    assert isinstance(response, AnalyticsPdvResponse)
+    assert response.pdv_id == 'PDV-0'
+
+
+def test_stock_returns_a_full_response(
+    dataset,
+    monkeypatch
+):
+    '''
+        The stock snapshot endpoint. Without a snapshot attached it must say
+        so rather than fail: an account that has not loaded stock is the
+        ordinary case, not an error.
+    '''
+    response = _call(controllers.stock_controller, dataset)
+    assert isinstance(response, StockResponse)
+
+    monkeypatch.setattr(
+        controllers, 'get_dataset_metadata',
+        lambda **_: {'file_s3_key': 'ingest/normalized/test.csv',
+                     'stock_s3_key': 'ingest/stock/test.csv', 'status': 'validated'}
+    )
+    monkeypatch.setattr(
+        controllers, 'load_dataframe_from_s3',
+        lambda key: _stock_frame() if 'stock' in key else _sales_frame()
+    )
+    with_stock = _call(controllers.stock_controller, dataset)
+
+    assert isinstance(with_stock, StockResponse)
+    assert with_stock.available is True
+
+
+def _stock_frame() -> pd.DataFrame:
+    '''
+        One snapshot day over the products the sales frame carries.
+
+        Returns:
+            pd.DataFrame: Stock rows as ingest hands them over.
+    '''
+    return pd.DataFrame([
+        {'snapshot_date': pd.Timestamp('2026-06-01'),
+         'product_id': f'SKU-{index}', 'product_name': f'Producto {index}',
+         'on_hand': 100.0 + index, 'committed': 0.0, 'unit_cost': 6.0}
+        for index in range(6)
+    ])
+
+
+def test_the_credit_policy_controller_answers_the_resolved_policy(monkeypatch):
+    '''
+        The read side of the credit policy: it must show which defaults are
+        in force, because a provision computed with them cannot be audited
+        otherwise.
+    '''
+    monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
+
+    response = asyncio.run(controllers.get_credit_policy_controller(
+        dynamodb_resource = None, request = None,
+        current_user = 'tester@bearsoft.com.bo'
+    ))
+
+    assert isinstance(response, CreditPolicyResponse)
+    assert response.source_code == 'DEFAULT'
+
+
+def test_reading_the_commercial_policy_shows_the_defaults_in_force(monkeypatch):
+    '''An account that never set one reads the service defaults.'''
+    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
+
+    response = asyncio.run(controllers.get_commercial_policy_controller(
+        dynamodb_resource = None, request = None,
+        current_user = 'tester@bearsoft.com.bo'
+    ))
+
+    assert isinstance(response, CommercialPolicyResponse)
+    assert (response.yellow_from, response.green_from) == (0.5, 1.0)

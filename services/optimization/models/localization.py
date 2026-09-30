@@ -37,6 +37,12 @@ class PlannedRouteItem(TypedDict, total = False):
 
         `route_code` is unique per owner; `seller` is who the route is assigned
         to, by the name the sales file uses.
+
+        `plan_date` is what tells a plan apart from a template, and the future
+        apart from the past: the planning screen asks from today on and the
+        history screen asks backwards. A route without it is a reusable
+        template that belongs to no day. Stored as 'YYYY-MM-DD' text, which
+        compares and sorts correctly in DynamoDB.
     '''
     owner_email: str
     id: str
@@ -44,6 +50,7 @@ class PlannedRouteItem(TypedDict, total = False):
     route_name: str
     description: Optional[str]
     seller: Optional[str]
+    plan_date: Optional[str]
     status: str
     created_at: str
     points: List[PlannedPointItem]

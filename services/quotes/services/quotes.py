@@ -26,7 +26,11 @@ from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError
 from services.bcb_source import SOURCE_NAME, fetch_official_rate
 from services.environment import load_and_validate_env_vars
-from services.exceptions import InvalidInputError, ServiceUnavailableError
+from services.exceptions import (
+    InvalidInputError,
+    ResourceNotFoundError,
+    ServiceUnavailableError
+)
 from services.logger_config import custom_logger as logger
 from services.quotes_utils import get_rate, put_rate, query_rates
 from services.forecast_models import MODELS
@@ -45,6 +49,7 @@ from services.utils import get_current_time_gmt, handle_service_errors
 # nobody chose.
 ENV_VARS = load_and_validate_env_vars({
     'FLOAT_REGIME_START': str,
+    'FIXED_REGIME_RATE': float,
     'SYNC_MAX_DAYS': int,
     'SYNC_DEFAULT_DAYS': int,
     'SCENARIO_MAX_DAYS': int,
@@ -60,6 +65,10 @@ ENV_VARS = load_and_validate_env_vars({
 # here: the years of 6.86 before it belong to a different regime and would
 # flatten any trend. A second regime change must not require a release.
 FLOAT_REGIME_START: date_type = date_type.fromisoformat(ENV_VARS['FLOAT_REGIME_START'])
+# What the rate was worth while it was fixed. A figure of the regime, not of
+# the market, so it is declared and not looked up — and not written into the
+# code either, because the day somebody analyses another country it changes.
+FIXED_REGIME_RATE: float = ENV_VARS['FIXED_REGIME_RATE']
 
 # Weekdays the BCB publishes as a single block, as Python numbers them (Monday
 # is 0). Today it is Saturday-Sunday-Monday: the rate published on Friday night
@@ -516,4 +525,59 @@ async def get_bench_service(
             {'date': item.date, 'rate': item.official_rate} for item in history
         ],
         'runs': runs,
+    }
+
+
+@handle_service_errors('QUOTES')
+async def rate_on_service(
+    day: date_type,
+    currency: str = USD
+) -> Dict[str, Any]:
+    '''
+    The rate in force on a day, and where it comes from.
+
+    This is what lets a report be read in dollars: every transaction is
+    converted at the rate of ITS OWN day, not at today's. A sale of March and
+    a sale of September are not the same dollars, and averaging them at one
+    rate is the mistake this exists to prevent.
+
+    The BCB does not publish every day, so the rate in force is the latest one
+    published on or before the day asked about — the same rule `validity_of`
+    states from the other side. Before the float began the rate was fixed, and
+    a day from then answers with that figure and says so, instead of pretending
+    there is a market quote for it.
+
+    Args:
+        day (date): The day being asked about.
+        currency (str): ISO 4217 code.
+
+    Returns:
+        Dict[str, Any]: The rate, the day it was published, and its regime.
+
+    Raises:
+        ResourceNotFoundError: When nothing was published on or before the day
+            and the day is inside the float regime.
+    '''
+    if day < FLOAT_REGIME_START:
+        return {
+            'date': day.isoformat(),
+            'currency': currency,
+            'rate': FIXED_REGIME_RATE,
+            'published_on': None,
+            'regime': 'FIXED'
+        }
+
+    published = query_rates(currency, None, day)
+    if not published:
+        error_msg = f'No {currency} rate published on or before {day}.'
+        logger.warning(error_msg)
+        raise ResourceNotFoundError(detail = QuotesError.NO_RATE_FOR_DATE.value)
+
+    latest = published[-1]
+    return {
+        'date': day.isoformat(),
+        'currency': currency,
+        'rate': round(float(latest.official_rate), RATE_DECIMALS),
+        'published_on': latest.date.isoformat(),
+        'regime': 'FLOAT'
     }

@@ -18,7 +18,13 @@ from services.utils import audit_event, handle_service_errors
 # spec, and folding them into one would hide which process each route runs.
 # pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
 
-SPEC = CompanionSpec(name = 'stock', response_model = StockResponse)
+# The snapshot is per product and day, so pushing today replaces today and
+# leaves every other day where it was.
+SPEC = CompanionSpec(
+    name = 'stock',
+    response_model = StockResponse,
+    merge_keys = ('snapshot_date', 'product_id')
+)
 
 
 @handle_service_errors('INGEST')
@@ -29,6 +35,7 @@ async def ingest_stock_controller(
     file_bytes: bytes,
     filename: str,
     current_user: str,
+    auth_token: str,
     request: Request # pylint: disable=unused-argument
 ) -> StockResponse:
     '''
@@ -48,6 +55,7 @@ async def ingest_stock_controller(
             file_bytes (bytes): Raw content of the uploaded file.
             filename (str): Original filename.
             current_user (str): Authenticated caller and owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
             StockResponse: Summary of the load and its issues.
@@ -57,5 +65,6 @@ async def ingest_stock_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset))
-    return await store_companion(dynamodb_resource, dataset, result, filename, SPEC)
+    result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset, auth_token))
+    return await store_companion(dynamodb_resource, dataset, result, SPEC,
+                                 (filename, auth_token))

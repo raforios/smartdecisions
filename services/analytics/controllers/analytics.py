@@ -24,6 +24,13 @@ from schemas.receivables import (
     ReceivablesResponse
 )
 from schemas.stock import StockResponse
+from schemas.objectives import (
+    CommercialPolicyResponse,
+    CommercialPolicySchema,
+    ObjectivesResponse
+)
+from services.objectives import build_objectives
+from services.objectives import resolve_policy as resolve_commercial_policy
 from services.receivables import build_receivables, resolve_policy
 from services.stock import build_stock
 from services.affinity import compute_opportunities
@@ -36,8 +43,10 @@ from services.margin import build_margin
 from services.portfolio import build_portfolio
 from services.segmentation import build_segmentation
 from services.volume import build_volume_source
+from services.currency import BASE_CURRENCY, convert_frame
 from services.analytics_utils import (
     apply_date_range,
+    get_commercial_policy,
     get_credit_policy,
     get_dataset_metadata,
     get_latest_run_for_dataset,
@@ -45,6 +54,7 @@ from services.analytics_utils import (
     list_runs_for_owner,
     load_dataframe_from_s3,
     persist_run,
+    save_commercial_policy,
     save_credit_policy
 )
 from services.environment import load_and_validate_env_vars
@@ -143,7 +153,9 @@ def _scoped_dataframe(
         Args:
             dynamodb_resource (ServiceResource): Injected DynamoDB resource.
             dataset_id (str): Dataset to load.
-            params (dict | None): May carry 'date_from' and 'date_to'.
+            params (dict | None): May carry 'date_from', 'date_to', and
+                'currency' with the caller's token to read amounts in another
+                currency.
 
         Returns:
             Tuple[Any, Dict[str, Any]]: The scoped DataFrame and the period
@@ -158,11 +170,25 @@ def _scoped_dataframe(
     )
     dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
     options = params or {}
-    return apply_date_range(
+
+    # One seam for the whole service: every analysis reads the frame through
+    # here, so a report in dollars is one conversion and not nine. Each amount
+    # converts at the rate of its own row's day — converting a year at one
+    # rate would turn a devaluation into growth.
+    converted, applied = convert_frame(
         dataframe = dataframe,
+        currency = options.get('currency') or BASE_CURRENCY,
+        auth_token = options.get('auth_token') or ''
+    )
+
+    scoped, period = apply_date_range(
+        dataframe = converted,
         date_from = options.get('date_from'),
         date_to = options.get('date_to')
     )
+    if applied:
+        period = {**period, 'currency': applied}
+    return scoped, period
 
 
 @handle_service_errors('ANALYTICS')
@@ -233,6 +259,96 @@ async def receivables_controller(
         dataset_id = dataset_id,
         period = period,
         **block.model_dump()
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def objectives_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: Dict[str, Any],
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> ObjectivesResponse:
+    '''
+        Loads the dataset with its objectives and payments and judges the
+        attainment: per client and month, and aggregated by cluster.
+
+        The objectives are read from the file INGEST attached to the dataset.
+        Their absence is not an error — it means nobody has set a target yet,
+        and the answer says so while still reporting the clients who invoiced.
+
+        Read-only: everything is derived on the fly, so nothing is persisted
+        as a run.
+    '''
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id
+    )
+    objectives_key = metadata.get('objectives_s3_key')
+    collections_key = metadata.get('collections_s3_key')
+
+    block = build_objectives(
+        sales = dataframe,
+        objectives = load_dataframe_from_s3(objectives_key) if objectives_key else None,
+        collections = load_dataframe_from_s3(collections_key) if collections_key else None,
+        stored_policy = get_commercial_policy(
+            dynamodb_resource = dynamodb_resource,
+            owner_email = current_user
+        )
+    )
+    return ObjectivesResponse(
+        dataset_id = dataset_id,
+        period = period,
+        **block.model_dump()
+    )
+
+
+@handle_service_errors('ANALYTICS')
+async def get_commercial_policy_controller(
+    dynamodb_resource: ServiceResource,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str
+) -> CommercialPolicyResponse:
+    '''
+        Returns the yardstick the caller's attainment is judged with: their
+        own where they set it, the service default everywhere else.
+    '''
+    resolved = resolve_commercial_policy(get_commercial_policy(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user
+    ))
+    return CommercialPolicyResponse(
+        owner_email = current_user,
+        **resolved.model_dump()
+    )
+
+
+@handle_service_errors('ANALYTICS')
+@audit_event('ANALYTICS', 'CommercialPolicy', 'UPSERT')
+async def save_commercial_policy_controller(
+    dynamodb_resource: ServiceResource,
+    policy: CommercialPolicySchema,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str
+) -> CommercialPolicyResponse:
+    '''
+        Stores the caller's commercial policy and answers with how it resolves.
+
+        Answering with the resolved policy and not with what was sent is
+        deliberate: the caller has to see which defaults filled the gaps
+        before a semaphore is drawn with them.
+    '''
+    save_commercial_policy(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        policy = policy.model_dump(exclude_none = True)
+    )
+    return await get_commercial_policy_controller(
+        dynamodb_resource = dynamodb_resource,
+        request = request,
+        current_user = current_user
     )
 
 

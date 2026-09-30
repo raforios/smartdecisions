@@ -14,6 +14,8 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
+from routes.clients import router as clients_router
+from routes.channels import router as channels_router
 from routes.ingest import router as ingest_router
 
 from services.api_exceptions import setup_exception_handlers
@@ -148,6 +150,11 @@ async def custom_swagger_ui() -> HTMLResponse:
     )
 
 
+# Order matters: `/v1/ingest/{dataset_id}` would swallow `/v1/ingest/clients`
+# and answer 422 for a path that has nothing to do with a dataset. The literal
+# routers go first, the one with the wildcard last.
+app.include_router(clients_router)
+app.include_router(channels_router)
 app.include_router(ingest_router)
 
 

@@ -21,7 +21,9 @@ import pandera.pandas as pa
 from pandera.errors import SchemaErrors
 
 from schemas.ingest import (
+    CLIENT_COLUMNS,
     COLLECTION_COLUMNS,
+    OBJECTIVE_COLUMNS,
     OPTIONAL_COLUMNS,
     REQUIRED_COLUMNS,
     SALES_COLUMNS,
@@ -32,7 +34,13 @@ from schemas.ingest import (
     ValidationIssue,
     ValidationRule
 )
+from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+
+_ENV_VARS = load_and_validate_env_vars({'AMOUNT_DECIMALS': int})
+# Decimals a published amount carries. A decision —a distributor in bolivianos
+# and one in dollars do not round the same— so it is not a literal in the code.
+AMOUNT_DECIMALS: Final[int] = _ENV_VARS['AMOUNT_DECIMALS']
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +90,8 @@ SALES_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(SALES_COLUMNS)
 COLLECTION_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(COLLECTION_COLUMNS)
 STOCK_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(STOCK_COLUMNS)
 VISIT_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(VISIT_COLUMNS)
+CLIENT_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(CLIENT_COLUMNS)
+OBJECTIVE_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(OBJECTIVE_COLUMNS)
 
 
 def map_columns(
@@ -202,6 +212,18 @@ VISITS_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
     VISIT_COLUMNS,
     f'SmartDecisions visits contract {TEMPLATE_VERSION}. Required: '
     f'{", ".join(column.canonical for column in VISIT_COLUMNS if column.required)}.'
+)
+
+CLIENTS_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
+    CLIENT_COLUMNS,
+    f'SmartDecisions client master contract {TEMPLATE_VERSION}. Required: '
+    f'{", ".join(column.canonical for column in CLIENT_COLUMNS if column.required)}.'
+)
+
+OBJECTIVES_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
+    OBJECTIVE_COLUMNS,
+    f'SmartDecisions objectives contract {TEMPLATE_VERSION}. Required: '
+    f'{", ".join(column.canonical for column in OBJECTIVE_COLUMNS if column.required)}.'
 )
 
 # Pandera reports parameterized check names ("greater_than(0)",

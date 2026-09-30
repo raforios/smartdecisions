@@ -1,25 +1,25 @@
 '''
     Ingest controllers.
 '''
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Dict, Optional
-from uuid import uuid4
+from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
-from controllers.collections import SPEC as COLLECTIONS
 from controllers.common import (
-    CSV_CONTENT_TYPE,
     MAX_ISSUES_ON_RESPONSE,
-    TEMPLATE_S3_KEY,
+    template_key,
     native_numbers,
-    store_companion
+    store_frame,
+    summary_of,
+    to_ingest_response
 )
-from controllers.stock import SPEC as STOCK
-from controllers.visits import SPEC as VISITS
+from schemas.clients import ClientSource
 from schemas.ingest import (
     OPTIONAL_COLUMNS,
+    SALES_TEMPLATE,
     REQUIRED_COLUMNS,
     TEMPLATE_VERSION,
     CollectionsSummary,
@@ -27,74 +27,32 @@ from schemas.ingest import (
     VisitsSummary,
     DatasetListResponse,
     DatasetSummary,
+    IngestError,
     IngestResponse,
     IngestStatusResponse,
-    IngestSummary,
     TemplateInfo,
     ValidationIssue
 )
 from services.exceptions import ResourceNotFoundError
 from services.logger_config import custom_logger as logger
 from services.ingest_utils import HISTORY_DEFAULT_LIMIT
-from services.collections import parse_and_validate as parse_collections
-from services.stock import parse_and_validate as parse_stock
-from services.visits import parse_and_validate as parse_visits
-from services.ingest import parse_and_validate, parse_and_validate_partial
+from services.clients import CLIENT_FRAME_COLUMNS, sync_master
+from services.ingest import parse_and_validate
+from services.ingest import parse_frame as parse_sales_frame
 from services.ingest_files import serialize_dataframe
 from services.ingest_utils import (
     content_fingerprint,
-    download_bytes,
+    download_template_bytes,
     find_dataset_by_fingerprint,
     get_owned_dataset,
     list_datasets_for_owner,
     persist_dataset,
-    upload_bytes,
-    upload_excel
+    read_stored_frame
 )
-from services.utils import audit_event, handle_service_errors
+from services.utils import audit_event, delete_stored_file, handle_service_errors
 
 # The companion sheets of a sales upload, in the order they are read. Each
 # one is a pipeline over its own sheet and the spec that says how to store it.
-_COMPANIONS = (
-    (parse_collections, COLLECTIONS),
-    (parse_stock, STOCK),
-    (parse_visits, VISITS),
-)
-
-def _to_response(
-    item: Dict[str, Any],
-    already_stored: bool = False
-) -> IngestResponse:
-    '''
-        Maps a persisted DynamoDB item into the public IngestResponse schema.
-
-        Args:
-            item (Dict[str, Any]): Stored dataset record.
-            already_stored (bool): True when the upload matched a dataset the
-                caller already had, so the client can say so instead of
-                reporting a load that did not happen.
-
-        Returns:
-            IngestResponse: Public payload.
-    '''
-    return IngestResponse(
-        already_stored = already_stored,
-        dataset_id = item['dataset_id'],
-        status = item['status'],
-        file_s3_key = item.get('file_s3_key') or '',
-        summary = IngestSummary(
-            total_rows = item.get('total_rows', 0),
-            valid_rows = item.get('valid_rows', 0),
-            error_rows = item.get('error_rows', 0),
-            unique_points_of_sale = item.get('unique_points_of_sale', 0),
-            unique_products = item.get('unique_products', 0),
-            date_range_start = item.get('date_range_start'),
-            date_range_end = item.get('date_range_end')
-        ),
-        issues = [ValidationIssue(**issue) for issue in item.get('issues', [])],
-        created_at = item['created_at']
-    )
-
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 @handle_service_errors('INGEST')
@@ -103,8 +61,8 @@ async def ingest_excel_controller(
     dynamodb_resource: ServiceResource,
     file_bytes: bytes,
     filename: str,
-    bearer_token: str,
     current_user: str,
+    auth_token: str,
     request: Request # pylint: disable=unused-argument
 ) -> IngestResponse:
     '''
@@ -118,7 +76,7 @@ async def ingest_excel_controller(
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             file_bytes (bytes): Raw content of the uploaded file.
             filename (str): Original filename.
-            bearer_token (str): JWT used to call FILES on behalf of the user.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
             current_user (str): Authenticated user email (owner of the dataset).
 
         Returns:
@@ -137,20 +95,27 @@ async def ingest_excel_controller(
         message = (f'Dataset {existing["dataset_id"]} already holds this exact '
                    f'file for {current_user}; returning it.')
         logger.info(message)
-        return _to_response(existing, already_stored = True)
+        return to_ingest_response(existing, already_stored = True)
 
     result = parse_and_validate(file_bytes, filename)
     is_valid = not result.issues
 
     file_s3_key: Optional[str] = None
     if is_valid:
+        # The client master learns from the file and then completes it. A
+        # company that uploaded coordinates once should not have to upload them
+        # again to keep Routes alive, and an export that drops a column must
+        # not blank what is already known about the client.
+        result = replace(result, accepted = sync_master(
+            dynamodb_resource = dynamodb_resource,
+            owner_email = current_user,
+            frame = result.accepted,
+            columns = CLIENT_FRAME_COLUMNS,
+            source = ClientSource.FILE
+        ))
         # Store the NORMALIZED dataframe (canonical columns, ids filled) so every
         # downstream service reads a clean, uniform dataset without re-mapping.
-        file_s3_key = upload_excel(
-            file_bytes = serialize_dataframe(result.accepted, filename),
-            filename = filename,
-            bearer_token = bearer_token
-        )
+        file_s3_key = store_frame(result.accepted, 'normalized', auth_token)
 
     persisted = persist_dataset(
         dynamodb_resource = dynamodb_resource,
@@ -165,16 +130,7 @@ async def ingest_excel_controller(
         }
     )
 
-    response = _to_response(persisted)
-    if is_valid:
-        await _companion_sheets_in_upload(
-            dynamodb_resource = dynamodb_resource,
-            dataset = persisted,
-            upload = (file_bytes, filename),
-            sales = result.accepted,
-            response = response
-        )
-    return response
+    return to_ingest_response(persisted)
 
 
 @handle_service_errors('INGEST')
@@ -184,6 +140,7 @@ async def ingest_excel_from_s3_controller(
     file_key: str,
     file_name: str,
     current_user: str,
+    auth_token: str,
     request: Request # pylint: disable=unused-argument
 ) -> IngestResponse:
     '''
@@ -207,14 +164,18 @@ async def ingest_excel_from_s3_controller(
             file_key (str): S3 key of the raw uploaded file.
             file_name (str): Original filename (drives format detection).
             current_user (str): Authenticated user email (dataset owner).
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
             IngestResponse: Public payload with the summary and per-row issues.
     '''
-    file_bytes = download_bytes(file_key)
+    # FILES owns the bucket: the object comes back as rows, not as bytes.
+    raw = read_stored_frame(file_key, auth_token)
 
     # Same rule as the direct upload: identical content is the same dataset.
-    fingerprint = content_fingerprint(file_bytes)
+    # Fingerprinted over the canonical rows and not the raw bytes, so the same
+    # data sent as .xlsx or as .csv is recognised as the one dataset it is.
+    fingerprint = content_fingerprint(serialize_dataframe(raw, 'raw.csv'))
     existing = find_dataset_by_fingerprint(
         dynamodb_resource = dynamodb_resource,
         owner_email = current_user,
@@ -224,27 +185,23 @@ async def ingest_excel_from_s3_controller(
         message = (f'Dataset {existing["dataset_id"]} already holds this exact '
                    f'file for {current_user}; returning it.')
         logger.info(message)
-        return _to_response(existing, already_stored = True)
+        return to_ingest_response(existing, already_stored = True)
 
-    result = parse_and_validate_partial(file_bytes, file_name)
+    result = parse_sales_frame(raw, file_name)
     has_valid_rows = len(result.accepted) > 0
-
-    # Accepted rows -> normalized CSV (feeds analytics/forecast/routes).
-    normalized_key: Optional[str] = None
     if has_valid_rows:
-        normalized_key = upload_bytes(
-            file_key = f'ingest/normalized/{uuid4().hex}.csv',
-            data = serialize_dataframe(result.accepted, 'normalized.csv'),
-            content_type = CSV_CONTENT_TYPE
-        )
-    # Rejected rows -> separate CSV the client can fix and re-upload.
-    rejected_key: Optional[str] = None
-    if len(result.rejected) > 0:
-        rejected_key = upload_bytes(
-            file_key = f'ingest/rejected/{uuid4().hex}.csv',
-            data = serialize_dataframe(result.rejected, 'rejected.csv'),
-            content_type = CSV_CONTENT_TYPE
-        )
+        result = replace(result, accepted = sync_master(
+            dynamodb_resource = dynamodb_resource,
+            owner_email = current_user,
+            frame = result.accepted,
+            columns = CLIENT_FRAME_COLUMNS,
+            source = ClientSource.FILE
+        ))
+
+    # Accepted rows feed analytics, forecast and routes; the rejected ones go
+    # to their own CSV so the client can fix just those and re-upload.
+    normalized_key = store_frame(result.accepted, 'normalized', auth_token)
+    rejected_key = store_frame(result.rejected, 'rejected', auth_token)
 
     persisted = persist_dataset(
         dynamodb_resource = dynamodb_resource,
@@ -263,56 +220,10 @@ async def ingest_excel_from_s3_controller(
         }
     )
 
-    response = _to_response(persisted)
-    if has_valid_rows:
-        await _companion_sheets_in_upload(
-            dynamodb_resource = dynamodb_resource,
-            dataset = persisted,
-            upload = (file_bytes, file_name),
-            sales = result.accepted,
-            response = response
-        )
-    return response
-
-
-async def _companion_sheets_in_upload(
-    dynamodb_resource: ServiceResource,
-    dataset: Dict[str, Any],
-    upload: tuple[bytes, str],
-    sales: Any,
-    response: IngestResponse
-) -> None:
-    '''
-        Loads the payments, stock and visits sheets that came inside a sales
-        upload.
-
-        The workbook the client downloads carries the four sheets, so
-        returning it filled answers every contract in one upload — which is
-        the product's thesis: one load feeds every module. A file without a
-        companion sheet reports nothing about it: whoever sells cash or keeps
-        no warehouse should not have to know those contracts exist.
-
-        Both upload paths —multipart and pre-signed S3— go through here. The
-        S3 path, the one the portal uses, used to skip this step and the
-        payments sheet was silently ignored.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset (Dict[str, Any]): The dataset just persisted.
-            upload (tuple[bytes, str]): The uploaded content and its filename.
-            sales (pd.DataFrame): The accepted sales rows.
-            response (IngestResponse): The response being assembled; its
-                `collections`, `stock` and `visits` summaries are filled in
-                place.
-    '''
-    file_bytes, filename = upload
-
-    for parse, spec in _COMPANIONS:
-        result = parse(file_bytes, filename, sales, auto = True)
-        if len(result.accepted) == 0:
-            continue
-        stored = await store_companion(dynamodb_resource, dataset, result, filename, spec)
-        setattr(response, spec.name, stored.summary)
+    # The staged upload is temporary: its rows now live in the normalized
+    # dataset, so the raw copy is deleted instead of piling up in the bucket.
+    delete_stored_file(file_key, auth_token)
+    return to_ingest_response(persisted)
 
 
 @handle_service_errors('INGEST', with_log = False)
@@ -320,7 +231,8 @@ async def download_rejected_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
+    current_user: str, # pylint: disable=unused-argument
+    auth_token: str
 ) -> bytes:
     '''
         Returns the CSV of rows that could not be loaded, each carrying the
@@ -336,10 +248,10 @@ async def download_rejected_controller(
     )
     rejected_key = item.get('rejected_s3_key')
     if not rejected_key:
-        raise ResourceNotFoundError(
-            detail = 'Este dataset no tiene filas rechazadas para descargar.'
-        )
-    return download_bytes(rejected_key)
+        raise ResourceNotFoundError(detail = IngestError.NO_REJECTED_ROWS.value)
+    return serialize_dataframe(
+        read_stored_frame(str(rejected_key), auth_token), 'rejected.csv'
+    )
 
 
 @handle_service_errors('INGEST')
@@ -422,15 +334,7 @@ async def get_dataset_status_controller(
             VisitsSummary(**native_numbers(stored_visits))
             if stored_visits else None
         ),
-        summary = IngestSummary(
-            total_rows = item.get('total_rows', 0),
-            valid_rows = item.get('valid_rows', 0),
-            error_rows = item.get('error_rows', 0),
-            unique_points_of_sale = item.get('unique_points_of_sale', 0),
-            unique_products = item.get('unique_products', 0),
-            date_range_start = item.get('date_range_start'),
-            date_range_end = item.get('date_range_end')
-        ),
+        summary = summary_of(item),
         issues = [ValidationIssue(**issue) for issue in item.get('issues', [])],
         created_at = item['created_at']
     )
@@ -438,19 +342,27 @@ async def get_dataset_status_controller(
 
 @handle_service_errors('INGEST', with_log = False)
 async def download_template_controller(
-    base_path: Path, # pylint: disable=unused-argument
+    contract: str,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
 ) -> bytes:
     '''
-        Reads the canonical template from the default bucket so the route can
+        Reads one contract's template from the default bucket so the route can
         return it. Decorated with `with_log = False`: the event is still shipped
         to EVENTS, but the binary file body is not logged.
+
+        This is the one object read straight from the bucket and not through
+        FILES, and the rule in `CLAUDE.md` §9 names the case: it is a STATIC
+        file the client downloads, identical for everyone, and putting a parse
+        and a second hop in front of it would only make it slower.
+
+        Args:
+            contract (str): Which template — ventas, cobros, stock or visitas.
 
         Returns:
             bytes: Raw .xlsx content of the stored template.
     '''
-    return download_bytes(TEMPLATE_S3_KEY)
+    return download_template_bytes(template_key(contract))
 
 
 @handle_service_errors('INGEST')
@@ -468,7 +380,7 @@ async def get_template_info_controller(
     '''
     return TemplateInfo(
         template_version = TEMPLATE_VERSION,
-        download_url = '/v1/ingest/template/file',
+        download_url = f'/v1/ingest/template/file/{SALES_TEMPLATE}',
         required_columns = list(REQUIRED_COLUMNS),
         optional_columns = list(OPTIONAL_COLUMNS)
     )

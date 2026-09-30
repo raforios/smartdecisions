@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 
 from controllers.quotes import (
     get_bench_controller,
+    get_rate_on_controller,
     get_forecast_controller,
     get_history_controller,
     preview_sale_scenario_controller,
@@ -16,6 +17,7 @@ from controllers.quotes import (
 from models.quotes import USD
 from schemas.quotes import (
     ExchangeRateHistory,
+    RateOnDate,
     ModelBench,
     RateForecast,
     SaleScenario,
@@ -59,6 +61,38 @@ async def get_exchange_rates_endpoint(
     return await get_history_controller(
         date_from = date_from,
         date_to = date_to,
+        currency = currency,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/exchange-rates/at',
+    response_model = RateOnDate,
+    status_code = status.HTTP_200_OK,
+    summary = 'The rate in force on one day',
+    description = (
+        'What lets a report be read in dollars: every transaction converts at '
+        'the rate of ITS OWN day, not at today\'s. A sale of March and a sale '
+        'of September are not the same dollars. The BCB does not publish every '
+        'day, so the answer is the latest rate published on or before the day '
+        'asked about; a day before the float carries the fixed rate and says so.'
+    )
+)
+async def get_rate_on_endpoint(
+    request: Request,
+    day: date_type = Query(..., alias = 'date', description = 'YYYY-MM-DD.'),
+    currency: str = Query(USD, min_length = 3, max_length = 3),
+    current_user: str = Depends(get_current_owner)
+) -> RateOnDate:
+    '''
+        Endpoint returning the rate in force on a day.
+    '''
+    message = f'User: {current_user}. Reading the {currency} rate in force on {day}.'
+    logger.info(message)
+    return await get_rate_on_controller(
+        day = day,
         currency = currency,
         current_user = current_user,
         request = request

@@ -17,7 +17,15 @@ from services.utils import audit_event, handle_service_errors
 # spec, and folding them into one would hide which process each route runs.
 # pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
 
-SPEC = CompanionSpec(name = 'collections', response_model = CollectionsResponse)
+# Without an identifier of its own in the contract, a payment IS its invoice,
+# its date and its amount. Two identical payments on one day therefore count as
+# one: the alternative is that an ERP retry doubles the payment and the
+# receivable quietly goes wrong, which is the worse of the two errors.
+SPEC = CompanionSpec(
+    name = 'collections',
+    response_model = CollectionsResponse,
+    merge_keys = ('order_id', 'payment_date', 'paid_amount')
+)
 
 
 @handle_service_errors('INGEST')
@@ -28,6 +36,7 @@ async def ingest_collections_controller(
     file_bytes: bytes,
     filename: str,
     current_user: str,
+    auth_token: str,
     request: Request # pylint: disable=unused-argument
 ) -> CollectionsResponse:
     '''
@@ -47,6 +56,7 @@ async def ingest_collections_controller(
             file_bytes (bytes): Raw content of the uploaded file.
             filename (str): Original filename.
             current_user (str): Authenticated caller and owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
             CollectionsResponse: Summary of the load and its issues.
@@ -56,5 +66,6 @@ async def ingest_collections_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset))
-    return await store_companion(dynamodb_resource, dataset, result, filename, SPEC)
+    result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset, auth_token))
+    return await store_companion(dynamodb_resource, dataset, result, SPEC,
+                                 (filename, auth_token))

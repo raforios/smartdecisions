@@ -18,11 +18,10 @@
     wrong file, not a new product.
 '''
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 
-from schemas.ingest import STOCK_SHEET, StockSummary, ValidationIssue, ValidationRule
+from schemas.ingest import StockSummary, ValidationIssue, ValidationRule
 from services.ingest import fill_product_ids, normalize_frame
 from services.ingest_contract import (
     STOCK_HEADER_LOOKUP,
@@ -30,7 +29,8 @@ from services.ingest_contract import (
     unknown_value_issues,
     validate
 )
-from services.ingest_files import read_sheet
+from services.ingest_files import read_file
+from services.ingest_contract import AMOUNT_DECIMALS
 from services.logger_config import custom_logger as logger
 
 _PRODUCT = 'product_id'
@@ -51,26 +51,6 @@ class StockResult:
     summary: StockSummary
 
 
-def read_stock(
-    file_bytes: bytes,
-    filename: str,
-    auto: bool = False
-) -> Optional[pd.DataFrame]:
-    '''
-        Reads the stock rows out of an upload: the `Stock` sheet of a
-        workbook, or the whole file when it was uploaded as a stock file.
-
-        Args:
-            file_bytes (bytes): Raw uploaded file content.
-            filename (str): Original filename; drives format detection.
-            auto (bool): True when scanning a sales upload for a stock sheet,
-                so a file without one comes back empty and silent.
-
-        Returns:
-            pd.DataFrame | None: The raw frame, or None when there is nothing
-                to read.
-    '''
-    return read_sheet(file_bytes, filename, STOCK_SHEET, auto = auto)
 
 
 def _summarize(
@@ -101,7 +81,7 @@ def _summarize(
         error_rows = error_rows,
         products = int(stock[_PRODUCT].nunique()),
         unknown_products = unknown,
-        units_on_hand = round(float(stock[_ON_HAND].sum()), 2),
+        units_on_hand = round(float(stock[_ON_HAND].sum()), AMOUNT_DECIMALS),
         snapshot_start = dates.min().date().isoformat() if not dates.empty else None,
         snapshot_end = dates.max().date().isoformat() if not dates.empty else None
     )
@@ -110,8 +90,7 @@ def _summarize(
 def parse_and_validate(
     file_bytes: bytes,
     filename: str,
-    sales: pd.DataFrame,
-    auto: bool = False
+    sales: pd.DataFrame
 ) -> StockResult:
     '''
         End-to-end stock pipeline: read, validate, marry, summarize.
@@ -121,7 +100,6 @@ def parse_and_validate(
             filename (str): Original filename; drives format detection.
             sales (pd.DataFrame): The normalized sales frame of the dataset the
                 snapshot belongs to, which holds the product catalogue.
-            auto (bool): True when scanning a sales upload for a stock sheet.
 
         Returns:
             StockResult: Accepted rows, issues and summary.
@@ -129,7 +107,7 @@ def parse_and_validate(
         Raises:
             ValueError: On an unsupported extension or unreadable content.
     '''
-    raw = read_stock(file_bytes, filename, auto = auto)
+    raw = read_file(file_bytes, filename)
     if raw is None or raw.empty:
         message = f'No stock rows found in "{filename}".'
         logger.info(message)
@@ -137,7 +115,50 @@ def parse_and_validate(
             accepted = pd.DataFrame(), issues = [], summary = StockSummary()
         )
 
-    mapped = fill_product_ids(normalize_frame(raw, STOCK_HEADER_LOOKUP))
+    return validate_rows(prepare_rows(normalize_frame(raw, STOCK_HEADER_LOOKUP)),
+                         sales, filename)
+
+
+def prepare_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    '''
+        The identifiers this service derives on its own, over a frame whose
+        columns are already canonical.
+
+        Split out so the API path —which receives canonical names from its
+        DTOs and needs no header mapping— reaches the validator through
+        exactly the same steps as the file.
+
+        Args:
+            frame (pd.DataFrame): Canonical stock rows.
+
+        Returns:
+            pd.DataFrame: The same rows with the product ids filled in.
+    '''
+    return fill_product_ids(frame)
+
+
+def validate_rows(
+    mapped: pd.DataFrame,
+    sales: pd.DataFrame,
+    origin: str
+) -> StockResult:
+    '''
+        Validates a canonical stock frame and marries it to the catalogue.
+
+        Everything after the reading lives here, so the uploaded file and the
+        ERP pushing JSON are judged by one contract and answer with one set of
+        codes. A second copy of this for the API would drift on the first
+        change.
+
+        Args:
+            mapped (pd.DataFrame): Canonical stock rows.
+            sales (pd.DataFrame): Normalized sales frame holding the catalogue.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            StockResult: Accepted rows, issues and summary.
+    '''
+    filename = origin
     validation = validate(mapped, STOCK_SCHEMA)
     issues = list(validation.issues)
     accepted = validation.frame if validation.is_valid else mapped.iloc[0:0]
@@ -157,3 +178,27 @@ def parse_and_validate(
     logger.info(message)
 
     return StockResult(accepted = accepted, issues = issues, summary = summary)
+
+
+def parse_frame(
+    frame: pd.DataFrame,
+    sales: pd.DataFrame,
+    origin: str
+) -> StockResult:
+    '''
+        The same pipeline, over the rows FILES handed back instead of bytes.
+
+        FILES owns the bucket and its reader answers with one flat table, so a
+        stored object arrives already parsed. What is left —mapping the client's
+        headers to the contract, deriving the identifiers and validating— is
+        exactly what the uploaded file goes through.
+
+        Args:
+            frame (pd.DataFrame): Rows as stored, with the client's headers.
+            sales (pd.DataFrame): Normalized sales frame of the dataset.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            StockResult: Accepted rows, issues and summary.
+    '''
+    return validate_rows(prepare_rows(normalize_frame(frame, STOCK_HEADER_LOOKUP)), sales, origin)

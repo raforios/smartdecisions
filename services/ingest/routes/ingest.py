@@ -9,6 +9,7 @@ from fastapi import (
 from boto3.resources.base import ServiceResource
 
 from controllers.collections import ingest_collections_controller
+from controllers.objectives import ingest_objectives_controller
 from controllers.ingest import (
     download_rejected_controller,
     download_template_controller,
@@ -22,6 +23,8 @@ from controllers.stock import ingest_stock_controller
 from controllers.visits import ingest_visits_controller
 from schemas.ingest import (
     CollectionsResponse,
+    ObjectivesResponse,
+    TemplateName,
     IngestError,
     StockResponse,
     VisitsResponse,
@@ -40,17 +43,11 @@ from services.security import get_current_owner
 
 router = APIRouter(prefix = '/v1/ingest', tags = ['Ingest'])
 
+# A FastAPI endpoint declares its dependencies as parameters —resource,
+# token, caller, body— so the five-argument budget does not describe it.
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+
 SERVICE_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _extract_bearer(authorization: str) -> str:
-    '''
-        Strips the "Bearer " prefix to forward the raw token to FILES.
-    '''
-    if not authorization:
-        return ''
-    parts = authorization.split(' ', 1)
-    return parts[1] if len(parts) == 2 and parts[0].lower() == 'bearer' else authorization
 
 
 @router.get(
@@ -80,23 +77,28 @@ async def get_template_info_endpoint(
 
 
 @router.get(
-    '/template/file',
+    '/template/file/{contract}',
     status_code = status.HTTP_200_OK,
-    summary = 'Download the sales Excel template',
-    description = 'Returns the canonical template_ventas_v1.xlsx stored in S3.',
+    summary = 'Download the template of one contract',
+    description = (
+        'One template per contract -ventas, cobros, stock, visitas- because a '
+        'client who only sends yesterday stock should not download a book '
+        'with three sheets they will never fill in.'
+    ),
     response_class = Response
 )
 async def download_template_endpoint(
     request: Request,
+    contract: TemplateName = PathParam(..., description = 'Which template.'),
     current_user: str = Depends(get_current_owner)
 ) -> Response:
     '''
-        Endpoint that streams the canonical .xlsx template.
+        Endpoint that streams one contract's .xlsx template.
     '''
-    message = f'User: {current_user}. Downloading Excel template file.'
+    message = f'User: {current_user}. Downloading the "{contract.value}" template.'
     logger.info(message)
     content = await download_template_controller(
-        base_path = SERVICE_ROOT,
+        contract = contract.value,
         request = request,
         current_user = current_user
     )
@@ -104,7 +106,8 @@ async def download_template_endpoint(
         content = content,
         media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers = {
-            'Content-Disposition': 'attachment; filename="template_ventas_v1.xlsx"'
+            'Content-Disposition':
+                f'attachment; filename="plantilla_{contract.value}.xlsx"'
         }
     )
 
@@ -146,8 +149,8 @@ async def ingest_excel_endpoint(
         dynamodb_resource = dynamodb_resource,
         file_bytes = file_bytes,
         filename = filename,
-        bearer_token = _extract_bearer(authorization),
         current_user = current_user,
+        auth_token = authorization,
         request = request
     )
 
@@ -169,6 +172,7 @@ async def ingest_excel_from_s3_endpoint(
     request: Request,
     payload: IngestFromS3Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
     current_user: str = Depends(get_current_owner)
 ) -> IngestResponse:
     '''
@@ -184,6 +188,56 @@ async def ingest_excel_from_s3_endpoint(
         file_key = payload.file_key,
         file_name = payload.file_name,
         current_user = current_user,
+        auth_token = authorization,
+        request = request
+    )
+
+
+@router.post(
+    '/{dataset_id}/objectives',
+    response_model = ObjectivesResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Upload the monthly objectives of a sales dataset',
+    description = (
+        'Accepts a .xlsx or .csv with the objectives contract: one objective '
+        'per client and per month. It is the only figure in the product that '
+        'no transaction implies — it is a decision, and nothing in a sales '
+        'file can be mined for it. The load is idempotent by client and '
+        'month, so re-sending March corrects March instead of doubling it, '
+        'and an objective for a client never invoiced is reported and kept: '
+        'that is the client the company is trying to activate.'
+    )
+)
+async def ingest_objectives_endpoint(
+    request: Request,
+    dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
+    file: UploadFile = File(...),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> ObjectivesResponse:
+    '''
+        Endpoint to ingest the monthly objectives of a sales dataset.
+    '''
+    filename = file.filename or ''
+    if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+        raise InvalidInputError(detail = IngestError.UNSUPPORTED_FILE_FORMAT.value)
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise InvalidInputError(detail = IngestError.EMPTY_UPLOAD.value)
+
+    message = (f'Ingesting objectives "{filename}" ({len(file_bytes)} bytes) for '
+               f'dataset {dataset_id} from {current_user}.')
+    logger.info(message)
+
+    return await ingest_objectives_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        file_bytes = file_bytes,
+        filename = filename,
+        current_user = current_user,
+        auth_token = authorization,
         request = request
     )
 
@@ -206,6 +260,7 @@ async def ingest_collections_endpoint(
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     file: UploadFile = File(...),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
     current_user: str = Depends(get_current_owner)
 ) -> CollectionsResponse:
     '''
@@ -229,6 +284,7 @@ async def ingest_collections_endpoint(
         file_bytes = file_bytes,
         filename = filename,
         current_user = current_user,
+        auth_token = authorization,
         request = request
     )
 
@@ -253,6 +309,7 @@ async def ingest_stock_endpoint(
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     file: UploadFile = File(...),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
     current_user: str = Depends(get_current_owner)
 ) -> StockResponse:
     '''
@@ -276,6 +333,7 @@ async def ingest_stock_endpoint(
         file_bytes = file_bytes,
         filename = filename,
         current_user = current_user,
+        auth_token = authorization,
         request = request
     )
 
@@ -298,6 +356,7 @@ async def ingest_visits_endpoint(
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     file: UploadFile = File(...),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
     current_user: str = Depends(get_current_owner)
 ) -> VisitsResponse:
     '''
@@ -321,6 +380,7 @@ async def ingest_visits_endpoint(
         file_bytes = file_bytes,
         filename = filename,
         current_user = current_user,
+        auth_token = authorization,
         request = request
     )
 
@@ -366,6 +426,7 @@ async def download_rejected_endpoint(
     request: Request,
     dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
     current_user: str = Depends(get_current_owner)
 ) -> DatasetListResponse:
     '''
@@ -375,7 +436,8 @@ async def download_rejected_endpoint(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
         request = request,
-        current_user = current_user
+        current_user = current_user,
+        auth_token = authorization
     )
     return Response(
         content = content,

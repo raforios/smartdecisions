@@ -31,25 +31,30 @@ from schemas.localization import (
     PlannedRouteResponseSchema,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
+    RepeatPlannedRouteSchema,
     PointsVisitedResponseSchema,
     RouteComparisonFullResponseSchema,
     RouteComparisonsResponseSchema
 )
+from schemas.route_optimization import RouteOptimizationSchema
 from services.localization import (
     add_planned_point,
-    bulk_create_planned_routes,
     create_planned_route,
     delete_planned_point,
     delete_planned_route,
     filter_planned_routes,
     get_planned_route,
-    infer_planned_route,
     list_planned_routes,
     to_point_response,
     to_route_response,
     update_planned_point,
     update_planned_route,
     update_planned_route_status
+)
+from services.localization_sources import (
+    bulk_create_planned_routes,
+    infer_planned_route,
+    repeat_planned_route
 )
 from services.localization_executed import (
     close_executed_route,
@@ -69,6 +74,7 @@ from services.localization_stats import (
     points_visited,
     route_comparisons
 )
+from services.route_optimization import optimize_planned_route
 from services.utils import audit_event, handle_service_errors
 
 
@@ -223,6 +229,47 @@ async def bulk_upload_planned_routes_controller(
         owner_email = current_user,
         csv_text = csv_text
     )
+
+
+@handle_service_errors('OPTIMIZATION')
+async def optimize_planned_route_controller(
+    dynamodb_resource: ServiceResource,
+    planned_route_id: str,
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> RouteOptimizationSchema:
+    '''
+        Studies a route the caller already has and proposes a better order.
+
+        Not audited and not a write: it changes nothing. Accepting the
+        proposal is `repeat` with the new order, which is audited like any
+        other route that is born.
+    '''
+    return optimize_planned_route(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        route_id = planned_route_id
+    )
+
+
+@handle_service_errors('OPTIMIZATION')
+@audit_event('OPTIMIZATION', 'PlannedRoute', 'REPEAT')
+async def repeat_planned_route_controller(
+    dynamodb_resource: ServiceResource,
+    planned_route_id: str,
+    repeat: RepeatPlannedRouteSchema,
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> PlannedRouteResponseSchema:
+    '''
+        Runs an existing route again on another day.
+    '''
+    return to_route_response(repeat_planned_route(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        route_id = planned_route_id,
+        repeat = repeat
+    ))
 
 
 @handle_service_errors('OPTIMIZATION')

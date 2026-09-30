@@ -119,6 +119,28 @@ COLLECTION_HEADERS: tuple[str, ...] = tuple(
     column.header for column in COLLECTION_COLUMNS
 )
 
+
+# The objective is what the company DECIDED a client should buy in a month,
+# and it is the only figure in the product that does not come from a
+# transaction: nothing in a sales file implies it. It arrives per client and
+# per month because that is the grain the commercial team manages — the same
+# objective is then measured twice, against what was invoiced and against what
+# was actually collected, which is the difference between selling and getting
+# paid.
+OBJECTIVE_COLUMNS: tuple[SalesColumn, ...] = (
+    SalesColumn('pos_id', 'Cliente ID', True, 'object',
+                rules = ValueRules(max_length = 64), filled_by_service = True),
+    SalesColumn('pos_name', 'Cliente', True, 'object', template_required = True),
+    SalesColumn('period', 'Periodo', True, 'object',
+                rules = ValueRules(max_length = 7), template_required = True),
+    SalesColumn('target_amount', 'Objetivo', True, 'float64',
+                rules = ValueRules(minimum = 0.0), template_required = True),
+)
+
+OBJECTIVE_HEADERS: tuple[str, ...] = tuple(
+    column.header for column in OBJECTIVE_COLUMNS if not column.filled_by_service
+)
+
 # The stock is a SNAPSHOT, not a movement ledger: one row per product and day
 # with what was in the warehouse. It has its own endpoint because it changes
 # every day while the sales file is loaded once, and because the ERP that
@@ -182,11 +204,88 @@ VISIT_HEADERS: tuple[str, ...] = tuple(
     column.header for column in VISIT_COLUMNS if not column.filled_by_service
 )
 
-# Sheet names of the workbook the client downloads and returns filled in.
-SALES_SHEET: str = 'Ventas'
-COLLECTIONS_SHEET: str = 'Cobros'
-STOCK_SHEET: str = 'Stock'
-VISITS_SHEET: str = 'Visitas'
+# The client master. What describes WHO buys is stated once here and not
+# repeated on every sales line: the transaction file only identifies the
+# client, and whatever it omits is taken from this master. That is what lets a
+# company upload sales without coordinates on Tuesday and still have Routes
+# working, and what lets a seller register a client from the street.
+#
+# `id` is the code the client's own system uses; it is the identity of the
+# record, so it is required everywhere and is never derived by the service.
+CLIENT_COLUMNS: tuple[SalesColumn, ...] = (
+    SalesColumn('id', 'Cliente ID', True, 'object',
+                rules = ValueRules(max_length = 64), template_required = True),
+    SalesColumn('name', 'Cliente', True, 'object',
+                rules = ValueRules(max_length = 150), template_required = True),
+    SalesColumn('tax_id', 'NIT', False, 'object',
+                rules = ValueRules(max_length = 40)),
+    SalesColumn('client_type', 'Tipo Negocio', False, 'object',
+                rules = ValueRules(max_length = 64)),
+    SalesColumn('channel', 'Canal', False, 'object',
+                rules = ValueRules(max_length = 64)),
+    SalesColumn('zone', 'Zona', False, 'object', rules = ValueRules(max_length = 100)),
+    SalesColumn('city', 'Ciudad', False, 'object', rules = ValueRules(max_length = 100)),
+    SalesColumn('region', 'Region', False, 'object', rules = ValueRules(max_length = 100)),
+    SalesColumn('address', 'Direccion', False, 'object',
+                rules = ValueRules(max_length = 255)),
+    SalesColumn('latitude', 'Latitud', False, 'float64',
+                rules = ValueRules(value_range = (-90.0, 90.0))),
+    SalesColumn('longitude', 'Longitud', False, 'float64',
+                rules = ValueRules(value_range = (-180.0, 180.0))),
+    SalesColumn('phone', 'Telefono', False, 'object',
+                rules = ValueRules(max_length = 40)),
+    SalesColumn('contact', 'Contacto', False, 'object',
+                rules = ValueRules(max_length = 150)),
+    SalesColumn('seller', 'Vendedor', False, 'object',
+                rules = ValueRules(max_length = 128)),
+    SalesColumn('credit_limit', 'Limite Credito', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+    # The commercial hierarchy a client is managed through. It is GIVEN, never
+    # deduced: the cluster is a decision the company makes about a client, not
+    # a tier computed from their sales — which is what `segmentation` already
+    # does, and a different question.
+    SalesColumn('cluster', 'Cluster', False, 'object',
+                rules = ValueRules(max_length = 40)),
+    SalesColumn('supervisor', 'Supervisor', False, 'object',
+                rules = ValueRules(max_length = 128)),
+    SalesColumn('market', 'Mercado', False, 'object',
+                rules = ValueRules(max_length = 100)),
+)
+
+CLIENT_HEADERS: tuple[str, ...] = tuple(
+    column.header for column in CLIENT_COLUMNS if not column.filled_by_service
+)
+
+# The attributes the sales, stock and visit files may carry about the client
+# and that therefore feed the master when they arrive. Stated once so the
+# enrichment and the upsert cannot drift apart.
+CLIENT_SALES_ATTRIBUTES: tuple[str, ...] = (
+    'name', 'zone', 'city', 'region', 'channel',
+    'latitude', 'longitude', 'seller', 'credit_limit',
+    'cluster', 'supervisor', 'market',
+)
+
+# One file per contract, so the contract IS the file and these are the names
+# of the templates the client downloads — not sheets inside one workbook. The
+# four-sheet book was our own invention: it made the service read S3 by itself,
+# because a reader that returns one flat table could not serve it.
+SALES_TEMPLATE: str = 'ventas'
+COLLECTIONS_TEMPLATE: str = 'cobros'
+STOCK_TEMPLATE: str = 'stock'
+VISITS_TEMPLATE: str = 'visitas'
+CLIENTS_TEMPLATE: str = 'clientes'
+OBJECTIVES_TEMPLATE: str = 'objetivos'
+
+
+class TemplateName(str, Enum):
+    '''
+        The templates a client can download, one per contract.
+    '''
+    SALES = SALES_TEMPLATE
+    COLLECTIONS = COLLECTIONS_TEMPLATE
+    STOCK = STOCK_TEMPLATE
+    VISITS = VISITS_TEMPLATE
+    OBJECTIVES = OBJECTIVES_TEMPLATE
 
 TEMPLATE_VERSION: str = 'v4'
 
@@ -249,6 +348,7 @@ class IngestError(str, Enum):
     FILES_SERVICE_UNREACHABLE = 'FILES_SERVICE_UNREACHABLE'
     FILES_SERVICE_REJECTED_UPLOAD = 'FILES_SERVICE_REJECTED_UPLOAD'
     DATASET_NOT_FOUND = 'DATASET_NOT_FOUND'
+    NO_REJECTED_ROWS = 'NO_REJECTED_ROWS'
 
 
 class ValidationIssue(BaseModel):
@@ -274,6 +374,27 @@ class IngestSummary(BaseModel):
                     description = 'ISO date of the earliest valid sale.')
     date_range_end: Optional[str] = Field(None,
                     description = 'ISO date of the latest valid sale.')
+
+
+class ObjectivesSummary(BaseModel):
+    """
+        What an objectives load contains, once matched to its sales dataset.
+
+        `unmatched_rows` travels for the same reason it does in a collections
+        load, but it means the opposite thing: a client with an objective and
+        no invoice is not a mistake, it is a client the company expects to
+        activate — and that is precisely the row a manager wants on the
+        screen.
+    """
+    total_rows: int = Field(0, ge = 0)
+    valid_rows: int = Field(0, ge = 0)
+    error_rows: int = Field(0, ge = 0)
+    clients_with_objective: int = Field(0, ge = 0)
+    unmatched_rows: int = Field(0, ge = 0)
+    periods_count: int = Field(0, ge = 0)
+    target_amount: float = Field(0.0, ge = 0)
+    period_start: Optional[str] = Field(None, description = "'YYYY-MM', if any.")
+    period_end: Optional[str] = Field(None, description = "'YYYY-MM', if any.")
 
 
 class CollectionsSummary(BaseModel):
@@ -356,6 +477,22 @@ class StockResponse(BaseModel):
         None, description = 'Object key of the stored snapshot file.'
     )
     summary: StockSummary = StockSummary()
+    issues: List[ValidationIssue] = Field(default_factory = list)
+
+
+class ObjectivesResponse(BaseModel):
+    """
+        Answer of an objectives upload: what got in, what did not, and why.
+
+        Parallel to the other companions —`<name>_s3_key`, summary, issues—
+        because one storage routine serves them all.
+    """
+    dataset_id: str = Field(..., description = 'Sales dataset the objectives belong to.')
+    status: str = Field(..., description = "'validated' or 'failed'.")
+    objectives_s3_key: Optional[str] = Field(
+        None, description = 'Object key of the stored objectives file.'
+    )
+    summary: ObjectivesSummary = ObjectivesSummary()
     issues: List[ValidationIssue] = Field(default_factory = list)
 
 

@@ -18,11 +18,10 @@
     call.
 '''
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 
-from schemas.ingest import VISITS_SHEET, ValidationIssue, ValidationRule, VisitsSummary
+from schemas.ingest import ValidationIssue, ValidationRule, VisitsSummary
 from services.ingest import fill_pos_ids, normalize_frame, sanitize_geo
 from services.ingest_contract import (
     VISIT_HEADER_LOOKUP,
@@ -30,7 +29,7 @@ from services.ingest_contract import (
     unknown_value_issues,
     validate
 )
-from services.ingest_files import read_sheet
+from services.ingest_files import read_file
 from services.logger_config import custom_logger as logger
 
 _CLIENT = 'pos_id'
@@ -58,26 +57,6 @@ class VisitsResult:
     summary: VisitsSummary
 
 
-def read_visits(
-    file_bytes: bytes,
-    filename: str,
-    auto: bool = False
-) -> Optional[pd.DataFrame]:
-    '''
-        Reads the visit rows out of an upload: the `Visitas` sheet of a
-        workbook, or the whole file when it was uploaded as a visits file.
-
-        Args:
-            file_bytes (bytes): Raw uploaded file content.
-            filename (str): Original filename; drives format detection.
-            auto (bool): True when scanning a sales upload for a visits sheet,
-                so a file without one comes back empty and silent.
-
-        Returns:
-            pd.DataFrame | None: The raw frame, or None when there is nothing
-                to read.
-    '''
-    return read_sheet(file_bytes, filename, VISITS_SHEET, auto = auto)
 
 
 def _normalize_time(visits: pd.DataFrame) -> pd.DataFrame:
@@ -194,8 +173,7 @@ def _known_values(
 def parse_and_validate(
     file_bytes: bytes,
     filename: str,
-    sales: pd.DataFrame,
-    auto: bool = False
+    sales: pd.DataFrame
 ) -> VisitsResult:
     '''
         End-to-end visits pipeline: read, validate, marry, summarize.
@@ -205,7 +183,6 @@ def parse_and_validate(
             filename (str): Original filename; drives format detection.
             sales (pd.DataFrame): The normalized sales frame of the dataset the
                 visits belong to, which holds the client and seller catalogues.
-            auto (bool): True when scanning a sales upload for a visits sheet.
 
         Returns:
             VisitsResult: Accepted rows, issues and summary.
@@ -213,7 +190,7 @@ def parse_and_validate(
         Raises:
             ValueError: On an unsupported extension or unreadable content.
     '''
-    raw = read_visits(file_bytes, filename, auto = auto)
+    raw = read_file(file_bytes, filename)
     if raw is None or raw.empty:
         message = f'No visit rows found in "{filename}".'
         logger.info(message)
@@ -221,9 +198,49 @@ def parse_and_validate(
             accepted = pd.DataFrame(), issues = [], summary = VisitsSummary()
         )
 
-    mapped = _normalize_time(
-        sanitize_geo(fill_pos_ids(normalize_frame(raw, VISIT_HEADER_LOOKUP)))
-    )
+    return validate_rows(prepare_rows(normalize_frame(raw, VISIT_HEADER_LOOKUP)),
+                         sales, filename)
+
+
+def prepare_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    '''
+        The identifiers and coercions this service applies on its own, over a
+        frame whose columns are already canonical.
+
+        Split out so the API path —which receives canonical names from its
+        DTOs— reaches the validator through exactly the same steps as the file.
+
+        Args:
+            frame (pd.DataFrame): Canonical visit rows.
+
+        Returns:
+            pd.DataFrame: The same rows with ids, coordinates and hour settled.
+    '''
+    return _normalize_time(sanitize_geo(fill_pos_ids(frame)))
+
+
+def validate_rows(
+    mapped: pd.DataFrame,
+    sales: pd.DataFrame,
+    origin: str
+) -> VisitsResult:
+    '''
+        Validates a canonical visits frame and marries it to clients and
+        sellers.
+
+        Everything after the reading lives here, so the uploaded file and the
+        ERP pushing JSON are judged by one contract and answer with one set of
+        codes.
+
+        Args:
+            mapped (pd.DataFrame): Canonical visit rows.
+            sales (pd.DataFrame): Normalized sales frame of the dataset.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            VisitsResult: Accepted rows, issues and summary.
+    '''
+    filename = origin
     validation = validate(mapped, VISITS_SCHEMA)
     issues = list(validation.issues)
     accepted = validation.frame if validation.is_valid else mapped.iloc[0:0]
@@ -245,3 +262,27 @@ def parse_and_validate(
     logger.info(message)
 
     return VisitsResult(accepted = accepted, issues = issues, summary = summary)
+
+
+def parse_frame(
+    frame: pd.DataFrame,
+    sales: pd.DataFrame,
+    origin: str
+) -> VisitsResult:
+    '''
+        The same pipeline, over the rows FILES handed back instead of bytes.
+
+        FILES owns the bucket and its reader answers with one flat table, so a
+        stored object arrives already parsed. What is left —mapping the client's
+        headers to the contract, deriving the identifiers and validating— is
+        exactly what the uploaded file goes through.
+
+        Args:
+            frame (pd.DataFrame): Rows as stored, with the client's headers.
+            sales (pd.DataFrame): Normalized sales frame of the dataset.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            VisitsResult: Accepted rows, issues and summary.
+    '''
+    return validate_rows(prepare_rows(normalize_frame(frame, VISIT_HEADER_LOOKUP)), sales, origin)

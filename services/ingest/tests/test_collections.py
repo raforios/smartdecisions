@@ -11,11 +11,9 @@ from io import BytesIO
 import pandas as pd
 
 from schemas.ingest import (
-    COLLECTIONS_SHEET,
-    SALES_SHEET,
     ValidationRule
 )
-from services.collections import parse_and_validate, read_collections
+from services.collections import parse_and_validate
 from services.ingest import parse_and_validate as parse_sales
 
 
@@ -131,46 +129,23 @@ def test_a_payment_of_zero_breaks_the_contract():
     assert ValidationRule.BELOW_MINIMUM in {issue.rule_code for issue in result.issues}
 
 
-def test_auto_mode_stays_silent_on_a_file_without_payments():
-    '''
-        Scanning a sales upload must report nothing when there is no payments
-        sheet: whoever sells cash should not see a broken contract they never
-        filled in.
-    '''
-    sales_csv = pd.DataFrame([
-        {'Fecha': '2026-03-10', 'Nro Factura': 'F-1', 'Cliente': 'Tienda',
-         'Producto': 'Galleta', 'Cantidad': 2}
-    ]).to_csv(index = False).encode('utf-8')
+def test_a_payments_file_is_read_whole_whatever_its_sheet_is_called():
+    """
+        One file, one contract.
 
-    result = parse_and_validate(sales_csv, 'ventas.csv', _sales_frame(), auto = True)
-
-    assert not result.issues
-    assert result.summary.valid_rows == 0
-    assert result.accepted.empty
-
-
-def test_the_payments_sheet_is_found_inside_a_two_sheet_workbook():
-    '''
-        The published template is one workbook with both sheets, so a client
-        who returns it filled in loads sales and payments in a single upload.
-    '''
+        The client uploads a payments file and the whole file IS the payments;
+        there is no sheet to go looking for. This replaces the two tests of
+        the four-sheet workbook, which was our own invention and the reason
+        the service could not read through FILES.
+    """
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine = 'openpyxl') as writer:
         pd.DataFrame([
-            {'Fecha': '2026-03-10', 'Nro Factura': 'F-1', 'Cliente': 'Tienda',
-             'Producto': 'Galleta', 'Cantidad': 2}
-        ]).to_excel(writer, sheet_name = SALES_SHEET, index = False)
-        pd.DataFrame([
             {'Nro Factura': 'F-1', 'Fecha Cobro': '2026-03-20', 'Monto Cobrado': 500.0}
-        ]).to_excel(writer, sheet_name = COLLECTIONS_SHEET, index = False)
+        ]).to_excel(writer, sheet_name = 'Datos', index = False)
 
-    found = read_collections(buffer.getvalue(), 'plantilla.xlsx', auto = True)
-    assert found is not None
-    assert len(found) == 1
+    result = parse_and_validate(buffer.getvalue(), 'plantilla_cobros.xlsx', _sales_frame())
 
-    result = parse_and_validate(
-        buffer.getvalue(), 'plantilla.xlsx', _sales_frame(), auto = True
-    )
     assert not result.issues
     assert result.summary.collected_amount == 500.0
 

@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
+from routes.factors import router as factors_router
 from routes.quotes import router as quotes_router
 from schemas.quotes import SyncResult
 
@@ -149,6 +150,9 @@ async def custom_swagger_ui() -> HTMLResponse:
     )
 
 
+# The literal router first: /v1/quotes/factors must not be read as a
+# path parameter of the quotes router.
+app.include_router(factors_router)
 app.include_router(quotes_router)
 
 

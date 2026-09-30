@@ -10,6 +10,7 @@
     puts them together; the payments, stock and visits pipelines reuse the
     same pieces over their own sheets.
 '''
+import hashlib
 from dataclasses import dataclass
 from typing import Final
 
@@ -60,6 +61,66 @@ class ParseResult:
 _RULE_CODES_COLUMN: Final[str] = 'rule_codes'
 
 _ID_COLUMNS = ('order_id', 'pos_id', 'product_id')
+
+# How long the hash that disambiguates a shortened identifier is, and the
+# character that introduces it. Eight hex digits over a set of a few thousand
+# names is a collision nobody will see.
+_ID_DIGEST_LENGTH: Final[int] = 8
+_ID_DIGEST_MARK: Final[str] = '~'
+
+
+def _id_limit(column: str) -> int:
+    '''
+        The length the contract allows for an identifier column.
+
+        Read from the contract and not written here: the cap and the check
+        that enforces it have to be the same number, or the service builds an
+        id the validator then rejects.
+
+        Args:
+            column (str): Canonical name of the identifier column.
+
+        Returns:
+            int: The maximum length.
+    '''
+    return next(definition.rules.max_length for definition in SALES_COLUMNS
+                if definition.canonical == column)
+
+
+def _derive_id(
+    name: object,
+    limit: int
+) -> object:
+    '''
+        The identifier a name stands for, guaranteed to fit the contract.
+
+        A name is used as its own code because the template only asks for
+        'Cliente' and 'Producto'. But real catalogues run long — 'SOCIEDAD
+        INDUSTRIAL DE ALIMENTOS NATURALES ORGANICOS SINDAN ORGANIC S.R.L.' is
+        74 characters, and a quarter of a real client's file was being
+        rejected for exceeding a cap on a column they never filled in and
+        could not correct.
+
+        So an over-long name is shortened and given a digest of the whole
+        name, which keeps two products that differ only in their tail apart.
+        A name that already fits is left exactly as it is: it is the key the
+        client master married on, and rewriting it would orphan every row
+        already loaded.
+
+        Args:
+            name (object): The client or product name.
+            limit (int): Characters the contract allows.
+
+        Returns:
+            object: The identifier, or NA when there is no name.
+    '''
+    if pd.isna(name):
+        return pd.NA
+    text = str(name).strip()
+    if len(text) <= limit:
+        return text or pd.NA
+    digest = hashlib.sha256(text.encode('utf-8')).hexdigest()[:_ID_DIGEST_LENGTH]
+    return f'{text[:limit - _ID_DIGEST_LENGTH - 1]}{_ID_DIGEST_MARK}{digest}'
 
 
 def _clean_id(value: object) -> object:
@@ -230,11 +291,13 @@ def _fill_from_name(
     '''
     if name_column not in dataframe.columns:
         return dataframe
+    limit = _id_limit(id_column)
+    derived = dataframe[name_column].map(lambda name: _derive_id(name, limit))
     if id_column not in dataframe.columns:
-        dataframe[id_column] = dataframe[name_column]
+        dataframe[id_column] = derived
     else:
         missing = dataframe[id_column].isna()
-        dataframe.loc[missing, id_column] = dataframe.loc[missing, name_column]
+        dataframe.loc[missing, id_column] = derived[missing]
     return dataframe
 
 
@@ -409,9 +472,26 @@ def _normalize(
     # Map the published template's headers to the canonical names before
     # validating, then clean numeric codes and fill the required id columns
     # from the client and product names, which is all the template carries.
-    mapped = normalize_frame(read_file(file_bytes, filename), SALES_HEADER_LOOKUP)
-    mapped = _fill_ids_from_names(mapped)
-    return sanitize_geo(mapped)
+    return prepare_rows(normalize_frame(read_file(file_bytes, filename),
+                                       SALES_HEADER_LOOKUP))
+
+
+def prepare_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    '''
+        The identifiers and coercions this service applies on its own, over a
+        frame whose columns are already canonical.
+
+        Split out so the API path —where an ERP posts rows that already carry
+        the canonical names— reaches the validator through exactly the same
+        steps as the uploaded file, instead of a second copy of them.
+
+        Args:
+            frame (pd.DataFrame): Canonical sales rows.
+
+        Returns:
+            pd.DataFrame: The same rows with ids filled and coordinates clean.
+    '''
+    return sanitize_geo(_fill_ids_from_names(frame))
 
 
 def parse_and_validate(
@@ -494,6 +574,25 @@ def _whole_file_rejection(
     )
 
 
+def rows_with_issues(issues: list[ValidationIssue]) -> set[int]:
+    '''
+        Frame indexes that carry at least one cell-level issue.
+
+        Public because partial acceptance is a promise of every contract, not
+        a trick of the sales one: whoever sets rows aside has to identify them
+        the same way, or two companions disagree about which row was row 7.
+
+        Args:
+            issues (list[ValidationIssue]): Cell-level issues; `row` is the
+                Excel row number, which is the frame index plus two.
+
+        Returns:
+            set[int]: The offending frame indexes. File-level issues, which
+                point at no row, are left out.
+    '''
+    return {issue.row - 2 for issue in issues if issue.row - 2 >= 0}
+
+
 def _codes_by_row(issues: list[ValidationIssue]) -> dict[int, list[str]]:
     '''
         Groups the failed columns and their rule codes by DataFrame index.
@@ -533,7 +632,29 @@ def parse_and_validate_partial(
             ParseResult: Accepted rows, rejected rows with their reason, the
                 issues found and the summary over the whole file.
     '''
-    mapped = _normalize(file_bytes, filename)
+    return validate_rows_partial(_normalize(file_bytes, filename), filename)
+
+
+def validate_rows_partial(
+    mapped: pd.DataFrame,
+    origin: str
+) -> ParseResult:
+    '''
+        Partial acceptance over a canonical sales frame.
+
+        Everything after the reading lives here, so the uploaded file and the
+        ERP posting rows are judged by one contract and answer with one set of
+        codes.
+
+        Args:
+            mapped (pd.DataFrame): Canonical sales rows.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            ParseResult: Accepted rows, rejected rows with their reason, the
+                issues found and the summary.
+    '''
+    filename = origin
     issues = validate(mapped).issues
 
     if any(issue.rule_code in _FILE_LEVEL_RULES for issue in issues):
@@ -562,3 +683,25 @@ def parse_and_validate_partial(
     return ParseResult(
         accepted = accepted, rejected = rejected, issues = issues, summary = summary
     )
+
+
+def parse_frame(
+    frame: pd.DataFrame,
+    origin: str
+) -> ParseResult:
+    '''
+        The same pipeline, over the rows FILES handed back instead of bytes.
+
+        FILES owns the bucket and its reader answers with one flat table, so a
+        stored object arrives already parsed. What is left —mapping the client's
+        headers to the contract, deriving the identifiers and validating— is
+        exactly what the uploaded file goes through.
+
+        Args:
+            frame (pd.DataFrame): Rows as stored, with the client's headers.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            ParseResult: Accepted rows, issues and summary.
+    '''
+    return validate_rows_partial(prepare_rows(normalize_frame(frame, SALES_HEADER_LOOKUP)), origin)

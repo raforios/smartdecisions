@@ -1,9 +1,13 @@
 '''
     Ingest support: persistence of dataset metadata and file storage.
 
-    Keeps the ingest domain logic in ingest.py free of infrastructure detail —
-    DynamoDB items, direct S3 access for files too large for API Gateway, and
-    the FILES service for regular uploads.
+    Keeps the ingest domain logic in ingest.py free of infrastructure detail:
+    the DynamoDB items of a dataset, and the thin turn of a stored file into
+    the frame this service works with.
+
+    Talking to FILES is NOT here: it lives in `services/utils.py`, which is
+    the model any new DynamoDB microservice copies. What stays is the one
+    direct read the rule allows — the static template.
 '''
 import hashlib
 import uuid
@@ -11,34 +15,60 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import boto3
-import requests
+import pandas as pd
 from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
+from schemas.files import FilesError
 from schemas.ingest import IngestError
 from services.crud import create_item, get_item_by_key
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
-from services.utils import audit_event, get_current_time_gmt
+from services.utils import (
+    audit_event,
+    get_current_time_gmt,
+    read_file_rows,
+    store_file
+)
 
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
     'BUCKET_NAME': str,
-    'FILES_SERVICE_URL': str,
     'HISTORY_DEFAULT_LIMIT': int,
-    'BUCKET_PATH': str,
-    'UPLOAD_TIMEOUT_SECONDS': int,
 })
 DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 BUCKET_NAME = ENV_VARS['BUCKET_NAME']
-FILES_SERVICE_URL = ENV_VARS['FILES_SERVICE_URL'].rstrip('/')
-DEFAULT_BUCKET_PATH = ENV_VARS['BUCKET_PATH'].strip('/')
-UPLOAD_TIMEOUT_SECONDS = ENV_VARS['UPLOAD_TIMEOUT_SECONDS']
 
-# Region + credentials come from the default chain (Lambda role in AWS).
+# The ONLY direct S3 access left, and the exception the rule names in
+# `CLAUDE.md` §9: the templates are static objects, identical for every client,
+# and FILES cannot hand back a file AS a file —its reader parses and returns
+# rows—. Everything the client sends or the service stores goes through FILES.
 _s3_client = boto3.client('s3')
+
+
+def download_template_bytes(file_key: str) -> bytes:
+    '''
+        Reads one static template straight from the bucket.
+
+        Args:
+            file_key (str): S3 object key of the template.
+
+        Returns:
+            bytes: The template, byte for byte.
+
+        Raises:
+            ServiceUnavailableError: If the object cannot be read.
+    '''
+    try:
+        return _s3_client.get_object(Bucket = BUCKET_NAME, Key = file_key)['Body'].read()
+    except Exception as error:
+        error_msg = f'Failed to read the template s3://{BUCKET_NAME}/{file_key}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(
+            detail = FilesError.UNREACHABLE.value
+        ) from error
 
 
 # ---------------------------------------------------------------------------
@@ -96,10 +126,11 @@ def persist_dataset(
     return persisted
 
 
-def _decimalize(value: Any) -> Any:
+def to_dynamo(value: Any) -> Any:
     '''
         Turns floats into Decimal, which is the only numeric type DynamoDB
-        accepts. Walks dicts and lists so a summary travels whole.
+        accepts. Walks dicts and lists so a summary travels whole. Named as in
+        OPTIMIZATION, which solves the same problem the same way.
 
         Args:
             value (Any): Node of the payload being written.
@@ -110,9 +141,30 @@ def _decimalize(value: Any) -> Any:
     if isinstance(value, float):
         return Decimal(str(value))
     if isinstance(value, dict):
-        return {key: _decimalize(item) for key, item in value.items()}
+        return {key: to_dynamo(item) for key, item in value.items()}
     if isinstance(value, list):
-        return [_decimalize(item) for item in value]
+        return [to_dynamo(item) for item in value]
+    return value
+
+
+def from_dynamo(value: Any) -> Any:
+    '''
+        The inverse of `to_dynamo`: the Decimals DynamoDB hands back become
+        native numbers, so DTOs and arithmetic never meet a Decimal.
+
+        Args:
+            value (Any): Node of the payload just read.
+
+        Returns:
+            Any: The same node, with int/float instead of Decimal.
+    '''
+    if isinstance(value, Decimal):
+        integral = int(value)
+        return integral if value == integral else float(value)
+    if isinstance(value, dict):
+        return {key: from_dynamo(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [from_dynamo(item) for item in value]
     return value
 
 
@@ -145,7 +197,7 @@ def attach_to_dataset(
         Key = {'id': dataset_id},
         UpdateExpression = f'SET {assignments}',
         ExpressionAttributeNames = {f'#{name}': name for name in payload},
-        ExpressionAttributeValues = _decimalize(values),
+        ExpressionAttributeValues = to_dynamo(values),
         ReturnValues = 'ALL_NEW'
     )
     message = f'Attached a secondary load to dataset {dataset_id}.'
@@ -306,222 +358,48 @@ def get_owned_dataset(
 
 
 # ---------------------------------------------------------------------------
-# Direct S3 access
+# Storage, through FILES
 # ---------------------------------------------------------------------------
 
-def download_bytes(file_key: str) -> bytes:
+def read_stored_frame(
+    file_key: str,
+    auth_token: str,
+    delimiter: str = ','
+) -> pd.DataFrame:
     '''
-        Downloads an object from the ingest bucket and returns its raw bytes.
+        An object of the bucket as a frame, read through FILES.
+
+        The conversation with FILES lives in the boilerplate
+        (`services/utils.py`), which is the model any new DynamoDB service
+        copies; here it is only turned into the frame this service works with.
 
         Args:
-            file_key (str): S3 object key of the file to read.
+            file_key (str): S3 object key.
+            auth_token (str): The caller's Authorization header.
+            delimiter (str): Field separator, for a CSV.
 
         Returns:
-            bytes: The object's content.
-
-        Raises:
-            ServiceUnavailableError: If S3 is unreachable or the key is missing.
+            pd.DataFrame: The rows the file holds.
     '''
-    try:
-        response = _s3_client.get_object(Bucket = BUCKET_NAME, Key = file_key)
-        return response['Body'].read()
-    except Exception as error:
-        error_msg = f'Failed to download s3://{BUCKET_NAME}/{file_key}: {error}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'No se pudo leer el archivo subido desde el bucket.'
-        ) from error
+    return pd.DataFrame(read_file_rows(file_key, auth_token, delimiter))
 
 
 def upload_bytes(
     file_key: str,
     data: bytes,
-    content_type: str
+    content_type: str,
+    auth_token: str
 ) -> str:
     '''
-        Writes bytes to the ingest bucket and returns the object key.
+        Stores bytes in the bucket through FILES and returns the object key.
 
         Args:
-            file_key (str): Destination S3 object key.
+            file_key (str): Destination object key.
             data (bytes): Content to store.
             content_type (str): MIME type stored on the object.
+            auth_token (str): The caller's Authorization header.
 
         Returns:
             str: The stored object key.
-
-        Raises:
-            ServiceUnavailableError: If S3 rejects the write.
     '''
-    try:
-        _s3_client.put_object(
-            Bucket = BUCKET_NAME,
-            Key = file_key,
-            Body = data,
-            ContentType = content_type
-        )
-    except Exception as error:
-        error_msg = f'Failed to upload s3://{BUCKET_NAME}/{file_key}: {error}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'No se pudo guardar el archivo normalizado en el bucket.'
-        ) from error
-    message = f'Stored normalized dataset at s3://{BUCKET_NAME}/{file_key}.'
-    logger.info(message)
-    return file_key
-
-
-# ---------------------------------------------------------------------------
-# FILES service
-# ---------------------------------------------------------------------------
-
-def _content_type_for(filename: str) -> str:
-    '''
-        Picks the multipart content-type the FILES service whitelists.
-    '''
-    lower = filename.lower()
-    if lower.endswith('.xlsx'):
-        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    if lower.endswith('.csv'):
-        return 'text/csv'
-    return 'application/octet-stream'
-
-
-def _key_from_url(
-    raw_url: str,
-    bucket_name: str
-) -> Optional[str]:
-    '''
-        Extracts the S3 object key from a FILES URL, preserving any folder
-        prefix so downstream S3 downloads do not fail with NoSuchKey.
-
-        Handles s3:// URIs, virtual-hosted style
-        (https://<bucket>.s3.<region>.amazonaws.com/<key>) and path-style
-        (https://s3.<region>.amazonaws.com/<bucket>/<key>) URLs.
-    '''
-    # s3://bucket/path/to/file → strip scheme + bucket
-    if raw_url.startswith('s3://'):
-        without_scheme = raw_url[len('s3://'):]
-        if '/' in without_scheme:
-            return without_scheme.split('/', 1)[1] or None
-        return None
-
-    bucket_token = f'/{bucket_name}/'
-    if bucket_token in raw_url:
-        return raw_url.split(bucket_token, 1)[1] or None
-
-    # Last-resort: drop scheme + host, return whatever path remains.
-    after_scheme = raw_url.split('://', 1)[-1]
-    if '/' in after_scheme:
-        return after_scheme.split('/', 1)[1] or None
-    return None
-
-
-def _extract_s3_key(
-    payload: dict,
-    bucket_name: str
-) -> Optional[str]:
-    '''
-        Extracts the FULL S3 object key from the FILES upload response.
-
-        Current FILES `POST /v1/s3/upload` returns a dict with a canonical
-        `file_key` field (plus legacy aliases and a `url`). We prefer the
-        explicit key and fall back to parsing the URL.
-    '''
-    if not isinstance(payload, dict):
-        return None
-
-    direct = (
-        payload.get('file_key')
-        or payload.get('file_s3_key')
-        or payload.get('key')
-    )
-    if direct:
-        return direct
-
-    raw_url = payload.get('url') or payload.get('s3_url') or ''
-    if not raw_url:
-        return None
-
-    return _key_from_url(raw_url, bucket_name)
-
-
-def upload_excel(
-    file_bytes: bytes,
-    filename: str,
-    bearer_token: str,
-    folder: str = ''
-) -> str:
-    '''
-        Uploads a validated Excel/CSV file to S3 via the FILES microservice.
-
-        Args:
-            file_bytes (bytes): Raw file content.
-            filename (str): Original filename (used as S3 key suffix).
-            bearer_token (str): Authorization token (without the "Bearer " prefix).
-            folder (str): Optional subpath inside the bucket. Falls back to
-                          `BUCKET_PATH` env var (default `ingest`).
-
-        Returns:
-            str: The S3 object key assigned by FILES.
-
-        Raises:
-            ServiceUnavailableError: If FILES does not respond with 2xx or
-                                     the response payload is unusable.
-    '''
-    url = f'{FILES_SERVICE_URL}/v1/s3/upload'
-    target_folder = (folder or DEFAULT_BUCKET_PATH).strip('/')
-
-    headers = {'Authorization': f'Bearer {bearer_token}'}
-    files = {'file': (filename, file_bytes, _content_type_for(filename))}
-    form = {
-        'bucket_name': BUCKET_NAME,
-        'file_path': target_folder
-    }
-
-    try:
-        response = requests.post(
-            url,
-            headers = headers,
-            files = files,
-            data = form,
-            timeout = UPLOAD_TIMEOUT_SECONDS
-        )
-    except requests.exceptions.RequestException as e:
-        error_msg = f'Network error calling FILES at {url}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = IngestError.FILES_SERVICE_UNREACHABLE.value
-        ) from e
-
-    if not response.ok:
-        error_msg = (
-            f'FILES upload failed: status={response.status_code} '
-            f'body={response.text[:300]}'
-        )
-        logger.error(error_msg)
-        raise ServiceUnavailableError(
-            detail = IngestError.FILES_SERVICE_REJECTED_UPLOAD.value
-        )
-
-    payload: dict = {}
-    try:
-        payload = response.json()
-    except ValueError:
-        # FILES answered 2xx with a non-JSON body; the S3 key is then looked up
-        # from the fallback path below instead of failing the whole upload.
-        error_msg = f'FILES returned a non-JSON body: {response.text[:300]}'
-        logger.warning(error_msg)
-
-    s3_key = _extract_s3_key(payload, BUCKET_NAME)
-    if not s3_key:
-        # Last-resort fallback: rebuild the conventional key from what we sent.
-        s3_key = f'{target_folder}/{filename}' if target_folder else filename
-        error_msg = (
-            f'FILES response did not include a key; falling back to constructed '
-            f'key "{s3_key}". Raw response: {payload}'
-        )
-        logger.warning(error_msg)
-
-    message = f'Excel "{filename}" uploaded via FILES; s3_key={s3_key}.'
-    logger.info(message)
-    return s3_key
+    return store_file(file_key, data, auth_token, content_type)

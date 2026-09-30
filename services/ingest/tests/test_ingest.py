@@ -12,6 +12,8 @@ import pytest
 from schemas.ingest import ValidationRule
 from services.ingest import (
     _coerce_dates,
+    _derive_id,
+    _id_limit,
     sanitize_geo,
     parse_and_validate,
     parse_and_validate_partial
@@ -262,3 +264,59 @@ def test_unit_cost_is_carried_through_the_pipeline():
     )
     assert 'unit_cost' in result.accepted.columns
     assert result.accepted['unit_cost'].tolist() == [6.0, 6.0]
+
+
+# ---------------------------------------------------------------------------
+# Identifiers derived from names
+# ---------------------------------------------------------------------------
+
+def test_a_long_name_yields_an_identifier_that_fits_the_contract():
+    '''
+        The service derives `product_id` from the product name, and the
+        contract caps identifiers at 64 characters. Copying the name verbatim
+        rejected a quarter of a real client's file on a column they never
+        filled in — so the derivation has to fit by construction.
+
+        Two products that differ only after the cut must still get different
+        codes, or a catalogue collapses into one row.
+    '''
+    limit = _id_limit('product_id')
+    shared = 'PAPEL ALUMINIO INDUSTRIAL EN ROLLO PARA HORNO DE PANIFICACION '
+    first = _derive_id(f'{shared} 30CM X 7,5M CAJA DE 25 UNIDADES', limit)
+    second = _derive_id(f'{shared} 45CM X 100M CAJA DE 6 UNIDADES', limit)
+
+    assert len(first) <= limit and len(second) <= limit
+    assert first != second
+
+
+def test_a_name_within_the_limit_is_still_its_own_identifier():
+    '''
+        Unchanged on purpose: the short name is the key the client master
+        already married on, and rewriting it would orphan every row loaded
+        before today. An absent name yields no identifier at all.
+    '''
+    assert _derive_id('Tienda Doña Rosa', _id_limit('pos_id')) == 'Tienda Doña Rosa'
+    assert pd.isna(_derive_id(None, _id_limit('pos_id')))
+
+
+def test_the_pipeline_accepts_a_file_whose_names_run_long():
+    '''
+        End to end, through the same path an upload takes: a row whose client
+        and product names both exceed the cap is accepted, not rejected.
+    '''
+    raw = pd.DataFrame([{
+        'Fecha': '2025-06-03',
+        'Nro Factura': 1050000021,
+        'Cliente': 'SOCIEDAD INDUSTRIAL DE ALIMENTOS NATURALES ORGANICOS '
+                   'SINDAN ORGANIC S.R.L.',
+        'Producto': 'ML-2007 - PAPEL ALUM. 30CM X 7,5M  - (CX 97108) - '
+                    '(PQ 97104) (CX 25 UND)',
+        'Cantidad': 20
+    }])
+    buffer = BytesIO()
+    raw.to_excel(buffer, index = False)
+
+    result = parse_and_validate(buffer.getvalue(), 'ventas.xlsx')
+
+    assert not result.issues
+    assert len(result.accepted) == 1

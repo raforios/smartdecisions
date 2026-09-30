@@ -26,6 +26,8 @@ from controllers.localization import (
     get_all_planned_routes_controller,
     get_planned_route_controller,
     infer_planned_route_controller,
+    optimize_planned_route_controller,
+    repeat_planned_route_controller,
     get_points_visited_controller,
     get_route_comparisons_controller,
     get_full_route_comparison_controller,
@@ -54,6 +56,7 @@ from schemas.localization import (
     PlannedRouteResponseSchema,
     PlannedRouteUpdateSchema,
     PlannedRouteUpdateStatusSchema,
+    RepeatPlannedRouteSchema,
     FIELD_ROLES,
     MANAGEMENT_ROLES,
     PointsVisitedResponseSchema,
@@ -61,6 +64,7 @@ from schemas.localization import (
     RouteComparisonFullResponseSchema,
     RouteComparisonsResponseSchema
 )
+from schemas.route_optimization import RouteOptimizationSchema
 from routes.common import csv_upload_text, get_caller
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
@@ -198,6 +202,74 @@ async def bulk_upload_planned_routes_endpoint(
     return await bulk_upload_planned_routes_controller(
         csv_text = csv_text,
         dynamodb_resource = dynamodb_resource,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/routes/planned/{planned_route_id}/optimization',
+    response_model = RouteOptimizationSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'In what order was this route worth doing',
+    description = (
+        'Takes the stops the route already has —imported, inferred from a day '
+        'that was worked, or built by a seller on the street— and proposes the '
+        'order that shortens it, measured on real streets with the same '
+        'algorithm the weekly planner uses. Answers with BOTH orders, both '
+        'measured and both drawable, so the saving can be seen and not just '
+        'claimed. It writes nothing: accepting the proposal is repeating the '
+        'route with the new order.'
+    )
+)
+async def optimize_planned_route_endpoint(
+    request: Request,
+    planned_route_id: str = _ROUTE_ID,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> RouteOptimizationSchema:
+    '''
+        Endpoint proposing a better order for an existing route.
+    '''
+    message = f'User: {current_user}. Studying planned route {planned_route_id}.'
+    logger.info(message)
+    return await optimize_planned_route_controller(
+        dynamodb_resource = dynamodb_resource,
+        planned_route_id = planned_route_id,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.post(
+    '/routes/planned/{planned_route_id}/repeat',
+    response_model = PlannedRouteResponseSchema,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Run an existing route again on another day',
+    description = (
+        'Copies the stops whole and asks only for what changes: the day and, '
+        'when it is somebody else\'s turn, the seller. It is what the history '
+        'screen needs — yesterday worked, do it again — instead of making '
+        'anybody retype thirty stops. The new route starts IN CREATION.'
+    )
+)
+async def repeat_planned_route_endpoint(
+    request: Request,
+    repeat: RepeatPlannedRouteSchema,
+    planned_route_id: str = _ROUTE_ID,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlannedRouteResponseSchema:
+    '''
+        Endpoint to repeat a planned route on another day.
+    '''
+    message = (f'User: {current_user}. Repeating planned route '
+               f'{planned_route_id} on {repeat.plan_date}.')
+    logger.info(message)
+    return await repeat_planned_route_controller(
+        dynamodb_resource = dynamodb_resource,
+        planned_route_id = planned_route_id,
+        repeat = repeat,
         current_user = current_user,
         request = request
     )

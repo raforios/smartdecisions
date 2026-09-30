@@ -40,10 +40,12 @@ ENV_VARS = load_and_validate_env_vars({
     'FORECAST_MONTHS_AHEAD': int,
     'RANKING_SIZE': int,
     'DYNAMODB_TABLE_NAME_CREDIT_POLICIES': str,
+    'DYNAMODB_TABLE_NAME_COMMERCIAL_POLICIES': str,
 })
 INGEST_DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 ANALYTICS_RUNS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_ANALYTICS_RUNS']
 CREDIT_POLICIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_CREDIT_POLICIES']
+COMMERCIAL_POLICIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_COMMERCIAL_POLICIES']
 FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 
 
@@ -383,13 +385,7 @@ def get_credit_policy(
             Dict[str, Any] | None: The stored policy, or None when the client
                 never set one — in which case the service defaults apply.
     '''
-    table = dynamodb_resource.Table(CREDIT_POLICIES_TABLE)
-    item = table.get_item(Key = {'owner_email': owner_email}).get('Item')
-    if not item:
-        message = f'No credit policy stored for {owner_email}; using defaults.'
-        logger.info(message)
-        return None
-    return _decimal_to_native(item)
+    return _read_policy(dynamodb_resource, CREDIT_POLICIES_TABLE, owner_email, 'credit')
 
 
 def save_credit_policy(
@@ -413,17 +409,110 @@ def save_credit_policy(
         Returns:
             Dict[str, Any]: The stored item.
     '''
+    return _write_policy(dynamodb_resource, CREDIT_POLICIES_TABLE,
+                         (owner_email, 'credit'), policy)
+
+
+def _read_policy(
+    dynamodb_resource: ServiceResource,
+    table_name: str,
+    owner_email: str,
+    kind: str
+) -> Optional[Dict[str, Any]]:
+    '''
+        Reads one account's parameter set from its table.
+
+        The owner is the KEY and never a filter applied afterwards: a policy
+        is the clearest case of a per-account parameter, and reading somebody
+        else's would silently change another company's figures.
+
+        Args:
+            dynamodb_resource (ServiceResource): The shared DynamoDB resource.
+            table_name (str): Table holding this kind of policy.
+            owner_email (str): Authenticated caller and owner of the policy.
+            kind (str): What the policy governs, for the log.
+
+        Returns:
+            Dict[str, Any] | None: The stored policy, or None when the account
+                never set one — in which case the service defaults apply.
+    '''
+    item = dynamodb_resource.Table(table_name).get_item(
+        Key = {'owner_email': owner_email}
+    ).get('Item')
+    if not item:
+        message = f'No {kind} policy stored for {owner_email}; using defaults.'
+        logger.info(message)
+        return None
+    return _decimal_to_native(item)
+
+
+def _write_policy(
+    dynamodb_resource: ServiceResource,
+    table_name: str,
+    owner: tuple[str, str],
+    policy: Dict[str, Any]
+) -> Dict[str, Any]:
+    '''
+        Stores one account's parameter set, replacing the previous one.
+
+        Args:
+            dynamodb_resource (ServiceResource): The shared DynamoDB resource.
+            table_name (str): Table holding this kind of policy.
+            owner (tuple[str, str]): Owner e-mail and what the policy governs.
+            policy (Dict[str, Any]): Parameters to store; empty values dropped.
+
+        Returns:
+            Dict[str, Any]: The stored item.
+    '''
+    owner_email, kind = owner
     item = {
         'owner_email': owner_email,
         'updated_at': get_current_time_gmt().isoformat(),
         **{key: value for key, value in policy.items() if value is not None}
     }
-    dynamodb_resource.Table(CREDIT_POLICIES_TABLE).put_item(
-        Item = _floats_to_decimal(item)
-    )
-    message = f'Stored credit policy for {owner_email}.'
+    dynamodb_resource.Table(table_name).put_item(Item = _floats_to_decimal(item))
+    message = f'Stored {kind} policy for {owner_email}.'
     logger.info(message)
     return item
+
+
+def get_commercial_policy(
+    dynamodb_resource: ServiceResource,
+    owner_email: str
+) -> Optional[Dict[str, Any]]:
+    '''
+        Reads the commercial policy of one account: the semaphore cuts and
+        what a bolivian is worth in points, by cluster.
+
+        Args:
+            dynamodb_resource (ServiceResource): The shared DynamoDB resource.
+            owner_email (str): Authenticated caller and owner of the policy.
+
+        Returns:
+            Dict[str, Any] | None: The stored policy, or None for defaults.
+    '''
+    return _read_policy(dynamodb_resource, COMMERCIAL_POLICIES_TABLE,
+                        owner_email, 'commercial')
+
+
+def save_commercial_policy(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    policy: Dict[str, Any]
+) -> Dict[str, Any]:
+    '''
+        Stores the commercial policy of one account, replacing the previous.
+
+        Args:
+            dynamodb_resource (ServiceResource): The shared DynamoDB resource.
+            owner_email (str): Authenticated caller and owner of the policy.
+            policy (Dict[str, Any]): Parameters to store; empty values dropped.
+
+        Returns:
+            Dict[str, Any]: The stored item.
+    '''
+    return _write_policy(dynamodb_resource, COMMERCIAL_POLICIES_TABLE,
+                         (owner_email, 'commercial'), policy)
 
 
 def get_dataset_metadata(

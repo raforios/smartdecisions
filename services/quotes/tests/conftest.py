@@ -10,10 +10,12 @@
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
+import boto3
 import pytest
+from moto import mock_aws
 
 from models.quotes import USD, ExchangeRateItem
-from services import bcb_source, quotes
+from services import bcb_source, factors, quotes
 
 
 # First day of the float regime; the series every fixture builds starts here
@@ -111,3 +113,32 @@ def _midweek():
     with patch.object(quotes, 'get_current_time_gmt',
                       lambda: datetime(2026, 9, 16, 10, 0, tzinfo = timezone.utc)):
         yield
+
+
+@pytest.fixture(name = 'factor_store')
+def factor_store_fixture():
+    '''
+        Both factor tables, mocked.
+
+        It lives here because the domain tests and the route tests need the
+        very same pair: a table built differently in one of them would let
+        the suite agree with itself and disagree with AWS.
+
+        Returns:
+            ServiceResource: The resource.
+    '''
+    with mock_aws():
+        resource = boto3.resource('dynamodb', region_name = 'us-east-1')
+        for table, partition, sort in (
+            (factors.FACTORS_TABLE, 'owner_email', 'code'),
+            (factors.FACTOR_VALUES_TABLE, 'owner_code', 'factor_date')
+        ):
+            resource.create_table(
+                TableName = table,
+                KeySchema = [{'AttributeName': partition, 'KeyType': 'HASH'},
+                             {'AttributeName': sort, 'KeyType': 'RANGE'}],
+                AttributeDefinitions = [{'AttributeName': partition, 'AttributeType': 'S'},
+                                        {'AttributeName': sort, 'AttributeType': 'S'}],
+                BillingMode = 'PAY_PER_REQUEST'
+            )
+        yield resource

@@ -31,9 +31,10 @@ RATES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_EXCHANGE_RATES']
 _resource = boto3.resource('dynamodb')
 
 
-def _floats_to_decimal(value: Any) -> Any:
+def to_dynamo(value: Any) -> Any:
     '''
         Converts floats to Decimal, the only numeric type DynamoDB accepts.
+        Named as in OPTIMIZATION and INGEST, which solve the same problem.
 
         Args:
             value (Any): Value, possibly nested, to convert.
@@ -44,9 +45,9 @@ def _floats_to_decimal(value: Any) -> Any:
     if isinstance(value, float):
         return decimal.Decimal(str(value))
     if isinstance(value, dict):
-        return {key: _floats_to_decimal(item) for key, item in value.items()}
+        return {key: to_dynamo(item) for key, item in value.items()}
     if isinstance(value, list):
-        return [_floats_to_decimal(item) for item in value]
+        return [to_dynamo(item) for item in value]
     return value
 
 
@@ -106,7 +107,7 @@ def put_rate(rate: ExchangeRateItem) -> None:
             ServiceUnavailableError: If DynamoDB rejects the write.
     '''
     try:
-        _table().put_item(Item = _floats_to_decimal(rate.to_item()))
+        _table().put_item(Item = to_dynamo(rate.to_item()))
     except ClientError as error:
         error_msg = f'Failed to store the rate of {rate.currency} on {rate.date}: {error}'
         logger.error(error_msg, exc_info = True)

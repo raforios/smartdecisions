@@ -20,19 +20,19 @@
           issue with a code — never dropped in silence.
 '''
 from dataclasses import dataclass
-from typing import Final, Optional
+from typing import Final
 
 import pandas as pd
 
 from schemas.ingest import (
-    COLLECTIONS_SHEET,
     CollectionsSummary,
     ValidationIssue,
     ValidationRule
 )
 from services.ingest import normalize_frame
 from services.ingest_contract import COLLECTION_HEADER_LOOKUP, COLLECTIONS_SCHEMA, validate
-from services.ingest_files import read_sheet
+from services.ingest_files import read_file
+from services.ingest_contract import AMOUNT_DECIMALS
 from services.logger_config import custom_logger as logger
 
 _ORDER = 'order_id'
@@ -59,26 +59,6 @@ class CollectionsResult:
     summary: CollectionsSummary
 
 
-def read_collections(
-    file_bytes: bytes,
-    filename: str,
-    auto: bool = False
-) -> Optional[pd.DataFrame]:
-    '''
-        Reads the payments rows out of an upload: the `Cobros` sheet of a
-        workbook, or the whole file when it was uploaded as a payments file.
-
-        Args:
-            file_bytes (bytes): Raw uploaded file content.
-            filename (str): Original filename; drives format detection.
-            auto (bool): True when scanning a sales upload for a payments
-                sheet; False when the caller uploaded a payments file.
-
-        Returns:
-            pd.DataFrame | None: The raw frame, or None when there is nothing
-                to read.
-    '''
-    return read_sheet(file_bytes, filename, COLLECTIONS_SHEET, auto = auto)
 
 
 def _normalize(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -178,7 +158,10 @@ def _summarize(
         error_rows = error_rows,
         matched_invoices = int(matched[_ORDER].nunique()) if not matched.empty else 0,
         unmatched_rows = int(len(payments) - len(matched)),
-        collected_amount = round(float(matched[_PAID].sum()), 2) if not matched.empty else 0.0,
+        collected_amount = (
+            round(float(matched[_PAID].sum()), AMOUNT_DECIMALS)
+            if not matched.empty else 0.0
+        ),
         payment_date_start = dates.min().date().isoformat() if not dates.empty else None,
         payment_date_end = dates.max().date().isoformat() if not dates.empty else None
     )
@@ -187,8 +170,7 @@ def _summarize(
 def parse_and_validate(
     file_bytes: bytes,
     filename: str,
-    sales: pd.DataFrame,
-    auto: bool = False
+    sales: pd.DataFrame
 ) -> CollectionsResult:
     '''
         End-to-end collections pipeline: read, validate, marry, summarize.
@@ -202,8 +184,6 @@ def parse_and_validate(
             filename (str): Original filename; drives format detection.
             sales (pd.DataFrame): The normalized sales frame of the dataset the
                 payments belong to.
-            auto (bool): True when scanning a sales upload for a payments
-                sheet, so a file without one comes back empty and silent.
 
         Returns:
             CollectionsResult: Accepted payments, issues and summary.
@@ -211,7 +191,7 @@ def parse_and_validate(
         Raises:
             ValueError: On an unsupported extension or unreadable content.
     '''
-    raw = read_collections(file_bytes, filename, auto = auto)
+    raw = read_file(file_bytes, filename)
     if raw is None or raw.empty:
         message = f'No collections rows found in "{filename}".'
         logger.info(message)
@@ -221,7 +201,30 @@ def parse_and_validate(
             summary = CollectionsSummary()
         )
 
-    mapped = _normalize(raw)
+    return validate_rows(_normalize(raw), sales, filename)
+
+
+def validate_rows(
+    mapped: pd.DataFrame,
+    sales: pd.DataFrame,
+    origin: str
+) -> CollectionsResult:
+    '''
+        Validates a canonical collections frame and marries it to its invoices.
+
+        Everything after the reading lives here, so the uploaded file and the
+        ERP pushing JSON are judged by one contract and answer with one set of
+        codes.
+
+        Args:
+            mapped (pd.DataFrame): Canonical payment rows.
+            sales (pd.DataFrame): Normalized sales frame holding the invoices.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            CollectionsResult: Accepted payments, issues and summary.
+    '''
+    filename = origin
     validation = validate(mapped, COLLECTIONS_SCHEMA)
     issues = list(validation.issues)
 
@@ -248,3 +251,27 @@ def parse_and_validate(
     logger.info(message)
 
     return CollectionsResult(accepted = accepted, issues = issues, summary = summary)
+
+
+def parse_frame(
+    frame: pd.DataFrame,
+    sales: pd.DataFrame,
+    origin: str
+) -> CollectionsResult:
+    '''
+        The same pipeline, over the rows FILES handed back instead of bytes.
+
+        FILES owns the bucket and its reader answers with one flat table, so a
+        stored object arrives already parsed. What is left —mapping the client's
+        headers to the contract, deriving the identifiers and validating— is
+        exactly what the uploaded file goes through.
+
+        Args:
+            frame (pd.DataFrame): Rows as stored, with the client's headers.
+            sales (pd.DataFrame): Normalized sales frame of the dataset.
+            origin (str): Filename or channel, for the log.
+
+        Returns:
+            CollectionsResult: Accepted rows, issues and summary.
+    '''
+    return validate_rows(normalize_frame(frame, COLLECTION_HEADER_LOOKUP), sales, origin)

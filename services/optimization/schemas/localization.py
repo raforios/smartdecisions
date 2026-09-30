@@ -31,6 +31,7 @@ class LocalizationError(str, Enum):
     PLANNED_ROUTE_NOT_ACTIVE = 'PLANNED_ROUTE_NOT_ACTIVE'
     OUTSIDE_START_GEOFENCE = 'OUTSIDE_START_GEOFENCE'
     OUTSIDE_END_GEOFENCE = 'OUTSIDE_END_GEOFENCE'
+    OUTSIDE_STOP_GEOFENCE = 'OUTSIDE_STOP_GEOFENCE'
     ROUTE_ALREADY_OPEN = 'ROUTE_ALREADY_OPEN'
     ROUTE_ALREADY_CLOSED = 'ROUTE_ALREADY_CLOSED'
     REOPEN_NOT_SAME_DAY = 'REOPEN_NOT_SAME_DAY'
@@ -189,6 +190,31 @@ class PlannedRouteUpdateSchema(BaseModel):
     plan_date: Optional[date] = None
 
 
+class RepeatPlannedRouteSchema(BaseModel):
+    """
+        What to change when a route is run again.
+
+        The stops are what a route IS, so repeating one copies them whole and
+        asks only for what changes: the day and, when it is somebody else's
+        turn, the seller. It answers the "duplicar o repetir ruta" the history
+        screen needs, instead of making somebody retype thirty stops.
+    """
+    plan_date: date
+    seller: Optional[str] = Field(None, max_length = 128)
+    route_code: Optional[str] = Field(
+        None, max_length = 50,
+        description = 'Code of the new route. Left out, the original code is '
+                      'suffixed with the date, which is unique per owner.'
+    )
+    optimized: bool = Field(
+        False,
+        description = 'Whether the stops are reordered into the shortest route '
+                      'before the new plan is created. The reordering happens '
+                      'here and not on the screen, so what is accepted cannot '
+                      'drift from what was proposed.'
+    )
+
+
 class PlannedRouteUpdateStatusSchema(BaseModel):
     '''
         Status change request.
@@ -225,6 +251,7 @@ class PlannedRouteBulkRowSchema(PointBase):
     '''
     route_name: str = Field(..., max_length = 150)
     route_code: str = Field(..., max_length = 50)
+    plan_date: Optional[date] = None
     description: Optional[str] = Field(None, max_length = 500)
     seller: Optional[str] = Field(None, max_length = 128)
     point_name: str = Field(..., max_length = 100)
@@ -312,6 +339,14 @@ class ExecutedPointCreateSchema(PointBase):
         default_factory = list,
         description = 'Lines sold on this visit; each draws from the day\'s stock, '
                       'all or none.'
+    )
+    max_distance_stop_point: Optional[float] = Field(
+        None, gt = 0,
+        description = 'Metres accepted between this reading and the planned stop '
+                      'it claims to be at. Optional: a device that knows how good '
+                      'its own fix is may tighten or loosen it, and everything '
+                      'already deployed keeps working. Left out, the radius the '
+                      'operation configured applies.'
     )
 
 
