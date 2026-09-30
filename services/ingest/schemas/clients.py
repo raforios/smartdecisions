@@ -53,6 +53,12 @@ class ClientBase(BaseModel):
     contact: Optional[str] = Field(None, max_length = 150)
     seller: Optional[str] = Field(None, max_length = 128)
     credit_limit: Optional[float] = Field(None, ge = 0.0)
+    # The commercial hierarchy. Declared in the file contract since Fase H but
+    # missing here, so a clients upload carrying them lost them in silence —
+    # the master could not hold what the validator accepted.
+    cluster: Optional[str] = Field(None, max_length = 40)
+    supervisor: Optional[str] = Field(None, max_length = 128)
+    market: Optional[str] = Field(None, max_length = 100)
 
 
 class ClientUpsertSchema(ClientBase):

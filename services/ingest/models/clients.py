@@ -33,6 +33,9 @@ class ClientItem(TypedDict, total = False):
     contact: Optional[str]
     seller: Optional[str]
     credit_limit: Optional[float]
+    cluster: Optional[str]
+    supervisor: Optional[str]
+    market: Optional[str]
     source: str
     created_at: str
     updated_at: str
