@@ -112,6 +112,47 @@ export async function mountSettings(host) {
                         mostrador no puede emitir notas.
                     </p>`}
 
+            </section>
+
+            <!-- Sucursal y punto de venta van DENTRO del CUF, así que son de
+                 la farmacia y no del servicio. La nominatividad es una bandera
+                 porque una farmacia que todavía emite notas internas tiene que
+                 seguir vendiendo hasta que la autoricen. -->
+            <section class="card">
+                <h3>Facturación electrónica</h3>
+                <p class="muted small">
+                    Estos datos forman parte del CUF de cada factura. Déjalos en
+                    cero mientras no tengas la autorización del SIN.
+                </p>
+                <div class="field-row">
+                    <label class="field">
+                        <span>Sucursal</span>
+                        <input type="number" id="branch" min="0" max="9999"
+                               value="${value('branch', 0)}">
+                    </label>
+                    <label class="field">
+                        <span>Punto de venta</span>
+                        <input type="number" id="point_of_sale" min="0" max="9999"
+                               value="${value('point_of_sale', 0)}">
+                    </label>
+                </div>
+                <label class="field">
+                    <span>Exigir documento del comprador</span>
+                    <select id="buyer_required">
+                        <option value="false" ${settings?.buyer_required ? '' : 'selected'}>
+                            No — se puede vender al mostrador
+                        </option>
+                        <option value="true" ${settings?.buyer_required ? 'selected' : ''}>
+                            Sí — obligatorio en toda venta
+                        </option>
+                    </select>
+                </label>
+                <p class="muted small">
+                    Al facturar electrónicamente es obligatorio: la norma exige el
+                    <strong>número de documento</strong> en toda factura, sin importar
+                    el monto. El nombre no es obligatorio.
+                </p>
+
                 <button class="btn btn-primary btn-block" id="save">Guardar</button>
             </section>
         </div>`;
@@ -134,7 +175,10 @@ export async function mountSettings(host) {
                 sale_series: host.querySelector('#sale_series').value.trim() || 'A',
                 purchase_series: host.querySelector('#purchase_series').value.trim() || 'C',
                 ticket_width: host.querySelector('#ticket_width').value,
-                discounts_enabled: host.querySelector('#discounts_enabled').value === 'true'
+                discounts_enabled: host.querySelector('#discounts_enabled').value === 'true',
+                branch: Number(host.querySelector('#branch').value) || 0,
+                point_of_sale: Number(host.querySelector('#point_of_sale').value) || 0,
+                buyer_required: host.querySelector('#buyer_required').value === 'true'
             });
             document.getElementById('shopName').textContent = tradeName;
             notify('Configuración guardada.', 'success');

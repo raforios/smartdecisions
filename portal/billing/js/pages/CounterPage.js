@@ -124,6 +124,7 @@ async function charge(host) {
                 document: host.querySelector('#buyer-document').value.trim() || null
             },
             payment_method: host.querySelector('#payment-method').value,
+            card_number: host.querySelector('#card-number').value.trim() || null,
             notes: host.querySelector('#sale-notes').value.trim() || null,
             lines: [...basket.values()].map((line) => ({
                 sku: line.product.sku,
@@ -138,6 +139,7 @@ async function charge(host) {
         basket = new Map();
         host.querySelector('#buyer-name').value = '';
         host.querySelector('#buyer-document').value = '';
+        host.querySelector('#card-number').value = '';
         host.querySelector('#sale-notes').value = '';
         catalogue = (await BillingService.listProducts({ only_active: true })).items;
         renderBasket(host);
@@ -200,12 +202,20 @@ export async function mountCounter(host) {
                             `<option value="${value}">${label}</option>`).join('')}
                     </select>
                 </label>
+                <!-- El número de tarjeta sólo aparece cuando el pago es con
+                     tarjeta: la norma prohíbe enviarlo en cualquier otro caso. Se
+                     enmascara en el servidor y nunca se guarda completo. -->
+                <label class="field" id="card-field" hidden>
+                    <span>Número de tarjeta</span>
+                    <input type="text" id="card-number" inputmode="numeric" maxlength="30"
+                           placeholder="Se guarda enmascarado">
+                </label>
                 <label class="field">
                     <span>Cliente (opcional)</span>
                     <input type="text" id="buyer-name" placeholder="Nombre o razón social">
                 </label>
                 <label class="field">
-                    <span>NIT / CI</span>
+                    <span id="document-label">NIT / CI</span>
                     <input type="text" id="buyer-document" inputmode="numeric">
                 </label>
                 <label class="field">
@@ -281,6 +291,27 @@ export async function mountCounter(host) {
         basket.delete(event.target.closest('tr').dataset.sku);
         renderBasket(host);
     });
+
+    // El campo de tarjeta sólo existe mientras el pago sea con tarjeta, y se
+    // limpia al cambiar de método: un número que quedó escrito en pantalla
+    // habría viajado con una venta en efectivo, que la norma rechaza.
+    const method = host.querySelector('#payment-method');
+    const cardField = host.querySelector('#card-field');
+    const cardInput = host.querySelector('#card-number');
+    const syncCardField = () => {
+        const isCard = method.value === 'TARJETA';
+        cardField.hidden = !isCard;
+        if (!isCard) cardInput.value = '';
+    };
+    method.addEventListener('change', syncCardField);
+    syncCardField();
+
+    // Con la nominatividad activada el documento deja de ser opcional, y la
+    // etiqueta lo tiene que decir antes de que el cajero cobre.
+    if (settings?.buyer_required) {
+        host.querySelector('#document-label').textContent = 'NIT / CI (obligatorio)';
+        host.querySelector('#buyer-document').required = true;
+    }
 
     host.querySelector('#charge').addEventListener('click', () => charge(host));
 
