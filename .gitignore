@@ -40,3 +40,15 @@ logs/*.log
 
 # CLAUDE files
 .claude/
+
+# Pylint
+.pylintrc
+
+# *.xlsx files
+*.xlsx
+
+# *.docx files
+*.docx
+
+# *.pdf files
+*.pdf
