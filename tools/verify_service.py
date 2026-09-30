@@ -96,10 +96,100 @@ def check_tests(service: Path) -> tuple[bool, str]:
     return code == 0, summary.strip()
 
 
+def check_imports(service: Path) -> tuple[bool, str]:
+    '''
+        The service actually starts, and every route it declares resolves.
+
+        The check that was missing, and the one that cost the most: a
+        duplicated keyword argument in `routes/ingest.py` was a SyntaxError,
+        so the service did not import at all — while its 83 tests passed and
+        Pylint rated it 10.00, because nothing in the suite imports the
+        routes. Green meant nothing.
+
+        Building the OpenAPI schema is what makes it real: FastAPI includes
+        routers lazily, so importing `main` alone would not have resolved a
+        route whose response model or controller is broken.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            tuple[bool, str]: Whether it starts, and how many endpoints it
+                serves, or the first line of the failure.
+    '''
+    if not (service / 'main.py').is_file():
+        return True, 'no main.py'
+    probe = (
+        'import sys; sys.path.insert(0, ".")\n'
+        'import main\n'
+        'paths = main.app.openapi()["paths"]\n'
+        # Operations, not paths: one path can serve GET and PUT, and counting
+        # paths made the service look like it declared more than it served.
+        'print(f"{sum(len(methods) for methods in paths.values())} endpoint(s)")\n'
+    )
+    code, output = _run(service, sys.executable, '-c', probe)
+    if code == 0:
+        # The last line is not reliably the answer: an import that emits a
+        # DeprecationWarning would otherwise be reported as its warning.
+        counted = [line for line in output.splitlines() if 'endpoint(s)' in line]
+        return True, counted[-1] if counted else 'imported'
+    failure = [line for line in output.splitlines() if line.strip()]
+    return False, failure[-1] if failure else 'import failed'
+
+
+def check_endpoint_coverage(service: Path) -> tuple[bool, str]:
+    '''
+        Every endpoint is exercised by a test.
+
+        Twice in one session a route or controller named something its schema
+        no longer had, and neither the domain tests nor Pylint could see it:
+        the defect lived in a layer the suite never ran. An endpoint nobody
+        calls in a test is an endpoint whose first caller is the client.
+
+        It looks for the controller each route delegates to, which is what a
+        controller test invokes. A route that calls none is reported too.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            tuple[bool, str]: Whether every endpoint is covered, and the ones
+                that are not.
+    '''
+    routes = service / 'routes'
+    tests = service / 'tests'
+    if not routes.is_dir() or not tests.is_dir():
+        return True, 'no routes or no tests'
+
+    exercised = '\n'.join(
+        path.read_text(encoding = 'utf-8') for path in sorted(tests.rglob('*.py'))
+    )
+    uncovered: list[str] = []
+    for path in sorted(routes.glob('*.py')):
+        source = path.read_text(encoding = 'utf-8')
+        for endpoint, body in re.findall(
+            r'async def (\w+_endpoint)\(((?:.|\n)*?)(?=\n@router|\nasync def |\Z)', source
+        ):
+            controllers = re.findall(r'await (\w+_controller)\(', body)
+            if not any(name in exercised for name in controllers) \
+                    and endpoint not in exercised:
+                uncovered.append(f'{path.name}:{endpoint}')
+
+    if uncovered:
+        shown = ', '.join(uncovered[:3])
+        more = f' (+{len(uncovered) - 3})' if len(uncovered) > 3 else ''
+        return False, f'{len(uncovered)} endpoint(s) with no test: {shown}{more}'
+    return True, 'every endpoint reached by a test'
+
+
 def check_pylint(service: Path) -> tuple[bool, str]:
     '''Pylint 10.00 over the five layers and the tests.'''
     targets = [target for target in LINT_TARGETS if (service / target).is_dir()]
-    code, output = _run(service, sys.executable, '-m', 'pylint', *targets)
+    # The config is passed explicitly: Pylint runs with the service as its
+    # root, and a .pylintrc at the repository root is NOT discovered from
+    # there. Without this the lxml C-extension warnings come back.
+    code, output = _run(service, sys.executable, '-m', 'pylint',
+                        f'--rcfile={ROOT / ".pylintrc"}', *targets)
     rated = re.search(r'rated at ([0-9.]+)/10', output)
     findings = [line for line in output.splitlines() if re.match(r'^[a-z_/]+\.py:\d+', line)]
     score = rated.group(1) if rated else '?'
@@ -556,6 +646,8 @@ def check_events(service: Path) -> tuple[bool, str]:
 
 CHECKS = (
     ('tests', check_tests),
+    ('imports', check_imports),
+    ('endpoint-coverage', check_endpoint_coverage),
     ('pylint', check_pylint),
     ('signatures', check_signatures),
     ('type-hints', check_type_hints),
@@ -570,6 +662,12 @@ CHECKS = (
     ('direct-s3', check_direct_s3),
     ('events', check_events),
 )
+
+# Checks that REPORT a backlog instead of blocking a delivery. Endpoint
+# coverage is one: it is a real gap and the number has to stay visible, but
+# closing 60-odd endpoints is planned work, not something that should stop a
+# service from shipping the day the check was written.
+ADVISORY = ('endpoint-coverage',)
 
 
 def verify(service: Path) -> bool:
@@ -586,8 +684,10 @@ def verify(service: Path) -> bool:
     all_ok = True
     for name, check in CHECKS:
         ok, detail = check(service)
-        all_ok &= ok
-        print(f'  {"PASS" if ok else "FAIL"}  {name:<12} {detail}')
+        advisory = name in ADVISORY
+        all_ok &= ok or advisory
+        label = 'PASS' if ok else ('TODO' if advisory else 'FAIL')
+        print(f'  {label}  {name:<12} {detail}')
     return all_ok
 
 

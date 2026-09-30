@@ -98,6 +98,35 @@ def _sample_rows(count: int) -> List[Dict[str, Any]]:
     return rows
 
 
+def _sample_objectives(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    '''
+        Builds the sample objectives: one per client and per month.
+
+        Two months on purpose. The grain is what a client gets wrong most
+        often — an objective is monthly, not one number for the year and not
+        one per invoice — and two rows for the same client say that more
+        clearly than any instruction.
+
+        Args:
+            rows (List[Dict[str, Any]]): Rows of the sales sheet.
+
+        Returns:
+            List[Dict[str, Any]]: Rows of the objectives sheet.
+    '''
+    clients = {row['Cliente']: row['Fecha'] for row in rows}
+    objectives: List[Dict[str, Any]] = []
+    for position, (client, when) in enumerate(clients.items()):
+        for offset, target in enumerate((12000.0, 13500.0)):
+            month = (when.year, when.month + offset)
+            year, number = (month[0] + 1, 1) if month[1] > 12 else month
+            objectives.append({
+                'Cliente': client,
+                'Periodo': f'{year:04d}-{number:02d}',
+                'Objetivo': round(target * (1 + position / 10), 2)
+            })
+    return objectives
+
+
 def _sample_collections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     '''
         Builds the sample payments of the credit sales.
@@ -213,7 +242,7 @@ def _sample_visits(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def _contracts() -> List[Tuple[str, Any, Any, Any]]:
     """
-        The four contracts a client fills in, each one its own template.
+        The five contracts a client fills in, each one its own template.
 
         One file per contract and not one workbook with four sheets: the sheets
         were our own idea, and they are what stopped the service from reading
@@ -229,6 +258,9 @@ def _contracts() -> List[Tuple[str, Any, Any, Any]]:
         COLLECTION_COLUMNS,
         COLLECTION_HEADERS,
         COLLECTIONS_TEMPLATE,
+        OBJECTIVE_COLUMNS,
+        OBJECTIVE_HEADERS,
+        OBJECTIVES_TEMPLATE,
         SALES_TEMPLATE,
         STOCK_COLUMNS,
         STOCK_HEADERS,
@@ -244,6 +276,7 @@ def _contracts() -> List[Tuple[str, Any, Any, Any]]:
         (COLLECTIONS_TEMPLATE, COLLECTION_COLUMNS, COLLECTION_HEADERS, _sample_collections),
         (STOCK_TEMPLATE, STOCK_COLUMNS, STOCK_HEADERS, _sample_stock),
         (VISITS_TEMPLATE, VISIT_COLUMNS, VISIT_HEADERS, _sample_visits),
+        (OBJECTIVES_TEMPLATE, OBJECTIVE_COLUMNS, OBJECTIVE_HEADERS, _sample_objectives),
     ]
 
 

@@ -8,7 +8,7 @@
 > `.claude/rules/`; los procedimientos en `.claude/skills/`; el guion comercial
 > en `GUION_DEMO.md`; el contrato de columnas en el código que lo valida.
 >
-> **Última actualización: 2026-09-22**
+> **Última actualización: 2026-09-27**
 
 ---
 
@@ -78,13 +78,21 @@ usuarios, roles, token de 30 min), **EVENTS** (auditoría y logs de uso),
 | 💵 QUOTES | Tipo de cambio del BCB, proyección y escenario de venta | 256 MB |
 | 🧠 AI | Convierte la respuesta de cualquier servicio en una explicación | 512 MB · Bedrock |
 
-**ML_FUNCTIONS** sigue desplegado pero ningún servicio lo consume.
+**ML_FUNCTIONS** es el servicio de capacitación: sigue desplegado y ningún
+producto lo consume.
 
-**Qué entra en una revisión general:** los diez servicios de arriba (los seis
-más AUTH, EVENTS, FILES y ML_FUNCTIONS). **FORMS, LOCALIZATION, TRADE,
-EVENTS_MYSQL, PLANNING, CMS y MINING_SUMMIT no se tocan** sin pedido explícito:
-son de clientes. **SUPPLIES es nuestro** y pasa a ser la base del facturador
-para farmacias.
+**Qué entra en una revisión general: los once servicios propios**, en cuatro
+grupos:
+
+| Grupo | Servicios |
+|---|---|
+| **SmartDecisions** (6) | INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI |
+| **SmartBilling** (1) | BILLING (antes SUPPLIES) — facturación de comercios, farmacias como primer vertical |
+| **Genéricos y obligatorios** (3) | AUTH, EVENTS, FILES — los usa todo producto |
+| **Capacitación** (1) | ML_FUNCTIONS — podría pasar a genérico |
+
+**FORMS, LOCALIZATION, TRADE, CMS y MINING_SUMMIT no se tocan** sin pedido
+explícito: son de clientes.
 
 **Límites de infraestructura que condicionan el diseño:** Lambda 250 MB sin
 comprimir (por eso no hay scikit-learn, osmnx, Prophet ni mlxtend); API Gateway
@@ -128,111 +136,423 @@ Desplegado, probado con datos reales y validado por Rafael.
 
 ## 4. Estado actual
 
-**MINING_ANALYSIS desplegado y probado en producción el 22-sep.** Falta que
-Rafael lo dé por bueno y el frontend de la pantalla. Lo que se verificó contra
-AWS: la regla `mining-analysis-daily-market-sync` ENABLED a `cron(0 23 * * ? *)`
-apuntando al Lambda con `{"task":"sync_market"}`; el sync guardó 42 días (6
-minerales × 7 hábiles de la ventana de 10) y al repetirlo saltó los 42 sin
-reescribir; las 9 escalas del Art. 227 sembradas en `mining_royalty_rules`; y
-`/market/estimate` devolviendo la quincena en curso (16→30 sep, que regirá del
-1 al 15 de octubre) con Oro −0,74 %, Cobre +1,23 %, Estaño −1,43 % y los tres de
-Asian Metal en `NONE` por no tener fuente libre. Sin errores en CloudWatch;
-arranque en frío 7 s, sync en 2,3 s, 305 MB de 1024 MB.
+**MINING_ANALYSIS en producción (22-sep), sin aprobar.** La cotización
+anticipada funciona de punta a punta: la regla diaria `cron(0 23 * * ? *)`
+corre el sync, que guardó 42 días de 6 minerales y al repetirlo no reescribió
+nada; `/market/estimate` devuelve la quincena en curso con las alícuotas del
+Art. 227; el panel del portal está publicado. En el camino se corrigió un 500
+del botón de sync —el decorador de auditoría leía `.id` sobre un resumen— y se
+alineó el servicio al boilerplate estándar de DynamoDB, dejando lo relacional
+en `*_sql.py`. 106 tests, ALL PASS.
 
-Los dos trabajos que entraron en ese despliegue:
+**BILLING terminado y desplegado (23-sep).** Backend y las seis pantallas de
+`portal/billing/` —mostrador, ventas, catálogo con lotes, recepción, tablero y
+configuración—, con impresión térmica de 58 y 80 mm. Probado contra el servicio
+local con una farmacia sembrada: FEFO tomó el lote que vence en 45 días y no el
+más barato, la sobreventa respondió `INSUFFICIENT_STOCK` sin dejar nota ni
+avanzar la numeración, y el tablero detectó el lote vencido. 26 tests, ALL PASS.
 
-1. **Cotización anticipada de minerales.** El cruce de 115 días oficiales
-   (`tools/mining_analysis/cross_check_sources.py`) fijó las fuentes: oro =
-   **LBMA fix AM** (111/115 exactos), plata = LBMA fix (114/115), Cu/Sn/Pb/Zn =
-   LME cash *buyer* vía Westmetall (su settlement va +0,01–0,1 %); Sb/W/Bi son
-   de Asian Metal, de pago, y siguen viniendo del informe quincenal. Módulos
-   `market_sources.py`, `royalty_rules.py` (escalas del Art. 227 como
-   parámetros en Dynamo) y `official_estimate.py`. Endpoints `/market/sync`
-   (ADMIN/MANAGER), `/market/estimate`, `/market/prices/{id}` y
-   `/royalty-rules` (GET/PUT), más el handler programado `task=sync_market`.
-   Tablas ya creadas: `mining_market_prices`, `mining_royalty_rules`.
-2. **Alineación al boilerplate.** `db_connection.py` y `crud.py` son ahora los
-   estándar de DynamoDB, idénticos a los de los otros cinco servicios, y el
-   recurso se inyecta desde la ruta. Lo relacional, que se queda porque el
-   Ministerio y la carga quincenal lo necesitan, vive en `db_connection_sql.py`
-   y `crud_sql.py` con `GET_SQL_DB_DEPENDENCY`; sólo `/etl/upload`,
-   `/royalties/*` lo usan. `crud_dyb.py` y `market_store.py` se eliminaron; el
-   acceso de dominio es `prices_dyb.py`. **104 tests en verde y
-   `/verificar-servicio` en ALL PASS** (Pylint 10.00, firmas, type hints).
+De la facturación electrónica está **lo que no depende del SIN**: los
+algoritmos del CUF y el módulo 11, verificados contra el ejemplo resuelto de la
+norma, gzip+base64, el enmascarado de tarjeta que exige la Fase II, y los tres
+códigos de homologación en el producto. El anexo técnico completo está en
+`docs/siat/`.
 
-**Pendiente de un redespliegue de MINING_ANALYSIS.** Al probar el botón
-"Actualizar del mercado" desde el portal, el endpoint devolvió 500: el
-decorador de auditoría leía `.id` sobre cualquier modelo Pydantic y
-`MarketSyncResult` es un resumen, no una fila. Corregido en
-`services/utils.py` —que en este servicio sigue siendo la variante MySQL, no
-la estándar— con dos tests de regresión. La corrida programada nunca pasó por
-ahí, por eso el sync nocturno funcionaba y el botón no.
+**EVENTS cerrado en los siete servicios (23-sep).** Faltaba la auditoría en
+cuatro de los seis de SmartDecisions y las dos cosas en BILLING: nadie podía
+decir quién cargó un archivo ni quién anuló una nota. Hoy son 37 eventos
+declarados. La causa era que la regla nunca se escribió: ahora está en
+`CLAUDE.md` §7 y la comprueba el chequeo `events`, que falla el servicio.
 
-**Frontend de minerales terminado y publicado (22-sep).** Panel "Cotización
-anticipada" en `portal/demo/minerales/`: promedio corriente contra la oficial
-vigente, alícuotas del Art. 227 con la parte de la escala que las decidió
-(techo/piso/fórmula), días cotizados y confianza; al desplegar un mineral, los
-días que construyeron el promedio y la fórmula legal que produjo la alícuota.
-Selector "Al día" para verificar el corte de quincena sin esperar al
-calendario, y botón de sync para ADMIN/MANAGER. Los formatos y el catálogo de
-códigos se extrajeron a `minerales_shared.js`, compartido con el panel viejo.
-
-**Flujo de Solicitudes eliminado de SUPPLIES (23-sep).** Como pediste: no lo
-usa el producto de farmacias y no tenía sentido cargarlo. Se fueron
-`routes/request.py`, `controllers/request.py`, `schemas/request.py` y
-`tests/test_reservations.py` (1.116 líneas), más la máquina de estados y las
-reservas de stock de `supplies_logic.py`, el campo `reserved_stock`, el rol
-REQUESTER y el origen REQUEST del kardex. **Consecuencia a decidir:** el
-dashboard del almacén perdió tres de sus KPI y el feed de solicitudes —eran
-suyos—, y el reporte de salidas ya no nombra un destinatario, sólo quién
-registró el movimiento.
-
-**Reunión comercial del jueves.** Lo que se demuestra —módulo comercial y
-RUTAS— ya está desplegado y probado; el minerales queda como avance.
+**Los once servicios en verde (27-sep).** `verify_service --all` sólo recorría
+siete: **AUTH, EVENTS, FILES y ML_FUNCTIONS nunca entraron**, y por eso
+acumularon fallas viejas que nadie veía —45 funciones sin type hints, un
+`os.getenv` suelto en FILES, `MESSAGE` en vez de `message` en tres `main.py`—.
+BILLING tampoco estaba en 10: `CufInput` nació el 23-sep como dataclass de nueve
+atributos y Pylint corta en siete. La causa real no era el número sino la capa
+—un DTO viviendo en `services/`—, así que pasó a `schemas/` como modelo Pydantic
+V2, que Pylint no cuenta, junto con los códigos del catálogo SIAT, que son
+contrato. Sin excepciones: la dependencia va `services/` → `schemas/` y nunca al
+revés. Hoy los once pasan los doce chequeos. En el camino se
+agregó el chequeo **`comment-language`**, que mira comentarios *y docstrings* e
+incluye los tests: encontró 28 comentarios y 23 docstrings en castellano que
+ninguna revisión anterior había mirado. EVENTS queda exento del chequeo de
+auditoría, con la razón escrita: es el servicio al que los decoradores le
+escriben, y auditarse a sí mismo no termina nunca.
 
 ---
+
+**Maestro de clientes, en INGEST y sólo ahí (27-sep).** Lo que describe al
+cliente —nombre, coordenadas, dirección, zona, ciudad, canal, tipo de local,
+contacto— dejó de repetirse en cada fila de venta y vive una vez en
+`ingest_clients`, con el dueño como partición. Entra por **tres puertas** que
+comparten una sola regla —se crea lo que no está, se completan los campos
+vacíos, **nunca se sobrescribe**—: el archivo (ventas y visitas, en las dos
+rutas de subida), el API del ERP, y el vendedor que da de alta desde la calle
+con `POST /v1/ingest/clients/field`, donde las coordenadas son obligatorias
+porque las toma parado en la puerta. Cada carga además **completa el archivo
+desde el maestro**, así que un ERP que deja de exportar latitud ya no apaga
+Rutas. Corregir es un `PATCH` aparte, que es lo único que sobrescribe.
+63 tests. En el camino apareció que el camino multipart de subida **no tenía
+ningún test**, y por eso una asignación sobre un dataclass congelado habría
+llegado a producción; ya está cubierto.
+
+---
+
+**Los dos canales de carga, para los cuatro contratos (28-sep).** Ventas,
+cobros, stock y visitas entran ahora por **API JSON** —`POST
+/v1/ingest/{dataset_id}/<contrato>/rows`— y por **archivo vía FILES→S3**
+—`.../from-s3`—, además del multipart que ya existía. El API no revalida por su
+cuenta: cada pipeline se partió en `prepare_rows` y `validate_rows`, así que la
+fila que empuja un ERP atraviesa **el mismo validador** que la del archivo y
+responde con los mismos códigos.
+
+**El modo de carga es `APPEND` por defecto**, que es lo que significa integrar a
+diario. Cada contrato declara qué hace que dos filas sean la misma: la venta es
+factura + producto, el cobro es factura + fecha + monto, el stock es producto +
+día, la visita es día + vendedor + cliente + hora. Con eso un reintento del ERP
+no cuenta dos veces un cobro, y empujar el stock de hoy corrige hoy sin tocar la
+semana pasada. `REPLACE` reproduce el comportamiento del archivo. El resumen
+describe **todo lo almacenado**; las incidencias, **sólo esa carga**.
+
+Tres defectos reales salieron de escribir las pruebas antes de creer el código:
+la mezcla no deduplicaba porque las filas vuelven del CSV como texto y la clave
+no comparaba igual; `GET /v1/ingest/clients` devolvía 422 porque
+`/v1/ingest/{dataset_id}` lo capturaba primero; y el camino multipart de ventas
+no tenía ningún test. 74 tests.
+
+---
+
+**Un archivo por contrato (28-sep).** El libro de cuatro hojas —Ventas, Cobros,
+Stock, Visitas— se eliminó. Era invención nuestra, y era la razón de que INGEST
+leyera S3 con su propio `boto3`: el lector de FILES devuelve **una tabla plana**,
+correctamente, y no podía servir un libro. Ahora hay **cuatro plantillas**
+—`plantilla_ventas|cobros|stock|visitas.xlsx`—, cada una con su hoja de datos y
+su hoja de instrucciones, derivadas del contrato por
+`tools/build_sales_template.py`. El portal elige qué carga; Ventas crea el
+conjunto de datos y los otros tres se enganchan a él, así cada módulo se
+enciende con su propio archivo en vez de exigir el libro entero.
+
+---
+
+**El patrón FILES para DynamoDB vive en `ingest/services/utils.py` (28-sep).**
+Es la contraparte del bloque que `trade/services/utils.py` tiene para MySQL:
+`_handle_files_service` con lectura, creación y borrado, `perform_bulk_upload`
+con aceptación parcial fila por fila y borrado del archivo consumido, y
+`generic_bulk_processor`. Mismos nombres y mismo flujo de dos pasos —el archivo
+va primero a S3 por FILES y el endpoint recibe sólo su **nombre**—; lo que
+cambia es que no hay `Session` que confirmar. **Es el modelo que copia todo
+servicio nuevo que mueva archivos.**
+
+**INGEST pasa por FILES (28-sep).** Ya no tiene cliente de S3 propio: todo lo
+que el cliente manda y todo lo que el servicio guarda va por FILES,
+**reenviando el token del que llama** para que autorice al usuario real, como
+en TRADE. El token viaja de la ruta al controlador y de ahí al servicio, igual
+que el `auth_token` de `perform_bulk_upload`. Queda **una** lectura directa y
+está escrita como tal: la plantilla estática, porque FILES no devuelve un
+archivo *como archivo* —su lector parsea y devuelve filas— y `CLAUDE.md` §9
+nombra justo ese caso.
+
+**Tres chequeos nuevos** en `verify_service.py`, uno por cada error que se me
+pasó: **`cross-duplicates`** (comparaba sólo dentro de un servicio, por eso un
+maestro copiado en dos no lo vio nadie), **`direct-s3`** (sólo FILES toca el
+bucket) y **`comment-language`**. Lo que queda pendiente está en listas con
+nombre dentro del chequeo, no silenciado: `to_dynamo`/`from_dynamo` y
+`get_caller` son boilerplate sin promover, y **ANALYTICS y OPTIMIZATION leen el
+dataset de INGEST directo de S3 con dos funciones duplicadas** — migran cuando
+se trabaje cada uno, no por simetría.
+
+---
+
+**RUTAS: pasado y futuro separados (28-sep).** La causa de que el histórico se
+presentara como plan era que **un plan no tenía fecha**. Ahora `plan_date` está
+en el contrato y el filtro acepta una ventana: **Histórico** pregunta hacia
+atrás y **Planes** de hoy en adelante. Una ruta sin fecha es una plantilla
+reutilizable y no cae en ninguna ventana salvo que se la pida.
+
+Lo demás de la reunión, resuelto:
+
+- **Inferir del día funcionaba mal** porque `visits_as_stops` descartaba toda
+  parada sin `client_id`. Justo esas son los clientes nuevos. Se conservan,
+  identificadas por su posición, y el plan queda fechado en su día.
+- **Geocerca al registrar la visita** (`OUTSIDE_STOP_GEOFENCE`). Sólo valla lo
+  que el plan prometió: una ruta sin plan no se juzga, un lugar nuevo pasa
+  —es la evidencia de que la ruta debe crecer— y un plan de un día pasado es
+  historia cargándose, no una visita haciéndose.
+- **Repetir una ruta** en otra fecha, copiando las paradas enteras.
+- **Alta de cliente desde la calle** en la pantalla del vendedor, contra
+  `POST /v1/ingest/clients/field`: la posición de quien está en la puerta es
+  mejor evidencia que cualquier planilla.
+- **«En vivo» dibuja el recorrido completo del día** —polilínea y paradas
+  numeradas con su hora—, no sólo el último punto. Sin eso la comparación
+  parecía vacía.
+- **Plantilla de rutas descargable con cabeceras en castellano**; el servicio
+  mapea a los nombres del contrato y sigue aceptando los canónicos.
+
+`localization.py` cruzó las 800 líneas y se partió: **`localization_sources.py`**
+son los planes que vienen de otro lado —CSV, día trabajado, repetición—.
+87 tests.
+
+---
+
+**OPTIMIZATION optimiza de verdad lo que el cliente tiene (28-sep).** El
+planificador armaba la semana desde el archivo de ventas, pero **las rutas que
+el cliente maneja nunca volvían al optimizador**: no había forma de tomar una
+ruta importada, inferida de un día trabajado o armada en la calle y preguntar
+en qué orden convenía. `GET /routes/planned/{id}/optimization` la estudia con
+el **mismo** `order_stops` —vecino más cercano mejorado con 2-opt— y la misma
+proyección OSRM que el planificador, y responde con **los dos órdenes, los dos
+medidos y los dos dibujables**: kilómetros, minutos y el porcentaje que se
+ahorra. Si la ruta ya estaba en el mejor orden, lo dice — defender una ruta
+bien armada vale tanto como mejorarla.
+
+**No escribe nada.** Aceptar es `repeat` con `optimized = true`, que reordena
+**en el servicio** contra el mismo estudio, así lo que se crea no puede
+desviarse de lo que se mostró; la ruta estudiada queda intacta. En el portal es
+el panel **Optimizar**, con los dos mapas lado a lado y la tabla de en qué
+posición estaba cada parada.
+
+---
+
+**Variables fluctuantes y lectura en dólares (29-sep).** Lo que se mueve solo
+y cambia lo que un reporte significa —el combustible, un arancel, un índice—
+vive en **tabla, no en el `.env`**: un número que el cliente lee de una factura
+cada semana no puede necesitar un despliegue. Se declara una vez, se carga **a
+mano o por API**, y cada lectura trae el día en que fue cierta.
+
+Un factor es **una cifra y si cuenta o no** — nace ACTIVO, y apagarlo es lo
+que lo vuelve inerte. Hubo un `weight` multiplicador que inventé y se eliminó:
+no significaba nada concreto y duplicaba lo que ACTIVO/INACTIVO ya hacía. Las
+**dos cosas que se mueven —valor y estado— guardan su historia fechada al
+momento**.
+
+Y de ahí la regla que lo cierra: **un cálculo usa el estado de SU propia
+fecha**, no el de hoy. `active_factors_on(día)` y `state_on(día)` son la única
+puerta. Un factor puede valer una cosa en marzo, estar apagado en junio y valer
+otra en septiembre: el reporte de marzo conserva lo de marzo, los meses
+apagados no cuentan, y septiembre usa lo de septiembre. Leer el estado actual
+dejaría que un interruptor movido hoy reescriba en silencio toda cifra
+producida antes. Un factor responde **inactivo para cualquier día anterior a su
+existencia**, y `effective_from` permite declararlo como vigente desde antes —
+sin eso, cargar un año de historia dejaría ese año sin peso y sin estado.
+
+**Costo de distribución local.** `GET /v1/quotes/factors/transport-cost`
+responde la cadena entera y no sólo el total: **km ÷ rendimiento × precio del
+litro**, sobre el **viaje redondo** —el vehículo termina en el último cliente y
+vuelve vacío—, y dividido por las unidades da el costo por unidad, que es la
+cifra que llega al margen. Se investigó antes de fijarla: la división **es** la
+fórmula estándar, y los factores que uno intuye —tráfico, carga, viento, aire
+acondicionado— no se aplican como multiplicadores porque **ya están dentro del
+rendimiento medido**. Por eso el rendimiento es el **promedio estimado por la
+operación en reparto urbano**, que consume cerca del doble que carretera, y no
+el del fabricante: se carga como dato, se fecha y se va afinando. Sólo el
+*código* del factor vive en el `.env`; el valor nunca.
+
+**`GET /v1/quotes/exchange-rates/at`** da la cotización vigente en un día: la
+última publicada en o antes de él —el BCB no publica todos los días— y, antes
+del 27-jun-2026, la del régimen fijo, diciéndolo. En ANALYTICS hay **una sola
+costura**: todo análisis lee el marco por `_scoped_dataframe`, así que un
+reporte en dólares es **una** conversión y no nueve, y **cada importe se
+convierte al cambio de su propio día**. Convertir un año entero a un solo tipo
+convertiría una devaluación en crecimiento. Las filas anteriores a la primera
+cotización publicada **conservan su importe y se reportan como tales**: un
+hueco dicho, no una mentira silenciosa. Las cotizaciones se le piden a QUOTES,
+que es su dueño; ANALYTICS no lee esa tabla.
+
+---
+
+**Punto de corte: la versión del 23-sep.** Los once servicios quedaron en
+producción el miércoles 23-sep entre las 18:29 y las 20:31, y el **24-sep** el
+potencial cliente revisó **exactamente eso**. Todas las observaciones de la
+reunión —el guion que faltó, la carga diaria, Rutas, el tipo de cambio— son
+contra esa versión. Lo que se escriba desde el 27-sep es la respuesta a esa
+revisión, no trabajo suelto: cuando algo no funcione, la pregunta es si ya
+estaba roto el 23 o lo rompimos ahora.
+
+---
+
+### Cumplimiento contra objetivo (Fase H)
+
+Los dos libros de cierre que trajo Rafael son de **otra empresa** —un
+prospecto— y no son datos: son **la lista de lo que quieren ver**. El archivo
+`base 2025.xlsx` es de una tercera, que sí tiene el detalle transaccional. Con
+los datos de la segunda se reproduce el reporte de la primera, y eso es la
+prueba de que el producto puede darlo.
+
+**El objetivo es la única cifra del producto que ningún movimiento implica.**
+Es una decisión que se toma antes de que empiece el mes, y por eso entra por
+su propio contrato —quinta plantilla, `objetivos`, por las tres puertas:
+archivo, API y S3— idempotente por cliente y mes. Un objetivo para un cliente
+que nadie facturó se **reporta y se conserva**: es el cliente que la empresa
+quiere activar, y esconderlo borraría justo la fila que el gerente busca.
+
+**Un objetivo se mide dos veces**, contra lo facturado y contra lo cobrado.
+Un cliente puede cumplir en el papel y deber hasta el último boliviano. El
+cobro cuenta en el mes de la **factura que salda**, no en el mes en que
+entró: es la única lectura bajo la cual `facturado = cobrado + deuda`, que es
+la identidad sobre la que está armado el libro del prospecto.
+
+El motor reproduce ese libro **a cuatro decimales** —0,6733 amarillo; 1,0008
+verde; y el caso que justifica todo, un cliente 0,6099 amarillo en facturado
+y 0,3364 rojo en pagado—. Los cortes del semáforo y cuántos bolivianos vale
+un punto en cada cluster **no son hechos del dato**: van en la política
+comercial por propietario, espejo de la de crédito, con default del `.env`.
+El producto **no declara ningún nombre de cluster**: son del cliente.
+
+La matriz cruza cluster × semáforo y pesa cada celda sobre el objetivo total,
+que es lo que evita que engañe: veinte clientes rojos que valen el 2 % del
+objetivo son otra mañana que tres que valen el 40 %.
+
+**El maestro se alimenta en un solo lugar.** `names_clients` de
+`CompanionSpec` era un comentario disfrazado de configuración: no lo leía
+nadie, y cada puerta alimentaba el maestro con su propia copia de la llamada
+a `sync_master` —salvo la de S3, que se olvidaba—. El mismo archivo de
+visitas cargado por subida y por clave dejaba dos maestros distintos: el
+prospecto que nombraba existía o no según el endpoint usado. Ahora la bandera
+se lee en `store_companion`, por donde pasan las tres puertas, y las tres
+copias se borraron. Dos tests lo fijan, incluido el de la puerta que fallaba.
 
 ## 5. Pendiente
 
 En orden.
 
-1. **SUPPLIES es ahora el facturador para farmacias — backend terminado,
-   falta desplegar y rehacer la pantalla.** El 23-sep se eliminó todo el lado
-   relacional (catálogo de almacén, proveedores, ingresos, kardex, reportes y
-   dashboard del Ministerio): el microservicio corre **sólo sobre DynamoDB**.
-   MySQL queda únicamente en MINING_ANALYSIS hasta verificar la carga de fin
-   de mes. Módulo paralelo dentro de SUPPLIES sobre
-   DynamoDB, con el mismo patrón que RUTAS dentro de OPTIMIZATION: archivos
-   `*/pharmacy*.py` nuevos, `db_connection.py` y `crud.py` estándar de Dynamo,
-   y lo relacional del almacén movido a `*_sql.py`. Cinco tablas ya creadas en
-   AWS. 22 tests propios y `/verificar-servicio` en ALL PASS.
+0. **Cobertura de endpoints: 63 sin prueba.** `verify_service.py` tiene dos
+   chequeos nuevos. `imports` levanta el servicio y arma su esquema de rutas:
+   existe porque un `auth_token` duplicado en `routes/ingest.py` era un
+   `SyntaxError` y INGEST no importaba, con 83 tests en verde y Pylint 10.00
+   —ningún test importaba las rutas—. `endpoint-coverage` cuenta los endpoints
+   que ningún test toca; sale como **TODO y no como FAIL**, porque es trabajo
+   planificado y no puede frenar una entrega. **Los tres servicios tocados en
+   estas fases quedaron completos**: INGEST 26/26, ANALYTICS 14/14, QUOTES
+   11/11. Falta lo que no se tocó: OPTIMIZATION 32, BILLING 16,
+   MINING_ANALYSIS 10, AI 1. AUTH, EVENTS, FILES y ML_FUNCTIONS estaban
+   completos desde antes y no se tocaron.
 
-   Reglas acordadas que ya están implementadas: multicliente desde el inicio
-   (el dueño es la farmacia y es parte de cada clave); **costo y precio de
-   venta por lote**, porque los fija el laboratorio en cada compra; **PEPS con
-   el reloj (FEFO)** — sale primero lo que vence antes, y una línea que abarca
-   dos lotes se cobra al precio de cada uno; comprador con nombre y NIT/CI;
-   descuentos por línea sólo si la farmacia los habilita; forma de pago
-   (efectivo/QR/tarjeta); numeración propia por farmacia, atómica; anular una
-   nota devuelve las unidades a los lotes exactos de los que salieron.
+1. **Desplegar lo de hoy.** Los **once** quedaron en producción el miércoles
+   **23-sep entre las 18:29 y las 20:31**, comprobado contra el `LastModified`
+   de cada Lambda. Lo del 27-sep —maestro de clientes en INGEST, type hints e
+   `os.getenv` de FILES/EVENTS/ML_FUNCTIONS, `CufInput` a `schemas/` en
+   BILLING— todavía no está arriba. La tabla `ingest_clients` se crea antes,
+   con `create_dynamodb_tables.sh`. Lo del 29-sep se suma: las dos tablas de
+   factores (`quotes_factors`, `quotes_factor_values`), sus variables nuevas
+   en el `.env`, y el arreglo de identificadores largos en INGEST.
 
-   El dashboard se rehízo sobre la nueva funcionalidad: vendido del día,
-   costo, margen y su porcentaje, ticket promedio, notas anuladas, capital en
-   estantería, lotes por vencer y ya vencidos (separados, porque piden
-   acciones distintas), productos bajo mínimo y los más vendidos por monto.
+   **El identificador derivado ya no es una copia del nombre.** INGEST deriva
+   `pos_id` y `product_id` del nombre porque la plantilla sólo pide 'Cliente'
+   y 'Producto', y el contrato los corta en 64 caracteres. Con el archivo real
+   de `base 2025.xlsx` eso rechazaba **1290 de 5079 filas —el 25 %—** por
+   exceder un límite en una columna que el cliente nunca llenó y no podía
+   corregir. Ahora un nombre largo se acorta y se le pega un digest del nombre
+   completo; uno que ya entra se deja idéntico, porque es la clave con la que
+   se casó el maestro y reescribirla dejaría huérfano lo ya cargado.
 
-   Falta: despliegue de Rafael, y **rehacer el frontend** — `portal/supplies/`
-   son 4.656 líneas construidas sobre el almacén (Catálogo, Ingresos, Kardex,
-   Solicitudes, Proveedores) y no sobre farmacia. Debe incluir la impresión
-   térmica de 58 y 80 mm desde el navegador, como en MINING_SUMMIT, con el
-   estilo visual de SmartDecisions. Fase siguiente: factura electrónica según
-   la RND 11 (SIAT, SOAP/XML).
+   De la Fase H se suma la tabla `analytics_commercial_policies`, las cinco
+   variables `OBJECTIVES_*` del `.env` de ANALYTICS, y publicar la quinta
+   plantilla con `python -m tools.build_sales_template --yes`.
 
-2. **Sección "Usuarios"** para que un MANAGER cree y administre a su gente.
-3. **Alinear `mining_analysis/services/utils.py` al boilerplate estándar** — es
-   la variante MySQL (828 líneas contra 408 del estándar); de ahí salió el 500
-   del sync. Las 420 líneas extra son la carga masiva que `/etl/upload` y
-   `/royalties/upload` todavía usan, así que no es un reemplazo directo.
+2. **Documentos de venta (Fase F) — ENTREGADOS.** `GUIA_PRODUCTO.md` describe
+   cada módulo, menú y gráfico del portal, derivado de lo que el portal
+   realmente tiene, no de memoria. `GUIA_PRUEBA.md` es el HOW TO: cada paso
+   dice qué hacer, qué se va a ver y cómo saber que salió bien, con seis
+   pruebas deliberadas de los comportamientos que no se creen hasta que se
+   ven —la fila rechazada que no tumba el archivo, el objetivo de un cliente
+   sin ventas, la geocerca—. Los dos convertidos a `.docx`.
+
+3. **Facturación electrónica: lo que no depende del trámite.** Hecho el
+   **29-sep**: `branch` y `point_of_sale` en `BillingSettings` —van DENTRO del
+   CUF, así que son parámetros de cada farmacia y no del servicio— y la
+   **nominatividad** como `buyer_required`, que rechaza una venta sin nombre y
+   documento del comprador. Es una bandera y no una constante a propósito: una
+   farmacia que todavía emite notas internas tiene que seguir vendiendo hasta
+   que la autoricen, y el día que la autoricen no cambia nada más.
+
+   Los **códigos de método de pago del SIN** quedaron en `SIN_PAYMENT_CODES`:
+   efectivo 1, tarjeta 2, y QR viaja como OTROS (5), que es lo que la norma
+   manda usar cuando el método no está en su lista. El **número de tarjeta** se
+   enmascara **al entrar** —primeros y últimos cuatro dígitos, ceros al medio—
+   y sólo la forma enmascarada se guarda: el número completo no llega a la
+   tabla, ni al log, ni a la nota impresa, así que no hay copia que se pueda
+   filtrar. Un número de tarjeta con un pago que no es tarjeta se rechaza,
+   porque el SIN lo reporta como error.
+
+   **Corrección sobre la nominatividad:** el anexo es explícito —«la
+   nominatividad hace referencia al número de documento, no al nombre o razón
+   social»—. La primera versión exigía los dos, lo que habría rechazado ventas
+   que la norma acepta. Ahora exige el documento y el nombre es opcional.
+
+   En el portal: sección «Facturación electrónica» en la configuración
+   (sucursal, punto de venta, exigir documento) y en el mostrador el campo de
+   tarjeta, que aparece sólo con pago con tarjeta y se limpia al cambiar de
+   método.
+
+   **El XML está armado y valida contra el XSD del SIN.**
+   `services/billing_invoice_xml.py` lo construye leyendo el orden del propio
+   `facturaComputarizadaCompraVenta.xsd`: el esquema declara un `xs:sequence`,
+   así que un elemento fuera de lugar invalida el documento aunque todos los
+   valores estén bien. La prueba valida contra el XSD real, no contra nuestra
+   idea de él, y eso destapó el error a la primera: **`nillable="true"` no
+   significa elemento vacío, significa `xsi:nil="true"`** — un
+   `<numeroTarjeta />` vacío no es un entero válido. `lxml` agregado a
+   `requirements.txt`; no hay equivalente en la biblioteca estándar para
+   validar contra XSD.
+
+   Nada se inventa: un producto sin sus tres códigos del SIN (actividad,
+   producto, unidad) **no se factura**, se rechaza con `PRODUCT_NOT_HOMOLOGATED`.
+   Una factura con un código inventado la rechaza el SIN *después* de que el
+   papel ya está en manos del cliente. Los importes van con dos decimales
+   exactos, redondeados half-up: mandar el `repr` de un float es cómo
+   0,1 + 0,2 llega al SIN como 0,30000000000000004.
+
+4. **Cliente SOAP del SIAT — hecho, falta poner los WSDL.**
+   `services/billing_siat_client.py` implementa CUIS, CUFD, verificación de
+   NIT, recepción y anulación con `zeep`. Se eligió `zeep` sobre SOAP a mano
+   por medición: sobre `lxml` y `requests`, que ya estaban, suma **283 KB** —
+   no es una decisión de infraestructura—, y ahorra diez envelopes escritos a
+   mano. El argumento de fondo: el XML a mano falló en `nillable` al primer
+   intento y lo cazó el XSD; con diez operaciones sin esquema, el error lo caza
+   el SIN.
+
+   **Los WSDL se leen de disco y nunca se bajan.** `zeep` los descargaría en
+   cada arranque en frío de la Lambda, y una caída del SIAT sería una caída
+   nuestra. Van en `docs/siat/wsdl/` —`codigos`, `facturacion`,
+   `sincronizacion`— y **todavía no están**: el anexo describe cada operación
+   pero no publica sus URL, que salen del portal del SIAT con el sistema ya
+   autorizado. `docs/siat/wsdl/LEEME.md` dice qué archivo va y cómo comprobar
+   que quedó bien. Sin ellos el servicio responde `SIAT_WSDL_MISSING`, no falla
+   callado.
+
+   Todas las llamadas pasan por **una sola costura** (`_invoke`), que es lo que
+   permite probar el armado de parámetros sin WSDL y lo que evita nueve
+   caminos de error distintos. El token va en el `.env` como header `apikey`,
+   nunca en el cuerpo SOAP que un log podría capturar.
+
+   **`.pylintrc` en la raíz**, pasado con `--rcfile` desde `verify_service.py`
+   porque Pylint corre con el servicio como raíz y ahí no se descubre solo.
+   Usa `ignored-modules=lxml`: probé primero `extension-pkg-allow-list` y
+   estaba mal —hace que Pylint INTENTE inspeccionar la extensión en C y se
+   equivoque con falsos positivos de nivel E—.
+
+5. **Facturación electrónica: lo que sí depende del trámite.** Cliente SOAP,
+   CUIS (365 días), CUFD (24 h por punto de venta, trae el código de control
+   que cierra el CUF), envío y anulación, contingencia con CAFC y paquete en
+   48 h, catálogos paramétricos, y la leyenda del pie que cambia
+   aleatoriamente por la Ley 453. Rafael tramita la autorización como
+   **Sistema Proveedor**, modalidad **Computarizada en Línea**.
+
+4. **Alinear los modelos de AI al patrón de los demás.** `PromptItem` (9
+   campos) y `ExplanationItem` (8) son los únicos ítems de DynamoDB modelados
+   como `dataclass` con `from_item`; todos los demás servicios usan
+   `TypedDict`, que además no dispara `too-many-instance-attributes` y borra
+   los dos únicos `disable` de ese tipo que quedan. Toca 32 puntos entre el
+   modelo y sus consumidores. **Se hace cuando se trabaje AI**, no antes.
+
+5. **Sección "Usuarios"** para que un MANAGER cree y administre a su gente.
+
+6. **Alinear `mining_analysis/services/utils.py` al boilerplate estándar** — es
+   la variante MySQL (828 líneas contra 408); de ahí salió el 500 del sync. Las
+   420 líneas extra son la carga masiva que `/etl/upload` y `/royalties/*`
+   todavía usan, así que no es un reemplazo directo. Espera a que se verifique
+   la carga de fin de mes.
 
 **Lo que falta para vender, no para demostrar:** control de suscripción,
 retención de datos y persistencia de lo que produce la capa de IA.
@@ -273,6 +593,15 @@ Las que siguen condicionando el código. Las revertidas no están.
 - **Nada configurable vive en el código.** Las variables son requeridas: un
   `ENV_VARS['X'] or 30` sigue siendo un número elegido por el código. Si falta
   configuración, el servicio no arranca.
+- **INGEST es la puerta de entrada de datos, cualquiera sea el dato.** No se
+  parte por especificidad todavía: la plantilla, el API del ERP y el maestro de
+  clientes entran por ahí, y es **su único dueño**. Quien necesite un cliente
+  lo pide a INGEST por HTTP, como se le pide a EVENTS o a FILES; **nadie más
+  toca `ingest_clients`**. El 27-sep se duplicó ese maestro en OPTIMIZATION
+  —571 líneas con la regla de negocio copiada— y se revirtió entero. Un
+  microservicio `CLIENTS` aparte se evaluará cuando haya un segundo consumidor
+  real, no antes.
+
 - **El dueño es parte de la consulta, no un filtro posterior.** Hoy el dueño es
   el `client` del token, o el email cuando no lo tiene. En OPTIMIZATION además
   es parte de la clave de partición, porque la carga borra la partición antes de
