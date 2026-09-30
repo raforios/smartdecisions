@@ -47,6 +47,13 @@ TABLES=(
     "optimization_daily_stock:owner_email:S:stock_key:S"
     # Clave compuesta: toda lectura es "esta moneda entre estas dos fechas".
     "exchange_rates:currency:S:date:S"
+    # Variables fluctuantes: lo que se mueve solo y cambia lo que un reporte
+    # significa —el precio del combustible, un arancel, un índice—. Van en
+    # tabla y no en el .env porque un número que el cliente lee de una factura
+    # cada semana no puede necesitar un despliegue para cambiar. La serie se
+    # particiona por "<dueño>#<código>", así leerla entera es una sola Query.
+    "quotes_factors:owner_email:S:code:S"
+    "quotes_factor_values:owner_code:S:factor_date:S"
     # MINING_ANALYSIS sobre DynamoDB. El catálogo se lee por mineral; las
     # cotizaciones siempre se leen como "este mineral entre estas dos fechas",
     # que es exactamente para lo que sirve la clave de ordenamiento.
@@ -66,6 +73,12 @@ TABLES=(
     # política se lee entera por dueño, y el dueño es parte de la consulta y no
     # un filtro posterior — leer la de otro cambiaría sus provisiones.
     "analytics_credit_policies:owner_email:S"
+    # Política comercial: los cortes del semáforo y cuántos bolivianos vale un
+    # punto en cada cluster. Aparte de la de crédito porque responde otra
+    # pregunta y la cambia otra persona, con la misma clave simple y por el
+    # mismo motivo. Los nombres de los clusters son del cliente: el producto no
+    # declara ninguno.
+    "analytics_commercial_policies:owner_email:S"
 
     # --- Facturación (BILLING) ---
     # El dueño es el comercio y es parte de cada clave, nunca un filtro
