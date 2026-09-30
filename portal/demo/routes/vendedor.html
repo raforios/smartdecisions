@@ -89,6 +89,24 @@
                         <button type="button" class="btn btn-ghost btn-small" id="addItemButton">+ Producto</button>
                         <p class="legend-hint" id="stockHint"></p>
                     </div>
+                    <div class="seller-new-client">
+                        <label class="legend-row">
+                            <input type="checkbox" id="isNewClient">
+                            Es un cliente nuevo, no está en la ruta
+                        </label>
+                        <div id="newClientFields" hidden>
+                            <label><span>Nombre del negocio</span>
+                                <input type="text" id="newClientName" maxlength="150"></label>
+                            <label><span>Dirección (opcional)</span>
+                                <input type="text" id="newClientAddress" maxlength="255"></label>
+                            <label><span>Teléfono (opcional)</span>
+                                <input type="text" id="newClientPhone" maxlength="40"></label>
+                            <p class="legend-hint">
+                                Se da de alta con la posición donde estás parado, que es
+                                la mejor que va a tener.
+                            </p>
+                        </div>
+                    </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-primary" id="visitSaveButton">Guardar visita</button>
                         <button type="button" class="btn btn-ghost" id="visitCancelButton">Cancelar</button>

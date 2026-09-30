@@ -26,6 +26,7 @@
     <script src="/routes/routes_plans.js?v=342ec54586" defer></script>
     <script src="/routes/routes_stock.js?v=26dcb8e1ce" defer></script>
     <script src="/routes/routes_live.js?v=3e259f19e7" defer></script>
+    <script src="/routes/routes_optimize.js" defer></script>
     <script src="/routes/routes_compare.js?v=7c9b4d7215" defer></script>
 </head>
 <body>
@@ -49,18 +50,18 @@
 <main>
     <div class="container">
         <h1 class="page-title">Rutas</h1>
-        <p class="page-subtitle">Planifica las visitas, sigue a los vendedores en el día y compara lo planificado con lo que pasó.</p>
+        <p class="page-subtitle">Mira lo que ya se hizo, arma lo que viene, sigue a los vendedores en el día y compara el plan con lo que pasó.</p>
 
         <div class="analysis-menu" id="sectionMenu">
             <button type="button" class="analysis-card is-active" data-section="planner">
                 <span class="analysis-icon">🗺️</span>
-                <span class="analysis-title">Planificar</span>
-                <span class="analysis-desc">Días de visita y orden de paradas a partir de la cartera de clientes.</span>
+                <span class="analysis-title">Histórico</span>
+                <span class="analysis-desc">Lo que ya se hizo y cuándo, sobre el mapa. Desde acá se repite una ruta.</span>
             </button>
             <button type="button" class="analysis-card" data-section="plans">
                 <span class="analysis-icon">📋</span>
                 <span class="analysis-title">Planes</span>
-                <span class="analysis-desc">Rutas guardadas, importadas o inferidas; asígnalas y actívalas.</span>
+                <span class="analysis-desc">Lo que viene: de hoy en adelante. Impórtalos, infiérelos, asígnalos y actívalos.</span>
             </button>
             <button type="button" class="analysis-card" data-section="stock">
                 <span class="analysis-icon">📦</span>
@@ -71,6 +72,11 @@
                 <span class="analysis-icon">📍</span>
                 <span class="analysis-title">En vivo</span>
                 <span class="analysis-desc">Dónde está cada vendedor ahora y qué reportó hoy.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="optimize">
+                <span class="analysis-icon">⚡</span>
+                <span class="analysis-title">Optimizar</span>
+                <span class="analysis-desc">La ruta que ya tienes contra el orden que la acorta, con los dos mapas y el ahorro.</span>
             </button>
             <button type="button" class="analysis-card" data-section="compare">
                 <span class="analysis-icon">🎯</span>
@@ -95,7 +101,12 @@
             <!-- ====== Sidebar ====== -->
             <aside class="routes-sidebar">
                 <article class="card">
-                    <h3>Planificar</h3>
+                    <h3>Lo que ya se hizo</h3>
+                    <p class="legend-hint">
+                        Estos son los clientes que compraron en el período y el orden
+                        en que conviene recorrerlos. <strong>Es historia</strong>: de acá
+                        sale una ruta para repetir, no un plan que ya esté vigente.
+                    </p>
                     <form id="planForm" class="form-stack" autocomplete="off">
                         <label>
                             <span>Vendedor</span>
@@ -119,7 +130,7 @@
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-primary" id="planButton">
-                                Armar rutas
+                                Ver el recorrido
                             </button>
                         </div>
                         <p class="form-note" id="formNote" aria-live="polite"></p>
@@ -147,8 +158,10 @@
             <section class="routes-main">
                 <div class="day-summary" id="daySummary" hidden></div>
                 <div class="form-actions" id="saveDayActions" hidden>
+                    <label><span class="legend-hint">Repetir este día el</span>
+                        <input type="date" id="repeatDate"></label>
                     <button type="button" class="btn btn-secondary btn-small" id="saveDayButton">
-                        Guardar este día como plan
+                        Repetir como plan
                     </button>
                     <span class="form-note" id="saveDayNote" aria-live="polite"></span>
                 </div>
@@ -197,10 +210,15 @@
                     <article class="card">
                         <h3>Importar un plan</h3>
                         <p class="legend-hint">
-                            CSV con una fila por parada: <code>route_code, route_name,
-                            point_name, secuencial, latitude, longitude</code> y opcionales
-                            <code>description, seller, reference_data, client_id</code>.
+                            Un CSV con una fila por parada. Descarga la plantilla y
+                            llénala: <code>Codigo Ruta, Nombre Ruta, Fecha, Cliente,
+                            Secuencia, Latitud, Longitud</code>, y opcionales
+                            <code>Vendedor, Descripcion, Referencia, Cliente ID</code>.
                         </p>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost btn-small"
+                                    id="planTemplateButton">Descargar plantilla</button>
+                        </div>
                         <form class="form-stack" id="bulkPlanForm">
                             <input type="file" id="bulkPlanFile" accept=".csv,.txt">
                             <div class="form-actions">
@@ -229,6 +247,10 @@
                         <div class="card-head">
                             <h3>Planes guardados</h3>
                             <div class="form-actions">
+                                <label class="legend-row">
+                                    <input type="checkbox" id="plansOnlyUpcoming" checked>
+                                    sólo de hoy en adelante
+                                </label>
                                 <select id="plansStatusFilter">
                                     <option value="">Todos los estados</option>
                                     <option value="IN CREATION">En creación</option>
@@ -340,6 +362,71 @@
                         <div class="table-wrapper">
                             <table class="data-table" id="liveTable">
                                 <thead><tr><th>Vendedor</th><th>Hace</th><th>Ruta</th><th class="numeric">Lat</th><th class="numeric">Lon</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </div>
+
+        <!-- ====== Optimizar ====== -->
+        <div class="routes-section" data-section="optimize" hidden>
+            <section class="routes-layout">
+                <aside class="routes-sidebar">
+                    <article class="card">
+                        <h3>¿En qué orden convenía?</h3>
+                        <p class="legend-hint">
+                            Toma las paradas que la ruta <strong>ya tiene</strong> —importada,
+                            inferida de un día trabajado o armada en la calle— y propone el
+                            orden que la acorta, medido sobre calles reales. No cambia nada:
+                            propone.
+                        </p>
+                        <form class="form-stack" id="optimizeForm">
+                            <label><span>Ruta</span>
+                                <select id="optimizePlan"></select></label>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small"
+                                        id="optimizeButton">Estudiar la ruta</button>
+                            </div>
+                            <p class="form-note" id="optimizeNote" aria-live="polite"></p>
+                        </form>
+                    </article>
+                    <article class="card" id="optimizeSavingCard" hidden>
+                        <h3>El ahorro</h3>
+                        <div class="day-summary" id="optimizeSaving"></div>
+                        <div class="form-actions">
+                            <label><span>Repetirla optimizada el</span>
+                                <input type="date" id="optimizeRepeatDate"></label>
+                            <button type="button" class="btn btn-secondary btn-small"
+                                    id="optimizeAcceptButton">Crear plan optimizado</button>
+                        </div>
+                        <p class="form-note" id="optimizeAcceptNote" aria-live="polite"></p>
+                    </article>
+                </aside>
+                <section class="routes-main">
+                    <div class="grid-2">
+                        <div>
+                            <h4 class="map-caption">Como está hoy</h4>
+                            <div class="routes-map-wrapper">
+                                <div id="currentMap" class="routes-map"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="map-caption">Como conviene</h4>
+                            <div class="routes-map-wrapper">
+                                <div id="optimizedMap" class="routes-map"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card stops-card">
+                        <div class="card-head"><h3>Orden de las paradas</h3></div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="optimizeTable">
+                                <thead><tr>
+                                    <th>#</th><th>Cliente</th>
+                                    <th class="numeric">Estaba en</th><th>Movimiento</th>
+                                </tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>

@@ -242,22 +242,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * The generated day becomes a saved plan: the stops in visiting order, the
-     * seller of the filter as its owner. From there it is activated, run and
-     * compared like any plan the client typed or imported.
+     * This screen shows HISTORY — who bought in the period and in what order
+     * it is worth walking them. Turning a day into a plan is therefore
+     * repeating it: it is born dated for a day the user picks, which is what
+     * puts it in Planes and out of here.
      */
     async function saveDayAsPlan() {
         const day = state.plan && state.plan.days.find((item) => item.day === state.day);
         if (!day) return;
+        const when = qs('#repeatDate').value;
+        if (!when) {
+            note(qs('#saveDayNote'), 'Elige el día en que se va a repetir.', 'error');
+            return;
+        }
         const seller = qs('#sellerSelect').value || '';
         const codeSeller = (seller || 'TODOS').replace(/[^A-Za-z0-9@._-]/g, '_').slice(0, 20);
         const done = setButtonBusy(qs('#saveDayButton'), 'Guardando…');
         try {
             const plan = await window.SD_TRACK.planned.create({
                 route_name: `Plan ${seller || 'general'} · día ${day.day}`,
-                route_code: `${codeSeller}-${todayIso()}-D${day.day}`,
-                description: `Generado desde la cartera el ${todayIso()}`,
+                route_code: `${codeSeller}-${when}-D${day.day}`,
+                description: `Repetido desde el histórico el ${todayIso()}`,
                 seller: seller || null,
+                plan_date: when,
                 points: day.stops.map((stop) => ({
                     point_name: stop.client,
                     secuencial: stop.stop_order,
@@ -266,14 +273,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     client_id: stop.client_id
                 }))
             });
-            note(qs('#saveDayNote'), `Guardado como ${plan.route_code}. Actívalo en Planes.`, 'success');
-            toast('Plan guardado.', 'success');
+            note(qs('#saveDayNote'),
+                 `Creado como ${plan.route_code} para el ${when}. Actívalo en Planes.`, 'success');
+            toast('Ruta repetida.', 'success');
         } catch (error) {
             note(qs('#saveDayNote'), window.SD_TRACK.errorText(error, 'No se pudo guardar el plan.'), 'error');
         } finally {
             done();
         }
     }
+    (function defaultRepeatDate() {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        qs('#repeatDate').value = tomorrow.toISOString().slice(0, 10);
+        qs('#repeatDate').min = todayIso();
+    }());
     qs('#saveDayButton').addEventListener('click', saveDayAsPlan);
 
     qs('#dayList').addEventListener('click', (event) => {

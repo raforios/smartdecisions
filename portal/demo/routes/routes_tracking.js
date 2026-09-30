@@ -67,7 +67,13 @@
             form.append('file', file, file.name);
             return API.postFormData(`${BASE}/routes/planned/bulk-upload`, form);
         },
-        infer: (body) => API.post(`${BASE}/routes/planned/infer`, body)
+        infer: (body) => API.post(`${BASE}/routes/planned/infer`, body),
+        repeat: (id, body) => API.post(
+            `${BASE}/routes/planned/${encodeURIComponent(id)}/repeat`, body
+        ),
+        optimization: (id) => API.get(
+            `${BASE}/routes/planned/${encodeURIComponent(id)}/optimization`
+        )
     };
     const executed = {
         list: (filters) => API.get(`${BASE}/routes/executed`, filters || {}),

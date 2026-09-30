@@ -45,8 +45,19 @@
             <article class="card">
                 <span class="step-pill">1</span>
                 <h3 id="templateTitle">Plantilla</h3>
-                <p>Descarga el Excel con las columnas requeridas y opcionales del contrato
-                   de ventas.</p>
+                <p>Un archivo por tema. Empieza por <strong>Ventas</strong>: es el que
+                   crea el conjunto de datos. Los otros se cargan cuando los tengas,
+                   y cada módulo se enciende con el suyo.</p>
+                <label class="field">
+                    <span>¿Qué vas a cargar?</span>
+                    <select id="contractSelect">
+                        <option value="ventas" selected>Ventas</option>
+                        <option value="cobros">Cobros</option>
+                        <option value="stock">Stock</option>
+                        <option value="visitas">Visitas</option>
+                        <option value="objetivos">Objetivos</option>
+                    </select>
+                </label>
                 <button id="downloadTemplateButton" class="btn btn-ghost">
                     Descargar plantilla
                 </button>
@@ -170,6 +181,13 @@
                         <span class="analysis-desc">Cuántos días te dura lo que tienes,
                             qué está por quebrar y cuánto capital está quieto en
                             productos que no rotan.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="objectives">
+                        <span class="analysis-icon">🎯</span>
+                        <span class="analysis-title">Cumplimiento de objetivos</span>
+                        <span class="analysis-desc">Cuánto se vendió contra lo que se
+                            debía vender, por cliente y por mes, con semáforo de
+                            facturado y de cobrado, deuda y puntos.</span>
                     </button>
                     <button type="button" class="analysis-card" data-analysis="portfolio">
                         <span class="analysis-icon">💔</span>
@@ -523,6 +541,95 @@
         <!-- Vive en su propio endpoint porque necesita los cobros, que se cargan
              aparte y después de la venta. Cuando el archivo no trae crédito, el
              backend responde con un código y la vista lo dice. -->
+        <!-- Cumplimiento: el objetivo es la única cifra que ningún movimiento
+             implica, así que se carga aparte. Sin objetivos cargados la vista lo
+             dice y sigue mostrando a los clientes que sí facturaron. -->
+        <section id="stepObjectives" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Cumplimiento de objetivos</h2>
+                <span class="cache-stamp" id="stampObjectives"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="objectives">
+                    &#8635; Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle" id="objectivesSubtitle"></p>
+
+            <p class="form-note" id="objectivesEmpty" hidden></p>
+
+            <div id="objectivesContent">
+                <div class="metric-grid" id="objectivesKpis"></div>
+                <p class="insight-line" id="objectivesPolicyNote"></p>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Clientes por semáforo</h3>
+                        <p class="chart-hint">
+                            Cuántos clientes hay en cada color, medido sobre lo
+                            facturado contra su objetivo.
+                        </p>
+                        <canvas id="chartSemaphore"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Peso de cada semáforo</h3>
+                        <p class="chart-hint">
+                            Cuánto del objetivo total representa cada color. Veinte
+                            clientes rojos que valen el 2 % no son lo mismo que tres
+                            que valen el 40 %.
+                        </p>
+                        <canvas id="chartSemaphoreWeight"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Cluster por semáforo</h3>
+                    <p class="chart-hint">
+                        Cada celda con su peso sobre el objetivo total. Los nombres de
+                        los clusters son los tuyos: el sistema no define ninguno.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="objectivesClusterTable">
+                            <thead><tr>
+                                <th>Cluster</th>
+                                <th>Semáforo</th>
+                                <th class="num">Clientes</th>
+                                <th class="num">Objetivo</th>
+                                <th class="num">Facturado</th>
+                                <th class="num">Deuda</th>
+                                <th class="num">% Avance</th>
+                                <th class="num">Peso</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Cliente por cliente</h3>
+                    <p class="chart-hint">
+                        El objetivo se mide dos veces: contra lo facturado y contra lo
+                        cobrado. Un cliente puede cumplir en el papel y deber todo.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="objectivesClientTable">
+                            <thead><tr>
+                                <th>Cliente</th>
+                                <th>Periodo</th>
+                                <th>Cluster</th>
+                                <th class="num">Objetivo</th>
+                                <th class="num">Facturado</th>
+                                <th class="num">% Fact.</th>
+                                <th class="num">Cobrado</th>
+                                <th class="num">% Cobr.</th>
+                                <th class="num">Deuda</th>
+                                <th class="num">Puntos</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section id="stepReceivables" class="step-section" hidden>
             <div class="section-head">
                 <h2 class="section-title">Cuentas por cobrar</h2>

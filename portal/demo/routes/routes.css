@@ -292,3 +292,18 @@
 }
 .position-line { margin-top: -0.6rem; font-variant-numeric: tabular-nums; }
 .position-line.is-poor { color: #a33a3a; }
+
+/* Two maps side by side: the route as it stands and the order that shortens
+   it. The caption is what makes the pair readable at a glance. */
+.map-caption {
+    margin: 0 0 .4rem;
+    font-size: .82rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: var(--muted, #5e6580);
+}
+
+@media (max-width: 900px) {
+    .routes-section[data-section="optimize"] .grid-2 { grid-template-columns: 1fr; }
+}

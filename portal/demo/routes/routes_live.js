@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const REFRESH_MS = 30000;
     const liveMap = T.createMap('liveMap');
-    const state = { timer: null, visible: false, routes: [] };
+    const state = { timer: null, visible: false, routes: [], tracks: [] };
 
     /** Sellers come from the active plans and today's routes; the box stays editable. */
     function knownSellers() {
@@ -36,6 +36,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const today = T.todayIso();
             state.routes = await T.executed.list({ date_from: today, date_to: today });
+            // The header of a route says how many points it has, not where they
+            // were: the whole day's track is what this panel is for, so each
+            // open route is read in full.
+            state.tracks = await Promise.all(
+                state.routes.map((route) => T.executed.get(route.id).catch(() => null))
+            );
             paintRoutes();
             const sellers = knownSellers();
             if (!sellers.length) {
@@ -70,11 +76,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    /**
+     * The day's track of every seller: the ordered line they walked and a
+     * numbered pin per stop. Only the last position was ever drawn, so a
+     * seller who visited eight clients looked like one who visited one.
+     */
+    function paintTracks() {
+        const drawn = [];
+        (state.tracks || []).filter(Boolean).forEach((route) => {
+            const points = (route.points || [])
+                .filter((point) => point.latitude != null && point.longitude != null)
+                .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+            if (!points.length) return;
+            const path = points.map((point) => [point.latitude, point.longitude]);
+            liveMap.line(path, T.PIN_COLORS.point, true);
+            points.forEach((point, index) => {
+                const color = point.client_id ? T.PIN_COLORS.sale : T.PIN_COLORS.point;
+                liveMap.marker(point.latitude, point.longitude, String(index + 1), color,
+                    `<strong>${T.escapeHtml(route.seller)}</strong><br>` +
+                    `${T.escapeHtml(point.client_id || 'Sin cliente')}<br>` +
+                    `${T.escapeHtml(T.formatStamp(point.timestamp))}`);
+            });
+            drawn.push(...path);
+        });
+        return drawn;
+    }
+
     function paintLocations(locations) {
         const tbody = qs('#liveTable tbody');
         tbody.innerHTML = '';
         liveMap.clear();
-        const points = [];
+        const points = paintTracks();
         locations.forEach((loc) => {
             const row = document.createElement('tr');
             row.innerHTML =

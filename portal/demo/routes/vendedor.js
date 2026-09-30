@@ -226,7 +226,17 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#visitCard').hidden = false;
         qs('#visitCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    function hideVisit() { qs('#visitCard').hidden = true; state.visiting = null; }
+    function hideVisit() {
+        qs('#visitCard').hidden = true;
+        state.visiting = null;
+        // The new-client fields do not survive into the next visit: leaving
+        // them filled is how the shop next door gets registered twice.
+        qs('#isNewClient').checked = false;
+        qs('#newClientFields').hidden = true;
+        ['#newClientName', '#newClientAddress', '#newClientPhone'].forEach((id) => {
+            qs(id).value = '';
+        });
+    }
     function toggleSaleFields() {
         const selling = qs('#visitOutcome').value === 'VENTA';
         qs('#orderField').hidden = !selling;
@@ -260,22 +270,55 @@ document.addEventListener('DOMContentLoaded', () => {
         })).filter((item) => item.sku && item.quantity > 0);
     }
 
+    qs('#isNewClient').addEventListener('change', (event) => {
+        qs('#newClientFields').hidden = !event.target.checked;
+    });
+
+    /**
+     * A shop the route never mentioned is registered from the street, with the
+     * position of whoever is standing at its door — better evidence than any
+     * spreadsheet. The master lives in INGEST, which owns it; nobody else
+     * writes that table.
+     */
+    async function registerNewClient(here) {
+        const name = qs('#newClientName').value.trim();
+        if (!name) throw new Error('Indica el nombre del negocio nuevo.');
+        const stored = await window.SD_API.post(
+            `${window.SD_CONFIG.INGEST_URL}/v1/ingest/clients/field`,
+            {
+                name,
+                latitude: here.lat,
+                longitude: here.lon,
+                address: qs('#newClientAddress').value.trim() || null,
+                phone: qs('#newClientPhone').value.trim() || null
+            }
+        );
+        return stored.id;
+    }
+
     qs('#visitSaveButton').addEventListener('click', async () => {
+        const isNew = qs('#isNewClient').checked;
         const client = qs('#visitClient').value.trim();
-        if (!client) { T.note(qs('#visitNote'), 'Indica el cliente.', 'error'); return; }
+        if (!isNew && !client) {
+            T.note(qs('#visitNote'), 'Indica el cliente.', 'error');
+            return;
+        }
         const outcome = qs('#visitOutcome').value;
         const items = outcome === 'VENTA' ? readItems() : [];
         const done = setButtonBusy(qs('#visitSaveButton'), 'Guardando…');
         try {
             const here = await locate();
+            const clientId = isNew ? await registerNewClient(here) : client;
             await T.executed.report({
                 executed_route_id: state.route.id, timestamp: T.nowIso(),
                 latitude: here.lat, longitude: here.lon,
-                client_id: client, outcome,
+                client_id: clientId, outcome,
                 order_id: outcome === 'VENTA' ? (qs('#visitOrder').value.trim() || null) : null,
                 items
             });
-            toast(outcome === 'VENTA' ? 'Venta registrada.' : 'Visita registrada.', 'success');
+            toast(isNew ? 'Cliente nuevo y visita registrados.'
+                        : (outcome === 'VENTA' ? 'Venta registrada.' : 'Visita registrada.'),
+                  'success');
             await refreshRoute();
             hideVisit();
         } catch (error) {

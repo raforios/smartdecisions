@@ -16,13 +16,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------- list ----------
     async function loadPlans() {
         const status = qs('#plansStatusFilter').value;
+        // This screen is what is COMING. A plan carries the day it is meant to
+        // be run, so asking from today on is what keeps yesterday out of it —
+        // yesterday belongs to Histórico. A plan with no date is a reusable
+        // template and answers to no window, so it stays.
+        const filters = {};
+        if (status) filters.route_status = status;
+        if (qs('#plansOnlyUpcoming').checked) filters.date_from = T.todayIso();
+        state.plans = [];
         note('#plansNote', 'Cargando planes…');
         try {
-            state.plans = status
-                ? await T.planned.filter({ route_status: status })
-                : await T.planned.list();
+            state.plans = await T.planned.filter(filters);
             paintPlans();
-            note('#plansNote', state.plans.length ? '' : 'Todavía no hay planes guardados.');
+            note('#plansNote', state.plans.length ? '' :
+                'No hay planes para este período. Quita el filtro para ver los anteriores.');
             document.dispatchEvent(new CustomEvent('sd:plans-loaded', { detail: state.plans }));
         } catch (error) {
             note('#plansNote', T.errorText(error, 'No se pudieron cargar los planes.'), 'error');
@@ -160,6 +167,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     qs('#plansRefresh').addEventListener('click', loadPlans);
     qs('#plansStatusFilter').addEventListener('change', loadPlans);
+    qs('#plansOnlyUpcoming').addEventListener('change', loadPlans);
+
+    // ---------- template ----------
+    qs('#planTemplateButton').addEventListener('click', () => {
+        // Headers in Spanish, like every template of the product; the mapper
+        // on the service turns them into the contract's own names.
+        const headers = ['Codigo Ruta', 'Nombre Ruta', 'Fecha', 'Vendedor',
+                         'Descripcion', 'Cliente', 'Secuencia', 'Latitud',
+                         'Longitud', 'Referencia', 'Cliente ID'];
+        const example = ['R-SUR', 'Zona Sur', T.todayIso(), 'Ana Quispe',
+                         'Ruta del lunes', 'Tienda Doña Rosa', '1', '-16.5435',
+                         '-68.0713', 'Frente a la plaza', 'PDV-001'];
+        const csv = `${headers.join(',')}\n${example.join(',')}\n`;
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'plantilla_rutas.csv';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        note('#bulkPlanNote', 'Plantilla descargada.', 'success');
+    });
 
     function note(selector, text, kind) { T.note(qs(selector), text, kind); }
 

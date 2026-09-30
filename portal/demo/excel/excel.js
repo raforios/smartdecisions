@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // The dataset id is persisted so a page reload / session refresh never forces
     // re-uploading the file: the data already lives in S3 + DynamoDB.
     const DATASET_KEY = 'sd_excel_dataset_id';
+    // One file per contract. Sales creates the dataset; these three attach to it.
+    const COMPANION_PATHS = { cobros: 'collections', stock: 'stock',
+                              visitas: 'visits', objetivos: 'objectives' };
+    const CONTRACT_LABELS = { ventas: 'Ventas', cobros: 'Cobros', stock: 'Stock',
+                              visitas: 'Visitas', objetivos: 'Objetivos' };
     const CACHE_KEY = 'sd_excel_results';
     const VIEW_KEY = 'sd_excel_view';
     const PERIOD_KEY = 'sd_excel_period';
@@ -116,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         opportunities: ['stampOpportunities'],
         segmentation: ['stampSegmentation'],
         portfolio: ['stampPortfolio'],
+        objectives: ['stampObjectives'],
         receivables: ['stampReceivables'],
         stock: ['stampStock']
     };
@@ -133,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // hides the others, so the page doesn't grow into a long vertical stack.
     const ANALYSIS_SECTIONS = ['stepDashboard', 'stepVolume', 'stepForecast',
         'stepSegmentation', 'stepOpportunities', 'stepPortfolio', 'stepReceivables',
-        'stepStock'];
+        'stepStock', 'stepObjectives'];
     function showAnalysisView(sectionId, scroll = true) {
         ANALYSIS_SECTIONS.forEach((id) => { qs('#' + id).hidden = (id !== sectionId); });
         sessionStorage.setItem(VIEW_KEY, sectionId);
@@ -184,7 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
         note.className = 'form-note';
         note.textContent = '';
         try {
-            const response = await fetch(`${INGEST_URL}/v1/ingest/template/file`, {
+            const contract = qs('#contractSelect').value;
+            const response = await fetch(
+                `${INGEST_URL}/v1/ingest/template/file/${contract}`, {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${window.SD_AUTH.getToken()}` }
             });
@@ -200,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const downloadUrl = URL.createObjectURL(blob);
             const anchor = document.createElement('a');
             anchor.href = downloadUrl;
-            anchor.download = `template_ventas_${template.version || 'actual'}.xlsx`;
+            anchor.download = `plantilla_${qs('#contractSelect').value}.xlsx`;
             document.body.appendChild(anchor);
             anchor.click();
             anchor.remove();
@@ -305,6 +313,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const note = qs('#uploadNote');
         note.className = 'form-note';
         note.textContent = '';
+        if (qs('#contractSelect').value !== 'ventas' && !state.datasetId) {
+            note.classList.add('error');
+            note.textContent = 'Primero carga el archivo de Ventas: es el que crea el ' +
+                'conjunto de datos al que se enganchan los demás.';
+            return;
+        }
         const done = setButtonBusy(uploadButton, 'Subiendo…');
         try {
             const file = state.selectedFile;
@@ -332,12 +346,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 3) Ask ingest to read it from S3, validate and normalize —
             //    synchronously. The response already carries the outcome.
+            //    One file, one contract: sales creates the dataset and the other
+            //    three attach to the one already loaded.
             note.textContent = 'Validando y procesando el archivo…';
-            const result = await window.SD_API.post(`${INGEST_URL}/v1/ingest/excel-from-s3`, {
-                file_key: presign.file_key,
-                file_name: file.name
-            });
-            handleIngestResponse(result);
+            const contract = qs('#contractSelect').value;
+            if (contract === 'ventas') {
+                handleIngestResponse(await window.SD_API.post(
+                    `${INGEST_URL}/v1/ingest/excel-from-s3`,
+                    { file_key: presign.file_key, file_name: file.name }
+                ));
+            } else {
+                const summary = await window.SD_API.post(
+                    `${INGEST_URL}/v1/ingest/${encodeURIComponent(state.datasetId)}` +
+                    `/${COMPANION_PATHS[contract]}/from-s3`,
+                    { file_key: presign.file_key, file_name: file.name }
+                );
+                note.classList.add('success');
+                note.textContent =
+                    `${CONTRACT_LABELS[contract]}: ${summary.summary.valid_rows} fila(s) ` +
+                    `cargada(s).`;
+                toast(`${CONTRACT_LABELS[contract]} cargado.`, 'success');
+            }
         } catch (error) {
             note.classList.add('error');
             note.textContent = errorText(error, 'No se pudo subir el archivo.');
@@ -660,7 +689,8 @@ document.addEventListener('DOMContentLoaded', () => {
         stepSegmentation: 'segmentation',
         stepForecast: 'forecast',
         stepReceivables: 'receivables',
-        stepStock: 'stock'
+        stepStock: 'stock',
+        stepObjectives: 'objectives'
     };
 
     function restoreLastView() {
@@ -706,6 +736,13 @@ document.addEventListener('DOMContentLoaded', () => {
             ready: 'Salud de cartera lista.', failed: 'No se pudo revisar la cartera.',
             fetch: () => window.SD_API.get(analysisUrl('portfolio')),
             render: renderPortfolio
+        },
+        objectives: {
+            busy: 'Midiendo…', running: 'Midiendo el cumplimiento contra objetivo…',
+            ready: 'Cumplimiento listo.',
+            failed: 'No se pudo medir el cumplimiento.',
+            fetch: () => window.SD_API.get(analysisUrl('objectives')),
+            render: renderObjectives
         },
         receivables: {
             busy: 'Calculando…', running: 'Leyendo la cartera por cobrar…',
@@ -1959,6 +1996,149 @@ document.addEventListener('DOMContentLoaded', () => {
                `${escapeHtml(RISK_LABELS[code] || code)}</span>`;
     }
 
+    // Los códigos del backend; el color y la palabra son del frontend, que es
+    // donde deben estar.
+    const SEMAPHORE_LABEL = { GREEN: 'Verde', YELLOW: 'Amarillo', RED: 'Rojo' };
+    const SEMAPHORE_COLOR = { GREEN: '#2d7d46', YELLOW: '#c4a378', RED: '#c0392b' };
+    const SEMAPHORE_ORDER = ['GREEN', 'YELLOW', 'RED'];
+
+    function semaphoreTag(code) {
+        const color = SEMAPHORE_COLOR[code] || '#5e6580';
+        return `<span class="badge" style="background:${color}">` +
+            `${escapeHtml(SEMAPHORE_LABEL[code] || code || '—')}</span>`;
+    }
+
+    /**
+     * Cumplimiento contra objetivo: cuánto se vendió contra lo que se debía
+     * vender, por cliente y por mes, con el semáforo de facturado y el de
+     * cobrado, que no son la misma pregunta.
+     */
+    function renderObjectives(data) {
+        const empty = qs('#objectivesEmpty');
+        const content = qs('#objectivesContent');
+        const totals = (data && data.totals) || {};
+
+        if (!data || !data.clients || data.clients.length === 0) {
+            const sinObjetivo = (data && data.clients_without_objective) || 0;
+            empty.textContent = sinObjetivo > 0
+                ? `Todavía no cargaste objetivos. Hay ${formatInt(sinObjetivo)} ` +
+                  'cliente(s) con ventas esperando una meta contra la cual medirse. ' +
+                  'Descarga la plantilla «objetivos» y cárgala para ver esta vista.'
+                : 'Todavía no cargaste objetivos para este archivo.';
+            empty.hidden = false;
+            content.hidden = true;
+            qs('#objectivesSubtitle').textContent = '';
+            showPeriodBar(data && data.period);
+            showAnalysisView('stepObjectives');
+            return;
+        }
+        empty.hidden = true;
+        content.hidden = false;
+
+        const meses = totals.periods || [];
+        qs('#objectivesSubtitle').textContent =
+            `${formatInt(totals.clients_count)} clientes con objetivo en ` +
+            `${meses.length} mes(es), de ${meses[0] || '—'} a ` +
+            `${meses[meses.length - 1] || '—'}.` +
+            (data.clients_without_objective
+                ? ` Otros ${formatInt(data.clients_without_objective)} facturaron ` +
+                  'sin objetivo asignado: no se los puntúa, porque no hay meta ' +
+                  'contra la cual compararlos.'
+                : '');
+
+        fillKpis('objectivesKpis', [
+            { label: 'Objetivo', value: totals.target_amount, format: 'money',
+              hint: 'Lo que la empresa decidió vender en el período' },
+            { label: 'Facturado', value: totals.invoiced_amount, format: 'money',
+              hint: `${formatDecimal(totals.invoiced_ratio * 100, 1)}% del objetivo` },
+            { label: 'Cobrado', value: totals.collected_amount, format: 'money',
+              hint: `${formatDecimal(totals.collected_ratio * 100, 1)}% del objetivo` },
+            { label: 'Deuda', value: totals.debt_amount, format: 'money',
+              hint: `${formatDecimal(totals.debt_ratio * 100, 1)}% del objetivo — ` +
+                    'facturado que todavía no se cobró' },
+            { label: 'Puntos', value: totals.points, format: 'decimal',
+              hint: 'A la tasa de cada cluster' }
+        ]);
+
+        const policy = data.policy || {};
+        qs('#objectivesPolicyNote').textContent =
+            `Semáforo: rojo por debajo de ` +
+            `${formatDecimal((policy.yellow_from || 0) * 100, 0)}%, amarillo hasta ` +
+            `${formatDecimal((policy.green_from || 0) * 100, 0)}%, verde desde ahí. ` +
+            'Son parámetros de tu política comercial, no del sistema.';
+
+        renderSemaphoreCharts(data.clients || [], data.by_cluster || []);
+        renderObjectivesTables(data);
+        showPeriodBar(data.period);
+        showAnalysisView('stepObjectives');
+    }
+
+    function renderSemaphoreCharts(clients, cells) {
+        const counts = {};
+        const weights = {};
+        clients.forEach((row) => {
+            counts[row.invoiced_semaphore] = (counts[row.invoiced_semaphore] || 0) + 1;
+        });
+        cells.forEach((cell) => {
+            weights[cell.semaphore] = (weights[cell.semaphore] || 0) + cell.weight_on_target;
+        });
+        const codes = SEMAPHORE_ORDER.filter((code) => counts[code] || weights[code]);
+
+        makeChart('chartSemaphore', {
+            type: 'doughnut',
+            data: {
+                labels: codes.map((code) => `${SEMAPHORE_LABEL[code]} (${counts[code] || 0})`),
+                datasets: [{ data: codes.map((code) => counts[code] || 0),
+                    backgroundColor: codes.map((code) => SEMAPHORE_COLOR[code]) }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'right' } } }
+        });
+
+        makeChart('chartSemaphoreWeight', {
+            type: 'doughnut',
+            data: {
+                labels: codes.map((code) =>
+                    `${SEMAPHORE_LABEL[code]} (${formatDecimal((weights[code] || 0) * 100, 1)}%)`),
+                datasets: [{ data: codes.map((code) => (weights[code] || 0) * 100),
+                    backgroundColor: codes.map((code) => SEMAPHORE_COLOR[code]) }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'right' } } }
+        });
+    }
+
+    function renderObjectivesTables(data) {
+        fillTable('objectivesClusterTable', data.by_cluster || [], (cell) =>
+            `<td>${escapeHtml(cell.cluster)}</td>` +
+            `<td>${semaphoreTag(cell.semaphore)}</td>` +
+            `<td class="num">${formatInt(cell.clients_count)}</td>` +
+            `<td class="num">${formatDecimal(cell.target_amount, 0)}</td>` +
+            `<td class="num">${formatDecimal(cell.invoiced_amount, 0)}</td>` +
+            `<td class="num">${formatDecimal(cell.debt_amount, 0)}</td>` +
+            `<td class="num">${formatDecimal(cell.invoiced_ratio * 100, 1)}%</td>` +
+            `<td class="num">${formatDecimal(cell.weight_on_target * 100, 1)}%</td>`,
+            { emptyText: 'Sin celdas para mostrar.' });
+
+        // Peor cumplimiento primero: la lista existe para encontrar al que no
+        // llega, no para felicitar al que sí.
+        const clients = (data.clients || []).slice()
+            .sort((a, b) => a.invoiced_ratio - b.invoiced_ratio);
+
+        fillTable('objectivesClientTable', clients, (row) =>
+            `<td>${escapeHtml(row.pos_name || row.pos_id)}</td>` +
+            `<td>${escapeHtml(row.period)}</td>` +
+            `<td>${escapeHtml(row.cluster || '—')}</td>` +
+            `<td class="num">${formatDecimal(row.target_amount, 0)}</td>` +
+            `<td class="num">${formatDecimal(row.invoiced_amount, 0)}</td>` +
+            `<td class="num">${semaphoreTag(row.invoiced_semaphore)} ` +
+            `${formatDecimal(row.invoiced_ratio * 100, 1)}%</td>` +
+            `<td class="num">${formatDecimal(row.collected_amount, 0)}</td>` +
+            `<td class="num">${semaphoreTag(row.collected_semaphore)} ` +
+            `${formatDecimal(row.collected_ratio * 100, 1)}%</td>` +
+            `<td class="num">${formatDecimal(row.debt_amount, 0)}</td>` +
+            `<td class="num">${formatDecimal(row.points, 0)}</td>`,
+            { emptyText: 'Sin clientes con objetivo.' });
+    }
+
     /**
      * La cartera por cobrar: posición, antigüedad, recuperabilidad, quién debe,
      * quién cobra, qué vence cuándo y qué deja el crédito.
@@ -2473,6 +2653,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const AI_VIEWS = {
         stepDashboard: ['commercial_summary', 'summary'],
         stepVolume: ['volume_source', 'summary'],
+        stepObjectives: ['objectives', 'objectives'],
         stepReceivables: ['receivables', 'receivables'],
         stepStock: ['stock', 'stock'],
         stepOpportunities: ['opportunities', 'opportunities'],
