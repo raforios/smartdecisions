@@ -520,3 +520,23 @@ def test_the_field_registration_controller_returns_its_model(resource):
     assert isinstance(response, ClientResponseSchema)
     assert response.name == 'Tienda Nueva'
     assert response.seller == 'Ana'
+
+
+def test_an_empty_numeric_column_does_not_break_the_load(resource):
+    '''
+        The bug a real client file found: `enrich_frame` wrote the master's
+        misses as well as its hits, and assigning None into a numeric column
+        raises. A sales file whose `credit_limit` is entirely empty —which is
+        most files— failed the whole load with a pandas TypeError.
+    '''
+    master.upsert_clients(resource, OWNER, [_client('PDV-1', 'Tienda Uno')],
+                          ClientSource.API)
+    frame = pd.DataFrame([
+        {'pos_id': 'PDV-1', 'pos_name': 'Tienda Uno', 'credit_limit': float('nan')},
+        {'pos_id': 'PDV-2', 'pos_name': 'Tienda Dos', 'credit_limit': float('nan')}
+    ])
+
+    enriched = master.enrich_frame(frame, master.list_clients(resource, OWNER), 'pos_id')
+
+    assert len(enriched) == 2
+    assert enriched['credit_limit'].isna().all()

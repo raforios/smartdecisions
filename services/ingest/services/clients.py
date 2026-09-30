@@ -381,7 +381,13 @@ def enrich_frame(
             blank = frame[column].isna() | (frame[column] == _NO_COORDINATE)
         else:
             blank = frame[column].isna()
-        frame.loc[blank, column] = replacement[blank]
+        # Only where the master actually HAS something. Writing the misses too
+        # is a no-op in meaning but not in practice: assigning None into a
+        # numeric column raises, so a file whose `credit_limit` column is
+        # entirely empty —which is most files— used to fail the whole load.
+        fillable = blank & replacement.notna()
+        if fillable.any():
+            frame.loc[fillable, column] = replacement[fillable]
     return frame
 
 
