@@ -560,12 +560,17 @@ def _product_out(
     ordered = sorted(lots, key = expiry_order)
     fields = {key: value for key, value in stored.items() if key != OWNER_KEY}
     fields.pop('available_quantity', None)
+    fields.pop('ready_to_invoice', None)
     return ProductOut(
         **fields,
         available_quantity = available,
         sale_price = ordered[0]['sale_price'] if ordered else None,
         next_expiry = ordered[0].get('expiry_date') if ordered else None,
-        below_minimum = available < stored.get('min_stock', 0)
+        below_minimum = available < stored.get('min_stock', 0),
+        # The screen must be able to show what is still un-homologated before
+        # the SIN rejects the first invoice, not after.
+        ready_to_invoice = all(stored.get(code) for code in
+                               ('sin_activity_code', 'sin_product_code', 'sin_unit_code'))
     )
 
 

@@ -85,6 +85,12 @@ class ProductItem:
     min_stock: float = 0
     requires_prescription: bool = False
     is_active: bool = True
+    # Homologation before the SIN: economic activity, product code and unit of
+    # measure, each from its catalogue. Empty until the pharmacy fills them in;
+    # without them the product cannot travel on an electronic invoice.
+    sin_activity_code: Optional[str] = None
+    sin_product_code: Optional[str] = None
+    sin_unit_code: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -140,6 +146,10 @@ class SaleItem:
     created_at: str
     buyer: Dict[str, Any] = field(default_factory = dict)
     notes: Optional[str] = None
+    # Already masked when it gets here. The full number is never written: the
+    # norm requires the middle digits zeroed, and a number we do not hold is a
+    # number that cannot leak.
+    card_number: Optional[str] = None
     cancelled_at: Optional[str] = None
     cancelled_by: Optional[str] = None
 

@@ -26,14 +26,18 @@ from services.environment import load_and_validate_env_vars
 from services.billing import products_by_sku, read_partition
 from services.billing_sales import list_sales
 
-ENV_VARS = load_and_validate_env_vars({'BILLING_EXPIRY_ALERT_DAYS': int})
+ENV_VARS = load_and_validate_env_vars({
+    'BILLING_EXPIRY_ALERT_DAYS': int,
+    'BILLING_TOP_ROWS': int,
+    'BILLING_LIST_ROWS': int,
+})
 EXPIRY_ALERT_DAYS = ENV_VARS['BILLING_EXPIRY_ALERT_DAYS']
 
 MONEY_DECIMALS = 2
 # How many rows each list carries. A counter screen is read at a glance; the
 # full lists live in their own sections.
-TOP_ROWS = 5
-LIST_ROWS = 10
+TOP_ROWS = ENV_VARS['BILLING_TOP_ROWS']
+LIST_ROWS = ENV_VARS['BILLING_LIST_ROWS']
 
 
 def dashboard(

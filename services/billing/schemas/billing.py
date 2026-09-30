@@ -11,11 +11,59 @@
     The backend answers with data and codes; the wording belongs to the
     frontend and to the interpretation layer.
 '''
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+# The SIAT numbers its catalogues; only the codes BILLING issues today are
+# here, and the rest are added when a trade that needs them is sold to. They
+# live with the DTOs because they are contract, not behaviour: the algorithms
+# in services/billing_siat.py read them, never the other way round.
+MODALITY_ELECTRONIC_ONLINE = 1
+MODALITY_COMPUTERIZED_ONLINE = 2
+
+EMISSION_ONLINE = 1
+EMISSION_OFFLINE = 2
+
+INVOICE_WITH_TAX_CREDIT = 1
+INVOICE_WITHOUT_TAX_CREDIT = 2
+
+SECTOR_DOCUMENT_PURCHASE_SALE = 1
+
+
+class CufInput(BaseModel):
+    '''
+        What identifies one invoice uniquely before the SIN.
+
+        The nine fields are the CUF itself: the norm names them and fixes the
+        order in which they concatenate, so they are stated here exactly as the
+        norm states them. The last four default to what this product issues
+        today; the first five belong to the individual document.
+    '''
+    nit: str = Field(..., max_length = 13, description = 'Issuer\'s NIT.')
+    issued_at: datetime = Field(
+        ..., description = 'Exact moment of issue, with milliseconds.'
+    )
+    invoice_number: int = Field(..., ge = 0, description = 'Invoice sequence number.')
+    branch: int = Field(0, ge = 0, description = 'Branch; 0 is the head office.')
+    point_of_sale: int = Field(
+        0, ge = 0, description = 'Point of sale; 0 when it does not apply.'
+    )
+    modality: int = Field(
+        MODALITY_COMPUTERIZED_ONLINE,
+        description = '1 electronic online, 2 computerized online.'
+    )
+    emission_type: int = Field(EMISSION_ONLINE, description = '1 online, 2 offline.')
+    invoice_type: int = Field(
+        INVOICE_WITH_TAX_CREDIT, description = '1 with tax credit, 2 without.'
+    )
+    sector_document: int = Field(
+        SECTOR_DOCUMENT_PURCHASE_SALE,
+        description = 'Sector document type; 1 is purchase-sale.'
+    )
 
 
 class BillingError(str, Enum):
@@ -34,6 +82,13 @@ class BillingError(str, Enum):
     SALE_ALREADY_CANCELLED = 'SALE_ALREADY_CANCELLED'
     PURCHASE_NOT_FOUND = 'PURCHASE_NOT_FOUND'
     SETTINGS_NOT_FOUND = 'SETTINGS_NOT_FOUND'
+    BUYER_REQUIRED = 'BUYER_REQUIRED'
+    CARD_WITHOUT_CARD_PAYMENT = 'CARD_WITHOUT_CARD_PAYMENT'
+    INVALID_CARD_NUMBER = 'INVALID_CARD_NUMBER'
+    PRODUCT_NOT_HOMOLOGATED = 'PRODUCT_NOT_HOMOLOGATED'
+    TOO_MANY_LINES = 'TOO_MANY_LINES'
+    SIAT_UNREACHABLE = 'SIAT_UNREACHABLE'
+    SIAT_WSDL_MISSING = 'SIAT_WSDL_MISSING'
 
 
 class PaymentMethod(str, Enum):
@@ -43,6 +98,23 @@ class PaymentMethod(str, Enum):
     EFECTIVO = 'EFECTIVO'
     QR = 'QR'
     TARJETA = 'TARJETA'
+
+
+# What each of them is called in the SIN's `codigoMetodoPago` parameter. Only
+# cash and card have a code of their own; QR travels as OTROS, which is what
+# the norm says to use when the method is not in the list
+# (`docs/siat/SIAT.md`). The full catalogue is synchronised from the SIN once
+# the authorization exists, and may add a code for QR — that is why the map
+# lives here and not inlined at the point of use.
+SIN_PAYMENT_CASH: int = 1
+SIN_PAYMENT_CARD: int = 2
+SIN_PAYMENT_OTHER: int = 5
+
+SIN_PAYMENT_CODES: dict = {
+    PaymentMethod.EFECTIVO: SIN_PAYMENT_CASH,
+    PaymentMethod.TARJETA: SIN_PAYMENT_CARD,
+    PaymentMethod.QR: SIN_PAYMENT_OTHER
+}
 
 
 class SaleStatus(str, Enum):
@@ -78,9 +150,10 @@ class ProductIn(BaseModel):
     min_stock: float = Field(0, ge = 0)
     requires_prescription: bool = False
     is_active: bool = True
-    # Homologación ante el SIN. Sin estos tres códigos la factura electrónica
-    # se rechaza, así que se piden desde ya aunque hoy no se envíe nada: pedirlos
-    # después obligaría a revisar un catálogo entero producto por producto.
+    # Homologation before the SIN. Without these three codes the electronic
+    # invoice is rejected, so they are asked for from the start even though
+    # nothing is sent yet: asking later would mean walking a whole catalogue
+    # product by product.
     sin_activity_code: Optional[str] = Field(
         None, max_length = 20, description = 'Actividad económica del emisor (ej. 451010).'
     )
@@ -257,6 +330,13 @@ class Buyer(BaseModel):
     name: Optional[str] = Field(None, max_length = 200)
     document: Optional[str] = Field(None, max_length = 40,
                                     description = 'NIT or CI, as the buyer gives it.')
+    document_type: Optional[int] = Field(
+        None, ge = 1, le = 5,
+        description = 'Código del tipo de documento según la paramétrica del '
+                      'SIN. El anexo sólo fija el rango 1 a 5; qué número es '
+                      'cada documento lo dice el catálogo que se sincroniza '
+                      'con la autorización, y por eso no se nombra aquí.'
+    )
 
 
 class SaleLineIn(BaseModel):
@@ -310,6 +390,13 @@ class SaleNoteIn(BaseModel):
     payment_method: PaymentMethod = PaymentMethod.EFECTIVO
     notes: Optional[str] = Field(None, max_length = 300)
     lines: List[SaleLineIn] = Field(..., min_length = 1)
+    card_number: Optional[str] = Field(
+        None, max_length = 30,
+        description = 'Card number, only when paying by card. It is MASKED on '
+                      'the way in and only the masked form is ever stored: the '
+                      'norm requires the middle digits zeroed, and the full '
+                      'number is not ours to keep.'
+    )
 
 
 class SaleNoteOut(BaseModel):
@@ -322,6 +409,9 @@ class SaleNoteOut(BaseModel):
     buyer: Buyer
     payment_method: PaymentMethod
     notes: Optional[str] = None
+    card_number: Optional[str] = Field(
+        None, description = 'Masked, when the sale was paid by card.'
+    )
     lines: List[SaleLineOut]
     subtotal: float
     discount: float
@@ -357,11 +447,39 @@ class BillingSettings(BaseModel):
     document: Optional[str] = Field(None, max_length = 40, description = 'NIT.')
     address: Optional[str] = Field(None, max_length = 300)
     phone: Optional[str] = Field(None, max_length = 40)
+    municipality: Optional[str] = Field(
+        None, max_length = 25,
+        description = 'Municipio o departamento que se imprime en la factura. '
+                      'El XSD del SIN lo exige y ningún otro campo lo lleva.'
+    )
     sale_series: str = Field('A', min_length = 1, max_length = 8)
     purchase_series: str = Field('C', min_length = 1, max_length = 8)
     discounts_enabled: bool = False
     ticket_width: TicketWidth = TicketWidth.MM_80
     ticket_footer: Optional[str] = Field(None, max_length = 200)
+    # --- Electronic invoicing ------------------------------------------------
+    # Branch and point of sale are per-tenant and go INTO the CUF, which is why
+    # they live here and not in the service configuration: two pharmacies on
+    # the same deployment issue from different branches, and a CUF built with
+    # the wrong one is a document the tax office rejects.
+    branch: int = Field(
+        0, ge = 0, le = 9999,
+        description = 'Branch registered with the SIN; 0 is the head office.'
+    )
+    point_of_sale: int = Field(
+        0, ge = 0, le = 9999,
+        description = 'Point of sale registered with the SIN; 0 when there is none.'
+    )
+    # Phase II of the norm requires the buyer to be named on EVERY invoice,
+    # whatever the amount. It is a flag and not a constant because a pharmacy
+    # still issuing internal notes has to be able to work before it is
+    # authorised, and because the day it is authorised nothing else changes.
+    buyer_required: bool = Field(
+        False,
+        description = 'Refuse a sale with no buyer. Required once invoicing '
+                      'electronically: the norm names the buyer on every '
+                      'invoice, regardless of the amount.'
+    )
 
 
 class SettingsResponse(BillingSettings):
@@ -473,3 +591,104 @@ class LotEdit(BaseModel):
     sku: str = Field(..., min_length = 1, max_length = 40)
     lot_id: str = Field(..., min_length = 1, max_length = 60)
     sale_price: float = Field(..., gt = 0)
+
+
+# --- electronic invoicing ----------------------------------------------------
+
+class InvoiceContext(BaseModel):
+    """
+        Everything the invoice XML needs that the sale itself does not carry.
+
+        It is one object and not fifteen arguments because these travel
+        together: they all come from the pharmacy's registration and from the
+        codes the tax office hands back. Passing them loose is how a CUF ends
+        up next to another invoice's CUFD.
+    """
+    issuer_document: str = Field(..., description = 'NIT of the issuing pharmacy.')
+    trade_name: str = Field(..., min_length = 1, max_length = 200)
+    municipality: str = Field(..., min_length = 1, max_length = 25)
+    address: str = Field(..., min_length = 1, max_length = 500)
+    phone: Optional[str] = Field(None, max_length = 25)
+    branch: int = Field(0, ge = 0, le = 9999)
+    point_of_sale: Optional[int] = Field(None, ge = 0, le = 9999)
+    invoice_number: int = Field(..., ge = 1)
+    cuf: str = Field(..., min_length = 1, max_length = 100)
+    cufd: str = Field(
+        ..., min_length = 1, max_length = 100,
+        description = 'Code the tax office issues per day and point of sale.'
+    )
+    issued_at: str = Field(..., description = 'ISO 8601, as xs:dateTime wants it.')
+    legend: str = Field(
+        ..., min_length = 1, max_length = 200,
+        description = 'Legend from the SIN catalogue. It changes with each '
+                      'issue by law 453, so the caller picks it, not this.'
+    )
+    currency_code: int = Field(..., ge = 1, le = 154)
+    exchange_rate: float = Field(..., gt = 0)
+    cafc: Optional[str] = Field(
+        None, max_length = 50,
+        description = 'Only on a contingency invoice; empty online.'
+    )
+
+
+class InvoiceLine(BaseModel):
+    """
+        One line as the invoice needs it: the sale's figures plus the three
+        SIN codes, which live on the product and not on the stored line.
+
+        They are demanded here rather than defaulted because an invoice with a
+        plausible-looking product code is rejected by the tax office AFTER the
+        sale is in the client's hands.
+    """
+    sku: str = Field(..., min_length = 1, max_length = 50)
+    description: str = Field(..., min_length = 1, max_length = 500)
+    quantity: float = Field(..., gt = 0)
+    unit_price: float = Field(..., gt = 0)
+    discount: float = Field(0, ge = 0)
+    subtotal: float = Field(..., gt = 0)
+    sin_activity_code: Optional[str] = None
+    sin_product_code: Optional[str] = None
+    sin_unit_code: Optional[int] = None
+
+
+class CuisResponse(BaseModel):
+    """
+        The CUIS the tax office issued, and when it stops being valid.
+
+        It lasts a year, so it is asked for once and stored. Asking on every
+        invoice would be a round trip to a service we do not control for a
+        code that did not change.
+    """
+    cuis: str = Field(..., min_length = 1, max_length = 100)
+    valid_until: str = Field(..., description = 'As the SIAT returns it.')
+
+
+class CufdResponse(BaseModel):
+    """
+        The CUFD of one day and point of sale.
+
+        `control_code` is what closes the CUF, so a CUFD of the wrong day
+        produces a CUF the tax office rejects — which is why the day it is
+        valid until travels with it.
+    """
+    cufd: str = Field(..., min_length = 1, max_length = 100)
+    control_code: str = Field(..., min_length = 1, max_length = 100)
+    address: str = Field(..., description = 'Address the SIAT has registered.')
+    valid_until: str = Field(..., description = 'As the SIAT returns it.')
+
+
+class SiatReceipt(BaseModel):
+    """
+        What the tax office answered about one document.
+
+        `messages` keeps the SIN's own wording verbatim. It is the exception to
+        the rule that this backend returns codes and not prose: these are not
+        our messages to write, they carry the SIN's own code, and rewording
+        them would lose the only text a person can use to argue with them.
+    """
+    accepted: bool
+    reception_code: Optional[str] = Field(
+        None, description = 'Code to ask later whether it was validated.'
+    )
+    state: Optional[str] = None
+    messages: List[str] = Field(default_factory = list)

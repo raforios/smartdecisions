@@ -140,8 +140,9 @@ async def custom_swagger_ui() -> HTMLResponse:
     )
 
 
-# CORS estándar: lista explícita opcional por env (CORS_ALLOWED_ORIGINS, CSV) +
-# un patrón que cubre nuestros frontends sin listar URLs una por una.
+# Standard CORS: an optional explicit list from the environment
+# (CORS_ALLOWED_ORIGINS, comma-separated) plus a pattern that covers our own
+# frontends without naming every URL one by one.
 CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
 ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()

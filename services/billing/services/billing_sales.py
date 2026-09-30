@@ -25,6 +25,7 @@ from models.billing import (
 from schemas.billing import (
     Buyer,
     BillingError,
+    PaymentMethod,
     SaleAllocation,
     SaleLineIn,
     SaleLineOut,
@@ -47,6 +48,7 @@ from services.billing import (
     read_partition,
     write_item
 )
+from services.billing_siat import mask_card
 from services.billing_stock import allocate, draw_down, give_back
 
 # Money is rounded where it is charged, never where it is added: totals come
@@ -73,11 +75,14 @@ def issue_sale(
             SaleNoteOut: The issued note, ready to print.
 
         Raises:
-            InvalidInputError: Repeated SKU, discount where discounts are off,
-                a discount larger than its line, or not enough stock.
+            InvalidInputError: No buyer where the pharmacy requires one,
+                repeated SKU, discount where discounts are off, a discount
+                larger than its line, or not enough stock.
             RegisterNotFoundError: A SKU is not in the catalogue.
     '''
     settings = get_settings(dynamodb_resource, owner)
+    _require_buyer(note, settings.buyer_required)
+    card = _masked_card(note)
     _reject_repeated_lines(note.lines)
 
     lines, consumption = _price_lines(dynamodb_resource, owner, note,
@@ -96,6 +101,7 @@ def issue_sale(
         lines = [line.model_dump(mode = 'json') for line in lines],
         created_by = created_by, created_at = stamp,
         buyer = note.buyer.model_dump(mode = 'json'), notes = note.notes,
+        card_number = card,
         **money
     )
     write_item(dynamodb_resource, SALES_TABLE, item.__dict__)
@@ -274,6 +280,73 @@ def list_sales(
     charged = round(sum(item.total for item in items
                         if item.status == SaleStatus.ISSUED), MONEY_DECIMALS)
     return SaleNotesResponse(items = items, total = len(items), total_amount = charged)
+
+
+def _require_buyer(
+    note: SaleNoteIn,
+    required: bool
+) -> None:
+    """
+        Refuses a sale with no buyer document where the pharmacy needs one.
+
+        Phase II of the Bolivian norm requires every invoice to be nominative
+        whatever the amount, and it is explicit about what that means: the
+        DOCUMENT NUMBER, not the name or business name (`docs/siat/SIAT.md`).
+        So the document is demanded and the name is not — asking for both
+        would refuse a sale the norm accepts, over a field the buyer is not
+        obliged to give.
+
+        It is a setting and not a constant because a pharmacy still issuing
+        internal notes has to keep working until it is authorised.
+
+        Args:
+            note (SaleNoteIn): What is being sold, with its buyer.
+            required (bool): Whether this pharmacy must name the buyer.
+
+        Raises:
+            InvalidInputError: BUYER_REQUIRED when the document is missing.
+    """
+    if not required:
+        return
+    if not (note.buyer and (note.buyer.document or '').strip()):
+        raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
+
+
+def _masked_card(note: SaleNoteIn) -> Optional[str]:
+    """
+        The card number as it may be stored: masked, or nothing at all.
+
+        Two rules of the norm, both in `docs/siat/SIAT.md`. A card number may
+        only travel when the payment method IS a card — sending one with a
+        cash sale is an error the tax office reports. And when it does travel
+        it goes with the middle digits zeroed, first and last four in clear.
+
+        Masking here, at the boundary, is deliberate: the full number never
+        reaches the table, the log or the printed note, so there is no copy of
+        it to leak later.
+
+        Args:
+            note (SaleNoteIn): The sale as it arrived.
+
+        Returns:
+            str | None: The masked number, or None when there is none.
+
+        Raises:
+            InvalidInputError: A card number without a card payment, or a
+                number too short to be one.
+    """
+    raw = (note.card_number or '').strip()
+    is_card = note.payment_method is PaymentMethod.TARJETA
+    if not raw:
+        return None
+    if not is_card:
+        raise InvalidInputError(detail = BillingError.CARD_WITHOUT_CARD_PAYMENT.value)
+    try:
+        return mask_card(raw)
+    except ValueError as error:
+        raise InvalidInputError(
+            detail = BillingError.INVALID_CARD_NUMBER.value
+        ) from error
 
 
 def _reject_repeated_lines(lines: List[SaleLineIn]) -> None:
