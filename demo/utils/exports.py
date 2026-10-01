@@ -15,18 +15,18 @@ class MiningReportPDF(FPDF):
             self.image('./img/cropped-escudo.png', 10, 8, 20)
         except Exception:
             pass
-        self.set_font('Arial', 'B', 11)
+        self.set_font('Helvetica', 'B', 11)
         self.set_text_color(44, 62, 80)
         self.cell(0, 5, 'ESTADO PLURINACIONAL DE BOLIVIA', ln=True, align='C')
-        self.set_font('Arial', 'B', 9)
+        self.set_font('Helvetica', 'B', 9)
         self.cell(0, 5, 'MINISTERIO DE MINERIA Y METALURGIA', ln=True, align='C')
-        self.set_font('Arial', '', 8)
+        self.set_font('Helvetica', '', 8)
         self.cell(0, 5, 'VICEMINISTERIO DE POLITICA MINERA, REGULACION Y FISCALIZACION', ln=True, align='C')
         self.ln(10)
 
     def footer(self) -> None:
         self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
+        self.set_font('Helvetica', 'I', 8)
         self.set_text_color(128, 128, 128)
         self.cell(0, 10, f'PAGINA {self.page_no()}', 0, 0, 'C')
 
@@ -43,9 +43,9 @@ def convert_df_to_pdf(df: pd.DataFrame, title: str, currency: str) -> bytes:
     if df.empty: return b""
     pdf = MiningReportPDF(orientation='P')
     pdf.add_page()
-    pdf.set_font('Arial', 'B', 14)
+    pdf.set_font('Helvetica', 'B', 14)
     pdf.cell(0, 10, f'REPORTE: {title.upper()} ({currency})', ln=True, align='C')
-    return pdf.output(dest='S').encode('latin-1', errors='ignore')
+    return bytes(pdf.output())
 
 
 def _flatten_multiindex(columns) -> list:
@@ -62,7 +62,7 @@ def _draw_advanced_table(pdf, df, usable_width, start_y=None):
 
     col_widths = []
     for i, col in enumerate(df.columns):
-        data_max = df[col].astype(str).map(len).max() if not df.empty else 5
+        data_max = df[col].map(lambda v: len(str(v))).max() if not df.empty else 5
         col_max = len(clean_cols[i])
         w = max(data_max * 1.5, col_max * 0.8) 
         w = max(w, 10)
@@ -80,7 +80,7 @@ def _draw_advanced_table(pdf, df, usable_width, start_y=None):
     
     pdf.set_fill_color(26, 43, 76)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font('Arial', 'B', 5)
+    pdf.set_font('Helvetica', 'B', 5)
 
     for i, col in enumerate(clean_cols):
         pdf.set_xy(x, y)
@@ -97,7 +97,7 @@ def _draw_advanced_table(pdf, df, usable_width, start_y=None):
             y = pdf.get_y()
             pdf.set_fill_color(26, 43, 76)
             pdf.set_text_color(255, 255, 255)
-            pdf.set_font('Arial', 'B', 5)
+            pdf.set_font('Helvetica', 'B', 5)
             for i, col in enumerate(clean_cols):
                 pdf.set_xy(x, y)
                 pdf.rect(x, y, col_widths[i], header_height, 'DF')
@@ -109,14 +109,14 @@ def _draw_advanced_table(pdf, df, usable_width, start_y=None):
         val0 = str(row.iloc[0]).upper()
         if 'SUBTOTAL' in val0 or 'TOTAL' in val0:
             pdf.set_fill_color(210, 225, 240)
-            pdf.set_font('Arial', 'B', 5)
+            pdf.set_font('Helvetica', 'B', 5)
             fill = True
         elif 'GAD' in val0:
             pdf.set_fill_color(255, 240, 200)
-            pdf.set_font('Arial', 'B', 5)
+            pdf.set_font('Helvetica', 'B', 5)
             fill = True
         else:
-            pdf.set_font('Arial', '', 5)
+            pdf.set_font('Helvetica', '', 5)
             fill = False
 
         x = pdf.get_x()
@@ -148,14 +148,14 @@ def generate_ordered_pdf(report_title: str, period_string: str, currency: str, e
     pdf.add_page()
     usable_width = 190 
     
-    pdf.set_font('Arial', 'B', 14)
+    pdf.set_font('Helvetica', 'B', 14)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 8, 'BOLETIN INFORMATIVO', ln=True, align='C')
-    pdf.set_font('Arial', 'B', 12)
+    pdf.set_font('Helvetica', 'B', 12)
     pdf.cell(0, 6, report_title.upper(), ln=True, align='C')
-    pdf.set_font('Arial', '', 10)
+    pdf.set_font('Helvetica', '', 10)
     pdf.cell(0, 6, period_string.upper(), ln=True, align='C')
-    pdf.set_font('Arial', 'I', 9)
+    pdf.set_font('Helvetica', 'I', 9)
     pdf.cell(0, 6, f'(EXPRESADO EN {currency})', ln=True, align='C')
     pdf.ln(6)
 
@@ -169,7 +169,7 @@ def generate_ordered_pdf(report_title: str, period_string: str, currency: str, e
         elif etype == 'title':
             if pdf.get_y() > 240: pdf.add_page()
             pdf.ln(3)
-            pdf.set_font('Arial', 'B', 8)
+            pdf.set_font('Helvetica', 'B', 8)
             pdf.set_fill_color(230, 230, 230)
             pdf.set_text_color(0, 0, 0)
             pdf.cell(0, 7, f'  {str(content).upper()}', border=1, ln=True, fill=True)
@@ -177,7 +177,7 @@ def generate_ordered_pdf(report_title: str, period_string: str, currency: str, e
 
         elif etype == 'metrics':
             if not content: continue
-            pdf.set_font('Arial', 'B', 8)
+            pdf.set_font('Helvetica', 'B', 8)
             pdf.set_text_color(0, 0, 0)
             w = usable_width / len(content)
             for metric in content:
@@ -247,4 +247,4 @@ def generate_ordered_pdf(report_title: str, period_string: str, currency: str, e
 
             pdf.set_y(max(end_y_table, start_y + half_width * 1.0) + 5)
 
-    return pdf.output(dest='S').encode('latin-1', errors='ignore')
+    return bytes(pdf.output())
