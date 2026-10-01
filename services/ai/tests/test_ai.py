@@ -370,3 +370,13 @@ def test_a_long_list_is_trimmed_at_any_depth(
     assert 'no mostrados' in sent
     # The structure survives: it is still days with stops, only shorter.
     assert 'stops' in sent and 'Cliente 0' in sent
+
+
+@pytest.mark.parametrize('view', ['objectives', 'stock'])
+def test_every_view_the_portal_explains_is_known(view):
+    '''
+        The portal mounts an explain button on Cumplimiento and on Stock. Both
+        views were missing here, so the request died as a 422 before reaching
+        the model and the portal printed the error list as "[object Object]".
+    '''
+    assert ViewName(view).value == view
