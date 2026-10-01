@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const currentMap = T.createMap('currentMap');
     const optimizedMap = T.createMap('optimizedMap');
-    const state = { plans: [], study: null };
+    const state = { plans: [], study: null, page: 0 };
 
     (function defaultRepeatDate() {
         const tomorrow = new Date();
@@ -84,9 +84,18 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#optimizeAcceptButton').disabled = study.already_optimal;
     }
 
-    function paintTable(study) {
+    // Ten rows per page, like every other table in the portal.
+    const STOPS_PER_PAGE = 10;
+
+    function paintTable(study, page = 0) {
+        const stops = study.optimized.stops;
+        const pages = Math.max(1, Math.ceil(stops.length / STOPS_PER_PAGE));
+        state.page = Math.min(Math.max(page, 0), pages - 1);
+        const from = state.page * STOPS_PER_PAGE;
+
+        const shown = stops.slice(from, from + STOPS_PER_PAGE);
         const tbody = qs('#optimizeTable tbody');
-        tbody.innerHTML = study.optimized.stops.map((stop) => {
+        tbody.innerHTML = shown.map((stop) => {
             const moved = stop.order - stop.original_order;
             const label = moved === 0 ? 'igual'
                 : (moved < 0 ? `sube ${Math.abs(moved)}` : `baja ${moved}`);
@@ -95,7 +104,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="numeric">${stop.original_order}</td>` +
                 `<td>${label}</td></tr>`;
         }).join('');
+        // Keep the height steady on the last page, so the card does not jump.
+        if (stops.length > STOPS_PER_PAGE) {
+            tbody.innerHTML += '<tr class="row-filler"><td colspan="4">&nbsp;</td></tr>'
+                .repeat(STOPS_PER_PAGE - shown.length);
+        }
+
+        qs('#optimizeCount').textContent = stops.length === 1
+            ? '1 parada'
+            : `${stops.length} paradas`;
+        qs('#optimizePage').textContent = `${state.page + 1} / ${pages}`;
+        qs('#optimizePrev').disabled = state.page === 0;
+        qs('#optimizeNext').disabled = state.page >= pages - 1;
+        qs('#optimizePager').hidden = stops.length <= STOPS_PER_PAGE;
     }
+
+    qs('#optimizePrev').addEventListener('click', () => paintTable(state.study, state.page - 1));
+    qs('#optimizeNext').addEventListener('click', () => paintTable(state.study, state.page + 1));
 
     qs('#optimizeButton').addEventListener('click', async () => {
         const planId = qs('#optimizePlan').value;

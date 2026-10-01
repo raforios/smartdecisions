@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="/js/config.js?v=3db97325c2"></script>
     <script src="/js/auth.js?v=514e2dbfb8" defer></script>
-    <script src="/js/api.js?v=91a5d11ed5" defer></script>
+    <script src="/js/api.js?v=9d954a6ae0" defer></script>
     <script src="/js/ui.js?v=bd318da6b9" defer></script>
     <script src="/js/session.js?v=91bb432af9" defer></script>
     <script src="/js/ai.js?v=ee4edb4da5" defer></script>
@@ -26,7 +26,7 @@
     <script src="/routes/routes_plans.js?v=accfba98fe" defer></script>
     <script src="/routes/routes_stock.js?v=26dcb8e1ce" defer></script>
     <script src="/routes/routes_live.js?v=6dd5389b43" defer></script>
-    <script src="/routes/routes_optimize.js?v=3d78d56bb0" defer></script>
+    <script src="/routes/routes_optimize.js?v=29e1178874" defer></script>
     <script src="/routes/routes_compare.js?v=7c9b4d7215" defer></script>
 </head>
 <body>
@@ -429,6 +429,16 @@
                                 </tr></thead>
                                 <tbody></tbody>
                             </table>
+                        </div>
+                        <div class="pager" id="optimizePager" hidden>
+                            <span class="pager-count" id="optimizeCount"></span>
+                            <div class="pager-controls">
+                                <button type="button" class="btn btn-ghost btn-small"
+                                        id="optimizePrev">← Anterior</button>
+                                <span class="pager-page" id="optimizePage"></span>
+                                <button type="button" class="btn btn-ghost btn-small"
+                                        id="optimizeNext">Siguiente →</button>
+                            </div>
                         </div>
                     </div>
                 </section>

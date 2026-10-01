@@ -35,7 +35,10 @@
         }
 
         if (!response.ok) {
-            const detail = payload && (payload.detail || payload.message);
+            const raw = payload && (payload.detail || payload.message);
+            // A request the service rejects before running (FastAPI's 422)
+            // answers with a list of objects, which printed as "[object Object]".
+            const detail = typeof raw === 'string' ? raw : null;
             const message = detail || `Error ${response.status} en el servicio.`;
             const error = new Error(message);
             error.status = response.status;
