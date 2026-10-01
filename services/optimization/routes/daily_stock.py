@@ -3,10 +3,18 @@
     visit (`POST /routes/executed/points`) and draw the stock down.
 '''
 from boto3.resources.base import ServiceResource
-from fastapi import APIRouter, Depends, Path, Request, status
+from fastapi import APIRouter, Depends, Header, Path, Request, status
 
-from controllers.daily_stock import get_daily_stock_controller, load_daily_stock_controller
-from schemas.daily_stock import DailyStockLoadSchema, DailyStockResponseSchema
+from controllers.daily_stock import (
+    get_daily_stock_controller,
+    load_daily_stock_controller,
+    load_daily_stock_from_ingest_controller
+)
+from schemas.daily_stock import (
+    DailyStockFromIngestSchema,
+    DailyStockLoadSchema,
+    DailyStockResponseSchema
+)
 from schemas.localization import FIELD_ROLES, MANAGEMENT_ROLES
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
@@ -41,6 +49,38 @@ async def load_daily_stock_endpoint(
         dynamodb_resource = dynamodb_resource,
         load = load,
         current_user = current_user,
+        request = request
+    )
+
+
+@router.post(
+    '/stock/day/from-ingest',
+    response_model = DailyStockResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Open the day from the stock file loaded in INGEST',
+    description = 'Takes the stock template the company already uploaded —the same file '
+                  'the analysis reads— and opens the chosen day with what is free to sell '
+                  'per product (on hand minus committed). Same replacement rule as the '
+                  'typed load.'
+)
+async def load_daily_stock_from_ingest_endpoint(
+    request: Request,
+    source: DailyStockFromIngestSchema,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> DailyStockResponseSchema:
+    '''
+        Endpoint to open the day from the INGEST stock file.
+    '''
+    message = (f'User: {current_user}. Opening stock of {source.date} from '
+               f'dataset {source.dataset_id}.')
+    logger.info(message)
+    return await load_daily_stock_from_ingest_controller(
+        dynamodb_resource = dynamodb_resource,
+        source = source,
+        current_user = current_user,
+        auth_token = authorization,
         request = request
     )
 

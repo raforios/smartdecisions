@@ -4,6 +4,7 @@
 import pandas as pd
 import pytest
 
+from services import affinity
 from services.affinity import compute_opportunities
 
 
@@ -122,3 +123,31 @@ def test_empty_dataframe_returns_zero_opportunities() -> None:
     assert not opportunities
     assert summary.total_opportunities == 0
     assert summary.affinity_rules_evaluated == 0
+
+
+def test_rules_reach_the_pdv_loop_as_records(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''
+        The rules are matched against every PdV, so they must reach that loop
+        as plain records. Walking the DataFrame with `iterrows()` per PdV took
+        118 s on the Lambda for 11 180 rules and 274 PdVs, past the 29 s of API
+        Gateway, and Oportunidades answered "Service Unavailable".
+    '''
+    seen = []
+    original = affinity._candidates_for_pdv # pylint: disable=protected-access
+
+    def _spy(
+        basket: affinity._PdvBasket, # pylint: disable=protected-access
+        data: affinity._EngineData # pylint: disable=protected-access
+    ) -> list:
+        seen.append(type(data.rules))
+        return original(basket, data)
+
+    monkeypatch.setattr(affinity, '_candidates_for_pdv', _spy)
+    opportunities, _ = compute_opportunities(
+        dataframe = _sales_frame(),
+        min_support = 0.1,
+        min_lift = 1.0,
+        top_n_per_pdv = 10
+    )
+    assert seen and all(kind is list for kind in seen)
+    assert any(opp.pdv_id == 'PDV-3' for opp in opportunities)

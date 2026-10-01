@@ -9,25 +9,38 @@
 '''
 from typing import Dict, List
 
+import requests
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
 
 from models.daily_stock import DailyStockItem
 from schemas.daily_stock import (
+    DailyStockFromIngestSchema,
     DailyStockLoadSchema,
     DailyStockResponseSchema,
     SaleItemSchema,
     StockError,
+    StockItemLoadSchema,
     StockItemResponseSchema
 )
 from services.common import from_dynamo, now_iso, to_dynamo
 from services.crud import query_by_partition
 from services.environment import load_and_validate_env_vars
-from services.exceptions import InvalidInputError
+from services.exceptions import (
+    InvalidInputError,
+    ResourceNotFoundError,
+    ServiceUnavailableError
+)
 from services.logger_config import custom_logger as logger
 
-_SETTINGS = load_and_validate_env_vars({'DYNAMODB_TABLE_NAME_OPTIMIZATION_DAILY_STOCK': str})
+_SETTINGS = load_and_validate_env_vars({
+    'DYNAMODB_TABLE_NAME_OPTIMIZATION_DAILY_STOCK': str,
+    'INGEST_SERVICE_URL': str,
+    'INGEST_REQUEST_TIMEOUT_SECONDS': int
+})
 DAILY_STOCK_TABLE = _SETTINGS['DYNAMODB_TABLE_NAME_OPTIMIZATION_DAILY_STOCK']
+INGEST_SERVICE_URL = _SETTINGS['INGEST_SERVICE_URL'].rstrip('/')
+INGEST_REQUEST_TIMEOUT_SECONDS = _SETTINGS['INGEST_REQUEST_TIMEOUT_SECONDS']
 
 
 def build_stock_key(
@@ -239,3 +252,70 @@ def draw_down_stock(
         raise InvalidInputError(detail = code.value) from error
     message = f'Sale drawn from stock of {day}: {merged}.'
     logger.info(message)
+
+
+def fetch_stock_from_ingest(
+    source: DailyStockFromIngestSchema,
+    auth_token: str
+) -> DailyStockLoadSchema:
+    '''
+        The day's opening stock, asked of INGEST, which owns the stock file.
+
+        The company fills one stock template and both modules read it: the
+        analysis for coverage, the route for what a seller can still sell. What
+        opens the day is `available` —on hand minus what the ERP already
+        committed— because a box promised to someone else is not on the truck.
+
+        The caller's token is forwarded so INGEST answers for the real user and
+        applies its own ownership rule.
+
+        Args:
+            source (DailyStockFromIngestSchema): Dataset and day to open.
+            auth_token (str): The caller's Authorization header.
+
+        Returns:
+            DailyStockLoadSchema: The day, ready for `load_daily_stock`.
+
+        Raises:
+            ResourceNotFoundError: NO_STOCK_FOR_DAY when INGEST holds nothing
+                for that dataset and day.
+            ServiceUnavailableError: STOCK_SOURCE_UNAVAILABLE when INGEST
+                cannot be reached or refuses.
+    '''
+    try:
+        response = requests.get(
+            f'{INGEST_SERVICE_URL}/v1/ingest/{source.dataset_id}/stock',
+            headers = {'Authorization': auth_token},
+            params = {'date': source.date},
+            timeout = INGEST_REQUEST_TIMEOUT_SECONDS
+        )
+    except requests.exceptions.RequestException as error:
+        error_msg = f'Network error asking INGEST for the stock of {source.date}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(
+            detail = StockError.STOCK_SOURCE_UNAVAILABLE.value
+        ) from error
+
+    if response.status_code == 404:
+        error_msg = (f'INGEST holds no stock for dataset {source.dataset_id} '
+                     f'on {source.date}: {response.text[:200]}')
+        logger.warning(error_msg)
+        raise ResourceNotFoundError(detail = StockError.NO_STOCK_FOR_DAY.value)
+    if not response.ok:
+        error_msg = (f'INGEST refused the stock of {source.date}: '
+                     f'status={response.status_code} body={response.text[:200]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = StockError.STOCK_SOURCE_UNAVAILABLE.value)
+
+    items = (response.json() or {}).get('items') or []
+    return DailyStockLoadSchema(
+        date = source.date,
+        items = [
+            StockItemLoadSchema(
+                sku = item['product_id'],
+                product_name = item.get('product_name'),
+                quantity = item['available']
+            )
+            for item in items
+        ]
+    )

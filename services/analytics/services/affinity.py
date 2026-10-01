@@ -40,7 +40,7 @@ class _EngineData:
         Read-only bundle of the pre-computed indices shared across every PdV
         while building opportunities.
     '''
-    rules: pd.DataFrame
+    rules: List[Dict[str, Any]]
     avg_units: pd.Series
     avg_amount: pd.Series
     product_names: Dict[str, str]
@@ -320,7 +320,7 @@ def _drop_size_for(
 
 def _build_candidate(
     basket: _PdvBasket,
-    rule: pd.Series,
+    rule: Dict[str, Any],
     consequent_id: str,
     antecedents: set,
     data: _EngineData
@@ -363,10 +363,15 @@ def _candidates_for_pdv(
         Builds every candidate opportunity for a single PdV: rules only fire
         when the PdV already buys all antecedents, and products it already
         buys are never recommended.
+
+        The rules arrive as plain records, not as the DataFrame: this loop runs
+        once per rule for every PdV, and `iterrows()` builds a Series per row.
+        With 11 180 rules and 274 PdVs that was 118 s on the Lambda, past the
+        29 s API Gateway limit, so the screen answered "Service Unavailable".
     '''
     candidates: List[Dict[str, Any]] = []
-    for _, rule in data.rules.iterrows():
-        antecedents = set(rule['antecedents'])
+    for rule in data.rules:
+        antecedents = rule['antecedents']
         if not antecedents.issubset(basket.products_bought):
             continue
         for consequent_id in set(rule['consequents']):
@@ -501,7 +506,7 @@ def compute_opportunities(
     rules = _compute_affinity_rules(transactions, min_support, min_lift)
     avg_units, avg_amount = _compute_drop_size(working)
     data = _EngineData(
-        rules = rules,
+        rules = rules.to_dict('records'),
         avg_units = avg_units,
         avg_amount = avg_amount,
         product_names = _build_product_name_index(working),

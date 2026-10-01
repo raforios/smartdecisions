@@ -19,6 +19,8 @@ class StockError(str, Enum):
     DUPLICATE_SKU = 'DUPLICATE_SKU'
     STOCK_NOT_LOADED = 'STOCK_NOT_LOADED'
     INSUFFICIENT_STOCK = 'INSUFFICIENT_STOCK'
+    NO_STOCK_FOR_DAY = 'NO_STOCK_FOR_DAY'
+    STOCK_SOURCE_UNAVAILABLE = 'STOCK_SOURCE_UNAVAILABLE'
 
 
 class StockItemLoadSchema(BaseModel):
@@ -36,6 +38,17 @@ class DailyStockLoadSchema(BaseModel):
     '''
     date: str = Field(..., pattern = r'^\d{4}-\d{2}-\d{2}$', description = 'YYYY-MM-DD.')
     items: List[StockItemLoadSchema] = Field(..., min_length = 1)
+
+
+class DailyStockFromIngestSchema(BaseModel):
+    '''
+        Open the day from the stock file already loaded in INGEST.
+
+        The same file the analysis reads: the company fills one stock template
+        and both modules use it, instead of typing the day's stock again here.
+    '''
+    dataset_id: str = Field(..., min_length = 8, max_length = 64)
+    date: str = Field(..., pattern = r'^\d{4}-\d{2}-\d{2}$', description = 'YYYY-MM-DD.')
 
 
 class SaleItemSchema(BaseModel):

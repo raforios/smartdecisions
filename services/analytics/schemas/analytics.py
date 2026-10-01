@@ -284,6 +284,22 @@ class PeriodInfo(BaseModel):
     to_date: Optional[str] = None
     filtered: bool = False
     rows: int = 0
+    currency: Optional['CurrencyApplied'] = None
+
+
+class CurrencyApplied(BaseModel):
+    '''
+        The currency a report was read in, present only when it was converted.
+
+        `rows_without_rate` travels because rows older than the first published
+        rate keep their original amount: the screen has to say so, or a mixed
+        total reads as if it were all in dollars.
+    '''
+    currency: str
+    base_currency: str
+    rows_converted: int = Field(0, ge = 0)
+    rows_total: int = Field(0, ge = 0)
+    rows_without_rate: int = Field(0, ge = 0)
 
 
 # --- Growth (month-over-month, year-over-year, seasonality) ---

@@ -300,7 +300,7 @@ def apply_date_range(
     dataframe: pd.DataFrame,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None
-) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+) -> Tuple[pd.DataFrame, PeriodInfo]:
     '''
         Restricts a sales frame to a date window and describes the result.
 
@@ -314,9 +314,8 @@ def apply_date_range(
             date_to (str | None): Inclusive upper bound, 'YYYY-MM-DD'.
 
         Returns:
-            Tuple[pd.DataFrame, Dict[str, Any]]: The scoped frame and the period
-                descriptor ('available_from/hasta', 'from_date', 'to_date',
-                'filtered', 'rows').
+            Tuple[pd.DataFrame, PeriodInfo]: The scoped frame and the period
+                descriptor (available range, applied window, filtered, rows).
 
         Raises:
             InvalidInputError: If a boundary is not a valid date, or if the

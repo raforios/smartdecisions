@@ -6,6 +6,7 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from schemas.analytics import (
+    CurrencyApplied,
     AnalyticsPdvResponse,
     AnalyticsResultsResponse,
     RunListResponse,
@@ -15,6 +16,7 @@ from schemas.analytics import (
     CommercialSummaryResponse,
     ForecastResponse,
     Opportunity,
+    PeriodInfo,
     PortfolioResponse,
     SegmentationResponse
 )
@@ -141,7 +143,7 @@ def _scoped_dataframe(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     params: Optional[Dict[str, Any]] = None
-) -> Tuple[Any, Dict[str, Any]]:
+) -> Tuple[Any, PeriodInfo]:
     '''
         Loads the normalized dataset from S3 and narrows it to the requested
         date window.
@@ -158,7 +160,7 @@ def _scoped_dataframe(
                 currency.
 
         Returns:
-            Tuple[Any, Dict[str, Any]]: The scoped DataFrame and the period
+            Tuple[Any, PeriodInfo]: The scoped DataFrame and the period
                 descriptor.
 
         Raises:
@@ -187,7 +189,9 @@ def _scoped_dataframe(
         date_to = options.get('date_to')
     )
     if applied:
-        period = {**period, 'currency': applied}
+        # `period` is a PeriodInfo, not a dict: spreading it raised TypeError
+        # and every report asked in dollars answered 500.
+        period = period.model_copy(update = {'currency': CurrencyApplied(**applied)})
     return scoped, period
 
 

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from schemas.ingest import StockSummary, ValidationIssue, ValidationRule
+from schemas.ingest import StockDayItem, StockSummary, ValidationIssue, ValidationRule
 from services.ingest import fill_product_ids, normalize_frame
 from services.ingest_contract import (
     STOCK_HEADER_LOOKUP,
@@ -36,6 +36,8 @@ from services.logger_config import custom_logger as logger
 _PRODUCT = 'product_id'
 _ON_HAND = 'on_hand'
 _SNAPSHOT_DATE = 'snapshot_date'
+_COMMITTED = 'committed'
+_PRODUCT_NAME = 'product_name'
 
 
 @dataclass(frozen = True)
@@ -202,3 +204,54 @@ def parse_frame(
             StockResult: Accepted rows, issues and summary.
     '''
     return validate_rows(prepare_rows(normalize_frame(frame, STOCK_HEADER_LOOKUP)), sales, origin)
+
+
+def stock_of_day(
+    stored: pd.DataFrame,
+    day: str
+) -> list[StockDayItem]:
+    '''
+        The products of the stored snapshot on one day, with what is free to sell.
+
+        The stored file comes back through FILES as text, so dates and numbers
+        are parsed here before filtering. A product with several rows that day
+        —one per warehouse— is summed: the route sells from the company's
+        stock, not from one shelf.
+
+        Args:
+            stored (pd.DataFrame): Every snapshot row the dataset holds.
+            day (str): The day asked for, YYYY-MM-DD.
+
+        Returns:
+            list[StockDayItem]: One item per product, empty when that day was
+                never loaded.
+    '''
+    if stored.empty or _SNAPSHOT_DATE not in stored.columns:
+        return []
+
+    columns = [_SNAPSHOT_DATE, _PRODUCT, _PRODUCT_NAME, _ON_HAND, _COMMITTED]
+    frame = stored.reindex(columns = columns)
+    frame = frame[pd.to_datetime(frame[_SNAPSHOT_DATE], errors = 'coerce')
+                  .dt.strftime('%Y-%m-%d') == day]
+    if frame.empty:
+        return []
+
+    grouped = frame.assign(
+        on_hand = pd.to_numeric(frame[_ON_HAND], errors = 'coerce').fillna(0.0),
+        committed = pd.to_numeric(frame[_COMMITTED], errors = 'coerce').fillna(0.0)
+    ).groupby(_PRODUCT, sort = True).agg(
+        product_name = (_PRODUCT_NAME, 'first'),
+        on_hand = (_ON_HAND, 'sum'),
+        committed = (_COMMITTED, 'sum')
+    )
+    return [
+        StockDayItem(
+            product_id = str(product_id),
+            product_name = None if pd.isna(row.product_name) else str(row.product_name),
+            on_hand = round(float(row.on_hand), AMOUNT_DECIMALS),
+            committed = round(float(row.committed), AMOUNT_DECIMALS),
+            available = round(max(float(row.on_hand) - float(row.committed), 0.0),
+                              AMOUNT_DECIMALS)
+        )
+        for product_id, row in grouped.iterrows()
+    ]

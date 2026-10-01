@@ -12,9 +12,11 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from fastapi import HTTPException
 
 from controllers import channels
 from controllers import common
+from controllers import stock as stock_controllers
 from services.ingest_files import read_file
 from schemas.channels import (
     CollectionRowSchema,
@@ -243,6 +245,50 @@ def test_a_stock_push_replaces_the_day_and_leaves_the_others(world):
     stored = _stored_rows(world).sort_values('snapshot_date')
     assert len(stored) == 2
     assert list(stored['on_hand']) == [10, 5]
+
+
+def test_the_stock_of_one_day_is_read_back_with_what_is_free(world):
+    '''
+        The route module opens its day from the file INGEST stored, so the
+        day it asks for has to come back alone and with `on_hand - committed`
+        as what a seller can still sell. A day never loaded is a code, not an
+        empty day that would let the route sell from nothing.
+    '''
+    asyncio.run(channels.push_stock_controller(
+        dynamodb_resource = None,
+        dataset_id = DATASET_ID,
+        push = StockPushSchema(rows = [
+            StockRowSchema(snapshot_date = '2026-02-14', product_name = 'Producto 1',
+                           on_hand = 10),
+            StockRowSchema(snapshot_date = '2026-02-15', product_name = 'Producto 1',
+                           on_hand = 7, committed = 2),
+            StockRowSchema(snapshot_date = '2026-02-15', product_name = 'Producto 2',
+                           on_hand = 4),
+        ]),
+        current_user = OWNER,
+        auth_token = 'Bearer t',
+        request = None
+    ))
+
+    def _read(day: str) -> Any:
+        return asyncio.run(stock_controllers.get_stock_day_controller(
+            dynamodb_resource = None,
+            dataset_id = DATASET_ID,
+            day = day,
+            current_user = OWNER,
+            auth_token = 'Bearer t',
+            request = None
+        ))
+
+    with patch.object(stock_controllers, 'get_owned_dataset', lambda **kwargs: world['dataset']):
+        response = _read('2026-02-15')
+        with pytest.raises(HTTPException) as missing:
+            _read('2026-02-16')
+
+    assert [(item.product_id, item.on_hand, item.available) for item in response.items] == [
+        ('Producto 1', 7.0, 5.0), ('Producto 2', 4.0, 4.0)
+    ]
+    assert missing.value.detail == 'NO_STOCK_FOR_DAY'
 
 
 def test_a_visits_push_feeds_the_client_master(world): # pylint: disable=unused-argument

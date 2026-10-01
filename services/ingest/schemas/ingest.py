@@ -349,6 +349,7 @@ class IngestError(str, Enum):
     FILES_SERVICE_REJECTED_UPLOAD = 'FILES_SERVICE_REJECTED_UPLOAD'
     DATASET_NOT_FOUND = 'DATASET_NOT_FOUND'
     NO_REJECTED_ROWS = 'NO_REJECTED_ROWS'
+    NO_STOCK_FOR_DAY = 'NO_STOCK_FOR_DAY'
 
 
 class ValidationIssue(BaseModel):
@@ -478,6 +479,33 @@ class StockResponse(BaseModel):
     )
     summary: StockSummary = StockSummary()
     issues: List[ValidationIssue] = Field(default_factory = list)
+
+
+class StockDayItem(BaseModel):
+    '''
+        One product of the snapshot of a single day.
+
+        `available` is `on_hand - committed`: the units the ERP has not already
+        promised, which are the ones a seller can still sell on the street.
+    '''
+    product_id: str
+    product_name: Optional[str] = None
+    on_hand: float = Field(..., ge = 0)
+    committed: float = Field(0.0, ge = 0)
+    available: float = Field(..., ge = 0)
+
+
+class StockDayResponse(BaseModel):
+    '''
+        The stored snapshot of one day, for GET /v1/ingest/{dataset_id}/stock.
+
+        It exists so a service that needs the stock asks INGEST for it instead
+        of reading the file: the route module opens its day with the same file
+        the analysis reads.
+    '''
+    dataset_id: str
+    date: str = Field(..., description = 'YYYY-MM-DD.')
+    items: List[StockDayItem] = Field(default_factory = list)
 
 
 class ObjectivesResponse(BaseModel):

@@ -6,10 +6,16 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
-from controllers.common import CompanionSpec, load_sales_frame, store_companion
-from schemas.ingest import StockResponse
+from controllers.common import (
+    CompanionSpec,
+    load_sales_frame,
+    store_companion,
+    stored_companion_frame
+)
+from schemas.ingest import IngestError, StockDayResponse, StockResponse
+from services.exceptions import ResourceNotFoundError
 from services.ingest_utils import get_owned_dataset
-from services.stock import parse_and_validate
+from services.stock import parse_and_validate, stock_of_day
 from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
@@ -68,3 +74,40 @@ async def ingest_stock_controller(
     result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset, auth_token))
     return await store_companion(dynamodb_resource, dataset, result, SPEC,
                                  (filename, auth_token))
+
+
+@handle_service_errors('INGEST')
+async def get_stock_day_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    day: str,
+    current_user: str,
+    auth_token: str,
+    request: Request # pylint: disable=unused-argument
+) -> StockDayResponse:
+    '''
+        The stored snapshot of one day, read back through FILES.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            dataset_id (str): Sales dataset the snapshot belongs to.
+            day (str): The day asked for, YYYY-MM-DD.
+            current_user (str): Authenticated caller and owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+
+        Returns:
+            StockDayResponse: One item per product of that day.
+
+        Raises:
+            ResourceNotFoundError: NO_STOCK_FOR_DAY when nothing was loaded for it.
+    '''
+    dataset = get_owned_dataset(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        owner_email = current_user
+    )
+    stored = stored_companion_frame(dataset, SPEC, auth_token)
+    items = stock_of_day(stored, day) if stored is not None else []
+    if not items:
+        raise ResourceNotFoundError(detail = IngestError.NO_STOCK_FOR_DAY.value)
+    return StockDayResponse(dataset_id = dataset_id, date = day, items = items)

@@ -5,6 +5,8 @@
     status codes, DTO shapes and error codes — including the path parameters
     that arrive grouped in `PlannedPointRef`.
 '''
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
 from moto import mock_aws
@@ -381,6 +383,60 @@ def test_daily_stock_load_sale_on_visit_and_remaining(client):
     assert refused.status_code == 400
     assert refused.json()['detail'] == 'INSUFFICIENT_STOCK'
     assert client.get(f'{EXECUTED}/{started["id"]}').json()['points_count'] == 1
+
+
+def _ingest_answer(
+    status_code: int,
+    body: dict
+) -> Mock:
+    '''
+        What `requests.get` returns when INGEST answers.
+    '''
+    return Mock(status_code = status_code, ok = status_code < 400, text = str(body),
+                json = Mock(return_value = body))
+
+
+def test_the_day_opens_from_the_stock_file_loaded_in_ingest(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''
+        The stock template is one file for the whole product: the route opens
+        its day from what INGEST stored, with what is free to sell —on hand
+        minus committed— and a day the file does not have answers its code.
+    '''
+    asked: list = []
+
+    def _ingest(
+        url: str,
+        **kwargs
+    ) -> Mock:
+        asked.append((url, kwargs['params']['date'], kwargs['headers']['Authorization']))
+        if kwargs['params']['date'] != '2026-10-01':
+            return _ingest_answer(404, {'detail': 'NO_STOCK_FOR_DAY'})
+        return _ingest_answer(200, {'dataset_id': 'ds-12345678', 'date': '2026-10-01', 'items': [
+            {'product_id': 'Agua 2L', 'product_name': 'Agua 2L', 'on_hand': 10,
+             'committed': 4, 'available': 6},
+            {'product_id': 'Pan', 'product_name': 'Pan', 'on_hand': 3,
+             'committed': 0, 'available': 3}
+        ]})
+
+    monkeypatch.setattr(daily_stock.requests, 'get', _ingest)
+    act_as('manager')
+    opened = client.post('/v1/optimization/stock/day/from-ingest',
+                         json = {'dataset_id': 'ds-12345678', 'date': '2026-10-01'},
+                         headers = {'Authorization': 'Bearer t'})
+    assert opened.status_code == 200, opened.text
+    by_sku = {row['sku']: row['opening_quantity'] for row in opened.json()['items']}
+    assert by_sku == {'Agua 2L': 6, 'Pan': 3}
+    assert asked[0][0].endswith('/v1/ingest/ds-12345678/stock')
+    assert asked[0][2] == 'Bearer t'
+
+    missing = client.post('/v1/optimization/stock/day/from-ingest',
+                          json = {'dataset_id': 'ds-12345678', 'date': '2026-10-02'},
+                          headers = {'Authorization': 'Bearer t'})
+    assert missing.status_code == 404
+    assert missing.json()['detail'] == 'NO_STOCK_FOR_DAY'
 
 
 # ---------------------------------------------------------------------------

@@ -19,13 +19,14 @@ from controllers.ingest import (
     ingest_excel_controller,
     ingest_excel_from_s3_controller
 )
-from controllers.stock import ingest_stock_controller
+from controllers.stock import get_stock_day_controller, ingest_stock_controller
 from controllers.visits import ingest_visits_controller
 from schemas.ingest import (
     CollectionsResponse,
     ObjectivesResponse,
     TemplateName,
     IngestError,
+    StockDayResponse,
     StockResponse,
     VisitsResponse,
     IngestFromS3Request,
@@ -332,6 +333,43 @@ async def ingest_stock_endpoint(
         dataset_id = dataset_id,
         file_bytes = file_bytes,
         filename = filename,
+        current_user = current_user,
+        auth_token = authorization,
+        request = request
+    )
+
+
+@router.get(
+    '/{dataset_id}/stock',
+    response_model = StockDayResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Read the stock snapshot of one day',
+    description = (
+        'Returns the products of the stored snapshot on the given day, with '
+        'what is free to sell (`on_hand - committed`). It is how another '
+        'service gets the stock: the route module opens its day from the same '
+        'file the analysis reads, instead of a second copy of it.'
+    )
+)
+async def get_stock_day_endpoint(
+    request: Request,
+    dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
+    day: str = Query(..., alias = 'date', pattern = r'^\d{4}-\d{2}-\d{2}$',
+                     description = 'YYYY-MM-DD.'),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> StockDayResponse:
+    '''
+        Endpoint to read the stock of one day.
+    '''
+    message = f'User: {current_user}. Reading stock of {day} for dataset {dataset_id}.'
+    logger.info(message)
+
+    return await get_stock_day_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        day = day,
         current_user = current_user,
         auth_token = authorization,
         request = request

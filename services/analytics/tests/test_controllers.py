@@ -703,3 +703,23 @@ def test_reading_the_commercial_policy_shows_the_defaults_in_force(monkeypatch):
 
     assert isinstance(response, CommercialPolicyResponse)
     assert (response.yellow_from, response.green_from) == (0.5, 1.0)
+
+
+def test_a_report_in_dollars_says_so_and_names_the_rows_left_unconverted(
+    dataset: str,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''
+        The controller put the conversion facts in the period, but PeriodInfo
+        had no field for them and Pydantic dropped them: a report in dollars
+        could not tell the screen which rows kept their bolivianos.
+    '''
+    applied = {'currency': 'USD', 'base_currency': 'BOB', 'rows_converted': 9,
+               'rows_total': 10, 'rows_without_rate': 1}
+    monkeypatch.setattr(controllers, 'convert_frame',
+                        lambda **kwargs: (kwargs['dataframe'], applied))
+
+    response = _call(controllers.commercial_summary_controller, dataset, {'currency': 'USD'})
+
+    assert response.period.currency.currency == 'USD'
+    assert response.period.currency.rows_without_rate == 1
