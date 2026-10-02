@@ -6,7 +6,8 @@
     frontend can swap the base URL with no payload changes.
 '''
 from enum import Enum
-from typing import Optional
+from datetime import date
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.environment import load_and_validate_env_vars
@@ -34,6 +35,7 @@ class OptimizationError(str, Enum):
     INVALID_ROW = 'INVALID_ROW'
     INVALID_POINT = 'INVALID_POINT'
     ROUTING_SERVICE_UNAVAILABLE = 'ROUTING_SERVICE_UNAVAILABLE'
+    NO_SELLERS_IN_FILE = 'NO_SELLERS_IN_FILE'
     ROUTING_SERVICE_NO_ROUTE = 'ROUTING_SERVICE_NO_ROUTE'
 
 
@@ -190,3 +192,60 @@ class RoutePlanResponse(BaseModel):
     seller: Optional[str] = None
     total_clients: int = 0
     days: list[DayRoute] = []
+
+
+class PlansBySellerSchema(BaseModel):
+    '''
+        Body of POST /v1/optimization/plan/{dataset_id}/by-seller.
+
+        One plan per seller, each from that seller's own portfolio in the file:
+        the clients they sold to, split into days by proximity. `day` is the
+        number of the day within EACH seller's split, not a shared group of
+        clients, because two portfolios never share their geography.
+    '''
+    days: int = Field(
+        default = DEFAULT_PLAN_DAYS, ge = 1, le = 12,
+        description = 'How many visit days each portfolio is spread over.'
+    )
+    day: int = Field(..., ge = 1, le = 12, description = 'Which of those days to plan.')
+    plan_date: date = Field(..., description = 'The day the plans are meant to be run.')
+    date_from: Optional[str] = Field(
+        default = None, pattern = r'^\d{4}-\d{2}-\d{2}$',
+        description = 'Inclusive start of the period read, YYYY-MM-DD.'
+    )
+    date_to: Optional[str] = Field(
+        default = None, pattern = r'^\d{4}-\d{2}-\d{2}$',
+        description = 'Inclusive end of the period read, YYYY-MM-DD.'
+    )
+    sellers: Optional[List[str]] = Field(
+        default = None,
+        description = 'Only these sellers. Left out, every seller in the file.'
+    )
+
+
+class SellerPlanSchema(BaseModel):
+    '''
+        One plan created for one seller.
+    '''
+    seller: str
+    id: str
+    route_code: str
+    stops: int = Field(..., ge = 1)
+
+
+class PlansBySellerResponse(BaseModel):
+    '''
+        What the split created, and the sellers it could not plan and why.
+    '''
+    dataset_id: str
+    day: int
+    plan_date: date
+    created: List[SellerPlanSchema] = Field(default_factory = list)
+    without_stops: List[str] = Field(
+        default_factory = list,
+        description = 'Sellers with no placeable client on that day of their split.'
+    )
+    already_planned: List[str] = Field(
+        default_factory = list,
+        description = 'Sellers who already had a plan with that code: left as they were.'
+    )

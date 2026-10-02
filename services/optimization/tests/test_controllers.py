@@ -7,13 +7,19 @@
 '''
 import asyncio
 from datetime import date, timedelta
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import Mock, patch
 
 import pandas as pd
 import pytest
+from fastapi import HTTPException
+from moto import mock_aws
 
-from schemas.optimization import RoutePlanResponse
+from schemas.optimization import PlansBySellerResponse, PlansBySellerSchema, RoutePlanResponse
 from controllers import optimization as controllers
+from services import localization, optimization_utils
+from services import optimization as optimization_service
+from tests.dynamo_helpers import build_resource
 
 
 def _sales_frame() -> pd.DataFrame:
@@ -75,3 +81,70 @@ def test_route_plan_returns_days_with_ordered_stops(dataset):
     )
     assert all(stop.client and stop.segment for stop in first_day.stops)
     assert first_day.distance_km > 0
+
+
+def _plans_by_seller(
+    resource: Any,
+    dataset_id: str
+) -> PlansBySellerResponse:
+    '''
+        Runs the plans-by-seller controller for day 1 of a two-day split.
+
+        Args:
+            resource (Any): Mocked DynamoDB resource.
+            dataset_id (str): The dataset the fixture serves.
+
+        Returns:
+            PlansBySellerResponse: What the endpoint answers.
+    '''
+    return asyncio.run(controllers.plans_by_seller_controller(
+        dynamodb_resource = resource,
+        dataset_id = dataset_id,
+        body = PlansBySellerSchema(days = 2, day = 1, plan_date = date(2026, 10, 5)),
+        current_user = 'tester@bearsoft.com.bo',
+        request = None
+    ))
+
+
+def test_each_seller_gets_a_plan_from_their_own_portfolio(dataset):
+    '''
+        A plan for "everybody" put the whole team on one route and measured
+        each seller against all of it. Each plan now holds only the clients
+        the file says that seller sold to, and saving twice does not duplicate.
+        No call goes to OSRM: the public router is asked when a plan is
+        opened, not once per seller here.
+    '''
+    def _no_osrm(
+        *_args: Any,
+        **_kwargs: Any
+    ) -> None:
+        raise AssertionError('OSRM was called while splitting by seller')
+
+    frame = _sales_frame()
+    portfolios = {seller: set(rows['pos_id']) for seller, rows in frame.groupby('seller')}
+    with mock_aws(), patch.object(optimization_service, 'road_trip', _no_osrm):
+        resource = build_resource([(localization.PLANNED_ROUTES_TABLE, 'owner_email', 'id')])
+        first = _plans_by_seller(resource, dataset)
+        again = _plans_by_seller(resource, dataset)
+        stored = localization.list_planned_routes(resource, 'tester@bearsoft.com.bo')
+
+    assert sorted(plan.seller for plan in first.created) == ['Ana', 'Juan']
+    assert sorted(again.already_planned) == ['Ana', 'Juan'] and not again.created
+    assert len(stored) == 2
+    for plan in stored:
+        assert {stop['client_id'] for stop in plan['points']} <= portfolios[plan['seller']]
+        assert plan['plan_date'] == '2026-10-05'
+
+
+def test_a_dataset_of_another_owner_answers_like_a_missing_one():
+    '''`CLAUDE.md` §8: a foreign dataset and no dataset are indistinguishable.'''
+    table = Mock()
+    table.get_item.return_value = {'Item': {
+        'id': 'ds-1', 'owner_email': 'otra@empresa.com', 'status': 'validated'
+    }}
+    resource = Mock(Table = Mock(return_value = table))
+
+    with pytest.raises(HTTPException) as foreign:
+        optimization_utils.get_dataset_metadata(resource, 'ds-1', 'yo@empresa.com')
+    assert foreign.value.status_code == 404
+    assert optimization_utils.get_dataset_metadata(resource, 'ds-1')['id'] == 'ds-1'

@@ -38,6 +38,7 @@ from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
 from services.ingest_utils import from_dynamo, to_dynamo
 from services.logger_config import custom_logger as logger
+from services.sellers import register_sellers, sellers_from_frame
 from services.utils import get_current_time_gmt
 
 
@@ -399,7 +400,8 @@ def sync_master(
     source: ClientSource
 ) -> pd.DataFrame:
     '''
-        Runs both directions of the master against one validated frame.
+        Runs both directions of the master against one validated frame, and
+        registers the sellers the frame names in their own master.
 
         First the frame feeds the master —clients it does not know are created,
         fields it has empty are filled— and only then the master fills the
@@ -422,6 +424,15 @@ def sync_master(
         dynamodb_resource = dynamodb_resource,
         owner_email = owner_email,
         clients = clients_from_frame(frame, id_column, name_column),
+        source = source
+    )
+    # The sellers ride the same pass: every door that names a client in a
+    # sales or visits frame also names who serves it, and this is the one
+    # place all of them go through, so none of them can forget.
+    register_sellers(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = owner_email,
+        sellers = sellers_from_frame(frame),
         source = source
     )
     return enrich_frame(

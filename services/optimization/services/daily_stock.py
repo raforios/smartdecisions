@@ -9,7 +9,6 @@
 '''
 from typing import Dict, List
 
-import requests
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
 
@@ -31,16 +30,11 @@ from services.exceptions import (
     ResourceNotFoundError,
     ServiceUnavailableError
 )
+from services.ingest_directory import ingest_get
 from services.logger_config import custom_logger as logger
 
-_SETTINGS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_OPTIMIZATION_DAILY_STOCK': str,
-    'INGEST_SERVICE_URL': str,
-    'INGEST_REQUEST_TIMEOUT_SECONDS': int
-})
+_SETTINGS = load_and_validate_env_vars({'DYNAMODB_TABLE_NAME_OPTIMIZATION_DAILY_STOCK': str})
 DAILY_STOCK_TABLE = _SETTINGS['DYNAMODB_TABLE_NAME_OPTIMIZATION_DAILY_STOCK']
-INGEST_SERVICE_URL = _SETTINGS['INGEST_SERVICE_URL'].rstrip('/')
-INGEST_REQUEST_TIMEOUT_SECONDS = _SETTINGS['INGEST_REQUEST_TIMEOUT_SECONDS']
 
 
 def build_stock_key(
@@ -282,20 +276,10 @@ def fetch_stock_from_ingest(
             ServiceUnavailableError: STOCK_SOURCE_UNAVAILABLE when INGEST
                 cannot be reached or refuses.
     '''
-    try:
-        response = requests.get(
-            f'{INGEST_SERVICE_URL}/v1/ingest/{source.dataset_id}/stock',
-            headers = {'Authorization': auth_token},
-            params = {'date': source.date},
-            timeout = INGEST_REQUEST_TIMEOUT_SECONDS
-        )
-    except requests.exceptions.RequestException as error:
-        error_msg = f'Network error asking INGEST for the stock of {source.date}: {error}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = StockError.STOCK_SOURCE_UNAVAILABLE.value
-        ) from error
-
+    response = ingest_get(
+        f'/v1/ingest/{source.dataset_id}/stock', auth_token, {'date': source.date},
+        StockError.STOCK_SOURCE_UNAVAILABLE.value
+    )
     if response.status_code == 404:
         error_msg = (f'INGEST holds no stock for dataset {source.dataset_id} '
                      f'on {source.date}: {response.text[:200]}')

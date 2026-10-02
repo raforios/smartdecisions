@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Path, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.optimization import (
+    plans_by_seller_controller,
     route_plan_controller,
     bulk_upload_routes_controller,
     data_ordered_controller,
@@ -18,7 +19,10 @@ from controllers.optimization import (
     preparing_data_controller,
     simulation_algorithm_controller
 )
+from schemas.localization import MANAGEMENT_ROLES
 from schemas.optimization import (
+    PlansBySellerResponse,
+    PlansBySellerSchema,
     PlanQueryParams,
     RoutePlanResponse,
     BulkUploadResponse,
@@ -30,7 +34,7 @@ from schemas.optimization import (
 from routes.common import csv_upload_text
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
+from services.security import get_current_owner, require_roles
 
 router = APIRouter(prefix = '/v1/optimization', tags = ['Optimization'])
 
@@ -256,6 +260,41 @@ async def route_plan_endpoint(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
         params = query_params.model_dump(),
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.post(
+    '/plan/{dataset_id}/by-seller',
+    response_model = PlansBySellerResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'One plan per seller, from each seller\'s portfolio',
+    description = (
+        'Splits each seller\'s own clients —the ones the sales file says they '
+        'sold to— into days by proximity, and saves the requested day as that '
+        'seller\'s plan for the given date. The order is the local 2-opt tour: '
+        'the street geometry is drawn when a plan is opened, not once per '
+        'seller here.'
+    )
+)
+async def plans_by_seller_endpoint(
+    request: Request,
+    body: PlansBySellerSchema,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> PlansBySellerResponse:
+    '''
+        Endpoint creating one plan per seller from a dataset.
+    '''
+    message = (f'User: {current_user}. Plans by seller from dataset {dataset_id}: '
+               f'day {body.day} of {body.days}, for {body.plan_date}.')
+    logger.info(message)
+    return await plans_by_seller_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        body = body,
         current_user = current_user,
         request = request
     )

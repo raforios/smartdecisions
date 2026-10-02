@@ -52,6 +52,20 @@ def dynamodb_fixture():
         ])
 
 
+@pytest.fixture(name = 'linked_users', autouse = True)
+def linked_users_fixture(monkeypatch: pytest.MonkeyPatch) -> set:
+    '''
+        INGEST's seller directory, in memory: who each seller of the files
+        signs in as. Empty unless a test links someone.
+
+        Returns:
+            set: The emails linked to the plan's seller, to fill in.
+    '''
+    linked: set = set()
+    monkeypatch.setattr(stats, 'users_of_seller', lambda seller, token: set(linked))
+    return linked
+
+
 @pytest.fixture(name = 'plan')
 def plan_fixture(dynamodb):
     '''An ACTIVE four-stop plan; the last stop has no client id.'''
@@ -72,7 +86,8 @@ def _run_route(
     dynamodb,
     plan: dict,
     visits: list,
-    fenced: bool = True
+    fenced: bool = True,
+    seller: str = 'Ana'
 ) -> dict:
     '''
         Opens a route against `plan` and reports `visits` as (lat, lon, client_id).
@@ -82,7 +97,7 @@ def _run_route(
         the door, and the comparison has to score them all the same.
     '''
     route = executed.create_executed_route(dynamodb, OWNER, ExecutedRouteCreateSchema(
-        seller = 'Ana', start_time = _at(8), planned_route_id = plan['id'],
+        seller = seller, start_time = _at(8), planned_route_id = plan['id'],
         start_latitude = STOPS[0][1], start_longitude = STOPS[0][2],
         max_distance_start_point = 100
     ))
@@ -146,6 +161,25 @@ def test_route_comparisons_scores_every_execution_in_the_period(
         dynamodb, OWNER, plan['id'], ExecutedRouteFilterSchema(seller = 'Nadie')
     )
     assert none.comparisons == []
+
+
+def test_only_the_plans_own_seller_is_scored_against_it(
+    dynamodb,
+    plan,
+    linked_users
+):
+    '''
+        A plan of Ana measures Ana. Juan running it is not a measure of how
+        Ana did; that is how the whole team ended up scored against the
+        whole team's stops. Ana's phone reports with her email, linked in
+        INGEST's seller master, and it counts as her.
+    '''
+    linked_users.add('ana@empresa.com')
+    _run_route(dynamodb, plan, [(STOPS[0][1], STOPS[0][2], 'PDV-1')], seller = 'Juan')
+    _run_route(dynamodb, plan, [(STOPS[0][1], STOPS[0][2], 'PDV-1')], seller = 'ANA@empresa.com')
+
+    result = stats.route_comparisons(dynamodb, OWNER, plan['id'], ExecutedRouteFilterSchema())
+    assert [score.seller for score in result.comparisons] == ['ANA@empresa.com']
 
 
 def test_route_comparisons_of_a_foreign_plan_is_not_found(

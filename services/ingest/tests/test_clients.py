@@ -69,20 +69,23 @@ class _FakeTable:
 # pylint: disable=too-few-public-methods
 class _FakeResource:
     '''
-        A DynamoDB resource backed by one in-memory table.
+        A DynamoDB resource backed by in-memory tables.
     '''
 
     def __init__(self) -> None:
-        self.rows: Dict[tuple, Dict[str, Any]] = {}
+        # One store per table name, like DynamoDB: the loads feed the client
+        # and the seller masters in the same pass, and they must not mix.
+        self.tables: Dict[str, Dict[tuple, Dict[str, Any]]] = {}
+        self.rows: Dict[tuple, Dict[str, Any]] = self.tables.setdefault(master.CLIENTS_TABLE, {})
 
     # Same reason as _FakeTable: boto3 spells it `Table`.
     # pylint: disable=invalid-name
     def Table(
         self,
-        name: str # pylint: disable=unused-argument
+        name: str
     ) -> _FakeTable:
-        '''Returns the single table this double holds.'''
-        return _FakeTable(self.rows)
+        '''Returns the table with that name, created empty on first use.'''
+        return _FakeTable(self.tables.setdefault(name, {}))
 
 
 OWNER = 'tester@bearsoft.com.bo'

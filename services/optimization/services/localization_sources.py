@@ -11,12 +11,19 @@
         plan. A stop that names no client is kept: those are the addresses
         the sales file never mentioned, which is to say the new clients.
 
+      - **A seller's portfolio in the sales file.** One plan per seller, each
+        from the clients that seller sold to, so nobody is measured against a
+        route that belonged to the whole team.
+
     The CRUD of a plan lives in `localization.py`; this is how one arrives.
 '''
 import csv
 import io
 import unicodedata
+import re
 from typing import Any, Dict, List
+
+import pandas as pd
 
 from boto3.resources.base import ServiceResource
 from pydantic import ValidationError
@@ -25,6 +32,12 @@ from models.localization import (
     ExecutedRouteItem,
     PlannedPointItem,
     PlannedRouteItem
+)
+from schemas.optimization import (
+    OptimizationError,
+    PlansBySellerResponse,
+    PlansBySellerSchema,
+    SellerPlanSchema
 )
 from schemas.localization import (
     BulkUploadPlannedResponseSchema,
@@ -36,7 +49,7 @@ from schemas.localization import (
     RepeatPlannedRouteSchema
 )
 from services.environment import load_and_validate_env_vars
-from services.exceptions import InvalidInputError
+from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from services.localization import (
     _assert_route_code_free,
     _assert_sequence_free,
@@ -48,6 +61,12 @@ from services.localization import (
     list_planned_routes
 )
 from services.logger_config import custom_logger as logger
+from services.optimization import (
+    assign_days,
+    available_sellers,
+    build_client_points,
+    plan_day
+)
 from services.route_optimization import (
     apply_optimized_order,
     optimize_planned_route
@@ -363,3 +382,151 @@ def repeat_planned_route(
                f'for {repeat.plan_date} with {len(stops)} stop(s).')
     logger.info(message)
     return plan
+
+
+# A route code is unique per owner and goes in URLs and file names, so the
+# seller part is reduced to safe characters and kept short.
+_CODE_UNSAFE = re.compile(r'[^A-Za-z0-9@._-]')
+_CODE_SELLER_LENGTH = 20
+
+
+def _seller_stops(
+    dataframe: pd.DataFrame,
+    seller: str,
+    request: PlansBySellerSchema
+) -> List[PlannedPointSchema]:
+    '''
+        The stops of one day of one seller's portfolio, in visiting order.
+
+        The order is the local nearest-neighbour + 2-opt tour, not OSRM: the
+        street geometry is drawn when someone opens the plan, and asking the
+        public router once per seller on every split is what its rate limit
+        punishes.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows of the period.
+            seller (str): The seller as the file writes it.
+            request (PlansBySellerSchema): Days, day and period.
+
+        Returns:
+            List[PlannedPointSchema]: The day's stops; empty when that day of
+                the seller's split has no placeable client.
+    '''
+    try:
+        clients = build_client_points(dataframe, seller = seller)
+    except InvalidInputError:
+        return []
+    clients = assign_days(clients, request.days)
+    return [
+        PlannedPointSchema(
+            point_name = stop.client[:100],
+            secuencial = stop.stop_order,
+            latitude = stop.latitude,
+            longitude = stop.longitude,
+            client_id = stop.client_id[:64]
+        )
+        for stop in plan_day(clients, request.day)
+    ]
+
+
+def _create_seller_plan(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    seller: str,
+    stops: List[PlannedPointSchema],
+    request: PlansBySellerSchema
+) -> SellerPlanSchema | None:
+    '''
+        Saves one seller's day as their plan.
+
+        The code is seller + date + day, so saving the same split twice finds
+        the plan already there and leaves it alone instead of duplicating it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): Authenticated account.
+            seller (str): The seller as the file writes it.
+            stops (List[PlannedPointSchema]): The day's stops, in order.
+            request (PlansBySellerSchema): Day and date.
+
+        Returns:
+            SellerPlanSchema | None: The plan created, or None when a plan with
+                that code already existed.
+    '''
+    code_seller = _CODE_UNSAFE.sub('_', seller)[:_CODE_SELLER_LENGTH]
+    day_label = f'{request.plan_date.isoformat()}-D{request.day}'
+    try:
+        plan = create_planned_route(dynamodb_resource, owner_email, PlannedRouteCreateSchema(
+            route_name = f'{seller} · {day_label}'[:150],
+            route_code = f'{code_seller}-{day_label}',
+            seller = seller[:128],
+            plan_date = request.plan_date,
+            points = stops
+        ))
+    except RegisterAlreadyExistsError:
+        return None
+    return SellerPlanSchema(
+        seller = seller, id = plan['id'], route_code = plan['route_code'], stops = len(stops)
+    )
+
+
+def plans_by_seller(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    dataset_id: str,
+    dataframe: pd.DataFrame,
+    request: PlansBySellerSchema
+) -> PlansBySellerResponse:
+    '''
+        One plan per seller, each from that seller's own portfolio.
+
+        A plan for "everybody" put every client of the team on one route, and
+        then each seller who ran it was measured against all of it. Here each
+        seller gets the clients the file says they sold to, split into days by
+        proximity, and the requested day of that split becomes their plan.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): Authenticated account.
+            dataset_id (str): The sales dataset the portfolios come from.
+            dataframe (pd.DataFrame): Sales rows of the period.
+            request (PlansBySellerSchema): Days, day, date and sellers.
+
+        Returns:
+            PlansBySellerResponse: The plans created and the sellers skipped.
+
+        Raises:
+            InvalidInputError: NO_SELLERS_IN_FILE when the file names nobody.
+    '''
+    sellers = available_sellers(dataframe)
+    if request.sellers:
+        wanted = set(request.sellers)
+        sellers = [seller for seller in sellers if seller in wanted]
+    if not sellers:
+        raise InvalidInputError(detail = OptimizationError.NO_SELLERS_IN_FILE.value)
+
+    created: List[SellerPlanSchema] = []
+    without_stops: List[str] = []
+    already_planned: List[str] = []
+    for seller in sellers:
+        stops = _seller_stops(dataframe, seller, request)
+        if not stops:
+            without_stops.append(seller)
+            continue
+        plan = _create_seller_plan(dynamodb_resource, owner_email, seller, stops, request)
+        if plan is None:
+            already_planned.append(seller)
+            continue
+        created.append(plan)
+
+    message = (f'Plans by seller for {owner_email}: {len(created)} created, '
+               f'{len(without_stops)} without stops, {len(already_planned)} already planned.')
+    logger.info(message)
+    return PlansBySellerResponse(
+        dataset_id = dataset_id,
+        day = request.day,
+        plan_date = request.plan_date,
+        created = created,
+        without_stops = without_stops,
+        already_planned = already_planned
+    )

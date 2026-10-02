@@ -17,6 +17,7 @@ import uvicorn
 from routes.clients import router as clients_router
 from routes.channels import router as channels_router
 from routes.ingest import router as ingest_router
+from routes.sellers import router as sellers_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
@@ -154,6 +155,7 @@ async def custom_swagger_ui() -> HTMLResponse:
 # and answer 422 for a path that has nothing to do with a dataset. The literal
 # routers go first, the one with the wildcard last.
 app.include_router(clients_router)
+app.include_router(sellers_router)
 app.include_router(channels_router)
 app.include_router(ingest_router)
 

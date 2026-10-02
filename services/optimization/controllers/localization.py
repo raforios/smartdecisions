@@ -6,7 +6,7 @@
     is the owner of everything read or written here. `request` is consumed by
     @handle_service_errors for the usage log.
 '''
-from typing import List
+from typing import List, Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -511,13 +511,22 @@ async def get_last_known_locations_controller(
 # ---------------------------------------------------------------------------
 # Comparison and statistics
 # ---------------------------------------------------------------------------
+def _caller_token(request: Optional[Request]) -> Optional[str]:
+    '''
+        The caller's Authorization header, forwarded when this service asks
+        INGEST something on their behalf. Read from the request the controller
+        already receives instead of widening every signature by one.
+    '''
+    return request.headers.get('authorization') if request is not None else None
+
+
 @handle_service_errors('OPTIMIZATION')
 async def get_route_comparisons_controller(
     dynamodb_resource: ServiceResource,
     planned_route_id: str,
     filters: ExecutedRouteFilterSchema,
     current_user: str,
-    request: Request # pylint: disable=unused-argument
+    request: Request
 ) -> RouteComparisonsResponseSchema:
     '''
         Every execution of a plan, scored.
@@ -526,7 +535,8 @@ async def get_route_comparisons_controller(
         dynamodb_resource = dynamodb_resource,
         owner_email = current_user,
         planned_route_id = planned_route_id,
-        filters = filters
+        filters = filters,
+        auth_token = _caller_token(request)
     )
 
 
@@ -536,7 +546,7 @@ async def get_full_route_comparison_controller(
     planned_route_id: str,
     filters: ExecutedRouteFilterSchema,
     current_user: str,
-    request: Request # pylint: disable=unused-argument
+    request: Request
 ) -> RouteComparisonFullResponseSchema:
     '''
         Plan and executions with their points, for the map.
@@ -545,7 +555,8 @@ async def get_full_route_comparison_controller(
         dynamodb_resource = dynamodb_resource,
         owner_email = current_user,
         planned_route_id = planned_route_id,
-        filters = filters
+        filters = filters,
+        auth_token = _caller_token(request)
     )
 
 

@@ -16,6 +16,8 @@ from pydantic import BaseModel
 
 from schemas.optimization import (
     BulkUploadResponse,
+    PlansBySellerResponse,
+    PlansBySellerSchema,
     RoutePlanResponse,
     DataMapResponse,
     OptimizationResponse,
@@ -40,6 +42,7 @@ from services.optimization_utils import (
     get_route_points,
     load_dataframe_from_s3
 )
+from services.localization_sources import plans_by_seller
 from services.utils import audit_event, handle_service_errors
 
 
@@ -274,4 +277,37 @@ async def route_plan_controller(
         seller = params.get('seller'),
         total_clients = int(len(clients)),
         days = [day for day in days if day.stops]
+    )
+
+
+@handle_service_errors('OPTIMIZATION')
+@audit_event('OPTIMIZATION', 'PlannedRoute', 'BULK_CREATE')
+async def plans_by_seller_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    body: PlansBySellerSchema,
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> PlansBySellerResponse:
+    '''
+        One plan per seller from that seller's portfolio in the sales file.
+
+        The dataset is read with its owner as part of the lookup: a dataset of
+        another account answers like a missing one.
+    '''
+    metadata = get_dataset_metadata(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        owner_email = current_user
+    )
+    dataframe = scope_to_period(
+        load_dataframe_from_s3(metadata['file_s3_key']),
+        body.model_dump(include = {'date_from', 'date_to'})
+    )
+    return plans_by_seller(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        dataset_id = dataset_id,
+        dataframe = dataframe,
+        request = body
     )

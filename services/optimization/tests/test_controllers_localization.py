@@ -13,7 +13,9 @@ from moto import mock_aws
 
 from main import app
 from schemas.localization import LocalizationError, PlannedRouteStatusEnum
-from services import daily_stock, localization, localization_executed as executed
+from services import daily_stock, ingest_directory, localization
+from services import localization_executed as executed
+from services import localization_stats
 from services.utils import get_current_time_gmt
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_payload
@@ -46,6 +48,15 @@ def act_as(who: str) -> None:
         Makes every request carry the claims of CALLERS[who].
     '''
     app.dependency_overrides[get_current_payload] = lambda: dict(CALLERS[who])
+
+
+@pytest.fixture(autouse = True)
+def no_seller_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''
+        The comparison asks INGEST who a plan's seller signs in as; no test
+        here reaches the network, and nobody is linked.
+    '''
+    monkeypatch.setattr(localization_stats, 'users_of_seller', lambda seller, token: set())
 
 
 @pytest.fixture(name = 'client')
@@ -421,7 +432,7 @@ def test_the_day_opens_from_the_stock_file_loaded_in_ingest(
              'committed': 0, 'available': 3}
         ]})
 
-    monkeypatch.setattr(daily_stock.requests, 'get', _ingest)
+    monkeypatch.setattr(ingest_directory.requests, 'get', _ingest)
     act_as('manager')
     opened = client.post('/v1/optimization/stock/day/from-ingest',
                          json = {'dataset_id': 'ds-12345678', 'date': '2026-10-01'},

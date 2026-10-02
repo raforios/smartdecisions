@@ -7,7 +7,7 @@
     within `ROUTES_VISIT_MATCH_RADIUS_M` metres of it. The map still gets both
     lists through the full comparison.
 '''
-from typing import List
+from typing import List, Optional
 
 from boto3.resources.base import ServiceResource
 
@@ -33,6 +33,7 @@ from services.localization_executed import (
     to_executed_detail,
     to_executed_point_response
 )
+from services.ingest_directory import users_of_seller
 from services.logger_config import custom_logger as logger
 
 _SETTINGS = load_and_validate_env_vars({'ROUTES_VISIT_MATCH_RADIUS_M': float})
@@ -89,21 +90,35 @@ def score_execution(
 def _executions_of(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    planned_route_id: str,
-    filters: ExecutedRouteFilterSchema
+    plan: PlannedRouteItem,
+    filters: ExecutedRouteFilterSchema,
+    auth_token: Optional[str]
 ) -> List[ExecutedRouteItem]:
     '''
-        The executed routes that followed `planned_route_id`, within the filters.
+        The executed routes that followed the plan, run by the plan's own seller.
+
+        A plan of one seller is that seller's route: someone else running it
+        is not a measure of how the seller did, and counting it is how every
+        seller of the team ended up scored against the whole team's stops. The
+        seller in the plan is the file's ("Ana"); the phone reports with the
+        email it signed in with, so both are accepted, linked in INGEST.
+        A plan with no seller keeps every execution, as before.
     '''
-    scoped = filters.model_copy(update = {'planned_route_id': planned_route_id})
-    return list_executed_routes(dynamodb_resource, owner_email, scoped)
+    scoped = filters.model_copy(update = {'planned_route_id': plan['id']})
+    routes = list_executed_routes(dynamodb_resource, owner_email, scoped)
+    seller = plan.get('seller')
+    if not seller:
+        return routes
+    allowed = {str(seller).lower()} | users_of_seller(str(seller), auth_token or '')
+    return [route for route in routes if str(route.get('seller') or '').lower() in allowed]
 
 
 def route_comparisons(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     planned_route_id: str,
-    filters: ExecutedRouteFilterSchema
+    filters: ExecutedRouteFilterSchema,
+    auth_token: Optional[str] = None
 ) -> RouteComparisonsResponseSchema:
     '''
         Every execution of a plan, scored.
@@ -113,12 +128,14 @@ def route_comparisons(
             owner_email (str): Authenticated account.
             planned_route_id (str): The plan.
             filters (ExecutedRouteFilterSchema): Period and seller.
+            auth_token (Optional[str]): Caller's token, to ask INGEST who the
+                plan's seller signs in as.
 
         Returns:
             RouteComparisonsResponseSchema: One score per execution.
     '''
     plan = get_planned_route(dynamodb_resource, owner_email, planned_route_id)
-    routes = _executions_of(dynamodb_resource, owner_email, planned_route_id, filters)
+    routes = _executions_of(dynamodb_resource, owner_email, plan, filters, auth_token)
     message = f'Scoring {len(routes)} execution(s) of planned route {planned_route_id}.'
     logger.info(message)
     return RouteComparisonsResponseSchema(
@@ -130,7 +147,8 @@ def full_route_comparison(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     planned_route_id: str,
-    filters: ExecutedRouteFilterSchema
+    filters: ExecutedRouteFilterSchema,
+    auth_token: Optional[str] = None
 ) -> RouteComparisonFullResponseSchema:
     '''
         The plan with its stops and every execution with its points, for the map.
@@ -140,12 +158,14 @@ def full_route_comparison(
             owner_email (str): Authenticated account.
             planned_route_id (str): The plan.
             filters (ExecutedRouteFilterSchema): Period and seller.
+            auth_token (Optional[str]): Caller's token, to ask INGEST who the
+                plan's seller signs in as.
 
         Returns:
             RouteComparisonFullResponseSchema: Both sides, points included.
     '''
     plan = get_planned_route(dynamodb_resource, owner_email, planned_route_id)
-    routes = _executions_of(dynamodb_resource, owner_email, planned_route_id, filters)
+    routes = _executions_of(dynamodb_resource, owner_email, plan, filters, auth_token)
     return RouteComparisonFullResponseSchema(
         planned_route = PlannedRouteComparisonSchema(
             id = plan['id'],
