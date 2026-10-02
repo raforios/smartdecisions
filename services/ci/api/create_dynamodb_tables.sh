@@ -31,6 +31,10 @@ TABLES=(
     # sistema del propio cliente es la clave de orden, así que una recarga
     # reconoce al mismo cliente y un cliente ajeno no existe.
     "ingest_clients:owner_email:S:id:S"
+    # Maestro de vendedores: el archivo nombra al vendedor como lo escribe el
+    # ERP ("Ana", "V-017") y el vendedor ingresa con su correo. Acá se dice
+    # una vez que son la misma persona. Misma clave que el de clientes.
+    "ingest_sellers:owner_email:S:id:S"
     "analytics_runs:id:S"
     # Clave compuesta: cada ítem es un punto de una ruta de un día concreto.
     "optimization_routes:route_day_key:S:client_id:N"
