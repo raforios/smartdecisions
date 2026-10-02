@@ -247,6 +247,40 @@ document.addEventListener('DOMContentLoaded', () => {
      * repeating it: it is born dated for a day the user picks, which is what
      * puts it in Planes and out of here.
      */
+    /**
+     * "Todos" saves one plan per seller, each from that seller's own
+     * portfolio, instead of one route with the whole team on it: that route
+     * was what every seller ended up measured against. Day N is the N-th day
+     * of EACH seller's split, because two portfolios do not share geography.
+     * The service orders the stops locally; the street geometry is drawn
+     * when a plan is opened, not once per seller.
+     */
+    async function saveDayBySeller(day, when) {
+        const done = setButtonBusy(qs('#saveDayButton'), 'Guardando…');
+        try {
+            const body = { days: Number(qs('#daysSelect').value), day: day.day, plan_date: when };
+            if (qs('#planFrom').value) body.date_from = qs('#planFrom').value;
+            if (qs('#planTo').value) body.date_to = qs('#planTo').value;
+            const result = await window.SD_TRACK.sellers.plansFromPortfolio(state.datasetId, body);
+            const parts = [`${result.created.length} plan(es) creados, uno por vendedor, para el ${when}.`];
+            if (result.already_planned.length) {
+                parts.push(`Ya tenían plan ese día: ${result.already_planned.join(', ')}.`);
+            }
+            if (result.without_stops.length) {
+                parts.push(`Sin clientes en el día ${day.day} de su cartera: ` +
+                           `${result.without_stops.join(', ')}.`);
+            }
+            parts.push('Asígnalos y actívalos en Planes.');
+            note(qs('#saveDayNote'), parts.join(' '), result.created.length ? 'success' : 'error');
+            if (result.created.length) toast('Planes por vendedor creados.', 'success');
+        } catch (error) {
+            note(qs('#saveDayNote'),
+                 window.SD_TRACK.errorText(error, 'No se pudieron crear los planes.'), 'error');
+        } finally {
+            done();
+        }
+    }
+
     async function saveDayAsPlan() {
         const day = state.plan && state.plan.days.find((item) => item.day === state.day);
         if (!day) return;
@@ -255,15 +289,18 @@ document.addEventListener('DOMContentLoaded', () => {
             note(qs('#saveDayNote'), 'Elige el día en que se va a repetir.', 'error');
             return;
         }
-        const seller = qs('#sellerSelect').value || '';
-        const codeSeller = (seller || 'TODOS').replace(/[^A-Za-z0-9@._-]/g, '_').slice(0, 20);
+        // The seller the map was CALCULATED for, not whatever the selector says
+        // now: saving must keep what is on the screen.
+        const seller = state.plan.seller || '';
+        if (!seller) { await saveDayBySeller(day, when); return; }
+        const codeSeller = seller.replace(/[^A-Za-z0-9@._-]/g, '_').slice(0, 20);
         const done = setButtonBusy(qs('#saveDayButton'), 'Guardando…');
         try {
             const plan = await window.SD_TRACK.planned.create({
-                route_name: `Plan ${seller || 'general'} · día ${day.day}`,
+                route_name: `Plan ${seller} · día ${day.day}`,
                 route_code: `${codeSeller}-${when}-D${day.day}`,
                 description: `Repetido desde el histórico el ${todayIso()}`,
-                seller: seller || null,
+                seller,
                 plan_date: when,
                 points: day.stops.map((stop) => ({
                     point_name: stop.client,
@@ -320,6 +357,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             state.plan = plan;
             fillSellers(plan.sellers, seller);
+            // The button says what it will do: with every seller on the map it
+            // saves one plan per seller, not one route for the whole team.
+            qs('#saveDayButton').textContent = seller ? 'Repetir como plan' : 'Crear un plan por vendedor';
             qs('#mapOverlay').hidden = true;
             selectDay(plan.days[0].day);
 

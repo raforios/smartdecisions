@@ -56,6 +56,9 @@
         MINERAL_NOT_MARKET_QUOTED: 'Ese mineral no tiene una fuente diaria ' +
             'gratuita: su cotización viene del informe quincenal.',
         RULE_NOT_FOUND: 'Ese mineral no tiene una escala de regalía cargada.',
+        FACTOR_NOT_FOUND: 'Ese factor no existe. Créalo primero.',
+        NO_VALUE_FOR_DATE: 'El factor no tiene un valor cargado en esa fecha o antes.',
+        EMPTY_LOAD: 'No hay valores para cargar.',
         ROLE_NOT_ALLOWED: 'Tu rol no permite esta acción.'
     };
 

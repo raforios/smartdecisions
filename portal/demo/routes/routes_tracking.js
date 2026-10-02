@@ -37,6 +37,14 @@
         DUPLICATE_SKU: 'Hay un SKU repetido en la carga.',
         STOCK_NOT_LOADED: 'Ese producto no está en el stock del día.',
         INSUFFICIENT_STOCK: 'No hay stock suficiente para esa venta.',
+        NO_STOCK_FOR_DAY: 'El archivo de stock no tiene productos para esa fecha.',
+        STOCK_SOURCE_UNAVAILABLE: 'No se pudo leer el archivo de stock. Intenta de nuevo.',
+        DATASET_NOT_FOUND: 'No se encontró tu archivo de ventas. Vuelve a cargarlo.',
+        UNSUPPORTED_FILE_FORMAT: 'Sólo se aceptan archivos .xlsx o .csv.',
+        SELLER_NOT_FOUND: 'Ese vendedor no existe en tu cartera.',
+        NO_SELLERS_IN_FILE: 'El archivo de ventas no tiene la columna Vendedor llena.',
+        SELLERS_UNAVAILABLE: 'No se pudo consultar a qué usuario corresponde el vendedor. ' +
+            'Intenta de nuevo.',
         ROLE_NOT_ALLOWED: 'Tu rol no permite esta acción.'
     };
 
@@ -87,8 +95,19 @@
             sellers.map((seller) => `sellers=${encodeURIComponent(seller)}`).join('&')
         )
     };
+    // The seller master lives in INGEST: the files name a seller ("Ana") and
+    // the phone signs in with an email; a manager links the two once.
+    const INGEST_SELLERS = `${window.SD_CONFIG.INGEST_URL}/v1/ingest/sellers`;
+    const sellers = {
+        list: (userEmail) => API.get(INGEST_SELLERS, userEmail ? { user_email: userEmail } : null),
+        link: (id, body) => API.patch(`${INGEST_SELLERS}/${encodeURIComponent(id)}`, body),
+        plansFromPortfolio: (datasetId, body) =>
+            API.post(`${BASE}/plan/${encodeURIComponent(datasetId)}/by-seller`, body)
+    };
+
     const stock = {
         load: (body) => API.put(`${BASE}/stock/day`, body),
+        fromIngest: (body) => API.post(`${BASE}/stock/day/from-ingest`, body),
         day: (date) => API.get(`${BASE}/stock/day/${encodeURIComponent(date)}`)
     };
     const stats = {
@@ -243,7 +262,7 @@
     }
 
     window.SD_TRACK = {
-        planned, executed, stock, stats,
+        planned, executed, stock, stats, sellers,
         errorText, STATUS_LABELS, OUTCOME_LABELS, PIN_COLORS,
         escapeHtml, formatMoney, formatDecimal, formatQuantity,
         todayIso, nowIso, formatStamp, timeAgo,

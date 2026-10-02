@@ -11,13 +11,14 @@
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=3db97325c2"></script>
     <script src="../js/auth.js?v=514e2dbfb8" defer></script>
-    <script src="../js/api.js?v=9d954a6ae0" defer></script>
+    <script src="../js/api.js?v=da4e83c5cf" defer></script>
     <script src="../js/ui.js?v=bd318da6b9" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
-    <script src="minerales_shared.js?v=e0a58c63a9" defer></script>
+    <script src="minerales_shared.js?v=5162ac9312" defer></script>
     <script src="minerales.js?v=2e4c6d824c" defer></script>
     <script src="anticipada.js?v=e61053909c" defer></script>
+    <script src="factors.js?v=9e6c8fb620" defer></script>
 </head>
 <body>
 
@@ -278,6 +279,109 @@
             </div>
             <p class="control-hint" id="scenarioHint"></p>
             <div id="scenarioResult"></div>
+        </section>
+
+        <!-- Fluctuating factors -->
+        <section class="card panel" id="factorsPanel">
+            <div class="panel-head">
+                <h2>Factores que cambian</h2>
+                <span class="panel-meta" id="factorsMeta"></span>
+            </div>
+            <p class="control-hint">
+                Cifras que se mueven solas y cambian lo que significa un reporte: el
+                precio del diésel, un arancel, un índice. Cada valor se guarda con su
+                fecha, y un cálculo usa el valor y el estado <strong>de su propia
+                fecha</strong>: apagar un factor hoy no cambia lo que ya se calculó
+                antes. Apagado, conserva sus valores y deja de contar.
+            </p>
+            <div class="table-scroll">
+                <table class="data-table" id="factorsTable">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Unidad</th>
+                            <th class="num">Último valor</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="pager" id="factorsPager" hidden>
+                <span class="pager-count" id="factorsCount"></span>
+                <div class="pager-controls">
+                    <button type="button" class="btn btn-ghost btn-small" id="factorsPrev">← Anterior</button>
+                    <span class="pager-page" id="factorsPage"></span>
+                    <button type="button" class="btn btn-ghost btn-small" id="factorsNext">Siguiente →</button>
+                </div>
+            </div>
+            <p class="control-hint" id="factorsNote"></p>
+
+            <h3>Nuevo factor</h3>
+            <div class="controls-row">
+                <div class="control">
+                    <label for="factorCode">Código</label>
+                    <input type="text" id="factorCode" maxlength="40" placeholder="DIESEL">
+                </div>
+                <div class="control">
+                    <label for="factorName">Nombre</label>
+                    <input type="text" id="factorName" maxlength="150" placeholder="Precio del diésel">
+                </div>
+                <div class="control">
+                    <label for="factorUnit">Unidad</label>
+                    <input type="text" id="factorUnit" maxlength="40" placeholder="Bs/litro">
+                </div>
+                <div class="control">
+                    <label for="factorSource">Fuente (opcional)</label>
+                    <input type="text" id="factorSource" maxlength="255" placeholder="ANH">
+                </div>
+                <button class="btn btn-primary" id="factorCreateButton">Crear</button>
+            </div>
+
+            <h3>Cargar un valor</h3>
+            <div class="controls-row">
+                <div class="control">
+                    <label for="factorValueCode">Factor</label>
+                    <select id="factorValueCode"></select>
+                </div>
+                <div class="control">
+                    <label for="factorValueDate">Fecha</label>
+                    <input type="date" id="factorValueDate">
+                </div>
+                <div class="control">
+                    <label for="factorValue">Valor</label>
+                    <input type="number" id="factorValue" step="any">
+                </div>
+                <button class="btn btn-primary" id="factorValueButton">Guardar</button>
+            </div>
+            <p class="control-hint" id="factorFormNote"></p>
+
+            <h3>Costo de distribución local</h3>
+            <p class="control-hint">
+                Kilómetros del recorrido ÷ rendimiento (km por litro) × precio del litro,
+                sobre el <strong>viaje redondo</strong>. Usa los factores
+                <code>DIESEL</code> (precio del litro) y <code>RENDIMIENTO</code> (km
+                por litro en reparto urbano) vigentes en la fecha elegida.
+            </p>
+            <div class="controls-row">
+                <div class="control">
+                    <label for="transportKm">Km del recorrido (ida)</label>
+                    <input type="number" id="transportKm" min="0" step="any" value="25">
+                </div>
+                <div class="control">
+                    <label for="transportDate">Fecha</label>
+                    <input type="date" id="transportDate">
+                </div>
+                <div class="control">
+                    <label for="transportUnits">Unidades entregadas (opcional)</label>
+                    <input type="number" id="transportUnits" min="0" step="any">
+                </div>
+                <button class="btn btn-primary" id="transportButton">Calcular</button>
+            </div>
+            <div id="transportResult"></div>
         </section>
 
         <section class="card empty-state" id="errorState" hidden>

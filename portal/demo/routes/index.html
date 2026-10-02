@@ -14,20 +14,22 @@
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="/js/config.js?v=3db97325c2"></script>
     <script src="/js/auth.js?v=514e2dbfb8" defer></script>
-    <script src="/js/api.js?v=9d954a6ae0" defer></script>
+    <script src="/js/api.js?v=da4e83c5cf" defer></script>
     <script src="/js/ui.js?v=bd318da6b9" defer></script>
     <script src="/js/session.js?v=91bb432af9" defer></script>
     <script src="/js/ai.js?v=ee4edb4da5" defer></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin="" defer></script>
-    <script src="/routes/routes_tracking.js?v=50770aaafe" defer></script>
+    <script src="/routes/routes_tracking.js?v=3948ff54ef" defer></script>
     <script src="/routes/routes.js?v=9facb21858" defer></script>
     <script src="/routes/routes_plans.js?v=accfba98fe" defer></script>
-    <script src="/routes/routes_stock.js?v=26dcb8e1ce" defer></script>
+    <script src="/routes/routes_stock.js?v=058e141a29" defer></script>
     <script src="/routes/routes_live.js?v=6dd5389b43" defer></script>
     <script src="/routes/routes_optimize.js?v=29e1178874" defer></script>
     <script src="/routes/routes_compare.js?v=7c9b4d7215" defer></script>
+    <script src="/routes/routes_clients.js?v=10114a312b" defer></script>
+    <script src="/routes/routes_sellers.js" defer></script>
 </head>
 <body>
 
@@ -82,6 +84,16 @@
                 <span class="analysis-icon">🎯</span>
                 <span class="analysis-title">Comparación</span>
                 <span class="analysis-desc">Plan contra ejecución: paradas cumplidas, visitas y ventas.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="sellers">
+                <span class="analysis-icon">🧑‍💼</span>
+                <span class="analysis-title">Vendedores</span>
+                <span class="analysis-desc">Quién es cada vendedor del archivo en el sistema, para que vea sus rutas en el teléfono.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="clients">
+                <span class="analysis-icon">🏪</span>
+                <span class="analysis-title">Clientes</span>
+                <span class="analysis-desc">Tu cartera, con los clientes nuevos que los vendedores dieron de alta en la calle.</span>
             </button>
         </div>
 
@@ -273,6 +285,13 @@
                     </div>
                     <div class="card stops-card" id="planDetailCard" hidden>
                         <div class="card-head"><h3 id="planDetailTitle">Paradas del plan</h3></div>
+                        <div class="form-actions plan-assign">
+                            <label><span>Vendedor asignado</span>
+                                <select id="planSellerSelect"></select>
+                            </label>
+                            <button type="button" class="btn btn-primary btn-small" id="planSellerButton">Asignar</button>
+                            <p class="form-note" id="planSellerNote" aria-live="polite"></p>
+                        </div>
                         <div class="routes-map-wrapper"><div id="planMap" class="routes-map"></div></div>
                         <div class="table-wrapper">
                             <table class="data-table" id="planStopsTable">
@@ -290,7 +309,26 @@
             <section class="routes-layout">
                 <aside class="routes-sidebar">
                     <article class="card">
-                        <h3>Cargar el stock de un día</h3>
+                        <h3>Subir el archivo de stock</h3>
+                        <p class="legend-hint">
+                            La misma plantilla de <strong>Stock</strong> que se carga en Análisis
+                            Comercial. Se toma lo disponible de cada producto en la fecha elegida
+                            (existencia menos comprometido). Volver a cargar el mismo día lo
+                            reemplaza y conserva lo ya vendido.
+                        </p>
+                        <form class="form-stack" id="stockFileForm">
+                            <label><span>Fecha</span><input type="date" id="stockFileDate"></label>
+                            <label><span>Archivo (.xlsx o .csv)</span>
+                                <input type="file" id="stockFile" accept=".xlsx,.csv">
+                            </label>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small" id="stockFileButton">Subir y cargar el día</button>
+                            </div>
+                            <p class="form-note" id="stockFileNote" aria-live="polite"></p>
+                        </form>
+                    </article>
+                    <article class="card">
+                        <h3>O escríbelo a mano</h3>
                         <p class="legend-hint">
                             Una línea por producto: <code>SKU, cantidad</code> y opcionalmente el
                             nombre. Volver a cargar el mismo día lo reemplaza y conserva lo ya vendido.
@@ -325,6 +363,16 @@
                                 </tr></thead>
                                 <tbody></tbody>
                             </table>
+                        </div>
+                        <div class="pager" id="stockPager" hidden>
+                            <span class="pager-count" id="stockCount"></span>
+                            <div class="pager-controls">
+                                <button type="button" class="btn btn-ghost btn-small"
+                                        id="stockPrev">← Anterior</button>
+                                <span class="pager-page" id="stockPage"></span>
+                                <button type="button" class="btn btn-ghost btn-small"
+                                        id="stockNext">Siguiente →</button>
+                            </div>
                         </div>
                         <p class="form-note" id="stockViewNote" aria-live="polite"></p>
                     </div>
@@ -489,6 +537,81 @@
                     </div>
                 </section>
             </section>
+        </div>
+
+        <!-- ====== Vendedores ====== -->
+        <div class="routes-section" data-section="sellers" hidden>
+            <div class="day-summary" id="sellersSummary"></div>
+            <div class="card stops-card">
+                <div class="card-head">
+                    <h3>Vendedores</h3>
+                    <button type="button" class="btn btn-ghost btn-small" id="sellersRefresh">Actualizar</button>
+                </div>
+                <p class="legend-hint">
+                    El archivo nombra a cada vendedor como lo exporta tu sistema; en el
+                    teléfono el vendedor ingresa con su correo. Escribe aquí con qué correo
+                    ingresa cada uno: así ve sus planes y la comparación lo mide solo a él.
+                    Los vendedores nuevos aparecen solos al cargar el archivo de ventas.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="sellersTable">
+                        <thead><tr>
+                            <th>Vendedor en el archivo</th><th>Correo con que ingresa</th><th></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="pager" id="sellersPager" hidden>
+                    <span class="pager-count" id="sellersCount"></span>
+                    <div class="pager-controls">
+                        <button type="button" class="btn btn-ghost btn-small" id="sellersPrev">← Anterior</button>
+                        <span class="pager-page" id="sellersPage"></span>
+                        <button type="button" class="btn btn-ghost btn-small" id="sellersNext">Siguiente →</button>
+                    </div>
+                </div>
+                <p class="form-note" id="sellersNote" aria-live="polite"></p>
+            </div>
+        </div>
+
+        <!-- ====== Clientes ====== -->
+        <div class="routes-section" data-section="clients" hidden>
+            <div class="day-summary" id="clientsSummary"></div>
+            <div class="card stops-card">
+                <div class="card-head">
+                    <h3>Clientes</h3>
+                    <div class="form-actions">
+                        <select id="clientsSource">
+                            <option value="">Todos</option>
+                            <option value="FIELD">Nuevos, dados de alta en la calle</option>
+                            <option value="FILE">Del archivo</option>
+                            <option value="API">Del sistema (API)</option>
+                        </select>
+                        <button type="button" class="btn btn-ghost btn-small" id="clientsRefresh">Actualizar</button>
+                    </div>
+                </div>
+                <p class="legend-hint">
+                    Los más recientes primero. Un cliente nuevo de la calle trae las
+                    coordenadas que tomó el teléfono del vendedor parado en la puerta.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="clientsTable">
+                        <thead><tr>
+                            <th>Cliente</th><th>Origen</th><th>Vendedor</th><th>Zona</th>
+                            <th>Dirección</th><th>Ubicación</th><th>Alta</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="pager" id="clientsPager" hidden>
+                    <span class="pager-count" id="clientsCount"></span>
+                    <div class="pager-controls">
+                        <button type="button" class="btn btn-ghost btn-small" id="clientsPrev">← Anterior</button>
+                        <span class="pager-page" id="clientsPage"></span>
+                        <button type="button" class="btn btn-ghost btn-small" id="clientsNext">Siguiente →</button>
+                    </div>
+                </div>
+                <p class="form-note" id="clientsNote" aria-live="polite"></p>
+            </div>
         </div>
     </div>
 </main>

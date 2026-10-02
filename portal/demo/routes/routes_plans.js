@@ -121,7 +121,48 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#planDetailCard').hidden = false;
         planMap.refresh();
         planMap.fit(points);
+        fillSellerSelect(plan);
     }
+
+    // ---------- assignment ----------
+    // A plan with no seller is offered to nobody's phone: assigning it is what
+    // puts it in front of one seller, and what the comparison measures them by.
+    let sellerNames = null;
+    async function fillSellerSelect(plan) {
+        const select = qs('#planSellerSelect');
+        T.note(qs('#planSellerNote'), '');
+        if (sellerNames === null) {
+            try {
+                sellerNames = ((await T.sellers.list()).sellers || []).map((seller) => seller.id);
+            } catch (error) {
+                sellerNames = [];
+                T.note(qs('#planSellerNote'),
+                       T.errorText(error, 'No se pudo leer la lista de vendedores.'), 'error');
+            }
+        }
+        const names = plan.seller && !sellerNames.includes(plan.seller)
+            ? [plan.seller, ...sellerNames] : sellerNames;
+        select.innerHTML = '<option value="">— Sin asignar —</option>' + names
+            .map((name) => `<option value="${T.escapeHtml(name)}">${T.escapeHtml(name)}</option>`)
+            .join('');
+        select.value = plan.seller || '';
+    }
+
+    qs('#planSellerButton').addEventListener('click', async () => {
+        if (!state.selected) return;
+        const seller = qs('#planSellerSelect').value || null;
+        const done = setButtonBusy(qs('#planSellerButton'), 'Asignando…');
+        try {
+            const plan = await T.planned.update(state.selected.id, { seller });
+            toast(seller ? `Plan asignado a ${seller}.` : 'Plan sin vendedor.', 'success');
+            await loadPlans();
+            showPlan(state.plans.find((item) => item.id === plan.id) || plan);
+        } catch (error) {
+            T.note(qs('#planSellerNote'), T.errorText(error, 'No se pudo asignar.'), 'error');
+        } finally {
+            done();
+        }
+    });
     function hidePlan() {
         state.selected = null;
         qs('#planDetailCard').hidden = true;

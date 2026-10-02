@@ -11,12 +11,12 @@
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=3db97325c2"></script>
     <script src="../js/auth.js?v=514e2dbfb8" defer></script>
-    <script src="../js/api.js?v=9d954a6ae0" defer></script>
+    <script src="../js/api.js?v=da4e83c5cf" defer></script>
     <script src="../js/ui.js?v=bd318da6b9" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-    <script src="excel.js?v=a16e33e7aa" defer></script>
+    <script src="excel.js?v=768cb8b2b4" defer></script>
 </head>
 <body>
 
@@ -133,7 +133,18 @@
                     <button type="button" class="btn btn-ghost btn-small" id="periodReset">
                         Todo el período
                     </button>
+                    <label class="period-field">
+                        <span>Moneda</span>
+                        <select id="periodCurrency">
+                            <option value="BOB">Bolivianos</option>
+                            <option value="USD">Dólares</option>
+                        </select>
+                    </label>
+                    <a class="btn btn-ghost btn-small" href="/minerales/index.html">
+                        Ver el tipo de cambio
+                    </a>
                     <span class="period-note" id="periodNote"></span>
+                    <span class="period-note" id="currencyNote" hidden></span>
                 </div>
 
                 <div class="analysis-menu" id="analysisMenu">
@@ -508,7 +519,7 @@
                             <table class="data-table" id="volumeProductEffects">
                                 <thead><tr>
                                     <th>Efecto</th>
-                                    <th class="numeric">Bs</th>
+                                    <th class="numeric" data-currency></th>
                                     <th class="numeric">% del cambio</th>
                                 </tr></thead>
                                 <tbody></tbody>
@@ -525,7 +536,7 @@
                             <table class="data-table" id="volumeClientEffects">
                                 <thead><tr>
                                     <th>Efecto</th>
-                                    <th class="numeric">Bs</th>
+                                    <th class="numeric" data-currency></th>
                                     <th class="numeric">% del cambio</th>
                                 </tr></thead>
                                 <tbody></tbody>
@@ -1052,7 +1063,7 @@
                                 <th>#</th>
                                 <th>Cliente</th><th>Segmento</th>
                                 <th class="numeric">Compras</th>
-                                <th class="numeric">Venta (Bs)</th>
+                                <th class="numeric" data-currency="Venta (%s)"></th>
                                 <th class="numeric">Ticket promedio</th>
                                 <th class="numeric">% de la venta</th>
                             </tr></thead>

@@ -118,5 +118,55 @@
         return _handleResponse(response);
     }
 
-    window.SD_API = { get, post, put, patch, del, postFormData };
+    function contentTypeFor(fileName) {
+        return fileName.toLowerCase().endsWith('.csv')
+            ? 'text/csv'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+
+    // PUT the file to S3 with real upload-progress feedback. `fetch` cannot
+    // report upload progress, so we use XMLHttpRequest: a 37 MB file takes
+    // minutes on a slow link, and without a live percentage the UI looks frozen.
+    function putToS3WithProgress(url, file, contentType, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', url);
+            xhr.setRequestHeader('Content-Type', contentType);
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable && onProgress) {
+                    onProgress(event.loaded / event.total);
+                }
+            });
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) resolve();
+                else reject(new Error(`Fallo al subir a S3 (${xhr.status}).`));
+            };
+            xhr.onerror = () => reject(new Error('Error de red al subir el archivo a S3.'));
+            xhr.send(file);
+        });
+    }
+
+    /**
+     * Uploads a client file straight to S3 and returns its key.
+     *
+     * FILES signs the PUT and the bytes go directly to the bucket: real sales
+     * exports exceed the ~10 MB API Gateway limit, so only the key travels
+     * through the APIs afterwards. Shared because every screen that takes a
+     * template —Análisis Comercial and Rutas— uploads it the same way.
+     */
+    async function uploadToBucket(file, onProgress) {
+        const contentType = contentTypeFor(file.name);
+        const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+        const presign = await post(`${window.SD_CONFIG.FILES_URL}/v1/s3/upload-presigned`, {
+            bucket_name: window.SD_CONFIG.INGEST_BUCKET,
+            file_path: 'ingest/raw',
+            file_name: `${Date.now()}_${safeName}`,
+            validation: false,
+            content_type: contentType
+        });
+        await putToS3WithProgress(presign.presigned_url, file, contentType, onProgress);
+        return presign.file_key;
+    }
+
+    window.SD_API = { get, post, put, patch, del, postFormData, uploadToBucket };
 })();

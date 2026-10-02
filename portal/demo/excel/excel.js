@@ -73,13 +73,30 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem(CACHE_KEY);
     }
 
-    /** Builds the ?date_from=&date_to= suffix every analysis endpoint accepts. */
+    /** Builds the ?date_from=&date_to=&currency= suffix every analysis endpoint accepts. */
     function analysisQuery() {
         const params = new URLSearchParams();
         if (state.period.from) params.set('date_from', state.period.from);
         if (state.period.to) params.set('date_to', state.period.to);
+        if (state.period.currency === 'USD') params.set('currency', 'USD');
         const query = params.toString();
         return query ? `?${query}` : '';
+    }
+
+    // The file is in bolivianos; dollars are a reading the backend converts,
+    // each amount at the official rate of its own day.
+    const CURRENCY_SYMBOLS = { BOB: 'Bs', USD: 'US$' };
+
+    function currencySymbol() {
+        return CURRENCY_SYMBOLS[state.period.currency] || CURRENCY_SYMBOLS.BOB;
+    }
+
+    /** Table headers that name the currency follow the one in force. */
+    function paintCurrencyLabels() {
+        document.querySelectorAll('[data-currency]').forEach((cell) => {
+            const template = cell.getAttribute('data-currency') || '%s';
+            cell.textContent = template.replace('%s', currencySymbol());
+        });
     }
 
     // ---------- Result cache ----------
@@ -274,37 +291,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
-    const FILES_URL = window.SD_CONFIG.FILES_URL;
-    const INGEST_BUCKET = window.SD_CONFIG.INGEST_BUCKET;
-
-    function contentTypeFor(fileName) {
-        return fileName.toLowerCase().endsWith('.csv')
-            ? 'text/csv'
-            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    }
-
-    // PUT the file to S3 with real upload-progress feedback. `fetch` cannot
-    // report upload progress, so we use XMLHttpRequest: a 37 MB file takes
-    // minutes on a slow link, and without a live percentage the UI looks frozen.
-    function putToS3WithProgress(url, file, contentType, onProgress) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PUT', url);
-            xhr.setRequestHeader('Content-Type', contentType);
-            xhr.upload.addEventListener('progress', (event) => {
-                if (event.lengthComputable && onProgress) {
-                    onProgress(event.loaded / event.total);
-                }
-            });
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) resolve();
-                else reject(new Error(`Fallo al subir a S3 (${xhr.status}).`));
-            };
-            xhr.onerror = () => reject(new Error('Error de red al subir el archivo a S3.'));
-            xhr.send(file);
-        });
-    }
-
     // ---------- Step 2b: direct-to-S3 upload (pre-signed) + validate ----------
     // Real sales exports easily exceed the ~10 MB API Gateway limit, so the file
     // is uploaded straight to S3 and only its key travels through the API.
@@ -322,24 +308,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const done = setButtonBusy(uploadButton, 'Subiendo…');
         try {
             const file = state.selectedFile;
-            const contentType = contentTypeFor(file.name);
-            const safeName = file.name.replace(/[^\w.\-]+/g, '_');
 
-            // 1) Ask FILES for a pre-signed PUT URL.
-            note.textContent = 'Preparando la subida…';
-            const presign = await window.SD_API.post(`${FILES_URL}/v1/s3/upload-presigned`, {
-                bucket_name: INGEST_BUCKET,
-                file_path: 'ingest/raw',
-                file_name: `${Date.now()}_${safeName}`,
-                validation: false,
-                content_type: contentType
-            });
-
-            // 2) Upload the bytes straight to S3 (no API Gateway limit), with a
-            //    live percentage so a large/slow upload never looks frozen.
+            // 1-2) FILES signs the PUT and the bytes go straight to S3 (no API
+            //    Gateway limit), with a live percentage so a large/slow upload
+            //    never looks frozen.
             const sizeLabel = formatBytes(file.size);
             note.textContent = `Subiendo ${sizeLabel} a almacenamiento seguro… 0%`;
-            await putToS3WithProgress(presign.presigned_url, file, contentType, (ratio) => {
+            const fileKey = await window.SD_API.uploadToBucket(file, (ratio) => {
                 note.textContent =
                     `Subiendo ${sizeLabel} a almacenamiento seguro… ${Math.round(ratio * 100)}%`;
             });
@@ -353,13 +328,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (contract === 'ventas') {
                 handleIngestResponse(await window.SD_API.post(
                     `${INGEST_URL}/v1/ingest/excel-from-s3`,
-                    { file_key: presign.file_key, file_name: file.name }
+                    { file_key: fileKey, file_name: file.name }
                 ));
             } else {
                 const summary = await window.SD_API.post(
                     `${INGEST_URL}/v1/ingest/${encodeURIComponent(state.datasetId)}` +
                     `/${COMPANION_PATHS[contract]}/from-s3`,
-                    { file_key: presign.file_key, file_name: file.name }
+                    { file_key: fileKey, file_name: file.name }
                 );
                 note.classList.add('success');
                 note.textContent =
@@ -841,10 +816,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         qs('#periodNote').textContent = periodo.filtered
             ? `Mostrando ${formatDateRange(periodo.from_date, periodo.to_date)} · ` +
-              `${formatInt(periodo.filas)} filas`
+              `${formatInt(periodo.rows)} filas`
             : `Datos disponibles: ${formatDateRange(periodo.available_from,
                 periodo.available_to)}`;
+
+        qs('#periodCurrency').value = state.period.currency || 'BOB';
+        paintCurrencyLabels();
+        const converted = periodo.currency;
+        const currencyNote = qs('#currencyNote');
+        currencyNote.hidden = !converted;
+        if (converted) {
+            currencyNote.textContent =
+                'En dólares: cada importe al tipo de cambio oficial de su propio día.' +
+                (converted.rows_without_rate > 0
+                    ? ` ${formatInt(converted.rows_without_rate)} fila(s) anteriores a la ` +
+                      'primera cotización publicada quedan en bolivianos.'
+                    : '');
+        }
     }
+
+    // Changing the currency is changing the reading, like changing the window:
+    // the cached results were computed in the other one.
+    qs('#periodCurrency').addEventListener('change', () => {
+        setPeriod({ ...state.period, currency: qs('#periodCurrency').value });
+        paintCurrencyLabels();
+        reopenCurrentAnalysis();
+    });
 
     qs('#periodApply').addEventListener('click', () => {
         const from = qs('#periodFrom').value;
@@ -853,14 +850,14 @@ document.addEventListener('DOMContentLoaded', () => {
             toast('La fecha "Desde" no puede ser posterior a "Hasta".', 'error');
             return;
         }
-        setPeriod({ from: from || null, to: to || null });
+        setPeriod({ from: from || null, to: to || null, currency: state.period.currency });
         reopenCurrentAnalysis();
     });
 
     qs('#periodReset').addEventListener('click', () => {
         qs('#periodFrom').value = '';
         qs('#periodTo').value = '';
-        setPeriod({});
+        setPeriod({ currency: state.period.currency });
         reopenCurrentAnalysis();
     });
 
@@ -1007,6 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (group) params.group_by = group;
             if (state.period.from) params.date_from = state.period.from;
             if (state.period.to) params.date_to = state.period.to;
+            if (state.period.currency === 'USD') params.currency = 'USD';
             // Both methods, always: seeing them apart tells you what one model
             // says; seeing them together tells you how much the answer depends
             // on the model, which is the useful question. Where the two lines
@@ -1185,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: 'Venta potencial',
                 value: totalValue == null ? '—' : formatCurrency(totalValue),
                 variant: totalValue == null ? '' : 'success',
-                hint: totalValue == null ? 'Faltan precios en el archivo.' : 'Impacto esperado en Bs'
+                hint: totalValue == null ? 'Faltan precios en el archivo.' : `Impacto esperado en ${currencySymbol()}`
             },
             {
                 label: 'Categoría estrella',
@@ -1416,7 +1414,7 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: trend.map((p) => p.month),
                 datasets: [{
-                    label: 'Venta (Bs)', data: trend.map((p) => p.amount),
+                    label: `Venta (${currencySymbol()})`, data: trend.map((p) => p.amount),
                     borderColor: BRAND[0], backgroundColor: 'rgba(13,30,76,0.1)',
                     fill: true, tension: 0.3
                 }]
@@ -1436,12 +1434,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Top products / top clients / sellers (horizontal bars)
-        horizontalBar('chartTopProductos', data.top_products, 'Venta (Bs)');
-        horizontalBar('chartTopClientes', data.best_clients, 'Venta (Bs)');
-        horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), 'Venta (Bs)');
+        horizontalBar('chartTopProductos', data.top_products, `Venta (${currencySymbol()})`);
+        horizontalBar('chartTopClientes', data.best_clients, `Venta (${currencySymbol()})`);
+        horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), `Venta (${currencySymbol()})`);
 
         // Bottom products: same bars as the top ten, so the two read alike.
-        horizontalBar('chartBottomProductos', data.bottom_products, 'Venta (Bs)');
+        horizontalBar('chartBottomProductos', data.bottom_products, `Venta (${currencySymbol()})`);
 
         showPeriodBar(data.period);
         renderMargin(data.margin);
@@ -1474,11 +1472,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 labels: categories.map((row) => dimensionLabel(row.label)),
                 datasets: [
                     {
-                        label: 'Venta (Bs)', data: categories.map((row) => row.amount),
+                        label: `Venta (${currencySymbol()})`, data: categories.map((row) => row.amount),
                         backgroundColor: BRAND[5]
                     },
                     {
-                        label: 'Margen (Bs)', data: categories.map((row) => row.margin),
+                        label: `Margen (${currencySymbol()})`, data: categories.map((row) => row.margin),
                         backgroundColor: BRAND[3]
                     }
                 ]
@@ -2178,7 +2176,7 @@ document.addEventListener('DOMContentLoaded', () => {
               format: 'money',
               hint: `${formatDecimal(kpis.uncollectible_rate, 1)}% del saldo` },
             { label: 'Venta a crédito', value: kpis.credit_share, format: 'percent',
-              hint: `Bs ${formatDecimal(kpis.credit_amount, 0)} de la venta del período` },
+              hint: `${currencySymbol()} ${formatDecimal(kpis.credit_amount, 0)} de la venta del período` },
             { label: 'DSO', value: kpis.days_sales_outstanding, format: 'decimal',
               hint: 'Días que tarda en volver la venta a crédito' },
             { label: 'Mora promedio', value: kpis.weighted_days_late, format: 'decimal',
@@ -2251,7 +2249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: aging.map((row) => AGING_LABELS[row.bucket_code] || row.bucket_code),
                 datasets: [{
-                    label: 'Saldo (Bs)', data: aging.map((row) => row.amount),
+                    label: `Saldo (${currencySymbol()})`, data: aging.map((row) => row.amount),
                     backgroundColor: aging.map((row) =>
                         row.bucket_code === 'CURRENT' ? BRAND[3] : BRAND[1])
                 }]
@@ -2307,7 +2305,7 @@ document.addEventListener('DOMContentLoaded', () => {
               hint: `${formatDecimal(margin.credit_gross_margin_rate, 1)}% de la venta a ` +
                     `crédito · al contado ${formatDecimal(margin.cash_gross_margin_rate, 1)}%` },
             { label: 'Costo financiero', value: margin.financing_cost, format: 'money',
-              hint: `De los cuales Bs ${formatDecimal(margin.delinquency_cost, 0)} son ` +
+              hint: `De los cuales ${currencySymbol()} ${formatDecimal(margin.delinquency_cost, 0)} son ` +
                     'por mora' },
             { label: 'Incobrable esperado', value: margin.expected_loss, format: 'money',
               hint: 'Provisión sobre el saldo abierto' },
@@ -2317,7 +2315,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const lost = margin.credit_gross_margin - margin.net_margin;
         qs('#creditMarginNote').textContent =
-            `Financiar y provisionar la cartera se lleva Bs ${formatDecimal(lost, 0)} ` +
+            `Financiar y provisionar la cartera se lleva ${currencySymbol()} ${formatDecimal(lost, 0)} ` +
             `del margen bruto: de ${formatDecimal(margin.credit_gross_margin_rate, 1)}% ` +
             `queda ${formatDecimal(margin.net_margin_rate, 1)}%.`;
     }
@@ -2328,7 +2326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: windows.map((row) => DUE_WINDOW_LABELS[row.window_code] || row.window_code),
                 datasets: [{
-                    label: 'Monto (Bs)', data: windows.map((row) => row.amount),
+                    label: `Monto (${currencySymbol()})`, data: windows.map((row) => row.amount),
                     backgroundColor: windows.map((row) =>
                         row.window_code === 'OVERDUE' ? BRAND[1] : BRAND[0])
                 }]
@@ -2563,7 +2561,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatCurrency(value) {
         if (value == null || isNaN(value)) return '—';
-        return `Bs ${Number(value).toLocaleString('es-BO', {
+        return `${currencySymbol()} ${Number(value).toLocaleString('es-BO', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         })}`;
@@ -2680,5 +2678,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    paintCurrencyLabels();
     if (state.datasetId) restoreDataset();
 });

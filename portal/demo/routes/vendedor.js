@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
         weekday: 'long', day: 'numeric', month: 'long'
     });
 
-    const state = { plans: [], plan: null, route: null, stock: [], visiting: null };
+    const state = { plans: [], mine: new Set(), plan: null, route: null, stock: [], visiting: null };
 
     // ---------- geolocation ----------
     const MAX_ACCURACY = window.SD_CONFIG.GPS_MAX_ACCURACY_METERS;
@@ -72,14 +72,18 @@ document.addEventListener('DOMContentLoaded', () => {
     async function load() {
         const today = T.todayIso();
         try {
-            const [plans, routes, stock] = await Promise.all([
+            const [plans, routes, stock, linked] = await Promise.all([
                 T.planned.filter({ route_status: 'ACTIVE' }),
                 T.executed.list({ date_from: today, date_to: today }),
-                T.stock.day(today).catch(() => ({ items: [] }))
+                T.stock.day(today).catch(() => ({ items: [] })),
+                T.sellers.list(me).catch(() => ({ sellers: [] }))
             ]);
-            // My plans first (assigned by email); unassigned ones stay selectable.
-            state.plans = plans.filter((plan) => !plan.seller || plan.seller === me)
-                .sort((a, b) => (a.seller === me ? -1 : 1) - (b.seller === me ? -1 : 1));
+            // Only MY plans. The file names me as the ERP does ("Ana"), the
+            // manager linked that name to my email; a plan with no seller is
+            // nobody's yet and is not offered — taking it was how every seller
+            // ended up measured against the whole team's stops.
+            state.mine = new Set([me, ...(linked.sellers || []).map((seller) => seller.id)]);
+            state.plans = plans.filter((plan) => plan.seller && state.mine.has(plan.seller));
             state.stock = stock.items || [];
             const mine = routes.filter((route) => route.seller === me);
             const open = mine.find((route) => !route.end_time);
@@ -109,12 +113,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.plans.forEach((plan) => {
             const option = document.createElement('option');
             option.value = plan.id;
-            option.textContent = `${plan.route_name} · ${plan.points.length} paradas` +
-                (plan.seller === me ? ' · asignado a ti' : '');
+            option.textContent = `${plan.route_name} · ${plan.points.length} paradas`;
             select.appendChild(option);
         });
-        const mine = state.plans.find((plan) => plan.seller === me);
-        if (mine) select.value = mine.id;
+        if (state.plans.length) select.value = state.plans[0].id;
         describePlan();
     }
     function describePlan() {
