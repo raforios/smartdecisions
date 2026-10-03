@@ -739,19 +739,38 @@ manage_api_gateway() {
 
     LAMBDA_ARN_TARGET="arn:aws:lambda:$REGION:$ACCOUNT_ID:function:$FUNCTION_NAME"
 
+    # Métodos CORS del API de ESTE servicio. Se declaran en su deploy.config
+    # (CORS_ALLOW_METHODS="GET,POST,PUT,PATCH,DELETE,OPTIONS") sólo cuando el
+    # servicio expone algo distinto de lo de siempre —p. ej. PATCH—: así el
+    # permiso queda escrito junto al servicio y no como un cambio a mano en la
+    # consola. Sin la variable, el API se crea con la lista por defecto y un
+    # API existente no se toca.
+    local DEFAULT_CORS_METHODS="GET,POST,OPTIONS,PUT,PATCH,DELETE"
+    local CORS_METHODS_JSON
+    CORS_METHODS_JSON=$(echo "${CORS_ALLOW_METHODS:-$DEFAULT_CORS_METHODS}" | tr -d ' ' | sed 's/,/","/g')
+    local CORS_CONFIGURATION="AllowOrigins=[\"*\"],AllowMethods=[\"${CORS_METHODS_JSON}\"],AllowHeaders=[\"*\"],MaxAge=86400"
+
     if [ -z "$API_ID" ]; then
         echo "API Gateway HTTP no existente. Creando nueva API '$API_NAME' con target '$LAMBDA_ARN_TARGET'..."
         API_ID=$(aws apigatewayv2 create-api \
             --name "$API_NAME" \
             --protocol-type HTTP \
             --target "$LAMBDA_ARN_TARGET" \
-            --cors-configuration "AllowOrigins=[\"*\"],AllowMethods=[\"GET\",\"POST\",\"OPTIONS\",\"PUT\",\"PATCH\",\"DELETE\"],AllowHeaders=[\"*\"],MaxAge=86400" \
+            --cors-configuration "$CORS_CONFIGURATION" \
             --region "$REGION" \
             --profile "$PROFILE" \
             --query 'ApiId' --output text) || { echo "Error: Falló la creación de la API Gateway HTTP."; exit 1; }
         echo "API Gateway HTTP '$API_NAME' creada con ID: $API_ID."
     else
         echo "API Gateway HTTP existente con ID: $API_ID. "
+        if [ -n "$CORS_ALLOW_METHODS" ]; then
+            aws apigatewayv2 update-api \
+                --api-id "$API_ID" \
+                --cors-configuration "$CORS_CONFIGURATION" \
+                --region "$REGION" \
+                --profile "$PROFILE" > /dev/null || { echo "Error: Falló la actualización del CORS de '$API_NAME'."; exit 1; }
+            echo "CORS de '$API_NAME' según su deploy.config: $CORS_ALLOW_METHODS."
+        fi
     fi
     echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
     echo ""
