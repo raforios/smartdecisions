@@ -106,7 +106,8 @@ def _rate_series(
             pd.Series: One rate per row, aligned to `days`.
     '''
     published = pd.Series(
-        {pd.Timestamp(rate['date']): float(rate['official_rate']) for rate in rates}
+        # QUOTES answers `ExchangeRatePoint` items: {date, rate}.
+        {pd.Timestamp(rate['date']): float(rate['rate']) for rate in rates}
     ).sort_index()
     if published.empty:
         return pd.Series(index = days.index, dtype = 'float64')

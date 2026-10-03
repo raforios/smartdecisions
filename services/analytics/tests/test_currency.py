@@ -14,9 +14,12 @@ from services import currency
 from services.exceptions import ServiceUnavailableError
 
 # The float began in June and the rate moved: 6.96 in July, 7.40 in September.
+# The exact shape QUOTES answers (`ExchangeRatePoint`). The fixture used to
+# say `official_rate`, the code read the same wrong name, and every report in
+# dollars answered 500 in production while this suite stayed green.
 PUBLISHED = [
-    {'date': '2026-07-01', 'official_rate': 6.96},
-    {'date': '2026-09-01', 'official_rate': 7.40},
+    {'date': '2026-07-01', 'rate': 6.96},
+    {'date': '2026-09-01', 'rate': 7.40},
 ]
 
 
