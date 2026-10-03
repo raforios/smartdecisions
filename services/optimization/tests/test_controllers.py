@@ -148,3 +148,14 @@ def test_a_dataset_of_another_owner_answers_like_a_missing_one():
         optimization_utils.get_dataset_metadata(resource, 'ds-1', 'yo@empresa.com')
     assert foreign.value.status_code == 404
     assert optimization_utils.get_dataset_metadata(resource, 'ds-1')['id'] == 'ds-1'
+
+    # And through the endpoint that plans from the file: the Histórico.
+    with pytest.raises(HTTPException) as planned:
+        asyncio.run(controllers.route_plan_controller(
+            dynamodb_resource = resource,
+            dataset_id = 'ds-1',
+            params = {'days': 2},
+            current_user = 'yo@empresa.com',
+            request = None
+        ))
+    assert planned.value.status_code == 404

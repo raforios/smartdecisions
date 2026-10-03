@@ -516,7 +516,8 @@ def save_commercial_policy(
 
 def get_dataset_metadata(
     dynamodb_resource: ServiceResource,
-    dataset_id: str
+    dataset_id: str,
+    owner_email: Optional[str] = None
 ) -> dict:
     '''
         Retrieves a dataset record from the ingest service's table.
@@ -524,6 +525,8 @@ def get_dataset_metadata(
         Args:
             dynamodb_resource (ServiceResource): The shared DynamoDB resource.
             dataset_id (str): UUID issued by the ingest service.
+            owner_email (Optional[str]): When given, a dataset of another owner
+                answers exactly like a missing one (`CLAUDE.md` §8).
 
         Returns:
             dict: The persisted ingest item.
@@ -538,6 +541,8 @@ def get_dataset_metadata(
     table = dynamodb_resource.Table(INGEST_DATASETS_TABLE)
     response = table.get_item(Key = {'id': dataset_id})
     item = response.get('Item')
+    if item and owner_email is not None and item.get('owner_email') != owner_email:
+        item = None
     if not item:
         error_msg = f'Dataset {dataset_id} not found in {INGEST_DATASETS_TABLE}.'
         logger.warning(error_msg)

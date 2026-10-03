@@ -8,6 +8,7 @@
     runs. Engines in isolation stayed green; the API returned 500.
 '''
 import asyncio
+from unittest.mock import Mock
 from datetime import date, timedelta
 
 import pandas as pd
@@ -723,3 +724,27 @@ def test_a_report_in_dollars_says_so_and_names_the_rows_left_unconverted(
 
     assert response.period.currency.currency == 'USD'
     assert response.period.currency.rows_without_rate == 1
+
+
+def test_a_dataset_of_another_owner_answers_like_a_missing_one() -> None:
+    '''
+        `CLAUDE.md` §8. Knowing another company's dataset UUID was enough to
+        read its analysis: the lookup never asked whose it was. Now the owner
+        is part of it, and a foreign dataset is the same 404 as none at all.
+    '''
+    table = Mock()
+    table.get_item.return_value = {'Item': {
+        'id': 'ds-ajeno', 'owner_email': 'Otra Empresa S.R.L.', 'status': 'validated',
+        'file_s3_key': 'ingest/normalized/ajeno.csv'
+    }}
+    resource = Mock(Table = Mock(return_value = table))
+
+    with pytest.raises(HTTPException) as foreign:
+        asyncio.run(controllers.commercial_summary_controller(
+            dynamodb_resource = resource,
+            dataset_id = 'ds-ajeno',
+            params = {},
+            current_user = 'tester@bearsoft.com.bo',
+            request = None
+        ))
+    assert foreign.value.status_code == 404

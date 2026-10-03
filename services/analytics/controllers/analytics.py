@@ -142,6 +142,7 @@ def _summary_from_item(summary: Dict[str, Any]) -> AnalyticsSummary:
 def _scoped_dataframe(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
+    owner_email: str,
     params: Optional[Dict[str, Any]] = None
 ) -> Tuple[Any, PeriodInfo]:
     '''
@@ -155,6 +156,8 @@ def _scoped_dataframe(
         Args:
             dynamodb_resource (ServiceResource): Injected DynamoDB resource.
             dataset_id (str): Dataset to load.
+            owner_email (str): The caller's owner key; a dataset of another
+                owner answers like a missing one.
             params (dict | None): May carry 'date_from', 'date_to', and
                 'currency' with the caller's token to read amounts in another
                 currency.
@@ -166,9 +169,12 @@ def _scoped_dataframe(
         Raises:
             InvalidInputError: If the requested window leaves no rows.
     '''
+    # The owner is part of the lookup: another account's dataset answers like
+    # a missing one, so a known UUID is not a key to someone else's figures.
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = owner_email
     )
     dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
     options = params or {}
@@ -209,7 +215,7 @@ async def commercial_summary_controller(
         and gross margin. Read-only: everything is derived on the fly from the
         dataset, so nothing is persisted as a run.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     summary = build_commercial_summary(dataframe)
     return CommercialSummaryResponse(
         dataset_id = dataset_id,
@@ -244,10 +250,11 @@ async def receivables_controller(
         Read-only: everything is derived on the fly, so nothing is persisted as
         a run.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = current_user
     )
     collections_key = metadata.get('collections_s3_key')
 
@@ -285,10 +292,11 @@ async def objectives_controller(
         Read-only: everything is derived on the fly, so nothing is persisted
         as a run.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = current_user
     )
     objectives_key = metadata.get('objectives_s3_key')
     collections_key = metadata.get('collections_s3_key')
@@ -375,10 +383,11 @@ async def stock_controller(
         Read-only, and deliberately so: `available` reflects what the client's
         ERP already committed. Nothing here reserves or promises stock.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = current_user
     )
     stock_key = metadata.get('stock_s3_key')
 
@@ -453,7 +462,7 @@ async def portfolio_controller(
         coverage, churn, month-by-month client movement and the actionable list
         of clients at risk of being lost. Read-only.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     return PortfolioResponse(
         dataset_id = dataset_id,
         period = period,
@@ -473,7 +482,7 @@ async def forecast_controller(
         Loads the normalized dataset and builds the demand forecast with the
         requested method / horizon / grouping. Read-only.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     result = build_forecast(
         dataframe = dataframe,
         months_ahead = params.get('months_ahead', 3),
@@ -495,7 +504,7 @@ async def segmentation_controller(
         Loads the normalized dataset and builds the customer value segmentation
         (Alto/Medio/Bajo). Read-only.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     result = build_segmentation(dataframe)
     return SegmentationResponse(dataset_id = dataset_id, **result.model_dump())
 
@@ -517,7 +526,7 @@ async def run_analytics_controller(
           4. Persist the run.
           5. Return the public response.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, params)
+    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
 
     parameters = _engine_parameters()
     opportunities, summary = compute_opportunities(

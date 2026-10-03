@@ -245,7 +245,7 @@ async def route_plan_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     params: dict,
-    current_user: str, # pylint: disable=unused-argument
+    current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> RoutePlanResponse:
     '''
@@ -254,11 +254,13 @@ async def route_plan_controller(
         The clients are the ones who actually bought in the period, the visit
         days come from clustering those clients geographically, and the order
         within each day is the 2-opt tour projected onto real streets. Nothing
-        here is read from the legacy route table.
+        here is read from the legacy route table. The dataset is read with its
+        owner as part of the lookup: another account's answers like a missing one.
     '''
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id
+        dataset_id = dataset_id,
+        owner_email = current_user
     )
     dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
     dataframe = scope_to_period(dataframe, params)
