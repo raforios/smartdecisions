@@ -103,6 +103,7 @@ async def favicon() -> FileResponse:
 
 # Root path (Healtcheck function)
 @app.get('/', tags = ['Home'])
+@app.get(f'{DOCS_BASE}/health', tags = ['Home'])
 def root() -> Dict[str, Any]:
     '''
         Function root: health check function

@@ -106,6 +106,7 @@ setup_exception_handlers(app)
 
 
 @app.get('/', tags = ['Home'])
+@app.get(f'{DOCS_BASE}/health', tags = ['Home'])
 def root() -> Dict[str, Any]:
     '''
         Healthcheck endpoint. Returns runtime metadata for monitoring.

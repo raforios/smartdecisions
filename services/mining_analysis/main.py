@@ -106,6 +106,7 @@ app = FastAPI(**APP_CONFIG)
 setup_exception_handlers(app)
 
 @app.get('/', tags = ['Healthcheck'])
+@app.get(f'{DOCS_BASE}/health', tags = ['Home'])
 def root() -> Dict[str, Any]:
     '''
         Function root: health check function

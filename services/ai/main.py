@@ -112,6 +112,7 @@ app.add_middleware(
 
 
 @app.get('/', tags = ['Home'])
+@app.get(f'{DOCS_BASE}/health', tags = ['Home'])
 def root() -> Dict[str, Any]:
     '''
         Health check endpoint.
