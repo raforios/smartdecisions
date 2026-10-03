@@ -27,7 +27,7 @@ Esta carpeta despliega los microservicios de BearSoft (los servicios base, Smart
 | `build_and_deploy.sh` | Despliega **un** microservicio: construye el paquete en Docker, lo sube a S3, crea o actualiza el Lambda y su API Gateway. | Normalmente no: `start.sh` lo llama. |
 | `create_dynamodb_tables.sh` | Crea las tablas DynamoDB que faltan. No borra ni modifica las que existen. | Sólo si agregas una tabla nueva. |
 | `create_schedules.sh` | Crea las tareas programadas (por ejemplo, la sincronización diaria del tipo de cambio). | No: `start.sh` lo llama. |
-| `setup_api_domain.sh` | Configura `api.bearsoft.com.bo`: certificado, dominio y un mapeo por servicio. | Sólo la primera vez o si algo del dominio falla. |
+| `setup_api_domain.sh` | Configura `api.bearsoft.com.bo`: certificado, dominio y la puerta de entrada `bearsoft-gateway`, con una ruta por servicio. | Sólo la primera vez o si algo del dominio falla. |
 | `update_service_urls.sh` | Cambia en los `.env` las direcciones con las que los servicios se llaman entre sí. | No: `start.sh --urls` lo llama. |
 
 Cada microservicio tiene, en su propia carpeta (`services/<servicio>/`), dos archivos que estos scripts leen:
@@ -110,7 +110,7 @@ El script hace, en este orden (ver la [sección 8](#8-referencia-el-orden-de-des
 4. Despliega ANALYTICS, OPTIMIZATION, MINING_ANALYSIS y AI.
 5. Despliega BILLING.
 6. Crea las tareas programadas.
-7. Configura el dominio `api.bearsoft.com.bo`.
+7. Configura el dominio `api.bearsoft.com.bo` y su puerta de entrada `bearsoft-gateway`.
 
 No cierres la terminal mientras corre. Al final debe decir **`Proceso de despliegue finalizado. ✅`**.
 
@@ -191,7 +191,7 @@ Vuelve a `services/ci/api` y escribe los nombres de las carpetas de los servicio
 ```
 
 - **No importa en qué orden los escribas**: el script los despliega siempre en el orden correcto (base primero, después los dueños de datos, después el resto).
-- Al terminar, el script revisa el dominio y corrige el mapeo si algún API cambió.
+- Al terminar, el script revisa el dominio y agrega al gateway las rutas de un servicio nuevo.
 
 Los nombres válidos son los de las carpetas: `auth`, `events`, `files`, `ml_functions`, `ingest`, `quotes`, `analytics`, `optimization`, `mining_analysis`, `ai`, `billing`.
 
@@ -310,8 +310,8 @@ curl -s -o /dev/null -w "%{http_code}\n" https://api.bearsoft.com.bo/v1/ingest/d
 | El servicio no arranca: `Required environment variable "X" is not configured.` | Falta una variable en el `.env` | Agrégala y publica la configuración (caso C1). |
 | El navegador da `Failed to fetch` en un botón que guarda | El API no permite ese método en CORS (por ejemplo, PATCH) | Caso C2. |
 | La prueba de humo del dominio da `000` | El registro `api` de Cloudflare todavía no existe o no se propagó | Revisa el registro (sección 3, paso 3b) y espera unos minutos. |
-| La prueba de humo da `404` | El servicio recibe la ruta sin el prefijo `/v1/<servicio>` | `setup_api_domain.sh` pasa cada API al formato de evento 1.0, que conserva la ruta completa. Vuelve a ejecutarlo. |
-| La prueba de humo da `403` | No hay mapeo para esa ruta | Revisa la lista `MAPPINGS` de `setup_api_domain.sh` y vuelve a ejecutarlo. |
+| La prueba de humo da `404` | La ruta no existe en el servicio, o el dominio apunta a otro lado | Vuelve a ejecutar `./setup_api_domain.sh`: deja el dominio entero apuntando a `bearsoft-gateway`. |
+| Una ruta nueva responde `404` desde el dominio pero no desde su URL `execute-api` | El prefijo no está en el gateway | Agrega el prefijo a la lista `ROUTES` de `setup_api_domain.sh` y vuelve a ejecutarlo. |
 | Error de `pydantic_core` al arrancar el Lambda | Paquete compilado para otra arquitectura | `build_and_deploy.sh` ya construye para `linux/amd64`. Si aparece, revisa que nadie haya cambiado esa línea. |
 
 Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch** (sección 6.2). Casi siempre dicen exactamente qué pasó.
@@ -328,7 +328,7 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 | 4 | ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, AI | Consumen lo anterior. |
 | 5 | BILLING | SmartBilling, independiente de SmartDecisions. |
 | 6 | Tareas programadas | Necesitan que los Lambdas existan. |
-| 7 | Dominio y mapeos | Necesitan que los API existan. Se repite en cada despliegue porque es seguro repetirlo y corrige el mapeo si un API se recreó con otro ID. |
+| 7 | Dominio y gateway | Necesita que los Lambdas existan. Se repite en cada despliegue porque es seguro repetirlo y agrega las rutas de un servicio nuevo. |
 
 ### Las direcciones públicas
 
@@ -346,6 +346,12 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 | AI | `https://api.bearsoft.com.bo/v1/ai/...` |
 | BILLING | `https://api.bearsoft.com.bo/v1/billing/...` |
 
-**Costo del dominio:** el certificado de ACM, el dominio de API Gateway, los mapeos y el DNS de Cloudflare no tienen costo. Se paga sólo por llamada, igual que con las direcciones `execute-api` de antes.
+**Costo del dominio:** el certificado de ACM, el dominio de API Gateway, el API `bearsoft-gateway` y sus rutas, y el DNS de Cloudflare no tienen costo. Se paga sólo por llamada, igual que con las direcciones `execute-api` de antes.
 
-**Si un servicio agrega un prefijo de rutas nuevo** (un `APIRouter(prefix = '/v1/algo')` que no estaba), agrégalo a la lista `MAPPINGS` de `setup_api_domain.sh` y ejecuta el script.
+### Cómo está armado el dominio
+
+Una sola puerta de entrada, el API HTTP **`bearsoft-gateway`**, recibe todo lo que llega a `api.bearsoft.com.bo` y lo envía al Lambda de cada servicio según el prefijo: `ANY /v1/ingest/{proxy+}` → Lambda de INGEST, y así con cada uno. El Lambda recibe la ruta **completa** (`/v1/ingest/datasets`) en el formato de evento 2.0, así que los servicios no saben ni necesitan saber que hay un dominio delante. El CORS del dominio se define una sola vez, en el gateway.
+
+Los API propios de cada servicio (los de `build_and_deploy.sh`) siguen respondiendo en su URL `execute-api`; el gateway no pasa por ellos.
+
+**Si un servicio agrega un prefijo de rutas nuevo** (un `APIRouter(prefix = '/v1/algo')` que no estaba), agrégalo a la lista `ROUTES` de `setup_api_domain.sh` y ejecuta el script.

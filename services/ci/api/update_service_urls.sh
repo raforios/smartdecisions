@@ -47,7 +47,7 @@ for SERVICE in "${SERVICES[@]}"; do
 done
 
 if $WRITE; then
-    echo "Escrito. Redespliega los servicios que cambiaron (start.sh --redeploy)."
+    echo "Escrito. Publica la configuración sin reconstruir: ./start.sh --urls"
 else
     echo "Simulación: no se escribió nada. Repite con --yes."
 fi

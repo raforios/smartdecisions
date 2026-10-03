@@ -23,9 +23,9 @@
 #   4. ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, AI.
 #   5. BILLING (SmartBilling).
 #   6. Tareas programadas (create_schedules.sh): necesitan los Lambdas.
-#   7. Dominio api.bearsoft.com.bo y sus mapeos (setup_api_domain.sh): necesitan
-#      los API. Se repite en cada despliegue porque es idempotente y corrige el
-#      mapeo si un API se recreó con otro ID.
+#   7. Dominio api.bearsoft.com.bo y su puerta de entrada bearsoft-gateway
+#      (setup_api_domain.sh): necesita los Lambdas. Se repite en cada
+#      despliegue porque es idempotente y agrega las rutas de un servicio nuevo.
 #
 # El CORS de cada API sale del deploy.config de su servicio (CORS_ALLOW_METHODS):
 # el que expone PATCH lo declara ahí y build_and_deploy.sh lo aplica siempre.
@@ -79,7 +79,7 @@ deploy_in_order() {
     done
 }
 
-# Dominio y mapeos. Un certificado pendiente (3) o una prueba de humo que no pasó
+# Dominio y gateway. Un certificado pendiente (3) o una prueba de humo que no pasó
 # (4) no detienen el despliegue de los servicios: se informa y se sigue.
 domain_step() {
     set +e
