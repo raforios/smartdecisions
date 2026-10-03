@@ -7,7 +7,8 @@ from boto3.resources.base import ServiceResource
 from schemas.audit import (
     AuditRecordCreateSchema,
     AuditRecordResponseSchema,
-    AuditRecordQuerySchema
+    AuditRecordQuerySchema,
+    READ_ROLES
 )
 from controllers.audit import (
     create_audit_record_controller,
@@ -15,6 +16,7 @@ from controllers.audit import (
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
+from services.security import get_current_user, require_roles
 
 router = APIRouter(prefix='/v1/events', tags=['Events'])
 
@@ -27,12 +29,13 @@ router = APIRouter(prefix='/v1/events', tags=['Events'])
 )
 def create_audit_record_endpoint(
     record_data: AuditRecordCreateSchema,
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY)
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    caller: str = Depends(get_current_user)
 ) -> AuditRecordResponseSchema:
     '''
         Endpoint to create a new audit record.
     '''
-    message = 'Received request to create a new audit record.'
+    message = f'Caller: {caller}. Received request to create a new audit record.'
     logger.info(message)
     return create_audit_record_controller(
         dynamodb_resource = dynamodb_resource,
@@ -52,13 +55,14 @@ def create_audit_record_endpoint(
     '''
 )
 def get_audit_records_endpoint(
+    current_user: str = Depends(require_roles(*READ_ROLES)),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     query_params: AuditRecordQuerySchema = Depends()
 ) -> Dict[str, Any]:
     '''
         Endpoint to retrieve a paginated list of audit records with filters.
     '''
-    message = 'Received request to retrieve audit records.'
+    message = f'User: {current_user}. Received request to retrieve audit records.'
     logger.info(message)
     return get_audit_records_controller(
         dynamodb_resource = dynamodb_resource,

@@ -4,6 +4,7 @@
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, status
 from boto3.resources.base import ServiceResource
+from schemas.audit import READ_ROLES
 from schemas.usage_log import (
     UsageLogCreateSchema,
     UsageLogResponseSchema,
@@ -15,6 +16,7 @@ from controllers.usage_log import (
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
+from services.security import get_current_user, require_roles
 
 router = APIRouter(prefix='/v1/events', tags=['Events'])
 
@@ -27,12 +29,13 @@ router = APIRouter(prefix='/v1/events', tags=['Events'])
 )
 def create_usage_log_endpoint(
     log_data: UsageLogCreateSchema,
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY)
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    caller: str = Depends(get_current_user)
 ) -> UsageLogResponseSchema:
     '''
         Endpoint to create a new usage log.
     '''
-    message = 'Received request to create a new usage log.'
+    message = f'Caller: {caller}. Received request to create a new usage log.'
     logger.info(message)
     return create_usage_log_controller(
         dynamodb_resource = dynamodb_resource,
@@ -52,13 +55,14 @@ def create_usage_log_endpoint(
     '''
 )
 def get_usage_logs_endpoint(
+    current_user: str = Depends(require_roles(*READ_ROLES)),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     query_params: UsageLogQuerySchema = Depends()
 ) -> Dict[str, Any]:
     '''
         Endpoint to retrieve a paginated list of usage logs with filters.
     '''
-    message = 'Received request to retrieve usage logs.'
+    message = f'User: {current_user}. Received request to retrieve usage logs.'
     logger.info(message)
     return get_usage_logs_controller(
         dynamodb_resource = dynamodb_resource,

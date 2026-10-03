@@ -125,7 +125,8 @@ class UsageLogData(BaseModel):
 async def _perform_request(
     method: str,
     url: str,
-    payload: Optional[Dict[str, Any]] = None
+    payload: Optional[Dict[str, Any]] = None,
+    authorization: Optional[str] = None
 ) -> Optional[req.Response]:
     '''
         Helper function to perform a request call in a thread pool executor.
@@ -135,7 +136,10 @@ async def _perform_request(
     try:
         def request_call():
             if method == 'POST':
-                return req.post(url, json = payload, timeout = REQUEST_TIMEOUT_SECONDS)
+                return req.post(
+                    url, json = payload, timeout = REQUEST_TIMEOUT_SECONDS,
+                    headers = {'Authorization': authorization} if authorization else None
+                )
             raise ValueError(f'Unsupported method: {method}')
 
         return await asyncio.to_thread(request_call)
@@ -145,7 +149,10 @@ async def _perform_request(
         return None
 
 
-async def send_audit_event(audit_data: dict) -> None:
+async def send_audit_event(
+    audit_data: dict,
+    authorization: Optional[str] = None
+) -> None:
     '''
         Asynchronous function to send an audit event to the EVENTS microservice.
     '''
@@ -153,7 +160,9 @@ async def send_audit_event(audit_data: dict) -> None:
         logger.warning('EVENTS_SERVICE_URL is not set. Cannot send audit event.')
         return
 
-    response = await _perform_request('POST', EVENTS_AUDIT_URL, payload = audit_data)
+    response = await _perform_request(
+        'POST', EVENTS_AUDIT_URL, payload = audit_data, authorization = authorization
+    )
     if response is None:
         return
     if response.status_code >= 400:
@@ -166,7 +175,10 @@ async def send_audit_event(audit_data: dict) -> None:
     logger.info(message)
 
 
-async def send_usage_log(log_data: dict) -> None:
+async def send_usage_log(
+    log_data: dict,
+    authorization: Optional[str] = None
+) -> None:
     '''
         Asynchronous function to send a usage log to the EVENTS microservice.
     '''
@@ -174,7 +186,9 @@ async def send_usage_log(log_data: dict) -> None:
         logger.warning('EVENTS_SERVICE_URL is not set. Cannot send usage log.')
         return
 
-    response = await _perform_request('POST', EVENTS_LOG_URL, payload = log_data)
+    response = await _perform_request(
+        'POST', EVENTS_LOG_URL, payload = log_data, authorization = authorization
+    )
     if response is None:
         return
     if response.status_code >= 400:
@@ -185,7 +199,10 @@ async def send_usage_log(log_data: dict) -> None:
     logger.info(message)
 
 
-async def _process_and_send_usage_log(log_data: UsageLogData) -> None:
+async def _process_and_send_usage_log(
+    log_data: UsageLogData,
+    authorization: Optional[str] = None
+) -> None:
     '''
         Processes and sends a usage log to the EVENTS microservice.
     '''
@@ -198,7 +215,7 @@ async def _process_and_send_usage_log(log_data: UsageLogData) -> None:
         log_data_json = json.dumps(
             log_data.model_dump(by_alias = True), cls = CustomJSONEncoder
         )
-        asyncio.create_task(send_usage_log(json.loads(log_data_json)))
+        asyncio.create_task(send_usage_log(json.loads(log_data_json), authorization))
     except TypeError as e:
         error_msg = f'Error serializing log data: {e}'
         logger.error(error_msg, exc_info = True)
@@ -321,7 +338,7 @@ def handle_service_errors(
                     log_data.response_body = (
                         _serialize_response(response_data) if with_log else None
                     )
-                    await _process_and_send_usage_log(log_data)
+                    await _process_and_send_usage_log(log_data, _caller_authorization(request))
 
         return wrapper
     return decorator
@@ -375,7 +392,7 @@ def _schedule_audit(
         'old_values': None,
         'new_values': formatted_new
     }
-    _safe_schedule(send_audit_event(audit_payload))
+    _safe_schedule(send_audit_event(audit_payload, _caller_authorization(kwargs.get('request'))))
 
 
 def audit_event(
@@ -410,3 +427,20 @@ def audit_event(
 
         return async_wrapper if is_coroutine else sync_wrapper
     return decorator
+
+
+def _caller_authorization(request: Optional[Request]) -> Optional[str]:
+    '''
+        The Authorization header of the request being served, forwarded to
+        EVENTS so it can check that whoever writes a log is a real caller.
+
+        The token was already validated by this service; EVENTS validates it
+        again because its POST endpoints are reachable from the internet.
+
+        Args:
+            request (Optional[Request]): The incoming request, when there is one.
+
+        Returns:
+            Optional[str]: The header, or None for calls with no request.
+    '''
+    return request.headers.get('authorization') if request is not None else None

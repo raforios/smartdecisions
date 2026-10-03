@@ -207,7 +207,10 @@ class UsageLogData(BaseModel):
     response_body: dict | list | None = None
     response_time_ms: int
 
-async def _process_and_send_usage_log(log_data: UsageLogData):
+async def _process_and_send_usage_log(
+    log_data: UsageLogData,
+    authorization: Optional[str] = None
+):
     '''
        Processes and sends a usage log to the event service.
     '''
@@ -219,7 +222,7 @@ async def _process_and_send_usage_log(log_data: UsageLogData):
 
         log_data_json = json.dumps(log_data.model_dump(by_alias = True),
                                    cls = CustomJSONEncoder)
-        asyncio.create_task(send_usage_log(json.loads(log_data_json)))
+        asyncio.create_task(send_usage_log(json.loads(log_data_json), authorization))
     except (TypeError) as e:
         error_msg = f'Error serializing log data: {e}'
         logger.error(error_msg, exc_info = True)
@@ -290,7 +293,7 @@ async def _finalize_and_log(
         else:
             log_data.response_body = None
 
-        await _process_and_send_usage_log(log_data)
+        await _process_and_send_usage_log(log_data, _caller_authorization(request))
 
 def _handle_exception(
     e: Exception,
@@ -537,7 +540,9 @@ def audit_event(
             }
             try:
                 data_to_send = json.loads(json.dumps(audit_event_data, cls = CustomJSONEncoder))
-                asyncio.create_task(send_audit_event(data_to_send))
+                asyncio.create_task(send_audit_event(
+                    data_to_send, _caller_authorization(kwargs.get('request'))
+                ))
             except (TypeError, AttributeError) as e:
                 error_msg = f'Error serializing audit data: {e}'
                 logger.error(error_msg, exc_info = True)
@@ -546,7 +551,10 @@ def audit_event(
         return wrapper
     return decorator
 
-async def send_audit_event(audit_data: dict):
+async def send_audit_event(
+    audit_data: dict,
+    authorization: Optional[str] = None
+):
     '''
         Asynchronous function to send an audit event to the EVENTS microservice.
     '''
@@ -555,12 +563,16 @@ async def send_audit_event(audit_data: dict):
         return
 
     url = EVENTS_AUDIT_URL
-    response = await _perform_request('POST', url, headers = {}, payload = audit_data)
+    response = await _perform_request('POST', url, headers = _events_headers(authorization),
+                                      payload = audit_data)
     response.raise_for_status()
     message = f'Audit event sent successfully. Status: {response.status_code}'
     logger.info(message)
 
-async def send_usage_log(log_data: dict):
+async def send_usage_log(
+    log_data: dict,
+    authorization: Optional[str] = None
+):
     '''
         Asynchronous function to send a usage log to the EVENTS microservice.
     '''
@@ -574,7 +586,8 @@ async def send_usage_log(log_data: dict):
             if len(body_str) > 2000 else body_str
 
     url = EVENTS_LOG_URL
-    response = await _perform_request('POST', url, headers = {}, payload = log_data)
+    response = await _perform_request('POST', url, headers = _events_headers(authorization),
+                                      payload = log_data)
 
     # Check the response exists before calling anything on it.
     if response is not None:
@@ -809,7 +822,8 @@ def _trigger_bulk_audit(
     microservice: str,
     entity: str,
     user: str,
-    result: dict
+    result: dict,
+    authorization: Optional[str] = None
 ):
     ''' Helper to trigger async audit for bulk ops '''
     audit_data = {
@@ -821,7 +835,7 @@ def _trigger_bulk_audit(
         'old_values': None,
         'new_values': json.dumps(result)
     }
-    asyncio.create_task(send_audit_event(audit_data))
+    asyncio.create_task(send_audit_event(audit_data, authorization))
 
 async def _execute_bulk_logic( # pylint: disable=too-many-arguments
     service_func: Callable,
@@ -870,7 +884,8 @@ async def generic_bulk_controller_wrapper(
 
     # 2. Audit (only on success)
     if status_code < 400:
-        _trigger_bulk_audit(microservice_name, entity_name, current_user, result)
+        _trigger_bulk_audit(microservice_name, entity_name, current_user, result,
+                            _caller_authorization(request))
 
     # 3. Usage Log
     await _finalize_and_log(
@@ -882,3 +897,30 @@ async def generic_bulk_controller_wrapper(
         raise HTTPException(status_code = status_code, detail = result['detail'])
 
     return result
+
+
+def _caller_authorization(request: Optional[Request]) -> Optional[str]:
+    '''
+        The Authorization header of the request being served, forwarded to
+        EVENTS so it can check that whoever writes a log is a real caller.
+
+        Args:
+            request (Optional[Request]): The incoming request, when there is one.
+
+        Returns:
+            Optional[str]: The header, or None for calls with no request.
+    '''
+    return request.headers.get('authorization') if request is not None else None
+
+
+def _events_headers(authorization: Optional[str]) -> Dict[str, str]:
+    '''
+        Headers for a POST to EVENTS: the caller's token when there is one.
+
+        Args:
+            authorization (Optional[str]): The caller's Authorization header.
+
+        Returns:
+            Dict[str, str]: The headers to send.
+    '''
+    return {'Authorization': authorization} if authorization else {}

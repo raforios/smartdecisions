@@ -45,7 +45,10 @@ APP_ENV = ENV_VARS['APP_ENV']
 
 ROOT_PATH_VALUE = ENV_VARS.get('ROOT_PATH', '').strip('/') if ENV_VARS.get('ROOT_PATH') else ''
 ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
-OPENAPI_URL = f'{ROOT_PATH_NORMALIZED}/openapi.json' if ROOT_PATH_NORMALIZED else '/openapi.json'
+# The docs live under the service's own prefix too: api.bearsoft.com.bo only
+# routes /v1/<service>/... to this Lambda, so /docs is unreachable through it.
+DOCS_BASE = '/v1/billing'
+OPENAPI_URL = f'{DOCS_BASE}/openapi.json'
 
 
 @asynccontextmanager
@@ -90,6 +93,8 @@ APP_CONFIG = {
         'email': 'raforios@gmail.com',
     },
     'lifespan': lifespan,
+    # Swagger's "Try it out" calls the host it was opened on, not a stage prefix.
+    'root_path_in_servers': False,
     'docs_url': None,
     'redoc_url': None,
     'openapi_url': None,
@@ -122,6 +127,7 @@ def root() -> Dict[str, Any]:
 
 
 @app.get('/openapi.json', include_in_schema = False)
+@app.get(OPENAPI_URL, include_in_schema = False)
 def custom_openapi() -> Dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
@@ -130,6 +136,7 @@ def custom_openapi() -> Dict[str, Any]:
 
 
 @app.get('/docs', include_in_schema = False)
+@app.get(f'{DOCS_BASE}/docs', include_in_schema = False)
 async def custom_swagger_ui() -> HTMLResponse:
     '''
         Serves the Swagger UI documentation interface.

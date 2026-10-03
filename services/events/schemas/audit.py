@@ -45,3 +45,9 @@ class AuditRecordQuerySchema(BaseModel):
     limit: int = Field(100, ge = 1, le = 100)
     last_evaluated_key: Optional[str] = Field(None,
                 description = 'The last evaluated key for pagination.')
+
+
+# Who may READ the logs. They hold every user's e-mail, IP and the bodies of
+# their requests, and they were open to anyone on the internet. Writing stays
+# open: every service posts its audit and usage logs without a user token.
+READ_ROLES: tuple[str, ...] = ('ADMIN',)
