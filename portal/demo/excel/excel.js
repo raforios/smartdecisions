@@ -828,9 +828,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (converted) {
             currencyNote.textContent =
                 'En dólares: cada importe al tipo de cambio oficial de su propio día.' +
+                (converted.rows_at_fixed_rate > 0
+                    ? ` ${formatInt(converted.rows_at_fixed_rate)} fila(s) de antes de que ` +
+                      'el dólar flotara, al tipo de cambio fijo de ese régimen.'
+                    : '') +
                 (converted.rows_without_rate > 0
-                    ? ` ${formatInt(converted.rows_without_rate)} fila(s) anteriores a la ` +
-                      'primera cotización publicada quedan en bolivianos.'
+                    ? ` ${formatInt(converted.rows_without_rate)} fila(s) sin cotización ` +
+                      'publicada quedan en bolivianos.'
                     : '');
         }
     }
