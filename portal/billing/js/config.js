@@ -8,13 +8,13 @@
  * The local URLs only take effect when the page itself is served from
  * localhost, which is what `resolveBases` decides.
  */
-export const AUTH_URL = 'https://32652ile50.execute-api.us-east-1.amazonaws.com';
+export const AUTH_URL = 'https://api.bearsoft.com.bo';
 export const AUTH_URL_LOCAL = 'https://32652ile50.execute-api.us-east-1.amazonaws.com';
 
 // Production, verified against the deployed API Gateway: the service answers
 // under /v1/billing. The local one stays on 3004 and only takes effect when the
 // page itself is served from localhost.
-export const BILLING_URL = 'https://l2z2r6v7cf.execute-api.us-east-1.amazonaws.com';
+export const BILLING_URL = 'https://api.bearsoft.com.bo';
 export const BILLING_URL_LOCAL = 'http://localhost:3004';
 
 /** Where an unauthenticated visitor is sent. */
