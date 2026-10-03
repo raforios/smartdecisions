@@ -78,21 +78,44 @@ def test_the_rate_of_a_day_without_publication_is_the_last_one_before_it():
     assert round(converted['total_amount'].iloc[0], 2) == 100.0
 
 
-def test_a_row_before_the_first_published_rate_is_left_alone_and_reported():
+def test_a_row_of_the_fixed_regime_converts_at_the_fixed_rate():
     '''
-        Converting at a figure nobody published would be inventing one. The
-        row keeps its amount and the answer says how many did, which is the
-        difference between a gap and a silent lie.
+        The series starts when the boliviano floated. A sale of January was
+        paid at the fixed rate, which QUOTES reports for that day: Andina's
+        whole 2025 file read as zero dollars before this, because every row
+        fell before the first published rate.
     '''
     frame = pd.DataFrame([
         {'date': '2026-01-10', 'total_amount': 686.0},
         {'date': '2026-09-15', 'total_amount': 740.0},
     ])
 
-    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
+    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED), \
+         patch.object(currency, '_fixed_rate_before', lambda *args: 6.86):
         converted, applied = currency.convert_frame(frame, 'USD', 'Bearer t')
 
-    assert pd.isna(converted['total_amount'].iloc[0])
+    assert round(converted['total_amount'].iloc[0], 2) == 100.0
+    assert applied['rows_at_fixed_rate'] == 1
+    assert applied['rows_without_rate'] == 0
+
+
+def test_a_row_with_no_rate_at_all_keeps_its_amount_and_is_reported():
+    '''
+        A real gap —no publication and not the fixed regime— is not invented:
+        the row keeps its own amount and the answer says how many did. It used
+        to become NaN, and a NaN sums as zero.
+    '''
+    frame = pd.DataFrame([
+        {'date': '2026-07-01', 'total_amount': 686.0},
+        {'date': '2026-09-15', 'total_amount': 740.0},
+    ])
+    later = [{'date': '2026-09-01', 'rate': 7.40}]
+
+    with patch.object(currency, '_fetch_rates', lambda *args: later), \
+         patch.object(currency, '_fixed_rate_before', lambda *args: None):
+        converted, applied = currency.convert_frame(frame, 'USD', 'Bearer t')
+
+    assert converted['total_amount'].iloc[0] == 686.0
     assert applied['rows_without_rate'] == 1
     assert applied['rows_converted'] == 1
 

@@ -42,6 +42,8 @@ MONEY_COLUMNS: Tuple[str, ...] = (
     'unit_price', 'unit_cost', 'total_amount', 'credit_limit'
 )
 _DATE = 'date'
+# The regime QUOTES reports for a day before the boliviano floated.
+_FIXED_REGIME = 'FIXED'
 
 
 def _fetch_rates(
@@ -84,6 +86,55 @@ def _fetch_rates(
         logger.error(error_msg)
         raise ServiceUnavailableError(detail = AnalyticsError.RATES_UNAVAILABLE.value)
     return (response.json() or {}).get('rates') or []
+
+
+def _fixed_rate_before(
+    currency: str,
+    auth_token: str,
+    day: str
+) -> Optional[float]:
+    '''
+        The rate of the fixed regime, when `day` falls in it; None otherwise.
+
+        The published series starts when the boliviano floated. A sale made
+        before that was paid at the fixed rate, and QUOTES —which owns the
+        rate— says so for any day it is asked about. Asking it keeps the
+        figure out of this service.
+
+        Args:
+            currency (str): ISO 4217 code.
+            auth_token (str): The caller's Authorization header.
+            day (str): The latest day with no published rate, YYYY-MM-DD.
+
+        Returns:
+            Optional[float]: The fixed rate, or None when that day is in the
+                float and the gap is real.
+
+        Raises:
+            ServiceUnavailableError: QUOTES unreachable or refusing.
+    '''
+    try:
+        response = requests.get(
+            f'{QUOTES_SERVICE_URL}/v1/quotes/exchange-rates/at',
+            headers = {'Authorization': auth_token},
+            params = {'currency': currency, 'date': day},
+            timeout = QUOTES_TIMEOUT_SECONDS
+        )
+    except requests.exceptions.RequestException as error:
+        error_msg = f'Network error asking QUOTES for the {currency} rate on {day}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(
+            detail = AnalyticsError.RATES_UNAVAILABLE.value
+        ) from error
+    if response.status_code == 404:
+        return None
+    if not response.ok:
+        error_msg = (f'QUOTES refused the {currency} rate on {day}: '
+                     f'status={response.status_code} body={response.text[:200]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = AnalyticsError.RATES_UNAVAILABLE.value)
+    answer = response.json() or {}
+    return float(answer['rate']) if answer.get('regime') == _FIXED_REGIME else None
 
 
 def _rate_series(
@@ -145,10 +196,28 @@ def convert_frame(
         (days.min().date().isoformat(), days.max().date().isoformat())
     )
     series = _rate_series(rates, days)
+
+    # Days before the first published rate. When they belong to the fixed
+    # regime they convert at its rate; the series is forward-filled, so every
+    # missing day is earlier than the latest one asked about.
+    missing = series.isna()
+    at_fixed = 0
+    if missing.any():
+        fixed = _fixed_rate_before(
+            currency, auth_token, days[missing].max().date().isoformat()
+        )
+        if fixed:
+            series = series.where(~missing, fixed)
+            at_fixed = int(missing.sum())
+
     converted = dataframe.copy()
     for column in MONEY_COLUMNS:
         if column in converted.columns:
-            converted[column] = converted[column] / series
+            # A row with no rate keeps its own amount: dividing by nothing
+            # turned it into NaN, and a NaN sums as zero.
+            converted[column] = (converted[column] / series).where(
+                series.notna(), converted[column]
+            )
 
     applied = int(series.notna().sum())
     message = (f'Converted {applied}/{len(series)} row(s) to {currency} at the rate '
@@ -158,6 +227,7 @@ def convert_frame(
         'currency': currency,
         'base_currency': BASE_CURRENCY,
         'rows_converted': applied,
+        'rows_at_fixed_rate': at_fixed,
         'rows_total': int(len(series)),
         # Rows before the first published rate keep their original amounts.
         # Saying so is the difference between a gap and a silent lie.

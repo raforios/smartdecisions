@@ -298,6 +298,9 @@ class CurrencyApplied(BaseModel):
     currency: str
     base_currency: str
     rows_converted: int = Field(0, ge = 0)
+    rows_at_fixed_rate: int = Field(
+        0, ge = 0, description = 'Rows dated before the float, converted at the fixed rate.'
+    )
     rows_total: int = Field(0, ge = 0)
     rows_without_rate: int = Field(0, ge = 0)
 
