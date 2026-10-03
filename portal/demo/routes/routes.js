@@ -72,7 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let layer = null;
 
     if (!state.datasetId) {
-        qs('#noDataset').hidden = false;
+        // A fresh login has no dataset in the session even when the account
+        // has one: ask INGEST, and start again with it in place.
+        window.SD_API.ensureDataset().then((datasetId) => {
+            if (datasetId) window.location.reload();
+            else qs('#noDataset').hidden = false;
+        });
         return;
     }
     qs('#plannerLayout').hidden = false;

@@ -13,9 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#stockFileDate').value = T.todayIso();
     qs('#stockViewDate').value = T.todayIso();
 
-    // The sales dataset the stock file attaches to: the same one Análisis
-    // Comercial created, shared through the session like the rest of Rutas.
-    const DATASET_KEY = 'sd_excel_dataset_id';
+    // The stock file attaches to the account's sales dataset (`ensureDataset`).
     const ROWS_PER_PAGE = 10;
     const state = { items: [], page: 0 };
 
@@ -28,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#stockFileButton').addEventListener('click', async () => {
         const date = qs('#stockFileDate').value;
         const file = qs('#stockFile').files[0];
-        const datasetId = sessionStorage.getItem(DATASET_KEY);
+        const datasetId = await window.SD_API.ensureDataset();
         if (!date) { note('#stockFileNote', 'Indica la fecha.', 'error'); return; }
         if (!file) { note('#stockFileNote', 'Elige el archivo de stock.', 'error'); return; }
         if (!datasetId) {

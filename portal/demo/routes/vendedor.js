@@ -83,7 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // nobody's yet and is not offered — taking it was how every seller
             // ended up measured against the whole team's stops.
             state.mine = new Set([me, ...(linked.sellers || []).map((seller) => seller.id)]);
-            state.plans = plans.filter((plan) => plan.seller && state.mine.has(plan.seller));
+            // And only the ones for TODAY, or with no date (a reusable template):
+            // a plan for Monday offered on Saturday as "today's plan" is wrong.
+            state.plans = plans.filter((plan) => plan.seller && state.mine.has(plan.seller)
+                && (!plan.plan_date || plan.plan_date === today));
             state.stock = stock.items || [];
             const mine = routes.filter((route) => route.seller === me);
             const open = mine.find((route) => !route.end_time);

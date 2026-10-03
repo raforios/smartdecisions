@@ -2679,5 +2679,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     paintCurrencyLabels();
-    if (state.datasetId) restoreDataset();
+    if (state.datasetId) {
+        restoreDataset();
+    } else {
+        // Same as Rutas: the account's latest validated upload, not an empty screen.
+        window.SD_API.ensureDataset().then((datasetId) => {
+            if (datasetId) { setDataset(datasetId); restoreDataset(); }
+        });
+    }
 });

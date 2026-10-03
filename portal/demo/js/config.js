@@ -6,28 +6,29 @@
  * Hosted statically (S3 + CloudFront) per environment by simply replacing
  * the URLs below. No build step required.
  *
- * Each microservice lives behind its own API Gateway. All of them are
- * deployed and productive; point a URL at localhost only while developing
- * that particular service.
+ * Every microservice is published under one domain, api.bearsoft.com.bo:
+ * the gateway routes /v1/<service>/... to that service's Lambda, so the base
+ * is the same for all of them. They stay separate keys so one service can be
+ * pointed at localhost while developing it.
  */
 window.SD_CONFIG = {
     // --- Base services (shared by every BearSoft product) ---
-    AUTH_URL:          'https://32652ile50.execute-api.us-east-1.amazonaws.com',
-    EVENTS_URL:        'https://uyrs6ucto3.execute-api.us-east-1.amazonaws.com',
-    FILES_URL:         'https://ek2xktuyr4.execute-api.us-east-1.amazonaws.com',
-    ML_FUNCTIONS_URL:  'https://g7o9aq6cf6.execute-api.us-east-1.amazonaws.com',
+    AUTH_URL:          'https://api.bearsoft.com.bo',
+    EVENTS_URL:        'https://api.bearsoft.com.bo',
+    FILES_URL:         'https://api.bearsoft.com.bo',
+    ML_FUNCTIONS_URL:  'https://api.bearsoft.com.bo',
 
     // --- SmartDecisions services ---
-    INGEST_URL:        'https://544nho7nk4.execute-api.us-east-1.amazonaws.com',
-    OPTIMIZATION_URL:  'https://yejyqw3716.execute-api.us-east-1.amazonaws.com',
-    ANALYTICS_URL:     'https://u0prf8qr12.execute-api.us-east-1.amazonaws.com',
-    MINING_URL:        'https://jvxmqeg601.execute-api.us-east-1.amazonaws.com/minig_analysis',
-    QUOTES_URL:        'https://w61p0ef0w7.execute-api.us-east-1.amazonaws.com/quotes',
+    INGEST_URL:        'https://api.bearsoft.com.bo',
+    OPTIMIZATION_URL:  'https://api.bearsoft.com.bo',
+    ANALYTICS_URL:     'https://api.bearsoft.com.bo',
+    MINING_URL:        'https://api.bearsoft.com.bo',
+    QUOTES_URL:        'https://api.bearsoft.com.bo',
 
     // Capa de interpretación. Definirla es lo que hace aparecer el botón
     // "¿Qué significa esto?" en cada vista: sin ella el portal funciona igual,
     // sólo que sin explicaciones.
-    AI_URL:            'https://wi8s2oocc0.execute-api.us-east-1.amazonaws.com/ai',
+    AI_URL:            'https://api.bearsoft.com.bo',
 
     // S3 bucket where large sales files are staged (direct-to-S3 upload via
     // pre-signed URL, bypassing the ~10 MB API Gateway limit).

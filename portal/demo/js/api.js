@@ -168,5 +168,27 @@
         return presign.file_key;
     }
 
-    window.SD_API = { get, post, put, patch, del, postFormData, uploadToBucket };
+    // The sales dataset every module reads. Kept in the session, but a fresh
+    // login that went straight to Rutas has none there although the account
+    // has data: INGEST lists the account's uploads newest first, so the most
+    // recent validated one is the one in use.
+    const DATASET_KEY = 'sd_excel_dataset_id';
+
+    async function ensureDataset() {
+        const stored = sessionStorage.getItem(DATASET_KEY);
+        if (stored) return stored;
+        try {
+            const list = await get(`${window.SD_CONFIG.INGEST_URL}/v1/ingest/datasets`);
+            const latest = (list.datasets || []).find((item) => item.status === 'validated');
+            if (!latest) return null;
+            sessionStorage.setItem(DATASET_KEY, latest.dataset_id);
+            return latest.dataset_id;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    window.SD_API = {
+        get, post, put, patch, del, postFormData, uploadToBucket, ensureDataset
+    };
 })();
