@@ -291,7 +291,14 @@ aws logs tail /aws/lambda/<nombre-del-lambda> --profile deploy_ml --region us-ea
 
 Si no imprime nada, está bien. Un error típico al arrancar es una variable faltante en el `.env`: el servicio **se niega a arrancar** a propósito, y el registro dice cuál falta.
 
-**3. El servicio responde por el dominio.** Sin token debe responder `401`:
+**3. El servicio responde por el dominio.** Cada servicio tiene su healthcheck y su documentación bajo su propio prefijo:
+
+```bash
+curl https://api.bearsoft.com.bo/v1/ingest/health      # {"Api Healthcheck": "OK", ...}
+open https://api.bearsoft.com.bo/v1/ingest/docs         # Swagger
+```
+
+Y un endpoint protegido, sin token, debe responder `401`:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" https://api.bearsoft.com.bo/v1/ingest/datasets
