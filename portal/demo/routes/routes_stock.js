@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const { qs, toast, setButtonBusy } = window.SD_UI;
     const T = window.SD_TRACK;
 
-    qs('#stockDate').value = T.todayIso();
     qs('#stockFileDate').value = T.todayIso();
     qs('#stockViewDate').value = T.todayIso();
 
@@ -70,44 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             note('#stockFileNote', T.errorText(error, 'No se pudo subir el archivo.'), 'error');
-        } finally {
-            done();
-        }
-    });
-
-    /**
-     * One product per line: "SKU, quantity[, name]". Commas or semicolons;
-     * blank lines ignored. Errors name the line so the user fixes it.
-     */
-    function parseLines(text) {
-        const items = [];
-        text.split(/\r?\n/).forEach((raw, index) => {
-            const line = raw.trim();
-            if (!line) return;
-            const parts = line.split(/[;,\t]/).map((part) => part.trim());
-            const quantity = Number(parts[1]);
-            if (!parts[0] || parts.length < 2 || isNaN(quantity) || quantity < 0) {
-                throw new Error(`Línea ${index + 1}: se espera "SKU, cantidad[, nombre]".`);
-            }
-            items.push({ sku: parts[0], quantity, product_name: parts[2] || null });
-        });
-        if (!items.length) throw new Error('No hay productos para cargar.');
-        return items;
-    }
-
-    qs('#stockLoadButton').addEventListener('click', async () => {
-        const date = qs('#stockDate').value;
-        if (!date) { note('#stockNote', 'Indica la fecha.', 'error'); return; }
-        const done = setButtonBusy(qs('#stockLoadButton'), 'Cargando…');
-        try {
-            const items = parseLines(qs('#stockLines').value);
-            const day = await T.stock.load({ date, items });
-            note('#stockNote', `${day.skus_loaded} producto(s) cargados para ${date}.`, 'success');
-            toast('Stock del día cargado.', 'success');
-            qs('#stockViewDate').value = date;
-            paintDay(day);
-        } catch (error) {
-            note('#stockNote', T.errorText(error, 'No se pudo cargar el stock.'), 'error');
         } finally {
             done();
         }

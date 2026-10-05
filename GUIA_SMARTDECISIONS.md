@@ -83,6 +83,7 @@ Usuarios de cada empresa (gerente, vendedor, consulta): `SMARTDECISIONS.md` §2.
 
 | Cosa | Cómo |
 |---|---|
+| Rutas del día | La mañana de la demo: `python -m tools.seed_demo_routes --date AAAA-MM-DD --yes --reset`. Arma, para las dos empresas, los planes del día que empiezan en BearSoft, un plan en mal orden para Optimizar, los recorridos de los tres días anteriores para Comparación y el stock de cada día |
 | Dos navegadores (o una ventana normal y una de incógnito) | Uno con Illimani y otro con Andina, **ya ingresados**. La sesión dura unos 30 minutos: ingresar justo antes |
 | Pantallas precalculadas | Abrir una vez cada análisis que se va a mostrar: la segunda vez sale de la memoria y es inmediata |
 | Cumplimiento de Illimani | Si se muestra, filtrar el período a los últimos meses: con 24 meses la respuesta pesa y con mala conexión tarda |

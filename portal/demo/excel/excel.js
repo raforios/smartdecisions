@@ -2038,10 +2038,18 @@ document.addEventListener('DOMContentLoaded', () => {
         content.hidden = false;
 
         const meses = totals.periods || [];
+        const disponibles = data.available_periods || [];
+        // Sin período elegido el servicio juzga sólo el último mes: se dice,
+        // para que el gerente sepa que puede ampliar con las fechas de arriba.
+        const alcance = meses.length === 1
+            ? `en ${meses[0]}`
+            : `en ${meses.length} meses, de ${meses[0] || '—'} a ${meses[meses.length - 1] || '—'}`;
+        const ampliar = disponibles.length > meses.length
+            ? ` Hay ${disponibles.length} meses cargados (${disponibles[0]} a ` +
+              `${disponibles[disponibles.length - 1]}): elige otro período arriba para verlos.`
+            : '';
         qs('#objectivesSubtitle').textContent =
-            `${formatInt(totals.clients_count)} clientes con objetivo en ` +
-            `${meses.length} mes(es), de ${meses[0] || '—'} a ` +
-            `${meses[meses.length - 1] || '—'}.` +
+            `${formatInt(totals.clients_count)} clientes con objetivo ${alcance}.` + ampliar +
             (data.clients_without_objective
                 ? ` Otros ${formatInt(data.clients_without_objective)} facturaron ` +
                   'sin objetivo asignado: no se los puntúa, porque no hay meta ' +

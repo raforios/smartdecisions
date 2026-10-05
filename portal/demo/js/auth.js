@@ -57,9 +57,13 @@
         return (claims && claims.role) || '';
     }
 
+    /**
+     * Forgets everything of the session, not only the token: the dataset, the
+     * last screen and the cached results belong to the user who chose them.
+     * Keeping them made the next user ask INGEST for somebody else's dataset.
+     */
     function clearSession() {
-        sessionStorage.removeItem(TOKEN_KEY);
-        sessionStorage.removeItem(EMAIL_KEY);
+        sessionStorage.clear();
     }
 
     /**
@@ -95,6 +99,8 @@
         if (!token) {
             throw new Error('La respuesta del servicio no incluye access_token.');
         }
+        // A new login starts clean even if the previous user never logged out.
+        clearSession();
         sessionStorage.setItem(TOKEN_KEY, token);
         sessionStorage.setItem(EMAIL_KEY, email);
         return token;

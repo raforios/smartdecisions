@@ -13,7 +13,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="/js/config.js?v=2e8e432ba8"></script>
-    <script src="/js/auth.js?v=514e2dbfb8" defer></script>
+    <script src="/js/auth.js?v=16147b32b2" defer></script>
     <script src="/js/api.js?v=5440fa776b" defer></script>
     <script src="/js/ui.js?v=bd318da6b9" defer></script>
     <script src="/js/session.js?v=91bb432af9" defer></script>
@@ -24,7 +24,7 @@
     <script src="/routes/routes_tracking.js?v=65a9b60304" defer></script>
     <script src="/routes/routes.js?v=a17e63a9fc" defer></script>
     <script src="/routes/routes_plans.js?v=98d6f9a4d2" defer></script>
-    <script src="/routes/routes_stock.js?v=397404eb04" defer></script>
+    <script src="/routes/routes_stock.js?v=414ee359ac" defer></script>
     <script src="/routes/routes_live.js?v=6dd5389b43" defer></script>
     <script src="/routes/routes_optimize.js?v=29e1178874" defer></script>
     <script src="/routes/routes_compare.js?v=7c9b4d7215" defer></script>
@@ -325,23 +325,6 @@
                                 <button type="button" class="btn btn-primary btn-small" id="stockFileButton">Subir y cargar el día</button>
                             </div>
                             <p class="form-note" id="stockFileNote" aria-live="polite"></p>
-                        </form>
-                    </article>
-                    <article class="card">
-                        <h3>O escríbelo a mano</h3>
-                        <p class="legend-hint">
-                            Una línea por producto: <code>SKU, cantidad</code> y opcionalmente el
-                            nombre. Volver a cargar el mismo día lo reemplaza y conserva lo ya vendido.
-                        </p>
-                        <form class="form-stack" id="stockForm">
-                            <label><span>Fecha</span><input type="date" id="stockDate"></label>
-                            <label><span>Productos</span>
-                                <textarea id="stockLines" rows="8" placeholder="SKU-001, 120, Agua 2L&#10;SKU-002, 40"></textarea>
-                            </label>
-                            <div class="form-actions">
-                                <button type="button" class="btn btn-primary btn-small" id="stockLoadButton">Cargar</button>
-                            </div>
-                            <p class="form-note" id="stockNote" aria-live="polite"></p>
                         </form>
                     </article>
                 </aside>
