@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
+import boto3
 from mangum import Mangum
 import uvicorn
 
@@ -22,7 +23,6 @@ from services.api_exceptions import setup_exception_handlers
 from services.db_connection_sql import ENGINE, Base
 from services.logger_config import custom_logger as logger
 from services.environment import load_and_validate_env_vars
-import boto3
 
 from services.market_sources import scheduled_sync
 from services.prices_store import uses_dynamodb
@@ -177,10 +177,19 @@ app.include_router(public_reports_router)
 app.include_router(mining_router)
 app.include_router(market_router)
 
-if __name__ == '__main__':
+def run_local() -> None:
+    '''
+        Runs the app with Uvicorn for local development. A function so its
+        log message does not live at module level, where it shadowed the
+        `message` of every other function.
+    '''
     message = f'Starting Mining Analysis Service at {UVICORN_HOST}:{UVICORN_PORT}'
     logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
+
+
+if __name__ == '__main__':
+    run_local()
 
 # The Lambda answers two kinds of caller. API Gateway sends HTTP events, which
 # Mangum turns into ASGI; EventBridge sends a scheduled event, which has no

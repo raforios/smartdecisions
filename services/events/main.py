@@ -142,9 +142,18 @@ app.include_router(audit_router, tags = ['Events'])
 app.include_router(usage_log_router, tags = ['Events'])
 
 # Entry point to run the app
-if __name__ == '__main__':
+def run_local() -> None:
+    '''
+        Runs the app with Uvicorn for local development. A function so its
+        log message does not live at module level, where it shadowed the
+        `message` of every other function.
+    '''
     message = f'Starting Uvicorn server at {UVICORN_HOST}:{UVICORN_PORT}'
     logger.info(message)
     uvicorn.run('main:app', host = UVICORN_HOST, port = UVICORN_PORT, reload = True)
+
+
+if __name__ == '__main__':
+    run_local()
 
 handler = Mangum(app)
