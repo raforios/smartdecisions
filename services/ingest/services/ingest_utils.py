@@ -19,6 +19,7 @@ import pandas as pd
 from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
+from models.ingest import IngestDataset
 from schemas.files import FilesError
 from schemas.ingest import IngestError
 from services.crud import create_item, get_item_by_key
@@ -75,7 +76,7 @@ def download_template_bytes(file_key: str) -> bytes:
 # Dataset metadata (DynamoDB)
 # ---------------------------------------------------------------------------
 
-def _build_dataset_item(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _build_dataset_item(payload: Dict[str, Any]) -> IngestDataset:
     '''
         Builds the DynamoDB item shape for a new ingested dataset.
 

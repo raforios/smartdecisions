@@ -320,3 +320,27 @@ def test_the_pipeline_accepts_a_file_whose_names_run_long():
 
     assert not result.issues
     assert len(result.accepted) == 1
+
+
+def test_the_dataset_model_declares_every_attribute_the_item_stores():
+    '''
+        `IngestDataset` had fallen behind the item: the companion files and
+        the rejected rows were written but never declared. Every attribute
+        the builder writes, and the three every companion attaches, must be
+        in the model.
+    '''
+    # pylint: disable=import-outside-toplevel,protected-access
+    from controllers import collections, objectives, stock, visits
+    from models.ingest import IngestDataset
+    from services.ingest_utils import _build_dataset_item
+
+    declared = set(IngestDataset.__annotations__)
+    built = _build_dataset_item({'owner_email': 'a@b.c', 'status': 'validated'})
+    attached = {
+        f'{module.SPEC.name}_{suffix}'
+        for module in (collections, objectives, stock, visits)
+        for suffix in ('s3_key', 'summary', 'issues')
+    }
+
+    assert set(built) <= declared
+    assert attached <= declared

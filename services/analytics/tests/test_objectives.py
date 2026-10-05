@@ -155,6 +155,29 @@ def test_without_payments_everything_invoiced_reads_as_debt():
     assert block.totals.debt_ratio == 1.0
 
 
+def test_a_cash_sale_is_collected_when_it_is_made():
+    '''
+        A CONTADO invoice was paid at the counter and never appears in the
+        collections file. Reading it as debt put Distribuidora Andina's whole
+        cash sales (Bs 994.287) into the debt column, against a receivables
+        block that rightly did not count them.
+    '''
+    sales = pd.DataFrame([
+        {**_sale('ABEL', 'SILVER', 'F1', 1000.0), 'payment_terms': 'CONTADO'},
+        {**_sale('ABEL', 'SILVER', 'F2', 500.0), 'payment_terms': 'CREDITO'}
+    ])
+    objectives = pd.DataFrame([
+        {'pos_id': 'ABEL', 'period': '2025-01', 'target_amount': 1500.0}
+    ])
+    collections = pd.DataFrame([{'order_id': 'F2', 'paid_amount': 200.0}])
+
+    with_payments = build_objectives(sales, objectives, collections, POLICY).clients[0]
+    without_payments = build_objectives(sales, objectives, None, POLICY).clients[0]
+
+    assert (with_payments.collected_amount, with_payments.debt_amount) == (1200.0, 300.0)
+    assert (without_payments.collected_amount, without_payments.debt_amount) == (1000.0, 500.0)
+
+
 def test_a_client_with_no_objective_is_counted_and_never_scored():
     '''
         Scoring them would mean inventing a target; hiding them would let a

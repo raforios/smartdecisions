@@ -47,17 +47,24 @@ analytics/
 └── requirements.txt
 ```
 
-## Tablas DynamoDB
+## Datos que guarda
 
-| Tabla | Partition Key | Sort Key | Notas |
+Tablas creadas con `services/ci/api/create_dynamodb_tables.sh`. El dueño es el
+`client` del JWT y es parte de cada consulta.
+
+| Tabla | Partición | Orden | Qué guarda |
 |---|---|---|---|
-| `t_analytics_runs` | `dataset_id` (S) | `run_id` (S, UUIDv4) | El sort key permite múltiples runs por dataset (re-tuneo de umbrales sin perder historial). |
+| `analytics_runs` | `id` (UUID; igual a `run_id`) | — | Cada cálculo de un análisis sobre un dataset: `dataset_id`, `owner_email`, `status`, `parameters`, `summary`, `opportunities` (recortadas a los mejores por producto: un ítem no pasa de 400 KB), `created_at` (`models/analytics.py`). Es la memoria que hace inmediata la segunda apertura |
+| `analytics_credit_policies` | `owner_email` | — | Política de crédito de la empresa: `source_code`, `aging_buckets` (días de cada tramo), `loss_rates` (pérdida esperada por tramo), `financial_rate_daily` (`schemas/receivables.py`, `CreditPolicy`) |
+| `analytics_commercial_policies` | `owner_email` | — | Política comercial de Cumplimiento: `yellow_from`, `green_from` (cortes del semáforo), `bs_per_point`, `points_per_cluster` (`schemas/objectives.py`, `CommercialPolicySchema`) |
 
-> Las fechas se calculan en `America/La_Paz` (`TARGET_TIMEZONE`).
+Sin política guardada se usan los valores por defecto del `.env`
+(`OBJECTIVES_*` y los de crédito).
 
-Tablas leídas:
-- `t_ingest_datasets` — el servicio `ingest` la mantiene; analytics solo hace
-  `get_item` para resolver `file_s3_key`.
+**Lo que lee y no es suyo:** el ítem de `ingest_datasets` (para resolver los
+archivos y comprobar el dueño) y los CSV de INGEST en S3 —ventas, cobros,
+stock y objetivos; su estructura está en `services/ingest/README.md`—. Las
+cotizaciones para leer en dólares se le piden a QUOTES por HTTP.
 
 ## Variables de entorno
 

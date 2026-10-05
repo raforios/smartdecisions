@@ -33,13 +33,144 @@ ingest/
 └── requirements.txt
 ```
 
-## Tablas DynamoDB
+## Datos que guarda
 
-| Tabla | Partition Key | Sort Key | Notas |
+### Tablas DynamoDB
+
+Se crean con `services/ci/api/create_dynamodb_tables.sh`. El dueño es el
+`client` del JWT (o el correo si no lo tiene) y es parte de cada consulta.
+
+| Tabla | Partición | Orden | Qué guarda |
 |---|---|---|---|
-| `t_ingest_datasets` | `dataset_id` (S, UUIDv4) | — | Un item por archivo ingestado. Guarda summary + lista de errores. |
+| `ingest_datasets` | `id` (UUID; igual a `dataset_id`) | — | Un ítem por archivo de ventas: dueño, estado, resumen y punteros a sus archivos en S3 |
+| `ingest_clients` | `owner_email` | `id` (código del cliente) | Maestro de clientes (`models/clients.py`) |
+| `ingest_sellers` | `owner_email` | `id` (el vendedor como lo escribe el archivo) | Maestro de vendedores y su usuario (`models/sellers.py`) |
 
-> Las fechas se calculan en `America/La_Paz` (variable `TARGET_TIMEZONE`).
+**`ingest_datasets`**, atributos del ítem:
+
+| Atributo | Qué es |
+|---|---|
+| `id`, `dataset_id` | Identificador del conjunto de datos |
+| `owner_email` | Dueño |
+| `status` | `validated` o `failed` |
+| `template_version`, `created_at` | Origen de la carga |
+| `total_rows`, `valid_rows`, `error_rows`, `unique_points_of_sale`, `unique_products`, `date_range_start`, `date_range_end`, `errors` | Resumen de la validación de ventas |
+| `file_s3_key` | Ventas aceptadas, normalizadas |
+| `rejected_s3_key` | Filas apartadas, para descargar y corregir |
+| `<contrato>_s3_key`, `<contrato>_summary`, `<contrato>_issues` | Por cada archivo enganchado: `collections`, `stock`, `visits`, `objectives` |
+
+Modelo: `models/ingest.py` (`IngestDataset`).
+
+**`ingest_clients`**: `name`, `tax_id`, `client_type`, `channel`, `zone`,
+`city`, `region`, `address`, `latitude`, `longitude`, `phone`, `contact`,
+`seller`, `credit_limit`, `cluster`, `supervisor`, `market`, `source`
+(`FILE`, `API` o `FIELD`), `created_at`, `updated_at`.
+
+**`ingest_sellers`**: `name`, `user_email` (el usuario con que ingresa al
+sistema), `source`, `created_at`, `updated_at`.
+
+### Archivos en S3 (por FILES)
+
+Bucket de FILES, prefijo `ingest/`. Cada archivo es un CSV con los **campos**
+de su contrato (columna "Campo"), no con las cabeceras en castellano. La fuente
+de verdad es `schemas/ingest.py`; estas tablas salen de ahí.
+
+### Ventas — `ingest/normalized/<uuid>.csv`
+
+| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+|---|---|---|---|---|
+| Fecha | `date` | fecha | sí |  |
+| Nro Factura | `order_id` | texto | sí | hasta 64 car. |
+| Cliente ID | `pos_id` | texto | sí (la deriva el servicio) | hasta 64 car. |
+| Cliente | `pos_name` | texto | no |  |
+| Zona | `zone` | texto | no |  |
+| Ciudad | `city` | texto | no |  |
+| Region | `region` | texto | no |  |
+| Canal | `channel` | texto | no |  |
+| Vendedor | `seller` | texto | no |  |
+| Latitud | `latitude` | número | no | entre -90 y 90 |
+| Longitud | `longitude` | número | no | entre -180 y 180 |
+| Producto ID | `product_id` | texto | sí (la deriva el servicio) | hasta 64 car. |
+| Producto | `product_name` | texto | no |  |
+| Categoria | `category` | texto | no |  |
+| Cantidad | `quantity` | número | sí | > 0 |
+| Precio Unitario | `unit_price` | número | no | ≥ 0 |
+| Costo Unitario | `unit_cost` | número | no | ≥ 0 |
+| Monto Total | `total_amount` | número | no | ≥ 0 |
+| Condicion Venta | `payment_terms` | texto | no | hasta 16 car.; uno de: CONTADO, CREDITO |
+| Plazo Dias | `credit_days` | entero | no | ≥ 0 |
+| Fecha Vencimiento | `due_date` | fecha | no |  |
+| Responsable Cobro | `collector` | texto | no |  |
+| Limite Credito | `credit_limit` | número | no | ≥ 0 |
+
+### Cobros — `ingest/collections/<uuid>.csv`
+
+| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+|---|---|---|---|---|
+| Nro Factura | `order_id` | texto | sí | hasta 64 car. |
+| Fecha Cobro | `payment_date` | fecha | sí |  |
+| Monto Cobrado | `paid_amount` | número | sí | > 0 |
+| Medio | `payment_method` | texto | no | hasta 32 car. |
+| Responsable Cobro | `collector` | texto | no |  |
+
+### Stock — `ingest/stock/<uuid>.csv`
+
+| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+|---|---|---|---|---|
+| Fecha | `snapshot_date` | fecha | sí |  |
+| Producto ID | `product_id` | texto | sí (la deriva el servicio) | hasta 64 car. |
+| Producto | `product_name` | texto | no |  |
+| Existencia | `on_hand` | número | sí | ≥ 0 |
+| Comprometido | `committed` | número | no | ≥ 0 |
+| En Transito | `in_transit` | número | no | ≥ 0 |
+| Almacen | `warehouse` | texto | no | hasta 64 car. |
+| Costo Unitario | `unit_cost` | número | no | ≥ 0 |
+
+### Visitas — `ingest/visits/<uuid>.csv`
+
+| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+|---|---|---|---|---|
+| Fecha | `visit_date` | fecha | sí |  |
+| Hora | `visit_time` | texto | no | hasta 8 car. |
+| Vendedor | `seller` | texto | sí | hasta 128 car. |
+| Cliente ID | `pos_id` | texto | sí (la deriva el servicio) | hasta 64 car. |
+| Cliente | `pos_name` | texto | no |  |
+| Latitud | `latitude` | número | no | entre -90 y 90 |
+| Longitud | `longitude` | número | no | entre -180 y 180 |
+| Resultado | `outcome` | texto | no | hasta 16 car.; uno de: VENTA, SIN_VENTA, CERRADO, NO_ENCONTRADO |
+| Nro Factura | `order_id` | texto | no | hasta 64 car. |
+
+### Objetivos — `ingest/objectives/<uuid>.csv`
+
+| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+|---|---|---|---|---|
+| Cliente ID | `pos_id` | texto | sí (la deriva el servicio) | hasta 64 car. |
+| Cliente | `pos_name` | texto | sí |  |
+| Periodo | `period` | texto | sí | hasta 7 car. |
+| Objetivo | `target_amount` | número | sí | ≥ 0 |
+
+### Clientes — carga del maestro (va a `ingest_clients`, no a S3)
+
+| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+|---|---|---|---|---|
+| Cliente ID | `id` | texto | sí | hasta 64 car. |
+| Cliente | `name` | texto | sí | hasta 150 car. |
+| NIT | `tax_id` | texto | no | hasta 40 car. |
+| Tipo Negocio | `client_type` | texto | no | hasta 64 car. |
+| Canal | `channel` | texto | no | hasta 64 car. |
+| Zona | `zone` | texto | no | hasta 100 car. |
+| Ciudad | `city` | texto | no | hasta 100 car. |
+| Region | `region` | texto | no | hasta 100 car. |
+| Direccion | `address` | texto | no | hasta 255 car. |
+| Latitud | `latitude` | número | no | entre -90 y 90 |
+| Longitud | `longitude` | número | no | entre -180 y 180 |
+| Telefono | `phone` | texto | no | hasta 40 car. |
+| Contacto | `contact` | texto | no | hasta 150 car. |
+| Vendedor | `seller` | texto | no | hasta 128 car. |
+| Limite Credito | `credit_limit` | número | no | ≥ 0 |
+| Cluster | `cluster` | texto | no | hasta 40 car. |
+| Supervisor | `supervisor` | texto | no | hasta 128 car. |
+| Mercado | `market` | texto | no | hasta 100 car. |
 
 ## Variables de entorno
 

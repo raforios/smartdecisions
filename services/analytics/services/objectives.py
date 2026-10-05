@@ -32,6 +32,7 @@ from schemas.objectives import (
 )
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+from services.receivables import CASH, TERMS
 
 # Business parameters. Defaults, not constants: the policy of an account
 # overrides them one by one, which is how two companies read the same sales
@@ -204,23 +205,52 @@ def _collected_by_client_period(
         Returns:
             pd.DataFrame: Columns pos_id, period, collected_amount.
     '''
-    empty = pd.DataFrame(columns = [_POS, _PERIOD, 'collected_amount'])
-    if collections is None or collections.empty or _ORDER not in collections.columns:
-        return empty
-
     invoices = sales.loc[:, [_ORDER, _POS, _DATE]].copy()
     invoices[_PERIOD] = pd.to_datetime(invoices[_DATE], errors = 'coerce').dt.strftime('%Y-%m')
     invoices = invoices.dropna(subset = [_PERIOD]).drop_duplicates(subset = [_ORDER])
-
-    paid = collections.loc[:, [_ORDER, _PAID]].copy()
-    paid[_ORDER] = paid[_ORDER].astype(str)
     invoices[_ORDER] = invoices[_ORDER].astype(str)
 
-    married = paid.merge(invoices, on = _ORDER, how = 'inner')
+    payments = pd.DataFrame(columns = [_ORDER, _PAID])
+    if collections is not None and not collections.empty and _ORDER in collections.columns:
+        payments = collections.loc[:, [_ORDER, _PAID]].copy()
+        payments[_ORDER] = payments[_ORDER].astype(str)
+    # A cash invoice the collections file already settles is counted once.
+    cash = _cash_collected(sales, invoices)
+    cash = cash[~cash[_ORDER].isin(payments[_ORDER])]
+
+    married = pd.concat([payments, cash], ignore_index = True)
+    married = married.merge(invoices, on = _ORDER, how = 'inner')
     if married.empty:
-        return empty
+        return pd.DataFrame(columns = [_POS, _PERIOD, 'collected_amount'])
     grouped = married.groupby([_POS, _PERIOD], as_index = False)[_PAID].sum()
     return grouped.rename(columns = {_PAID: 'collected_amount'})
+
+
+def _cash_collected(
+    sales: pd.DataFrame,
+    invoices: pd.DataFrame
+) -> pd.DataFrame:
+    '''
+        The cash invoices, as payments made the moment they were billed.
+
+        A cash sale is paid at the counter and never reaches the collections
+        file; reading it as debt would put every cash sale in the debt column.
+
+        Args:
+            sales (pd.DataFrame): Normalized sales rows.
+            invoices (pd.DataFrame): One row per invoice, order id as text.
+
+        Returns:
+            pd.DataFrame: Columns order_id, paid_amount; empty when the file
+                does not say how each sale was paid.
+    '''
+    if TERMS not in sales.columns or _AMOUNT not in sales.columns:
+        return pd.DataFrame(columns = [_ORDER, _PAID])
+    cash = sales.loc[sales[TERMS].astype(str).str.upper() == CASH, [_ORDER, _AMOUNT]]
+    cash = cash.assign(**{_ORDER: cash[_ORDER].astype(str)})
+    paid = cash.groupby(_ORDER, as_index = False)[_AMOUNT].sum()
+    paid = paid.rename(columns = {_AMOUNT: _PAID})
+    return paid[paid[_ORDER].isin(invoices[_ORDER])]
 
 
 def _descriptors_of(sales: pd.DataFrame) -> pd.DataFrame:
