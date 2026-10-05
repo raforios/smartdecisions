@@ -137,6 +137,16 @@ export async function mountSettings(host) {
                     </label>
                 </div>
                 <label class="field">
+                    <span>Hora de alerta de cierre de caja</span>
+                    <input type="time" id="cash_alert_time"
+                           value="${value('cash_alert_time').slice(0, 5)}">
+                </label>
+                <p class="muted small">
+                    Desde esta hora, el sistema avisa qué cajas siguen abiertas. Cada
+                    caja es de un día: la que quede abierta no deja vender al día
+                    siguiente hasta cerrarla.
+                </p>
+                <label class="field">
                     <span>Exigir documento del comprador</span>
                     <select id="buyer_required">
                         <option value="false" ${settings?.buyer_required ? '' : 'selected'}>
@@ -166,7 +176,12 @@ export async function mountSettings(host) {
         const done = setBusy(event.currentTarget, 'Guardando…');
         const text = (id) => host.querySelector(`#${id}`).value.trim() || null;
         try {
+            // La ficha se guarda entera: lo que este formulario no muestra
+            // (el municipio de la factura, por ejemplo) se conserva tal cual.
+            const { next_sale_number: _sale, next_purchase_number: _purchase, ...kept } =
+                settings || {};
             await BillingService.saveSettings({
+                ...kept,
                 trade_name: tradeName,
                 document: text('document'),
                 address: text('address'),
@@ -178,7 +193,8 @@ export async function mountSettings(host) {
                 discounts_enabled: host.querySelector('#discounts_enabled').value === 'true',
                 branch: Number(host.querySelector('#branch').value) || 0,
                 point_of_sale: Number(host.querySelector('#point_of_sale').value) || 0,
-                buyer_required: host.querySelector('#buyer_required').value === 'true'
+                buyer_required: host.querySelector('#buyer_required').value === 'true',
+                cash_alert_time: host.querySelector('#cash_alert_time').value || null
             });
             document.getElementById('shopName').textContent = tradeName;
             notify('Configuración guardada.', 'success');

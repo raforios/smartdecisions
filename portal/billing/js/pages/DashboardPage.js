@@ -5,7 +5,7 @@
  * y qué se me está acabando. El tablero del almacén contaba solicitudes; este
  * producto no las tiene y no hereda sus indicadores.
  */
-import { BillingService, errorText } from '../services/BillingService.js';
+import { BillingService, PAYMENT_LABELS, errorText } from '../services/BillingService.js';
 import { escapeHtml, money, percent, shortDate, todayIso } from '../ui.js';
 
 function kpi(label, value, foot) {
@@ -84,6 +84,25 @@ export async function mountDashboard(host) {
                 </div>
 
                 <div class="panel-grid">
+                    <section class="card">
+                        <h3>Ventas por medio de pago</h3>
+                        <p class="muted small">Débito y crédito van separados; las notas
+                           anteriores a la distinción figuran como tarjeta sin detalle.</p>
+                        ${data.sales_by_method.length ? `
+                            <div class="table-scroll"><table class="data-table">
+                                <thead><tr><th>Medio</th><th class="num">Notas</th>
+                                           <th class="num">Bs</th></tr></thead>
+                                <tbody>${data.sales_by_method.map((row) => `
+                                    <tr>
+                                        <td>${escapeHtml(PAYMENT_LABELS[row.payment_method]
+                                                         || row.payment_method)}</td>
+                                        <td class="num">${row.count}</td>
+                                        <td class="num">${money(row.total)}</td>
+                                    </tr>`).join('')}</tbody>
+                            </table></div>`
+                            : '<p class="muted small">No hubo ventas en el rango.</p>'}
+                    </section>
+
                     <section class="card">
                         <h3>Por vencer</h3>
                         <p class="muted small">Lotes que vencen dentro de

@@ -25,7 +25,34 @@ export const ERRORS = {
     SALE_ALREADY_CANCELLED: 'Esa nota ya estaba anulada.',
     PURCHASE_NOT_FOUND: 'Esa nota de compra no existe.',
     SETTINGS_NOT_FOUND: 'Todavía no configuraste el comercio.',
-    ROLE_NOT_ALLOWED: 'Tu rol no permite esta acción.'
+    ROLE_NOT_ALLOWED: 'Tu rol no permite esta acción.',
+    CASH_SESSION_ALREADY_OPEN: 'Ya tienes una caja abierta.',
+    CASH_SESSION_REQUIRED: 'Abre tu caja antes de vender.',
+    CASH_SESSION_CLOSED: 'Esa caja ya está cerrada.',
+    CASH_SESSION_EXPIRED: 'Tu caja de un día anterior sigue abierta: ciérrala antes de seguir.',
+    CASH_SESSION_NOT_FOUND: 'No hay una caja abierta.',
+    CLOSING_NOTE_REQUIRED: 'Para cerrar la caja de otra persona escribe una observación.',
+    EXPENSE_EXCEEDS_CASH: 'El egreso supera el efectivo que hay en la caja.',
+    EXPENSE_NOT_FOUND: 'Ese egreso no existe o ya estaba anulado.'
+};
+
+/** Cómo se llama cada medio de pago en pantalla. */
+export const PAYMENT_LABELS = {
+    EFECTIVO: 'Efectivo',
+    QR: 'QR',
+    TARJETA_DEBITO: 'Tarjeta de débito',
+    TARJETA_CREDITO: 'Tarjeta de crédito',
+    TARJETA: 'Tarjeta sin detalle'
+};
+
+/** Los medios que se ofrecen al vender: la tarjeta sin detalle es de notas viejas. */
+export const SALE_PAYMENT_METHODS = ['EFECTIVO', 'QR', 'TARJETA_DEBITO', 'TARJETA_CREDITO'];
+
+/** Cómo se llama cada tipo de egreso en pantalla. */
+export const EXPENSE_LABELS = {
+    SUPPLIER_PAYMENT: 'Pago a proveedor',
+    SERVICE_PAYMENT: 'Pago de servicio',
+    PETTY_CASH: 'Caja chica'
 };
 
 /** The sentence for an error, or the fallback when the code is unknown. */
@@ -92,5 +119,34 @@ export const BillingService = {
     listSales: (params) => call(`/sales${query(params)}`),
     getSale: (id) => call(`/sales/${encodeURIComponent(id)}`),
     issueSale: (body) => call('/sales', { method: 'POST', body: JSON.stringify(body) }),
-    cancelSale: (id) => call(`/sales/${encodeURIComponent(id)}/cancel`, { method: 'POST' })
+    cancelSale: (id) => call(`/sales/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
+
+    openTill: (openingCash) => call('/cash/sessions', {
+        method: 'POST', body: JSON.stringify({ opening_cash: openingCash })
+    }),
+    currentTill: () => call('/cash/sessions/current'),
+    listTills: (params) => call(`/cash/sessions${query(params)}`),
+    getTill: (id) => call(`/cash/sessions/${encodeURIComponent(id)}`),
+    addExpense: (id, body) => call(`/cash/sessions/${encodeURIComponent(id)}/expenses`,
+                                   { method: 'POST', body: JSON.stringify(body) }),
+    cancelExpense: (id, movementId) => call(
+        `/cash/sessions/${encodeURIComponent(id)}/expenses/${encodeURIComponent(movementId)}/cancel`,
+        { method: 'POST' }
+    ),
+    closeTill: (id, body) => call(`/cash/sessions/${encodeURIComponent(id)}/close`,
+                                  { method: 'POST', body: JSON.stringify(body) }),
+    tillAlerts: () => call('/cash/alerts')
 };
+
+/**
+ * La caja abierta del usuario, o null si no tiene. Un 404 no es un error
+ * aquí: es la respuesta «todavía no abriste la caja».
+ */
+export async function currentTillOrNull() {
+    try {
+        return await BillingService.currentTill();
+    } catch (error) {
+        if (error.code === 'CASH_SESSION_NOT_FOUND') return null;
+        throw error;
+    }
+}

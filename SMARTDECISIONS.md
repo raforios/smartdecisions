@@ -158,17 +158,13 @@ directo, duplicados entre servicios, cobertura de endpoints).
 
 **Esperando el despliegue de backend (Rafael):**
 
-- **ANALYTICS** — un costo en cero ya no cuenta como costo (Rentabilidad
-  mostraba 100 % de margen); y en Cumplimiento una venta **al contado** cuenta
-  como cobrada (antes inflaba la deuda con todo el contado). Sin este
-  despliegue, el Cumplimiento de Andina muestra la deuda inflada.
-- **INGEST** — `IngestDataset` declara todo lo que el ítem guarda, con un test
-  que falla si vuelve a quedar atrás.
-- **AUTH** — dos altas simultáneas del mismo correo respondían 500 en vez de
-  «Email already registered» (`create_user_item`).
-- **BILLING** — el token del SIAT va como `TokenApi <token>` (sin eso el SIAT
-  responde «API KEY NO VALIDO») y los WSDL en `services/billing/wsdl/`, que
-  viajan en el ZIP. Comprobar si ya salió con los commits del 05-oct.
+- **BILLING — arqueo de caja** (`docs/cambios/billing-caja/`): caja por
+  usuario y por día, egresos, cierre con diferencia, cierre del gerente,
+  alerta de fin de día (hora por comercio en la configuración), débito y
+  crédito separados en los reportes. Las tablas `billing_cash_sessions` y
+  `billing_cash_movements` ya están creadas y en el `.env`. **El portal se
+  publica después del backend**: antes, el Mostrador pediría una caja que el
+  servicio desplegado no conoce.
 
 **Revisión del 04/05-oct en el portal**, con las dos empresas: los nueve
 análisis, las ocho secciones de Rutas y Cotizaciones abren sin errores de JS.
@@ -186,15 +182,13 @@ Ronda nueva de funcionalidades definida el 04-oct (ver §5).
 
 En orden.
 
-1. **Desplegar ANALYTICS, BILLING, INGEST y AUTH** (Rafael; ver §4).
+1. **Desplegar BILLING** (Rafael; ver §4) y luego publicar `portal/billing` y probar la caja de punta a punta.
 2. **SmartBilling, ronda del 04-oct**, por cambios con `intent.md`, `spec.md`
    y `plan.md` en `docs/cambios/` (plantilla en `docs/cambios/_plantilla/`):
    - `billing-proveedores-pedidos`: catálogo de proveedores, producto con
      varios proveedores (código y costos con historia), pedidos con recepción
      parcial; la recepción sin pedido se permite.
-   - `billing-caja`: apertura y cierre por usuario con fecha y hora, arqueo
-     por medio de pago (efectivo, QR, débito, crédito), EGRESOS de la caja
-     abierta, roles MANAGER/SELLER. `intent.md` ya escrito y respondido.
+   - `billing-caja`: **programado el 05-oct**, falta desplegar (ver §4).
    - `billing-sucursales`: inventario por sucursal y traspasos — simple, dos
      sucursales que se pasan mercadería.
 3. **SIAT:** pedir CUIS y CUFD reales en el piloto; agregar el WSDL de

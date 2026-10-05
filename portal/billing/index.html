@@ -26,6 +26,9 @@
             <button class="nav-item" data-section="counter">
                 <span class="icon" aria-hidden="true">🧾</span><span>Mostrador</span>
             </button>
+            <button class="nav-item" data-section="cash">
+                <span class="icon" aria-hidden="true">💵</span><span>Caja y egresos</span>
+            </button>
             <button class="nav-item" data-section="sales">
                 <span class="icon" aria-hidden="true">📄</span><span>Ventas</span>
             </button>
@@ -34,6 +37,9 @@
             </button>
             <button class="nav-item" data-section="purchases" data-roles="ADMIN,MANAGER">
                 <span class="icon" aria-hidden="true">📦</span><span>Recepción</span>
+            </button>
+            <button class="nav-item" data-section="tills" data-roles="ADMIN,MANAGER">
+                <span class="icon" aria-hidden="true">🗃️</span><span>Cajas</span>
             </button>
             <button class="nav-item" data-section="dashboard">
                 <span class="icon" aria-hidden="true">📊</span><span>Tablero</span>
@@ -49,8 +55,11 @@
         </div>
     </aside>
 
-    <main class="app-main" id="view">
+    <main class="app-main">
+        <div id="till-alert" hidden></div>
+        <div id="view">
         <p class="muted">Cargando…</p>
+        </div>
     </main>
 
 </div>

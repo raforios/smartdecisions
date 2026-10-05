@@ -10,20 +10,25 @@
  * screen had: if the backend allocated two batches at two prices, the paper
  * has to say so.
  */
-import { BillingService, errorText } from '../services/BillingService.js';
+import {
+    BillingService,
+    PAYMENT_LABELS,
+    SALE_PAYMENT_METHODS,
+    currentTillOrNull,
+    errorText
+} from '../services/BillingService.js';
 import { printTicket } from './TicketPrinter.js';
 import { escapeHtml, money, notify, setBusy } from '../ui.js';
 
-const PAYMENT_METHODS = [
-    ['EFECTIVO', 'Efectivo'],
-    ['QR', 'QR'],
-    ['TARJETA', 'Tarjeta']
-];
+/** Débito y crédito van separados para los reportes; para el SIN son tarjeta. */
+const PAYMENT_METHODS = SALE_PAYMENT_METHODS.map((value) => [value, PAYMENT_LABELS[value]]);
 
 /** Lines being sold, keyed by SKU so the same product cannot enter twice. */
 let basket = new Map();
 let catalogue = [];
 let settings = null;
+/** La caja abierta y vigente de quien cobra; sin ella no se vende. */
+let tillReady = false;
 
 function total() {
     let subtotal = 0;
@@ -68,7 +73,7 @@ function renderBasket(host) {
     host.querySelector('#sum-subtotal').textContent = money(sums.subtotal);
     host.querySelector('#sum-discount').textContent = money(sums.discount);
     host.querySelector('#sum-total').textContent = money(sums.total);
-    host.querySelector('#charge').disabled = basket.size === 0;
+    host.querySelector('#charge').disabled = basket.size === 0 || !tillReady;
 }
 
 /** Adds one unit of a SKU, or one more when it is already in the basket. */
@@ -151,6 +156,27 @@ async function charge(host) {
 }
 
 /**
+ * El estado de la caja encima del mostrador. Sin caja abierta de hoy no se
+ * cobra: el botón queda deshabilitado y el aviso dice qué hacer.
+ */
+function renderTillBar(host, till) {
+    const bar = host.querySelector('#till-bar');
+    tillReady = Boolean(till) && !till.expired;
+    if (!till) {
+        bar.innerHTML = `<div class="card form-error">No tienes una caja abierta.
+            Ábrela en <strong>Caja y egresos</strong> para empezar a vender.</div>`;
+    } else if (till.expired) {
+        bar.innerHTML = `<div class="card form-error">Tu caja del
+            ${escapeHtml(till.business_day)} sigue abierta. Ciérrala en
+            <strong>Caja y egresos</strong> para vender hoy.</div>`;
+    } else {
+        bar.innerHTML = `<p class="muted small">Caja abierta desde ${
+            escapeHtml(till.opened_at.slice(11, 16))} · efectivo esperado Bs ${
+            money(till.expected_cash)}</p>`;
+    }
+}
+
+/**
  * Paints the till and wires it.
  *
  * @param {HTMLElement} host Where the section is mounted.
@@ -162,6 +188,8 @@ export async function mountCounter(host) {
             <p class="muted">El precio sale del lote que va a salir, y el lote que
                sale es el que vence antes.</p>
         </header>
+
+        <div id="till-bar"></div>
 
         <div class="counter">
             <section class="card">
@@ -231,10 +259,12 @@ export async function mountCounter(host) {
             </aside>
         </div>`;
 
+    let till = null;
     try {
-        [settings, catalogue] = await Promise.all([
+        [settings, catalogue, till] = await Promise.all([
             BillingService.getSettings(),
-            BillingService.listProducts({ only_active: true }).then((page) => page.items)
+            BillingService.listProducts({ only_active: true }).then((page) => page.items),
+            currentTillOrNull()
         ]);
     } catch (error) {
         host.innerHTML = `<div class="card empty-state">
@@ -242,6 +272,8 @@ export async function mountCounter(host) {
             <p>${escapeHtml(errorText(error, 'El servicio no respondió.'))}</p></div>`;
         return;
     }
+
+    renderTillBar(host, till);
 
     const search = host.querySelector('#search');
     search.addEventListener('input', (event) => renderResults(host, event.target.value));
@@ -299,7 +331,7 @@ export async function mountCounter(host) {
     const cardField = host.querySelector('#card-field');
     const cardInput = host.querySelector('#card-number');
     const syncCardField = () => {
-        const isCard = method.value === 'TARJETA';
+        const isCard = method.value.startsWith('TARJETA');
         cardField.hidden = !isCard;
         if (!isCard) cardInput.value = '';
     };

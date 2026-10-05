@@ -17,9 +17,13 @@ import { mountCatalog } from './pages/CatalogPage.js';
 import { mountPurchases } from './pages/PurchasesPage.js';
 import { mountDashboard } from './pages/DashboardPage.js';
 import { mountSettings } from './pages/SettingsPage.js';
+import { mountCash } from './pages/CashPage.js';
+import { mountCashSessions } from './pages/CashSessionsPage.js';
 
 const SECTIONS = {
     counter: mountCounter,
+    cash: mountCash,
+    tills: mountCashSessions,
     sales: mountSales,
     catalog: mountCatalog,
     purchases: mountPurchases,
@@ -29,6 +33,32 @@ const SECTIONS = {
 
 /** La sección abierta sobrevive a un F5: el turno no se pierde por recargar. */
 const LAST_SECTION_KEY = 'billing_section';
+
+/** Cada cuánto se revisa si hay cajas por cerrar. */
+const TILL_ALERT_EVERY_MS = 5 * 60 * 1000;
+
+/**
+ * Aviso de cajas abiertas: pasada la hora que configuró el comercio, o
+ * abiertas desde otro día. Al vendedor, la suya; al gerente, todas.
+ */
+async function refreshTillAlert() {
+    const banner = document.getElementById('till-alert');
+    try {
+        const alerts = await BillingService.tillAlerts();
+        if (!alerts.items.length) {
+            banner.hidden = true;
+            return;
+        }
+        const names = alerts.items.map((item) => escapeHtml(item.user_email)
+            + (item.expired ? ` (desde el ${escapeHtml(item.business_day)})` : '')).join(', ');
+        banner.innerHTML = `<div class="card form-error">Cajas sin cerrar: ${names}.
+            Cada caja es de un día: ciérralas antes de que termine.</div>`;
+        banner.hidden = false;
+    } catch (error) {
+        // El aviso es una ayuda: si falla, el resto del portal sigue igual.
+        banner.hidden = true;
+    }
+}
 
 async function show(name) {
     const view = document.getElementById('view');
@@ -100,6 +130,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         );
         return;
     }
+
+    refreshTillAlert();
+    setInterval(refreshTillAlert, TILL_ALERT_EVERY_MS);
 
     const saved = sessionStorage.getItem(LAST_SECTION_KEY);
     const visible = [...document.querySelectorAll('.nav-item')].filter((item) => !item.hidden);
