@@ -44,6 +44,13 @@ A continuación se listan los endpoints principales de la API, organizados por s
 
 -----
 
+## 🗄️ Datos que guarda
+
+No tiene tablas. Es el único servicio que toca el bucket (variable
+`ML_DATA_BUCKET_NAME`). Lo que hay adentro lo decide cada servicio que lo usa:
+INGEST guarda bajo `ingest/` los CSV de cada contrato (estructura en
+`services/ingest/README.md`) y las plantillas estáticas que descarga el cliente.
+
 ## 📦 Dependencias
 
 Las siguientes librerías son esenciales para el funcionamiento del **File-Handler-Service** y se gestionan a través de `requirements.txt` y Docker:

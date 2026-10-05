@@ -33,3 +33,41 @@ def test_user_schemas_carry_the_client_that_groups_them():
     )
     assert grouped.client == 'acme' and grouped.role is Role.SELLER
     assert alone.client is None
+
+
+def test_a_duplicate_caught_by_dynamodb_answers_already_registered(monkeypatch):
+    '''
+        Two sign-ups of one e-mail at once pass the controller's check and
+        meet at the conditional write. That branch raised `ValueError` with an
+        unbound `message`, which surfaced as a 500 instead of the 409.
+
+        The environment is set before the import because CI runs without
+        `.env` and `services/dynamodb.py` validates it on import.
+    '''
+    # pylint: disable=import-outside-toplevel
+    import importlib
+
+    import pytest
+    from botocore.exceptions import ClientError
+
+    monkeypatch.setenv('TABLE_NAME', 'auth-users-test')
+    monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
+    dynamodb = importlib.import_module('services.dynamodb')
+    exceptions = importlib.import_module('services.exceptions')
+
+    class _Table: # pylint: disable=too-few-public-methods
+        '''A table whose conditional write always finds the e-mail taken.'''
+        def put_item(
+            self,
+            **_kwargs: object
+        ) -> None:
+            '''Fails the condition, as DynamoDB does for an existing key.'''
+            raise ClientError(
+                {'Error': {'Code': 'ConditionalCheckFailedException', 'Message': 'exists'}},
+                'PutItem'
+            )
+
+    monkeypatch.setattr(dynamodb, 'get_table', _Table)
+
+    with pytest.raises(exceptions.RegisterAlreadyExistsError):
+        dynamodb.create_user_item({'email': 'dup@bearsoft.com.bo'})

@@ -47,13 +47,33 @@ optimization/
 └── requirements.txt
 ```
 
-## Tablas DynamoDB
+## Datos que guarda
 
-| Tabla | Partition Key | Sort Key | Notas |
+Tablas creadas con `services/ci/api/create_dynamodb_tables.sh`. El dueño es el
+`client` del JWT y, salvo en la primera, es la **partición**: una consulta no
+puede salir de la empresa.
+
+| Tabla | Partición | Orden | Qué guarda |
 |---|---|---|---|
-| `t_optimization_routes` | `route_day_key` (S, formato `"{route_id}#{day}"`) | `client_id` (N) | Reemplaza `routes` (Postgres del monolito). Una sola Query trae todos los puntos de una (ruta, día). |
+| `optimization_routes` | `route_day_key` (`{route_id}#{day}`) | `client_id` (N) | Puntos de la semana armada por el planificador desde el archivo: `route_id`, `day`, `latitude`, `longitude`, `client` (`models/optimization.py`) |
+| `optimization_planned_routes` | `owner_email` | `id` (UUID) | Planes: `route_code`, `route_name`, `description`, `seller`, `plan_date` (sin fecha = plantilla reutilizable), `status`, `created_at` y `points` |
+| `optimization_executed_routes` | `owner_email` | `id` (`{YYYYMMDDTHHMMSS}-{uuid8}`) | Recorridos reales: `seller`, `planned_route_id`, inicio y fin con hora y coordenadas, distancia a la parada de inicio y de cierre (geocercas), última posición y `points` |
+| `optimization_daily_stock` | `owner_email` | `stock_key` (`{YYYY-MM-DD}#{sku}`) | Stock del día por producto: `opening_quantity`, `sold_quantity`, `available_quantity` (se guarda, no se calcula: es la condición que rechaza la sobreventa de forma atómica), `product_name`, `updated_at` |
 
-> Las fechas se calculan en `America/La_Paz` (variable `TARGET_TIMEZONE`).
+**Una parada de un plan** (`points` de `optimization_planned_routes`): `id`,
+`point_name`, `secuencial`, `latitude`, `longitude`, `reference_data`,
+`client_id`.
+
+**Una parada ejecutada** (`points` de `optimization_executed_routes`): `id`,
+`latitude`, `longitude`, `timestamp`, `client_id`, `outcome` (resultado de la
+visita), `order_id` e `items` (lo vendido).
+
+Modelos en `models/localization.py` y `models/daily_stock.py`.
+
+**Lo que lee y no es suyo:** el dataset y los CSV de INGEST (ventas, para armar
+planes y carteras por vendedor), el stock del día que INGEST sirve en
+`GET /v1/ingest/{id}/stock?date=`, y los maestros de clientes y vendedores por
+HTTP.
 
 ## Variables de entorno
 

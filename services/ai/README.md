@@ -87,6 +87,16 @@ Las reglas comunes existen por errores reales observados: pedirle que leyera
 nueve minerales y que contara diez, y que dedujera el día de la semana de una
 fecha y se equivocara. Están escritas como prohibiciones explícitas.
 
+## Datos que guarda
+
+| Tabla | Partición | Orden | Qué guarda |
+|---|---|---|---|
+| `ai_prompts` | `view` (la pantalla) | `version` (N) | El rol de cada vista: `role`, `instructions`, `rules`, `max_tokens`, `model_id`, `active`, `created_at`. Versionado: la versión entra en la clave del caché |
+| `ai_explanations` | `cache_key` | — | Explicaciones ya generadas: `view`, `text`, `role`, `model_id`, `prompt_version`, `generated_at`, `expires_at` (TTL) |
+
+Modelos en `models/ai.py`. Tablas creadas con
+`services/ci/api/create_dynamodb_tables.sh`.
+
 ## Caché
 
 `ai_explanations`, partición `cache_key`, con TTL en `expires_at`. La clave es

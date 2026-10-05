@@ -73,6 +73,22 @@ Pensados para `mineria.gob.bo` y otros consumidores anónimos. El default del re
 
 ---
 
+## 🗄️ Datos que guarda
+
+En DynamoDB (tablas creadas con `services/ci/api/create_dynamodb_tables.sh`;
+modelos en `models/mining_analysis_dyb.py` y `models/market_prices.py`):
+
+| Tabla | Partición | Orden | Qué guarda |
+|---|---|---|---|
+| `minerals` | `mineral_id` | — | Catálogo: `name`, `unit`, `chemical_symbol`, `quoted_in`, `method`, `created_at` |
+| `mining_prices` | `mineral_id` | `date` | Cotización oficial quincenal: `price_low`, `price_high`, `created_at` |
+| `mining_market_prices` | `mineral_id` | `date` | Precio de mercado diario (LME, LBMA): `price`, `source`, `retrieved_at` |
+| `mining_royalty_rules` | `mineral_id` | — | Alícuota de regalía: `slope`, `intercept`, `min_rate`, `max_rate`, `internal_factor`, `legal_basis`, `updated_at` |
+
+Lo relacional (departamentos, municipios, empresas, transacciones y pagos de
+regalías) vive en MySQL local, en `models/mining_analysis.py`, y se usa sólo
+por los módulos `*_sql.py`.
+
 ## 🗂️ Estructura del Microservicio
 
 ```txt

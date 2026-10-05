@@ -6,7 +6,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from services.logger_config import custom_logger as logger
-from services.exceptions import ServiceUnavailableError
+from services.exceptions import RegisterAlreadyExistsError, ServiceUnavailableError
 from services.environment import load_and_validate_env_vars
 
 dynamodb = boto3.resource('dynamodb')
@@ -65,7 +65,9 @@ def create_user_item(user_data: Dict[str, Any]) -> Dict[str, Any]:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             error_msg = f'User with email "{user_email}" already exists.'
             logger.warning(error_msg)
-            raise ValueError(message) from e
+            # Same answer as the check in the controller: this branch is the
+            # race that check cannot see, two sign-ups of one e-mail at once.
+            raise RegisterAlreadyExistsError(detail = 'Email already registered') from e
         error_msg = f'Error creating user "{user_email}" in DynamoDB: {e}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(

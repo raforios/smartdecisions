@@ -61,6 +61,15 @@ cada pantalla. Guardarla también hace que la serie sobreviva a que la fuente se
 caiga, que para una cifra con la que se cierra una venta es la diferencia entre
 una respuesta vieja y ninguna respuesta.
 
+| Tabla | Partición | Orden | Qué guarda |
+|---|---|---|---|
+| `exchange_rates` | `currency` | `date` (`YYYY-MM-DD`) | Cotización oficial del día: `official_rate`, `source`, `retrieved_at` (`models/quotes.py`) |
+| `quotes_factors` | `owner_email` | `code` (el que da la empresa) | Declaración de cada factor: `name`, `unit`, `source`, `status` (ACTIVO/INACTIVO), `latest_date`, `latest_value`, `created_at`, `updated_at` |
+| `quotes_factor_values` | `owner_code` (`{owner_email}#{code}`) | `factor_date` (`YYYY-MM-DD`) | Historia fechada de cada factor: `value`, `recorded_at`. Un cálculo usa el valor y el estado de **su propia fecha** |
+
+Modelos en `models/quotes.py` y `models/factors.py`. Tablas creadas con
+`services/ci/api/create_dynamodb_tables.sh`.
+
 ## Endpoints
 
 Todos exigen el header `Authorization` validado contra AUTH.

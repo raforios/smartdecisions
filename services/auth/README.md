@@ -30,6 +30,14 @@ Este microservicio ha sido desarrollado utilizando un stack moderno y eficiente 
 
 ---
 
+## 🗄️ Datos que guarda
+
+Una tabla, `auth-users` (variable `TABLE_NAME`), con partición `email`. Cada
+ítem es un usuario: `email`, `first_name`, `last_name`, `hashed_password`
+(nunca la contraseña), `client` (la empresa: es el dueño de los datos en todos
+los servicios), `role` (`schemas/role.py`: ADMIN, MANAGER, SELLER, REQUESTER, WAREHOUSE_MANAGER, REGISTRATION, REPORTS), `status` y
+`date_register`. Esquemas en `schemas/users.py`.
+
 ## 🗺️ API Endpoints
 
 The **Auth-Handler-Service** exposes the following programmatic API endpoints for authentication and user management.

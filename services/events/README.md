@@ -44,6 +44,16 @@ A continuación se listan los endpoints principales de la API, agrupados por su 
 
 -----
 
+## 🗄️ Datos que guarda
+
+| Tabla | Partición | Qué guarda |
+|---|---|---|
+| `audit_records` | `id` (UUID) | Quién cambió qué: `microservice`, `entity_name`, `entity_id`, `action`, `user_id`, `timestamp`, `old_values`, `new_values` (`models/audit.py`) |
+| `usage_logs` | `id` (UUID) | Cada llamada a un servicio: `user_app`, `microservice`, `endpoint`, `method`, `status_code`, `ip_address`, `request_body`, `response_body`, `response_time_ms`, `timestamp` (`models/usage_log.py`) |
+
+La lectura de las dos exige rol ADMIN; la escritura exige el token de la
+petición que se registra.
+
 ## 🗂️ Estructura del Microservicio
 
 ```txt
