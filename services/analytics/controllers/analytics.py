@@ -31,7 +31,7 @@ from schemas.objectives import (
     CommercialPolicySchema,
     ObjectivesResponse
 )
-from services.objectives import build_objectives
+from services.objectives import build_objectives, select_objective_periods
 from services.objectives import resolve_policy as resolve_commercial_policy
 from services.receivables import build_receivables, resolve_policy
 from services.stock import build_stock
@@ -301,9 +301,14 @@ async def objectives_controller(
     objectives_key = metadata.get('objectives_s3_key')
     collections_key = metadata.get('collections_s3_key')
 
+    objectives, available = select_objective_periods(
+        load_dataframe_from_s3(objectives_key) if objectives_key else None,
+        (params or {}).get('date_from'),
+        (params or {}).get('date_to')
+    )
     block = build_objectives(
         sales = dataframe,
-        objectives = load_dataframe_from_s3(objectives_key) if objectives_key else None,
+        objectives = objectives,
         collections = load_dataframe_from_s3(collections_key) if collections_key else None,
         stored_policy = get_commercial_policy(
             dynamodb_resource = dynamodb_resource,
@@ -313,6 +318,7 @@ async def objectives_controller(
     return ObjectivesResponse(
         dataset_id = dataset_id,
         period = period,
+        available_periods = available,
         **block.model_dump()
     )
 

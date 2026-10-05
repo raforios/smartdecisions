@@ -18,6 +18,7 @@
     belongs to the account, arrives as its policy, and the service only
     supplies a default when the account never set one.
 '''
+from datetime import date
 from typing import Dict, Final, List, Optional, Tuple
 
 import pandas as pd
@@ -382,6 +383,41 @@ def _matrix(
     return sorted(built, key = lambda cell: cell.weight_on_target, reverse = True)
 
 
+def select_objective_periods(
+    objectives: Optional[pd.DataFrame],
+    date_from: Optional[date],
+    date_to: Optional[date]
+) -> Tuple[Optional[pd.DataFrame], List[str]]:
+    '''
+        The months to judge, and every month the file has.
+
+        With no window only the latest month is judged: it is the closing a
+        manager reviews, and twenty-four months at once is a response nobody
+        reads and a slow line cannot download. A window keeps the months it
+        touches, partial ones included.
+
+        Args:
+            objectives (pd.DataFrame | None): The objectives file.
+            date_from (date | None): First day of the window.
+            date_to (date | None): Last day of the window.
+
+        Returns:
+            Tuple[pd.DataFrame | None, List[str]]: The objectives of the chosen
+                months, and the months available, oldest first.
+    '''
+    if objectives is None or objectives.empty or _PERIOD not in objectives.columns:
+        return objectives, []
+    periods = objectives[_PERIOD].astype(str)
+    available = sorted(periods.unique())
+    if date_from is None and date_to is None:
+        keep = periods == available[-1]
+    else:
+        low = date_from.strftime('%Y-%m') if date_from else available[0]
+        high = date_to.strftime('%Y-%m') if date_to else available[-1]
+        keep = (periods >= low) & (periods <= high)
+    return objectives.loc[keep], available
+
+
 def build_objectives(
     sales: pd.DataFrame,
     objectives: Optional[pd.DataFrame],
@@ -435,7 +471,9 @@ def build_objectives(
 
     scores = _score_rows(merged, policy)
     totals = _totals(scores, sorted({score.period for score in scores}))
-    without = set(invoiced[_POS]) - set(targets[_POS])
+    # Counted over the months being judged, not the whole file.
+    judged = invoiced[invoiced[_PERIOD].isin(set(targets[_PERIOD]))]
+    without = set(judged[_POS]) - set(targets[_POS])
 
     message = (f'Attainment built for {totals.clients_count} client-month(s) over '
                f'{len(totals.periods)} period(s); {len(without)} client(s) with no objective.')

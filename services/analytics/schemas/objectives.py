@@ -147,6 +147,11 @@ class ObjectivesResponse(ObjectivesBlockSchema):
     """
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
+    available_periods: List[str] = Field(
+        default_factory = list,
+        description = 'Every month the objectives file has; without a window '
+                      'only the latest is judged.'
+    )
 
 
 class CommercialPolicyResponse(CommercialPolicySchema):

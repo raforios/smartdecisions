@@ -11,11 +11,13 @@
     belongs to the month of the INVOICE it settles, and a client nobody gave
     an objective to is counted rather than scored.
 '''
+from datetime import date
+
 import pandas as pd
 import pytest
 
 from schemas.objectives import Semaphore
-from services.objectives import build_objectives, resolve_policy
+from services.objectives import build_objectives, resolve_policy, select_objective_periods
 
 
 # Rates as the prospect sets them. The product declares no cluster names.
@@ -270,3 +272,32 @@ def test_a_cluster_without_a_rate_falls_back_to_the_default():
     block = build_objectives(sales, objectives, None, POLICY)
 
     assert block.clients[0].points == 100.0
+
+
+def test_without_a_window_only_the_latest_month_is_judged():
+    '''
+        Twenty-four months of objectives were 2,4 MB on the wire. With no
+        window the block judges the closing month only, and says which months
+        there are so the screen can offer the rest.
+    '''
+    objectives = pd.DataFrame([
+        {'pos_id': 'ABEL', 'period': period, 'target_amount': 1000.0}
+        for period in ('2025-01', '2025-02', '2025-03')
+    ])
+
+    chosen, available = select_objective_periods(objectives, None, None)
+
+    assert sorted(chosen['period'].unique()) == ['2025-03']
+    assert available == ['2025-01', '2025-02', '2025-03']
+
+
+def test_a_window_judges_the_months_it_covers():
+    '''The window the user picks decides the months, partial months included.'''
+    objectives = pd.DataFrame([
+        {'pos_id': 'ABEL', 'period': period, 'target_amount': 1000.0}
+        for period in ('2025-01', '2025-02', '2025-03')
+    ])
+
+    chosen, _ = select_objective_periods(objectives, date(2025, 1, 15), date(2025, 2, 10))
+
+    assert sorted(chosen['period'].unique()) == ['2025-01', '2025-02']
