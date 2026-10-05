@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.14"] # Usamos la versión 3.13 que es la que usas en el proyecto
+        python-version: ["3.14"] # La versión del proyecto (CLAUDE.md §2)
         # Lista de los directorios de microservicios para que el workflow los recorra
         service-directory:
           - "services/auth"
@@ -39,7 +39,9 @@ jobs:
     - name: Run Pylint on ${{ matrix.service-directory }}
       working-directory: ${{ matrix.service-directory }}
       run: |
-        pylint --fail-under=8.0 . # Ejecutamos Pylint. Falla si el score es menor a 8.0
+        # La regla del proyecto es 10.00 (CLAUDE.md §11), con la misma
+        # configuración que usa tools/verify_service.py en local.
+        pylint --rcfile=../../.pylintrc --fail-under=10.0 .
 
     - name: Test with Pytest for ${{ matrix.service-directory }}
       working-directory: ${{ matrix.service-directory }}

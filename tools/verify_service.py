@@ -183,8 +183,11 @@ def check_endpoint_coverage(service: Path) -> tuple[bool, str]:
 
 
 def check_pylint(service: Path) -> tuple[bool, str]:
-    '''Pylint 10.00 over the five layers and the tests.'''
+    '''Pylint 10.00 over the five layers, the tests and the top-level modules.'''
+    # `main.py` included: it is where the app and the Lambda handler live,
+    # and leaving it out is how EVENTS scored 10.00 here and 9.99 in the CI.
     targets = [target for target in LINT_TARGETS if (service / target).is_dir()]
+    targets += sorted(path.name for path in service.glob('*.py'))
     # The config is passed explicitly: Pylint runs with the service as its
     # root, and a .pylintrc at the repository root is NOT discovered from
     # there. Without this the lxml C-extension warnings come back.

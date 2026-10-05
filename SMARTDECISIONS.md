@@ -108,8 +108,14 @@ puertas** con el mismo validador: archivo, API JSON del ERP y `from-s3`.
 
 | Empresa (`client` del JWT) | Ingresa | Dataset | Contenido |
 |---|---|---|---|
-| Comercial Illimani S.R.L. | `gerente@raforios.com` | `8c9b15fa…` | 22.008 ventas, 24 meses, cobros, stock, visitas (923), objetivos (6.384) |
-| Distribuidora Andina S.R.L. | `gerente@bearsoft.com.bo` | `6c20be37…` | 5.079 ventas, 7 meses, cobros (603), stock (256), visitas (411), objetivos (1.925) |
+| Comercial Illimani S.R.L. | `gerente@raforios.com` | `70ce5398…` | 22.008 ventas, oct-2024 → sep-2026, cobros (4.903), stock (159), visitas (913), objetivos (6.384) |
+| Distribuidora Andina S.R.L. | `gerente@bearsoft.com.bo` | `9118b2f2…` | 5.079 ventas, mar → sep-2026, cobros (603), stock (256), visitas (411), objetivos (1.925) |
+
+Las fechas terminan el 30-sep-2026 a propósito: cruzan la flotación del
+27-jun-2026 y la cartera se ve actual. Rehacer los datos de una empresa:
+`tools/complete_demo_dataset.py --end-date` y
+`tools/load_second_owner.py ... --replace`. Rutas del día de la demo:
+`tools/seed_demo_routes.py --date ... --yes --reset`.
 
 Usuarios y roles por empresa: memoria `reference_test_companies_users`.
 Completar un archivo de ventas con los otros cuatro:
@@ -182,8 +188,13 @@ Ronda nueva de funcionalidades definida el 04-oct (ver §5).
 
 En orden.
 
-1. **Desplegar BILLING** (Rafael; ver §4) y luego publicar `portal/billing` y probar la caja de punta a punta.
-2. **SmartBilling, ronda del 04-oct**, por cambios con `intent.md`, `spec.md`
+1. **Desplegar ANALYTICS** (Rafael): Cumplimiento abre en el último mes.
+   Probar la caja de BILLING de punta a punta en el portal.
+2. **Rutas: depósito por empresa y ruta libre** —
+   `docs/cambios/rutas-deposito-y-ruta-libre/spec.md`, para aprobar.
+3. **Factores externos y tipo de cambio** —
+   `docs/cambios/smartdecisions-tipo-cambio-factores/spec.md`, para aprobar.
+4. **SmartBilling, ronda del 04-oct**, por cambios con `intent.md`, `spec.md`
    y `plan.md` en `docs/cambios/` (plantilla en `docs/cambios/_plantilla/`):
    - `billing-proveedores-pedidos`: catálogo de proveedores, producto con
      varios proveedores (código y costos con historia), pedidos con recepción
@@ -191,19 +202,18 @@ En orden.
    - `billing-caja`: **programado el 05-oct**, falta desplegar (ver §4).
    - `billing-sucursales`: inventario por sucursal y traspasos — simple, dos
      sucursales que se pasan mercadería.
-3. **SIAT:** pedir CUIS y CUFD reales en el piloto; agregar el WSDL de
+5. **SIAT:** pedir CUIS y CUFD reales en el piloto; agregar el WSDL de
    `FacturacionOperaciones` cuando se haga contingencia y el de
    `ServicioFacturacionDocumentoAjuste` para notas de crédito y débito.
-4. **Cobertura de endpoints:** OPTIMIZATION 32, BILLING 16, MINING_ANALYSIS 10
+6. **Cobertura de endpoints:** OPTIMIZATION 32, BILLING 16, MINING_ANALYSIS 10
    y AI 1 sin prueba (`endpoint-coverage` sale como TODO).
-5. **Maestro de productos**, con la misma regla que clientes y vendedores.
-6. **Sección "Usuarios"** para que un MANAGER administre a su gente, y panel
+7. **Maestro de productos**, con la misma regla que clientes y vendedores.
+8. **Sección "Usuarios"** para que un MANAGER administre a su gente, y panel
    del ADMIN (usuarios, roles de IA, uso por cuenta). Cuando el sistema esté
    listo para pruebas, no antes (01-oct).
-7. **Sugerencias sin decidir:** Cumplimiento podría mandar el detalle por
-   cliente sólo al abrirlo (la respuesta de 24 meses es pesada); reemplazar
-   OSRM público antes de tener clientes pagando.
-8. **Postergado:** oro y plata en la cotización anticipada (la LBMA bloquea la
+9. **Sugerencia sin decidir:** reemplazar OSRM público antes de tener
+   clientes pagando.
+10. **Postergado:** oro y plata en la cotización anticipada (la LBMA bloquea la
    lectura automática desde el 30-sep; cotizaciones tiene baja prioridad);
    alinear los modelos de AI a `TypedDict`; alinear
    `mining_analysis/services/utils.py` al boilerplate; corregir
