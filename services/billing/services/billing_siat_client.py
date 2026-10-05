@@ -64,6 +64,9 @@ SERVICE_CODES = 'codigos'
 SERVICE_INVOICE = 'facturacion'
 SERVICE_SYNC = 'sincronizacion'
 
+# Authorization scheme of the `apikey` header, fixed by the SIAT protocol.
+TOKEN_SCHEME: Final[str] = 'TokenApi'
+
 _clients: Dict[str, Client] = {}
 
 
@@ -122,7 +125,8 @@ def _client(service: str) -> Client:
     session = requests.Session()
     # The delegation token authorises every call. It is a header and not a
     # parameter, so it never appears in the SOAP body a log might capture.
-    session.headers.update({'apikey': ENV_VARS['SIAT_TOKEN']})
+    # The SIAT rejects the bare token: it expects the `TokenApi` scheme.
+    session.headers.update({'apikey': f'{TOKEN_SCHEME} {ENV_VARS["SIAT_TOKEN"]}'})
     _clients[service] = Client(
         wsdl = path,
         transport = Transport(session = session, timeout = TIMEOUT),

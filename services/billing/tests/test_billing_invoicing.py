@@ -463,6 +463,21 @@ def test_a_missing_wsdl_is_reported_and_not_downloaded(monkeypatch):
     assert refused.value.detail == BillingError.SIAT_WSDL_MISSING.value
 
 
+def test_the_token_travels_with_the_scheme_the_siat_expects(monkeypatch):
+    '''
+        The pilot answers "API KEY NO VALIDO" to the bare token and
+        "COMUNICACION EXITOSA" to `TokenApi <token>` (checked against
+        FacturacionCodigos on 04-oct). Built from the real WSDL on disk.
+    '''
+    monkeypatch.setattr(siat_client, '_clients', {})
+
+    client = siat_client._client(siat_client.SERVICE_CODES) # pylint: disable=protected-access
+
+    assert client.transport.session.headers['apikey'] == (
+        f'TokenApi {siat_client.ENV_VARS["SIAT_TOKEN"]}'
+    )
+
+
 def test_the_dry_run_produces_a_valid_document():
     '''
         The demonstration tool is exercised here so it cannot rot silently: it
