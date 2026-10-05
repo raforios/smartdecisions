@@ -1988,7 +1988,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const CREDIT_MARGIN_UNAVAILABLE = {
-        NO_COST_COLUMN: 'Sin la columna Costo Unitario no se puede calcular qué deja ' +
+        NO_COST_COLUMN: 'Sin el Costo Unitario cargado no se puede calcular qué deja ' +
             'el crédito: falta el margen del que se descuentan el financiamiento y el ' +
             'incobrable.'
     };
