@@ -41,12 +41,19 @@ async function show(name) {
     });
     sessionStorage.setItem(LAST_SECTION_KEY, name);
 
-    view.innerHTML = '<p class="muted">Cargando…</p>';
+    // Cada sección se monta en su propio contenedor. Si el usuario cambia de
+    // sección mientras la anterior espera al API, la anterior sigue sobre un
+    // contenedor que ya no está en pantalla: ni encuentra nulos al terminar
+    // ni pinta su error encima de la sección nueva.
+    const container = document.createElement('div');
+    container.innerHTML = '<p class="muted">Cargando…</p>';
+    view.replaceChildren(container);
     try {
-        await mount(view);
+        await mount(container);
     } catch (error) {
-        view.innerHTML = errorCard('No se pudo abrir la sección',
-                                   errorText(error, 'El servicio no respondió.'));
+        if (!container.isConnected) return;
+        container.innerHTML = errorCard('No se pudo abrir la sección',
+                                        errorText(error, 'El servicio no respondió.'));
     }
 }
 
