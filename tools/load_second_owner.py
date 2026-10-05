@@ -16,9 +16,14 @@
     of this account's data is that client name, and using the e-mail instead
     would file the rows where the account will never look for them.
 
+    The other companions —collections, stock, visits— go through their own
+    INGEST validators and attach to the dataset the same way the upload door
+    attaches them.
+
     Usage:
         python -m tools.load_second_owner --owner "Sociedad de Cachivaches" \
-            --sales /tmp/ventas.xlsx --objectives /tmp/objetivos.xlsx
+            --sales /tmp/ventas.xlsx --objectives /tmp/objetivos.xlsx \
+            --collections /tmp/cobros.xlsx --stock /tmp/stock.xlsx --visits /tmp/visitas.xlsx
         python -m tools.load_second_owner ... --yes    # escribe de verdad
 '''
 import argparse
@@ -28,6 +33,7 @@ from typing import Optional
 from uuid import uuid4
 
 import boto3
+from boto3.dynamodb.conditions import Attr
 from dotenv import load_dotenv
 
 INGEST_PATH = Path(__file__).resolve().parent.parent / 'services' / 'ingest'
@@ -44,7 +50,8 @@ from schemas.clients import ClientSource  # noqa: E402
 from services.clients import CLIENT_FRAME_COLUMNS, sync_master  # noqa: E402
 from services.ingest import parse_and_validate_partial  # noqa: E402
 from services.ingest_files import serialize_dataframe  # noqa: E402
-from services.ingest_utils import persist_dataset  # noqa: E402
+from services import collections, stock, visits  # noqa: E402
+from services.ingest_utils import attach_to_dataset, persist_dataset  # noqa: E402
 from services.ingest_utils import to_dynamo  # noqa: E402
 from services.objectives import parse_and_validate as parse_objectives  # noqa: E402
 
@@ -122,6 +129,11 @@ def main(argument_list: Optional[list] = None) -> int:
                         help = 'Owner key: the JWT client, not the e-mail.')
     parser.add_argument('--sales', required = True, help = 'Sales file, template-shaped.')
     parser.add_argument('--objectives', default = None, help = 'Objectives file.')
+    parser.add_argument('--collections', default = None, help = 'Collections file.')
+    parser.add_argument('--stock', default = None, help = 'Stock file.')
+    parser.add_argument('--visits', default = None, help = 'Visits file.')
+    parser.add_argument('--replace', action = 'store_true',
+                        help = 'Delete the owner\'s previous datasets, their runs and files.')
     parser.add_argument('--yes', action = 'store_true', help = 'Write for real.')
     arguments = parser.parse_args(argument_list)
     dry_run = not arguments.yes
@@ -188,9 +200,127 @@ def main(argument_list: Optional[list] = None) -> int:
             )
             print('objetivos enganchados al dataset')
 
+    for name, module, names_clients in (('collections', collections, False),
+                                        ('stock', stock, False),
+                                        ('visits', visits, True)):
+        path = getattr(arguments, name)
+        if path:
+            _attach_companion((resource, arguments.owner, dataset_id, accepted),
+                              name, (module, names_clients), Path(path), dry_run)
+
+    if arguments.replace and not dry_run:
+        datasets, runs = delete_previous_datasets(resource, arguments.owner, dataset_id)
+        print(f'anteriores borrados: {datasets} dataset(s), {runs} análisis guardado(s)')
+
     if dry_run:
         print('\nSimulación: no se escribió nada. Repite con --yes.')
     return 0
+
+
+def _scan_all(
+    table,
+    condition,
+    keys_only: bool = False
+) -> list:
+    '''
+        Every item of a table matching a condition, page after page: a run
+        carries its results, so one page of `analytics_runs` is a handful.
+
+        Args:
+            table: A boto3 table.
+            condition: A boto3 attribute condition.
+            keys_only (bool): Bring only the key, not the stored results.
+
+        Returns:
+            list: The matching items.
+    '''
+    items: list = []
+    arguments = {'FilterExpression': condition}
+    if keys_only:
+        arguments.update(ProjectionExpression = '#k', ExpressionAttributeNames = {'#k': 'id'})
+    while True:
+        page = table.scan(**arguments)
+        items.extend(page['Items'])
+        if 'LastEvaluatedKey' not in page:
+            return items
+        arguments['ExclusiveStartKey'] = page['LastEvaluatedKey']
+
+
+def delete_previous_datasets(
+    resource,
+    owner: str,
+    keep_id: str
+) -> tuple:
+    '''
+        Deletes every dataset of the owner but the one just loaded: the item,
+        the files it points to and the analysis runs computed over it. A demo
+        company keeps one dataset, so the portal never opens a stale one.
+
+        Args:
+            resource: DynamoDB resource.
+            owner (str): Owner key.
+            keep_id (str): The dataset that stays.
+
+        Returns:
+            tuple: Datasets and runs deleted.
+    '''
+    datasets = [item for item in _scan_all(resource.Table('ingest_datasets'),
+                                           Attr('owner_email').eq(owner))
+                if item['id'] != keep_id]
+    runs_deleted = 0
+    for dataset in datasets:
+        keys = {value for name, value in dataset.items()
+                if name.endswith('s3_key') and isinstance(value, str)
+                and value.startswith('ingest/')}
+        runs = _scan_all(resource.Table('analytics_runs'),
+                         Attr('dataset_id').eq(dataset['id']), keys_only = True)
+        for key in keys:
+            _s3().delete_object(Bucket = BUCKET, Key = key)
+        with resource.Table('analytics_runs').batch_writer() as batch:
+            for run in runs:
+                batch.delete_item(Key = {'id': run['id']})
+        resource.Table('ingest_datasets').delete_item(Key = {'id': dataset['id']})
+        runs_deleted += len(runs)
+    return len(datasets), runs_deleted
+
+
+def _attach_companion(
+    target: tuple,
+    name: str,
+    pipeline: tuple,
+    path: Path,
+    dry_run: bool
+) -> None:
+    '''
+        Validates a companion file with INGEST's own pipeline and attaches it
+        to the dataset, as the upload door does.
+
+        Args:
+            target (tuple): DynamoDB resource, owner, dataset id and the
+                accepted sales the companion is checked against.
+            name (str): Companion name: collections, stock or visits.
+            pipeline (tuple): The INGEST module and whether it names clients.
+            path (Path): The file.
+            dry_run (bool): True to report without writing.
+    '''
+    resource, owner, dataset_id, sales = target
+    module, names_clients = pipeline
+    result = module.parse_and_validate(path.read_bytes(), path.name, sales)
+    accepted = result.accepted
+    if names_clients and len(accepted) > 0 and not dry_run:
+        accepted = sync_master(
+            dynamodb_resource = resource, owner_email = owner, frame = accepted,
+            columns = CLIENT_FRAME_COLUMNS, source = ClientSource.FILE
+        )
+    print(f'{name}: {result.summary.valid_rows} válidas, {len(result.issues)} observaciones')
+    key = _store(accepted, name, dry_run)
+    print(f'{name} -> {key}')
+    if not dry_run:
+        attach_to_dataset(dynamodb_resource = resource, dataset_id = dataset_id, payload = {
+            f'{name}_s3_key': key,
+            f'{name}_summary': to_dynamo(result.summary.model_dump(mode = 'json')),
+            f'{name}_issues': [issue.model_dump(mode = 'json') for issue in result.issues[:50]]
+        })
 
 
 if __name__ == '__main__':

@@ -21,10 +21,18 @@
 
     Everything is seeded, so the same input always yields the same files.
 
+    `--end-date` moves every date of the sales so the last one falls on that
+    day (or the closest earlier one keeping the weekday): a demo whose data
+    ends yesterday shows a current portfolio and crosses the exchange rate
+    float of 27-jun-2026.
+
     Usage:
         python -m tools.complete_demo_dataset ventas.xlsx --out-dir /tmp/andina
+        python -m tools.complete_demo_dataset ventas.xlsx --out-dir /tmp/andina \
+            --end-date 2026-10-04
 '''
 import argparse
+from datetime import date
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +44,7 @@ from tools.build_sample_dataset import CATEGORY_MARGINS, DEFAULT_MARGIN, MARGIN_
 from tools.build_visits import build_visits_sheet
 from tools.derive_objectives import DEFAULT_ATTAINMENT_RATE, derive
 
+DATE_COLUMNS = ('Fecha', 'Fecha Vencimiento')
 PRODUCT = 'Producto'
 CATEGORY = 'Categoria'
 PRICE = 'Precio Unitario'
@@ -71,6 +80,31 @@ def fill_unit_cost(
     return frame
 
 
+def shift_dates(
+    sales: pd.DataFrame,
+    end_date: date
+) -> pd.DataFrame:
+    '''
+        Moves every date by whole weeks so the last sale falls on `end_date`
+        or the closest earlier day with the same weekday.
+
+        Args:
+            sales (pd.DataFrame): Rows of the sales template.
+            end_date (date): Where the data should end.
+
+        Returns:
+            pd.DataFrame: The same rows, dated later.
+    '''
+    frame = sales.copy()
+    last = pd.to_datetime(frame['Fecha']).max().date()
+    weeks = (end_date - last).days // 7
+    delta = pd.Timedelta(weeks = weeks)
+    for column in DATE_COLUMNS:
+        if column in frame.columns:
+            frame[column] = pd.to_datetime(frame[column], errors = 'coerce') + delta
+    return frame
+
+
 def main(argument_list: Optional[list] = None) -> int:
     '''
         Entry point.
@@ -87,12 +121,16 @@ def main(argument_list: Optional[list] = None) -> int:
     parser.add_argument('--seed', type = int, default = DEFAULT_SEED)
     parser.add_argument('--scenario', default = 'estresada', help = 'Credit scenario.')
     parser.add_argument('--stock-scenario', default = 'ajustado', help = 'Stock scenario.')
+    parser.add_argument('--end-date', default = None,
+                        help = 'Move the dates so the data ends this day (YYYY-MM-DD).')
     arguments = parser.parse_args(argument_list)
 
     out_dir = Path(arguments.out_dir)
     out_dir.mkdir(parents = True, exist_ok = True)
 
     sales = fill_unit_cost(pd.read_excel(arguments.sales), arguments.seed)
+    if arguments.end_date:
+        sales = shift_dates(sales, date.fromisoformat(arguments.end_date))
     book = build_credit_book(sales, arguments.scenario, arguments.seed)
     files = {
         'ventas': book.sales,
