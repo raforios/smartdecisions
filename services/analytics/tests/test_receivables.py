@@ -260,6 +260,16 @@ def test_margin_reports_its_code_without_a_cost_column():
     assert margin.reason_code == 'NO_COST_COLUMN'
 
 
+def test_a_zero_cost_is_not_a_cost_for_the_credit_margin():
+    '''A cost column full of zeros would report the whole price as margin.'''
+    sales = pd.DataFrame([_sale('F-1', 'Tienda', '2026-03-01', 500.0)]).assign(unit_cost = 0.0)
+
+    margin = build_receivables(sales, None).margin
+
+    assert margin.available is False
+    assert margin.reason_code == 'NO_COST_COLUMN'
+
+
 def test_debtors_and_priority_rank_by_what_can_be_recovered():
     '''
         The list to call is ordered by expected recovery, not by age: an old

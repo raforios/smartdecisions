@@ -67,13 +67,15 @@ def has_cost_data(dataframe: pd.DataFrame) -> bool:
     required = {COST, QUANTITY, AMOUNT}
     if not required.issubset(dataframe.columns):
         return False
-    return bool(pd.to_numeric(dataframe[COST], errors = 'coerce').notna().any())
+    # A zero cost is an uninformed cost: a file with the column filled with
+    # zeros would otherwise read as a 100% margin.
+    return bool((pd.to_numeric(dataframe[COST], errors = 'coerce') > 0).any())
 
 
 def _with_margin(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
         Adds the per-line cost and gross margin columns, keeping only the rows
-        where both operands are usable.
+        where every operand is usable and the cost is known (positive).
 
         Args:
             dataframe (pd.DataFrame): Normalized sales rows.
@@ -86,7 +88,7 @@ def _with_margin(dataframe: pd.DataFrame) -> pd.DataFrame:
     frame[QUANTITY] = pd.to_numeric(frame[QUANTITY], errors = 'coerce')
     frame[AMOUNT] = pd.to_numeric(frame[AMOUNT], errors = 'coerce')
 
-    frame = frame[frame[COST].notna() & frame[QUANTITY].notna() & frame[AMOUNT].notna()]
+    frame = frame[(frame[COST] > 0) & frame[QUANTITY].notna() & frame[AMOUNT].notna()]
     frame['line_cost'] = frame[COST] * frame[QUANTITY]
     frame['line_margin'] = frame[AMOUNT] - frame['line_cost']
     return frame

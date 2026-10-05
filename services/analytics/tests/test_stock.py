@@ -229,6 +229,10 @@ def test_stock_value_uses_the_snapshot_cost_and_falls_back_to_sales():
     blind = sales.drop(columns = ['unit_cost'])
     assert build_stock(blind, without_cost).kpis.stock_value is None
 
+    # A zero cost in the history is an uninformed cost, not a free product.
+    zero_cost = sales.assign(unit_cost = 0.0)
+    assert build_stock(zero_cost, without_cost).kpis.stock_value is None
+
 
 def test_no_snapshot_reports_its_code_instead_of_an_empty_warehouse():
     '''A dataset nobody uploaded stock for is not a warehouse with nothing in it.'''

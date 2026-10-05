@@ -165,6 +165,8 @@ def _unit_values(sales: pd.DataFrame) -> pd.Series:
     if PRODUCT_ID not in sales.columns or UNIT_COST not in sales.columns:
         return pd.Series(dtype = 'float64')
     costs = pd.to_numeric(sales[UNIT_COST], errors = 'coerce')
+    # A zero cost is an uninformed cost: averaging it in would undervalue stock.
+    costs = costs.where(costs > 0)
     return costs.groupby(sales[PRODUCT_ID].astype(str)).mean().dropna()
 
 

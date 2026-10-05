@@ -35,6 +35,31 @@ def test_reports_unavailable_without_cost_column():
     assert not result.by_category
 
 
+def test_a_cost_column_full_of_zeros_is_not_cost_data():
+    '''
+        Distribuidora Andina's file carries 'Costo Unitario' filled with zeros:
+        it read as a 100% margin on Bs 4,2 M. A zero cost is an uninformed
+        cost, so the block must be unavailable, as with no column at all.
+    '''
+    frame = _sales_frame().assign(unit_cost = 0.0)
+    result = build_margin(frame)
+    assert has_cost_data(frame) is False
+    assert result.available is False
+    assert not result.kpis
+
+
+def test_lines_without_cost_do_not_count_as_pure_margin():
+    '''
+        One line with cost and one at zero: the margin is measured only over
+        the line whose cost is known, so the zero line cannot inflate it.
+    '''
+    frame = _sales_frame()
+    frame.loc[1, 'unit_cost'] = 0.0
+    kpis = {kpi.metric_code: kpi.value for kpi in build_margin(frame).kpis}
+    assert kpis['GROSS_MARGIN_PERCENT'] == 40.0
+    assert kpis['COST_OF_GOODS'] == 60.0
+
+
 def test_gross_margin_kpis_are_computed():
     '''Revenue 200, cost 150 -> margin 50 (25%).'''
     result = build_margin(_sales_frame())

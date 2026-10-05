@@ -52,6 +52,7 @@ from services.analytics_utils import (
 )
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+from services.margin import has_cost_data
 from services.receivables_views import (
     build_collection_curve,
     build_collectors,
@@ -667,7 +668,7 @@ def _credit_margin(
             CreditMargin: The margin chain, or an unavailable block with its
                 code when the file carries no unit cost.
     '''
-    if COST not in sales.columns:
+    if not has_cost_data(sales):
         return CreditMargin(available = False, reason_code = 'NO_COST_COLUMN')
 
     credit_rows = sales[TERMS].astype(str).str.upper() == CREDIT
