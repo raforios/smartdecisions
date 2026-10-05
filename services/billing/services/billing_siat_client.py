@@ -12,8 +12,9 @@
     **The WSDL is read from disk, never fetched.** `zeep` downloads it when it
     builds a client, and in Lambda that is a network round trip on every cold
     start — and an outage of a service we do not control turning into an outage
-    of ours. The WSDL files sit next to the XSDs in `docs/siat/`, versioned
-    with the code, so the contract cannot change under us without a commit.
+    of ours. The WSDL files live in the service's `wsdl/` folder, so they
+    travel inside the Lambda package and are versioned with the code: the
+    contract cannot change under us without a commit.
 
     **Every call goes through one seam.** `_invoke` is the only place that
     talks to `zeep`, which is what makes the parameter assembly testable
