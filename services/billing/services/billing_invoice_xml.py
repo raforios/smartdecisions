@@ -29,11 +29,11 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 from lxml import etree
 
 from schemas.billing import (
+    CARD_METHODS,
     SIN_PAYMENT_CODES,
     BillingError,
     InvoiceContext,
     InvoiceLine,
-    PaymentMethod,
     SaleNoteOut
 )
 from services.exceptions import InvalidInputError
@@ -140,7 +140,7 @@ def _card_for_xml(sale: SaleNoteOut) -> Optional[str]:
         Returns:
             str | None: The digits, or None.
     '''
-    if sale.payment_method is not PaymentMethod.TARJETA:
+    if sale.payment_method not in CARD_METHODS:
         return None
     return sale.card_number or None
 

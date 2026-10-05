@@ -11,9 +11,9 @@
     The backend answers with data and codes; the wording belongs to the
     frontend and to the interpretation layer.
 '''
-from datetime import date, datetime
+from datetime import date, datetime, time as time_type
 from enum import Enum
-from typing import List, Optional
+from typing import Final, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -89,15 +89,34 @@ class BillingError(str, Enum):
     TOO_MANY_LINES = 'TOO_MANY_LINES'
     SIAT_UNREACHABLE = 'SIAT_UNREACHABLE'
     SIAT_WSDL_MISSING = 'SIAT_WSDL_MISSING'
+    CASH_SESSION_ALREADY_OPEN = 'CASH_SESSION_ALREADY_OPEN'
+    CASH_SESSION_REQUIRED = 'CASH_SESSION_REQUIRED'
+    CASH_SESSION_CLOSED = 'CASH_SESSION_CLOSED'
+    CASH_SESSION_EXPIRED = 'CASH_SESSION_EXPIRED'
+    CASH_SESSION_NOT_FOUND = 'CASH_SESSION_NOT_FOUND'
+    CLOSING_NOTE_REQUIRED = 'CLOSING_NOTE_REQUIRED'
+    EXPENSE_EXCEEDS_CASH = 'EXPENSE_EXCEEDS_CASH'
+    EXPENSE_NOT_FOUND = 'EXPENSE_NOT_FOUND'
 
 
 class PaymentMethod(str, Enum):
     '''
-        How the buyer paid. A pharmacy counter takes these three.
+        How the buyer paid.
+
+        Debit and credit are told apart for the shop's own reports; for the
+        SIN both are a card. `TARJETA` stays for the notes issued before the
+        distinction existed, which the reports show as a card with no detail.
     '''
     EFECTIVO = 'EFECTIVO'
     QR = 'QR'
     TARJETA = 'TARJETA'
+    TARJETA_DEBITO = 'TARJETA_DEBITO'
+    TARJETA_CREDITO = 'TARJETA_CREDITO'
+
+
+CARD_METHODS: Final[frozenset] = frozenset({
+    PaymentMethod.TARJETA, PaymentMethod.TARJETA_DEBITO, PaymentMethod.TARJETA_CREDITO
+})
 
 
 # What each of them is called in the SIN's `codigoMetodoPago` parameter. Only
@@ -113,6 +132,8 @@ SIN_PAYMENT_OTHER: int = 5
 SIN_PAYMENT_CODES: dict = {
     PaymentMethod.EFECTIVO: SIN_PAYMENT_CASH,
     PaymentMethod.TARJETA: SIN_PAYMENT_CARD,
+    PaymentMethod.TARJETA_DEBITO: SIN_PAYMENT_CARD,
+    PaymentMethod.TARJETA_CREDITO: SIN_PAYMENT_CARD,
     PaymentMethod.QR: SIN_PAYMENT_OTHER
 }
 
@@ -422,6 +443,9 @@ class SaleNoteOut(BaseModel):
     created_at: str
     cancelled_at: Optional[str] = None
     cancelled_by: Optional[str] = None
+    cash_session_id: Optional[str] = Field(
+        None, description = 'The till the sale went into; empty on notes issued before tills.'
+    )
 
 
 class SaleNotesResponse(BaseModel):
@@ -480,6 +504,13 @@ class BillingSettings(BaseModel):
                       'electronically: the norm names the buyer on every '
                       'invoice, regardless of the amount.'
     )
+    # --- Cash tills ------------------------------------------------------------
+    # Per shop and not in the service configuration: each shop closes at its
+    # own hour. Without it there is no end-of-day alert.
+    cash_alert_time: Optional[time_type] = Field(
+        None,
+        description = 'From this hour the screens warn about tills still open.'
+    )
 
 
 class SettingsResponse(BillingSettings):
@@ -527,6 +558,15 @@ class TopProduct(BaseModel):
     amount: float
 
 
+class MethodTotal(BaseModel):
+    '''
+        What one payment method brought in.
+    '''
+    payment_method: PaymentMethod
+    count: int
+    total: float
+
+
 class BillingDashboard(BaseModel):
     '''
         What the person behind the counter needs to see when they open the
@@ -553,6 +593,7 @@ class BillingDashboard(BaseModel):
     expired: List[ExpiringLot]
     low_stock: List[LowStockProduct]
     top_products: List[TopProduct]
+    sales_by_method: List['MethodTotal'] = []
 
 
 # --- grouped arguments -------------------------------------------------------

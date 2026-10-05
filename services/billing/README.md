@@ -62,7 +62,7 @@ billing/
 
 ## Almacenamiento
 
-Cinco tablas, todas particionadas por **dueño** —el comercio, tomado del
+Siete tablas, todas particionadas por **dueño** —el comercio, tomado del
 token—. El dueño es parte de cada clave y nunca un filtro posterior: un
 comercio que pudiera leer la estantería de otro estaría leyendo sus márgenes.
 
@@ -72,6 +72,8 @@ comercio que pudiera leer la estantería de otro estaría leyendo sus márgenes.
 | `billing_lots` | `owner` | `lot_key` = `sku#lot_id` |
 | `billing_sales` | `owner` | `sale_id` (empieza con la marca de tiempo) |
 | `billing_purchases` | `owner` | `purchase_id` |
+| `billing_cash_sessions` | `owner` | `session_id` (empieza con la hora de apertura) |
+| `billing_cash_movements` | `owner` | `movement_key` = `session_id#movimiento` |
 | `billing_settings` | `owner` | `setting_key` |
 
 `lot_key` agrupa los lotes de un producto, así que las partidas a vender salen
@@ -106,7 +108,39 @@ POST   /sales                            Nota de venta
 GET    /sales                            Por ventana de fechas
 GET    /sales/{sale_id}
 POST   /sales/{sale_id}/cancel           (ADMIN, MANAGER)
+POST   /cash/sessions                    Abrir la caja propia
+GET    /cash/sessions/current            La caja abierta propia, con su arqueo
+GET    /cash/sessions                    Cajas: las propias, o todas (ADMIN, MANAGER)
+GET    /cash/sessions/{id}               Arqueo de una caja
+POST   /cash/sessions/{id}/expenses      Egreso de la caja propia
+POST   /cash/sessions/{id}/expenses/{movement_id}/cancel
+POST   /cash/sessions/{id}/close         Cierre; una caja ajena sólo ADMIN/MANAGER, con observación
+GET    /cash/alerts                      Cajas por cerrar
 ```
+
+### La caja
+
+Especificación completa en `docs/cambios/billing-caja/spec.md`. Lo esencial:
+cada caja es de **un usuario y un día**; no se vende sin caja abierta de hoy
+(la comprobación va antes de tocar el stock); de la caja sólo sale efectivo y
+nunca más del que hay; nada se borra, un egreso se anula con quién y cuándo; al
+cerrar se guardan lo esperado, lo contado y la diferencia. Una caja que quedó
+abierta de un día anterior no admite ventas ni egresos hasta cerrarla. La hora
+de la alerta de cierre es de cada comercio (`cash_alert_time` en la
+configuración), no del `.env`.
+
+**Una caja** (`billing_cash_sessions`): `user_email`, `status` (`OPEN`,
+`CLOSED`), `business_day`, `opened_at`, `opening_cash`, y al cerrar
+`closed_at`, `closed_by`, `counted_cash`, `expected_cash`, `difference`, `note`.
+
+**Un egreso** (`billing_cash_movements`): `session_id`, `movement_id`,
+`expense_type` (`SUPPLIER_PAYMENT`, `SERVICE_PAYMENT`, `PETTY_CASH`), `amount`,
+`concept`, `purchase_id`, `status` (`ACTIVE`, `CANCELLED`), `created_by`,
+`created_at`, `cancelled_by`, `cancelled_at`.
+
+La venta guarda además `cash_session_id`. Medios de pago: `EFECTIVO`, `QR`,
+`TARJETA_DEBITO`, `TARJETA_CREDITO`; `TARJETA` queda para las notas anteriores
+a la distinción. Para el SIN las tres tarjetas son el código 2.
 
 ### El tablero
 

@@ -1,7 +1,7 @@
 '''
     Billing: the DynamoDB items.
 
-    Five tables, all partitioned by owner — the shop. The owner is part of every
+    Seven tables, all partitioned by owner — the shop. The owner is part of every
     key and never a filter applied afterwards: a shop that could read
     another's shelf would be reading its margins.
 
@@ -12,6 +12,8 @@
     | billing_sales        | owner     | sale_id (time-sorted) |
     | billing_purchases    | owner     | purchase_id           |
     | billing_settings     | owner     | setting_key           |
+    | billing_cash_sessions| owner     | session_id (time-sorted) |
+    | billing_cash_movements| owner    | movement_key = session_id#movement_id |
 
     `lot_key` puts every lot of one SKU together, so the batches to sell next
     come back with a single `begins_with` query instead of a scan. The sale and
@@ -29,7 +31,9 @@ ENV_VARS = load_and_validate_env_vars(
         'DYNAMODB_TABLE_NAME_BILLING_LOTS': str,
         'DYNAMODB_TABLE_NAME_BILLING_SALES': str,
         'DYNAMODB_TABLE_NAME_BILLING_PURCHASES': str,
-        'DYNAMODB_TABLE_NAME_BILLING_SETTINGS': str
+        'DYNAMODB_TABLE_NAME_BILLING_SETTINGS': str,
+        'DYNAMODB_TABLE_NAME_BILLING_CASH_SESSIONS': str,
+        'DYNAMODB_TABLE_NAME_BILLING_CASH_MOVEMENTS': str
     }
 )
 
@@ -38,6 +42,8 @@ LOTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_LOTS']
 SALES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_SALES']
 PURCHASES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_PURCHASES']
 SETTINGS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_SETTINGS']
+CASH_SESSIONS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_CASH_SESSIONS']
+CASH_MOVEMENTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_CASH_MOVEMENTS']
 
 OWNER_KEY = 'owner'
 PRODUCT_SORT_KEY = 'sku'
@@ -45,6 +51,8 @@ LOT_SORT_KEY = 'lot_key'
 SALE_SORT_KEY = 'sale_id'
 PURCHASE_SORT_KEY = 'purchase_id'
 SETTING_SORT_KEY = 'setting_key'
+CASH_SESSION_SORT_KEY = 'session_id'
+CASH_MOVEMENT_SORT_KEY = 'movement_key'
 
 # The single settings row of a shop, and the two counters that number its
 # documents. Counters live beside the settings because they are the same kind
@@ -152,6 +160,8 @@ class SaleItem:
     card_number: Optional[str] = None
     cancelled_at: Optional[str] = None
     cancelled_by: Optional[str] = None
+    # The till the sale went into. Empty on notes issued before tills existed.
+    cash_session_id: Optional[str] = None
 
 
 @dataclass
@@ -171,3 +181,62 @@ class PurchaseItem:
     invoice_number: Optional[str] = None
     invoice_date: Optional[str] = None
     notes: Optional[str] = None
+
+
+def movement_key(
+    session_id: str,
+    movement_id: str
+) -> str:
+    '''
+        The sort key of a till movement.
+
+        Args:
+            session_id (str): The till.
+            movement_id (str): The movement.
+
+        Returns:
+            str: "session_id#movement_id", so a whole shift is one begins_with.
+    '''
+    return f'{session_id}#{movement_id}'
+
+
+@dataclass
+class CashSessionItem:
+    '''
+        A till: one user's shift, for one day. The identifier starts with the
+        opening time, so the tills of a day are a bounded Query.
+    '''
+    owner: str
+    session_id: str
+    user_email: str
+    status: str
+    business_day: str
+    opened_at: str
+    opening_cash: float
+    closed_at: Optional[str] = None
+    closed_by: Optional[str] = None
+    counted_cash: Optional[float] = None
+    expected_cash: Optional[float] = None
+    difference: Optional[float] = None
+    note: Optional[str] = None
+
+
+@dataclass
+class CashMovementItem:
+    '''
+        Cash that left a till. Never deleted: a cancellation records who and
+        when, and the movement stops counting.
+    '''
+    owner: str
+    movement_key: str
+    session_id: str
+    movement_id: str
+    expense_type: str
+    amount: float
+    concept: str
+    status: str
+    created_by: str
+    created_at: str
+    purchase_id: Optional[str] = None
+    cancelled_by: Optional[str] = None
+    cancelled_at: Optional[str] = None

@@ -25,7 +25,7 @@ from models.billing import (
 from schemas.billing import (
     Buyer,
     BillingError,
-    PaymentMethod,
+    CARD_METHODS,
     SaleAllocation,
     SaleLineIn,
     SaleLineOut,
@@ -34,6 +34,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SaleStatus
 )
+from services.billing_cash import require_sale_session
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
 from services.billing import (
@@ -75,12 +76,16 @@ def issue_sale(
             SaleNoteOut: The issued note, ready to print.
 
         Raises:
-            InvalidInputError: No buyer where the pharmacy requires one,
-                repeated SKU, discount where discounts are off, a discount
-                larger than its line, or not enough stock.
+            InvalidInputError: No open till of today for the seller, no
+                buyer where the pharmacy requires one, repeated SKU, discount
+                where discounts are off, a discount larger than its line, or
+                not enough stock.
             RegisterNotFoundError: A SKU is not in the catalogue.
     '''
     settings = get_settings(dynamodb_resource, owner)
+    # Before any stock moves: a sale refused for want of a till must not have
+    # touched a shelf.
+    session_id = require_sale_session(dynamodb_resource, owner, created_by)
     _require_buyer(note, settings.buyer_required)
     card = _masked_card(note)
     _reject_repeated_lines(note.lines)
@@ -101,7 +106,7 @@ def issue_sale(
         lines = [line.model_dump(mode = 'json') for line in lines],
         created_by = created_by, created_at = stamp,
         buyer = note.buyer.model_dump(mode = 'json'), notes = note.notes,
-        card_number = card,
+        card_number = card, cash_session_id = session_id,
         **money
     )
     write_item(dynamodb_resource, SALES_TABLE, item.__dict__)
@@ -336,7 +341,7 @@ def _masked_card(note: SaleNoteIn) -> Optional[str]:
                 number too short to be one.
     """
     raw = (note.card_number or '').strip()
-    is_card = note.payment_method is PaymentMethod.TARJETA
+    is_card = note.payment_method in CARD_METHODS
     if not raw:
         return None
     if not is_card:

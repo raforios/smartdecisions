@@ -24,6 +24,7 @@ from schemas.billing import (
 )
 from services.environment import load_and_validate_env_vars
 from services.billing import products_by_sku, read_partition
+from services.billing_cash import method_totals
 from services.billing_sales import list_sales
 
 ENV_VARS = load_and_validate_env_vars({
@@ -82,6 +83,7 @@ def dashboard(
         expired = expired,
         low_stock = _low_stock(lots, products),
         top_products = _top_products(issued),
+        sales_by_method = method_totals(issued),
         **_money(issued)
     )
 

@@ -20,6 +20,7 @@ from mangum import Mangum
 import uvicorn
 
 from routes.billing import router as billing_router
+from routes.billing_cash import router as billing_cash_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
@@ -173,6 +174,7 @@ app.add_middleware(
 )
 
 app.include_router(billing_router)
+app.include_router(billing_cash_router)
 
 
 if __name__ == '__main__':

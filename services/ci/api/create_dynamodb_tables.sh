@@ -20,6 +20,11 @@ set -e
 # consultas coincidían, que fue el cuello de botella de usage_logs.
 
 TABLES=(
+    # --- Base: usuarios (AUTH) ---
+    # El correo es la clave: un usuario se busca siempre por el correo con que
+    # ingresa, y el alta es una escritura condicionada a que no exista.
+    "auth-users:email:S"
+
     # --- Base: auditoría y logs de uso (EVENTS) ---
     "audit_records:id:S"
     "usage_logs:id:S"
@@ -96,6 +101,11 @@ TABLES=(
     "billing_sales:owner:S:sale_id:S"
     "billing_purchases:owner:S:purchase_id:S"
     "billing_settings:owner:S:setting_key:S"
+    # Caja: el turno de un usuario. La caja empieza con la fecha y hora de
+    # apertura, así "las cajas de hoy" es una consulta acotada; el movimiento
+    # se ordena por "caja#movimiento" para leer el turno entero de una vez.
+    "billing_cash_sessions:owner:S:session_id:S"
+    "billing_cash_movements:owner:S:movement_key:S"
 
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"

@@ -14,6 +14,8 @@ import pytest
 from moto import mock_aws
 
 from models.billing import (
+    CASH_MOVEMENTS_TABLE,
+    CASH_SESSIONS_TABLE,
     LOTS_TABLE,
     PRODUCTS_TABLE,
     PURCHASES_TABLE,
@@ -33,8 +35,10 @@ from schemas.billing import (
     SaleNoteIn,
     SaleStatus
 )
+from schemas.billing_cash import CashOpenIn
 from services import (
     billing,
+    billing_cash,
     billing_purchases,
     billing_reports,
     billing_sales,
@@ -57,7 +61,7 @@ LATER = TODAY + timedelta(days = 400)
 
 def _create_tables(resource):
     '''
-        The five tables, with the same keys `create_dynamodb_tables.sh` gives
+        The seven tables, with the same keys `create_dynamodb_tables.sh` gives
         them in AWS.
 
         Args:
@@ -65,7 +69,9 @@ def _create_tables(resource):
     '''
     for name, sort_key in ((PRODUCTS_TABLE, 'sku'), (LOTS_TABLE, 'lot_key'),
                            (SALES_TABLE, 'sale_id'), (PURCHASES_TABLE, 'purchase_id'),
-                           (SETTINGS_TABLE, 'setting_key')):
+                           (SETTINGS_TABLE, 'setting_key'),
+                           (CASH_SESSIONS_TABLE, 'session_id'),
+                           (CASH_MOVEMENTS_TABLE, 'movement_key')):
         resource.create_table(
             TableName = name,
             KeySchema = [{'AttributeName': 'owner', 'KeyType': 'HASH'},
@@ -79,7 +85,8 @@ def _create_tables(resource):
 @pytest.fixture(name = 'dynamodb')
 def _dynamodb():
     '''
-        A mocked DynamoDB with the five tables and one pharmacy set up.
+        A mocked DynamoDB with the seven tables, one pharmacy set up and the
+        cashier's till open: there is no selling without one.
 
         Returns:
             ServiceResource: Ready to use.
@@ -90,6 +97,7 @@ def _dynamodb():
         billing.save_settings(resource, OWNER, BillingSettings(
             trade_name = 'Farmacia Demo', document = '1234567', sale_series = 'A'
         ))
+        billing_cash.open_session(resource, OWNER, CASHIER, CashOpenIn(opening_cash = 0))
         yield resource
 
 
