@@ -5,7 +5,8 @@
 >
 > **Documento hermano:** `SMARTDECISIONS.md` guarda el estado del producto, las
 > decisiones vigentes y lo último que se hizo. Se lee al iniciar cada sesión.
-> `GUION_DEMO.md` es el guion de la demostración comercial.
+> `GUIA_SMARTDECISIONS.md` es la guía interna para presentar el producto
+> (guion de la demo incluido); no se entrega a nadie de afuera.
 >
 > **Procedimientos paso a paso** viven en `.claude/skills/`, no aquí:
 > `/verificar-servicio`, `/desplegar-frontend`, `/revisar-logs`,

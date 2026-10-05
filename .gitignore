@@ -52,3 +52,6 @@ logs/*.log
 
 # *.pdf files
 *.pdf
+
+# Docs
+docs/*
