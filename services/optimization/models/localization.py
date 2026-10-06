@@ -10,7 +10,7 @@
     queries its own partition, so a foreign route is indistinguishable from a
     missing one.
 '''
-from typing import List, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 
 
 class PlannedPointItem(TypedDict, total = False):
@@ -54,6 +54,10 @@ class PlannedRouteItem(TypedDict, total = False):
     status: str
     created_at: str
     points: List[PlannedPointItem]
+    # Where the route starts and ends, when the plan fixes it ({name,
+    # latitude, longitude}). Absent: open, the seller starts and ends anywhere.
+    start_point: Optional[Dict[str, Any]]
+    end_point: Optional[Dict[str, Any]]
 
 
 class ExecutedPointItem(TypedDict, total = False):

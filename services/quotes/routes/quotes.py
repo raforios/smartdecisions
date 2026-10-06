@@ -50,8 +50,8 @@ async def get_exchange_rates_endpoint(
     date_to: Optional[date_type] = Query(
         None, description = 'Inclusive end (YYYY-MM-DD).'
     ),
-    currency: str = Query(USD, min_length = 3, max_length = 3,
-                          description = 'ISO 4217 code.'),
+    currency: str = Query(USD, min_length = 3, max_length = 4,
+                          description = 'ISO 4217 code, or USDT for the P2P series.'),
     current_user: str = Depends(get_current_owner)
 ) -> ExchangeRateHistory:
     ''' Endpoint returning the stored exchange-rate series. '''
@@ -83,7 +83,8 @@ async def get_exchange_rates_endpoint(
 async def get_rate_on_endpoint(
     request: Request,
     day: date_type = Query(..., alias = 'date', description = 'YYYY-MM-DD.'),
-    currency: str = Query(USD, min_length = 3, max_length = 3),
+    currency: str = Query(USD, min_length = 3, max_length = 4,
+                          description = 'ISO 4217 code, or USDT for the P2P series.'),
     current_user: str = Depends(get_current_owner)
 ) -> RateOnDate:
     '''

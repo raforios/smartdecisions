@@ -36,6 +36,7 @@ class OptimizationError(str, Enum):
     INVALID_POINT = 'INVALID_POINT'
     ROUTING_SERVICE_UNAVAILABLE = 'ROUTING_SERVICE_UNAVAILABLE'
     NO_SELLERS_IN_FILE = 'NO_SELLERS_IN_FILE'
+    BASE_POINT_NOT_SET = 'BASE_POINT_NOT_SET'
     ROUTING_SERVICE_NO_ROUTE = 'ROUTING_SERVICE_NO_ROUTE'
 
 
@@ -220,6 +221,14 @@ class PlansBySellerSchema(BaseModel):
     sellers: Optional[List[str]] = Field(
         default = None,
         description = 'Only these sellers. Left out, every seller in the file.'
+    )
+    start_at_base: bool = Field(
+        default = False,
+        description = 'Every plan starts at the company base point. Off: no fixed start.'
+    )
+    end_at_base: bool = Field(
+        default = False,
+        description = 'Every plan ends at the company base point. Off: no fixed end.'
     )
 
 

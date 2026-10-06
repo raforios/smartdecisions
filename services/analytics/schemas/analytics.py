@@ -301,6 +301,12 @@ class CurrencyApplied(BaseModel):
     rows_at_fixed_rate: int = Field(
         0, ge = 0, description = 'Rows dated before the float, converted at the fixed rate.'
     )
+    rows_at_fallback: int = Field(
+        0, ge = 0,
+        description = 'In USDT: rows read at the official rate because the USDT series '
+                      'had not started on their day.'
+    )
+    fallback_currency: Optional[str] = None
     rows_total: int = Field(0, ge = 0)
     rows_without_rate: int = Field(0, ge = 0)
 

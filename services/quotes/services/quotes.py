@@ -40,6 +40,7 @@ from services.rate_forecast import (
     project as project_rate,
     run_bench
 )
+from services.usdt_source import SOURCE_NAME as USDT_SOURCE_NAME, fetch_usdt_rate
 from services.utils import get_current_time_gmt, handle_service_errors
 
 
@@ -55,6 +56,7 @@ ENV_VARS = load_and_validate_env_vars({
     'SCENARIO_MAX_DAYS': int,
     'SCENARIO_DEFAULT_DAYS': int,
     'SCHEDULED_SYNC_DAYS': int,
+    'PARALLEL_CURRENCY': str,
     'RATE_BLOCK_WEEKDAYS': str,
     'AMOUNT_DECIMALS': int,
     'RATE_DECIMALS': int,
@@ -93,6 +95,8 @@ SYNC_DEFAULT_DAYS = ENV_VARS['SYNC_DEFAULT_DAYS']
 # series forever. Re-reading a stored date costs nothing — the sync skips it
 # without asking the source.
 SCHEDULED_SYNC_DAYS = ENV_VARS['SCHEDULED_SYNC_DAYS']
+# The code the USDT series is stored under, next to the official USD.
+PARALLEL_CURRENCY = ENV_VARS['PARALLEL_CURRENCY']
 
 # Longest horizon a projection may reach, and the one used when none is asked
 # for. Beyond a quarter the projection says more about the model than about the
@@ -462,9 +466,43 @@ async def scheduled_sync_service(currency: str = USD) -> Dict[str, Any]:
     '''
     message = f'Scheduled {currency} sync over {SCHEDULED_SYNC_DAYS} day(s).'
     logger.info(message)
-    return await sync_rates_service(
+    result = await sync_rates_service(
         days_back = SCHEDULED_SYNC_DAYS, currency = currency
     )
+    store_today_usdt()
+    return result
+
+
+def store_today_usdt() -> bool:
+    '''
+        Keeps today's USDT price, once. Binance only answers the price of now,
+        so the series is the readings we keep.
+
+        A failure is logged and swallowed on purpose: the parallel reference
+        going dark for a day must never cost the official rate of that day,
+        which was stored before this runs.
+
+        Returns:
+            bool: True when a reading was stored.
+    '''
+    today = get_current_time_gmt().date()
+    if get_rate(PARALLEL_CURRENCY, today) is not None:
+        return False
+    try:
+        price = fetch_usdt_rate()
+    except ServiceUnavailableError as error:
+        error_msg = f'USDT reading of {today} skipped: {error.detail}.'
+        logger.warning(error_msg)
+        return False
+    if price is None:
+        return False
+    put_rate(ExchangeRateItem(
+        currency = PARALLEL_CURRENCY, date = today, official_rate = price,
+        source = USDT_SOURCE_NAME, retrieved_at = get_current_time_gmt().isoformat()
+    ))
+    message = f'USDT reading of {today}: {price} BOB.'
+    logger.info(message)
+    return True
 
 
 @handle_service_errors('QUOTES')

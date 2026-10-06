@@ -81,6 +81,9 @@ def _store():
         patcher.setattr(quotes, 'put_rate',
                         lambda rate: items.__setitem__((rate.currency, rate.date), rate))
         patcher.setattr(quotes, 'query_rates', _query)
+        # No test reaches Binance: by default the USDT source answers with no
+        # price, and the tests about it put their own answer in its place.
+        patcher.setattr(quotes, 'fetch_usdt_rate', lambda: None)
         yield items
 
 

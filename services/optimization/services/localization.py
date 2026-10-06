@@ -191,7 +191,9 @@ def to_route_response(route: PlannedRouteItem) -> PlannedRouteResponseSchema:
         plan_date = route.get('plan_date'),
         status = route['status'],
         created_at = route['created_at'],
-        points = [to_point_response(route['id'], point) for point in route.get('points', [])]
+        points = [to_point_response(route['id'], point) for point in route.get('points', [])],
+        start_point = route.get('start_point'),
+        end_point = route.get('end_point')
     )
 
 
@@ -279,7 +281,7 @@ def build_route_item(
         Args:
             owner_email (str): Authenticated account.
             header (Dict[str, Any]): route_name, route_code, description,
-                seller and the optional plan_date.
+                seller and the optional plan_date, start_point and end_point.
             points (List[PlannedPointItem]): Stop items.
 
         Returns:
@@ -297,7 +299,9 @@ def build_route_item(
         'plan_date': header['plan_date'].isoformat() if header.get('plan_date') else None,
         'status': PlannedRouteStatusEnum.IN_CREATION.value,
         'created_at': now_iso(),
-        'points': sorted(points, key = lambda point: point['secuencial'])
+        'points': sorted(points, key = lambda point: point['secuencial']),
+        'start_point': header.get('start_point'),
+        'end_point': header.get('end_point')
     }
 
 

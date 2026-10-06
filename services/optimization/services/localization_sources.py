@@ -21,7 +21,7 @@ import csv
 import io
 import unicodedata
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -46,7 +46,8 @@ from schemas.localization import (
     PlannedPointSchema,
     PlannedRouteBulkRowSchema,
     PlannedRouteCreateSchema,
-    RepeatPlannedRouteSchema
+    RepeatPlannedRouteSchema,
+    RouteEndpointSchema
 )
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
@@ -61,6 +62,7 @@ from services.localization import (
     list_planned_routes
 )
 from services.logger_config import custom_logger as logger
+from services.optimization_settings import get_route_settings
 from services.optimization import (
     assign_days,
     available_sellers,
@@ -432,9 +434,9 @@ def _seller_stops(
 def _create_seller_plan(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    seller: str,
-    stops: List[PlannedPointSchema],
-    request: PlansBySellerSchema
+    seller_stops: Tuple[str, List[PlannedPointSchema]],
+    request: PlansBySellerSchema,
+    endpoints: Tuple[Optional[RouteEndpointSchema], Optional[RouteEndpointSchema]]
 ) -> SellerPlanSchema | None:
     '''
         Saves one seller's day as their plan.
@@ -445,14 +447,16 @@ def _create_seller_plan(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
-            seller (str): The seller as the file writes it.
-            stops (List[PlannedPointSchema]): The day's stops, in order.
+            seller_stops (Tuple[str, List[PlannedPointSchema]]): The seller as
+                the file writes it, and the day's stops in order.
             request (PlansBySellerSchema): Day and date.
+            endpoints (Tuple): Fixed start and end point, or None when open.
 
         Returns:
             SellerPlanSchema | None: The plan created, or None when a plan with
                 that code already existed.
     '''
+    seller, stops = seller_stops
     code_seller = _CODE_UNSAFE.sub('_', seller)[:_CODE_SELLER_LENGTH]
     day_label = f'{request.plan_date.isoformat()}-D{request.day}'
     try:
@@ -461,13 +465,45 @@ def _create_seller_plan(
             route_code = f'{code_seller}-{day_label}',
             seller = seller[:128],
             plan_date = request.plan_date,
-            points = stops
+            points = stops,
+            start_point = endpoints[0],
+            end_point = endpoints[1]
         ))
     except RegisterAlreadyExistsError:
         return None
     return SellerPlanSchema(
         seller = seller, id = plan['id'], route_code = plan['route_code'], stops = len(stops)
     )
+
+
+def _base_endpoints(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    request: PlansBySellerSchema
+) -> Tuple[Optional[RouteEndpointSchema], Optional[RouteEndpointSchema]]:
+    '''
+        The start and end the plans get: the company base point where the
+        request asks for it, nothing where it does not.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): Authenticated account.
+            request (PlansBySellerSchema): Whether to start and end at the base.
+
+        Returns:
+            Tuple: Start and end point, each None when open.
+
+        Raises:
+            InvalidInputError: BASE_POINT_NOT_SET when asked for a base point
+                the company never configured.
+    '''
+    if not (request.start_at_base or request.end_at_base):
+        return None, None
+    base = get_route_settings(dynamodb_resource, owner_email).base_point
+    if base is None:
+        raise InvalidInputError(detail = OptimizationError.BASE_POINT_NOT_SET.value)
+    return (base if request.start_at_base else None,
+            base if request.end_at_base else None)
 
 
 def plans_by_seller(
@@ -505,6 +541,7 @@ def plans_by_seller(
     if not sellers:
         raise InvalidInputError(detail = OptimizationError.NO_SELLERS_IN_FILE.value)
 
+    endpoints = _base_endpoints(dynamodb_resource, owner_email, request)
     created: List[SellerPlanSchema] = []
     without_stops: List[str] = []
     already_planned: List[str] = []
@@ -513,7 +550,8 @@ def plans_by_seller(
         if not stops:
             without_stops.append(seller)
             continue
-        plan = _create_seller_plan(dynamodb_resource, owner_email, seller, stops, request)
+        plan = _create_seller_plan(dynamodb_resource, owner_email, (seller, stops),
+                                   request, endpoints)
         if plan is None:
             already_planned.append(seller)
             continue

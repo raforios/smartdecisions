@@ -36,6 +36,9 @@ ROUTE_BODY = {
     'route_name': 'Zona sur',
     'route_code': 'R-001',
     'seller': 'Ana',
+    # The plan fixes where it starts: that, and not the first stop, is what
+    # the start geofence measures against.
+    'start_point': {'name': 'Depósito', 'latitude': -16.50, 'longitude': -68.10},
     'points': [
         {'point_name': 'Tienda 1', 'secuencial': 1, 'latitude': -16.50, 'longitude': -68.10},
         {'point_name': 'Tienda 2', 'secuencial': 2, 'latitude': -16.51, 'longitude': -68.11}
@@ -91,6 +94,8 @@ def test_create_and_get_planned_route_return_the_dto(client):
     assert created['status'] == PlannedRouteStatusEnum.IN_CREATION.value
     assert [stop['secuencial'] for stop in created['points']] == [1, 2]
     assert created['points'][0]['planned_route_id'] == created['id']
+    assert created['start_point']['name'] == 'Depósito'
+    assert created['end_point'] is None
 
     fetched = client.get(f'{BASE}/{created["id"]}')
     assert fetched.status_code == 200

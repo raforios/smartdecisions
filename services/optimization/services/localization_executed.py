@@ -20,7 +20,6 @@ from boto3.resources.base import ServiceResource
 from models.localization import (
     ExecutedPointItem,
     ExecutedRouteItem,
-    PlannedPointItem,
     PlannedRouteItem
 )
 from schemas.localization import (
@@ -280,7 +279,7 @@ def _active_plan(
 
 
 def _assert_within(
-    stop: Optional[PlannedPointItem],
+    stop: Optional[Dict[str, Any]],
     position: Tuple[float, float],
     limit_m: float,
     code: LocalizationError
@@ -298,16 +297,26 @@ def _assert_within(
         raise InvalidInputError(detail = code.value)
 
 
-def _first_and_last_stop(
-    plan: PlannedRouteItem
-) -> Tuple[Optional[PlannedPointItem], Optional[PlannedPointItem]]:
+def _endpoint(
+    plan: PlannedRouteItem,
+    which: str
+) -> Optional[Dict[str, Any]]:
     '''
-        The plan's stops with the lowest and highest visiting order.
+        The start or end point the plan fixes, or None when it is open.
+
+        The stops do not stand in for it: start and end are open per route,
+        and the first client of the day is not where the seller has to be to
+        start working (Rafael, 05-oct).
+
+        Args:
+            plan (PlannedRouteItem): The plan.
+            which (str): 'start_point' or 'end_point'.
+
+        Returns:
+            Dict[str, Any] | None: {name, latitude, longitude}, or None.
     '''
-    stops = sorted(plan.get('points', []), key = lambda stop: stop['secuencial'])
-    if not stops:
-        return None, None
-    return stops[0], stops[-1]
+    point = plan.get(which)
+    return point if point and point.get('latitude') is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -319,8 +328,9 @@ def create_executed_route(
     route_data: ExecutedRouteCreateSchema
 ) -> ExecutedRouteItem:
     '''
-        A seller starts a route. Against a plan, the plan must be ACTIVE and
-        the start within the declared distance of its first stop.
+        A seller starts a route. Against a plan, the plan must be ACTIVE and,
+        when it fixes a start point, the start within the declared distance of
+        it. Without one the route starts wherever the seller is.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
@@ -332,13 +342,14 @@ def create_executed_route(
     '''
     if route_data.planned_route_id:
         plan = _active_plan(dynamodb_resource, owner_email, route_data.planned_route_id)
-        first_stop, _ = _first_and_last_stop(plan)
-        _assert_within(
-            first_stop,
-            (route_data.start_latitude, route_data.start_longitude),
-            route_data.max_distance_start_point,
-            LocalizationError.OUTSIDE_START_GEOFENCE
-        )
+        start = _endpoint(plan, 'start_point')
+        if start is not None:
+            _assert_within(
+                start,
+                (route_data.start_latitude, route_data.start_longitude),
+                route_data.max_distance_start_point,
+                LocalizationError.OUTSIDE_START_GEOFENCE
+            )
     # Stored stamps are all in the service timezone, so "which is later" is
     # a plain string comparison whatever offset each device reported in.
     start_time = parse_timestamp(route_data.start_time).isoformat()
@@ -495,8 +506,8 @@ def close_executed_route(
     update_data: ExecutedRouteUpdateSchema
 ) -> ExecutedRouteItem:
     '''
-        The seller ends the route. Against a plan, the end must be within the
-        declared distance of its last stop.
+        The seller ends the route. Against a plan that fixes an end point, the
+        end must be within the declared distance of it; otherwise anywhere.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
@@ -511,13 +522,14 @@ def close_executed_route(
     _assert_open(route)
     if route.get('planned_route_id'):
         plan = get_planned_route(dynamodb_resource, owner_email, route['planned_route_id'])
-        _, last_stop = _first_and_last_stop(plan)
-        _assert_within(
-            last_stop,
-            (update_data.end_latitude, update_data.end_longitude),
-            update_data.max_distance_end_point,
-            LocalizationError.OUTSIDE_END_GEOFENCE
-        )
+        end = _endpoint(plan, 'end_point')
+        if end is not None:
+            _assert_within(
+                end,
+                (update_data.end_latitude, update_data.end_longitude),
+                update_data.max_distance_end_point,
+                LocalizationError.OUTSIDE_END_GEOFENCE
+            )
     route.update(update_data.model_dump())
     route['end_time'] = parse_timestamp(update_data.end_time).isoformat()
     _save_executed_route(dynamodb_resource, route)

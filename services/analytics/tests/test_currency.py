@@ -142,3 +142,28 @@ def test_quotes_being_down_is_said_and_not_guessed():
     with patch.object(currency, '_fetch_rates', _refuse):
         with pytest.raises(ServiceUnavailableError):
             currency.convert_frame(_sales(), 'USD', 'Bearer t')
+
+
+def test_in_usdt_the_days_before_the_series_read_at_the_official_rate():
+    '''
+        Case 10 of the FX spec. The USDT series starts the day it was
+        connected, so earlier rows read at the official rate of their day —
+        and the answer says how many, instead of passing them off as USDT.
+    '''
+    usdt = [{'date': '2026-09-10', 'rate': 7.50}]
+
+    def _series(
+        code: str,
+        *_args: object
+    ) -> list:
+        '''The USDT series, or the official one.'''
+        return usdt if code == currency.PARALLEL_CURRENCY else PUBLISHED
+
+    with patch.object(currency, '_fetch_rates', _series):
+        converted, applied = currency.convert_frame(_sales(), currency.PARALLEL_CURRENCY,
+                                                    'Bearer t')
+
+    assert [round(value, 2) for value in converted['total_amount']] == [100.0, 98.67]
+    assert applied['rows_at_fallback'] == 1
+    assert applied['fallback_currency'] == currency.PARALLEL_FALLBACK_CURRENCY
+    assert applied['rows_without_rate'] == 0

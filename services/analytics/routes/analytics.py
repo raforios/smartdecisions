@@ -75,8 +75,9 @@ class DateWindow: # pylint: disable=too-few-public-methods
             None, pattern = _ISO_DATE, description = 'Inclusive end, YYYY-MM-DD.'
         ),
         currency: str = Query(
-            None, min_length = 3, max_length = 3,
-            description = 'ISO 4217 code to read the amounts in. Left out, the '
+            None, min_length = 3, max_length = 4,
+            description = 'ISO 4217 code to read the amounts in, or USDT for the '
+                          'P2P parallel dollar. Left out, the '
                           'report comes in the currency the file was written in. '
                           'Each amount converts at the rate of its OWN day.'
         ),

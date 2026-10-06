@@ -29,11 +29,17 @@ ENV_VARS = load_and_validate_env_vars({
     'QUOTES_SERVICE_URL': str,
     'QUOTES_TIMEOUT_SECONDS': int,
     'BASE_CURRENCY': str,
+    'PARALLEL_CURRENCY': str,
+    'PARALLEL_FALLBACK_CURRENCY': str,
 })
 QUOTES_SERVICE_URL = ENV_VARS['QUOTES_SERVICE_URL'].rstrip('/')
 QUOTES_TIMEOUT_SECONDS = ENV_VARS['QUOTES_TIMEOUT_SECONDS']
 # What the file is written in. Asking for it is asking for no conversion.
 BASE_CURRENCY = ENV_VARS['BASE_CURRENCY']
+# The USDT series (Binance P2P, the parallel dollar) starts the day it was
+# connected; days before it read at the official rate, and the answer says so.
+PARALLEL_CURRENCY = ENV_VARS['PARALLEL_CURRENCY']
+PARALLEL_FALLBACK_CURRENCY = ENV_VARS['PARALLEL_FALLBACK_CURRENCY']
 
 # The columns that hold money. A rate applies to an amount, not to a quantity
 # or a coordinate, so the list is explicit: converting a latitude would be
@@ -168,6 +174,29 @@ def _rate_series(
     return days.dt.normalize().map(calendar)
 
 
+def _fill_from_official(
+    series: pd.Series,
+    days: pd.Series,
+    auth_token: str
+) -> Tuple[pd.Series, int]:
+    '''
+        Fills the USDT gaps with the official rate of each row's own day.
+
+        Args:
+            series (pd.Series): USDT rate per row, empty before its first reading.
+            days (pd.Series): The dates of the frame, as datetime64.
+            auth_token (str): The caller's Authorization header, for QUOTES.
+
+        Returns:
+            Tuple[pd.Series, int]: The filled series and how many rows it filled.
+    '''
+    window = (days.min().date().isoformat(), days.max().date().isoformat())
+    official = _rate_series(_fetch_rates(PARALLEL_FALLBACK_CURRENCY, auth_token, window), days)
+    before = series.isna()
+    filled = series.where(~before, official)
+    return filled, int((before & filled.notna()).sum())
+
+
 def convert_frame(
     dataframe: pd.DataFrame,
     currency: str,
@@ -197,6 +226,14 @@ def convert_frame(
     )
     series = _rate_series(rates, days)
 
+    # In USDT, the days before the series read at the official rate of their
+    # own day: a later USDT reading filled backwards would be invented.
+    at_fallback = 0
+    fixed_currency = currency
+    if currency == PARALLEL_CURRENCY and series.isna().any():
+        series, at_fallback = _fill_from_official(series, days, auth_token)
+        fixed_currency = PARALLEL_FALLBACK_CURRENCY
+
     # Days before the first published rate. When they belong to the fixed
     # regime they convert at its rate; the series is forward-filled, so every
     # missing day is earlier than the latest one asked about.
@@ -204,7 +241,7 @@ def convert_frame(
     at_fixed = 0
     if missing.any():
         fixed = _fixed_rate_before(
-            currency, auth_token, days[missing].max().date().isoformat()
+            fixed_currency, auth_token, days[missing].max().date().isoformat()
         )
         if fixed:
             series = series.where(~missing, fixed)
@@ -228,6 +265,10 @@ def convert_frame(
         'base_currency': BASE_CURRENCY,
         'rows_converted': applied,
         'rows_at_fixed_rate': at_fixed,
+        # USDT only: rows read at the official rate because the USDT series
+        # had not started yet on their day.
+        'rows_at_fallback': at_fallback,
+        'fallback_currency': PARALLEL_FALLBACK_CURRENCY if at_fallback else None,
         'rows_total': int(len(series)),
         # Rows before the first published rate keep their original amounts.
         # Saying so is the difference between a gap and a silent lie.

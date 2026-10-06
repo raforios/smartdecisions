@@ -15,7 +15,12 @@ import pytest
 from fastapi import HTTPException
 from moto import mock_aws
 
-from schemas.optimization import PlansBySellerResponse, PlansBySellerSchema, RoutePlanResponse
+from schemas.optimization import (
+    OptimizationError,
+    PlansBySellerResponse,
+    PlansBySellerSchema,
+    RoutePlanResponse
+)
 from controllers import optimization as controllers
 from services import localization, optimization_utils
 from services import optimization as optimization_service
@@ -159,3 +164,45 @@ def test_a_dataset_of_another_owner_answers_like_a_missing_one():
             request = None
         ))
     assert planned.value.status_code == 404
+
+
+def test_plans_by_seller_can_start_at_the_company_base_point(dataset):
+    '''
+        Cases 7 and 8 of the routes spec: asked to, each plan starts at the
+        company's base point without counting it as a stop; not asked, it has
+        no fixed start; asked with no base point configured, refused.
+    '''
+    # pylint: disable=import-outside-toplevel
+    import boto3
+    from schemas.localization import RouteEndpointSchema
+    from schemas.optimization_settings import RouteSettingsSchema
+    from services import optimization_settings
+
+    owner = 'tester@bearsoft.com.bo'
+    body = PlansBySellerSchema(days = 2, day = 1, plan_date = date(2026, 10, 6),
+                               start_at_base = True)
+    with mock_aws():
+        resource = build_resource([(localization.PLANNED_ROUTES_TABLE, 'owner_email', 'id')])
+        boto3.resource('dynamodb', region_name = 'us-east-1').create_table(
+            TableName = optimization_settings.SETTINGS_TABLE,
+            KeySchema = [{'AttributeName': 'owner_email', 'KeyType': 'HASH'}],
+            AttributeDefinitions = [{'AttributeName': 'owner_email', 'AttributeType': 'S'}],
+            BillingMode = 'PAY_PER_REQUEST'
+        )
+        with pytest.raises(HTTPException) as unset:
+            asyncio.run(controllers.plans_by_seller_controller(
+                dynamodb_resource = resource, dataset_id = dataset, body = body,
+                current_user = owner, request = None))
+        assert unset.value.detail == OptimizationError.BASE_POINT_NOT_SET.value
+
+        optimization_settings.save_route_settings(resource, owner, RouteSettingsSchema(
+            base_point = RouteEndpointSchema(name = 'Depósito', latitude = -16.54,
+                                             longitude = -68.07)))
+        asyncio.run(controllers.plans_by_seller_controller(
+            dynamodb_resource = resource, dataset_id = dataset, body = body,
+            current_user = owner, request = None))
+        stored = localization.list_planned_routes(resource, owner)
+
+    assert stored and all(plan['start_point']['name'] == 'Depósito' for plan in stored)
+    assert all(plan.get('end_point') is None for plan in stored)
+    assert all(stop['point_name'] != 'Depósito' for plan in stored for stop in plan['points'])

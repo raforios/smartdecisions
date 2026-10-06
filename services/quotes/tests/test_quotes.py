@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError, RateConfidence
-from services import bcb_source, forecast_models, quotes, rate_forecast
+from services import bcb_source, forecast_models, quotes, rate_forecast, usdt_source
 from services.exceptions import ServiceUnavailableError
 
 from tests.conftest import build_history
@@ -601,3 +601,49 @@ def test_the_rate_in_force_is_the_last_one_published_before_the_day(store):
     assert answer['published_on'] == published[-1].isoformat()
     assert answer['regime'] == 'FLOAT'
     assert answer['date'] == asked.isoformat()
+
+
+@pytest.mark.usefixtures('midweek')
+def test_the_scheduled_sync_also_stores_today_s_usdt(store):
+    '''
+        Case 9 of the FX spec: the daily task keeps a USDT row of the day,
+        the P2P reference of the parallel dollar, next to the official one.
+    '''
+    with patch.object(quotes, 'fetch_official_rate', lambda day: 12.0), \
+         patch.object(quotes, 'fetch_usdt_rate', lambda: 11.99):
+        _run(quotes.scheduled_sync_service())
+
+    usdt = [item for (code, _), item in store.items() if code == quotes.PARALLEL_CURRENCY]
+    assert len(usdt) == 1 and usdt[0].official_rate == 11.99
+    assert usdt[0].source == usdt_source.SOURCE_NAME
+
+
+@pytest.mark.usefixtures('midweek')
+def test_a_usdt_outage_does_not_cost_the_official_rate(store):
+    '''Binance down is a logged gap in the USDT series, never a lost official day.'''
+    def _down() -> float:
+        raise ServiceUnavailableError(detail = 'SOURCE_UNAVAILABLE')
+
+    with patch.object(quotes, 'fetch_official_rate', lambda day: 12.0), \
+         patch.object(quotes, 'fetch_usdt_rate', _down):
+        result = _run(quotes.scheduled_sync_service())
+
+    assert result['stored'] > 0
+    assert not [code for (code, _) in store if code == quotes.PARALLEL_CURRENCY]
+
+
+def test_the_usdt_source_reads_the_p2p_price():
+    '''The quote endpoint answers {data: {price}}: that price is bolivianos per USDT.'''
+    class _Answer:  # pylint: disable=too-few-public-methods
+        '''A Binance answer.'''
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            '''It went fine.'''
+
+        def json(self) -> dict:
+            '''The quote.'''
+            return {'code': '000000', 'data': {'price': 11.99}, 'success': True}
+
+    with patch.object(usdt_source.requests, 'get', lambda *a, **k: _Answer()):
+        assert usdt_source.fetch_usdt_rate() == 11.99

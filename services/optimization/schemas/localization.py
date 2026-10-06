@@ -144,6 +144,17 @@ class PlannedPointUpdateSchema(BaseModel):
     client_id: Optional[str] = Field(None, max_length = 64)
 
 
+class RouteEndpointSchema(BaseModel):
+    '''
+        Where a route starts or ends, when the plan fixes it. Optional on
+        purpose: start and end are open per route, and a plan without them
+        starts and ends wherever the seller is.
+    '''
+    name: str = Field(..., min_length = 1, max_length = 100)
+    latitude: float = Field(..., ge = -90.0, le = 90.0)
+    longitude: float = Field(..., ge = -180.0, le = 180.0)
+
+
 class PlannedRouteCreateSchema(BaseModel):
     '''
         A route with its stops, created in one call.
@@ -162,6 +173,8 @@ class PlannedRouteCreateSchema(BaseModel):
                       'carries one is a plan for a given day.'
     )
     points: List[PlannedPointSchema] = Field(..., min_length = 1)
+    start_point: Optional[RouteEndpointSchema] = None
+    end_point: Optional[RouteEndpointSchema] = None
 
 
 class PlannedRouteResponseSchema(BaseModel):
@@ -177,6 +190,8 @@ class PlannedRouteResponseSchema(BaseModel):
     status: PlannedRouteStatusEnum
     created_at: str
     points: List[PlannedPointResponseSchema]
+    start_point: Optional[RouteEndpointSchema] = None
+    end_point: Optional[RouteEndpointSchema] = None
 
 
 class PlannedRouteUpdateSchema(BaseModel):

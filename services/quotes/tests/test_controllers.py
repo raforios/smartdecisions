@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from models.quotes import USD
+from models.quotes import USD, ExchangeRateItem
 from schemas.factors import (
     FactorDefinitionSchema,
     FactorListResponseSchema,
@@ -205,3 +205,29 @@ def test_forecast_and_bench_controllers_return_their_models(
 
     assert isinstance(forecast, RateForecast)
     assert isinstance(bench, ModelBench)
+
+
+def test_the_history_endpoint_accepts_the_usdt_series(store):
+    '''
+        ANALYTICS asks for the USDT series by its code; a three-letter limit
+        answered it with a 422 before the service was ever reached.
+    '''
+    # pylint: disable=import-outside-toplevel
+    from fastapi.testclient import TestClient
+
+    from main import app
+    from services.security import get_current_owner
+
+    store[(quotes.PARALLEL_CURRENCY, date(2026, 10, 5))] = ExchangeRateItem(
+        currency = quotes.PARALLEL_CURRENCY, date = date(2026, 10, 5),
+        official_rate = 11.99, source = 'BINANCE_P2P', retrieved_at = '2026-10-05T09:00:00'
+    )
+    app.dependency_overrides[get_current_owner] = lambda: 'tester'
+    try:
+        response = TestClient(app).get('/v1/quotes/exchange-rates', params = {
+            'currency': 'USDT', 'start': '2026-10-01', 'end': '2026-10-06'})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200, response.text
+    assert [point['rate'] for point in response.json()['rates']] == [11.99]

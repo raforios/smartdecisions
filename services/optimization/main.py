@@ -17,6 +17,7 @@ import uvicorn
 from routes.optimization import router as optimization_router
 from routes.localization import router as localization_router
 from routes.daily_stock import router as daily_stock_router
+from routes.optimization_settings import router as settings_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
@@ -161,6 +162,7 @@ async def custom_swagger_ui() -> HTMLResponse:
 app.include_router(optimization_router)
 app.include_router(localization_router)
 app.include_router(daily_stock_router)
+app.include_router(settings_router)
 
 
 def run_local() -> None:

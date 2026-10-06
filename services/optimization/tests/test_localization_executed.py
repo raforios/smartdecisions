@@ -20,6 +20,7 @@ from schemas.localization import (
     PlannedPointSchema,
     PlannedRouteCreateSchema,
     PlannedRouteStatusEnum,
+    RouteEndpointSchema,
     VisitOutcome
 )
 from services import localization, localization_executed as executed
@@ -83,9 +84,16 @@ def dynamodb_fixture():
 
 @pytest.fixture(name = 'active_plan')
 def active_plan_fixture(dynamodb):
-    '''An ACTIVE plan of OWNER whose first stop is FIRST_STOP and last is LAST_STOP.'''
+    '''
+        An ACTIVE plan of OWNER that starts at FIRST_STOP and ends at
+        LAST_STOP: declared as its own start and end, not as stops.
+    '''
     plan = localization.create_planned_route(dynamodb, OWNER, PlannedRouteCreateSchema(
         route_name = 'Zona sur', route_code = 'R-001', seller = 'Ana',
+        start_point = RouteEndpointSchema(name = 'Depósito', latitude = FIRST_STOP[0],
+                                          longitude = FIRST_STOP[1]),
+        end_point = RouteEndpointSchema(name = 'Depósito', latitude = LAST_STOP[0],
+                                        longitude = LAST_STOP[1]),
         points = [
             PlannedPointSchema(point_name = 'Tienda 1', secuencial = 1,
                                latitude = FIRST_STOP[0], longitude = FIRST_STOP[1],
@@ -158,6 +166,40 @@ def test_create_executed_route_against_plan_checks_status_and_geofence(
             dynamodb, OWNER, _start_payload(planned_route_id = active_plan['id'])
         )
     assert failure.value.detail == LocalizationError.PLANNED_ROUTE_NOT_ACTIVE.value
+
+
+def test_a_plan_without_start_point_starts_anywhere_and_closes_anywhere(dynamodb):
+    '''
+        Start and end are open per route (Rafael, 05-oct): with no start or
+        end point declared, the stops do not stand in for them.
+    '''
+    plan = localization.create_planned_route(dynamodb, OWNER, PlannedRouteCreateSchema(
+        route_name = 'Libre', route_code = 'R-002', seller = 'Ana',
+        points = [PlannedPointSchema(point_name = 'Tienda 1', secuencial = 1,
+                                     latitude = FIRST_STOP[0], longitude = FIRST_STOP[1])]
+    ))
+    localization.update_planned_route_status(dynamodb, OWNER, plan['id'],
+                                             PlannedRouteStatusEnum.ACTIVE)
+
+    route = executed.create_executed_route(
+        dynamodb, OWNER, _start_payload(planned_route_id = plan['id'], start = (-17.5, -65.0))
+    )
+    closed = executed.close_executed_route(
+        dynamodb, OWNER, route['id'], _end_payload(end = (-17.5, -65.0))
+    )
+    assert closed['end_time'] == _today_at(17)
+
+
+def test_the_plan_keeps_its_start_and_end_points(
+    dynamodb,
+    active_plan
+):
+    '''The points travel with the plan and are not counted as stops.'''
+    stored = localization.get_planned_route(dynamodb, OWNER, active_plan['id'])
+    assert stored['start_point']['name'] == 'Depósito'
+    assert stored['end_point']['latitude'] == LAST_STOP[0]
+    assert [stop['point_name'] for stop in stored['points']] == ['Tienda 1', 'Tienda 2',
+                                                                  'Tienda 3']
 
 
 def test_create_executed_route_against_a_foreign_plan_is_not_found(
