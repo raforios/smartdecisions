@@ -60,6 +60,15 @@ class CommercialPolicySchema(BaseModel):
         description = 'Currency per point, by cluster. The cluster names are '
                       'the account\'s own: the product declares none.'
     )
+    usd_cost_share: Optional[float] = Field(
+        None, ge = 0, le = 1,
+        description = 'Share of the cost bought in dollars, for any category '
+                      'without one of its own. 1.0 is a pure importer.'
+    )
+    usd_cost_share_by_category: Optional[Dict[str, float]] = Field(
+        None,
+        description = 'Share of the cost bought in dollars, by category.'
+    )
 
 
 class ClientScoreSchema(BaseModel):

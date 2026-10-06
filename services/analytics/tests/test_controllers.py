@@ -16,6 +16,7 @@ import pytest
 
 from fastapi import HTTPException
 
+from schemas.fx_effect import FxEffectResponse
 from schemas.analytics import (
     AnalyticsError,
     AnalyticsPdvResponse,
@@ -748,3 +749,27 @@ def test_a_dataset_of_another_owner_answers_like_a_missing_one() -> None:
             request = None
         ))
     assert foreign.value.status_code == 404
+
+
+def test_the_fx_effect_endpoint_returns_its_model_and_simulates(
+    dataset: str,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''
+        `fx_effect_endpoint`: the response is built whole, in bolivianos even
+        when the window asks for dollars, and a hypothetical rate replaces
+        today's without being stored (case 7 of the FX spec).
+    '''
+    monkeypatch.setattr(controllers, 'rates_per_row',
+                        lambda frame, *_: (pd.Series([7.0] * len(frame)), {}))
+    monkeypatch.setattr(controllers, 'current_rate', lambda *_: 8.0)
+    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
+
+    today = _call(controllers.fx_effect_controller, dataset, {'source': 'USD', 'currency': 'USD'})
+    simulated = _call(controllers.fx_effect_controller, dataset, {'source': 'USD', 'rate': 9.0})
+
+    assert isinstance(today, FxEffectResponse)
+    assert today.rate_today == 8.0 and not today.rate_is_hypothetical
+    assert today.period.currency is None
+    assert simulated.rate_today == 9.0 and simulated.rate_is_hypothetical
+    assert simulated.totals.replacement_cost > today.totals.replacement_cost

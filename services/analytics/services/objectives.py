@@ -44,6 +44,7 @@ _SETTINGS = load_and_validate_env_vars({
     'OBJECTIVES_BS_PER_POINT': float,
     'OBJECTIVES_AMOUNT_DECIMALS': int,
     'OBJECTIVES_RATIO_DECIMALS': int,
+    'FX_USD_COST_SHARE': float,
 })
 
 _YELLOW_FROM: Final[float] = _SETTINGS['OBJECTIVES_YELLOW_FROM']
@@ -51,6 +52,7 @@ _GREEN_FROM: Final[float] = _SETTINGS['OBJECTIVES_GREEN_FROM']
 _BS_PER_POINT: Final[float] = _SETTINGS['OBJECTIVES_BS_PER_POINT']
 _AMOUNTS: Final[int] = _SETTINGS['OBJECTIVES_AMOUNT_DECIMALS']
 _RATIOS: Final[int] = _SETTINGS['OBJECTIVES_RATIO_DECIMALS']
+_USD_COST_SHARE: Final[float] = _SETTINGS['FX_USD_COST_SHARE']
 
 _POS = 'pos_id'
 _PERIOD = 'period'
@@ -92,6 +94,11 @@ def resolve_policy(stored: Optional[Dict]) -> CommercialPolicySchema:
         points_per_cluster = {
             str(cluster): float(rate)
             for cluster, rate in (saved.get('points_per_cluster') or {}).items()
+        },
+        usd_cost_share = _as_float(saved.get('usd_cost_share'), _USD_COST_SHARE),
+        usd_cost_share_by_category = {
+            str(category): float(share)
+            for category, share in (saved.get('usd_cost_share_by_category') or {}).items()
         }
     )
 

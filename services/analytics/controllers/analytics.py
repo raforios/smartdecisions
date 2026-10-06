@@ -26,6 +26,7 @@ from schemas.receivables import (
     ReceivablesResponse
 )
 from schemas.stock import StockResponse
+from schemas.fx_effect import FxEffectResponse
 from schemas.objectives import (
     CommercialPolicyResponse,
     CommercialPolicySchema,
@@ -45,7 +46,8 @@ from services.margin import build_margin
 from services.portfolio import build_portfolio
 from services.segmentation import build_segmentation
 from services.volume import build_volume_source
-from services.currency import BASE_CURRENCY, convert_frame
+from services.currency import BASE_CURRENCY, convert_frame, current_rate, rates_per_row
+from services.fx_effect import build_fx_effect
 from services.analytics_utils import (
     apply_date_range,
     get_commercial_policy,
@@ -60,7 +62,7 @@ from services.analytics_utils import (
     save_credit_policy
 )
 from services.environment import load_and_validate_env_vars
-from services.utils import audit_event, handle_service_errors
+from services.utils import audit_event, get_current_time_gmt, handle_service_errors
 
 
 # Caps on opportunities kept in the run (DynamoDB item limit + usable table)
@@ -679,3 +681,38 @@ async def get_pdv_opportunities_controller(
         pdv_id = pdv_id,
         opportunities = _opportunities_from_item(pdv_opportunities)
     )
+
+
+@handle_service_errors('ANALYTICS')
+async def fx_effect_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: Dict[str, Any],
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> FxEffectResponse:
+    '''
+        What the exchange rate does to sales, margin and restocking.
+
+        The rows are read in bolivianos —the effect needs the original amounts—
+        and the rates come from QUOTES: each row's own day, and today's, unless
+        the user asks to simulate another.
+    '''
+    window = {key: value for key, value in (params or {}).items() if key != 'currency'}
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, window)
+    source = params.get('source') or 'USD'
+    auth_token = params.get('auth_token')
+    rates, _ = rates_per_row(dataframe, source, auth_token)
+    hypothetical = params.get('rate')
+    rate_today = hypothetical or current_rate(
+        source, auth_token, get_current_time_gmt().date().isoformat()
+    )
+    block = build_fx_effect(
+        dataframe, rates, rate_today,
+        resolve_commercial_policy(get_commercial_policy(
+            dynamodb_resource = dynamodb_resource, owner_email = current_user
+        ))
+    )
+    block.rate_is_hypothetical = hypothetical is not None
+    return FxEffectResponse(dataset_id = dataset_id, source = source, period = period,
+                            **block.model_dump())

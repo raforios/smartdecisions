@@ -1,11 +1,14 @@
 '''
     Analytics: routes handler.
 '''
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.analytics import (
     get_credit_policy_controller,
+    fx_effect_controller,
     objectives_controller,
     get_commercial_policy_controller,
     save_commercial_policy_controller,
@@ -21,6 +24,7 @@ from controllers.analytics import (
     run_analytics_controller,
     segmentation_controller
 )
+from schemas.fx_effect import FxEffectResponse
 from schemas.objectives import (
     CommercialPolicyResponse,
     CommercialPolicySchema,
@@ -103,6 +107,39 @@ class DateWindow: # pylint: disable=too-few-public-methods
             'currency': self.currency,
             'auth_token': self.authorization
         }
+
+
+class FxScenario(DateWindow): # pylint: disable=too-few-public-methods
+    '''
+        The reporting window plus which dollar the exchange-rate effect
+        measures against and the hypothetical rate to simulate.
+    '''
+
+    def __init__(
+        self,
+        date_from: str = Query(None, pattern = _ISO_DATE, description = 'Inclusive start.'),
+        date_to: str = Query(None, pattern = _ISO_DATE, description = 'Inclusive end.'),
+        source: str = Query('USD', pattern = '^(USD|USDT)$',
+                            description = 'USD (official) or USDT (P2P parallel).'),
+        rate: Optional[float] = Query(None, gt = 0,
+                                      description = 'Hypothetical rate to simulate.'),
+        authorization: str = Header(None)
+    ): # pylint: disable=super-init-not-called
+        self.date_from = date_from
+        self.date_to = date_to
+        self.currency = None
+        self.authorization = authorization
+        self.source = source
+        self.rate = rate
+
+    def as_params(self) -> dict:
+        '''
+            The window, the dollar and the simulated rate.
+
+            Returns:
+                dict: What the controller expects.
+        '''
+        return {**super().as_params(), 'source': self.source, 'rate': self.rate}
 
 
 class ForecastOptions: # pylint: disable=too-few-public-methods
@@ -624,6 +661,42 @@ async def portfolio_endpoint(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
         params = window.as_params(),
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/fx-effect/{dataset_id}',
+    response_model = FxEffectResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'What the exchange rate does to sales, margin and restocking',
+    description = (
+        'For a distributor that buys in dollars and sells in bolivianos: sales '
+        'by month in both currencies, margin at historical cost against margin '
+        'at replacement cost (the dollar cost at today\'s rate), the products '
+        'whose price no longer covers replacing them, and what the period\'s '
+        'sales buy at today\'s rate. `source` picks the official dollar or the '
+        'USDT; `rate` simulates another rate without storing anything.'
+    )
+)
+async def fx_effect_endpoint(
+    request: Request,
+    dataset_id: str = Path(..., min_length = 8, max_length = 64),
+    scenario: FxScenario = Depends(),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(get_current_owner)
+) -> FxEffectResponse:
+    '''
+        Endpoint returning the exchange-rate effect for a dataset_id.
+    '''
+    message = (f'FX effect for dataset {dataset_id} ({scenario.source}) '
+               f'requested by {current_user}.')
+    logger.info(message)
+    return await fx_effect_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        params = scenario.as_params(),
         current_user = current_user,
         request = request
     )

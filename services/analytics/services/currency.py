@@ -197,28 +197,26 @@ def _fill_from_official(
     return filled, int((before & filled.notna()).sum())
 
 
-def convert_frame(
+def rates_per_row(
     dataframe: pd.DataFrame,
     currency: str,
     auth_token: str
-) -> Tuple[pd.DataFrame, Optional[Dict[str, Any]]]:
+) -> Tuple[pd.Series, Dict[str, int]]:
     '''
-        The same rows, with every amount read in another currency.
+        The rate of each row's own day, with how it was obtained.
+
+        Shared by the conversion of a whole report and by the exchange-rate
+        effect, which needs the rate itself and not converted amounts.
 
         Args:
-            dataframe (pd.DataFrame): Normalized sales rows.
-            currency (str): ISO 4217 code to read the report in.
+            dataframe (pd.DataFrame): Normalized sales rows, with `date`.
+            currency (str): ISO 4217 code, or the parallel USDT.
             auth_token (str): The caller's Authorization header, for QUOTES.
 
         Returns:
-            Tuple[pd.DataFrame, Optional[Dict[str, Any]]]: The converted frame
-                and what the conversion was based on. The descriptor is None
-                when nothing was converted, so a caller can say so instead of
-                implying a rate that was never applied.
+            Tuple[pd.Series, Dict[str, int]]: One rate per row (empty where no
+                rate exists) and the counts at the fallback and fixed rates.
     '''
-    if currency == BASE_CURRENCY or dataframe.empty or _DATE not in dataframe.columns:
-        return dataframe, None
-
     days = pd.to_datetime(dataframe[_DATE])
     rates = _fetch_rates(
         currency, auth_token,
@@ -246,6 +244,65 @@ def convert_frame(
         if fixed:
             series = series.where(~missing, fixed)
             at_fixed = int(missing.sum())
+    return series, {'at_fallback': at_fallback, 'at_fixed': at_fixed}
+
+
+def current_rate(
+    currency: str,
+    auth_token: str,
+    today: str
+) -> float:
+    '''
+        The latest published rate on or before today: what replacing the
+        merchandise costs now. In USDT, the official one until the USDT
+        series has a reading.
+
+        Args:
+            currency (str): ISO 4217 code, or the parallel USDT.
+            auth_token (str): The caller's Authorization header, for QUOTES.
+            today (str): Today, YYYY-MM-DD.
+
+        Returns:
+            float: Bolivianos per unit of the currency.
+
+        Raises:
+            ServiceUnavailableError: No rate at all to measure against.
+    '''
+    month_ago = (pd.Timestamp(today) - pd.Timedelta(days = 31)).date().isoformat()
+    rates = _fetch_rates(currency, auth_token, (month_ago, today))
+    if not rates and currency == PARALLEL_CURRENCY:
+        rates = _fetch_rates(PARALLEL_FALLBACK_CURRENCY, auth_token, (month_ago, today))
+    if not rates:
+        error_msg = f'No {currency} rate published in the month before {today}.'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = AnalyticsError.RATES_UNAVAILABLE.value)
+    return float(sorted(rates, key = lambda rate: rate['date'])[-1]['rate'])
+
+
+def convert_frame(
+    dataframe: pd.DataFrame,
+    currency: str,
+    auth_token: str
+) -> Tuple[pd.DataFrame, Optional[Dict[str, Any]]]:
+    '''
+        The same rows, with every amount read in another currency.
+
+        Args:
+            dataframe (pd.DataFrame): Normalized sales rows.
+            currency (str): ISO 4217 code to read the report in.
+            auth_token (str): The caller's Authorization header, for QUOTES.
+
+        Returns:
+            Tuple[pd.DataFrame, Optional[Dict[str, Any]]]: The converted frame
+                and what the conversion was based on. The descriptor is None
+                when nothing was converted, so a caller can say so instead of
+                implying a rate that was never applied.
+    '''
+    if currency == BASE_CURRENCY or dataframe.empty or _DATE not in dataframe.columns:
+        return dataframe, None
+
+    series, counts = rates_per_row(dataframe, currency, auth_token)
+    at_fallback, at_fixed = counts['at_fallback'], counts['at_fixed']
 
     converted = dataframe.copy()
     for column in MONEY_COLUMNS:
