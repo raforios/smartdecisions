@@ -43,6 +43,7 @@
         UNSUPPORTED_FILE_FORMAT: 'Sólo se aceptan archivos .xlsx o .csv.',
         SELLER_NOT_FOUND: 'Ese vendedor no existe en tu cartera.',
         NO_SELLERS_IN_FILE: 'El archivo de ventas no tiene la columna Vendedor llena.',
+        BASE_POINT_NOT_SET: 'Todavía no cargaste el punto de partida: hazlo en Configuración.',
         SELLERS_UNAVAILABLE: 'No se pudo consultar a qué usuario corresponde el vendedor. ' +
             'Intenta de nuevo.',
         ROLE_NOT_ALLOWED: 'Tu rol no permite esta acción.'
@@ -104,6 +105,22 @@
         plansFromPortfolio: (datasetId, body) =>
             API.post(`${BASE}/plan/${encodeURIComponent(datasetId)}/by-seller`, body)
     };
+
+    // Route parameters of the company: today, the optional base point.
+    const settings = {
+        get: () => API.get(`${BASE}/settings`),
+        save: (body) => API.put(`${BASE}/settings`, body)
+    };
+
+    /** Metres between two {latitude, longitude}: the phone says how far it is. */
+    function metresBetween(a, b) {
+        const rad = Math.PI / 180;
+        const dLat = (b.latitude - a.latitude) * rad;
+        const dLon = (b.longitude - a.longitude) * rad;
+        const h = Math.sin(dLat / 2) ** 2 +
+            Math.cos(a.latitude * rad) * Math.cos(b.latitude * rad) * Math.sin(dLon / 2) ** 2;
+        return 2 * 6371000 * Math.asin(Math.sqrt(h));
+    }
 
     const stock = {
         load: (body) => API.put(`${BASE}/stock/day`, body),
@@ -262,7 +279,7 @@
     }
 
     window.SD_TRACK = {
-        planned, executed, stock, stats, sellers,
+        planned, executed, stock, stats, sellers, settings, metresBetween,
         errorText, STATUS_LABELS, OUTCOME_LABELS, PIN_COLORS,
         escapeHtml, formatMoney, formatDecimal, formatQuantity,
         todayIso, nowIso, formatStamp, timeAgo,

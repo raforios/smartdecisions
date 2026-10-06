@@ -78,14 +78,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams();
         if (state.period.from) params.set('date_from', state.period.from);
         if (state.period.to) params.set('date_to', state.period.to);
-        if (state.period.currency === 'USD') params.set('currency', 'USD');
+        if (CONVERTED.has(state.period.currency)) params.set('currency', state.period.currency);
         const query = params.toString();
         return query ? `?${query}` : '';
     }
 
     // The file is in bolivianos; dollars are a reading the backend converts,
     // each amount at the official rate of its own day.
-    const CURRENCY_SYMBOLS = { BOB: 'Bs', USD: 'US$' };
+    const CURRENCY_SYMBOLS = { BOB: 'Bs', USD: 'US$', USDT: 'US$' };
+    // The readings the service converts: the official dollar and the USDT of
+    // the P2P market (the parallel dollar).
+    const CONVERTED = new Set(['USD', 'USDT']);
 
     function currencySymbol() {
         return CURRENCY_SYMBOLS[state.period.currency] || CURRENCY_SYMBOLS.BOB;
@@ -826,8 +829,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const currencyNote = qs('#currencyNote');
         currencyNote.hidden = !converted;
         if (converted) {
+            const fuente = converted.currency === 'USDT'
+                ? 'al precio del USDT (Binance P2P, dólar paralelo) de su propio día.'
+                : 'al tipo de cambio oficial de su propio día.';
             currencyNote.textContent =
-                'En dólares: cada importe al tipo de cambio oficial de su propio día.' +
+                `En dólares: cada importe ${fuente}` +
+                (converted.rows_at_fallback > 0
+                    ? ` ${formatInt(converted.rows_at_fallback)} fila(s) de antes de que ` +
+                      'empezara la serie USDT, al tipo oficial de su día.'
+                    : '') +
                 (converted.rows_at_fixed_rate > 0
                     ? ` ${formatInt(converted.rows_at_fixed_rate)} fila(s) de antes de que ` +
                       'el dólar flotara, al tipo de cambio fijo de ese régimen.'
@@ -1008,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (group) params.group_by = group;
             if (state.period.from) params.date_from = state.period.from;
             if (state.period.to) params.date_to = state.period.to;
-            if (state.period.currency === 'USD') params.currency = 'USD';
+            if (CONVERTED.has(state.period.currency)) params.currency = state.period.currency;
             // Both methods, always: seeing them apart tells you what one model
             // says; seeing them together tells you how much the answer depends
             // on the model, which is the useful question. Where the two lines

@@ -263,7 +263,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveDayBySeller(day, when) {
         const done = setButtonBusy(qs('#saveDayButton'), 'Guardando…');
         try {
-            const body = { days: Number(qs('#daysSelect').value), day: day.day, plan_date: when };
+            const body = {
+                days: Number(qs('#daysSelect').value), day: day.day, plan_date: when,
+                // Open by default: a fixed start or end only when asked for.
+                start_at_base: qs('#startAtBase').checked,
+                end_at_base: qs('#endAtBase').checked
+            };
             if (qs('#planFrom').value) body.date_from = qs('#planFrom').value;
             if (qs('#planTo').value) body.date_to = qs('#planTo').value;
             const result = await window.SD_TRACK.sellers.plansFromPortfolio(state.datasetId, body);

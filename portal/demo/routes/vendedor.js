@@ -119,14 +119,24 @@ document.addEventListener('DOMContentLoaded', () => {
             option.textContent = `${plan.route_name} · ${plan.points.length} paradas`;
             select.appendChild(option);
         });
-        if (state.plans.length) select.value = state.plans[0].id;
+        // Nothing chosen beforehand: picking the first plan by default is how a
+        // seller started against a plan without noticing, and was refused for
+        // being far from its start (05-oct).
+        select.value = '';
+        qs('#freeStartButton').hidden = true;
         describePlan();
     }
     function describePlan() {
         const plan = state.plans.find((item) => item.id === qs('#planSelect').value);
-        qs('#planHint').textContent = plan
-            ? `Empieza en ${plan.points[0].point_name}. Debes estar a menos de ${GEOFENCE} m para iniciar.`
-            : 'Sin plan, la ruta se arma con lo que visites; gerencia puede convertirla en plan después.';
+        if (!plan) {
+            qs('#planHint').textContent = 'Ruta libre: empieza donde estés. Lo que visites queda '
+                + 'registrado y gerencia puede convertirlo en plan después.';
+        } else if (plan.start_point) {
+            qs('#planHint').textContent = `Empieza en ${plan.start_point.name}: debes estar a menos `
+                + `de ${GEOFENCE} m para iniciar.`;
+        } else {
+            qs('#planHint').textContent = `${plan.points.length} paradas. Empieza donde estés.`;
+        }
     }
     qs('#planSelect').addEventListener('change', describePlan);
 
@@ -136,6 +146,19 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const here = await locate();
             const planId = qs('#planSelect').value || null;
+            const chosen = state.plans.find((plan) => plan.id === planId);
+            // The distance is measured here, where both the position and the
+            // plan's start are known: the service only answers with a code.
+            if (chosen && chosen.start_point) {
+                const away = T.metresBetween({ latitude: here.lat, longitude: here.lon },
+                                             chosen.start_point);
+                if (away > GEOFENCE) {
+                    T.note(qs('#startNote'), `Estás a ${Math.round(away)} m de `
+                        + `${chosen.start_point.name}. Acércate o inicia como ruta libre.`, 'error');
+                    qs('#freeStartButton').hidden = false;
+                    return;
+                }
+            }
             const route = await T.executed.start({
                 seller: me, start_time: T.nowIso(), planned_route_id: planId,
                 start_latitude: here.lat, start_longitude: here.lon, max_distance_start_point: GEOFENCE
@@ -149,6 +172,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             done();
         }
+    });
+
+    qs('#freeStartButton').addEventListener('click', () => {
+        qs('#planSelect').value = '';
+        describePlan();
+        qs('#freeStartButton').hidden = true;
+        qs('#startButton').click();
     });
 
     // ---------- open route ----------

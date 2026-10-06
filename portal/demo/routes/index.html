@@ -30,6 +30,7 @@
     <script src="/routes/routes_compare.js?v=7c9b4d7215" defer></script>
     <script src="/routes/routes_clients.js?v=10114a312b" defer></script>
     <script src="/routes/routes_sellers.js?v=3a51df6c3e" defer></script>
+    <script src="/routes/routes_settings.js" defer></script>
 </head>
 <body>
 
@@ -94,6 +95,11 @@
                 <span class="analysis-icon">🏪</span>
                 <span class="analysis-title">Clientes</span>
                 <span class="analysis-desc">Tu cartera, con los clientes nuevos que los vendedores dieron de alta en la calle.</span>
+            </button>
+            <button type="button" class="analysis-card" data-section="settings">
+                <span class="analysis-icon">⚙️</span>
+                <span class="analysis-title">Configuración</span>
+                <span class="analysis-desc">El punto de partida de tus rutas, si quieres usar uno. Es opcional.</span>
             </button>
         </div>
 
@@ -172,6 +178,10 @@
                 <div class="form-actions" id="saveDayActions" hidden>
                     <label><span class="legend-hint">Repetir este día el</span>
                         <input type="date" id="repeatDate"></label>
+                    <label class="legend-hint"><input type="checkbox" id="startAtBase">
+                        Empezar en el punto de partida</label>
+                    <label class="legend-hint"><input type="checkbox" id="endAtBase">
+                        Terminar en el punto de partida</label>
                     <button type="button" class="btn btn-secondary btn-small" id="saveDayButton">
                         Repetir como plan
                     </button>
@@ -557,6 +567,29 @@
         </div>
 
         <!-- ====== Clientes ====== -->
+        <div class="routes-section" data-section="settings" hidden>
+            <section class="card">
+                <h3>Punto de partida</h3>
+                <p class="legend-hint">
+                    Opcional. Si lo cargas, al armar planes por vendedor puedes elegir que
+                    empiecen o terminen aquí. Sin él, cada ruta empieza y termina donde esté
+                    el vendedor.
+                </p>
+                <form class="form-stack" id="baseForm" autocomplete="off">
+                    <label><span>Nombre</span><input type="text" id="baseName" maxlength="100"
+                           placeholder="Depósito central"></label>
+                    <label><span>Latitud</span><input type="number" id="baseLat" step="any"></label>
+                    <label><span>Longitud</span><input type="number" id="baseLon" step="any"></label>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-ghost btn-small" id="baseHere">Usar mi ubicación</button>
+                        <button type="button" class="btn btn-ghost btn-small" id="baseClear">Quitar</button>
+                        <button type="button" class="btn btn-primary btn-small" id="baseSave">Guardar</button>
+                    </div>
+                    <p class="form-note" id="baseNote" aria-live="polite"></p>
+                </form>
+            </section>
+        </div>
+
         <div class="routes-section" data-section="clients" hidden>
             <div class="day-summary" id="clientsSummary"></div>
             <div class="card stops-card">
