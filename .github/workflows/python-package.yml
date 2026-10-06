@@ -39,9 +39,10 @@ jobs:
     - name: Run Pylint on ${{ matrix.service-directory }}
       working-directory: ${{ matrix.service-directory }}
       run: |
-        # La regla del proyecto es 10.00 (CLAUDE.md §11), con la misma
-        # configuración que usa tools/verify_service.py en local.
-        pylint --rcfile=../../.pylintrc --fail-under=10.0 .
+        # La regla del proyecto es 10.00 (CLAUDE.md §11). Sin --rcfile: el
+        # .pylintrc de la raíz está en .gitignore y sólo silencia lxml, que
+        # ninguno de estos cuatro servicios usa.
+        pylint --fail-under=10.0 .
 
     - name: Test with Pytest for ${{ matrix.service-directory }}
       working-directory: ${{ matrix.service-directory }}
