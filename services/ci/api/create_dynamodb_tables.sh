@@ -54,6 +54,8 @@ TABLES=(
     # available_quantity (el rol Lambda ya tiene AmazonDynamoDBFullAccess, que
     # incluye dynamodb:TransactWriteItems).
     "optimization_daily_stock:owner_email:S:stock_key:S"
+    # Parámetros de Rutas de cada empresa: hoy, el punto de partida opcional.
+    "optimization_settings:owner_email:S"
     # Clave compuesta: toda lectura es "esta moneda entre estas dos fechas".
     "exchange_rates:currency:S:date:S"
     # Variables fluctuantes: lo que se mueve solo y cambia lo que un reporte
