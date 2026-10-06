@@ -142,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         segmentation: ['stampSegmentation'],
         portfolio: ['stampPortfolio'],
         objectives: ['stampObjectives'],
+        fx: ['stampFx'],
         receivables: ['stampReceivables'],
         stock: ['stampStock']
     };
@@ -668,7 +669,8 @@ document.addEventListener('DOMContentLoaded', () => {
         stepForecast: 'forecast',
         stepReceivables: 'receivables',
         stepStock: 'stock',
-        stepObjectives: 'objectives'
+        stepObjectives: 'objectives',
+        stepFx: 'fx'
     };
 
     function restoreLastView() {
@@ -709,6 +711,13 @@ document.addEventListener('DOMContentLoaded', () => {
             fetch: () => window.SD_API.get(analysisUrl('segmentation')),
             render: renderSegmentation
         },
+        fx: {
+            busy: 'Midiendo…', running: 'Midiendo el efecto del tipo de cambio…',
+            ready: 'Efecto del tipo de cambio listo.',
+            failed: 'No se pudo medir el efecto del tipo de cambio.',
+            fetch: () => window.SD_API.get(fxUrl()),
+            render: renderFx
+        },
         portfolio: {
             busy: 'Revisando…', running: 'Revisando la salud de la cartera…',
             ready: 'Salud de cartera lista.', failed: 'No se pudo revisar la cartera.',
@@ -736,6 +745,20 @@ document.addEventListener('DOMContentLoaded', () => {
             render: renderStock
         }
     };
+
+    /**
+     * The FX view always reads the file in bolivianos —it needs the original
+     * amounts— and adds which dollar and the rate to simulate, if any.
+     */
+    function fxUrl() {
+        const params = new URLSearchParams();
+        if (state.period.from) params.set('date_from', state.period.from);
+        if (state.period.to) params.set('date_to', state.period.to);
+        params.set('source', qs('#fxSource').value);
+        if (qs('#fxRate').value) params.set('rate', qs('#fxRate').value);
+        return `${ANALYTICS_URL}/v1/analytics/fx-effect/` +
+            `${encodeURIComponent(state.datasetId)}?${params.toString()}`;
+    }
 
     function analysisUrl(kind) {
         return `${ANALYTICS_URL}/v1/analytics/${kind}/` +
@@ -790,6 +813,9 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (kind === 'volume') openAnalysis('summary', card, false, 'stepVolume');
         else openAnalysis(kind, card);
     });
+
+    // A different dollar or a simulated rate is a different reading: fresh numbers.
+    qs('#fxApply').addEventListener('click', (event) => openAnalysis('fx', event.currentTarget, true));
 
     // "↻ Recalcular" inside each result section: same analysis, fresh numbers.
     qsAll('[data-recalc]').forEach((button) => {
@@ -2453,6 +2479,91 @@ document.addEventListener('DOMContentLoaded', () => {
             `<td class="numeric">${formatInt(row.days_without_purchase)}</td>`);
 
         showAnalysisView('stepPortfolio');
+    }
+
+    function renderFx(data) {
+        const bs = (value) => (value == null || isNaN(value)) ? '—'
+            : `Bs ${Number(value).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const usd = (value) => (value == null || isNaN(value)) ? '—'
+            : `US$ ${Number(value).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const pct = (value) => (value == null || isNaN(value)) ? '—' : `${formatDecimal(value, 1)} %`;
+        const fuente = data.source === 'USDT' ? 'USDT' : 'oficial';
+
+        qs('#fxNote').textContent = data.rate_is_hypothetical
+            ? `Simulación con un tipo de cambio de ${formatDecimal(data.rate_today, 2)}: no se guarda nada.`
+            : `Tipo de cambio ${fuente} de hoy: ${formatDecimal(data.rate_today, 2)} Bs por dólar.`;
+
+        const totals = data.totals;
+        const power = data.purchasing_power || {};
+        const box = qs('#fxKpis');
+        box.innerHTML = '';
+        [
+            { label: 'Crecimiento en bolivianos', value: pct(data.growth_bob_pct),
+              hint: 'Primer mes contra último' },
+            { label: 'Crecimiento en dólares', value: pct(data.growth_usd_pct),
+              hint: 'Si es menor que en Bs, parte del crecimiento es el tipo de cambio',
+              variant: data.growth_usd_pct != null && data.growth_bob_pct != null
+                  && data.growth_usd_pct < data.growth_bob_pct ? 'warning' : '' },
+            { label: 'Margen al costo de compra', value: totals ? pct(totals.historical_margin_pct) : '—',
+              hint: totals ? bs(totals.historical_margin) : 'El archivo no trae costo' },
+            { label: 'Margen al costo de reposición', value: totals ? pct(totals.replacement_margin_pct) : '—',
+              hint: totals ? `${bs(totals.replacement_margin)} reponiendo hoy` : '',
+              variant: totals && totals.replacement_margin < totals.historical_margin ? 'warning' : '' },
+            { label: 'Lo vendido, en dólares de cada día', value: usd(power.usd_at_own_day),
+              hint: 'Cada venta al tipo de su día' },
+            { label: 'Lo vendido, en dólares de hoy', value: usd(power.usd_at_today),
+              hint: power.difference != null ? `${usd(power.difference)} de poder de compra` : '',
+              variant: power.difference < 0 ? 'warning' : '' }
+        ].forEach((card) => box.appendChild(metricCard(card)));
+
+        const monthly = data.monthly || [];
+        makeChart('chartFx', {
+            type: 'bar',
+            data: {
+                labels: monthly.map((row) => row.month),
+                datasets: [
+                    { type: 'bar', label: 'Venta Bs', data: monthly.map((row) => row.sales_bob),
+                      backgroundColor: BRAND[0], yAxisID: 'bs' },
+                    { type: 'line', label: 'Venta US$', data: monthly.map((row) => row.sales_usd),
+                      borderColor: BRAND[3], backgroundColor: BRAND[3], tension: 0.3, yAxisID: 'usd' }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    bs: { position: 'left', beginAtZero: true, title: { display: true, text: 'Bs' } },
+                    usd: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+                           title: { display: true, text: 'US$' } }
+                }
+            }
+        });
+
+        qs('#fxCategoryCard').hidden = !totals;
+        fillTable('fxCategoryTable', data.by_category || [], (row) =>
+            `<td>${escapeHtml(row.category)}</td>` +
+            `<td class="numeric">${bs(row.revenue)}</td>` +
+            `<td class="numeric">${formatDecimal(row.usd_cost_share * 100, 0)} %</td>` +
+            `<td class="numeric">${pct(row.historical_margin_pct)}</td>` +
+            `<td class="numeric">${pct(row.replacement_margin_pct)}</td>`);
+
+        const uncovered = data.uncovered || [];
+        qs('#fxUncoveredCard').hidden = !totals;
+        qs('#fxUncoveredHint').textContent = data.uncovered_count
+            ? `${formatInt(data.uncovered_count)} producto(s) se venden por debajo de lo que cuesta ` +
+              `reponerlos hoy` + (data.uncovered_count > uncovered.length
+                  ? `; se muestran los ${formatInt(uncovered.length)} con mayor diferencia.` : '.')
+            : 'Todos los precios cubren lo que cuesta reponer hoy.';
+        fillTable('fxUncoveredTable', uncovered, (row) =>
+            `<td>${escapeHtml(row.product_name || row.product_id)}</td>` +
+            `<td>${escapeHtml(row.category || '—')}</td>` +
+            `<td class="numeric">${bs(row.last_price)}</td>` +
+            `<td class="numeric">${bs(row.last_cost)}</td>` +
+            `<td class="numeric">${bs(row.replacement_cost)}</td>` +
+            `<td class="numeric">${bs(row.gap)}</td>`,
+            { emptyText: 'Ningún producto por debajo de su costo de reposición.' });
+
+        showAnalysisView('stepFx');
     }
 
     function renderRiskTable() {

@@ -16,7 +16,7 @@
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-    <script src="excel.js?v=81aaa0086c" defer></script>
+    <script src="excel.js?v=346c8cbd16" defer></script>
 </head>
 <body>
 
@@ -206,6 +206,12 @@
                         <span class="analysis-title">Salud de Cartera</span>
                         <span class="analysis-desc">Quiénes dejaron de comprar, quiénes se
                             recuperaron y a qué clientes estás por perder.</span>
+                    </button>
+                    <button type="button" class="analysis-card" data-analysis="fx">
+                        <span class="analysis-icon">💱</span>
+                        <span class="analysis-title">Efecto del tipo de cambio</span>
+                        <span class="analysis-desc">Si creciste de verdad, si tu precio cubre lo
+                            que cuesta reponer y cuánto compras con lo que vendiste.</span>
                     </button>
                 </div>
                 <p class="form-note" id="runNote" aria-live="polite"></p>
@@ -893,6 +899,84 @@
         </section>
 
         <!-- ===================== Salud de Cartera ===================== -->
+        <section id="stepFx" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Efecto del tipo de cambio</h2>
+                <span class="cache-stamp" id="stampFx"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="fx">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <div class="insight-panel">
+                <p class="insight-objective">
+                    <strong>Objetivo:</strong> la distribuidora compra en dólares y vende en
+                    bolivianos. Esta vista muestra qué le hace el tipo de cambio a la venta, al
+                    margen y a la capacidad de reponer mercadería.
+                </p>
+                <p class="insight-what">
+                    <strong>Qué mira:</strong> la venta de cada mes en bolivianos y en dólares;
+                    el margen al costo con que se compró contra el margen al <em>costo de
+                    reposición</em> (el costo en dólares al tipo de hoy); y lo vendido convertido
+                    a dólares al tipo de cada día contra el tipo de hoy.
+                </p>
+                <p class="insight-note">
+                    El archivo no trae la fecha de compra: se toma el tipo del día de la venta
+                    como el de la compra. La parte del costo que se compra en dólares es la de
+                    la política comercial (100 % si no se cambió).
+                </p>
+            </div>
+            <div class="field-row fx-controls">
+                <label><span>Dólar</span>
+                    <select id="fxSource">
+                        <option value="USD">Oficial (BCB)</option>
+                        <option value="USDT">USDT (Binance P2P, paralelo)</option>
+                    </select></label>
+                <label><span>Simular tipo de cambio (opcional)</span>
+                    <input type="number" id="fxRate" min="0.01" step="0.01" placeholder="Hoy"></label>
+                <button type="button" class="btn btn-secondary btn-small" id="fxApply">Aplicar</button>
+            </div>
+            <p class="form-note" id="fxNote"></p>
+            <div class="metric-grid" id="fxKpis"></div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3 class="chart-title">Venta por mes: bolivianos y dólares</h3>
+                    <canvas id="chartFx"></canvas>
+                </div>
+            </div>
+            <div class="card" id="fxCategoryCard">
+                <h3 class="chart-title">Margen por categoría: compra contra reposición</h3>
+                <div class="table-wrapper">
+                    <table class="data-table" id="fxCategoryTable">
+                        <thead><tr>
+                            <th>Categoría</th>
+                            <th class="num">Venta Bs</th>
+                            <th class="num">% costo en USD</th>
+                            <th class="num">Margen a costo de compra</th>
+                            <th class="num">Margen a costo de reposición</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card" id="fxUncoveredCard">
+                <h3 class="chart-title">Productos cuyo precio no cubre la reposición</h3>
+                <p class="legend-hint" id="fxUncoveredHint"></p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="fxUncoveredTable">
+                        <thead><tr>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th class="num">Último precio</th>
+                            <th class="num">Costo de compra</th>
+                            <th class="num">Costo de reposición</th>
+                            <th class="num">Diferencia</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
         <section id="stepPortfolio" class="step-section" hidden>
             <div class="section-head">
                 <h2 class="section-title">Salud de Cartera</h2>
