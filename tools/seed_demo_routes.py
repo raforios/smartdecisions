@@ -8,9 +8,11 @@
     OPTIMIZATION's own functions, so it passes the same geofences and the same
     stock draw-down as a seller on the street.
 
-    Every plan starts and ends at the company's depot, so a seller testing
-    from the office can open and close the route. The depot is BearSoft's
-    office for both companies until each company configures its own.
+    Every plan starts and ends at the company's base point —set here as the
+    company's route parameter— so a seller testing from the office can open
+    and close the route. The base point is BearSoft's office for both
+    companies; start and end are open in the product, this is the demo's
+    choice.
 
     Run it the morning of the demo, with that date:
 
@@ -51,6 +53,7 @@ from schemas.daily_stock import (  # noqa: E402
     StockItemLoadSchema
 )
 from schemas.localization import (  # noqa: E402
+    RouteEndpointSchema,
     ExecutedPointCreateSchema,
     ExecutedRouteCreateSchema,
     ExecutedRouteUpdateSchema,
@@ -71,7 +74,9 @@ from services.localization_executed import (  # noqa: E402
     create_executed_route,
     register_executed_point
 )
+from schemas.optimization_settings import RouteSettingsSchema  # noqa: E402
 from services.optimization import order_stops  # noqa: E402
+from services.optimization_settings import save_route_settings  # noqa: E402
 
 PROFILE = 'deploy_ml'
 REGION = 'us-east-1'
@@ -212,9 +217,13 @@ def _ordered(
     return [clients[index - 1] for index in order if index != 0]
 
 
+BASE_POINT = RouteEndpointSchema(name = DEPOT_NAME, latitude = DEPOT[0], longitude = DEPOT[1])
+
+
 def _plan_points(clients: List[Dict[str, Any]]) -> List[PlannedPointSchema]:
     '''
-        Depot, the clients, depot.
+        The clients as stops. The base point is the plan's start and end, not
+        a stop.
 
         Args:
             clients (List[Dict[str, Any]]): Clients in visiting order.
@@ -222,12 +231,10 @@ def _plan_points(clients: List[Dict[str, Any]]) -> List[PlannedPointSchema]:
         Returns:
             List[PlannedPointSchema]: The stops.
     '''
-    depot = {'point_name': DEPOT_NAME, 'latitude': DEPOT[0], 'longitude': DEPOT[1]}
-    stops = [depot] + [{'point_name': c['name'][:100], 'client_id': c['id'],
-                        'latitude': float(c['latitude']), 'longitude': float(c['longitude'])}
-                       for c in clients] + [depot]
-    return [PlannedPointSchema(secuencial = position, **stop)
-            for position, stop in enumerate(stops, start = 1)]
+    return [PlannedPointSchema(secuencial = position, point_name = c['name'][:100],
+                               client_id = c['id'], latitude = float(c['latitude']),
+                               longitude = float(c['longitude']))
+            for position, c in enumerate(clients, start = 1)]
 
 
 def _create_plan(
@@ -252,7 +259,8 @@ def _create_plan(
     if header['route_code'] in existing:
         return None
     plan = create_planned_route(resource, owner, PlannedRouteCreateSchema(
-        **header, points = _plan_points(clients)
+        **header, points = _plan_points(clients),
+        start_point = BASE_POINT, end_point = BASE_POINT
     ))
     return update_planned_route_status(resource, owner, plan['id'],
                                        PlannedRouteStatusEnum.ACTIVE)
@@ -288,7 +296,7 @@ def _run_plan(
         max_distance_start_point = GEOFENCE_METRES
     ))
     visits = 0
-    for stop in plan['points'][1:-1]:
+    for stop in plan['points']:
         clock += timedelta(minutes = rng.randint(15, 30))
         if rng.random() < 0.2:
             continue                                     # a stop not reached
@@ -422,6 +430,7 @@ def seed_company(
     if not write:
         return
 
+    save_route_settings(resource, company.owner, RouteSettingsSchema(base_point = BASE_POINT))
     sample = _write_stock_sample(company, stock, demo_day)
     print(f'  archivo de stock -> {sample}')
     _link_seller(resource, company, next(iter(portfolios)))
