@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factores externos y tipo de cambio — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=8d34ccaf11">
+    <link rel="stylesheet" href="../minerales/minerales.css?v=30b9fd5336">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=2e8e432ba8"></script>
+    <script src="../js/auth.js?v=16147b32b2" defer></script>
+    <script src="../js/api.js?v=5440fa776b" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../minerales/minerales_shared.js?v=e8fbc20f24" defer></script>
+    <script src="tipo_cambio.js?v=ab6b942843" defer></script>
+    <script src="factors.js?v=9e6c8fb620" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="/home.html" class="brand">
+            <img src="/assets/bear-face.jpg?v=e028b9fcd7" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <a href="/home.html" class="btn btn-ghost btn-small">← Módulos</a>
+            <span class="session-chip" id="sessionChip" hidden></span>
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Factores externos y tipo de cambio</h1>
+        <p class="page-subtitle">Lo que se mueve fuera de la empresa y cambia lo que valen sus números: el dólar —oficial y paralelo— y los factores que cada empresa sigue, como el diésel.</p>
+        <p class="page-note">El efecto sobre la venta y el margen se ve en Análisis comercial › Efecto del tipo de cambio.</p>
+
+        <section class="card controls-card">
+            <div class="controls-row">
+                <div class="control">
+                    <label for="daysInput">Plazo de la proyección (días)</label>
+                    <input type="number" id="daysInput" min="1" max="90" step="1" value="30">
+                </div>
+                <button class="btn btn-primary" id="runButton">Proyectar</button>
+            </div>
+        </section>
+
+        <section class="card panel" id="parallelPanel">
+            <div class="panel-head">
+                <h2>Dólar oficial y paralelo (USDT)</h2>
+                <span class="panel-meta" id="parallelMeta"></span>
+            </div>
+            <p class="control-hint">El USDT es el precio del dólar digital en el mercado P2P de Binance, la referencia del dólar paralelo. La serie empieza el 27/06/2026, cuando el tipo de cambio dejó de estar fijo: hasta el 05/10 viene del registro público de lecturas de Binance P2P (mauforonda/dolares, mediana del día) y desde el 06/10, de la lectura diaria propia.</p>
+
+            <div class="rate-figures" id="parallelFigures"></div>
+            <div class="chart-holder" id="parallelChart"></div>
+            <div class="chart-legend">
+                <span class="legend-item"><span class="legend-swatch swatch-official"></span>Oficial (BCB)</span>
+                <span class="legend-item"><span class="legend-swatch swatch-parallel"></span>USDT</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-table" id="parallelTable">
+                    <thead><tr><th>Fecha</th><th class="num">Oficial (BCB)</th><th class="num">USDT</th><th class="num">Brecha</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <div class="pager" id="parallelPager" hidden>
+                    <span class="pager-count" id="parallelCount"></span>
+                    <div class="pager-controls">
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="parallelPrev">← Anterior</button>
+                        <span class="pager-page" id="parallelPage"></span>
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="parallelNext">Siguiente →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card panel" id="ratePanel" hidden>
+            <div class="panel-head">
+                <h2>Dólar oficial</h2>
+                <span class="panel-meta" id="rateMeta"></span>
+                <span class="ai-slot" id="rateAi"></span>
+            </div>
+            <!-- El modelo manda sobre todo lo que sigue: cifras, gráfico y
+                 tabla. Antes había una tabla fija con un método y otra que
+                 cambiaba con el selector: la misma pregunta contestada dos
+                 veces, y con dos respuestas distintas a la vista. -->
+            <div class="controls-row">
+                <div class="control">
+                    <label for="rateModel">Modelo de proyección</label>
+                    <select id="rateModel"></select>
+                </div>
+                <div class="control control-wide">
+                    <span class="model-note" id="rateModelNote"></span>
+                </div>
+            </div>
+            <p class="control-hint" id="rateDefaultNote"></p>
+
+            <div class="rate-figures" id="rateFigures"></div>
+            <div class="chart-holder" id="rateChart"></div>
+
+            <div class="rate-table-head">
+                <h3>Cotizaciones día por día</h3>
+                <div class="rate-table-actions">
+                    <label class="checkbox">
+                        <input type="checkbox" id="rateShowProjected" checked>
+                        Incluir proyectadas
+                    </label>
+                    <button class="btn btn-ghost btn-small" id="rateToggle"
+                            aria-expanded="false">Ver la tabla</button>
+                </div>
+            </div>
+            <div class="table-scroll rate-table-scroll" id="rateTableHolder" hidden>
+                <table class="data-table" id="rateTable">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Día</th>
+                            <th class="num">Bs por USD</th>
+                            <th class="num">Variación</th>
+                            <th class="num">Desde el inicio</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div class="pager" id="ratePager" hidden>
+                    <span class="pager-count" id="rateCount"></span>
+                    <div class="pager-controls">
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="ratePrev">← Anterior</button>
+                        <span class="pager-page" id="ratePage"></span>
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="rateNext">Siguiente →</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bench">
+                <details class="bench-detail">
+                    <summary>Cómo se comparan los modelos</summary>
+                    <p class="control-hint">
+                        Cada modelo se mide re-corriendo la serie desde cada punto
+                        de partida posible y promediando lo que erró al proyectar
+                        <strong id="benchHorizon">30</strong> días. Es un promedio
+                        histórico, no el error de la cifra de arriba: un modelo
+                        puede acertar hoy y ser peor en promedio, o al revés.
+                    </p>
+                    <div class="table-scroll">
+                        <table class="data-table" id="benchTable">
+                            <thead>
+                                <tr>
+                                    <th>Modelo</th>
+                                    <th class="num">Proyecta</th>
+                                    <th class="num">Cambio</th>
+                                    <th class="num">Error medio</th>
+                                    <th>Sobre el horizonte</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+
+            <!-- La fecha de arranque sale de la serie misma, no escrita acá:
+                 el servicio es el que sabe dónde empieza el régimen flotante. -->
+            <p class="control-hint" id="rateSeriesNote"></p>
+        </section>
+
+        <!-- Sale scenario -->
+        <section class="card panel" id="factorsPanel">
+            <div class="panel-head">
+                <h2>Factores que cambian</h2>
+                <span class="panel-meta" id="factorsMeta"></span>
+            </div>
+            <p class="control-hint">
+                Cifras que se mueven solas y cambian lo que significa un reporte: el
+                precio del diésel, un arancel, un índice. Cada valor se guarda con su
+                fecha, y un cálculo usa el valor y el estado <strong>de su propia
+                fecha</strong>: apagar un factor hoy no cambia lo que ya se calculó
+                antes. Apagado, conserva sus valores y deja de contar.
+            </p>
+            <div class="table-scroll">
+                <table class="data-table" id="factorsTable">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Unidad</th>
+                            <th class="num">Último valor</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="pager" id="factorsPager" hidden>
+                <span class="pager-count" id="factorsCount"></span>
+                <div class="pager-controls">
+                    <button type="button" class="btn btn-ghost btn-small" id="factorsPrev">← Anterior</button>
+                    <span class="pager-page" id="factorsPage"></span>
+                    <button type="button" class="btn btn-ghost btn-small" id="factorsNext">Siguiente →</button>
+                </div>
+            </div>
+            <p class="control-hint" id="factorsNote"></p>
+
+            <h3>Nuevo factor</h3>
+            <div class="controls-row">
+                <div class="control">
+                    <label for="factorCode">Código</label>
+                    <input type="text" id="factorCode" maxlength="40" placeholder="DIESEL">
+                </div>
+                <div class="control">
+                    <label for="factorName">Nombre</label>
+                    <input type="text" id="factorName" maxlength="150" placeholder="Precio del diésel">
+                </div>
+                <div class="control">
+                    <label for="factorUnit">Unidad</label>
+                    <input type="text" id="factorUnit" maxlength="40" placeholder="Bs/litro">
+                </div>
+                <div class="control">
+                    <label for="factorSource">Fuente (opcional)</label>
+                    <input type="text" id="factorSource" maxlength="255" placeholder="ANH">
+                </div>
+                <button class="btn btn-primary" id="factorCreateButton">Crear</button>
+            </div>
+
+            <h3>Cargar un valor</h3>
+            <div class="controls-row">
+                <div class="control">
+                    <label for="factorValueCode">Factor</label>
+                    <select id="factorValueCode"></select>
+                </div>
+                <div class="control">
+                    <label for="factorValueDate">Fecha</label>
+                    <input type="date" id="factorValueDate">
+                </div>
+                <div class="control">
+                    <label for="factorValue">Valor</label>
+                    <input type="number" id="factorValue" step="any">
+                </div>
+                <button class="btn btn-primary" id="factorValueButton">Guardar</button>
+            </div>
+            <p class="control-hint" id="factorFormNote"></p>
+
+            <h3>Costo de distribución local</h3>
+            <p class="control-hint">
+                Kilómetros del recorrido ÷ rendimiento (km por litro) × precio del litro,
+                sobre el <strong>viaje redondo</strong>. Usa los factores
+                <code>DIESEL</code> (precio del litro) y <code>RENDIMIENTO</code> (km
+                por litro en reparto urbano) vigentes en la fecha elegida.
+            </p>
+            <div class="controls-row">
+                <div class="control">
+                    <label for="transportKm">Km del recorrido (ida)</label>
+                    <input type="number" id="transportKm" min="0" step="any" value="25">
+                </div>
+                <div class="control">
+                    <label for="transportDate">Fecha</label>
+                    <input type="date" id="transportDate">
+                </div>
+                <div class="control">
+                    <label for="transportUnits">Unidades entregadas (opcional)</label>
+                    <input type="number" id="transportUnits" min="0" step="any">
+                </div>
+                <button class="btn btn-primary" id="transportButton">Calcular</button>
+            </div>
+            <div id="transportResult"></div>
+        </section>
+
+        <section class="card empty-state" id="errorState" hidden>
+            <h3>No se pudo cargar</h3>
+            <p id="errorText"></p>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

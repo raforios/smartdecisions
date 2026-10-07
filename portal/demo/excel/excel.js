@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // hides the others, so the page doesn't grow into a long vertical stack.
     const ANALYSIS_SECTIONS = ['stepDashboard', 'stepVolume', 'stepForecast',
         'stepSegmentation', 'stepOpportunities', 'stepPortfolio', 'stepReceivables',
-        'stepStock', 'stepObjectives'];
+        'stepStock', 'stepObjectives', 'stepFx'];
     function showAnalysisView(sectionId, scroll = true) {
         ANALYSIS_SECTIONS.forEach((id) => { qs('#' + id).hidden = (id !== sectionId); });
         sessionStorage.setItem(VIEW_KEY, sectionId);
@@ -291,8 +291,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatBytes(bytes) {
         if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        if (bytes < 1024 * 1024) return `${formatDecimal(bytes / 1024, 1)} KB`;
+        return `${formatDecimal(bytes / (1024 * 1024), 1)} MB`;
     }
 
     // ---------- Step 2b: direct-to-S3 upload (pre-signed) + validate ----------
@@ -986,7 +986,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="numeric">${formatInt(purchases)}</td>` +
                 `<td class="numeric strong">${formatCurrency(amount)}</td>` +
                 `<td class="numeric">${formatCurrency(ticket)}</td>` +
-                `<td class="numeric">${share.toFixed(2)}%</td>`;
+                `<td class="numeric">${formatDecimal(share, 2)}%</td>`;
         }, { emptyText: 'Sin clientes para ese filtro.' });
         // The API caps the client list, so say so instead of letting the user
         // wonder why the lowest tier looks smaller than its KPI card.
@@ -1429,6 +1429,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function makeChart(canvasId, config) {
         if (!window.Chart) return;
         window.Chart.defaults.maintainAspectRatio = false;
+        // Axis and tooltip numbers in the Bolivian format, like every figure.
+        window.Chart.defaults.locale = 'es-BO';
         if (chartRegistry[canvasId]) chartRegistry[canvasId].destroy();
         chartRegistry[canvasId] = new window.Chart(qs('#' + canvasId), config);
     }
@@ -1685,7 +1687,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 },
-                scales: { y: { ticks: { callback: (value) => `${value}%` } } }
+                scales: { y: { ticks: { callback: (value) => `${Number(value).toLocaleString('es-BO')}%` } } }
             }
         });
 
@@ -2410,7 +2412,7 @@ document.addEventListener('DOMContentLoaded', () => {
             options: {
                 responsive: true,
                 plugins: { legend: { position: 'bottom' } },
-                scales: { y: { ticks: { callback: (value) => `${value}%` } } }
+                scales: { y: { ticks: { callback: (value) => `${Number(value).toLocaleString('es-BO')}%` } } }
             }
         });
     }
@@ -2486,7 +2488,7 @@ document.addEventListener('DOMContentLoaded', () => {
             : `Bs ${Number(value).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const usd = (value) => (value == null || isNaN(value)) ? '—'
             : `US$ ${Number(value).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        const pct = (value) => (value == null || isNaN(value)) ? '—' : `${formatDecimal(value, 1)} %`;
+        const pct = (value) => (value == null || isNaN(value)) ? '—' : `${formatDecimal(value, 1)}%`;
         const fuente = data.source === 'USDT' ? 'USDT' : 'oficial';
 
         qs('#fxNote').textContent = data.rate_is_hypothetical
@@ -2543,7 +2545,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fillTable('fxCategoryTable', data.by_category || [], (row) =>
             `<td>${escapeHtml(row.category)}</td>` +
             `<td class="numeric">${bs(row.revenue)}</td>` +
-            `<td class="numeric">${formatDecimal(row.usd_cost_share * 100, 0)} %</td>` +
+            `<td class="numeric">${formatDecimal(row.usd_cost_share * 100, 0)}%</td>` +
             `<td class="numeric">${pct(row.historical_margin_pct)}</td>` +
             `<td class="numeric">${pct(row.replacement_margin_pct)}</td>`);
 
@@ -2643,9 +2645,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Axis ticks in full bolivianos crowd each other; 12.500 reads as 12,5 k.
     function formatCompact(value) {
         const number = Number(value) || 0;
-        if (Math.abs(number) >= 1000000) return `${(number / 1000000).toFixed(1)} M`;
+        if (Math.abs(number) >= 1000000) return `${formatDecimal(number / 1000000, 1)} M`;
         if (Math.abs(number) >= 1000) return `${Math.round(number / 1000)} k`;
-        return String(number);
+        return number.toLocaleString('es-BO');
     }
 
     function chartOptions(format) {
@@ -2689,7 +2691,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatPercent(value) {
         if (value == null || isNaN(value)) return '—';
-        return `${(Number(value) * 100).toFixed(1)}%`;
+        return `${formatDecimal(Number(value) * 100, 1)}%`;
     }
 
     function formatCurrency(value) {

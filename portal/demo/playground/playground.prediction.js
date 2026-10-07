@@ -262,15 +262,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderResults(train, lastCost) {
         resultsCard.hidden = false;
         const cards = [
-            { label: 'w_final', value: `[${train.w_final.map((v) => formatNumber(v, 4)).join(', ')}]` },
+            { label: 'w_final', value: `[${train.w_final.map((v) => formatNumber(v, 4)).join('; ')}]` },
             { label: 'b_final', value: formatNumber(train.b_final, 4) },
             { label: 'Costo final', value: formatNumber(lastCost, 6) },
             { label: 'Iteraciones', value: String(train.J_history.length) }
         ];
         if (train.normalize) {
             cards.push(
-                { label: 'μ', value: `[${train.mu.map((v) => formatNumber(v, 3)).join(', ')}]` },
-                { label: 'σ', value: `[${train.sigma.map((v) => formatNumber(v, 3)).join(', ')}]` }
+                { label: 'μ', value: `[${train.mu.map((v) => formatNumber(v, 3)).join('; ')}]` },
+                { label: 'σ', value: `[${train.sigma.map((v) => formatNumber(v, 3)).join('; ')}]` }
             );
         }
         resultsGrid.innerHTML = '';
@@ -369,6 +369,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatNumber(value, decimals = 4) {
         if (value == null || Number.isNaN(value)) return '—';
         if (!Number.isFinite(value)) return '∞';
-        return Number(value).toFixed(decimals);
+        return Number(value).toLocaleString('es-BO', {
+            minimumFractionDigits: decimals, maximumFractionDigits: decimals
+        });
     }
 });

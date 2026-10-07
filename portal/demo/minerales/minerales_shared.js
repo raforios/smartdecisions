@@ -83,7 +83,9 @@
     function percent(value, digits = 2) {
         if (value === null || value === undefined) return '—';
         const sign = value > 0 ? '+' : '';
-        return `${sign}${Number(value).toFixed(digits)}%`;
+        return `${sign}${Number(value).toLocaleString('es-BO', {
+            minimumFractionDigits: digits, maximumFractionDigits: digits
+        })}%`;
     }
 
     function changeClass(value) {
@@ -96,6 +98,16 @@
         if (!value) return '—';
         const [, month, day] = value.split('-');
         return `${day}/${month}`;
+    }
+
+    /**
+     * With the year: the start of the series is a historical date, and without
+     * the year a reader cannot tell which regime it belongs to.
+     */
+    function fullDate(value) {
+        if (!value) return '—';
+        const [year, month, day] = value.split('-');
+        return `${day}/${month}/${year}`;
     }
 
     function escapeHtml(value) {
@@ -155,6 +167,6 @@
     window.SD_MIN = {
         MINING_BASE, market,
         CONFIDENCE_LABELS, METHOD_LABELS, SOURCE_LABELS, BASIS_LABELS,
-        errorText, money, percent, changeClass, shortDate, escapeHtml, sparkline
+        errorText, money, percent, changeClass, shortDate, fullDate, escapeHtml, sparkline
     };
 })();

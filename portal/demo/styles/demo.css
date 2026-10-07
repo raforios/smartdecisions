@@ -191,15 +191,21 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1.2rem;
+}
+@media (max-width: 1000px) {
+    .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+    .card-grid { grid-template-columns: 1fr; }
 }
 
 .module-card {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    padding: 1.8rem;
+    padding: 1.5rem;
     border-radius: var(--radius);
     background: var(--panel);
     border: 1px solid var(--border);
@@ -218,7 +224,8 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 .module-card h3 { margin: 0; color: var(--text); }
 .module-card p { color: var(--muted); margin: 0; font-size: 0.95rem; }
 .module-tag {
-    margin-top: 0.4rem;
+    margin-top: auto;
+    padding-top: 0.4rem;
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.14em;

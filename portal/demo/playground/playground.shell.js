@@ -222,5 +222,6 @@
         window.Chart.defaults.color = '#0d1e4c';
         window.Chart.defaults.borderColor = '#e3dccc';
         window.Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+        window.Chart.defaults.locale = 'es-BO';
     });
 })();

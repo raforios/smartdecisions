@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#compareSummary').innerHTML =
             metric('Paradas planificadas', String(state.full.planned_route.points.length)) +
             metric('Ejecuciones', String(scores.length)) +
-            metric('Cumplimiento medio', `${T.formatDecimal(average)} %`) +
+            metric('Cumplimiento medio', `${T.formatDecimal(average)}%`) +
             metric('Visitas con venta', String(sales));
         qs('#compareSummary').hidden = false;
     }
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="numeric">${score.planned_points_count}</td>` +
                 `<td class="numeric">${score.matched_points_count}</td>` +
                 `<td class="numeric">${score.points_visited_count}</td>` +
-                `<td class="numeric"><strong>${T.formatDecimal(score.match_percentage)} %</strong></td>` +
+                `<td class="numeric"><strong>${T.formatDecimal(score.match_percentage)}%</strong></td>` +
                 `<td class="numeric"><button class="btn btn-ghost btn-small" data-action="map">Ver</button></td>`;
             tbody.appendChild(row);
         });

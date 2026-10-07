@@ -315,11 +315,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatBytes(bytes) {
         if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString('es-BO', { maximumFractionDigits: 1 })} KB`;
+        return `${(bytes / (1024 * 1024)).toLocaleString('es-BO', { maximumFractionDigits: 1 })} MB`;
     }
     function formatNumber(value) {
         if (Number.isInteger(value)) return String(value);
-        return Number(value).toFixed(3);
+        return Number(value).toLocaleString('es-BO', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
     }
 });

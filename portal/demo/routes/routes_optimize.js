@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
               '<span class="day-chip-meta">No hay nada que mejorar: la ruta está bien armada.</span></div>'
             : [
                 ['Ahorro', `${km(study.saved_metres)} · ${min(study.saved_seconds)}`],
-                ['Es un', `${T.formatDecimal(study.saved_percentage, 1)} % menos`],
+                ['Es un', `${T.formatDecimal(study.saved_percentage, 1)}% menos`],
                 ['Hoy', `${km(study.current.distance_metres)} · ${min(study.current.duration_seconds)}`],
                 ['Optimizada', `${km(study.optimized.distance_metres)} · ${min(study.optimized.duration_seconds)}`]
             ].map(([label, value]) =>

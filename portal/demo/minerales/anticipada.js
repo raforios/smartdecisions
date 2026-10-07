@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // `money`, not `percent`: an alícuota is a level, not a change, and the
         // leading + of a variation made 5 % read as "subió cinco".
         return `<td class="num">
-            <span class="official-value">${money(value, 2)} %</span>
+            <span class="official-value">${money(value, 2)}%</span>
             ${basis ? `<span class="official-window">${BASIS_LABELS[basis] || basis}</span>` : ''}
         </td>`;
     }
@@ -138,8 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const formula = rule
             ? `regalía = ${money(rule.slope, 5)} × cotización ${
                 rule.intercept < 0 ? '−' : '+'} ${money(Math.abs(rule.intercept), 5)},
-               acotada entre ${money(rule.min_rate, 2)} % y ${money(rule.max_rate, 2)} %;
-               venta interna = ${money(rule.internal_factor * 100, 0)} % de la de exportación`
+               acotada entre ${money(rule.min_rate, 2)}% y ${money(rule.max_rate, 2)}%;
+               venta interna = ${money(rule.internal_factor * 100, 0)}% de la de exportación`
             : 'sin escala cargada para este mineral';
 
         holder.innerHTML = `
@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#estimateNote').textContent =
             `Lo que promedie esta quincena regirá del ${data.valid_from} al ${data.valid_to}. ` +
             `Datos al ${data.as_of}.`;
-        qs('#estimatePanel').hidden = qs('#scopeSelect').value === 'RATE';
+        qs('#estimatePanel').hidden = false;
     }
 
     async function load() {
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
             qs('#estimateMeta').textContent = '';
             qs('#estimateNote').textContent =
                 errorText(error, 'No se pudo calcular la cotización anticipada.');
-            qs('#estimatePanel').hidden = qs('#scopeSelect').value === 'RATE';
+            qs('#estimatePanel').hidden = false;
         }
     }
 
@@ -254,9 +254,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     qs('#estimateDate').addEventListener('change', load);
-    qs('#scopeSelect').addEventListener('change', () => {
-        qs('#estimatePanel').hidden = qs('#scopeSelect').value === 'RATE';
-    });
-
     load();
 });

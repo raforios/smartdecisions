@@ -1,4 +1,4 @@
-/* Cotizaciones y proyecciones — module styles.
+/* Minerales and Factores externos — module styles.
    Only what this module adds; everything shared lives in ../styles/demo.css */
 
 .controls-card { margin-bottom: 1.25rem; }
@@ -466,3 +466,16 @@
     margin: -.4rem 0 1rem;
     max-width: 52rem;
 }
+
+/* Official against USDT: two lines on one scale. */
+.spark-parallel { stroke: var(--accent-2); }
+.chart-legend { display: flex; gap: 1.2rem; margin: 0.4rem 0 1rem; font-size: 0.85rem; color: var(--muted); }
+.legend-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+.legend-swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+.swatch-official { background: #0d1e4c; }
+.swatch-parallel { background: var(--accent-2); }
+.pair-chart { display: grid; grid-template-columns: auto 1fr; gap: 0.6rem; }
+.pair-axis { display: flex; flex-direction: column; justify-content: space-between;
+             font-size: 0.78rem; color: var(--muted); text-align: right; }
+.pair-dates { display: flex; justify-content: space-between; font-size: 0.78rem;
+              color: var(--muted); margin-left: 3rem; }

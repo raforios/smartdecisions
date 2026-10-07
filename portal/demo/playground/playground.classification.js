@@ -285,15 +285,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderResults(train, lastCost) {
         resultsCard.hidden = false;
         const cards = [
-            { label: 'w', value: `[${train.w.map((v) => formatNumber(v, 4)).join(', ')}]` },
+            { label: 'w', value: `[${train.w.map((v) => formatNumber(v, 4)).join('; ')}]` },
             { label: 'b', value: formatNumber(train.b, 4) },
             { label: 'Costo final', value: formatNumber(lastCost, 6) },
             { label: 'Iteraciones', value: String(train.J_history.length) }
         ];
         if (train.normalize) {
             cards.push(
-                { label: 'μ', value: `[${train.mu.map((v) => formatNumber(v, 3)).join(', ')}]` },
-                { label: 'σ', value: `[${train.sigma.map((v) => formatNumber(v, 3)).join(', ')}]` }
+                { label: 'μ', value: `[${train.mu.map((v) => formatNumber(v, 3)).join('; ')}]` },
+                { label: 'σ', value: `[${train.sigma.map((v) => formatNumber(v, 3)).join('; ')}]` }
             );
         }
         resultsGrid.innerHTML = '';
@@ -364,12 +364,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const verdict = probability >= 0.5 ? 'Clase 1 (positivo)' : 'Clase 0 (negativo)';
             setSuccess(
                 predictNote,
-                `Probabilidad: ${(probability * 100).toFixed(2)}% → ${verdict}`
+                `Probabilidad: ${formatNumber(probability * 100, 2)}% → ${verdict}`
             );
             // Plot the input point on the (possibly normalized) scatter.
             lastPredictionPoint = { x: xUse, y: yUse, probability };
             renderScatter();
-            toast(`Predicción: ${(probability * 100).toFixed(2)}%`, 'success');
+            toast(`Predicción: ${formatNumber(probability * 100, 2)}%`, 'success');
         } catch (error) {
             setError(predictNote, error.message || 'Error al calcular probabilidad.');
         } finally {
@@ -407,6 +407,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function formatNumber(value, decimals = 4) {
         if (value == null || Number.isNaN(value)) return '—';
-        return Number(value).toFixed(decimals);
+        return Number(value).toLocaleString('es-BO', {
+            minimumFractionDigits: decimals, maximumFractionDigits: decimals
+        });
     }
 });

@@ -104,8 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function renderZScoreResults(response) {
-        const muText = `[${response.mu.map((v) => formatNumber(v, 4)).join(', ')}]`;
-        const sigmaText = `[${response.sigma.map((v) => formatNumber(v, 4)).join(', ')}]`;
+        const muText = `[${response.mu.map((v) => formatNumber(v, 4)).join('; ')}]`;
+        const sigmaText = `[${response.sigma.map((v) => formatNumber(v, 4)).join('; ')}]`;
         zscoreMetrics.innerHTML = '';
         [
             { label: 'μ (media por columna)', value: muText },
@@ -313,7 +313,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatNumber(value, decimals = 4) {
         if (value == null || Number.isNaN(value)) return '—';
         if (!Number.isFinite(value)) return '∞';
-        return Number(value).toFixed(decimals);
+        return Number(value).toLocaleString('es-BO', {
+            minimumFractionDigits: decimals, maximumFractionDigits: decimals
+        });
     }
     function escapeHtml(value) {
         return String(value)
