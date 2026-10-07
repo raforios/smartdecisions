@@ -10,7 +10,7 @@
 >
 > **Procedimientos paso a paso** viven en `.claude/skills/`, no aquí:
 > `/verificar-servicio`, `/desplegar-frontend`, `/revisar-logs`,
-> `/quincena-minerales`, `/sin-hardcode`, `/nuevo-microservicio`.
+> `/quincena-minerales`, `/sin-hardcode`, `/nuevo-microservicio`, `/constitucion`.
 >
 > **Estándares de código** viven en `.claude/rules/`, y se cargan solos cuando
 > se tocan los archivos que gobiernan.
@@ -73,7 +73,7 @@ que optimización prematura.
 
 **En cada capa el archivo principal se llama como el microservicio.**
 `services/` puede tener varios archivos, pero uno principal con ese nombre.
-**Ningún archivo pasa las 1000 líneas**; si crece, se parte en complementos
+**Ningún archivo llega a 800 líneas** (`tools/verify_service.py` falla ahí); si crece, se parte en complementos
 nombrados por funcionalidad.
 
 ### Reglas de estructura — no negociables

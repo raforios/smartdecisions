@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in */services/*.py) cd /Users/rafael/Work/projects/back/SmartBear/app && python3 tools/check_signatures.py \"$f\" | grep -v '^0 signature' || true;; esac; }",
+            "timeout": 20,
+            "statusMessage": "Revisando firmas..."
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "claude-mem@thedotmack": true,
+    "superpowers@claude-plugins-official": true,
+    "mattpocock-skills@claude-plugins-official": true
+  }
+}
