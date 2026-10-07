@@ -27,40 +27,29 @@
         python -m tools.load_second_owner ... --yes    # escribe de verdad
 '''
 import argparse
-import sys
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
-import boto3
-from boto3.dynamodb.conditions import Attr
-from dotenv import load_dotenv
+import pandas as pd
+from boto3.dynamodb.conditions import Attr, ConditionBase
+from boto3.resources.base import ServiceResource
 
-INGEST_PATH = Path(__file__).resolve().parent.parent / 'services' / 'ingest'
-sys.path.insert(0, str(INGEST_PATH))
-
-# The service reads its configuration from its own directory, so it has to be
-# loaded before importing anything of it: its modules validate the environment
-# at import time, which is what makes a missing variable fail at startup
-# instead of halfway through a load.
-load_dotenv(INGEST_PATH / '.env')
-
-# pylint: disable=wrong-import-position
-from schemas.clients import ClientSource  # noqa: E402
-from services.clients import CLIENT_FRAME_COLUMNS, sync_master  # noqa: E402
-from services.ingest import parse_and_validate_partial  # noqa: E402
-from services.ingest_files import serialize_dataframe  # noqa: E402
-from services import collections, stock, visits  # noqa: E402
-from services.ingest_utils import attach_to_dataset, persist_dataset  # noqa: E402
-from services.ingest_utils import to_dynamo  # noqa: E402
-from services.objectives import parse_and_validate as parse_objectives  # noqa: E402
-
-BUCKET = 'ml-data-file-handler'
-PROFILE = 'deploy_ml'
-REGION = 'us-east-1'
+# First on purpose: importing it puts INGEST on the path and loads its .env.
+# pylint: disable=wrong-import-order
+from tools.ingest_env import BUCKET, session
+from schemas.clients import ClientSource
+from services.clients import CLIENT_FRAME_COLUMNS, sync_master
+from services.ingest import parse_and_validate_partial
+from services.ingest_files import serialize_dataframe
+from services import collections, stock, visits
+from services.ingest_utils import attach_to_dataset, persist_dataset
+from services.ingest_utils import to_dynamo
+from services.objectives import parse_and_validate as parse_objectives
 CSV_TYPE = 'text/csv'
 
 
-def _s3():
+def _s3() -> Any:
     '''
         The S3 client of the deployment profile.
 
@@ -71,21 +60,21 @@ def _s3():
         Returns:
             The boto3 S3 client.
     '''
-    return boto3.Session(profile_name = PROFILE, region_name = REGION).client('s3')
+    return session().client('s3')
 
 
-def _dynamodb():
+def _dynamodb() -> ServiceResource:
     '''
         The DynamoDB resource of the deployment profile.
 
         Returns:
             The boto3 DynamoDB resource.
     '''
-    return boto3.Session(profile_name = PROFILE, region_name = REGION).resource('dynamodb')
+    return session().resource('dynamodb')
 
 
 def _store(
-    frame,
+    frame: pd.DataFrame,
     folder: str,
     dry_run: bool
 ) -> str | None:
@@ -113,15 +102,12 @@ def _store(
     return key
 
 
-def main(argument_list: list | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     '''
-        Entry point.
-
-        Args:
-            argument_list (list): Arguments, for tests. Defaults to argv.
+        The command line of the tool.
 
         Returns:
-            int: Process exit code.
+            argparse.ArgumentParser: The parser.
     '''
     parser = argparse.ArgumentParser(description = __doc__)
     parser.add_argument('--owner', required = True,
@@ -134,15 +120,32 @@ def main(argument_list: list | None = None) -> int:
     parser.add_argument('--replace', action = 'store_true',
                         help = 'Delete the owner\'s previous datasets, their runs and files.')
     parser.add_argument('--yes', action = 'store_true', help = 'Write for real.')
-    arguments = parser.parse_args(argument_list)
-    dry_run = not arguments.yes
+    return parser
 
-    sales_bytes = Path(arguments.sales).read_bytes()
-    result = parse_and_validate_partial(sales_bytes, Path(arguments.sales).name)
+
+def _load_sales(
+    resource: Any,
+    arguments: argparse.Namespace,
+    dry_run: bool
+) -> tuple[pd.DataFrame, str]:
+    '''
+        Validates the sales file, feeds the client master and creates the
+        dataset, as the upload door does.
+
+        Args:
+            resource (Any): The boto3 DynamoDB resource.
+            arguments (argparse.Namespace): The command line.
+            dry_run (bool): True to report without writing.
+
+        Returns:
+            tuple[pd.DataFrame, str]: The accepted rows and the dataset id
+                (`simulado` in a dry run).
+    '''
+    sales_path = Path(arguments.sales)
+    result = parse_and_validate_partial(sales_path.read_bytes(), sales_path.name)
     print(f'ventas: {result.summary.valid_rows} válidas de {result.summary.total_rows}, '
           f'{result.summary.error_rows} apartadas')
 
-    resource = _dynamodb()
     accepted = result.accepted
     if not dry_run:
         # The master learns who the clients are and hands the frame back with
@@ -158,46 +161,79 @@ def main(argument_list: list | None = None) -> int:
     rejected_key = _store(result.rejected, 'rejected', dry_run)
     print(f'normalizado -> {normalized_key}')
 
-    payload = {
+    if dry_run:
+        print(f'dataset -> simulado para dueño "{arguments.owner}"')
+        return accepted, 'simulado'
+    dataset = persist_dataset(dynamodb_resource = resource, payload = {
         'owner_email': arguments.owner,
         'status': 'validated',
         'file_s3_key': normalized_key,
         'rejected_s3_key': rejected_key,
-        'file_name': Path(arguments.sales).name,
+        'file_name': sales_path.name,
         **result.summary.model_dump()
-    }
+    })
+    print(f'dataset -> {dataset["dataset_id"]} (dueño "{arguments.owner}")')
+    return accepted, dataset['dataset_id']
+
+
+def _attach_objectives(
+    target: tuple,
+    path: Path,
+    dry_run: bool
+) -> None:
+    '''
+        Validates the objectives file against the sales and attaches it to the
+        dataset.
+
+        Args:
+            target (tuple): DynamoDB resource, dataset id and the accepted
+                sales the objectives are matched against.
+            path (Path): The objectives file.
+            dry_run (bool): True to report without writing.
+
+        Returns:
+            None
+    '''
+    resource, dataset_id, sales = target
+    objectives = parse_objectives(path.read_bytes(), path.name, sales)
+    print(f'objetivos: {objectives.summary.valid_rows} válidos sobre '
+          f'{objectives.summary.periods_count} mes(es), '
+          f'{objectives.summary.unmatched_rows} sin venta')
+    key = _store(objectives.accepted, 'objectives', dry_run)
+    print(f'objetivos -> {key}')
     if dry_run:
-        print(f'dataset -> simulado para dueño "{arguments.owner}"')
-        dataset_id = 'simulado'
-    else:
-        dataset = persist_dataset(dynamodb_resource = resource, payload = payload)
-        dataset_id = dataset['dataset_id']
-        print(f'dataset -> {dataset_id} (dueño "{arguments.owner}")')
+        return
+    resource.Table('ingest_datasets').update_item(
+        Key = {'id': dataset_id},
+        UpdateExpression = 'SET objectives_s3_key = :k, objectives_summary = :s',
+        # Through `to_dynamo`: DynamoDB refuses floats, and the summary carries
+        # amounts. The service converts with this same function, so the item
+        # looks identical whichever door wrote it.
+        ExpressionAttributeValues = {
+            ':k': key,
+            ':s': to_dynamo(objectives.summary.model_dump(mode = 'json'))
+        }
+    )
+    print('objetivos enganchados al dataset')
+
+
+def main(argument_list: list | None = None) -> int:
+    '''
+        Entry point.
+
+        Args:
+            argument_list (list): Arguments, for tests. Defaults to argv.
+
+        Returns:
+            int: Process exit code.
+    '''
+    arguments = _parser().parse_args(argument_list)
+    dry_run = not arguments.yes
+    resource = _dynamodb()
+    accepted, dataset_id = _load_sales(resource, arguments, dry_run)
 
     if arguments.objectives:
-        objectives = parse_objectives(
-            Path(arguments.objectives).read_bytes(),
-            Path(arguments.objectives).name,
-            accepted
-        )
-        print(f'objetivos: {objectives.summary.valid_rows} válidos sobre '
-              f'{objectives.summary.periods_count} mes(es), '
-              f'{objectives.summary.unmatched_rows} sin venta')
-        key = _store(objectives.accepted, 'objectives', dry_run)
-        print(f'objetivos -> {key}')
-        if not dry_run:
-            resource.Table('ingest_datasets').update_item(
-                Key = {'id': dataset_id},
-                UpdateExpression = 'SET objectives_s3_key = :k, objectives_summary = :s',
-                # Through `to_dynamo`: DynamoDB refuses floats, and the
-                # summary carries amounts. The service converts with this same
-                # function, so the item looks identical whichever door wrote it.
-                ExpressionAttributeValues = {
-                    ':k': key,
-                    ':s': to_dynamo(objectives.summary.model_dump(mode = 'json'))
-                }
-            )
-            print('objetivos enganchados al dataset')
+        _attach_objectives((resource, dataset_id, accepted), Path(arguments.objectives), dry_run)
 
     for name, module, names_clients in (('collections', collections, False),
                                         ('stock', stock, False),
@@ -217,8 +253,8 @@ def main(argument_list: list | None = None) -> int:
 
 
 def _scan_all(
-    table,
-    condition,
+    table: Any,
+    condition: ConditionBase,
     keys_only: bool = False
 ) -> list:
     '''
@@ -246,7 +282,7 @@ def _scan_all(
 
 
 def delete_previous_datasets(
-    resource,
+    resource: ServiceResource,
     owner: str,
     keep_id: str
 ) -> tuple:

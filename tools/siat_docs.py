@@ -1,21 +1,21 @@
 '''
-    Baja la documentación técnica del SIAT a un solo archivo Markdown.
+    Downloads the SIAT technical documentation into a single Markdown file.
 
-    El "Anexo Técnico" que la RND 11 menciona no es un PDF: es el sitio
-    `siatinfo.impuestos.gob.bo`, repartido en decenas de páginas —los servicios
-    SOAP, los XSD de cada tipo de factura, los algoritmos del código de control
-    y los códigos de error—. Leerlo página por página cada vez cuesta tiempo y
-    tokens; acá se consolida una vez y después se busca con `grep`.
+    The "Anexo Técnico" that RND 11 mentions is not a PDF: it is the site
+    `siatinfo.impuestos.gob.bo`, spread over dozens of pages —the SOAP
+    services, the XSD of each invoice type, the control-code algorithms and
+    the error codes. Reading it page by page every time costs time and tokens;
+    here it is consolidated once and then searched with `grep`.
 
-    Sobre el certificado: la cadena TLS del SIAT está mal configurada y ningún
-    cliente la valida. Esta herramienta lo salta a propósito y lo dice en el
-    encabezado del archivo, porque lo que se baja así **es informativo**: antes
-    de implementar contra él, confirmar el documento con el SIN.
+    About the certificate: the SIAT TLS chain is misconfigured and no client
+    validates it. This tool skips it on purpose and says so in the header of
+    the file, because what is downloaded this way **is informative**: confirm
+    the document with the SIN before implementing against it.
 
-    Uso:
-        python tools/siat_docs.py                       # las páginas clave
+    Usage:
+        python tools/siat_docs.py                       # the key pages
         python tools/siat_docs.py --output docs/siat.md
-        python tools/siat_docs.py --index               # lista lo que hay
+        python tools/siat_docs.py --index               # lists what there is
 '''
 import argparse
 import re
@@ -28,9 +28,9 @@ from pathlib import Path
 BASE = 'https://siatinfo.impuestos.gob.bo'
 INDEX_PATH = '/index.php/informacion/generalidades-sfvl'
 
-# Lo que hace falta para facturar desde BILLING: cómo se autoriza el sistema,
-# cómo se obtienen los códigos, cómo se manda la factura y cómo se lee un
-# rechazo. El resto del sitio son sectores que no nos tocan.
+# What invoicing from BILLING needs: how the system is authorised, how the
+# codes are obtained, how an invoice is sent and how a rejection is read. The
+# rest of the site covers sectors that are not ours.
 PAGES: tuple[tuple[str, str], ...] = (
     ('Proceso de autorización del sistema',
      '/index.php/facturacion-en-linea/autorizacion-de-sistemas/proceso-de-autorizacion'),
@@ -70,9 +70,9 @@ PAGES: tuple[tuple[str, str], ...] = (
      '/index.php/facturacion-manual/algoritmos/codigo-de-control'),
     ('Códigos de error del SIAT',
      '/index.php/facturacion-en-linea/implementacion-servicios-facturacion/codigos-error-siat'),
-    # Los algoritmos son lo único del anexo que se implementa tal cual: el CUF
-    # lo genera nuestro sistema, no el SIN, y un dígito mal calculado invalida
-    # la factura entera.
+    # The algorithms are the only part of the annex implemented as they are:
+    # our system generates the CUF, not the SIN, and one wrong digit voids the
+    # whole invoice.
     ('Algoritmo: generación del CUF',
      '/index.php/facturacion-en-linea/algoritmos-utilizados/generacion-cuf'),
     ('Algoritmo: módulo 11 (dígito autoverificador)',
@@ -94,10 +94,10 @@ PAGES: tuple[tuple[str, str], ...] = (
 
 def _context() -> ssl.SSLContext:
     '''
-        Un contexto TLS que no valida la cadena.
+        A TLS context that does not validate the chain.
 
         Returns:
-            ssl.SSLContext: Contexto sin verificación.
+            ssl.SSLContext: Context without verification.
     '''
     context = ssl.create_default_context()
     context.check_hostname = False
@@ -107,13 +107,13 @@ def _context() -> ssl.SSLContext:
 
 def fetch(path: str) -> str:
     '''
-        El HTML de una página del SIAT.
+        The HTML of one SIAT page.
 
         Args:
-            path (str): Ruta bajo el dominio.
+            path (str): Path under the domain.
 
         Returns:
-            str: HTML, o cadena vacía si la página ya no existe.
+            str: HTML, or an empty string when the page no longer exists.
     '''
     try:
         with urllib.request.urlopen(BASE + path, timeout = 30,
@@ -126,13 +126,13 @@ def fetch(path: str) -> str:
 
 def to_text(html: str) -> str:
     '''
-        El contenido legible de una página, sin menús ni scripts.
+        The readable content of a page, without menus or scripts.
 
         Args:
-            html (str): HTML de la página.
+            html (str): The page's HTML.
 
         Returns:
-            str: Texto plano con los saltos de párrafo conservados.
+            str: Plain text, paragraph breaks kept.
     '''
     body = re.sub(r'(?is)<(script|style|nav|header|footer|form).*?</\1>', ' ', html)
     body = re.sub(r'(?i)</(p|div|li|tr|h[1-6])>', '\n', body)
@@ -145,13 +145,13 @@ def to_text(html: str) -> str:
 
 def downloads(html: str) -> list[str]:
     '''
-        Los archivos descargables que la página enlaza.
+        The downloadable files the page links to.
 
         Args:
-            html (str): HTML de la página.
+            html (str): The page's HTML.
 
         Returns:
-            list[str]: URLs de PDF, XSD, WSDL o ZIP.
+            list[str]: URLs of PDF, XSD, WSDL or ZIP files.
     '''
     found = re.findall(r'href="([^"]+\.(?:pdf|xsd|wsdl|zip|xml))"', html, re.I)
     return list(dict.fromkeys(found))
@@ -159,10 +159,10 @@ def downloads(html: str) -> list[str]:
 
 def build_index() -> str:
     '''
-        Todo lo que la página de generalidades enlaza, para elegir qué agregar.
+        Everything the overview page links to, to choose what to add.
 
         Returns:
-            str: Una línea por enlace.
+            str: One line per link.
     '''
     html = fetch(INDEX_PATH)
     links = re.findall(r'href="(/index\.php[^"]+)"[^>]*>\s*([^<]{4,90}?)\s*<', html)
@@ -174,10 +174,10 @@ def build_index() -> str:
 
 def main() -> int:
     '''
-        Punto de entrada.
+        Entry point.
 
         Returns:
-            int: 0 siempre; las páginas caídas se avisan y se saltan.
+            int: Always 0; pages that are down are reported and skipped.
     '''
     parser = argparse.ArgumentParser(
         description = 'Consolida la documentación técnica del SIAT en un Markdown.'

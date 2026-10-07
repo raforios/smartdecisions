@@ -26,7 +26,10 @@ from pathlib import Path
 SKIP_DIRS = {'.venv', 'node_modules', '__pycache__'}
 
 
-def _signature_span(node: ast.AST, lines: list[str]) -> tuple[int, int]:
+def _signature_span(
+    node: ast.AST,
+    lines: list[str]
+) -> tuple[int, int]:
     '''
         Lines (0-based, inclusive) the signature occupies: from `def` to the
         line holding the colon that opens the body.
@@ -49,7 +52,11 @@ def _signature_span(node: ast.AST, lines: list[str]) -> tuple[int, int]:
     return start, end
 
 
-def _needs_fix(lines: list[str], start: int, end: int) -> bool:
+def _needs_fix(
+    lines: list[str],
+    start: int,
+    end: int
+) -> bool:
     '''
         A multi-line signature is fine only if every parameter sits on its
         own line at a four-space deeper indent and the closing parenthesis
@@ -107,7 +114,10 @@ def _strip_comments(lines: list[str]) -> tuple[str, dict[int, str]]:
     return '\n'.join(stripped), comments
 
 
-def _split_top_level(text: str, separator: str) -> list[str]:
+def _split_top_level(
+    text: str,
+    separator: str
+) -> list[str]:
     '''
         Splits on a separator, ignoring the ones nested inside brackets.
 
@@ -153,7 +163,11 @@ def _split_params(rest: str) -> tuple[str, str]:
     return rest, ''
 
 
-def _rebuild(lines: list[str], start: int, end: int) -> list[str]:
+def _rebuild(
+    lines: list[str],
+    start: int,
+    end: int
+) -> list[str]:
     '''
         Rewrites one signature in the canonical layout, keeping comments and
         decorators untouched.
@@ -215,7 +229,10 @@ def _place_comments(
     return header, body
 
 
-def check(path: Path, fix: bool) -> list[tuple[int, str]]:
+def check(
+    path: Path,
+    fix: bool
+) -> list[tuple[int, str]]:
     '''
         Reports (and optionally fixes) the offending signatures of one file.
 

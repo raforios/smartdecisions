@@ -20,43 +20,24 @@
 import argparse
 import io
 import sys
-from pathlib import Path
+from typing import Any
 
-import boto3
 import pandas as pd
 from botocore.config import Config
-from dotenv import load_dotenv
 
-INGEST_PATH = Path(__file__).resolve().parent.parent / 'services' / 'ingest'
-sys.path.insert(0, str(INGEST_PATH))
-# The service validates its environment at import time, so its .env goes first.
-load_dotenv(INGEST_PATH / '.env')
-
-# pylint: disable=wrong-import-position
-from schemas.clients import ClientSource  # noqa: E402
-from services.sellers import list_sellers, register_sellers, sellers_from_frame  # noqa: E402
-
-BUCKET = 'ml-data-file-handler'
-PROFILE = 'deploy_ml'
-REGION = 'us-east-1'
-DATASETS_TABLE = 'ingest_datasets'
+# First on purpose: importing it puts INGEST on the path and loads its .env.
+# pylint: disable=wrong-import-order
+from tools.ingest_env import BUCKET, DATASETS_TABLE, session
+from schemas.clients import ClientSource
+from services.sellers import list_sellers, register_sellers, sellers_from_frame
 # A normalized sales file is several MB; on a shared or slow link the default
 # 60 s read timeout cut the download. Patience and retries, not a failure.
 S3_CONFIG = Config(read_timeout = 300, connect_timeout = 30, retries = {'max_attempts': 5})
 
 
-def _session() -> boto3.Session:
-    '''
-        The deployment profile.
-
-        Returns:
-            boto3.Session: Session bound to the profile and region.
-    '''
-    return boto3.Session(profile_name = PROFILE, region_name = REGION)
-
 
 def _sales_frame(
-    s3_client,
+    s3_client: Any,
     key: str
 ) -> pd.DataFrame:
     '''
@@ -87,9 +68,9 @@ def main(argument_list: list | None = None) -> int:
     parser.add_argument('--yes', action = 'store_true', help = 'Write for real.')
     arguments = parser.parse_args(argument_list)
 
-    session = _session()
-    dynamodb = session.resource('dynamodb')
-    s3_client = session.client('s3', config = S3_CONFIG)
+    aws = session()
+    dynamodb = aws.resource('dynamodb')
+    s3_client = aws.client('s3', config = S3_CONFIG)
     datasets = dynamodb.Table(DATASETS_TABLE).scan().get('Items', [])
 
     for dataset in datasets:

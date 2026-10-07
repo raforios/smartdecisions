@@ -29,6 +29,7 @@ from collections import defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import boto3
 import requests
@@ -75,7 +76,7 @@ def daily_rates(
             for day, values in sorted(readings.items())}
 
 
-def stored_days(table) -> set:
+def stored_days(table: Any) -> set:
     '''
         The days QUOTES already has a USDT reading for.
 

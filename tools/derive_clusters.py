@@ -26,25 +26,14 @@
 '''
 import argparse
 import io
-import sys
-from pathlib import Path
 
-import boto3
 import pandas as pd
-from dotenv import load_dotenv
 
-INGEST_PATH = Path(__file__).resolve().parent.parent / 'services' / 'ingest'
-sys.path.insert(0, str(INGEST_PATH))
-load_dotenv(INGEST_PATH / '.env')
-
-# pylint: disable=wrong-import-position
-from services.clients import list_clients, upsert_clients  # noqa: E402
-from schemas.clients import ClientSource, ClientUpsertSchema  # noqa: E402
-
-BUCKET = 'ml-data-file-handler'
-PROFILE = 'deploy_ml'
-REGION = 'us-east-1'
-DATASETS_TABLE = 'ingest_datasets'
+# First on purpose: importing it puts INGEST on the path and loads its .env.
+# pylint: disable=wrong-import-order
+from tools.ingest_env import BUCKET, DATASETS_TABLE, session
+from schemas.clients import ClientSource, ClientUpsertSchema
+from services.clients import list_clients, upsert_clients
 
 # The bands, as cumulative share of revenue. The names are the account's to
 # choose; these are the ones the prospect uses, so a demonstration against
@@ -55,15 +44,6 @@ BANDS = (
     (1.01, 'SILVER')
 )
 
-
-def _session():
-    '''
-        The AWS session of the deployment profile.
-
-        Returns:
-            boto3.Session: The session.
-    '''
-    return boto3.Session(profile_name = PROFILE, region_name = REGION)
 
 
 def _dataset_of(owner: str) -> dict:
@@ -79,7 +59,7 @@ def _dataset_of(owner: str) -> dict:
         Raises:
             SystemExit: The owner has no dataset.
     '''
-    table = _session().resource('dynamodb').Table(DATASETS_TABLE)
+    table = session().resource('dynamodb').Table(DATASETS_TABLE)
     found = [item for item in table.scan().get('Items', [])
              if item.get('owner_email') == owner]
     if not found:
@@ -104,6 +84,61 @@ def clusters_from_volume(sales: pd.DataFrame) -> pd.Series:
     )
 
 
+def _describe_bands(
+    owner: str,
+    sales: pd.DataFrame,
+    clusters: pd.Series
+) -> None:
+    '''
+        Prints how many clients fell in each band and what share of the sales
+        they carry, so a bad cut is visible before anything is written.
+
+        Args:
+            owner (str): Owner key, for the heading.
+            sales (pd.DataFrame): The normalized sales.
+            clusters (pd.Series): Band of each client.
+
+        Returns:
+            None
+    '''
+    counts = clusters.value_counts()
+    print(f'{owner}: {len(clusters)} clientes')
+    for _, name in BANDS:
+        if name in counts:
+            billed = sales.loc[sales['pos_id'].map(clusters) == name, 'total_amount'].sum()
+            print(f'  {name:10} {counts[name]:>4} clientes · '
+                  f'{billed / sales["total_amount"].sum():.1%} de la venta')
+
+
+def _update_master(
+    owner: str,
+    clusters: pd.Series
+) -> None:
+    '''
+        Completes the cluster of each known client in the master.
+
+        The master completes blanks and never overwrites, which is exactly what
+        is wanted here: a cluster the company already declared stays.
+
+        Args:
+            owner (str): Owner key.
+            clusters (pd.Series): Band of each client.
+
+        Returns:
+            None
+    '''
+    resource = session().resource('dynamodb')
+    # `list_clients` hands back the stored items, which are TypedDicts.
+    known = {str(item['id']): item for item in list_clients(resource, owner)}
+    updates = [
+        ClientUpsertSchema(id = str(code), name = known[str(code)].get('name') or str(code),
+                           cluster = cluster)
+        for code, cluster in clusters.items() if str(code) in known
+    ]
+    result = upsert_clients(resource, owner, updates, ClientSource.FILE)
+    print(f'maestro: {result.completed} completado(s), {result.unchanged} sin cambio')
+
+
 def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
@@ -122,20 +157,12 @@ def main(argument_list: list | None = None) -> int:
 
     dataset = _dataset_of(arguments.owner)
     key = str(dataset['file_s3_key'])
-    s3_client = _session().client('s3')
+    s3_client = session().client('s3')
     body = s3_client.get_object(Bucket = BUCKET, Key = key)['Body'].read()
     sales = pd.read_csv(io.BytesIO(body))
 
     clusters = clusters_from_volume(sales)
-    counts = clusters.value_counts()
-    print(f'{arguments.owner}: {len(clusters)} clientes')
-    for _, name in BANDS:
-        if name in counts:
-            billed = sales.loc[
-                sales['pos_id'].map(clusters) == name, 'total_amount'
-            ].sum()
-            print(f'  {name:10} {counts[name]:>4} clientes · '
-                  f'{billed / sales["total_amount"].sum():.1%} de la venta')
+    _describe_bands(arguments.owner, sales, clusters)
 
     sales['cluster'] = sales['pos_id'].map(clusters)
     if dry_run:
@@ -150,19 +177,7 @@ def main(argument_list: list | None = None) -> int:
                          Body = buffer.getvalue().encode('utf-8'),
                          ContentType = 'text/csv')
     print(f'\nreescrito {key}')
-
-    resource = _session().resource('dynamodb')
-    # `list_clients` hands back the stored items, which are TypedDicts.
-    known = {str(item['id']): item for item in list_clients(resource, arguments.owner)}
-    updates = [
-        ClientUpsertSchema(id = str(code), name = known[str(code)].get('name') or str(code),
-                           cluster = cluster)
-        for code, cluster in clusters.items() if str(code) in known
-    ]
-    # The master completes blanks and never overwrites, which is exactly what
-    # is wanted here: a cluster the company already declared stays.
-    result = upsert_clients(resource, arguments.owner, updates, ClientSource.FILE)
-    print(f'maestro: {result.completed} completado(s), {result.unchanged} sin cambio')
+    _update_master(arguments.owner, clusters)
     return 0
 
 

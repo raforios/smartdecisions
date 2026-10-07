@@ -37,7 +37,10 @@ HEADING = re.compile(
 )
 
 
-def parse_pages(value: str | None, total: int) -> tuple[int, int]:
+def parse_pages(
+    value: str | None,
+    total: int
+) -> tuple[int, int]:
     '''
         The page range to convert, as a half-open pair of indexes.
 

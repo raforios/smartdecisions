@@ -11,7 +11,8 @@
     Usage (run from the app root):
         python tools/notibol_scraper.py --fecha 2026-08-04
         python tools/notibol_scraper.py --fecha 2026-08-04 --out /ruta/noticias.xlsx
-        python tools/notibol_scraper.py --fecha 2026-08-04 --base https://notibol.com/bolivia/economia
+        python tools/notibol_scraper.py --fecha 2026-08-04 \
+            --base https://notibol.com/bolivia/economia
 
     Requires: requests, beautifulsoup4, openpyxl.
 '''
@@ -23,7 +24,7 @@ from urllib.parse import urljoin
 
 import openpyxl
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from openpyxl.styles import Alignment, Font, PatternFill
 
 BASE_URL = 'https://notibol.com/bolivia/economia'
@@ -86,7 +87,10 @@ def _absolute(href: str) -> str:
     return urljoin(SITE_ROOT + '/', href.lstrip('/'))
 
 
-def _parse_news_item(block, fecha: str) -> dict:
+def _parse_news_item(
+    block: Tag,
+    fecha: str
+) -> dict:
     '''
         Extracts one news row from a `.noticia` block.
 
@@ -124,7 +128,10 @@ def _parse_news_item(block, fecha: str) -> dict:
     }
 
 
-def _has_next_page(soup, current_page: int) -> bool:
+def _has_next_page(
+    soup: BeautifulSoup,
+    current_page: int
+) -> bool:
     '''
         Tells whether a link to page `current_page + 1` exists in the pagination.
     '''
@@ -135,7 +142,10 @@ def _has_next_page(soup, current_page: int) -> bool:
     return False
 
 
-def scrape_date(fecha: str, base: str = BASE_URL) -> list:
+def scrape_date(
+    fecha: str,
+    base: str = BASE_URL
+) -> list:
     '''
         Scrapes every page of the listing for the given date.
 
@@ -190,7 +200,10 @@ def _resolve_original_links(rows: list) -> None:
         row['Enlace'] = resolved.get(row['Enlace'], row['Enlace'])
 
 
-def write_excel(rows: list, output_path: str) -> str:
+def write_excel(
+    rows: list,
+    output_path: str
+) -> str:
     '''
         Writes the scraped rows to a styled .xlsx and returns the path.
     '''
@@ -220,8 +233,8 @@ def write_excel(rows: list, output_path: str) -> str:
 
     widths = {'Fecha': 12, 'Medio': 26, 'Titular': 55, 'Enlace': 60}
     for col_index, header in enumerate(COLUMNS, start = 1):
-        worksheet.column_dimensions[worksheet.cell(row = 1, column = col_index).column_letter].width = \
-            widths[header]
+        letter = worksheet.cell(row = 1, column = col_index).column_letter
+        worksheet.column_dimensions[letter].width = widths[header]
 
     workbook.save(output_path)
     return output_path

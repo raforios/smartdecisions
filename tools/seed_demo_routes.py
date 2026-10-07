@@ -38,6 +38,7 @@ import boto3
 import numpy as np
 import pandas as pd
 from boto3.dynamodb.conditions import Key
+from boto3.resources.base import ServiceResource
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,6 +63,7 @@ from schemas.localization import (  # noqa: E402
     PlannedRouteStatusEnum,
     VisitOutcome
 )
+from schemas.optimization_settings import RouteSettingsSchema  # noqa: E402
 from services.daily_stock import load_daily_stock  # noqa: E402
 from services.exceptions import InvalidInputError  # noqa: E402
 from services.localization import (  # noqa: E402
@@ -74,7 +76,6 @@ from services.localization_executed import (  # noqa: E402
     create_executed_route,
     register_executed_point
 )
-from schemas.optimization_settings import RouteSettingsSchema  # noqa: E402
 from services.optimization import order_stops  # noqa: E402
 from services.optimization_settings import save_route_settings  # noqa: E402
 
@@ -115,7 +116,7 @@ COMPANIES = (
 )
 
 
-def _session():
+def _session() -> boto3.Session:
     '''
         The deployment profile.
 
@@ -126,7 +127,7 @@ def _session():
 
 
 def _query(
-    resource,
+    resource: ServiceResource,
     table: str,
     owner: str
 ) -> list[dict[str, Any]]:
@@ -152,7 +153,7 @@ def _query(
 
 
 def _stock_frame(
-    resource,
+    resource: ServiceResource,
     owner: str
 ) -> pd.DataFrame:
     '''
@@ -238,7 +239,7 @@ def _plan_points(clients: list[dict[str, Any]]) -> list[PlannedPointSchema]:
 
 
 def _create_plan(
-    resource,
+    resource: ServiceResource,
     owner: str,
     header: dict[str, Any],
     clients: list[dict[str, Any]]
@@ -266,8 +267,69 @@ def _create_plan(
                                        PlannedRouteStatusEnum.ACTIVE)
 
 
+def _draw_visit(
+    stock: pd.DataFrame,
+    rng: random.Random
+) -> tuple[VisitOutcome, list[SaleItemSchema]]:
+    '''
+        What happened at one stop, and what was sold there.
+
+        Args:
+            stock (pd.DataFrame): The day's stock, with `available`.
+            rng (random.Random): The run's generator.
+
+        Returns:
+            tuple[VisitOutcome, list[SaleItemSchema]]: The outcome and the
+                lines sold; no lines unless it was a sale.
+    '''
+    outcome = rng.choices([VisitOutcome.SALE, VisitOutcome.NO_SALE, VisitOutcome.CLOSED],
+                          weights = [0.65, 0.25, 0.10])[0]
+    if outcome is not VisitOutcome.SALE:
+        return outcome, []
+    # Only SKUs with room to spare: a demo sale should not be the one that
+    # empties a shelf.
+    plenty = stock[stock['available'] >= 50]
+    picked = plenty.sample(min(rng.randint(1, 3), len(plenty)),
+                           random_state = rng.randint(0, 9999))
+    return outcome, [SaleItemSchema(sku = str(row['product_id']), quantity = rng.randint(1, 4))
+                     for _, row in picked.iterrows()]
+
+
+def _register_visit(
+    account: tuple,
+    point: dict[str, Any],
+    visit: tuple[VisitOutcome, list[SaleItemSchema]],
+    order_id: str | None
+) -> None:
+    '''
+        Registers a stop through OPTIMIZATION, as the phone would.
+
+        Args:
+            account (tuple): DynamoDB resource and owner key.
+            point (dict[str, Any]): Route, time, position and client.
+            visit (tuple[VisitOutcome, list[SaleItemSchema]]): Outcome and
+                lines sold.
+            order_id (str | None): Order number when something was sold.
+
+        Returns:
+            None
+    '''
+    resource, owner = account
+    outcome, items = visit
+    try:
+        register_executed_point(resource, owner, ExecutedPointCreateSchema(
+            **point, outcome = outcome, items = items, order_id = order_id
+        ))
+    except InvalidInputError:
+        # The shelf ran out, as it would on the street: the visit stays,
+        # without the sale.
+        register_executed_point(resource, owner, ExecutedPointCreateSchema(
+            **point, outcome = VisitOutcome.NO_SALE
+        ))
+
+
 def _run_plan(
-    resource,
+    resource: ServiceResource,
     owner: str,
     plan: dict[str, Any],
     run: tuple[str, pd.DataFrame, random.Random]
@@ -288,8 +350,8 @@ def _run_plan(
             int: Visits registered.
     '''
     seller, stock, rng = run
-    day = date.fromisoformat(plan['plan_date'])
-    clock = datetime.combine(day, datetime.min.time(), ZONE).replace(hour = 8)
+    clock = datetime.combine(date.fromisoformat(plan['plan_date']), datetime.min.time(),
+                             ZONE).replace(hour = 8)
     route = create_executed_route(resource, owner, ExecutedRouteCreateSchema(
         seller = seller, start_time = clock.isoformat(), planned_route_id = plan['id'],
         start_latitude = DEPOT[0], start_longitude = DEPOT[1],
@@ -300,31 +362,12 @@ def _run_plan(
         clock += timedelta(minutes = rng.randint(15, 30))
         if rng.random() < 0.2:
             continue                                     # a stop not reached
-        outcome = rng.choices([VisitOutcome.SALE, VisitOutcome.NO_SALE, VisitOutcome.CLOSED],
-                              weights = [0.65, 0.25, 0.10])[0]
-        items = []
-        if outcome is VisitOutcome.SALE:
-            # Only SKUs with room to spare: a demo sale should not be the one
-            # that empties a shelf.
-            plenty = stock[stock['available'] >= 50]
-            picked = plenty.sample(min(rng.randint(1, 3), len(plenty)),
-                                   random_state = rng.randint(0, 9999))
-            items = [SaleItemSchema(sku = str(row['product_id']), quantity = rng.randint(1, 4))
-                     for _, row in picked.iterrows()]
+        visit = _draw_visit(stock, rng)
         point = {'executed_route_id': route['id'], 'timestamp': clock.isoformat(),
                  'latitude': float(stop['latitude']), 'longitude': float(stop['longitude']),
                  'client_id': stop.get('client_id')}
-        try:
-            register_executed_point(resource, owner, ExecutedPointCreateSchema(
-                **point, outcome = outcome, items = items,
-                order_id = f'{plan["route_code"]}-{visits + 1}' if items else None
-            ))
-        except InvalidInputError:
-            # The shelf ran out, as it would on the street: the visit stays,
-            # without the sale.
-            register_executed_point(resource, owner, ExecutedPointCreateSchema(
-                **point, outcome = VisitOutcome.NO_SALE
-            ))
+        order_id = f'{plan["route_code"]}-{visits + 1}' if visit[1] else None
+        _register_visit((resource, owner), point, visit, order_id)
         visits += 1
     clock += timedelta(minutes = 40)
     close_executed_route(resource, owner, route['id'], ExecutedRouteUpdateSchema(
@@ -335,7 +378,7 @@ def _run_plan(
 
 
 def _load_stock(
-    resource,
+    resource: ServiceResource,
     owner: str,
     day: date,
     stock: pd.DataFrame
@@ -382,7 +425,7 @@ def _write_stock_sample(
 
 
 def _link_seller(
-    resource,
+    resource: ServiceResource,
     company: Company,
     seller: str
 ) -> None:
@@ -406,8 +449,46 @@ def _link_seller(
     )
 
 
+def _seed_seller_day(
+    account: tuple,
+    when: tuple[date, int],
+    portfolio: tuple[str, list[dict[str, Any]]],
+    run: tuple[str, pd.DataFrame, random.Random]
+) -> None:
+    '''
+        One seller's plan for one day and, on a past day, its run.
+
+        Args:
+            account (tuple): DynamoDB resource and owner key.
+            when (tuple[date, int]): The day and how many days before the demo
+                it falls; zero is the demo day, which is planned but not run.
+            portfolio (tuple[str, list[dict[str, Any]]]): The seller and their
+                clients.
+            run (tuple[str, pd.DataFrame, random.Random]): Who runs it, the
+                stock to sell from and the generator.
+
+        Returns:
+            None
+    '''
+    resource, owner = account
+    day, offset = when
+    seller, clients = portfolio
+    rng = run[2]
+    chosen = rng.sample(clients, min(STOPS_PER_PLAN, len(clients)))
+    plan = _create_plan(resource, owner, {
+        'route_code': f'DEMO-{seller[:20].upper().replace(" ", "_")}-{day}',
+        'route_name': f'{seller} — {day.strftime("%d/%m")}',
+        'seller': seller, 'plan_date': day
+    }, _ordered(chosen))
+    if plan and offset > 0:
+        visits = _run_plan(resource, owner, plan, run)
+        print(f'  {day} {seller}: plan y recorrido ({visits} visitas)')
+    elif plan:
+        print(f'  {day} {seller}: plan del día')
+
+
 def seed_company(
-    resource,
+    resource: ServiceResource,
     company: Company,
     demo_day: date,
     write: bool
@@ -440,18 +521,8 @@ def seed_company(
         day = demo_day - timedelta(days = offset)
         _load_stock(resource, company.owner, day, stock)
         for seller, clients in portfolios.items():
-            chosen = rng.sample(clients, min(STOPS_PER_PLAN, len(clients)))
-            plan = _create_plan(resource, company.owner, {
-                'route_code': f'DEMO-{seller[:20].upper().replace(" ", "_")}-{day}',
-                'route_name': f'{seller} — {day.strftime("%d/%m")}',
-                'seller': seller, 'plan_date': day
-            }, _ordered(chosen))
-            if plan and offset > 0:
-                visits = _run_plan(resource, company.owner, plan,
-                                   (linked.get(seller) or seller, stock, rng))
-                print(f'  {day} {seller}: plan y recorrido ({visits} visitas)')
-            elif plan:
-                print(f'  {day} {seller}: plan del día')
+            _seed_seller_day((resource, company.owner), (day, offset), (seller, clients),
+                             (linked.get(seller) or seller, stock, rng))
 
     pool = [client for clients in portfolios.values() for client in clients]
     bad = _create_plan(resource, company.owner, {
@@ -464,7 +535,7 @@ def seed_company(
 
 
 def reset_demo(
-    resource,
+    resource: ServiceResource,
     owner: str,
     days: set
 ) -> tuple[int, int]:

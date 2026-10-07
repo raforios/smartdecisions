@@ -39,7 +39,10 @@ _FIRST_STOP_MINUTES = 8 * 60 + 30
 _MINUTES_PER_STOP = (18, 35)
 
 
-def _walk_order(points: np.ndarray, rng: np.random.Generator) -> list[int]:
+def _walk_order(
+    points: np.ndarray,
+    rng: np.random.Generator
+) -> list[int]:
     '''
         Orders the stops of a day the way a seller drives them: from a random
         first stop, always to the nearest one not yet visited.
@@ -68,8 +71,11 @@ def _walk_order(points: np.ndarray, rng: np.random.Generator) -> list[int]:
     return order + unknown
 
 
-def _day_visits(day_sales: pd.DataFrame, pool: pd.DataFrame,
-                rng: np.random.Generator) -> pd.DataFrame:
+def _day_visits(
+    day_sales: pd.DataFrame,
+    pool: pd.DataFrame,
+    rng: np.random.Generator
+) -> pd.DataFrame:
     '''
         Draws the visits of one seller on one day.
 
@@ -124,19 +130,22 @@ def _day_visits(day_sales: pd.DataFrame, pool: pd.DataFrame,
     return visits
 
 
-def build_visits_sheet(sales: pd.DataFrame, seed: int, weeks: int = 8) -> pd.DataFrame:
+def _recent_invoices(
+    sales: pd.DataFrame,
+    weeks: int
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     '''
-        Draws the visits sheet from the last weeks of the sales sheet.
+        The invoices of the last weeks, one per seller, client and day, and the
+        clients each seller served in that period.
 
         Args:
             sales (pd.DataFrame): Template-shaped sales sheet.
-            seed (int): Seed, so the same ledger always yields the same log.
             weeks (int): How many weeks back from the last sale to cover.
 
         Returns:
-            pd.DataFrame: The 'Visitas' sheet, in contract order.
+            tuple[pd.DataFrame, dict[str, pd.DataFrame]]: The invoices, and
+                each seller's client pool with coordinates.
     '''
-    rng = np.random.default_rng(seed)
     dates = pd.to_datetime(sales['Fecha'])
     since = dates.max() - pd.Timedelta(weeks = weeks)
     recent = sales.loc[dates >= since].copy()
@@ -151,6 +160,27 @@ def build_visits_sheet(sales: pd.DataFrame, seed: int, weeks: int = 8) -> pd.Dat
         seller: block.drop_duplicates('Cliente')[['Vendedor', 'Cliente', 'Latitud', 'Longitud']]
         for seller, block in invoices.groupby('Vendedor')
     }
+    return invoices, pools
+
+
+def build_visits_sheet(
+    sales: pd.DataFrame,
+    seed: int,
+    weeks: int = 8
+) -> pd.DataFrame:
+    '''
+        Draws the visits sheet from the last weeks of the sales sheet.
+
+        Args:
+            sales (pd.DataFrame): Template-shaped sales sheet.
+            seed (int): Seed, so the same ledger always yields the same log.
+            weeks (int): How many weeks back from the last sale to cover.
+
+        Returns:
+            pd.DataFrame: The 'Visitas' sheet, in contract order.
+    '''
+    rng = np.random.default_rng(seed)
+    invoices, pools = _recent_invoices(sales, weeks)
 
     days = []
     for (day, seller), block in invoices.groupby(['Fecha', 'Vendedor'], sort = True):

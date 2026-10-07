@@ -1,25 +1,26 @@
 '''
-    Siembra una farmacia de demostración en BILLING.
+    Seeds a demonstration pharmacy in BILLING.
 
-    Escribe con la API del servicio, no directo en DynamoDB: así los lotes, la
-    numeración y el descuento de stock salen del mismo código que atiende al
-    mostrador, y lo sembrado es exactamente lo que produciría un día de trabajo
-    real. Sembrar por debajo dejaría datos que el servicio nunca habría creado.
+    It writes through the service's API, not straight into DynamoDB: the lots,
+    the numbering and the stock draw-down come out of the same code that serves
+    the counter, so what is seeded is exactly what a real working day would
+    produce. Seeding underneath would leave data the service never created.
 
-    El catálogo son medicamentos comunes de una farmacia boliviana, con lotes
-    escalonados a propósito: uno ya vencido, dos por vencer dentro de la
-    alerta, y el resto lejos. Eso es lo que hace visible el FEFO y el tablero.
+    The catalogue is common medicines of a Bolivian pharmacy, with lots
+    staggered on purpose: one already expired, two expiring inside the alert
+    window, the rest far away. That is what makes FEFO and the dashboard show.
 
-    Uso:
+    Usage:
         python tools/billing/seed_demo.py --token <jwt>
         python tools/billing/seed_demo.py --token <jwt> --base http://localhost:3004
-        python tools/billing/seed_demo.py --token <jwt> --wipe   # sólo agrega, ver abajo
+        python tools/billing/seed_demo.py --token <jwt> --skip-existing
 '''
 import argparse
 import json
 import sys
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
@@ -28,7 +29,7 @@ ROOT = '/v1/billing'
 
 TODAY = date.today()
 
-# (sku, descripción, laboratorio, código de barras, mínimo)
+# (sku, description, laboratory, barcode, minimum stock)
 CATALOGUE = (
     ('PARA500', 'Paracetamol 500 mg — caja x 10', 'Inti', '7770001000015', 20),
     ('IBU400', 'Ibuprofeno 400 mg — caja x 10', 'Inti', '7770001000022', 20),
@@ -42,8 +43,8 @@ CATALOGUE = (
     ('BARBIJO-N95', 'Barbijo N95 — unidad', 'Importado', '7770001000107', 30),
 )
 
-# (sku, cantidad, costo, precio, lote, días hasta el vencimiento)
-# Los negativos son lotes ya vencidos: el tablero tiene que separarlos.
+# (sku, quantity, cost, price, lot, days to expiry)
+# Negative days are lots already expired: the dashboard has to set them apart.
 DELIVERIES = (
     ('Droguería Inti S.A.', '84512', (
         ('PARA500', 60, 3.10, 6.50, 'L-2401', 400),
@@ -76,7 +77,7 @@ SETTINGS = {
     'ticket_footer': 'Consulte a su médico. Gracias por su preferencia.'
 }
 
-# (sku, unidades, descuento) — ventas de ejemplo para que el tablero no abra vacío.
+# (sku, units, discount) — sample sales, so the dashboard does not open empty.
 SALES = (
     ((('PARA500', 2, 0), ('VITC-1G', 1, 0)), 'EFECTIVO', 'Juan Pérez', '9876543'),
     ((('IBU400', 1, 0),), 'QR', None, None),
@@ -86,55 +87,52 @@ SALES = (
 )
 
 
+@dataclass(frozen = True)
 class Api:
     '''
-        Cliente mínimo del servicio, con el token del usuario que siembra.
+        Where the service is, and the token of the user seeding it.
     '''
+    base: str
+    token: str
 
-    def __init__(
-        self,
-        base: str,
-        token: str
-    ):
-        self.base = base.rstrip('/')
-        self.token = token
 
-    def call(
-        self,
-        method: str,
-        path: str,
-        body: dict[str, Any] | None = None
-    ) -> Any:
-        '''
-            Una llamada al servicio.
+def call(
+    api: Api,
+    method: str,
+    path: str,
+    body: dict[str, Any] | None = None
+) -> Any:
+    '''
+        One call to the service.
 
-            Args:
-                method (str): Verbo HTTP.
-                path (str): Ruta bajo /v1/billing.
-                body (dict | None): Cuerpo JSON, si lo lleva.
+        Args:
+            api (Api): Service and token.
+            method (str): HTTP verb.
+            path (str): Path under /v1/billing.
+            body (dict | None): JSON body, if any.
 
-            Returns:
-                Any: La respuesta decodificada.
+        Returns:
+            Any: The decoded answer.
 
-            Raises:
-                RuntimeError: El servicio respondió con un error.
-        '''
-        data = json.dumps(body).encode() if body is not None else None
-        request = urllib.request.Request(
-            f'{self.base}{ROOT}{path}', data = data, method = method,
-            headers = {
-                'Authorization': f'Bearer {self.token}',
-                'Accept': 'application/json',
-                **({'Content-Type': 'application/json'} if data else {})
-            }
-        )
-        try:
-            with urllib.request.urlopen(request, timeout = 30) as response:
-                payload = response.read()
-            return json.loads(payload) if payload else None
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode('utf-8', 'replace')
-            raise RuntimeError(f'{method} {path} → {error.code} {detail}') from error
+        Raises:
+            RuntimeError: The service answered with an error.
+    '''
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(
+        f'{api.base}{ROOT}{path}', data = data, method = method,
+        headers = {
+            'Authorization': f'Bearer {api.token}',
+            'Accept': 'application/json',
+            **({'Content-Type': 'application/json'} if data else {})
+        }
+    )
+    try:
+        with urllib.request.urlopen(request, timeout = 30) as response:
+            payload = response.read()
+        return json.loads(payload) if payload else None
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode('utf-8', 'replace')
+        raise RuntimeError(f'{method} {path} → {error.code} {detail}') from error
 
 
 def seed(
@@ -142,19 +140,19 @@ def seed(
     skip_existing: bool
 ) -> None:
     '''
-        Deja la farmacia lista para usar.
+        Leaves the pharmacy ready to use.
 
         Args:
-            api (Api): Cliente del servicio.
-            skip_existing (bool): Seguir aunque el SKU ya esté registrado.
+            api (Api): Service and token.
+            skip_existing (bool): Carry on when a SKU is already registered.
     '''
     print('Configuración del comercio…')
-    api.call('PUT', '/settings', SETTINGS)
+    call(api, 'PUT', '/settings', SETTINGS)
 
     print(f'Catálogo: {len(CATALOGUE)} productos')
     for sku, description, laboratory, barcode, minimum in CATALOGUE:
         try:
-            api.call('POST', '/products', {
+            call(api, 'POST', '/products', {
                 'sku': sku, 'description': description, 'laboratory': laboratory,
                 'barcode': barcode, 'min_stock': minimum
             })
@@ -167,7 +165,7 @@ def seed(
 
     print(f'Recepciones: {len(DELIVERIES)}')
     for supplier, invoice, lines in DELIVERIES:
-        note = api.call('POST', '/purchases', {
+        note = call(api, 'POST', '/purchases', {
             'supplier_name': supplier,
             'invoice_number': invoice,
             'invoice_date': (TODAY - timedelta(days = 3)).isoformat(),
@@ -184,7 +182,7 @@ def seed(
 
     print(f'Ventas de ejemplo: {len(SALES)}')
     for lines, method, buyer, document in SALES:
-        note = api.call('POST', '/sales', {
+        note = call(api, 'POST', '/sales', {
             'payment_method': method,
             'buyer': {'name': buyer, 'document': document},
             'lines': [{'sku': sku, 'quantity': units, 'discount': discount}
@@ -195,10 +193,10 @@ def seed(
 
 def main() -> int:
     '''
-        Punto de entrada.
+        Entry point.
 
         Returns:
-            int: 0 si sembró, 1 si el servicio rechazó algo.
+            int: 0 when seeded, 1 when the service refused something.
     '''
     parser = argparse.ArgumentParser(description = 'Siembra una farmacia de demostración.')
     parser.add_argument('--token', required = True, help = 'JWT de un ADMIN o MANAGER.')
@@ -208,7 +206,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        seed(Api(args.base, args.token), args.skip_existing)
+        seed(Api(args.base.rstrip('/'), args.token), args.skip_existing)
     except RuntimeError as error:
         print(f'\n{error}', file = sys.stderr)
         return 1

@@ -15,6 +15,7 @@
 import argparse
 import os
 import re
+from typing import Any
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -22,6 +23,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
+from docx.text.paragraph import Paragraph
 
 CODE_FONT = 'Consolas'
 CODE_SHADING = 'F2F3F5'
@@ -33,7 +35,10 @@ _INLINE = re.compile(r'(\*\*.+?\*\*|`[^`]+`|\*[^*]+\*)')
 _LABEL = re.compile(r'^\*\*[^*]+:\*\*')
 
 
-def _shade(cell_or_paragraph, color: str) -> None:
+def _shade(
+    cell_or_paragraph: Any,
+    color: str
+) -> None:
     '''
         Paints a solid background on a table cell or a paragraph.
 
@@ -51,7 +56,11 @@ def _shade(cell_or_paragraph, color: str) -> None:
     cell_or_paragraph.paragraph_format.element.get_or_add_pPr().append(element)
 
 
-def _add_rich_text(paragraph, text: str, bold: bool = False) -> None:
+def _add_rich_text(
+    paragraph: Paragraph,
+    text: str,
+    bold: bool = False
+) -> None:
     '''
         Writes text into a paragraph, honouring inline **bold**, *italic* and
         `code` spans.
@@ -82,7 +91,10 @@ def _add_rich_text(paragraph, text: str, bold: bool = False) -> None:
             run.bold = True
 
 
-def _add_code_block(document: Document, lines: list[str]) -> None:
+def _add_code_block(
+    document: Document,
+    lines: list[str]
+) -> None:
     '''
         Renders a fenced code block as a shaded monospace paragraph.
     '''
@@ -102,7 +114,10 @@ def _split_row(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip('|').split('|')]
 
 
-def _add_table(document: Document, rows: list[str]) -> None:
+def _add_table(
+    document: Document,
+    rows: list[str]
+) -> None:
     '''
         Renders a GitHub-flavoured table, shading the header row.
 
@@ -130,7 +145,10 @@ def _add_table(document: Document, rows: list[str]) -> None:
     document.add_paragraph()
 
 
-def _add_wrapped(document: Document, buffer: list[str]) -> None:
+def _add_wrapped(
+    document: Document,
+    buffer: list[str]
+) -> None:
     '''
         Emits a soft-wrapped Markdown paragraph as ONE Word paragraph.
 
@@ -149,7 +167,11 @@ def _add_wrapped(document: Document, buffer: list[str]) -> None:
     _add_rich_text(paragraph, text)
 
 
-def _flush(document: Document, buffer: list[str], kind: str) -> None:
+def _flush(
+    document: Document,
+    buffer: list[str],
+    kind: str
+) -> None:
     '''
         Emits whatever block the parser had accumulated.
     '''
@@ -173,7 +195,10 @@ class _Renderer:
         ends and what to open next.
     '''
 
-    def __init__(self, document: Document):
+    def __init__(
+        self,
+        document: Document
+    ):
         self.document = document
         self.buffer: list[str] = []
         self.block: str | None = None
@@ -185,7 +210,10 @@ class _Renderer:
         _flush(self.document, self.buffer, self.block or '')
         self.block = None
 
-    def feed(self, line: str) -> None:
+    def feed(
+        self,
+        line: str
+    ) -> None:
         '''
             Consumes one source line.
 
@@ -205,7 +233,11 @@ class _Renderer:
             return
         self._handle_paragraph(stripped)
 
-    def _handle_fence(self, line: str, stripped: str) -> bool:
+    def _handle_fence(
+        self,
+        line: str,
+        stripped: str
+    ) -> bool:
         '''
             Opens or closes a fenced code block; inside one, everything is
             captured verbatim.
@@ -220,7 +252,10 @@ class _Renderer:
             return True
         return False
 
-    def _handle_table(self, stripped: str) -> bool:
+    def _handle_table(
+        self,
+        stripped: str
+    ) -> bool:
         '''
             Accumulates the rows of a GitHub-flavoured table.
         '''
@@ -234,7 +269,10 @@ class _Renderer:
             self.close()
         return False
 
-    def _handle_break(self, stripped: str) -> bool:
+    def _handle_break(
+        self,
+        stripped: str
+    ) -> bool:
         '''
             Blank lines and horizontal rules end the current paragraph; an
             explicit `&nbsp;` line is a deliberate blank line (signature
@@ -253,7 +291,10 @@ class _Renderer:
             return True
         return False
 
-    def _handle_heading(self, stripped: str) -> bool:
+    def _handle_heading(
+        self,
+        stripped: str
+    ) -> bool:
         '''
             Writes an ATX heading (levels 1 to 4).
         '''
@@ -265,7 +306,10 @@ class _Renderer:
         _add_rich_text(paragraph, heading.group(2))
         return True
 
-    def _handle_list(self, stripped: str) -> bool:
+    def _handle_list(
+        self,
+        stripped: str
+    ) -> bool:
         '''
             Opens a bullet or numbered item; further lines wrap into it.
         '''
@@ -281,7 +325,10 @@ class _Renderer:
         ])
         return True
 
-    def _handle_paragraph(self, stripped: str) -> None:
+    def _handle_paragraph(
+        self,
+        stripped: str
+    ) -> None:
         '''
             Starts a paragraph or wraps the line into the open one.
         '''
@@ -294,7 +341,10 @@ class _Renderer:
         self.buffer.append(stripped)
 
 
-def convert(markdown_path: str, docx_path: str) -> str:
+def convert(
+    markdown_path: str,
+    docx_path: str
+) -> str:
     '''
         Converts a Markdown file into a .docx document.
 

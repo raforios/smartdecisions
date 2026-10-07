@@ -1,39 +1,39 @@
 '''
-    Reporte de visitas de los sitios de BearSoft, leído de los logs de CloudFront.
+    Visit report of the BearSoft sites, read from the CloudFront logs.
 
-    Por qué desde los logs y no desde un contador en la página: el contador solo
-    ve a quien ejecuta JavaScript, no sobrevive a un bloqueador y depende de un
-    tercero que puede cerrar o empezar a cobrar. Los logs los escribe la misma
-    CDN que sirve el sitio: cuentan cada petición, no piden nada al visitante y
-    no dependen de nadie más.
+    Why from the logs and not from a counter on the page: a counter only sees
+    whoever runs JavaScript, does not survive a blocker and depends on a third
+    party that may close or start charging. The logs are written by the same
+    CDN that serves the site: they count every request, ask nothing of the
+    visitor and depend on no one else.
 
-    Qué cuenta y qué no. Una **página vista** es una petición a un `.html` o a
-    la raíz **que el sitio efectivamente sirvió**. Los recursos —CSS, imágenes,
-    JavaScript— se descartan, porque una sola página genera veinte peticiones.
-    Y se descarta todo lo que terminó en 403 o 404: internet zumba con
-    escáneres que piden `/wp-login.php` y `/xmlrpc.php` a cualquier dominio, y
-    contarlos multiplicaba el tráfico de BearSoft por diez. Ese ruido no se
-    esconde: se informa aparte, al final de cada sitio.
+    What counts and what does not. A **page view** is a request for an `.html`
+    or the root **that the site actually served**. Assets —CSS, images,
+    JavaScript— are dropped, because a single page makes twenty requests. And
+    everything that ended in 403 or 404 is dropped: the internet hums with
+    scanners asking any domain for `/wp-login.php` and `/xmlrpc.php`, and
+    counting them multiplied BearSoft's traffic by ten. That noise is not
+    hidden: it is reported apart, at the end of each site.
 
-    Una **visita** es una dirección IP distinta en el día, leída de
-    `x-forwarded-for` y no de `c-ip`. Los sitios van detrás de Cloudflare, así
-    que `c-ip` es el nodo de Cloudflare que reenvió la petición —contarlo era
-    contar puntos de presencia de la CDN, no personas.
+    A **visit** is a distinct IP address in the day, read from
+    `x-forwarded-for` and not from `c-ip`. The sites sit behind Cloudflare, so
+    `c-ip` is the Cloudflare node that forwarded the request —counting it
+    counted the CDN's points of presence, not people.
 
-    No hay países: `c-country` no existe en este formato de log. Lo más cercano
-    es el PoP de CloudFront que atendió la petición, que se reporta como tal y
-    no como si fuera la ubicación del visitante.
+    There are no countries: `c-country` does not exist in this log format. The
+    closest is the CloudFront PoP that served the request, reported as such and
+    not as if it were the visitor's location.
 
-    Uso:
-        python -m tools.traffic_report                  # últimos 7 días
+    Usage:
+        python -m tools.traffic_report                  # last 7 days
         python -m tools.traffic_report --days 30
         python -m tools.traffic_report --site smartdecisions
 '''
 import argparse
-from collections.abc import Iterator
 import gzip
 import io
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from datetime import date, timedelta
 from typing import Any
 
@@ -43,32 +43,32 @@ import boto3
 LOG_BUCKET = 'bearsoft-cloudfront-logs'
 PROFILE = 'deploy_ml'
 
-# Cada sitio escribe bajo su propio prefijo, así el reporte puede separarlos.
+# Each site writes under its own prefix, so the report can tell them apart.
 SITES = {
     'bearsoft': 'bearsoft/',
     'smartdecisions': 'smartdecisions/',
     'raforios': 'raforios/',
 }
 
-# Extensiones que no son una página. Una sola visita pide el HTML y luego veinte
-# recursos; contarlos todos multiplicaría el tráfico por diez.
+# Extensions that are not a page. One visit asks for the HTML and then twenty
+# assets; counting them all would multiply the traffic by ten.
 ASSET_SUFFIXES = (
     '.css', '.js', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.woff', '.woff2',
     '.map', '.json', '.webp', '.gif'
 )
 
-# Peticiones que no vienen de una persona mirando el sitio. Sirve para los bots
-# que se identifican; los escáneres de vulnerabilidades se anuncian como un
-# Chrome cualquiera y sólo los delata el código de respuesta.
+# Requests that do not come from a person looking at the site. It catches the
+# bots that identify themselves; vulnerability scanners announce themselves as
+# any Chrome and only the response code gives them away.
 BOT_MARKERS = ('bot', 'crawl', 'spider', 'slurp', 'curl', 'wget', 'headless',
                'monitor', 'preview', 'scan')
 
-# Respuestas que significan "el sitio entregó la página". Todo lo demás es una
-# petición a algo que no existe: no es una visita, es alguien probando suerte.
+# Responses that mean "the site delivered the page". Anything else is a request
+# for something that does not exist: not a visit, someone trying their luck.
 SERVED_STATUSES = ('200', '304', '206')
 
 
-def _session():
+def _session() -> boto3.Session:
     '''
         Returns the AWS session used to read the logs.
 
@@ -78,7 +78,10 @@ def _session():
     return boto3.Session(profile_name = PROFILE, region_name = 'us-east-1')
 
 
-def _log_files(prefix: str, since: date) -> Iterator[str]:
+def _log_files(
+    prefix: str,
+    since: date
+) -> Iterator[str]:
     '''
         Lists the log files written on or after a date.
 
@@ -181,7 +184,10 @@ def _client(row: dict[str, str]) -> str:
     return row.get('c-ip', '')
 
 
-def _collect(rows: Iterator[dict[str, str]], since: date) -> dict[str, Any]:
+def _collect(
+    rows: Iterator[dict[str, str]],
+    since: date
+) -> dict[str, Any]:
     '''
         Reduces the log lines to the figures the report prints.
 
@@ -285,7 +291,11 @@ def _reduce(
     }
 
 
-def _print(site: str, data: dict[str, Any], days: int) -> None:
+def _print(
+    site: str,
+    data: dict[str, Any],
+    days: int
+) -> None:
     '''
         Prints the report.
 

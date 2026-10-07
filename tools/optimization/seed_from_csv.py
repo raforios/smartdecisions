@@ -44,7 +44,10 @@ def _resolve_table_name() -> str:
     return local_env.get('DYNAMODB_TABLE_NAME_OPTIMIZATION_ROUTES') or DEFAULT_TABLE
 
 
-def _build_dynamodb_resource(endpoint_url: str | None, region: str) -> ServiceResource:
+def _build_dynamodb_resource(
+    endpoint_url: str | None,
+    region: str
+) -> ServiceResource:
     '''
         Returns a DynamoDB resource pointing at local or AWS.
     '''
@@ -97,7 +100,11 @@ def _iter_rows(csv_path: Path) -> Iterable[dict]:
         yield from reader
 
 
-def seed(csv_path: Path, table_name: str, dynamodb_resource: ServiceResource) -> int:
+def seed(
+    csv_path: Path,
+    table_name: str,
+    dynamodb_resource: ServiceResource
+) -> int:
     '''
         Loads the CSV and bulk-writes its rows into the target table.
 
@@ -138,9 +145,9 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
-    table_name = args.table or _resolve_table_name()
+    target_table = args.table or _resolve_table_name()
     resource = _build_dynamodb_resource(args.endpoint_url, args.region)
 
-    written = seed(args.csv, table_name, resource)
+    written = seed(args.csv, target_table, resource)
     target = args.endpoint_url or f'AWS DynamoDB ({args.region})'
-    print(f'Seeded {written} items into "{table_name}" at {target}.')
+    print(f'Seeded {written} items into "{target_table}" at {target}.')

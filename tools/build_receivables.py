@@ -21,18 +21,11 @@
     Everything is drawn from a seeded generator, so the same scenario always
     produces the same book and a demo can be rehearsed.
 '''
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-
-# The sheet names are part of the microservice's contract and not a decision of
-# this tool: they are read from there so the two cannot diverge.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'services' / 'ingest'))
-from schemas.ingest import COLLECTIONS_TEMPLATE, STOCK_TEMPLATE   # noqa: E402  pylint: disable=wrong-import-position
 
 # Terms seen in the Bolivian mass-consumption market, with the weight of each.
 # The 5- and 15-day ones belong to corner shops; 90 and 120, to chains.
@@ -81,7 +74,10 @@ class CreditBook:
     as_of: pd.Timestamp
 
 
-def _credit_flags(invoices: pd.DataFrame, rng: np.random.Generator) -> np.ndarray:
+def _credit_flags(
+    invoices: pd.DataFrame,
+    rng: np.random.Generator
+) -> np.ndarray:
     '''
         Decides which invoices went on credit.
 
@@ -100,8 +96,12 @@ def _credit_flags(invoices: pd.DataFrame, rng: np.random.Generator) -> np.ndarra
     return rng.random(len(invoices)) < probability
 
 
-def _payment_rows(invoice: dict[str, Any], behaviour: str,
-                  rng: np.random.Generator, as_of: pd.Timestamp) -> list[dict[str, Any]]:
+def _payment_rows(
+    invoice: dict[str, Any],
+    behaviour: str,
+    rng: np.random.Generator,
+    as_of: pd.Timestamp
+) -> list[dict[str, Any]]:
     '''
         Builds the payment rows of one credit invoice.
 
@@ -195,7 +195,11 @@ def _credit_limits(invoices: pd.DataFrame) -> pd.Series:
     return limits.clip(lower = CREDIT_LIMIT_FLOOR)
 
 
-def build_credit_book(sheet: pd.DataFrame, scenario: str, seed: int) -> CreditBook:
+def build_credit_book(
+    sheet: pd.DataFrame,
+    scenario: str,
+    seed: int
+) -> CreditBook:
     '''
         Adds the credit columns to a sales sheet and builds its payments sheet.
 
@@ -326,8 +330,87 @@ COVERAGE_BY_SITUATION: dict[str, tuple[float, float]] = {
 COMMITTED_SHARE: tuple[float, float] = (0.0, 0.25)
 
 
-def build_stock_snapshot(sheet: pd.DataFrame, scenario: str, seed: int,
-                         window_days: int = 90) -> pd.DataFrame:
+def _demand_catalogue(
+    sheet: pd.DataFrame,
+    window_days: int
+) -> tuple[pd.DataFrame, pd.Timestamp]:
+    '''
+        Every product with its average cost and its daily demand.
+
+        Args:
+            sheet (pd.DataFrame): Template-shaped sales sheet.
+            window_days (int): Window the daily demand is measured over.
+
+        Returns:
+            tuple[pd.DataFrame, pd.Timestamp]: The catalogue, indexed by
+                product, and the last day of the sheet.
+    '''
+    frame = sheet.copy()
+    frame['Fecha'] = pd.to_datetime(frame['Fecha'])
+    as_of = frame['Fecha'].max()
+    window = frame.loc[frame['Fecha'] > as_of - pd.Timedelta(days = window_days)]
+
+    span = max((as_of - window['Fecha'].min()).days + 1, 1)
+    demand = window.groupby('Producto')['Cantidad'].sum() / span
+    catalogue = frame.groupby('Producto').agg(
+        cost = ('Costo Unitario', 'mean')
+    )
+    catalogue['demand'] = demand.reindex(catalogue.index).fillna(0.0)
+    return catalogue, as_of
+
+
+def _stock_row(
+    product: str,
+    row: pd.Series,
+    situation: str,
+    as_of: pd.Timestamp,
+    rng: np.random.Generator
+) -> dict[str, Any]:
+    '''
+        The stock line of one product in its drawn situation.
+
+        The draws keep their order —balance, committed, in transit— so the same
+        seed always yields the same photo.
+
+        Args:
+            product (str): Product code.
+            row (pd.Series): Its `cost` and daily `demand`.
+            situation (str): One of STOCK_SITUATIONS.
+            as_of (pd.Timestamp): Day of the photo.
+            rng (np.random.Generator): The scenario's generator.
+
+        Returns:
+            dict[str, Any]: One row of the 'Stock' sheet.
+    '''
+    daily = float(row['demand'])
+    low, high = COVERAGE_BY_SITUATION[situation]
+
+    if situation == 'OUT':
+        on_hand = 0.0
+    elif situation == 'DEAD' or daily <= 0:
+        # Idle capital: units with no measured demand moving them.
+        on_hand = float(rng.integers(20, 400))
+    else:
+        on_hand = round(daily * float(rng.uniform(low, high)), 0)
+
+    committed = round(on_hand * float(rng.uniform(*COMMITTED_SHARE)), 0)
+    return {
+        'Fecha': as_of.date(),
+        'Producto': product,
+        'Existencia': on_hand,
+        'Comprometido': committed,
+        'En Transito': round(on_hand * float(rng.uniform(0.0, 0.3)), 0),
+        'Almacen': 'Central',
+        'Costo Unitario': round(float(row['cost']), 2),
+    }
+
+
+def build_stock_snapshot(
+    sheet: pd.DataFrame,
+    scenario: str,
+    seed: int,
+    window_days: int = 90
+) -> pd.DataFrame:
     '''
         Builds the stock snapshot of the last day of the sales sheet.
 
@@ -354,49 +437,17 @@ def build_stock_snapshot(sheet: pd.DataFrame, scenario: str, seed: int,
     '''
     weights = STOCK_SCENARIOS[scenario]
     rng = np.random.default_rng(seed + 1)
-
-    frame = sheet.copy()
-    frame['Fecha'] = pd.to_datetime(frame['Fecha'])
-    as_of = frame['Fecha'].max()
-    window = frame.loc[frame['Fecha'] > as_of - pd.Timedelta(days = window_days)]
-
-    span = max((as_of - window['Fecha'].min()).days + 1, 1)
-    demand = window.groupby('Producto')['Cantidad'].sum() / span
-    catalogue = frame.groupby('Producto').agg(
-        cost = ('Costo Unitario', 'mean')
-    )
-    catalogue['demand'] = demand.reindex(catalogue.index).fillna(0.0)
-
+    catalogue, as_of = _demand_catalogue(sheet, window_days)
     situations = rng.choice(STOCK_SITUATIONS, size = len(catalogue), p = weights)
-    rows: list[dict[str, Any]] = []
-
-    for (product, row), situation in zip(catalogue.iterrows(), situations):
-        daily = float(row['demand'])
-        low, high = COVERAGE_BY_SITUATION[situation]
-
-        if situation == 'OUT':
-            on_hand = 0.0
-        elif situation == 'DEAD' or daily <= 0:
-            # Idle capital: units with no measured demand moving them.
-            on_hand = float(rng.integers(20, 400))
-        else:
-            on_hand = round(daily * float(rng.uniform(low, high)), 0)
-
-        committed = round(on_hand * float(rng.uniform(*COMMITTED_SHARE)), 0)
-        rows.append({
-            'Fecha': as_of.date(),
-            'Producto': product,
-            'Existencia': on_hand,
-            'Comprometido': committed,
-            'En Transito': round(on_hand * float(rng.uniform(0.0, 0.3)), 0),
-            'Almacen': 'Central',
-            'Costo Unitario': round(float(row['cost']), 2),
-        })
-
+    rows = [_stock_row(product, row, situation, as_of, rng)
+            for (product, row), situation in zip(catalogue.iterrows(), situations)]
     return pd.DataFrame(rows)
 
 
-def describe_stock(snapshot: pd.DataFrame, scenario: str) -> None:
+def describe_stock(
+    snapshot: pd.DataFrame,
+    scenario: str
+) -> None:
     '''
         Prints what the snapshot looks like, so a bad draw is visible before it
         reaches a demo.

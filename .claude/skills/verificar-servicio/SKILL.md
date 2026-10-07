@@ -5,7 +5,8 @@ argument-hint: [nombre-del-servicio | --all]
 allowed-tools: Bash(cd *), Bash(python3 *), Bash(grep *), Bash(ls *), Bash(find *), Read
 ---
 
-Verifica el microservicio `$1` (o los once servicios propios con `--all`). Si no se
+Verifica el microservicio `$1` (o los once servicios propios y `tools/` con `--all`;
+sólo `tools/` con `--tools`). Si no se
 indica, pregunta cuál.
 
 **Reporta el resultado real, no la intención.** Si algo falla, arréglalo y
@@ -17,7 +18,10 @@ vuelve a correr; si no se puede arreglar, dilo explícitamente.
 python3 tools/verify_service.py services/$1      # o --all
 ```
 
-Imprime PASS/FAIL por chequeo y termina con `ALL PASS` o `FAILED: ...`. Lo que
+Imprime PASS/FAIL por chequeo y termina con `ALL PASS` o `FAILED: ...`. En `tools/`
+corre Pylint 10.00 sobre cada herramienta con su servicio en el path (como se
+ejecuta de verdad), código duplicado entre herramientas, firmas, type hints,
+tamaño, `except` mudo, sintaxis de tipos e idioma de los comentarios. Lo que
 cubre, y cómo se corrige cada cosa:
 
 | Chequeo | Regla | Corrección |

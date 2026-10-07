@@ -295,6 +295,9 @@ retención de datos y persistencia de lo que produce la capa de IA.
 - **Tipos con sintaxis moderna** (`list[str]`, `str | None`), en todo el código
   propio, boilerplate incluido (07-oct). Lo vigila el chequeo `modern-typing`;
   `pyupgrade` vive sólo en `SmartBear/.venv`. Archivos de hasta 800 líneas.
+- **`tools/` cumple las mismas reglas que los servicios** (Pylint 10.00 por
+  herramienta, firmas, tipos, idioma); `verify_service.py --all` la revisa.
+  Las herramientas de INGEST arrancan con `tools/ingest_env.py`.
 
 ### Infraestructura
 

@@ -11,12 +11,22 @@
 '''
 import sys
 import zipfile
+from pathlib import Path
+
 import pandas as pd
-from sqlalchemy.orm import Session
+from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
-from services.db_connection_sql import ENGINE
-from services.logger_config import custom_logger as logger
-from models.mining_analysis import Department, Municipality
+from sqlalchemy.orm import Session
+
+MINING_PATH = Path(__file__).resolve().parent.parent / 'services' / 'mining_analysis'
+sys.path.insert(0, str(MINING_PATH))
+# The service validates its environment at import time, so its .env goes first.
+load_dotenv(MINING_PATH / '.env')
+
+# pylint: disable=wrong-import-position
+from models.mining_analysis import Department, Municipality  # noqa: E402
+from services.db_connection_sql import ENGINE  # noqa: E402
+from services.logger_config import custom_logger as logger  # noqa: E402
 
 
 def seed_official_locations(excel_path: str) -> None:
