@@ -479,7 +479,7 @@ def test_the_template_download_controller_serves_the_stored_file():
         cannot hand back as a file. It has to reach the caller as bytes.
     '''
     with patch.object(controllers, 'download_template_bytes',
-                      lambda key: f'contenido de {key}'.encode('utf-8')):
+                      lambda key: f'contenido de {key}'.encode()):
         content = asyncio.run(controllers.download_template_controller(
             contract = 'ventas', request = None,
             current_user = 'tester@bearsoft.com.bo'

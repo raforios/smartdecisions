@@ -8,7 +8,6 @@
     `current_user` are consumed by @handle_service_errors for the usage log.
 '''
 from datetime import date as date_type
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -44,7 +43,7 @@ async def sync_market_controller(
 @handle_service_errors('MINING_ANALYSIS')
 async def estimate_controller(
     dynamodb_resource: ServiceResource,
-    as_of: Optional[date_type],
+    as_of: date_type | None,
     request: Request, # pylint: disable=unused-argument
     current_user: str # pylint: disable=unused-argument
 ) -> EstimateResponse:

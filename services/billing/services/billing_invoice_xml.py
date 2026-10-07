@@ -23,7 +23,6 @@
     *after* the sale is already in the client's hands.
 '''
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from lxml import etree
@@ -104,17 +103,17 @@ def _put(
         child.text = str(value)
 
 
-def _missing_homologation(lines: List[InvoiceLine]) -> List[str]:
+def _missing_homologation(lines: list[InvoiceLine]) -> list[str]:
     '''
         The SIN codes the sale's products have not been homologated with.
 
         Args:
-            lines (List[InvoiceLine]): The lines as the invoice needs them.
+            lines (list[InvoiceLine]): The lines as the invoice needs them.
 
         Returns:
-            List[str]: One entry per line missing a code, naming the SKU.
+            list[str]: One entry per line missing a code, naming the SKU.
     '''
-    missing: List[str] = []
+    missing: list[str] = []
     for line in lines:
         absent = [name for name, code in (
             ('actividad', line.sin_activity_code),
@@ -126,7 +125,7 @@ def _missing_homologation(lines: List[InvoiceLine]) -> List[str]:
     return missing
 
 
-def _card_for_xml(sale: SaleNoteOut) -> Optional[str]:
+def _card_for_xml(sale: SaleNoteOut) -> str | None:
     '''
         The masked card number, as the schema types it.
 
@@ -193,14 +192,14 @@ def _build_header(
 
 def _build_detail(
     root: Element,
-    lines: List[InvoiceLine]
+    lines: list[InvoiceLine]
 ) -> None:
     '''
         Writes one `detalle` per line, in the order the XSD declares it.
 
         Args:
             root (Element): The document root.
-            lines (List[InvoiceLine]): The lines as the invoice needs them.
+            lines (list[InvoiceLine]): The lines as the invoice needs them.
     '''
     for line in lines:
         detail = SubElement(root, 'detalle')
@@ -222,7 +221,7 @@ def _build_detail(
 def build_invoice_xml(
     sale: SaleNoteOut,
     context: InvoiceContext,
-    lines: List[InvoiceLine]
+    lines: list[InvoiceLine]
 ) -> str:
     '''
         Builds the invoice XML of one sale.
@@ -231,7 +230,7 @@ def build_invoice_xml(
             sale (SaleNoteOut): The issued sale, as it was stored.
             context (InvoiceContext): Everything the sale does not carry — the
                 issuer, the CUF and CUFD, the legend and the exchange rate.
-            lines (List[InvoiceLine]): The sale's lines with the three SIN
+            lines (list[InvoiceLine]): The sale's lines with the three SIN
                 codes their products were homologated with.
 
         Returns:
@@ -265,7 +264,7 @@ def build_invoice_xml(
 def validate_against_schema(
     xml: str,
     schema_path: str
-) -> List[str]:
+) -> list[str]:
     '''
         Validates a document against the XSD the SIN publishes.
 
@@ -279,7 +278,7 @@ def validate_against_schema(
             schema_path (str): Path to the .xsd.
 
         Returns:
-            List[str]: One message per violation; empty when it validates.
+            list[str]: One message per violation; empty when it validates.
     '''
     with open(schema_path, 'rb') as handle:
         schema = etree.XMLSchema(etree.parse(handle))

@@ -19,7 +19,7 @@
     as today" is a liability in front of a client. When the series is long
     enough to estimate them, they belong here.
 '''
-from typing import Callable, Dict, List
+from collections.abc import Callable
 
 import numpy as np
 
@@ -52,9 +52,9 @@ THETA_ALPHA = ENV_VARS['RATE_THETA_ALPHA']
 
 
 def naive(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Repeats the last observation.
 
@@ -63,19 +63,19 @@ def naive(
         not clear it is not earning its place.
 
         Args:
-            values (List[float]): Observed series, oldest first.
+            values (list[float]): Observed series, oldest first.
             days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     return [float(values[-1])] * days_ahead
 
 
 def mean(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Repeats the mean of the whole series.
 
@@ -83,29 +83,29 @@ def mean(
         and any projection with a slope is reading noise.
 
         Args:
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     return [float(np.mean(values))] * days_ahead
 
 
 def drift(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Random walk with drift: extends the slope between the first and the
         last point.
 
         Args:
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     if len(values) < 2:
         return naive(values, days_ahead)
@@ -114,9 +114,9 @@ def drift(
 
 
 def linear(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Least-squares straight line over the whole series.
 
@@ -125,11 +125,11 @@ def linear(
         it extrapolates forever a slope the market does not respect.
 
         Args:
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     if len(values) < 2:
         return naive(values, days_ahead)
@@ -140,36 +140,36 @@ def linear(
 
 
 def moving_average(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Repite el promedio de los últimos días.
 
         Args:
-            values (List[float]): Serie observada.
+            values (list[float]): Serie observada.
             days_ahead (int): Pasos a proyectar.
 
         Returns:
-            List[float]: Valores proyectados.
+            list[float]: Valores proyectados.
     '''
     window = values[-MOVING_WINDOW:] if len(values) >= MOVING_WINDOW else values
     return [float(np.mean(window))] * days_ahead
 
 
 def simple_exponential(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Suavizado exponencial simple: nivel que sigue a la serie, sin tendencia.
 
         Args:
-            values (List[float]): Serie observada.
+            values (list[float]): Serie observada.
             days_ahead (int): Pasos a proyectar.
 
         Returns:
-            List[float]: Valores proyectados.
+            list[float]: Valores proyectados.
     '''
     level = values[0]
     for value in values[1:]:
@@ -178,9 +178,9 @@ def simple_exponential(
 
 
 def holt(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Holt smoothing with a linear trend, undamped.
 
@@ -189,19 +189,19 @@ def holt(
         does not; seeing them together shows how much the damping is worth.
 
         Args:
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     return _holt(values, days_ahead, phi = 1.0)
 
 
 def damped_trend(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Holt smoothing with a damped trend.
 
@@ -210,30 +210,30 @@ def damped_trend(
         the projection from running away, and why this is the default model.
 
         Args:
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     return _holt(values, days_ahead, phi = PHI)
 
 
 def _holt(
-    values: List[float],
+    values: list[float],
     days_ahead: int,
     phi: float
-) -> List[float]:
+) -> list[float]:
     '''
         Mecánica común de Holt, con y sin amortiguación.
 
         Args:
-            values (List[float]): Serie observada.
+            values (list[float]): Serie observada.
             days_ahead (int): Pasos a proyectar.
             phi (float): Factor de amortiguación; 1.0 la desactiva.
 
         Returns:
-            List[float]: Valores proyectados.
+            list[float]: Valores proyectados.
     '''
     if len(values) < 2:
         return naive(values, days_ahead)
@@ -249,9 +249,9 @@ def _holt(
 
 
 def theta(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Theta method: averages a long-term straight line with a smoothing that
         follows the recent movements.
@@ -262,11 +262,11 @@ def theta(
         neither ignores the direction nor extrapolates it without a brake.
 
         Args:
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Steps to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     if len(values) < 3:
         return naive(values, days_ahead)
@@ -287,7 +287,7 @@ def theta(
 # The registry is the contract: adding a model is adding an entry, and
 # everything that compares, measures and publishes walks it without knowing
 # any model in particular.
-MODELS: Dict[str, Callable[[List[float], int], List[float]]] = {
+MODELS: dict[str, Callable[[list[float], int], list[float]]] = {
     'NAIVE': naive,
     'MEAN': mean,
     'DRIFT': drift,

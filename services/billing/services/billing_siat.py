@@ -18,7 +18,6 @@
 '''
 import base64
 import gzip
-from typing import Optional
 
 from schemas.billing import CufInput
 
@@ -104,7 +103,7 @@ def cuf_chain(data: CufInput) -> str:
 
 def build_cuf(
     data: CufInput,
-    control_code: Optional[str] = None
+    control_code: str | None = None
 ) -> str:
     '''
         The Unique Invoice Code (CUF).

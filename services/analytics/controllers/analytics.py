@@ -1,7 +1,7 @@
 '''
     Analytics controllers.
 '''
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
@@ -79,7 +79,7 @@ _MAX_PER_PRODUCT = _SETTINGS['ANALYTICS_MAX_PER_PRODUCT']
 _MAX_OPPORTUNITIES = _SETTINGS['ANALYTICS_MAX_OPPORTUNITIES']
 
 
-def _top_opportunities_per_product(opportunities: List[Opportunity]) -> List[Opportunity]:
+def _top_opportunities_per_product(opportunities: list[Opportunity]) -> list[Opportunity]:
     '''
         Keeps the top-scoring stores for each recommended product, so the
         product summary lists every recommendation instead of only the single
@@ -87,8 +87,8 @@ def _top_opportunities_per_product(opportunities: List[Opportunity]) -> List[Opp
     '''
     from collections import defaultdict # pylint: disable=import-outside-toplevel
     ranked = sorted(opportunities, key = lambda opp: opp.opportunity_score, reverse = True)
-    per_product: Dict[Any, List[Opportunity]] = defaultdict(list)
-    kept: List[Opportunity] = []
+    per_product: dict[Any, list[Opportunity]] = defaultdict(list)
+    kept: list[Opportunity] = []
     for opp in ranked:
         product = opp.recommended_product_id or opp.recommended_product_name
         if len(per_product[product]) < _MAX_PER_PRODUCT:
@@ -99,7 +99,7 @@ def _top_opportunities_per_product(opportunities: List[Opportunity]) -> List[Opp
     return kept
 
 
-def _engine_parameters() -> Dict[str, Any]:
+def _engine_parameters() -> dict[str, Any]:
     '''
         Reads the affinity-engine tuning parameters from the environment.
 
@@ -115,25 +115,25 @@ def _engine_parameters() -> Dict[str, Any]:
     }
 
 
-def _opportunities_from_item(items: List[Dict[str, Any]]) -> List[Opportunity]:
+def _opportunities_from_item(items: list[dict[str, Any]]) -> list[Opportunity]:
     '''
         Rebuilds the opportunity DTOs from a stored DynamoDB item.
 
         Args:
-            items (List[Dict[str, Any]]): Opportunities as persisted.
+            items (list[dict[str, Any]]): Opportunities as persisted.
 
         Returns:
-            List[Opportunity]: Validated DTOs.
+            list[Opportunity]: Validated DTOs.
     '''
     return [Opportunity.model_validate(item) for item in items]
 
 
-def _summary_from_item(summary: Dict[str, Any]) -> AnalyticsSummary:
+def _summary_from_item(summary: dict[str, Any]) -> AnalyticsSummary:
     '''
         Rebuilds the run summary DTO from a stored DynamoDB item.
 
         Args:
-            summary (Dict[str, Any]): Summary as persisted.
+            summary (dict[str, Any]): Summary as persisted.
 
         Returns:
             AnalyticsSummary: Validated DTO.
@@ -145,8 +145,8 @@ def _scoped_dataframe(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     owner_email: str,
-    params: Optional[Dict[str, Any]] = None
-) -> Tuple[Any, PeriodInfo]:
+    params: dict[str, Any] | None = None
+) -> tuple[Any, PeriodInfo]:
     '''
         Loads the normalized dataset from S3 and narrows it to the requested
         date window.
@@ -165,7 +165,7 @@ def _scoped_dataframe(
                 currency.
 
         Returns:
-            Tuple[Any, PeriodInfo]: The scoped DataFrame and the period
+            tuple[Any, PeriodInfo]: The scoped DataFrame and the period
                 descriptor.
 
         Raises:
@@ -207,7 +207,7 @@ def _scoped_dataframe(
 async def commercial_summary_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> CommercialSummaryResponse:
@@ -235,7 +235,7 @@ async def commercial_summary_controller(
 async def receivables_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> ReceivablesResponse:
@@ -279,7 +279,7 @@ async def receivables_controller(
 async def objectives_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> ObjectivesResponse:
@@ -376,7 +376,7 @@ async def save_commercial_policy_controller(
 async def stock_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> StockResponse:
@@ -461,7 +461,7 @@ async def save_credit_policy_controller(
 async def portfolio_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> PortfolioResponse:
@@ -482,7 +482,7 @@ async def portfolio_controller(
 async def forecast_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> ForecastResponse:
@@ -504,7 +504,7 @@ async def forecast_controller(
 async def segmentation_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> SegmentationResponse:
@@ -522,7 +522,7 @@ async def segmentation_controller(
 async def run_analytics_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> AnalyticsRunResponse:
@@ -618,7 +618,7 @@ async def list_runs_controller(
     )
 
 
-def _optional_float(value: Any) -> Optional[float]:
+def _optional_float(value: Any) -> float | None:
     '''
         Renders a DynamoDB number as a float, tolerating its absence.
 
@@ -687,7 +687,7 @@ async def get_pdv_opportunities_controller(
 async def fx_effect_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> FxEffectResponse:

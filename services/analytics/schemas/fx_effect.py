@@ -3,7 +3,6 @@
     ability to restock, for a distributor that buys in dollars and sells in
     bolivianos.
 '''
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,7 +16,7 @@ class MonthlyFx(BaseModel):
     month: str
     sales_bob: float
     sales_usd: float
-    average_rate: Optional[float] = Field(
+    average_rate: float | None = Field(
         None, description = 'Bolivianos per dollar the month sold at, weighted by sales.'
     )
 
@@ -32,8 +31,8 @@ class FxTotals(BaseModel):
     replacement_cost: float
     historical_margin: float
     replacement_margin: float
-    historical_margin_pct: Optional[float] = None
-    replacement_margin_pct: Optional[float] = None
+    historical_margin_pct: float | None = None
+    replacement_margin_pct: float | None = None
 
 
 class CategoryFx(BaseModel):
@@ -43,8 +42,8 @@ class CategoryFx(BaseModel):
     category: str
     revenue: float
     usd_cost_share: float = Field(..., ge = 0, le = 1)
-    historical_margin_pct: Optional[float] = None
-    replacement_margin_pct: Optional[float] = None
+    historical_margin_pct: float | None = None
+    replacement_margin_pct: float | None = None
 
 
 class UncoveredProduct(BaseModel):
@@ -52,8 +51,8 @@ class UncoveredProduct(BaseModel):
         A product whose last price no longer covers what replacing it costs.
     '''
     product_id: str
-    product_name: Optional[str] = None
-    category: Optional[str] = None
+    product_name: str | None = None
+    category: str | None = None
     last_price: float
     last_cost: float
     replacement_cost: float
@@ -68,7 +67,7 @@ class PurchasingPower(BaseModel):
     usd_at_own_day: float
     usd_at_today: float
     difference: float
-    difference_pct: Optional[float] = None
+    difference_pct: float | None = None
 
 
 class FxEffectBlock(BaseModel):
@@ -78,16 +77,16 @@ class FxEffectBlock(BaseModel):
     '''
     rate_today: float
     rate_is_hypothetical: bool = False
-    monthly: List[MonthlyFx] = Field(default_factory = list)
-    growth_bob_pct: Optional[float] = None
-    growth_usd_pct: Optional[float] = None
-    totals: Optional[FxTotals] = Field(
+    monthly: list[MonthlyFx] = Field(default_factory = list)
+    growth_bob_pct: float | None = None
+    growth_usd_pct: float | None = None
+    totals: FxTotals | None = Field(
         None, description = 'Absent when the file carries no unit cost.'
     )
-    by_category: List[CategoryFx] = Field(default_factory = list)
-    uncovered: List[UncoveredProduct] = Field(default_factory = list)
+    by_category: list[CategoryFx] = Field(default_factory = list)
+    uncovered: list[UncoveredProduct] = Field(default_factory = list)
     uncovered_count: int = 0
-    purchasing_power: Optional[PurchasingPower] = None
+    purchasing_power: PurchasingPower | None = None
 
 
 class FxEffectResponse(FxEffectBlock):

@@ -12,7 +12,7 @@
     to be told before the paper prints.
 '''
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
@@ -124,24 +124,24 @@ def reprice_lot(
 
 
 def allocate(
-    lots: List[Dict[str, Any]],
+    lots: list[dict[str, Any]],
     quantity: float
-) -> List[SaleAllocation]:
+) -> list[SaleAllocation]:
     '''
         Which batches cover a quantity, soonest expiry first.
 
         Args:
-            lots (List[Dict[str, Any]]): Batches of one SKU with units left.
+            lots (list[dict[str, Any]]): Batches of one SKU with units left.
             quantity (float): Units being sold.
 
         Returns:
-            List[SaleAllocation]: Units taken from each batch.
+            list[SaleAllocation]: Units taken from each batch.
 
         Raises:
             InvalidInputError: The batches do not cover the quantity.
     '''
     pending = quantity
-    taken: List[SaleAllocation] = []
+    taken: list[SaleAllocation] = []
     for lot in sorted(lots, key = expiry_order):
         if pending <= 0:
             break
@@ -165,7 +165,7 @@ def allocate(
 def draw_down(
     dynamodb_resource: ServiceResource,
     owner: str,
-    consumption: Dict[str, List[SaleAllocation]]
+    consumption: dict[str, list[SaleAllocation]]
 ) -> None:
     '''
         Takes the allocated units out of their batches, all or nothing.
@@ -173,7 +173,7 @@ def draw_down(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The pharmacy.
-            consumption (Dict[str, List[SaleAllocation]]): Allocations per SKU.
+            consumption (dict[str, list[SaleAllocation]]): Allocations per SKU.
 
         Raises:
             InvalidInputError: A batch no longer holds the units it was
@@ -185,7 +185,7 @@ def draw_down(
 def give_back(
     dynamodb_resource: ServiceResource,
     owner: str,
-    consumption: Dict[str, List[SaleAllocation]]
+    consumption: dict[str, list[SaleAllocation]]
 ) -> None:
     '''
         Returns the units of a cancelled note to the batches they left.
@@ -193,7 +193,7 @@ def give_back(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The pharmacy.
-            consumption (Dict[str, List[SaleAllocation]]): Allocations per SKU.
+            consumption (dict[str, list[SaleAllocation]]): Allocations per SKU.
     '''
     _apply(dynamodb_resource, owner, consumption, sign = 1)
 
@@ -201,7 +201,7 @@ def give_back(
 def _apply(
     dynamodb_resource: ServiceResource,
     owner: str,
-    consumption: Dict[str, List[SaleAllocation]],
+    consumption: dict[str, list[SaleAllocation]],
     sign: int
 ) -> None:
     '''
@@ -210,14 +210,14 @@ def _apply(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The pharmacy.
-            consumption (Dict[str, List[SaleAllocation]]): Allocations per SKU.
+            consumption (dict[str, list[SaleAllocation]]): Allocations per SKU.
             sign (int): -1 to sell, +1 to return.
 
         Raises:
             InvalidInputError: A conditional update failed because the batch no
                 longer holds those units.
     '''
-    operations: List[Dict[str, Any]] = []
+    operations: list[dict[str, Any]] = []
     for sku, allocations in consumption.items():
         for allocation in allocations:
             operations.append(_update_operation(owner, sku, allocation, sign))
@@ -243,7 +243,7 @@ def _update_operation(
     sku: str,
     allocation: SaleAllocation,
     sign: int
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         The conditional update of one batch.
 
@@ -258,7 +258,7 @@ def _update_operation(
             sign (int): -1 to sell, +1 to return.
 
         Returns:
-            Dict[str, Any]: One entry of a transact_write_items call.
+            dict[str, Any]: One entry of a transact_write_items call.
     '''
     units = Decimal(str(allocation.quantity))
     expression = ('SET quantity_remaining = quantity_remaining - :units'
@@ -282,7 +282,7 @@ def _read_lot(
     owner: str,
     sku: str,
     lot_id: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         One stored batch, or None.
 
@@ -293,7 +293,7 @@ def _read_lot(
             lot_id (str): Batch to read.
 
         Returns:
-            Dict[str, Any] | None: The item as stored.
+            dict[str, Any] | None: The item as stored.
     '''
     response = dynamodb_resource.Table(LOTS_TABLE).get_item(
         Key = {OWNER_KEY: owner, LOT_SORT_KEY: lot_key(sku, lot_id)}
@@ -301,12 +301,12 @@ def _read_lot(
     return from_dynamo(response.get('Item'))
 
 
-def _lot_out(stored: Dict[str, Any]) -> LotOut:
+def _lot_out(stored: dict[str, Any]) -> LotOut:
     '''
         A stored batch as the API returns it.
 
         Args:
-            stored (Dict[str, Any]): The lot item.
+            stored (dict[str, Any]): The lot item.
 
         Returns:
             LotOut: The batch.

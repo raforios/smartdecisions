@@ -14,7 +14,6 @@
     depends on, and answering both here kept the product tables split across
     two blocks of the dashboard.
 '''
-from typing import Optional
 
 import pandas as pd
 
@@ -47,8 +46,8 @@ _HHI_HIGH = _SETTINGS['CONCENTRATION_HHI_HIGH']
 
 def _sorted_totals(
     dataframe: pd.DataFrame,
-    labels: Optional[pd.Series]
-) -> Optional[pd.Series]:
+    labels: pd.Series | None
+) -> pd.Series | None:
     '''
         Aggregates amounts by label, descending, dropping non-positive rows.
 

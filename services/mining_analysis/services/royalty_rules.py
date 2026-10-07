@@ -7,7 +7,6 @@
     biweekly report (INF/MMM/VMPMRF/DGPMRF/UCF/N°0041/2026) so the numbers can
     be corrected without touching code when the law or its reading changes.
 '''
-from typing import Dict, List, Tuple
 
 from boto3.resources.base import ServiceResource
 
@@ -26,7 +25,7 @@ INTERNAL_FACTOR = 0.6
 # slope, intercept, floor, cap. The floor and the cap are where the formula
 # meets 1 % (4 % gold, 3 % silver) and 5 % (7 % gold, 6 % silver): e.g. copper
 # 3.0769 * 0.70 - 1.1538 = 1.0 and 3.0769 * 2.00 - 1.1538 = 5.0.
-DEFAULT_SCALES: Dict[str, Tuple[float, float, float, float]] = {
+DEFAULT_SCALES: dict[str, tuple[float, float, float, float]] = {
     '1': (1.6, -3.0, 1.0, 5.0),                # Estaño, USD/LF
     '2': (13.33333, -3.0, 1.0, 5.0),           # Plomo, USD/LF
     '3': (8.60215, -3.08602, 1.0, 5.0),        # Zinc, USD/LF
@@ -39,12 +38,12 @@ DEFAULT_SCALES: Dict[str, Tuple[float, float, float, float]] = {
 }
 
 
-def default_rules() -> List[RoyaltyRuleItem]:
+def default_rules() -> list[RoyaltyRuleItem]:
     '''
         The seed scales, one per mineral of the catalogue.
 
         Returns:
-            List[RoyaltyRuleItem]: Rules as the report states them.
+            list[RoyaltyRuleItem]: Rules as the report states them.
     '''
     stamp = get_current_time_gmt().isoformat(timespec = 'seconds')
     return [
@@ -57,7 +56,7 @@ def default_rules() -> List[RoyaltyRuleItem]:
     ]
 
 
-def ensure_rules(dynamodb_resource: ServiceResource) -> List[RoyaltyRuleItem]:
+def ensure_rules(dynamodb_resource: ServiceResource) -> list[RoyaltyRuleItem]:
     '''
         Seeds the scales the first time the table is empty; otherwise returns
         what is stored, which may have been edited since.
@@ -66,7 +65,7 @@ def ensure_rules(dynamodb_resource: ServiceResource) -> List[RoyaltyRuleItem]:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
 
         Returns:
-            List[RoyaltyRuleItem]: The rules in force.
+            list[RoyaltyRuleItem]: The rules in force.
     '''
     stored = list_royalty_rules(dynamodb_resource)
     if stored:
@@ -79,7 +78,7 @@ def ensure_rules(dynamodb_resource: ServiceResource) -> List[RoyaltyRuleItem]:
     return seeded
 
 
-def rules_by_mineral(dynamodb_resource: ServiceResource) -> Dict[str, RoyaltyRuleItem]:
+def rules_by_mineral(dynamodb_resource: ServiceResource) -> dict[str, RoyaltyRuleItem]:
     '''
         The rules in force keyed by mineral id.
 
@@ -87,7 +86,7 @@ def rules_by_mineral(dynamodb_resource: ServiceResource) -> Dict[str, RoyaltyRul
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
 
         Returns:
-            Dict[str, RoyaltyRuleItem]: {mineral_id: rule}.
+            dict[str, RoyaltyRuleItem]: {mineral_id: rule}.
     '''
     return {rule.mineral_id: rule for rule in ensure_rules(dynamodb_resource)}
 
@@ -138,7 +137,7 @@ def rule_for(
 def apply_rule(
     rule: RoyaltyRuleItem,
     quotation: float
-) -> Tuple[float, float, RateBasis]:
+) -> tuple[float, float, RateBasis]:
     '''
         The export and domestic rates for a quotation, and which part of the
         scale decided them.
@@ -148,7 +147,7 @@ def apply_rule(
             quotation (float): Official quotation in the mineral's unit.
 
         Returns:
-            Tuple[float, float, RateBasis]: export rate %, domestic rate %, basis.
+            tuple[float, float, RateBasis]: export rate %, domestic rate %, basis.
     '''
     if rule.slope == 0 and rule.min_rate == rule.max_rate:
         rate, basis = rule.max_rate, RateBasis.FIXED

@@ -1,7 +1,7 @@
 '''
     Usage Log: routes handler
 '''
-from typing import Dict, Any
+from typing import Any
 from fastapi import APIRouter, Depends, status
 from boto3.resources.base import ServiceResource
 from schemas.audit import READ_ROLES
@@ -44,7 +44,7 @@ def create_usage_log_endpoint(
 
 @router.get(
     '/usage-log',
-    response_model = Dict[str, Any],
+    response_model = dict[str, Any],
     status_code = status.HTTP_200_OK,
     summary = 'Get usage logs with filters',
     description = '''
@@ -58,7 +58,7 @@ def get_usage_logs_endpoint(
     current_user: str = Depends(require_roles(*READ_ROLES)),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     query_params: UsageLogQuerySchema = Depends()
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Endpoint to retrieve a paginated list of usage logs with filters.
     '''

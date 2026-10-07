@@ -17,7 +17,7 @@
 '''
 from dataclasses import dataclass
 from datetime import date as date_type, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -85,14 +85,14 @@ class RateProjection:
         confidence says why, so the caller never has to guess whether an empty
         series means "no data" or "no answer".
     '''
-    points: List[Tuple[date_type, float]]
+    points: list[tuple[date_type, float]]
     confidence: RateConfidence
-    change_percent: Optional[float]
-    expected_error: Optional[float] = None
-    baseline_error: Optional[float] = None
+    change_percent: float | None
+    expected_error: float | None = None
+    baseline_error: float | None = None
 
     @property
-    def final_rate(self) -> Optional[float]:
+    def final_rate(self) -> float | None:
         '''
             The projected rate at the end of the horizon.
 
@@ -123,14 +123,14 @@ def confidence_for(sample_size: int) -> RateConfidence:
 
 
 def backtest_windows(
-    values: List[float],
+    values: list[float],
     days_ahead: int
 ) -> int:
     '''
         How many replays a series affords at a horizon.
 
         Args:
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Horizon.
 
         Returns:
@@ -140,9 +140,9 @@ def backtest_windows(
 
 
 def backtest_error(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> Optional[float]:
+) -> float | None:
     '''
         Measures how far this model has missed, on this very series.
 
@@ -152,14 +152,14 @@ def backtest_error(
         each, and this is the mean absolute error of those attempts.
 
         Args:
-            values (List[float]): Observed series, oldest first.
+            values (list[float]): Observed series, oldest first.
             days_ahead (int): Horizon to measure.
 
         Returns:
             float | None: Mean absolute error in the unit of the series, or None
                 when the history leaves too few windows to measure anything.
     '''
-    errors: List[float] = []
+    errors: list[float] = []
     for cut in range(BACKTEST_MIN_TRAIN, len(values) - days_ahead + 1):
         forecast = damped_trend(values[:cut], days_ahead)
         actual = values[cut:cut + days_ahead]
@@ -171,9 +171,9 @@ def backtest_error(
 
 
 def baseline_error(
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> Optional[float]:
+) -> float | None:
     '''
         The same measurement for the model that has to be beaten.
 
@@ -187,14 +187,14 @@ def baseline_error(
         than assuming nothing moves.
 
         Args:
-            values (List[float]): Observed series, oldest first.
+            values (list[float]): Observed series, oldest first.
             days_ahead (int): Horizon to measure.
 
         Returns:
             float | None: Mean absolute error of the naive forecast, or None
                 when there are too few windows.
     '''
-    errors: List[float] = []
+    errors: list[float] = []
     for cut in range(BACKTEST_MIN_TRAIN, len(values) - days_ahead + 1):
         actual = np.array(values[cut:cut + days_ahead])
         errors.append(float(np.mean(np.abs(actual - values[cut - 1]))))
@@ -206,9 +206,9 @@ def baseline_error(
 
 def error_of(
     model: str,
-    values: List[float],
+    values: list[float],
     days_ahead: int
-) -> Optional[float]:
+) -> float | None:
     '''
         Measures how much a model has erred over this very series.
 
@@ -219,7 +219,7 @@ def error_of(
 
         Args:
             model (str): Name of the model in the registry.
-            values (List[float]): Observed series.
+            values (list[float]): Observed series.
             days_ahead (int): Horizon to measure.
 
         Returns:
@@ -229,7 +229,7 @@ def error_of(
     if projector is None:
         return None
 
-    errors: List[float] = []
+    errors: list[float] = []
     for cut in range(BACKTEST_MIN_TRAIN, len(values) - days_ahead + 1):
         forecast = np.array(projector(values[:cut], days_ahead))
         actual = np.array(values[cut:cut + days_ahead])
@@ -241,10 +241,10 @@ def error_of(
 
 
 def run_bench(
-    rates: List[ExchangeRateItem],
+    rates: list[ExchangeRateItem],
     days_ahead: int,
-    models: List[str]
-) -> List[Dict[str, Any]]:
+    models: list[str]
+) -> list[dict[str, Any]]:
     '''
         Runs several models over the same series and returns them measured.
 
@@ -258,12 +258,12 @@ def run_bench(
         precisely what has to be visible.
 
         Args:
-            rates (List[ExchangeRateItem]): Observed quotes.
+            rates (list[ExchangeRateItem]): Observed quotes.
             days_ahead (int): Days to project.
-            models (List[str]): Models to run; unknown ones are ignored.
+            models (list[str]): Models to run; unknown ones are ignored.
 
         Returns:
-            List[Dict[str, Any]]: One block per model, best first.
+            list[dict[str, Any]]: One block per model, best first.
     '''
     observed = sorted(rates, key = lambda item: item.date)
     values = [float(item.official_rate) for item in observed]
@@ -273,7 +273,7 @@ def run_bench(
     ]
     last_rate = values[-1]
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     for name in models:
         projector = MODELS.get(name)
         if projector is None:
@@ -304,14 +304,14 @@ def run_bench(
 
 
 def project(
-    rates: List[ExchangeRateItem],
+    rates: list[ExchangeRateItem],
     days_ahead: int
 ) -> RateProjection:
     '''
         Projects the exchange rate forward from the stored history.
 
         Args:
-            rates (List[ExchangeRateItem]): Observed rates, any order.
+            rates (list[ExchangeRateItem]): Observed rates, any order.
             days_ahead (int): How many days to project.
 
         Returns:

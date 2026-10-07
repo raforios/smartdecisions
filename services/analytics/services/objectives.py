@@ -19,7 +19,7 @@
     supplies a default when the account never set one.
 '''
 from datetime import date
-from typing import Dict, Final, List, Optional, Tuple
+from typing import Final
 
 import pandas as pd
 
@@ -64,7 +64,7 @@ _DATE = 'date'
 
 # Descriptors carried from the sales rows onto the score, so the matrix can be
 # cut by any of them without a second lookup.
-_DESCRIPTORS: Final[Tuple[str, ...]] = (
+_DESCRIPTORS: Final[tuple[str, ...]] = (
     'pos_name', 'cluster', 'supervisor', 'market', 'channel', 'seller'
 )
 
@@ -73,7 +73,7 @@ _DESCRIPTORS: Final[Tuple[str, ...]] = (
 _NO_CLUSTER: Final[str] = 'UNASSIGNED'
 
 
-def resolve_policy(stored: Optional[Dict]) -> CommercialPolicySchema:
+def resolve_policy(stored: dict | None) -> CommercialPolicySchema:
     '''
         The yardstick to apply, the account's own where it set one.
 
@@ -81,7 +81,7 @@ def resolve_policy(stored: Optional[Dict]) -> CommercialPolicySchema:
         move the green cut should not have to restate the rest.
 
         Args:
-            stored (Dict | None): The policy as persisted, or None.
+            stored (dict | None): The policy as persisted, or None.
 
         Returns:
             CommercialPolicySchema: Every field resolved.
@@ -158,7 +158,7 @@ def _ratio(
 
 def _points(
     invoiced: float,
-    cluster: Optional[str],
+    cluster: str | None,
     policy: CommercialPolicySchema
 ) -> float:
     '''
@@ -195,7 +195,7 @@ def _invoiced_by_client_period(sales: pd.DataFrame) -> pd.DataFrame:
 
 def _collected_by_client_period(
     sales: pd.DataFrame,
-    collections: Optional[pd.DataFrame]
+    collections: pd.DataFrame | None
 ) -> pd.DataFrame:
     '''
         What was paid against each month's invoices.
@@ -281,7 +281,7 @@ def _descriptors_of(sales: pd.DataFrame) -> pd.DataFrame:
 def _score_rows(
     merged: pd.DataFrame,
     policy: CommercialPolicySchema
-) -> List[ClientScoreSchema]:
+) -> list[ClientScoreSchema]:
     '''
         Turns the merged figures into one score per client and month.
 
@@ -291,9 +291,9 @@ def _score_rows(
             policy (CommercialPolicySchema): The resolved policy.
 
         Returns:
-            List[ClientScoreSchema]: The scores.
+            list[ClientScoreSchema]: The scores.
     '''
-    scores: List[ClientScoreSchema] = []
+    scores: list[ClientScoreSchema] = []
     for row in merged.to_dict('records'):
         target = _amount(row[_TARGET])
         invoiced = _amount(row.get('invoiced_amount'))
@@ -336,7 +336,7 @@ def _amount(value: object) -> float:
     return 0.0 if value is None or pd.isna(value) else float(value)
 
 
-def _text(value: object) -> Optional[str]:
+def _text(value: object) -> str | None:
     '''
         A descriptor as text, or nothing when the dataset has none.
 
@@ -350,20 +350,20 @@ def _text(value: object) -> Optional[str]:
 
 
 def _matrix(
-    scores: List[ClientScoreSchema],
+    scores: list[ClientScoreSchema],
     total_target: float
-) -> List[ClusterCellSchema]:
+) -> list[ClusterCellSchema]:
     '''
         The cluster-by-semaphore matrix, with each cell's weight.
 
         Args:
-            scores (List[ClientScoreSchema]): Every scored client-month.
+            scores (list[ClientScoreSchema]): Every scored client-month.
             total_target (float): The whole objective, for the weights.
 
         Returns:
-            List[ClusterCellSchema]: The cells, heaviest first.
+            list[ClusterCellSchema]: The cells, heaviest first.
     '''
-    cells: Dict[Tuple[str, Semaphore], Dict[str, float]] = {}
+    cells: dict[tuple[str, Semaphore], dict[str, float]] = {}
     for score in scores:
         key = (score.cluster or _NO_CLUSTER, score.invoiced_semaphore)
         cell = cells.setdefault(key, {'clients': 0.0, 'target': 0.0,
@@ -391,10 +391,10 @@ def _matrix(
 
 
 def select_objective_periods(
-    objectives: Optional[pd.DataFrame],
-    date_from: Optional[date],
-    date_to: Optional[date]
-) -> Tuple[Optional[pd.DataFrame], List[str]]:
+    objectives: pd.DataFrame | None,
+    date_from: date | None,
+    date_to: date | None
+) -> tuple[pd.DataFrame | None, list[str]]:
     '''
         The months to judge, and every month the file has.
 
@@ -409,7 +409,7 @@ def select_objective_periods(
             date_to (date | None): Last day of the window.
 
         Returns:
-            Tuple[pd.DataFrame | None, List[str]]: The objectives of the chosen
+            tuple[pd.DataFrame | None, list[str]]: The objectives of the chosen
                 months, and the months available, oldest first.
     '''
     if objectives is None or objectives.empty or _PERIOD not in objectives.columns:
@@ -427,9 +427,9 @@ def select_objective_periods(
 
 def build_objectives(
     sales: pd.DataFrame,
-    objectives: Optional[pd.DataFrame],
-    collections: Optional[pd.DataFrame],
-    stored_policy: Optional[Dict]
+    objectives: pd.DataFrame | None,
+    collections: pd.DataFrame | None,
+    stored_policy: dict | None
 ) -> ObjectivesBlockSchema:
     '''
         Builds the attainment block for a dataset.
@@ -448,7 +448,7 @@ def build_objectives(
                 them nothing is collected and every invoice reads as debt,
                 which is what an account that has not loaded payments should
                 see.
-            stored_policy (Dict | None): The account's policy, if it set one.
+            stored_policy (dict | None): The account's policy, if it set one.
 
         Returns:
             ObjectivesBlockSchema: Totals, matrix and every client behind it.
@@ -496,15 +496,15 @@ def build_objectives(
 
 
 def _totals(
-    scores: List[ClientScoreSchema],
-    periods: List[str]
+    scores: list[ClientScoreSchema],
+    periods: list[str]
 ) -> ObjectivesTotalsSchema:
     '''
         The header line over every scored client-month.
 
         Args:
-            scores (List[ClientScoreSchema]): The scores.
-            periods (List[str]): The months covered.
+            scores (list[ClientScoreSchema]): The scores.
+            periods (list[str]): The months covered.
 
         Returns:
             ObjectivesTotalsSchema: The totals.

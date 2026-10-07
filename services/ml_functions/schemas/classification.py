@@ -1,7 +1,6 @@
 '''
     Classification Schemas (Request/Response)
 '''
-from typing import Union, List
 from pydantic import BaseModel, Field
 
 from schemas.base import NumPyValidatorBase
@@ -10,7 +9,7 @@ class SigmoidBatchRequest(BaseModel): # pylint: disable=too-few-public-methods
     '''
         Request model for calculating sigmoid on a batch of values.
     '''
-    z_values: List[Union[float, int]] = Field(
+    z_values: list[float | int] = Field(
         ...,
         description = 'List of input values (z) for sigmoid calculation.'
     )
@@ -29,15 +28,15 @@ class ComputeCostLogisticRequest(NumPyValidatorBase):
     '''
         Request model for calculating logistic regression cost.
     '''
-    x_matrix: List[List[float]] = Field(
+    x_matrix: list[list[float]] = Field(
         ...,
         description = 'Feature matrix X for logistic regression cost calculation.'
     )
-    y: List[float] = Field(
+    y: list[float] = Field(
         ...,
         description = 'Target vector y for logistic regression cost calculation.'
     )
-    w: List[float] = Field(
+    w: list[float] = Field(
         ...,
         description = 'Weight parameters w for logistic regression cost calculation.'
     )
@@ -63,15 +62,15 @@ class ComputeGradientLogisticRequest(NumPyValidatorBase):
     '''
         Request model for calculating logistic regression gradient.
     '''
-    x_matrix: List[List[float]] = Field(
+    x_matrix: list[list[float]] = Field(
         ...,
         description = 'Feature matrix X for logistic regression gradient calculation.'
     )
-    y: List[float] = Field(
+    y: list[float] = Field(
         ...,
         description = 'Target vector y for logistic regression gradient calculation.'
     )
-    w: List[float] = Field(
+    w: list[float] = Field(
         ...,
         description = 'Weight parameters w for logistic regression gradient calculation.'
     )
@@ -101,7 +100,7 @@ class ComputeGradientLogisticResponse(BaseModel):
         ...,
         description = 'Gradient of cost with respect to bias (b) for logistic regression.'
     )
-    dj_dw: List[float] = Field(
+    dj_dw: list[float] = Field(
         ...,
         description = 'Gradient of cost with respect to weights (w) for logistic regression.'
     )
@@ -121,15 +120,15 @@ class GradientDescentLogisticRequest(NumPyValidatorBase):
     '''
         Request model for performing logistic regression gradient descent.
     '''
-    x_matrix: List[List[float]] = Field(
+    x_matrix: list[list[float]] = Field(
         ...,
         description = 'Feature matrix X for logistic regression gradient descent.'
     )
-    y: List[float] = Field(
+    y: list[float] = Field(
         ...,
         description = 'Target vector y for logistic regression gradient descent.'
     )
-    w_in: List[float] = Field(
+    w_in: list[float] = Field(
         ...,
         description = 'Initial weight parameters w for logistic regression.'
     )
@@ -165,7 +164,7 @@ class GradientDescentLogisticResponse(BaseModel):
     '''
         Response model for logistic regression gradient descent results.
     '''
-    w: List[float] = Field(
+    w: list[float] = Field(
         ...,
         description = 'Final weight parameters w after logistic regression training.'
     )
@@ -173,11 +172,11 @@ class GradientDescentLogisticResponse(BaseModel):
         ...,
         description = 'Final bias parameter b after logistic regression training.'
     )
-    J_history: List[float] = Field(
+    J_history: list[float] = Field(
         ...,
         description = 'History of cost function J during logistic regression training.'
     )
-    p_history: List[List[Union[List[float], float]]] = Field(
+    p_history: list[list[list[float] | float]] = Field(
         ...,
         description = 'History of [w_epoch, b_epoch] during logistic regression training.'
     )
@@ -199,11 +198,11 @@ class PredictLogisticRequest(NumPyValidatorBase):
     '''
         Request model for logistic regression prediction.
     '''
-    x_matrix: List[List[float]] = Field(
+    x_matrix: list[list[float]] = Field(
         ...,
         description = 'Feature matrix X for logistic regression prediction.'
     )
-    w: List[float] = Field(
+    w: list[float] = Field(
         ...,
         description = 'Weight parameters w (from trained logistic model).'
     )
@@ -228,7 +227,7 @@ class PredictLogisticResponse(BaseModel):
     '''
         Response model for logistic regression prediction.
     '''
-    predictions: List[int] = Field(
+    predictions: list[int] = Field(
         ...,
         description = 'List of predicted labels (0 or 1) from logistic regression.'
     )

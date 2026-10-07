@@ -12,7 +12,7 @@
         IN CREATION; a route is deleted only in that state.
       - Status moves IN CREATION -> ACTIVE, then ACTIVE <-> INACTIVE.
 '''
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -51,7 +51,7 @@ _STOP_POSITION_DECIMALS = _SETTINGS['STOP_POSITION_DECIMALS']
 
 # Where a route may go from each status. IN CREATION only opens; ACTIVE and
 # INACTIVE toggle each other.
-_ALLOWED_TRANSITIONS: Dict[PlannedRouteStatusEnum, Tuple[PlannedRouteStatusEnum, ...]] = {
+_ALLOWED_TRANSITIONS: dict[PlannedRouteStatusEnum, tuple[PlannedRouteStatusEnum, ...]] = {
     PlannedRouteStatusEnum.IN_CREATION: (PlannedRouteStatusEnum.ACTIVE,),
     PlannedRouteStatusEnum.ACTIVE: (PlannedRouteStatusEnum.INACTIVE,),
     PlannedRouteStatusEnum.INACTIVE: (PlannedRouteStatusEnum.ACTIVE,)
@@ -93,7 +93,7 @@ def get_planned_route(
 def list_planned_routes(
     dynamodb_resource: ServiceResource,
     owner_email: str
-) -> List[PlannedRouteItem]:
+) -> list[PlannedRouteItem]:
     '''
         Every route of the owner, oldest first (then by code).
 
@@ -102,7 +102,7 @@ def list_planned_routes(
             owner_email (str): Authenticated account.
 
         Returns:
-            List[PlannedRouteItem]: Route items with native numbers.
+            list[PlannedRouteItem]: Route items with native numbers.
     '''
     items = query_by_partition(
         dynamodb_resource = dynamodb_resource,
@@ -198,9 +198,9 @@ def to_route_response(route: PlannedRouteItem) -> PlannedRouteResponseSchema:
 
 
 def _assert_route_code_free(
-    routes: List[PlannedRouteItem],
+    routes: list[PlannedRouteItem],
     route_code: str,
-    exclude_id: Optional[str] = None
+    exclude_id: str | None = None
 ) -> None:
     '''
         Raises if another route of the same owner already carries `route_code`.
@@ -225,9 +225,9 @@ def _assert_in_creation(route: PlannedRouteItem) -> None:
 
 
 def _assert_sequence_free(
-    points: List[PlannedPointItem],
+    points: list[PlannedPointItem],
     secuencial: int,
-    exclude_id: Optional[str] = None
+    exclude_id: str | None = None
 ) -> None:
     '''
         Raises if another stop of the route already has that visiting order.
@@ -271,8 +271,8 @@ def build_point_item(point: PlannedPointSchema) -> PlannedPointItem:
 
 def build_route_item(
     owner_email: str,
-    header: Dict[str, Any],
-    points: List[PlannedPointItem]
+    header: dict[str, Any],
+    points: list[PlannedPointItem]
 ) -> PlannedRouteItem:
     '''
         Route item as stored: header fields, the owner, a fresh id, IN CREATION
@@ -280,9 +280,9 @@ def build_route_item(
 
         Args:
             owner_email (str): Authenticated account.
-            header (Dict[str, Any]): route_name, route_code, description,
+            header (dict[str, Any]): route_name, route_code, description,
                 seller and the optional plan_date, start_point and end_point.
-            points (List[PlannedPointItem]): Stop items.
+            points (list[PlannedPointItem]): Stop items.
 
         Returns:
             PlannedRouteItem: Route item ready to be written.
@@ -328,7 +328,7 @@ def create_planned_route(
     _assert_route_code_free(
         list_planned_routes(dynamodb_resource, owner_email), route_data.route_code
     )
-    points: List[PlannedPointItem] = []
+    points: list[PlannedPointItem] = []
     for point in route_data.points:
         _assert_sequence_free(points, point.secuencial)
         points.append(build_point_item(point))
@@ -347,7 +347,7 @@ def filter_planned_routes(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     filters: PlannedRouteFilterRequestSchema
-) -> List[PlannedRouteItem]:
+) -> list[PlannedRouteItem]:
     '''
         The owner's routes narrowed by every filter given.
 
@@ -357,7 +357,7 @@ def filter_planned_routes(
             filters (PlannedRouteFilterRequestSchema): Optional criteria.
 
         Returns:
-            List[PlannedRouteItem]: Matching route items.
+            list[PlannedRouteItem]: Matching route items.
     '''
     routes = list_planned_routes(dynamodb_resource, owner_email)
     if filters.planned_route_ids:
@@ -376,9 +376,9 @@ def filter_planned_routes(
 
 
 def _within_window(
-    routes: List[PlannedRouteItem],
+    routes: list[PlannedRouteItem],
     filters: PlannedRouteFilterRequestSchema
-) -> List[PlannedRouteItem]:
+) -> list[PlannedRouteItem]:
     '''
         Narrows routes to the window the caller asked about.
 
@@ -388,12 +388,12 @@ def _within_window(
         should — otherwise a date filter would hide the templates for good.
 
         Args:
-            routes (List[PlannedRouteItem]): Routes already narrowed by the
+            routes (list[PlannedRouteItem]): Routes already narrowed by the
                 other criteria.
             filters (PlannedRouteFilterRequestSchema): The window asked for.
 
         Returns:
-            List[PlannedRouteItem]: Routes inside it.
+            list[PlannedRouteItem]: Routes inside it.
     '''
     if filters.date_from is None and filters.date_to is None:
         return routes
@@ -514,7 +514,7 @@ def add_planned_point(
     owner_email: str,
     route_id: str,
     point_data: PlannedPointSchema
-) -> Tuple[PlannedRouteItem, PlannedPointItem]:
+) -> tuple[PlannedRouteItem, PlannedPointItem]:
     '''
         Adds a stop to a route being built.
 
@@ -525,7 +525,7 @@ def add_planned_point(
             point_data (PlannedPointSchema): The new stop.
 
         Returns:
-            Tuple[PlannedRouteItem, PlannedPointItem]: The updated route and the new stop.
+            tuple[PlannedRouteItem, PlannedPointItem]: The updated route and the new stop.
     '''
     route = get_planned_route(dynamodb_resource, owner_email, route_id)
     _assert_in_creation(route)
@@ -546,7 +546,7 @@ def update_planned_point(
     route_id: str,
     point_id: str,
     point_data: PlannedPointUpdateSchema
-) -> Tuple[PlannedRouteItem, PlannedPointItem]:
+) -> tuple[PlannedRouteItem, PlannedPointItem]:
     '''
         Edits a stop of a route being built.
 
@@ -558,7 +558,7 @@ def update_planned_point(
             point_data (PlannedPointUpdateSchema): Fields to change.
 
         Returns:
-            Tuple[PlannedRouteItem, PlannedPointItem]: The updated route and stop.
+            tuple[PlannedRouteItem, PlannedPointItem]: The updated route and stop.
     '''
     route = get_planned_route(dynamodb_resource, owner_email, route_id)
     _assert_in_creation(route)

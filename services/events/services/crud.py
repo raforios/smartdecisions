@@ -4,7 +4,7 @@
 import json
 import decimal
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 from boto3.resources.base import ServiceResource
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError as AWSClientError
@@ -32,9 +32,9 @@ def _convert_floats_to_decimals(data: Any) -> Any:
 def create_item(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    item_data: Dict[str, Any],
+    item_data: dict[str, Any],
     unique_key_attribute: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Adds a new item to a DynamoDB table, enforcing uniqueness on the
         partition-key attribute supplied by the caller.
@@ -42,12 +42,12 @@ def create_item(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            item_data (Dict[str, Any]): Item to insert.
+            item_data (dict[str, Any]): Item to insert.
             unique_key_attribute (str): Attribute used to enforce uniqueness via
                 an 'attribute_not_exists' condition (typically the partition key).
 
         Returns:
-            Dict[str, Any]: The persisted item.
+            dict[str, Any]: The persisted item.
 
         Raises:
             RegisterAlreadyExistsError: If an item with the same key already exists.
@@ -80,7 +80,7 @@ def get_item_by_id(
     dynamodb_resource: ServiceResource,
     table_name: str,
     item_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Retrieves an item from a DynamoDB table by its ID.
     '''
@@ -112,7 +112,7 @@ SCAN_TIME_BUDGET_SECONDS = 18
 
 
 def _build_filter_expression(
-    filters: Dict[str, Any],
+    filters: dict[str, Any],
     date_attribute: str
 ):
     '''
@@ -124,7 +124,7 @@ def _build_filter_expression(
         empty.
 
         Args:
-            filters (Dict[str, Any]): Query parameters, without paging keys.
+            filters (dict[str, Any]): Query parameters, without paging keys.
             date_attribute (str): Item attribute holding the ISO timestamp.
 
         Returns:
@@ -154,8 +154,8 @@ def _build_filter_expression(
 
 
 def _find_usable_index(
-    table, filters: Dict[str, Any], partition_attribute: Optional[str]
-) -> Optional[Dict[str, str]]:
+    table, filters: dict[str, Any], partition_attribute: str | None
+) -> dict[str, str] | None:
     '''
         Looks for a secondary index that can answer this query as a Query
         instead of a Scan.
@@ -167,12 +167,12 @@ def _find_usable_index(
 
         Args:
             table: boto3 Table resource.
-            filters (Dict[str, Any]): Query parameters, without paging keys.
-            partition_attribute (Optional[str]): Attribute the service's index
+            filters (dict[str, Any]): Query parameters, without paging keys.
+            partition_attribute (str | None): Attribute the service's index
                 is partitioned by. None means "always Scan".
 
         Returns:
-            Optional[Dict[str, str]]: {'name', 'partition', 'sort'} or None to
+            dict[str, str] | None: {'name', 'partition', 'sort'} or None to
                 fall back to Scan.
     '''
     if not partition_attribute or not filters.get(partition_attribute):
@@ -194,8 +194,8 @@ def _find_usable_index(
 
 
 def _index_key_condition(
-    index: Dict[str, str],
-    filters: Dict[str, Any]
+    index: dict[str, str],
+    filters: dict[str, Any]
 ):
     '''
         Builds the KeyConditionExpression for an index-backed listing: the
@@ -219,28 +219,28 @@ def _index_key_condition(
 
 
 def _cursor_from_item(
-    item: Dict[str, Any],
-    key_schema: List[Dict[str, str]]
-) -> Dict[str, Any]:
+    item: dict[str, Any],
+    key_schema: list[dict[str, str]]
+) -> dict[str, Any]:
     '''
         Builds the pagination cursor pointing at a specific item, so the next
         page resumes exactly where this one stopped.
 
         Args:
-            item (Dict[str, Any]): Last item actually returned to the caller.
-            key_schema (List[Dict[str, str]]): Table key schema from boto3.
+            item (dict[str, Any]): Last item actually returned to the caller.
+            key_schema (list[dict[str, str]]): Table key schema from boto3.
 
         Returns:
-            Dict[str, Any]: ExclusiveStartKey for the following request.
+            dict[str, Any]: ExclusiveStartKey for the following request.
     '''
     return {key['AttributeName']: item[key['AttributeName']] for key in key_schema}
 
 
 def _build_read_plan(
     table,
-    filters: Dict[str, Any],
+    filters: dict[str, Any],
     limit: int,
-    options: Dict[str, Any]
+    options: dict[str, Any]
 ):
     '''
         Decides how the listing will be read and with which arguments.
@@ -251,16 +251,16 @@ def _build_read_plan(
 
         Args:
             table: boto3 Table resource.
-            filters (Dict[str, Any]): Query parameters, without paging keys.
+            filters (dict[str, Any]): Query parameters, without paging keys.
             limit (int): Page size requested by the caller.
-            options (Dict[str, Any]): 'date_attribute' and, optionally,
+            options (dict[str, Any]): 'date_attribute' and, optionally,
                 'index_partition_attribute'.
 
         Returns:
             tuple: (callable that reads one page, kwargs for it).
     '''
     date_attribute = options['date_attribute']
-    read_kwargs: Dict[str, Any] = {'Limit': limit}
+    read_kwargs: dict[str, Any] = {'Limit': limit}
     index = _find_usable_index(table, filters, options.get('index_partition_attribute'))
 
     if not index:
@@ -282,7 +282,7 @@ def _build_read_plan(
 
 def _read_until_full(
     read_page,
-    read_kwargs: Dict[str, Any],
+    read_kwargs: dict[str, Any],
     limit: int
 ):
     '''
@@ -296,13 +296,13 @@ def _read_until_full(
 
         Args:
             read_page: Bound table.query or table.scan.
-            read_kwargs (Dict[str, Any]): Arguments for it; mutated per page.
+            read_kwargs (dict[str, Any]): Arguments for it; mutated per page.
             limit (int): Items the caller asked for.
 
         Returns:
             tuple: (items gathered, cursor to continue or None).
     '''
-    items: List[Dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
     cursor = None
     deadline = time.monotonic() + SCAN_TIME_BUDGET_SECONDS
     while True:
@@ -317,10 +317,10 @@ def _read_until_full(
 def get_all_records_paginated(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    query_params: Dict[str, Any],
+    query_params: dict[str, Any],
     date_attribute: str = DEFAULT_DATE_ATTRIBUTE,
-    index_partition_attribute: Optional[str] = None,
-) -> Dict[str, Any]:
+    index_partition_attribute: str | None = None,
+) -> dict[str, Any]:
     '''
         Retrieves items from a DynamoDB table with optional pagination and
         filters.
@@ -334,16 +334,16 @@ def get_all_records_paginated(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Table to read.
-            query_params (Dict[str, Any]): Filters plus `limit` and
+            query_params (dict[str, Any]): Filters plus `limit` and
                 `last_evaluated_key`.
             date_attribute (str): Item attribute the date range applies to.
-            index_partition_attribute (Optional[str]): Attribute the service's
+            index_partition_attribute (str | None): Attribute the service's
                 secondary index is partitioned by. When given and present in
                 the filters, the listing is served by a Query instead of a
                 Scan. Omit it and the behaviour is the previous Scan.
 
         Returns:
-            Dict[str, Any]: 'items' and the 'last_evaluated_key' to continue.
+            dict[str, Any]: 'items' and the 'last_evaluated_key' to continue.
     '''
     try:
         table = dynamodb_resource.Table(table_name)
@@ -411,8 +411,8 @@ def get_all_records_paginated(
 def get_item_by_key(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    key: Dict[str, Any]
-) -> Dict[str, Any]:
+    key: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Retrieves an item from a DynamoDB table by its primary key (single or
         composite). Raises RegisterNotFoundError if the item does not exist.
@@ -420,11 +420,11 @@ def get_item_by_key(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            key (Dict[str, Any]): Primary key mapping (e.g., {'ci': '123'} or
+            key (dict[str, Any]): Primary key mapping (e.g., {'ci': '123'} or
                 {'ci': '123', 'attendance_date': '2026-05-04'}).
 
         Returns:
-            Dict[str, Any]: The retrieved item.
+            dict[str, Any]: The retrieved item.
     '''
     table = dynamodb_resource.Table(table_name)
     response = table.get_item(Key = key)
@@ -441,8 +441,8 @@ def get_item_by_key(
 def find_item_by_key(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    key: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+    key: dict[str, Any]
+) -> dict[str, Any] | None:
     '''
         Retrieves an item from a DynamoDB table by its primary key, returning
         None if the item does not exist (no exception is raised).
@@ -450,10 +450,10 @@ def find_item_by_key(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            key (Dict[str, Any]): Primary key mapping.
+            key (dict[str, Any]): Primary key mapping.
 
         Returns:
-            Optional[Dict[str, Any]]: The retrieved item or None.
+            dict[str, Any] | None: The retrieved item or None.
     '''
     table = dynamodb_resource.Table(table_name)
     response = table.get_item(Key = key)
@@ -463,10 +463,10 @@ def find_item_by_key(
 def put_unique_composite_item(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    item_data: Dict[str, Any],
+    item_data: dict[str, Any],
     partition_key: str,
     sort_key: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Inserts an item into a composite-key DynamoDB table enforcing
         uniqueness on the (partition_key, sort_key) tuple.
@@ -474,12 +474,12 @@ def put_unique_composite_item(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            item_data (Dict[str, Any]): Item to insert.
+            item_data (dict[str, Any]): Item to insert.
             partition_key (str): Partition key attribute name.
             sort_key (str): Sort key attribute name.
 
         Returns:
-            Dict[str, Any]: The persisted item.
+            dict[str, Any]: The persisted item.
 
         Raises:
             RegisterAlreadyExistsError: If a record with the same composite
@@ -519,9 +519,9 @@ def query_by_partition(
     table_name: str,
     partition_key: str,
     partition_value: str,
-    sort_key: Optional[str] = None,
-    sort_between: Optional[Dict[str, str]] = None
-) -> List[Dict[str, Any]]:
+    sort_key: str | None = None,
+    sort_between: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     '''
         Performs an efficient Query (not Scan) on a composite-key table by
         partition value, optionally bounding the sort key.
@@ -531,12 +531,12 @@ def query_by_partition(
             table_name (str): Target DynamoDB table.
             partition_key (str): Partition key attribute name.
             partition_value (str): Partition key value to match.
-            sort_key (Optional[str]): Sort key attribute name (when bounding).
-            sort_between (Optional[Dict[str, str]]): Bounds for the sort key,
+            sort_key (str | None): Sort key attribute name (when bounding).
+            sort_between (dict[str, str] | None): Bounds for the sort key,
                 accepting 'from' and/or 'to' (inclusive).
 
         Returns:
-            List[Dict[str, Any]]: Matched items.
+            list[dict[str, Any]]: Matched items.
     '''
     table = dynamodb_resource.Table(table_name)
     key_condition = Key(partition_key).eq(partition_value)

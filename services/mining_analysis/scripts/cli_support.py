@@ -7,10 +7,10 @@
     shapes; here it is written once, so a fix to the session handling lands
     everywhere.
 '''
+from collections.abc import Iterator
 import sys
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Iterator
 
 from sqlalchemy.orm import Session
 

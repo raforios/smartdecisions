@@ -8,7 +8,6 @@
     while this microservice reads the same shape from DynamoDB via
     `services.optimization_utils.get_route_points`.
 '''
-from typing import List, Optional, Type
 import pandas as pd
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -49,7 +48,7 @@ from services.utils import audit_event, handle_service_errors
 # ---------------------------------------------------------------------------
 # Data-source adapter
 # ---------------------------------------------------------------------------
-def _route_points_to_df(items: List[dict]) -> pd.DataFrame:
+def _route_points_to_df(items: list[dict]) -> pd.DataFrame:
     '''
         Converts the Dynamo response (RoutePoint items) into the DataFrame
         shape the algorithm expects: columns day, client_id, y (lat), x (lon).
@@ -88,7 +87,7 @@ def _load_dataframe(
 
 def _df_to_pydantic(
     df: pd.DataFrame,
-    model: Type[BaseModel]
+    model: type[BaseModel]
 ) -> list:
     '''
         Transforms a dataframe into a list of Pydantic instances.
@@ -105,7 +104,7 @@ def _ordered_route_models(
     route_id: int,
     day: int,
     owner_email: str
-) -> List[OptimizationResponse]:
+) -> list[OptimizationResponse]:
     '''
         Computes the ordered linear-distance route and returns it as the
         OptimizationResponse list. Shared by `data_ordered_controller` and
@@ -130,7 +129,7 @@ async def preparing_data_controller(
     day: int,
     request: Request, # pylint: disable=unused-argument
     current_user: str
-) -> Optional[List[DataMapResponse]]:
+) -> list[DataMapResponse] | None:
     '''
         Returns the base map data (geolocated client points tagged with color).
     '''
@@ -146,7 +145,7 @@ async def data_ordered_controller(
     day: int,
     request: Request, # pylint: disable=unused-argument
     current_user: str
-) -> Optional[List[OptimizationResponse]]:
+) -> list[OptimizationResponse] | None:
     '''
         Returns the ordered linear-distance pairs (origin → target).
     '''
@@ -161,7 +160,7 @@ async def optimization_algorithm_controller(
     day: int,
     request: Request, # pylint: disable=unused-argument
     current_user: str
-) -> Optional[List[RouteResponse]]:
+) -> list[RouteResponse] | None:
     '''
         Runs the full route-optimization pipeline (ordering + OSRM projection).
 

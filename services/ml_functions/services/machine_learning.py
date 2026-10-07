@@ -4,7 +4,7 @@
 '''
 import math
 import copy
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import numpy as np
 from services.logger_config import custom_logger as logger
@@ -43,7 +43,7 @@ def compute_gradient(
     y: np.ndarray,
     w: float,
     b: float
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     '''
     Computes the gradient for linear regression
 
@@ -74,8 +74,8 @@ def gradient_descent(
     y: np.ndarray,
     w_in: float,
     b_in: float,
-    config: Dict[str, Any]
-) -> Tuple[float, float, List[float], List[Tuple[float, float]]]:
+    config: dict[str, Any]
+) -> tuple[float, float, list[float], list[tuple[float, float]]]:
     '''
     Performs gradient descent to fit w,b. Updates w,b by taking
     num_iters gradient steps with learning rate alpha
@@ -84,7 +84,7 @@ def gradient_descent(
       x (ndarray (m,)) : Data, m examples
       y (ndarray (m,)) : target values
       w_in,b_in (scalar): initial values of model parameters
-      config (Dict): {
+      config (dict): {
         alpha (float):     Learning rate
         num_iters (int):   number of iterations to run gradient descent
       }
@@ -92,7 +92,7 @@ def gradient_descent(
     Returns:
       w (scalar): Updated value of parameter after running gradient descent
       b (scalar): Updated value of parameter after running gradient descent
-      J_history (List): History of cost values
+      J_history (list): History of cost values
       p_history (list): History of parameters [w,b]
     '''
 
@@ -193,7 +193,7 @@ def compute_gradient_matrix(
     y: np.ndarray,
     w: np.ndarray,
     b: float
-) -> Tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float]:
     '''
     Computes the gradient for linear regression 
 
@@ -220,8 +220,8 @@ def gradient_descent_matrix(
     y: np.ndarray,
     w_in: np.ndarray,
     b_in: float,
-    config: Dict[str, Any]
-) -> Tuple[np.ndarray, float, List[float]]:
+    config: dict[str, Any]
+) -> tuple[np.ndarray, float, list[float]]:
     '''
     Performs batch gradient descent to learn w and b. Updates w and b by taking 
     num_iters gradient steps with learning rate alpha
@@ -233,7 +233,7 @@ def gradient_descent_matrix(
       b_in (scalar)      : initial model parameter
       cost_function      : function to compute cost
       gradient_function  : function to compute the gradient
-      config (Dict): {
+      config (dict): {
         alpha (float):     Learning rate
         num_iters (int):   number of iterations to run gradient descent
       }
@@ -299,7 +299,7 @@ def gradient_descent_matrix(
 # ----------------------------------------------------------------
 def zscore_normalize_features(
     x_matrix: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     '''
     computes  x_matrix, zcore normalized by column
     
@@ -388,7 +388,7 @@ def compute_gradient_logistic(
     y: np.ndarray,
     w: np.ndarray,
     b: float
-) -> Tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float]:
     '''
     Computes the gradient for logistic regression
     Args:
@@ -419,8 +419,8 @@ def gradient_descent_logistic(
     y: np.ndarray,
     w_in: np.ndarray,
     b_in: float,
-    config: Dict[str, Any]
-) -> Tuple[np.ndarray, float, List[float], List[np.ndarray]]:
+    config: dict[str, Any]
+) -> tuple[np.ndarray, float, list[float], list[np.ndarray]]:
     '''
     Performs batch gradient descent to learn theta. Updates theta by taking
     num_iters gradient steps with learning rate alpha
@@ -430,7 +430,7 @@ def gradient_descent_logistic(
       y:    (ndarray Shape (m,))  target value
       w_in: (ndarray Shape (n,))  Initial values of parameters of the model
       b_in: (scalar)              Initial value of parameter of the model
-      config (Dict): {
+      config (dict): {
         alpha (float):     Learning rate
         num_iters (int):   number of iterations to run gradient descent
       }

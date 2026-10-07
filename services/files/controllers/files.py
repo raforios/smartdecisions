@@ -4,7 +4,6 @@
 import os
 import base64
 from io import StringIO, BytesIO
-from typing import List, Optional
 import pandas as pd
 import boto3
 from schemas.files import FileUploadData
@@ -22,7 +21,7 @@ async def read_data_from_s3(
     bucket_name: str,
     file_key: str,
     current_user: str,
-    delimiter: Optional[str] = None
+    delimiter: str | None = None
 ) -> dict:
     '''
         Loads data from a given S3 bucket and processes it based on file extension.
@@ -141,7 +140,7 @@ async def list_s3_files(
     bucket_name: str,
     prefix: str,
     current_user: str
-) -> List[str]:
+) -> list[str]:
     '''
         Lists files in a given S3 bucket with an optional prefix.
     '''

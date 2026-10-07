@@ -6,7 +6,6 @@
     changes the master is audited, because a coordinate that moves is a route
     that changes and somebody has to be able to say who moved it.
 '''
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -67,7 +66,7 @@ async def upsert_clients_controller(
 @handle_service_errors('INGEST')
 async def list_clients_controller(
     dynamodb_resource: ServiceResource,
-    seller: Optional[str],
+    seller: str | None,
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> ClientListResponseSchema:
@@ -76,7 +75,7 @@ async def list_clients_controller(
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
-            seller (Optional[str]): Salesperson the client is assigned to.
+            seller (str | None): Salesperson the client is assigned to.
             current_user (str): Authenticated caller and owner of the data.
             request (Request): Incoming request, used by the decorators.
 

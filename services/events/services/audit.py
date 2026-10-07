@@ -1,7 +1,7 @@
 '''
     Business logic services for the Audit Module.
 '''
-from typing import Dict, Any
+from typing import Any
 from boto3.resources.base import ServiceResource
 from schemas.audit import AuditRecordQuerySchema
 from services.crud import (
@@ -22,8 +22,8 @@ AUDIT_TABLE_NAME = ENV_VARS['DYNAMODB_TABLE_NAME_AUDIT']
 @handle_service_errors
 def create_audit_record(
     dynamodb_resource: ServiceResource,
-    record_data: Dict[str, Any]
-) -> Dict[str, Any]:
+    record_data: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Service to create a new audit record in the database.
     '''
@@ -39,7 +39,7 @@ def create_audit_record(
 def get_audit_records(
     dynamodb_resource: ServiceResource,
     query_params: AuditRecordQuerySchema
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Retrieves a paginated list of audit records with optional filters.
     '''

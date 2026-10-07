@@ -7,7 +7,6 @@
 '''
 from enum import Enum
 from datetime import date
-from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.environment import load_and_validate_env_vars
@@ -53,7 +52,7 @@ class OptimizationQueryParams(BaseModel):
 
     route_id: int = Field(..., gt = 0, description = 'Identifier of the planned route.')
     day: int = Field(..., ge = 0, description = 'Day index within the route plan.')
-    dist: Optional[int] = Field(
+    dist: int | None = Field(
         default = 1500,
         ge = 100,
         le = 50000,
@@ -130,7 +129,7 @@ class PlanQueryParams(BaseModel):
         There is deliberately no route_id or day here: both are derived from the
         clients' own geography, so the module works with any sales export.
     '''
-    seller: Optional[str] = Field(
+    seller: str | None = Field(
         default = None, max_length = 120,
         description = 'Restrict the plan to one salesperson\'s clients.'
     )
@@ -138,11 +137,11 @@ class PlanQueryParams(BaseModel):
         default = DEFAULT_PLAN_DAYS, ge = 1, le = 12,
         description = 'How many visit days to spread the clients over.'
     )
-    date_from: Optional[str] = Field(
+    date_from: str | None = Field(
         default = None, pattern = r'^\d{4}-\d{2}-\d{2}$',
         description = 'Inclusive start of the period, YYYY-MM-DD.'
     )
-    date_to: Optional[str] = Field(
+    date_to: str | None = Field(
         default = None, pattern = r'^\d{4}-\d{2}-\d{2}$',
         description = 'Inclusive end of the period, YYYY-MM-DD.'
     )
@@ -160,7 +159,7 @@ class RouteStop(BaseModel):
     longitude: float
     amount: float = Field(..., description = 'What the client bought in the period (Bs).')
     segment: str = Field(..., description = "'HIGH', 'MEDIUM' or 'LOW'.")
-    last_purchase: Optional[str] = None
+    last_purchase: str | None = None
 
 
 class DayRoute(BaseModel):
@@ -190,7 +189,7 @@ class RoutePlanResponse(BaseModel):
         default_factory = list,
         description = 'Salespeople present in the dataset, for the UI selector.'
     )
-    seller: Optional[str] = None
+    seller: str | None = None
     total_clients: int = 0
     days: list[DayRoute] = []
 
@@ -210,15 +209,15 @@ class PlansBySellerSchema(BaseModel):
     )
     day: int = Field(..., ge = 1, le = 12, description = 'Which of those days to plan.')
     plan_date: date = Field(..., description = 'The day the plans are meant to be run.')
-    date_from: Optional[str] = Field(
+    date_from: str | None = Field(
         default = None, pattern = r'^\d{4}-\d{2}-\d{2}$',
         description = 'Inclusive start of the period read, YYYY-MM-DD.'
     )
-    date_to: Optional[str] = Field(
+    date_to: str | None = Field(
         default = None, pattern = r'^\d{4}-\d{2}-\d{2}$',
         description = 'Inclusive end of the period read, YYYY-MM-DD.'
     )
-    sellers: Optional[List[str]] = Field(
+    sellers: list[str] | None = Field(
         default = None,
         description = 'Only these sellers. Left out, every seller in the file.'
     )
@@ -249,12 +248,12 @@ class PlansBySellerResponse(BaseModel):
     dataset_id: str
     day: int
     plan_date: date
-    created: List[SellerPlanSchema] = Field(default_factory = list)
-    without_stops: List[str] = Field(
+    created: list[SellerPlanSchema] = Field(default_factory = list)
+    without_stops: list[str] = Field(
         default_factory = list,
         description = 'Sellers with no placeable client on that day of their split.'
     )
-    already_planned: List[str] = Field(
+    already_planned: list[str] = Field(
         default_factory = list,
         description = 'Sellers who already had a plan with that code: left as they were.'
     )

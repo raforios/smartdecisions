@@ -1,7 +1,7 @@
 '''
     Classification: routes handler
 '''
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from services.security import get_current_user
@@ -34,7 +34,7 @@ router = APIRouter(prefix = '/v1/classification', tags = ['ML Classification'])
 async def sigmoid_batch_algorithm(
     request: SigmoidBatchRequest,
     current_user: str = Depends(get_current_user)
-) -> List[float]:
+) -> list[float]:
     '''
     Calculates the sigmoid function for each value in a list of `z_values`.
 
@@ -45,7 +45,7 @@ async def sigmoid_batch_algorithm(
                             (dependency-injected).
 
     Returns:
-        Union[float, numpy.ndarray]: The result of the sigmoid calculation.
+        float | numpy.ndarray: The result of the sigmoid calculation.
                                      Returns a float if a single value was passed,
                                      or a NumPy array if a list was passed.
 
@@ -101,7 +101,7 @@ async def compute_cost_logistic_route(
 async def compute_gradient_logistic_route(
     request: ComputeGradientLogisticRequest,
     current_user: str = Depends(get_current_user)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
     Calculates the gradient for logistic regression based on provided data, weights, and bias.
 
@@ -136,7 +136,7 @@ async def compute_gradient_logistic_route(
 async def train_logistic_regression_route(
     request: GradientDescentLogisticRequest,
     current_user: str = Depends(get_current_user)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
     Performs logistic regression gradient descent to find optimal parameters (w, b).
 

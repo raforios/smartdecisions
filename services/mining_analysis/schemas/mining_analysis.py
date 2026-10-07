@@ -3,7 +3,7 @@
 '''
 from datetime import datetime, date
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from pydantic import BaseModel, Field, ConfigDict
 
 class MiningStatus(str, Enum):
@@ -49,11 +49,11 @@ class MineralBase(BaseModel):
     unit: str = Field(..., max_length = 20, description = 'Measurement unit (e.g., LF, OT).')
 
     # New metadata fields
-    chemical_symbol: Optional[str] = Field(None, max_length = 10,
+    chemical_symbol: str | None = Field(None, max_length = 10,
                                     description = 'Chemical symbol (e.g., Sn, Pb).')
-    quoted_in: Optional[str] = Field(None, max_length = 50,
+    quoted_in: str | None = Field(None, max_length = 50,
                                     description = 'Reference market (e.g., LME, AM).')
-    method: Optional[str] = Field(None, max_length = 255, description = 'Calculation method.')
+    method: str | None = Field(None, max_length = 255, description = 'Calculation method.')
 
 class MineralResponseSchema(MineralBase, MiningAnalysisBaseSchema):
     '''
@@ -64,15 +64,15 @@ class MineralResponseSchema(MineralBase, MiningAnalysisBaseSchema):
         payload the consumers actually read — name, unit, symbol, market — is
         the same on both backends.
     '''
-    id: Optional[int] = None
-    created_at: Optional[datetime] = None
+    id: int | None = None
+    created_at: datetime | None = None
 
 class MiningPriceCreateSchema(BaseModel):
     ''' Schema for creating a price entry. '''
     mineral_id: int
     date: date
-    price_low: Optional[float] = None
-    price_high: Optional[float] = None
+    price_low: float | None = None
+    price_high: float | None = None
 
 class MiningPriceResponseSchema(MiningAnalysisBaseSchema):
     '''
@@ -81,10 +81,10 @@ class MiningPriceResponseSchema(MiningAnalysisBaseSchema):
         `id` is optional: on DynamoDB a quotation is identified by mineral and
         date, which is its key, and there is no surrogate row number to report.
     '''
-    id: Optional[int] = None
+    id: int | None = None
     date: date
     price_low: float
-    price_high: Optional[float]
+    price_high: float | None
     mineral: MineralResponseSchema
 
 class BulkUploadMiningResponseSchema(BaseModel):
@@ -116,18 +116,18 @@ class RoyaltySummaryItem(BaseModel):
     distribucion_muni_usd: float
 
     # KPIs analíticos
-    variacion_monto_bob: Optional[float] = 0.0
-    variacion_porcentaje: Optional[float] = 0.0
+    variacion_monto_bob: float | None = 0.0
+    variacion_porcentaje: float | None = 0.0
 
 class MiningAnalyticsKPIs(BaseModel):
     ''' Schema for summary strategic insights. '''
     total_recaudado_periodo: float = 0.0
-    municipios_destacados: List[Dict[str, Any]] = []
-    alerta_caida_critica: List[Dict[str, Any]] = []
+    municipios_destacados: list[dict[str, Any]] = []
+    alerta_caida_critica: list[dict[str, Any]] = []
 
 class RoyaltySummaryData(BaseModel):
     ''' Internal data structure for the response. '''
-    detailed_records: List[RoyaltySummaryItem]
+    detailed_records: list[RoyaltySummaryItem]
     summary_kpis: MiningAnalyticsKPIs
 
 class RoyaltySummaryResponse(BaseModel):
@@ -150,7 +150,7 @@ class TransactionSummaryResponse(BaseModel):
     ''' Main response schema for transactions. '''
     status: MiningStatus
     result: MiningResult
-    data: List[CompanyTransactionItem]
+    data: list[CompanyTransactionItem]
 
 
 class DailyMineralPriceRow(BaseModel):
@@ -163,14 +163,14 @@ class DailyMineralPriceRow(BaseModel):
     with data; both are 0.0 when no prior record exists.
     '''
     mineral: str
-    chemical_symbol: Optional[str] = None
-    unit: Optional[str] = None
-    quoted_in: Optional[str] = None
+    chemical_symbol: str | None = None
+    unit: str | None = None
+    quoted_in: str | None = None
     price_low: float
     price_high: float
     price_date: date
     previous_price_low: float = 0.0
-    previous_price_date: Optional[date] = None
+    previous_price_date: date | None = None
     change_pct: float = 0.0
     is_fallback: bool = False
 
@@ -180,7 +180,7 @@ class DailyReportResponse(BaseModel):
     status: MiningStatus = MiningStatus.SUCCESS
     result: MiningResult = MiningResult.DAILY_REPORT_GENERATED
     ref_date: date
-    rows: List[DailyMineralPriceRow]
+    rows: list[DailyMineralPriceRow]
 
 
 class BiweeklyMineralPriceRow(BaseModel):
@@ -191,9 +191,9 @@ class BiweeklyMineralPriceRow(BaseModel):
     `avg_price_low` is the simple mean over those days only.
     '''
     mineral: str
-    chemical_symbol: Optional[str] = None
-    unit: Optional[str] = None
-    quoted_in: Optional[str] = None
+    chemical_symbol: str | None = None
+    unit: str | None = None
+    quoted_in: str | None = None
     avg_price_low: float
     sample_size: int
     period_start: date
@@ -211,7 +211,7 @@ class BiweeklyReportResponse(BaseModel):
                       description = 'Half of the month: 1 for days 1-15, 2 for 16-end.')
     period_start: date
     period_end: date
-    rows: List[BiweeklyMineralPriceRow]
+    rows: list[BiweeklyMineralPriceRow]
 
 
 class BiweeklyPeriodSummary(BaseModel):
@@ -224,7 +224,7 @@ class BiweeklyPeriodSummary(BaseModel):
     half: int
     period_start: date
     period_end: date
-    rows: List[BiweeklyMineralPriceRow]
+    rows: list[BiweeklyMineralPriceRow]
 
 
 class BiweeklyHistoryResponse(BaseModel):
@@ -237,7 +237,7 @@ class BiweeklyHistoryResponse(BaseModel):
     result: MiningResult = MiningResult.BIWEEKLY_HISTORY_GENERATED
     period_from: date
     period_to: date
-    periods: List[BiweeklyPeriodSummary]
+    periods: list[BiweeklyPeriodSummary]
 
 
 # --- Price forecasting ---
@@ -313,42 +313,42 @@ class MineralForecast(BaseModel):
         the trend rather than take the number on faith.
     '''
     mineral: str
-    chemical_symbol: Optional[str] = None
-    unit: Optional[str] = None
+    chemical_symbol: str | None = None
+    unit: str | None = None
     method: ForecastMethod
     confidence: ForecastConfidence
     sample_size: int = Field(..., ge = 0, description = 'Days of history used.')
-    last_price: Optional[float] = Field(
+    last_price: float | None = Field(
         None, description = 'Most recent observed quotation.'
     )
-    change_percent: Optional[float] = Field(
+    change_percent: float | None = Field(
         None, description = 'Projected change against the last observed price.'
     )
-    mean_absolute_error: Optional[float] = Field(
+    mean_absolute_error: float | None = Field(
         None,
         description = 'Average miss of this method on this mineral, measured by '
                       'replaying the series. Not an assumed interval.'
     )
     baseline_method: ForecastMethod = ForecastMethod.NAIVE
-    baseline_error: Optional[float] = Field(
+    baseline_error: float | None = Field(
         None, description = 'Same measurement for repeating the last quotation.'
     )
-    history: List[PricePoint] = []
-    forecast: List[PricePoint] = []
-    official_current: Optional[OfficialQuotation] = Field(
+    history: list[PricePoint] = []
+    forecast: list[PricePoint] = []
+    official_current: OfficialQuotation | None = Field(
         None, description = 'The price in force today, from the closed fortnight.'
     )
-    official_history: List[OfficialQuotation] = Field(
+    official_history: list[OfficialQuotation] = Field(
         default_factory = list,
         description = 'Official prices already published, newest first, so the '
                       'projection can be checked against what happened.'
     )
-    official_forecast: List[OfficialQuotation] = Field(
+    official_forecast: list[OfficialQuotation] = Field(
         default_factory = list,
         description = 'Upcoming official prices the horizon reaches. The first '
                       'one mixes days already quoted with projected ones.'
     )
-    official_change_percent: Optional[float] = Field(
+    official_change_percent: float | None = Field(
         None, description = 'Next official price against the one in force.'
     )
 
@@ -360,6 +360,6 @@ class PriceForecastResponse(BaseModel):
     status: MiningStatus = MiningStatus.SUCCESS
     result: MiningResult = MiningResult.PRICE_FORECAST_GENERATED
     days_ahead: int
-    history_from: Optional[date] = None
-    history_to: Optional[date] = None
-    minerals: List[MineralForecast] = []
+    history_from: date | None = None
+    history_to: date | None = None
+    minerals: list[MineralForecast] = []

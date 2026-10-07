@@ -1,7 +1,7 @@
 '''
     Seller master model for DynamoDB.
 '''
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class SellerItem(TypedDict, total = False):
@@ -16,7 +16,7 @@ class SellerItem(TypedDict, total = False):
     owner_email: str
     id: str
     name: str
-    user_email: Optional[str]
+    user_email: str | None
     source: str
     created_at: str
     updated_at: str

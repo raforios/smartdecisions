@@ -6,7 +6,6 @@
     of now, so the history is ours: one reading a day, kept next to the
     official rate in the same table.
 '''
-from typing import Optional
 
 import requests
 
@@ -24,7 +23,7 @@ TIMEOUT_SECONDS = ENV_VARS['USDT_TIMEOUT_SECONDS']
 SOURCE_NAME = 'BINANCE_P2P'
 
 
-def fetch_usdt_rate() -> Optional[float]:
+def fetch_usdt_rate() -> float | None:
     '''
         Bolivianos per USDT right now on Binance P2P.
 

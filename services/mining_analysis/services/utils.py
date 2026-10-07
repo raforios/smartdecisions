@@ -2,6 +2,7 @@
     Utils service
 '''
 
+from collections.abc import Callable
 import mimetypes
 import time
 import decimal
@@ -12,7 +13,7 @@ from contextvars import ContextVar
 from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Type, Tuple
+from typing import Any
 import requests as req
 from fastapi import HTTPException, Request, UploadFile, status
 
@@ -88,9 +89,9 @@ def sqlalchemy_object_as_dict(obj):
 async def _perform_request(
     method: str,
     url: str,
-    headers: Dict[str, str],
-    payload: Optional[Dict[str, Any]] = None,
-    files: Optional[Dict[str, Any]] = None
+    headers: dict[str, str],
+    payload: dict[str, Any] | None = None,
+    files: dict[str, Any] | None = None
 ):
     '''
         Helper function to perform a request call in a thread pool executor.
@@ -164,15 +165,15 @@ USER_ID_HEADER = 'user_id'
 # 'User-Id' would NOT match 'user_id'. The hyphenated spelling is the HTTP
 # convention, so it is accepted as an alias to avoid a silent miss.
 USER_ID_HEADER_ALIAS = 'user-id'
-_request_user_id: ContextVar[Optional[str]] = ContextVar('request_user_id', default = None)
+_request_user_id: ContextVar[str | None] = ContextVar('request_user_id', default = None)
 
 
-def set_request_user_id(request: Optional[Request]) -> None:
+def set_request_user_id(request: Request | None) -> None:
     '''
         Captures the end-user id sent by the client for the rest of the request.
 
         Args:
-            request (Optional[Request]): Incoming request, when the endpoint
+            request (Request | None): Incoming request, when the endpoint
                 declares one.
     '''
     if request is None:
@@ -182,7 +183,7 @@ def set_request_user_id(request: Optional[Request]) -> None:
     )
 
 
-def get_request_user_id() -> Optional[str]:
+def get_request_user_id() -> str | None:
     '''
         Returns the end-user id of the request in progress, or None when the
         client did not send the header.
@@ -209,7 +210,7 @@ class UsageLogData(BaseModel):
 
 async def _process_and_send_usage_log(
     log_data: UsageLogData,
-    authorization: Optional[str] = None
+    authorization: str | None = None
 ):
     '''
        Processes and sends a usage log to the event service.
@@ -255,7 +256,7 @@ async def _finalize_and_log(
     status_code: int,
     response_data: Any,
     start_time: float,
-    current_user: Optional[str],
+    current_user: str | None,
     with_log: bool = True
 ):
     '''
@@ -297,9 +298,9 @@ async def _finalize_and_log(
 
 def _handle_exception(
     e: Exception,
-    db: Optional[Session] = None,
+    db: Session | None = None,
     func_name: str = 'unknown_function'
-) -> Tuple[int, Any]:
+) -> tuple[int, Any]:
     '''
         Helper to handle various exceptions, log them, and return appropriate status code
         and detail for HTTPException.
@@ -350,7 +351,7 @@ def handle_service_errors(
             db: Session = kwargs.get('db')
             request: Request = kwargs.get('request')
             set_request_user_id(request)
-            current_user: Optional[str] = kwargs.get('current_user')
+            current_user: str | None = kwargs.get('current_user')
 
             start_time = time.perf_counter()
             response_data = None
@@ -389,12 +390,12 @@ def handle_service_errors(
 AUDIT_ID_KEYS = ('id', 'run_id', 'dataset_id', 'client_id')
 
 
-def _pick_entity_id(values: Dict[str, Any]) -> Optional[Any]:
+def _pick_entity_id(values: dict[str, Any]) -> Any | None:
     '''
         The identifier of an audited result, or None when it names no row.
 
         Args:
-            values (Dict[str, Any]): The result as a dictionary.
+            values (dict[str, Any]): The result as a dictionary.
 
         Returns:
             Any | None: First candidate key present, or None.
@@ -432,7 +433,7 @@ def _audit_new_values(final_result: Any) -> Any:
     return None
 
 
-def _audit_entity_id(final_result: Any) -> Optional[Any]:
+def _audit_entity_id(final_result: Any) -> Any | None:
     '''
         The row the audited action touched, or None when it touched no single
         row.
@@ -461,7 +462,7 @@ def _audit_entity_id(final_result: Any) -> Optional[Any]:
 def _resolve_audit_data(
     final_result: Any,
     new_values: Any
-) -> Tuple[Any, Any]:
+) -> tuple[Any, Any]:
     '''
         Helper to resolve entity_id and new_values for the audit decorator,
         reducing cyclomatic complexity.
@@ -471,7 +472,7 @@ def _resolve_audit_data(
             new_values (Any): Values the caller already supplied, if any.
 
         Returns:
-            Tuple[Any, Any]: (entity_id, new_values).
+            tuple[Any, Any]: (entity_id, new_values).
     '''
     if new_values is None:
         new_values = _audit_new_values(final_result)
@@ -553,7 +554,7 @@ def audit_event(
 
 async def send_audit_event(
     audit_data: dict,
-    authorization: Optional[str] = None
+    authorization: str | None = None
 ):
     '''
         Asynchronous function to send an audit event to the EVENTS microservice.
@@ -571,7 +572,7 @@ async def send_audit_event(
 
 async def send_usage_log(
     log_data: dict,
-    authorization: Optional[str] = None
+    authorization: str | None = None
 ):
     '''
         Asynchronous function to send a usage log to the EVENTS microservice.
@@ -602,7 +603,7 @@ async def send_usage_log(
 async def _execute_file_read(
     file_name: str,
     auth_token: str,
-    delimiter: Optional[str]
+    delimiter: str | None
 ) -> str:
     query_string = f'?delimiter={delimiter}' if delimiter else ''
     url = f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_name}{query_string}'
@@ -617,7 +618,7 @@ async def _execute_file_read(
 async def _execute_file_create(
     uploaded_file: UploadFile,
     auth_token: str,
-    dynamic_path: Optional[str]
+    dynamic_path: str | None
 ) -> dict:
     upload_endpoint = f'{FILES_SERVICE_URL}/v1/s3/upload'
 
@@ -675,7 +676,7 @@ async def _execute_file_delete(
 async def _handle_files_service(
     action: str,
     **kwargs
-) -> Optional[str]:
+) -> str | None:
     '''
         Handles communication with the FILES microservice using kwargs to avoid
         too many positional arguments.
@@ -727,8 +728,8 @@ async def _handle_files_service(
 async def _read_and_parse_file_content(
     file_name: str,
     auth_token: str,
-    delimiter: Optional[str] = ','
-) -> List[Dict[str, Any]]:
+    delimiter: str | None = ','
+) -> list[dict[str, Any]]:
     '''
         Reads and parses the file content from the FILES microservice.
     '''
@@ -758,8 +759,8 @@ async def perform_bulk_upload(
     bulk_schema: BaseModel,
     processor_func: Callable,
     inserter_func: Callable,
-    delimiter: Optional[str] = ','
-) -> Dict[str, Any]:
+    delimiter: str | None = ','
+) -> dict[str, Any]:
     '''
         Generic bulk upload processor.
     '''
@@ -790,9 +791,9 @@ async def perform_bulk_upload(
     }
 
 def generic_bulk_processor(
-    rows: List[Dict[str, Any]],
-    bulk_schema: Type[BaseModel]
-) -> List[BaseModel]:
+    rows: list[dict[str, Any]],
+    bulk_schema: type[BaseModel]
+) -> list[BaseModel]:
     '''
         Generic processor function to validate raw data against the bulk schema.
         Pre-processes specific fields to ensure correct string typing before validation.
@@ -823,7 +824,7 @@ def _trigger_bulk_audit(
     entity: str,
     user: str,
     result: dict,
-    authorization: Optional[str] = None
+    authorization: str | None = None
 ):
     ''' Helper to trigger async audit for bulk ops '''
     audit_data = {
@@ -868,9 +869,9 @@ async def generic_bulk_controller_wrapper(
     microservice_name: str,
     entity_name: str,
     service_func: Callable,
-    delimiter: Optional[str] = ',',
-    auth_token: Optional[str] = None
-) -> Dict[str, Any]:
+    delimiter: str | None = ',',
+    auth_token: str | None = None
+) -> dict[str, Any]:
     '''
         Generic controller wrapper for bulk upload endpoints.
         Handles logging, status tracking, audit event generation, and usage logging.
@@ -899,28 +900,28 @@ async def generic_bulk_controller_wrapper(
     return result
 
 
-def _caller_authorization(request: Optional[Request]) -> Optional[str]:
+def _caller_authorization(request: Request | None) -> str | None:
     '''
         The Authorization header of the request being served, forwarded to
         EVENTS so it can check that whoever writes a log is a real caller.
 
         Args:
-            request (Optional[Request]): The incoming request, when there is one.
+            request (Request | None): The incoming request, when there is one.
 
         Returns:
-            Optional[str]: The header, or None for calls with no request.
+            str | None: The header, or None for calls with no request.
     '''
     return request.headers.get('authorization') if request is not None else None
 
 
-def _events_headers(authorization: Optional[str]) -> Dict[str, str]:
+def _events_headers(authorization: str | None) -> dict[str, str]:
     '''
         Headers for a POST to EVENTS: the caller's token when there is one.
 
         Args:
-            authorization (Optional[str]): The caller's Authorization header.
+            authorization (str | None): The caller's Authorization header.
 
         Returns:
-            Dict[str, str]: The headers to send.
+            dict[str, str]: The headers to send.
     '''
     return {'Authorization': authorization} if authorization else {}

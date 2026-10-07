@@ -1,7 +1,7 @@
 '''
     Business logic services for the Usage Log Module.
 '''
-from typing import Dict, Any
+from typing import Any
 from boto3.resources.base import ServiceResource
 from schemas.usage_log import UsageLogQuerySchema
 from services.crud import (
@@ -23,8 +23,8 @@ USAGE_LOG_TABLE_NAME = ENV_VARS['DYNAMODB_TABLE_NAME_USAGE']
 @handle_service_errors
 def create_usage_log(
     dynamodb_resource: ServiceResource,
-    log_data: Dict[str, Any]
-) -> Dict[str, Any]:
+    log_data: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Service to create a new usage log record in the database.
     '''
@@ -40,7 +40,7 @@ def create_usage_log(
 def get_usage_logs(
     dynamodb_resource: ServiceResource,
     query_params: UsageLogQuerySchema
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Retrieves a paginated list of usage logs with optional filters.
     '''

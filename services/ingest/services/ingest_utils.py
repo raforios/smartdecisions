@@ -12,7 +12,7 @@
 import hashlib
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import boto3
 import pandas as pd
@@ -76,7 +76,7 @@ def download_template_bytes(file_key: str) -> bytes:
 # Dataset metadata (DynamoDB)
 # ---------------------------------------------------------------------------
 
-def _build_dataset_item(payload: Dict[str, Any]) -> IngestDataset:
+def _build_dataset_item(payload: dict[str, Any]) -> IngestDataset:
     '''
         Builds the DynamoDB item shape for a new ingested dataset.
 
@@ -110,8 +110,8 @@ def _build_dataset_item(payload: Dict[str, Any]) -> IngestDataset:
 @audit_event('INGEST', 'IngestDataset', 'CREATE')
 def persist_dataset(
     dynamodb_resource: ServiceResource,
-    payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    payload: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Persists a new ingested dataset record in DynamoDB.
     '''
@@ -172,8 +172,8 @@ def from_dynamo(value: Any) -> Any:
 def attach_to_dataset(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    payload: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Attaches a secondary load —payments, stock— to a sales dataset.
 
@@ -186,11 +186,11 @@ def attach_to_dataset(
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             dataset_id (str): Dataset the load belongs to.
-            payload (Dict[str, Any]): Attributes to write: the object key and
+            payload (dict[str, Any]): Attributes to write: the object key and
                 the summary of the load.
 
         Returns:
-            Dict[str, Any]: The dataset as it now stands.
+            dict[str, Any]: The dataset as it now stands.
     '''
     values = {f':{name}': value for name, value in payload.items()}
     assignments = ', '.join(f'#{name} = :{name}' for name in payload)
@@ -209,7 +209,7 @@ def attach_to_dataset(
 def get_dataset_by_id(
     dynamodb_resource: ServiceResource,
     dataset_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Retrieves an ingested dataset record by its primary key.
 
@@ -244,7 +244,7 @@ def find_dataset_by_fingerprint(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     fingerprint: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         Returns the caller's dataset with this exact content, if it exists.
 
@@ -263,10 +263,10 @@ def find_dataset_by_fingerprint(
             fingerprint (str): Content fingerprint to look for.
 
         Returns:
-            Dict[str, Any] | None: The stored record, or None if it is new.
+            dict[str, Any] | None: The stored record, or None if it is new.
     '''
     table = dynamodb_resource.Table(DATASETS_TABLE)
-    scan_kwargs: Dict[str, Any] = {
+    scan_kwargs: dict[str, Any] = {
         'FilterExpression': (Attr('owner_email').eq(owner_email)
                              & Attr('file_fingerprint').eq(fingerprint))
     }
@@ -285,7 +285,7 @@ def list_datasets_for_owner(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     limit: int = HISTORY_DEFAULT_LIMIT
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Returns the caller's own uploads, most recent first.
 
@@ -301,11 +301,11 @@ def list_datasets_for_owner(
             limit (int): Most rows to return.
 
         Returns:
-            List[Dict[str, Any]]: Stored dataset records, newest first.
+            list[dict[str, Any]]: Stored dataset records, newest first.
     '''
     table = dynamodb_resource.Table(DATASETS_TABLE)
-    items: List[Dict[str, Any]] = []
-    scan_kwargs: Dict[str, Any] = {
+    items: list[dict[str, Any]] = []
+    scan_kwargs: dict[str, Any] = {
         'FilterExpression': Attr('owner_email').eq(owner_email)
     }
     while True:
@@ -324,7 +324,7 @@ def get_owned_dataset(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     owner_email: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Retrieves a dataset only if it belongs to whoever is asking.
 
@@ -342,7 +342,7 @@ def get_owned_dataset(
             owner_email (str): Authenticated caller.
 
         Returns:
-            Dict[str, Any]: The stored dataset record.
+            dict[str, Any]: The stored dataset record.
 
         Raises:
             ResourceNotFoundError: If it does not exist or belongs to someone else.

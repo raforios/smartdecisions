@@ -17,7 +17,6 @@
 '''
 import datetime
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -49,22 +48,22 @@ class SaleRowSchema(BaseModel):
     pos_name: str = Field(..., min_length = 1, max_length = 150)
     product_name: str = Field(..., min_length = 1, max_length = 150)
     quantity: float = Field(..., gt = 0)
-    zone: Optional[str] = Field(None, max_length = 100)
-    city: Optional[str] = Field(None, max_length = 100)
-    region: Optional[str] = Field(None, max_length = 100)
-    channel: Optional[str] = Field(None, max_length = 64)
-    seller: Optional[str] = Field(None, max_length = 128)
-    latitude: Optional[float] = Field(None, ge = -90.0, le = 90.0)
-    longitude: Optional[float] = Field(None, ge = -180.0, le = 180.0)
-    category: Optional[str] = Field(None, max_length = 100)
-    unit_price: Optional[float] = Field(None, ge = 0)
-    unit_cost: Optional[float] = Field(None, ge = 0)
-    total_amount: Optional[float] = Field(None, ge = 0)
-    payment_terms: Optional[str] = Field(None, max_length = 16)
-    credit_days: Optional[int] = Field(None, ge = 0)
-    due_date: Optional[datetime.date] = None
-    collector: Optional[str] = Field(None, max_length = 150)
-    credit_limit: Optional[float] = Field(None, ge = 0)
+    zone: str | None = Field(None, max_length = 100)
+    city: str | None = Field(None, max_length = 100)
+    region: str | None = Field(None, max_length = 100)
+    channel: str | None = Field(None, max_length = 64)
+    seller: str | None = Field(None, max_length = 128)
+    latitude: float | None = Field(None, ge = -90.0, le = 90.0)
+    longitude: float | None = Field(None, ge = -180.0, le = 180.0)
+    category: str | None = Field(None, max_length = 100)
+    unit_price: float | None = Field(None, ge = 0)
+    unit_cost: float | None = Field(None, ge = 0)
+    total_amount: float | None = Field(None, ge = 0)
+    payment_terms: str | None = Field(None, max_length = 16)
+    credit_days: int | None = Field(None, ge = 0)
+    due_date: datetime.date | None = None
+    collector: str | None = Field(None, max_length = 150)
+    credit_limit: float | None = Field(None, ge = 0)
 
 
 class SalesPushSchema(BaseModel):
@@ -72,7 +71,7 @@ class SalesPushSchema(BaseModel):
         The sales lines an ERP posts into an existing dataset.
     """
     mode: LoadMode = LoadMode.APPEND
-    rows: List[SaleRowSchema] = Field(..., min_length = 1)
+    rows: list[SaleRowSchema] = Field(..., min_length = 1)
 
 
 class CollectionRowSchema(BaseModel):
@@ -82,8 +81,8 @@ class CollectionRowSchema(BaseModel):
     order_id: str = Field(..., min_length = 1, max_length = 64)
     payment_date: datetime.date
     paid_amount: float = Field(..., gt = 0)
-    payment_method: Optional[str] = Field(None, max_length = 32)
-    collector: Optional[str] = Field(None, max_length = 150)
+    payment_method: str | None = Field(None, max_length = 32)
+    collector: str | None = Field(None, max_length = 150)
 
 
 class ObjectiveRowSchema(BaseModel):
@@ -111,10 +110,10 @@ class StockRowSchema(BaseModel):
     snapshot_date: datetime.date
     product_name: str = Field(..., min_length = 1, max_length = 150)
     on_hand: float = Field(..., ge = 0)
-    committed: Optional[float] = Field(None, ge = 0)
-    in_transit: Optional[float] = Field(None, ge = 0)
-    warehouse: Optional[str] = Field(None, max_length = 64)
-    unit_cost: Optional[float] = Field(None, ge = 0)
+    committed: float | None = Field(None, ge = 0)
+    in_transit: float | None = Field(None, ge = 0)
+    warehouse: str | None = Field(None, max_length = 64)
+    unit_cost: float | None = Field(None, ge = 0)
 
 
 class VisitRowSchema(BaseModel):
@@ -122,13 +121,13 @@ class VisitRowSchema(BaseModel):
         One visit the sales force registered on the street.
     '''
     visit_date: datetime.date
-    visit_time: Optional[str] = Field(None, max_length = 8)
+    visit_time: str | None = Field(None, max_length = 8)
     seller: str = Field(..., min_length = 1, max_length = 128)
     pos_name: str = Field(..., min_length = 1, max_length = 150)
-    latitude: Optional[float] = Field(None, ge = -90.0, le = 90.0)
-    longitude: Optional[float] = Field(None, ge = -180.0, le = 180.0)
-    outcome: Optional[str] = Field(None, max_length = 16)
-    order_id: Optional[str] = Field(None, max_length = 64)
+    latitude: float | None = Field(None, ge = -90.0, le = 90.0)
+    longitude: float | None = Field(None, ge = -180.0, le = 180.0)
+    outcome: str | None = Field(None, max_length = 16)
+    order_id: str | None = Field(None, max_length = 64)
 
 
 class CollectionsPushSchema(BaseModel):
@@ -136,7 +135,7 @@ class CollectionsPushSchema(BaseModel):
         The payments an ERP posts for a sales dataset.
     '''
     mode: LoadMode = LoadMode.APPEND
-    rows: List[CollectionRowSchema] = Field(..., min_length = 1)
+    rows: list[CollectionRowSchema] = Field(..., min_length = 1)
 
 
 class ObjectivesPushSchema(BaseModel):
@@ -144,7 +143,7 @@ class ObjectivesPushSchema(BaseModel):
         The monthly objectives an ERP posts for a sales dataset.
     """
     mode: LoadMode = LoadMode.APPEND
-    rows: List[ObjectiveRowSchema] = Field(..., min_length = 1)
+    rows: list[ObjectiveRowSchema] = Field(..., min_length = 1)
 
 
 class StockPushSchema(BaseModel):
@@ -152,7 +151,7 @@ class StockPushSchema(BaseModel):
         The stock an ERP posts for a sales dataset.
     '''
     mode: LoadMode = LoadMode.APPEND
-    rows: List[StockRowSchema] = Field(..., min_length = 1)
+    rows: list[StockRowSchema] = Field(..., min_length = 1)
 
 
 class VisitsPushSchema(BaseModel):
@@ -160,7 +159,7 @@ class VisitsPushSchema(BaseModel):
         The visits an ERP posts for a sales dataset.
     '''
     mode: LoadMode = LoadMode.APPEND
-    rows: List[VisitRowSchema] = Field(..., min_length = 1)
+    rows: list[VisitRowSchema] = Field(..., min_length = 1)
 
 
 class IngestFromS3CompanionRequest(BaseModel):

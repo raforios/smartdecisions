@@ -1,7 +1,7 @@
 '''
     Audit: routes handler
 '''
-from typing import Dict, Any
+from typing import Any
 from fastapi import APIRouter, Depends, status
 from boto3.resources.base import ServiceResource
 from schemas.audit import (
@@ -44,7 +44,7 @@ def create_audit_record_endpoint(
 
 @router.get(
     '/audit',
-    response_model = Dict[str, Any],
+    response_model = dict[str, Any],
     status_code = status.HTTP_200_OK,
     summary = 'Get audit records with filters',
     description = '''
@@ -58,7 +58,7 @@ def get_audit_records_endpoint(
     current_user: str = Depends(require_roles(*READ_ROLES)),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     query_params: AuditRecordQuerySchema = Depends()
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Endpoint to retrieve a paginated list of audit records with filters.
     '''

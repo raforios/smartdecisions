@@ -1,7 +1,8 @@
 '''
     Security service
 '''
-from typing import Any, Awaitable, Callable, Dict, Iterable, Optional
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 from fastapi import Depends, Header
 from jose import jwt, JWTError
 
@@ -18,7 +19,7 @@ ENV_VARS = load_and_validate_env_vars(
 SECRET_KEY = ENV_VARS['SECRET_KEY']
 ALGORITHM = ENV_VARS['ALGORITHM']
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
+async def get_current_user(authorization: str | None = Header(None)) -> str:
     '''
         Validates the JWT authentication token from the 'Authorization' header.
 
@@ -27,7 +28,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
         in FastAPI path operations to secure endpoints.
 
         Args:
-            authorization (Optional[str]): The 'Authorization' header containing
+            authorization (str | None): The 'Authorization' header containing
                                         the Bearer token (e.g., "Bearer YOUR_TOKEN").
 
         Returns:
@@ -92,29 +93,29 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
 # the client, so a manager and their sellers share routes, plans and stock;
 # accounts created before the grouping have no client and keep their email as
 # the key, which is exactly how their data was stored.
-async def get_current_payload(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+async def get_current_payload(authorization: str | None = Header(None)) -> dict[str, Any]:
     '''
         Validates the token exactly like `get_current_user` and returns its
         whole payload (email, role, client, exp).
 
         Args:
-            authorization (Optional[str]): The 'Authorization' header.
+            authorization (str | None): The 'Authorization' header.
 
         Returns:
-            Dict[str, Any]: The decoded claims.
+            dict[str, Any]: The decoded claims.
     '''
     await get_current_user(authorization)
     token = authorization.split(' ', 1)[1]
     return jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM])
 
 
-def resolve_owner(payload: Dict[str, Any]) -> str:
+def resolve_owner(payload: dict[str, Any]) -> str:
     '''
         The key the caller's data lives under: their client, or their email
         when they belong to none.
 
         Args:
-            payload (Dict[str, Any]): Decoded token claims.
+            payload (dict[str, Any]): Decoded token claims.
 
         Returns:
             str: Owner key.
@@ -122,12 +123,12 @@ def resolve_owner(payload: Dict[str, Any]) -> str:
     return payload.get('client') or payload['email']
 
 
-async def get_current_owner(payload: Dict[str, Any] = Depends(get_current_payload)) -> str:
+async def get_current_owner(payload: dict[str, Any] = Depends(get_current_payload)) -> str:
     '''
         FastAPI dependency: the owner key of the caller's data.
 
         Args:
-            payload (Dict[str, Any]): Decoded token claims.
+            payload (dict[str, Any]): Decoded token claims.
 
         Returns:
             str: Owner key.
@@ -149,8 +150,8 @@ def require_roles(*allowed_roles: str) -> Callable[..., Awaitable[str]]:
     '''
     allowed: Iterable[str] = tuple(allowed_roles)
 
-    async def _checker(payload: Dict[str, Any] = Depends(get_current_payload)) -> str:
-        role: Optional[str] = payload.get('role')
+    async def _checker(payload: dict[str, Any] = Depends(get_current_payload)) -> str:
+        role: str | None = payload.get('role')
         if role not in allowed:
             error_msg = (
                 f'Forbidden: {payload["email"]} with role {role} called an endpoint '

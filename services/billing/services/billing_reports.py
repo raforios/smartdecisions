@@ -10,7 +10,7 @@
     so nothing here has its own truth to keep in sync.
 '''
 from datetime import date as date_type, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -44,9 +44,9 @@ LIST_ROWS = ENV_VARS['BILLING_LIST_ROWS']
 def dashboard(
     dynamodb_resource: ServiceResource,
     owner: str,
-    date_from: Optional[date_type] = None,
-    date_to: Optional[date_type] = None,
-    today: Optional[date_type] = None
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+    today: date_type | None = None
 ) -> BillingDashboard:
     '''
         The counter summary for a window, today by default.
@@ -88,15 +88,15 @@ def dashboard(
     )
 
 
-def _money(issued: List[Any]) -> Dict[str, Any]:
+def _money(issued: list[Any]) -> dict[str, Any]:
     '''
         What the window charged and what it left.
 
         Args:
-            issued (List[SaleNoteOut]): The notes that were not cancelled.
+            issued (list[SaleNoteOut]): The notes that were not cancelled.
 
         Returns:
-            Dict[str, Any]: count, amount, cost, margin, percentage and ticket.
+            dict[str, Any]: count, amount, cost, margin, percentage and ticket.
     '''
     amount = round(sum(note.total for note in issued), MONEY_DECIMALS)
     cost = round(sum(note.cost for note in issued), MONEY_DECIMALS)
@@ -111,12 +111,12 @@ def _money(issued: List[Any]) -> Dict[str, Any]:
     }
 
 
-def _stock_value(lots: List[Dict[str, Any]]) -> float:
+def _stock_value(lots: list[dict[str, Any]]) -> float:
     '''
         What the shelf is worth at what it cost.
 
         Args:
-            lots (List[Dict[str, Any]]): Every batch of the pharmacy.
+            lots (list[dict[str, Any]]): Every batch of the pharmacy.
 
         Returns:
             float: Units left times their own cost, summed.
@@ -127,10 +127,10 @@ def _stock_value(lots: List[Dict[str, Any]]) -> float:
 
 
 def _expiry_lists(
-    lots: List[Dict[str, Any]],
-    products: Dict[str, Dict[str, Any]],
+    lots: list[dict[str, Any]],
+    products: dict[str, dict[str, Any]],
     reference: date_type
-) -> Tuple[List[ExpiringLot], List[ExpiringLot]]:
+) -> tuple[list[ExpiringLot], list[ExpiringLot]]:
     '''
         The batches about to expire and the ones already expired.
 
@@ -138,16 +138,16 @@ def _expiry_lists(
         can still be sold or returned, the other has to leave the shelf.
 
         Args:
-            lots (List[Dict[str, Any]]): Every batch of the pharmacy.
-            products (Dict[str, Dict[str, Any]]): The catalogue by SKU.
+            lots (list[dict[str, Any]]): Every batch of the pharmacy.
+            products (dict[str, dict[str, Any]]): The catalogue by SKU.
             reference (date): The day to measure against.
 
         Returns:
-            Tuple[List[ExpiringLot], List[ExpiringLot]]: (expiring, expired).
+            tuple[list[ExpiringLot], list[ExpiringLot]]: (expiring, expired).
     '''
     horizon = reference + timedelta(days = EXPIRY_ALERT_DAYS)
-    expiring: List[ExpiringLot] = []
-    expired: List[ExpiringLot] = []
+    expiring: list[ExpiringLot] = []
+    expired: list[ExpiringLot] = []
 
     for lot in lots:
         if lot.get('quantity_remaining', 0) <= 0 or not lot.get('expiry_date'):
@@ -174,9 +174,9 @@ def _expiry_lists(
 
 
 def _low_stock(
-    lots: List[Dict[str, Any]],
-    products: Dict[str, Dict[str, Any]]
-) -> List[LowStockProduct]:
+    lots: list[dict[str, Any]],
+    products: dict[str, dict[str, Any]]
+) -> list[LowStockProduct]:
     '''
         The SKUs at or under their own minimum.
 
@@ -184,13 +184,13 @@ def _low_stock(
         does not care to keep it in stock.
 
         Args:
-            lots (List[Dict[str, Any]]): Every batch of the pharmacy.
-            products (Dict[str, Dict[str, Any]]): The catalogue by SKU.
+            lots (list[dict[str, Any]]): Every batch of the pharmacy.
+            products (dict[str, dict[str, Any]]): The catalogue by SKU.
 
         Returns:
-            List[LowStockProduct]: Shortest first.
+            list[LowStockProduct]: Shortest first.
     '''
-    available: Dict[str, float] = {}
+    available: dict[str, float] = {}
     for lot in lots:
         if lot.get('quantity_remaining', 0) > 0:
             available[lot['sku']] = available.get(lot['sku'], 0) + lot['quantity_remaining']
@@ -209,17 +209,17 @@ def _low_stock(
     return rows[:LIST_ROWS]
 
 
-def _top_products(issued: List[Any]) -> List[TopProduct]:
+def _top_products(issued: list[Any]) -> list[TopProduct]:
     '''
         What sold most over the window, by amount charged.
 
         Args:
-            issued (List[SaleNoteOut]): The notes that were not cancelled.
+            issued (list[SaleNoteOut]): The notes that were not cancelled.
 
         Returns:
-            List[TopProduct]: Highest amount first.
+            list[TopProduct]: Highest amount first.
     '''
-    grouped: Dict[str, Dict[str, Any]] = {}
+    grouped: dict[str, dict[str, Any]] = {}
     for note in issued:
         for line in note.lines:
             row = grouped.setdefault(line.sku, {

@@ -17,7 +17,7 @@
         total_amount, quantity, pos_id, pos_name, product_id, product_name,
         category, date
 '''
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -95,7 +95,7 @@ _LOST_CLIENTS = 'LOST_CLIENTS'
 _RETAINED_CLIENTS = 'RETAINED_CLIENTS'
 
 
-def _labelled(dataframe: pd.DataFrame) -> Optional[pd.DataFrame]:
+def _labelled(dataframe: pd.DataFrame) -> pd.DataFrame | None:
     '''
         Adds readable client and product labels to the frame.
 
@@ -162,7 +162,7 @@ def _pareto_point(cumulative: pd.Series) -> int:
 
 def _product_rows(
     frame: pd.DataFrame
-) -> Tuple[List[VolumeProduct], VolumeHeadline, List[AbcClass]]:
+) -> tuple[list[VolumeProduct], VolumeHeadline, list[AbcClass]]:
     '''
         The Pareto of products with its headline figures and ABC summary.
 
@@ -234,7 +234,7 @@ def _product_rows(
     return products, headline, summary
 
 
-def _client_rows(frame: pd.DataFrame) -> List[VolumeClient]:
+def _client_rows(frame: pd.DataFrame) -> list[VolumeClient]:
     '''
         The Pareto of clients, each with the product that anchors it.
 
@@ -242,7 +242,7 @@ def _client_rows(frame: pd.DataFrame) -> List[VolumeClient]:
             frame (pd.DataFrame): Labelled sales rows.
 
         Returns:
-            List[VolumeClient]: Rows for the configured top of clients.
+            list[VolumeClient]: Rows for the configured top of clients.
     '''
     if not frame['_client'].astype(str).str.strip().any():
         return []
@@ -283,7 +283,7 @@ def _client_rows(frame: pd.DataFrame) -> List[VolumeClient]:
     return rows
 
 
-def _matrix_rows(frame: pd.DataFrame) -> List[VolumeMatrixCell]:
+def _matrix_rows(frame: pd.DataFrame) -> list[VolumeMatrixCell]:
     '''
         The client × product intersections that carry the volume.
 
@@ -296,7 +296,7 @@ def _matrix_rows(frame: pd.DataFrame) -> List[VolumeMatrixCell]:
             frame (pd.DataFrame): Labelled sales rows.
 
         Returns:
-            List[VolumeMatrixCell]: Non-empty intersections, largest first.
+            list[VolumeMatrixCell]: Non-empty intersections, largest first.
     '''
     if not frame['_client'].astype(str).str.strip().any():
         return []
@@ -334,8 +334,8 @@ def _matrix_rows(frame: pd.DataFrame) -> List[VolumeMatrixCell]:
 def _category_mix(
     frame: pd.DataFrame,
     parsed_dates: pd.Series,
-    months: Tuple[str, str]
-) -> List[CategoryMix]:
+    months: tuple[str, str]
+) -> list[CategoryMix]:
     '''
         Category shares of the last month against the previous one, so a shift
         inside a flat total becomes visible.
@@ -350,7 +350,7 @@ def _category_mix(
             months (tuple): (current month key, previous month key).
 
         Returns:
-            List[CategoryMix]: One row per category, biggest gain first.
+            list[CategoryMix]: One row per category, biggest gain first.
     '''
     if CATEGORY not in frame.columns:
         return []
@@ -373,8 +373,8 @@ def _category_mix(
 
 def _mix_row(
     category: str,
-    amounts: Tuple[pd.Series, pd.Series],
-    totals: Tuple[float, float]
+    amounts: tuple[pd.Series, pd.Series],
+    totals: tuple[float, float]
 ) -> CategoryMix:
     '''
         Builds one category row of the mix comparison.
@@ -406,9 +406,9 @@ def _mix_row(
 
 
 def _effects(
-    terms: List[Tuple[str, float]],
+    terms: list[tuple[str, float]],
     change: float
-) -> List[VolumeEffect]:
+) -> list[VolumeEffect]:
     '''
         Turns raw decomposition terms into rows with their weight.
 
@@ -417,7 +417,7 @@ def _effects(
             change (float): The move being explained.
 
         Returns:
-            List[VolumeEffect]: The terms that are not zero, largest absolute
+            list[VolumeEffect]: The terms that are not zero, largest absolute
                 first. The percentage is against the absolute change, so a term
                 that pushes against the move reads negative.
     '''
@@ -439,7 +439,7 @@ def _effects(
 def _product_effects(
     current: pd.DataFrame,
     previous: pd.DataFrame
-) -> List[Tuple[str, float]]:
+) -> list[tuple[str, float]]:
     '''
         Splits the move into price, quantity, their joint term and the products
         that entered or left.
@@ -454,7 +454,7 @@ def _product_effects(
             previous (pd.DataFrame): The same, month before.
 
         Returns:
-            List[Tuple[str, float]]: (code, amount) terms.
+            list[tuple[str, float]]: (code, amount) terms.
     '''
     common = current.index.intersection(previous.index)
     price = quantity = joint = 0.0
@@ -485,7 +485,7 @@ def _product_effects(
 def _client_effects(
     current: pd.Series,
     previous: pd.Series
-) -> List[Tuple[str, float]]:
+) -> list[tuple[str, float]]:
     '''
         Splits the same move into new, lost and retained clients.
 
@@ -494,7 +494,7 @@ def _client_effects(
             previous (pd.Series): Amount per client, month before.
 
         Returns:
-            List[Tuple[str, float]]: (code, amount) terms.
+            list[tuple[str, float]]: (code, amount) terms.
     '''
     common = current.index.intersection(previous.index)
     retained = float(current.loc[common].sum() - previous.loc[common].sum())
@@ -508,7 +508,7 @@ def _client_effects(
 def _monthly_keys(
     frame: pd.DataFrame,
     parsed_dates: pd.Series
-) -> Optional[Tuple[str, str]]:
+) -> tuple[str, str] | None:
     '''
         The last two months with sales, or None when there is only one.
 
@@ -517,7 +517,7 @@ def _monthly_keys(
             parsed_dates (pd.Series): Coerced datetimes aligned to the frame.
 
         Returns:
-            Tuple[str, str] | None: (current, previous) as 'YYYY-MM'.
+            tuple[str, str] | None: (current, previous) as 'YYYY-MM'.
     '''
     monthly = (
         frame.assign(_month = parsed_dates.dt.strftime('%Y-%m'))
@@ -533,7 +533,7 @@ def _monthly_keys(
 def _decomposition(
     frame: pd.DataFrame,
     parsed_dates: pd.Series,
-    months: Tuple[str, str]
+    months: tuple[str, str]
 ) -> VolumeDecomposition:
     '''
         Where the change between the last two months came from, split two ways.
@@ -561,7 +561,7 @@ def _decomposition(
     previous_amount = float(previous_products['amount'].sum())
     change = current_amount - previous_amount
 
-    by_client: List[VolumeEffect] = []
+    by_client: list[VolumeEffect] = []
     if current_rows['_client'].astype(str).str.strip().any():
         by_client = _effects(
             _client_effects(
@@ -609,7 +609,7 @@ def build_volume_source(dataframe: pd.DataFrame) -> VolumeSourceBlock:
                f'{frame["_client"].nunique()} clients).')
     logger.info(message)
 
-    block: Dict[str, Any] = {
+    block: dict[str, Any] = {
         'headline': headline,
         'abc_summary': abc_summary,
         'products': products,

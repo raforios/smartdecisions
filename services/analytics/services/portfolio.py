@@ -11,7 +11,7 @@
         * Clients at risk: those whose purchases collapsed against their own
           history, or who simply stopped buying — ranked by what is at stake.
 '''
-from typing import Any, Dict, List, Set, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -69,7 +69,7 @@ def _monthly_client_sets(
     dataframe: pd.DataFrame,
     parsed_dates: pd.Series,
     labels: pd.Series
-) -> Dict[str, Set[str]]:
+) -> dict[str, set[str]]:
     '''
         Groups the clients that bought on each calendar month.
 
@@ -79,7 +79,7 @@ def _monthly_client_sets(
             labels (pd.Series): Readable client label per row.
 
         Returns:
-            Dict[str, Set[str]]: Client labels keyed by 'YYYY-MM'.
+            dict[str, set[str]]: Client labels keyed by 'YYYY-MM'.
     '''
     valid = parsed_dates.notna()
     scoped = dataframe.loc[valid].assign(
@@ -92,7 +92,7 @@ def _monthly_client_sets(
     }
 
 
-def _movement(monthly_sets: Dict[str, Set[str]]) -> List[PortfolioMovement]:
+def _movement(monthly_sets: dict[str, set[str]]) -> list[PortfolioMovement]:
     '''
         Builds the month-by-month movement of the client base.
 
@@ -101,15 +101,15 @@ def _movement(monthly_sets: Dict[str, Set[str]]) -> List[PortfolioMovement]:
         *lost* when they bought last month but not this one.
 
         Args:
-            monthly_sets (Dict[str, Set[str]]): Clients per 'YYYY-MM'.
+            monthly_sets (dict[str, set[str]]): Clients per 'YYYY-MM'.
 
         Returns:
-            List[PortfolioMovement]: One row per month in chronological order.
+            list[PortfolioMovement]: One row per month in chronological order.
     '''
     months = sorted(monthly_sets)
-    seen: Set[str] = set()
-    previous: Set[str] = set()
-    rows: List[PortfolioMovement] = []
+    seen: set[str] = set()
+    previous: set[str] = set()
+    rows: list[PortfolioMovement] = []
 
     for month in months:
         current = monthly_sets[month]
@@ -200,7 +200,7 @@ def _client_row(
     client: Any,
     record: pd.Series,
     reference_date: pd.Timestamp
-) -> tuple[Optional[str], ClientAtRisk]:
+) -> tuple[str | None, ClientAtRisk]:
     '''
         Builds one row of the risk / lost tables.
 
@@ -210,7 +210,7 @@ def _client_row(
             reference_date (pd.Timestamp): Latest date present in the dataset.
 
         Returns:
-            tuple[Optional[str], ClientAtRisk]: Which list the client belongs to
+            tuple[str | None, ClientAtRisk]: Which list the client belongs to
                 ('at_risk', 'lost' or None) and the row itself.
     '''
     months_active = int(record['active_months']) or 1
@@ -235,7 +235,7 @@ def _client_row(
 def _split_by_risk(
     history: pd.DataFrame,
     reference_date: pd.Timestamp
-) -> tuple[List[ClientAtRisk], ...]:
+) -> tuple[list[ClientAtRisk], ...]:
     '''
         Splits the client base into those worth chasing now and those already
         lost, each ordered by the monthly revenue at stake.
@@ -249,7 +249,7 @@ def _split_by_risk(
         Returns:
             tuple: (at-risk rows, lost rows), both capped for readability.
     '''
-    buckets: Dict[str, List[ClientAtRisk]] = {'at_risk': [], 'lost': []}
+    buckets: dict[str, list[ClientAtRisk]] = {'at_risk': [], 'lost': []}
     for client, record in history.iterrows():
         bucket, row = _client_row(client, record, reference_date)
         if bucket:
@@ -262,21 +262,21 @@ def _split_by_risk(
 
 def _portfolio_kpis(
     history: pd.DataFrame,
-    movement: List[PortfolioMovement],
+    movement: list[PortfolioMovement],
     dataframe: pd.DataFrame,
     counts: tuple[int, int]
-) -> List[KpiCard]:
+) -> list[KpiCard]:
     '''
         Headline cards describing the health of the client base.
 
         Args:
             history (pd.DataFrame): Per-client history.
-            movement (List[Dict[str, Any]]): Monthly movement rows.
+            movement (list[dict[str, Any]]): Monthly movement rows.
             dataframe (pd.DataFrame): Normalized sales rows (for order counts).
             counts (tuple[int, int]): (clients at risk, clients already lost).
 
         Returns:
-            List[KpiCard]: KPI cards ready for the UI.
+            list[KpiCard]: KPI cards ready for the UI.
     '''
     total_clients = int(len(history))
     last = movement[-1] if movement else PortfolioMovement(month = '')
@@ -302,12 +302,12 @@ def _portfolio_kpis(
     ]
 
 
-def _empty_portfolio() -> Dict[str, Any]:
+def _empty_portfolio() -> dict[str, Any]:
     '''
         Neutral payload used when the dataset cannot support the analysis.
 
         Returns:
-            Dict[str, Any]: Empty sections with the same shape as a real result.
+            dict[str, Any]: Empty sections with the same shape as a real result.
     '''
     return PortfolioBlock()
 
@@ -320,7 +320,7 @@ def build_portfolio(dataframe: pd.DataFrame) -> PortfolioBlock:
             dataframe (pd.DataFrame): Normalized sales rows as produced by ingest.
 
         Returns:
-            Dict[str, Any]: 'kpis' (coverage, churn, frequency), 'movement'
+            dict[str, Any]: 'kpis' (coverage, churn, frequency), 'movement'
                 (new/recovered/retained/lost per month), 'at_risk' (a short
                 actionable list) and 'lost' (clients gone long enough to need
                 a reactivation campaign), each with its total. Empty sections

@@ -1,9 +1,10 @@
 '''
     Ingest Microservice Main Handler
 '''
+from collections.abc import AsyncGenerator
 import socket
 from datetime import date, datetime
-from typing import Any, AsyncGenerator, Dict
+from typing import Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -116,12 +117,12 @@ app.add_middleware(
 
 @app.get('/', tags = ['Home'])
 @app.get(f'{DOCS_BASE}/health', tags = ['Home'])
-def root() -> Dict[str, Any]:
+def root() -> dict[str, Any]:
     '''
         Health check endpoint.
 
         Returns:
-            Dict[str, Any]: Service metadata and status.
+            dict[str, Any]: Service metadata and status.
     '''
     today = datetime.now()
     copyright_symbol = '©'
@@ -140,7 +141,7 @@ def root() -> Dict[str, Any]:
 
 @app.get('/openapi.json', include_in_schema = False)
 @app.get(OPENAPI_URL, include_in_schema = False)
-def custom_openapi() -> Dict[str, Any]:
+def custom_openapi() -> dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
     '''

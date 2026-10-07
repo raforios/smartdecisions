@@ -1,7 +1,6 @@
 '''
     Users: routes handler
 '''
-from typing import List
 from fastapi import APIRouter, Depends, status
 from controllers.users import (
     read_users,
@@ -19,11 +18,11 @@ router = APIRouter(prefix = '/v1/users', tags = ['Users'])
 
 @router.get(
     '/',
-    response_model = List[UserResponse],
+    response_model = list[UserResponse],
     status_code = status.HTTP_200_OK,
     dependencies = [Depends(get_current_admin_user)]
 )
-async def read_all_users() -> List[UserResponse]:
+async def read_all_users() -> list[UserResponse]:
     '''
         Endpoint to read all users. Restricted to ADMIN.
     '''
@@ -37,7 +36,7 @@ async def read_all_users() -> List[UserResponse]:
     status_code = status.HTTP_200_OK,
     dependencies = [Depends(get_current_admin_user)]
 )
-async def read_user(email: str) -> List[UserResponse]:
+async def read_user(email: str) -> list[UserResponse]:
     '''
         Endpoint to read a single user by email. Restricted to ADMIN.
     '''

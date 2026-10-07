@@ -15,7 +15,7 @@
     figure and the answer says so, so nobody reads a decreed stability as a
     market fact.
 '''
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 import requests
@@ -44,7 +44,7 @@ PARALLEL_FALLBACK_CURRENCY = ENV_VARS['PARALLEL_FALLBACK_CURRENCY']
 # The columns that hold money. A rate applies to an amount, not to a quantity
 # or a coordinate, so the list is explicit: converting a latitude would be
 # silent nonsense.
-MONEY_COLUMNS: Tuple[str, ...] = (
+MONEY_COLUMNS: tuple[str, ...] = (
     'unit_price', 'unit_cost', 'total_amount', 'credit_limit'
 )
 _DATE = 'date'
@@ -55,18 +55,18 @@ _FIXED_REGIME = 'FIXED'
 def _fetch_rates(
     currency: str,
     auth_token: str,
-    window: Tuple[str, str]
-) -> List[Dict[str, Any]]:
+    window: tuple[str, str]
+) -> list[dict[str, Any]]:
     '''
         The published series of one currency over a window, from QUOTES.
 
         Args:
             currency (str): ISO 4217 code.
             auth_token (str): The caller's Authorization header.
-            window (Tuple[str, str]): First and last day the frame covers.
+            window (tuple[str, str]): First and last day the frame covers.
 
         Returns:
-            List[Dict[str, Any]]: Published rates, oldest first.
+            list[dict[str, Any]]: Published rates, oldest first.
 
         Raises:
             ServiceUnavailableError: QUOTES unreachable or refusing.
@@ -98,7 +98,7 @@ def _fixed_rate_before(
     currency: str,
     auth_token: str,
     day: str
-) -> Optional[float]:
+) -> float | None:
     '''
         The rate of the fixed regime, when `day` falls in it; None otherwise.
 
@@ -113,7 +113,7 @@ def _fixed_rate_before(
             day (str): The latest day with no published rate, YYYY-MM-DD.
 
         Returns:
-            Optional[float]: The fixed rate, or None when that day is in the
+            float | None: The fixed rate, or None when that day is in the
                 float and the gap is real.
 
         Raises:
@@ -144,7 +144,7 @@ def _fixed_rate_before(
 
 
 def _rate_series(
-    rates: List[Dict[str, Any]],
+    rates: list[dict[str, Any]],
     days: pd.Series
 ) -> pd.Series:
     '''
@@ -156,7 +156,7 @@ def _rate_series(
         currency rather than converted at a figure nobody published.
 
         Args:
-            rates (List[Dict[str, Any]]): Published rates.
+            rates (list[dict[str, Any]]): Published rates.
             days (pd.Series): The dates of the frame, as datetime64.
 
         Returns:
@@ -178,7 +178,7 @@ def _fill_from_official(
     series: pd.Series,
     days: pd.Series,
     auth_token: str
-) -> Tuple[pd.Series, int]:
+) -> tuple[pd.Series, int]:
     '''
         Fills the USDT gaps with the official rate of each row's own day.
 
@@ -188,7 +188,7 @@ def _fill_from_official(
             auth_token (str): The caller's Authorization header, for QUOTES.
 
         Returns:
-            Tuple[pd.Series, int]: The filled series and how many rows it filled.
+            tuple[pd.Series, int]: The filled series and how many rows it filled.
     '''
     window = (days.min().date().isoformat(), days.max().date().isoformat())
     official = _rate_series(_fetch_rates(PARALLEL_FALLBACK_CURRENCY, auth_token, window), days)
@@ -201,7 +201,7 @@ def rates_per_row(
     dataframe: pd.DataFrame,
     currency: str,
     auth_token: str
-) -> Tuple[pd.Series, Dict[str, int]]:
+) -> tuple[pd.Series, dict[str, int]]:
     '''
         The rate of each row's own day, with how it was obtained.
 
@@ -214,7 +214,7 @@ def rates_per_row(
             auth_token (str): The caller's Authorization header, for QUOTES.
 
         Returns:
-            Tuple[pd.Series, Dict[str, int]]: One rate per row (empty where no
+            tuple[pd.Series, dict[str, int]]: One rate per row (empty where no
                 rate exists) and the counts at the fallback and fixed rates.
     '''
     days = pd.to_datetime(dataframe[_DATE])
@@ -283,7 +283,7 @@ def convert_frame(
     dataframe: pd.DataFrame,
     currency: str,
     auth_token: str
-) -> Tuple[pd.DataFrame, Optional[Dict[str, Any]]]:
+) -> tuple[pd.DataFrame, dict[str, Any] | None]:
     '''
         The same rows, with every amount read in another currency.
 
@@ -293,7 +293,7 @@ def convert_frame(
             auth_token (str): The caller's Authorization header, for QUOTES.
 
         Returns:
-            Tuple[pd.DataFrame, Optional[Dict[str, Any]]]: The converted frame
+            tuple[pd.DataFrame, dict[str, Any] | None]: The converted frame
                 and what the conversion was based on. The descriptor is None
                 when nothing was converted, so a caller can say so instead of
                 implying a rate that was never applied.

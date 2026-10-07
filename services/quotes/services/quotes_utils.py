@@ -6,7 +6,7 @@
 '''
 import decimal
 from datetime import date as date_type
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -72,7 +72,7 @@ def _table() -> Any:
 def get_rate(
     currency: str,
     day: date_type
-) -> Optional[ExchangeRateItem]:
+) -> ExchangeRateItem | None:
     '''
         Returns the stored rate of one currency on one date.
 
@@ -116,9 +116,9 @@ def put_rate(rate: ExchangeRateItem) -> None:
 
 def query_rates(
     currency: str,
-    start: Optional[date_type] = None,
-    end: Optional[date_type] = None
-) -> List[ExchangeRateItem]:
+    start: date_type | None = None,
+    end: date_type | None = None
+) -> list[ExchangeRateItem]:
     '''
         Returns the stored rates of one currency, optionally within a window.
 
@@ -131,7 +131,7 @@ def query_rates(
             end (date | None): Last date to include.
 
         Returns:
-            List[ExchangeRateItem]: Rates ordered by date.
+            list[ExchangeRateItem]: Rates ordered by date.
     '''
     condition = Key(RATES_PARTITION_KEY).eq(currency)
     if start and end:
@@ -143,8 +143,8 @@ def query_rates(
     elif end:
         condition = condition & Key(RATES_SORT_KEY).lte(end.isoformat())
 
-    items: List[Dict[str, Any]] = []
-    kwargs: Dict[str, Any] = {'KeyConditionExpression': condition}
+    items: list[dict[str, Any]] = []
+    kwargs: dict[str, Any] = {'KeyConditionExpression': condition}
     try:
         while True:
             response = _table().query(**kwargs)

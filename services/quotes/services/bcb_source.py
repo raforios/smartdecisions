@@ -20,7 +20,6 @@
 '''
 import re
 from datetime import date as date_type
-from typing import Optional
 
 import requests
 
@@ -65,7 +64,7 @@ def _plain_text(html: str) -> str:
     return re.sub(r'(\s*\|\s*)+', ' | ', text)
 
 
-def _to_float(raw: str) -> Optional[float]:
+def _to_float(raw: str) -> float | None:
     '''
         Parses the rate as the page writes it.
 
@@ -82,7 +81,7 @@ def _to_float(raw: str) -> Optional[float]:
         return None
 
 
-def fetch_official_rate(day: date_type) -> Optional[float]:
+def fetch_official_rate(day: date_type) -> float | None:
     '''
         Returns the official USD rate the BCB published for one date.
 

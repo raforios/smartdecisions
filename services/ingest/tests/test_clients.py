@@ -8,7 +8,7 @@
 '''
 import asyncio
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -35,7 +35,7 @@ class _FakeTable:
 
     def __init__(
         self,
-        rows: Dict[tuple, Dict[str, Any]]
+        rows: dict[tuple, dict[str, Any]]
     ) -> None:
         self.rows = rows
 
@@ -43,15 +43,15 @@ class _FakeTable:
     # pylint: disable=invalid-name
     def put_item(
         self,
-        Item: Dict[str, Any]
+        Item: dict[str, Any]
     ) -> None:
         '''Stores the item under its composite key.'''
         self.rows[(Item['owner_email'], Item['id'])] = dict(Item)
 
     def get_item(
         self,
-        Key: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        Key: dict[str, Any]
+    ) -> dict[str, Any]:
         '''Returns the item under a composite key, or an empty response.'''
         row = self.rows.get((Key['owner_email'], Key['id']))
         return {'Item': dict(row)} if row else {}
@@ -59,7 +59,7 @@ class _FakeTable:
     def query(
         self,
         KeyConditionExpression: Any
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         '''Returns every row of the owner in the condition.'''
         owner = KeyConditionExpression._values[1] # pylint: disable=protected-access
         return {'Items': [dict(row) for key, row in self.rows.items() if key[0] == owner]}
@@ -75,8 +75,8 @@ class _FakeResource:
     def __init__(self) -> None:
         # One store per table name, like DynamoDB: the loads feed the client
         # and the seller masters in the same pass, and they must not mix.
-        self.tables: Dict[str, Dict[tuple, Dict[str, Any]]] = {}
-        self.rows: Dict[tuple, Dict[str, Any]] = self.tables.setdefault(master.CLIENTS_TABLE, {})
+        self.tables: dict[str, dict[tuple, dict[str, Any]]] = {}
+        self.rows: dict[tuple, dict[str, Any]] = self.tables.setdefault(master.CLIENTS_TABLE, {})
 
     # Same reason as _FakeTable: boto3 spells it `Table`.
     # pylint: disable=invalid-name
@@ -124,7 +124,7 @@ def _client(
 def _stored(
     resource: _FakeResource,
     code: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         Reads one client straight out of the double.
 
@@ -133,7 +133,7 @@ def _stored(
             code (str): Client code.
 
         Returns:
-            Optional[Dict[str, Any]]: The stored row.
+            dict[str, Any] | None: The stored row.
     '''
     return resource.rows.get((OWNER, code))
 
@@ -237,12 +237,12 @@ def test_another_owners_client_does_not_exist(resource):
     assert 'not found' in str(error.value).lower()
 
 
-def _frame(rows: List[Dict[str, Any]]) -> pd.DataFrame:
+def _frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     '''
         Builds a validated-looking sales frame.
 
         Args:
-            rows (List[Dict[str, Any]]): Row dictionaries.
+            rows (list[dict[str, Any]]): Row dictionaries.
 
         Returns:
             pd.DataFrame: The frame.

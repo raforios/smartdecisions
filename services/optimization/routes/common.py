@@ -1,7 +1,7 @@
 '''
     Dependencies shared by the planning and the tracking routers.
 '''
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import Depends, File, UploadFile
 
@@ -25,12 +25,12 @@ async def csv_upload_text(file: UploadFile = File(...)) -> str:
     return decode_csv_upload(file.filename or '', await file.read())
 
 
-async def get_caller(payload: Dict[str, Any] = Depends(get_current_payload)) -> CallerClaims:
+async def get_caller(payload: dict[str, Any] = Depends(get_current_payload)) -> CallerClaims:
     '''
         FastAPI dependency: the token claims as a DTO instead of a loose dict.
 
         Args:
-            payload (Dict[str, Any]): Decoded token claims.
+            payload (dict[str, Any]): Decoded token claims.
 
         Returns:
             CallerClaims: Email, role and client of the caller.

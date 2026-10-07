@@ -9,7 +9,7 @@
     Receiving is the mirror of selling and much simpler: nothing can fail for
     lack of stock, so the note and its batches are written straight through.
 '''
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -75,7 +75,7 @@ def receive_purchase(
     stamp = now_iso()
     purchase_id = document_id(stamp)
 
-    lines: List[PurchaseLineOut] = []
+    lines: list[PurchaseLineOut] = []
     for line in note.lines:
         if line.sku not in products:
             raise RegisterNotFoundError(detail = BillingError.PRODUCT_NOT_FOUND.value)
@@ -146,8 +146,8 @@ def get_purchase(
 def list_purchases(
     dynamodb_resource: ServiceResource,
     owner: str,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None
+    date_from: str | None = None,
+    date_to: str | None = None
 ) -> PurchaseNotesResponse:
     '''
         The delivery notes of a window, newest first.
@@ -171,12 +171,12 @@ def list_purchases(
     return PurchaseNotesResponse(items = items, total = len(items))
 
 
-def _purchase_out(stored: Dict[str, Any]) -> PurchaseNoteOut:
+def _purchase_out(stored: dict[str, Any]) -> PurchaseNoteOut:
     '''
         A stored note as the API returns it.
 
         Args:
-            stored (Dict[str, Any]): The purchase item.
+            stored (dict[str, Any]): The purchase item.
 
         Returns:
             PurchaseNoteOut: The note.

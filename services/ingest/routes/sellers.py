@@ -4,7 +4,6 @@
     The loads feed the master on their own; the API reads it and lets a manager
     say which user each seller signs in as.
 '''
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path as PathParam, Query, Request, status
@@ -36,7 +35,7 @@ _SELLER_ID = PathParam(..., min_length = 1, max_length = 128)
 )
 async def list_sellers_endpoint(
     request: Request,
-    user_email: Optional[str] = Query(None, max_length = 100),
+    user_email: str | None = Query(None, max_length = 100),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> SellerListResponseSchema:

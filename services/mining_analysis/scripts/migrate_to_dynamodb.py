@@ -20,7 +20,6 @@
     run overwrites the same items with the same values.
 '''
 import argparse
-from typing import List, Optional
 
 import boto3
 from boto3.resources.base import ServiceResource
@@ -34,8 +33,8 @@ from services import prices_dyb
 
 def _read_minerals(
     session: Session,
-    mineral_id: Optional[int]
-) -> List[MineralItem]:
+    mineral_id: int | None
+) -> list[MineralItem]:
     '''
         Reads the catalogue from the relational database.
 
@@ -44,7 +43,7 @@ def _read_minerals(
             mineral_id (int | None): Restrict to one mineral, or all of them.
 
         Returns:
-            List[MineralItem]: The catalogue, ready for DynamoDB.
+            list[MineralItem]: The catalogue, ready for DynamoDB.
     '''
     query = session.query(Mineral)
     if mineral_id is not None:
@@ -65,8 +64,8 @@ def _read_minerals(
 
 def _read_prices(
     session: Session,
-    mineral_id: Optional[int]
-) -> List[MiningPriceItem]:
+    mineral_id: int | None
+) -> list[MiningPriceItem]:
     '''
         Reads the quotations from the relational database.
 
@@ -75,7 +74,7 @@ def _read_prices(
             mineral_id (int | None): Restrict to one mineral, or all of them.
 
         Returns:
-            List[MiningPriceItem]: The quotations, ready for DynamoDB.
+            list[MiningPriceItem]: The quotations, ready for DynamoDB.
     '''
     query = session.query(MiningPrice)
     if mineral_id is not None:
@@ -93,15 +92,15 @@ def _read_prices(
 
 
 def _describe(
-    minerals: List[MineralItem],
-    prices: List[MiningPriceItem]
+    minerals: list[MineralItem],
+    prices: list[MiningPriceItem]
 ) -> None:
     '''
         Reports what was read, so a dry run is worth something.
 
         Args:
-            minerals (List[MineralItem]): Catalogue read.
-            prices (List[MiningPriceItem]): Quotations read.
+            minerals (list[MineralItem]): Catalogue read.
+            prices (list[MiningPriceItem]): Quotations read.
     '''
     report(f'Catalogue: {len(minerals)} mineral(s).')
     report(f'Quotations: {len(prices)} row(s).')
@@ -115,16 +114,16 @@ def _describe(
 
 def _copy(
     dynamodb_resource: ServiceResource,
-    minerals: List[MineralItem],
-    prices: List[MiningPriceItem]
+    minerals: list[MineralItem],
+    prices: list[MiningPriceItem]
 ) -> None:
     '''
         Writes the catalogue and the quotations into DynamoDB.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            minerals (List[MineralItem]): Catalogue to write.
-            prices (List[MiningPriceItem]): Quotations to write.
+            minerals (list[MineralItem]): Catalogue to write.
+            prices (list[MiningPriceItem]): Quotations to write.
     '''
     for mineral in minerals:
         prices_dyb.put_mineral(dynamodb_resource, mineral)
@@ -136,16 +135,16 @@ def _copy(
 
 def _verify(
     dynamodb_resource: ServiceResource,
-    minerals: List[MineralItem],
-    prices: List[MiningPriceItem]
+    minerals: list[MineralItem],
+    prices: list[MiningPriceItem]
 ) -> bool:
     '''
         Reads DynamoDB back and compares the counts against the source.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            minerals (List[MineralItem]): Catalogue that was written.
-            prices (List[MiningPriceItem]): Quotations that were written.
+            minerals (list[MineralItem]): Catalogue that was written.
+            prices (list[MiningPriceItem]): Quotations that were written.
 
         Returns:
             bool: True when both counts match.

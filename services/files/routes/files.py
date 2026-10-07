@@ -2,7 +2,7 @@
     Files: routes handler
 '''
 import os
-from typing import Dict, Any, Optional
+from typing import Any
 from mimetypes import guess_type
 from fastapi import APIRouter, Depends, Query, UploadFile, File
 from fastapi import Form
@@ -52,14 +52,14 @@ ALLOWED_CONTENT_TYPES = [
 
 @router.get(
     '/read/{bucket_name}/{file_key}',
-    response_model = Dict[str, Any]
+    response_model = dict[str, Any]
 )
 async def read_s3_file_route(
     bucket_name: str,
     file_key: str,
     current_user: str = Depends(get_current_user),
-    delimiter: Optional[str] = Query(None, description = 'The delimiter used for CSV files.')
-) -> Dict[str, Any]:
+    delimiter: str | None = Query(None, description = 'The delimiter used for CSV files.')
+) -> dict[str, Any]:
     '''
         Reads a file from an S3 bucket, processes it, and returns the data.
 
@@ -69,7 +69,7 @@ async def read_s3_file_route(
             current_user (str): The authenticated user.
 
         Returns:
-            Dict[str, Any]: A dictionary containing the processed data from the file.
+            dict[str, Any]: A dictionary containing the processed data from the file.
     '''
     message = f'User: {current_user} accessing file: {file_key} in bucket: {bucket_name
             } with delimiter {delimiter}.'
@@ -83,14 +83,14 @@ async def read_s3_file_route(
 
 @router.post(
     '/upload',
-    response_model = Dict[str, str]
+    response_model = dict[str, str]
 )
 async def upload_file_to_s3_route(
     file: UploadFile = File(...),
     bucket_name: str = Form(..., description = 'Name of the S3 bucket.'),
     file_path: str = Form('', description='Path within the S3 bucket.'),
     current_user: str = Depends(get_current_user)
-) -> Dict[str, str]:
+) -> dict[str, str]:
     '''
         Uploads a file to a specified S3 bucket.
 
@@ -101,7 +101,7 @@ async def upload_file_to_s3_route(
             current_user (str): The authenticated user.
 
         Returns:
-            Dict[str, str]: A dictionary containing the S3 URL of the uploaded file.
+            dict[str, str]: A dictionary containing the S3 URL of the uploaded file.
     '''
     message = f'User: {current_user} attempting to upload file: {file.filename
             } to bucket: {bucket_name}/{file_path}.'
@@ -127,12 +127,12 @@ async def upload_file_to_s3_route(
 
 @router.delete(
     '/delete',
-    response_model = Dict[str, str]
+    response_model = dict[str, str]
 )
 async def delete_file_from_s3_route(
     request: S3FileRequest,
     current_user: str = Depends(get_current_user)
-) -> Dict[str, str]:
+) -> dict[str, str]:
     '''
         Deletes a specified file from an S3 bucket.
 
@@ -141,7 +141,7 @@ async def delete_file_from_s3_route(
             current_user (str): The authenticated user.
 
         Returns:
-            Dict[str, str]: A message indicating success.
+            dict[str, str]: A message indicating success.
     '''
     message = f'User: {current_user} attempting to delete file: {
         request.file_key} from bucket: {request.bucket_name}.'

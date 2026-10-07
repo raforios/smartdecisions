@@ -6,7 +6,6 @@
     is the owner of everything read or written here. `request` is consumed by
     @handle_service_errors for the usage log.
 '''
-from typing import List, Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -123,7 +122,7 @@ async def get_all_planned_routes_controller(
     dynamodb_resource: ServiceResource,
     current_user: str,
     request: Request # pylint: disable=unused-argument
-) -> List[PlannedRouteResponseSchema]:
+) -> list[PlannedRouteResponseSchema]:
     '''
         Returns every planned route of the caller.
     '''
@@ -140,7 +139,7 @@ async def filter_planned_routes_controller(
     filters: PlannedRouteFilterRequestSchema,
     current_user: str,
     request: Request # pylint: disable=unused-argument
-) -> List[PlannedRouteResponseSchema]:
+) -> list[PlannedRouteResponseSchema]:
     '''
         Returns the caller's planned routes that match the filters.
     '''
@@ -479,7 +478,7 @@ async def list_executed_routes_controller(
     filters: ExecutedRouteFilterSchema,
     current_user: str,
     request: Request # pylint: disable=unused-argument
-) -> List[ExecutedRouteResponseSchema]:
+) -> list[ExecutedRouteResponseSchema]:
     '''
         The caller's executed routes in a period, by seller and/or plan.
     '''
@@ -494,7 +493,7 @@ async def list_executed_routes_controller(
 @handle_service_errors('OPTIMIZATION')
 async def get_last_known_locations_controller(
     dynamodb_resource: ServiceResource,
-    sellers: List[str],
+    sellers: list[str],
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> GroupLastKnownLocationsResponseSchema:
@@ -511,7 +510,7 @@ async def get_last_known_locations_controller(
 # ---------------------------------------------------------------------------
 # Comparison and statistics
 # ---------------------------------------------------------------------------
-def _caller_token(request: Optional[Request]) -> Optional[str]:
+def _caller_token(request: Request | None) -> str | None:
     '''
         The caller's Authorization header, forwarded when this service asks
         INGEST something on their behalf. Read from the request the controller

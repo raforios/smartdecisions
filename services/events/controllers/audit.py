@@ -1,7 +1,7 @@
 '''
     Audit controllers.
 '''
-from typing import Dict, Any
+from typing import Any
 import uuid
 from boto3.resources.base import ServiceResource
 from schemas.audit import (
@@ -42,7 +42,7 @@ def create_audit_record_controller(
 def get_audit_records_controller(
     dynamodb_resource: ServiceResource,
     query_params: AuditRecordQuerySchema
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Controller to retrieve a paginated list of audit records with optional filters.
     '''

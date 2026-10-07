@@ -1,7 +1,7 @@
 '''
     Dataset Model for DynamoDB.
 '''
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, TypedDict
 
 
 class IngestDataset(TypedDict, total = False):
@@ -25,27 +25,27 @@ class IngestDataset(TypedDict, total = False):
     dataset_id: str
     owner_email: str
     status: str
-    file_s3_key: Optional[str]
-    rejected_s3_key: Optional[str]
+    file_s3_key: str | None
+    rejected_s3_key: str | None
     template_version: str
     total_rows: int
     valid_rows: int
     error_rows: int
     unique_points_of_sale: int
     unique_products: int
-    date_range_start: Optional[str]
-    date_range_end: Optional[str]
-    errors: List[Dict[str, Any]]
+    date_range_start: str | None
+    date_range_end: str | None
+    errors: list[dict[str, Any]]
     created_at: str
-    collections_s3_key: Optional[str]
-    collections_summary: Dict[str, Any]
-    collections_issues: List[Dict[str, Any]]
-    stock_s3_key: Optional[str]
-    stock_summary: Dict[str, Any]
-    stock_issues: List[Dict[str, Any]]
-    visits_s3_key: Optional[str]
-    visits_summary: Dict[str, Any]
-    visits_issues: List[Dict[str, Any]]
-    objectives_s3_key: Optional[str]
-    objectives_summary: Dict[str, Any]
-    objectives_issues: List[Dict[str, Any]]
+    collections_s3_key: str | None
+    collections_summary: dict[str, Any]
+    collections_issues: list[dict[str, Any]]
+    stock_s3_key: str | None
+    stock_summary: dict[str, Any]
+    stock_issues: list[dict[str, Any]]
+    visits_s3_key: str | None
+    visits_summary: dict[str, Any]
+    visits_issues: list[dict[str, Any]]
+    objectives_s3_key: str | None
+    objectives_summary: dict[str, Any]
+    objectives_issues: list[dict[str, Any]]

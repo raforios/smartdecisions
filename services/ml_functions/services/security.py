@@ -1,7 +1,6 @@
 '''
     Security service
 '''
-from typing import Optional
 from fastapi import Header
 from jose import jwt, JWTError
 
@@ -18,7 +17,7 @@ ENV_VARS = load_and_validate_env_vars(
 SECRET_KEY = ENV_VARS['SECRET_KEY']
 ALGORITHM = ENV_VARS['ALGORITHM']
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
+async def get_current_user(authorization: str | None = Header(None)) -> str:
     '''
         Validates the JWT authentication token from the 'Authorization' header.
 
@@ -27,7 +26,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
         in FastAPI path operations to secure endpoints.
 
         Args:
-            authorization (Optional[str]): The 'Authorization' header containing
+            authorization (str | None): The 'Authorization' header containing
                                         the Bearer token (e.g., "Bearer YOUR_TOKEN").
 
         Returns:

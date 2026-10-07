@@ -9,7 +9,6 @@
 '''
 from datetime import date
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from schemas.daily_stock import SaleItemSchema
@@ -58,8 +57,8 @@ class CallerClaims(BaseModel):
         What the token says about the caller, as the routes need it.
     '''
     email: str
-    role: Optional[str] = None
-    client: Optional[str] = None
+    role: str | None = None
+    client: str | None = None
 
 
 # Who may do what. Management builds plans, loads stock and reads everything;
@@ -109,8 +108,8 @@ class PlannedPointSchema(PointBase):
     '''
     point_name: str = Field(..., max_length = 100)
     secuencial: int = Field(..., gt = 0, description = 'Visiting order within the route.')
-    reference_data: Optional[str] = Field(None, max_length = 255)
-    client_id: Optional[str] = Field(
+    reference_data: str | None = Field(None, max_length = 255)
+    client_id: str | None = Field(
         None, max_length = 64,
         description = 'Client identifier as it appears in the sales file, when the '
                       'stop is a known client.'
@@ -138,10 +137,10 @@ class PlannedPointUpdateSchema(BaseModel):
     '''
         Partial update of a stop.
     '''
-    secuencial: Optional[int] = Field(None, gt = 0)
-    point_name: Optional[str] = Field(None, max_length = 100)
-    reference_data: Optional[str] = Field(None, max_length = 255)
-    client_id: Optional[str] = Field(None, max_length = 64)
+    secuencial: int | None = Field(None, gt = 0)
+    point_name: str | None = Field(None, max_length = 100)
+    reference_data: str | None = Field(None, max_length = 255)
+    client_id: str | None = Field(None, max_length = 64)
 
 
 class RouteEndpointSchema(BaseModel):
@@ -161,20 +160,20 @@ class PlannedRouteCreateSchema(BaseModel):
     '''
     route_name: str = Field(..., max_length = 150)
     route_code: str = Field(..., max_length = 50, description = 'Unique per owner.')
-    description: Optional[str] = Field(None, max_length = 500)
-    seller: Optional[str] = Field(
+    description: str | None = Field(None, max_length = 500)
+    seller: str | None = Field(
         None, max_length = 128,
         description = 'Salesperson the route is assigned to, by name.'
     )
-    plan_date: Optional[date] = Field(
+    plan_date: date | None = Field(
         None,
         description = 'The day the route is meant to be run. Optional, because a '
                       'route can also be a reusable template with no date; what '
                       'carries one is a plan for a given day.'
     )
-    points: List[PlannedPointSchema] = Field(..., min_length = 1)
-    start_point: Optional[RouteEndpointSchema] = None
-    end_point: Optional[RouteEndpointSchema] = None
+    points: list[PlannedPointSchema] = Field(..., min_length = 1)
+    start_point: RouteEndpointSchema | None = None
+    end_point: RouteEndpointSchema | None = None
 
 
 class PlannedRouteResponseSchema(BaseModel):
@@ -184,25 +183,25 @@ class PlannedRouteResponseSchema(BaseModel):
     id: str
     route_name: str
     route_code: str
-    description: Optional[str] = None
-    seller: Optional[str] = None
-    plan_date: Optional[str] = None
+    description: str | None = None
+    seller: str | None = None
+    plan_date: str | None = None
     status: PlannedRouteStatusEnum
     created_at: str
-    points: List[PlannedPointResponseSchema]
-    start_point: Optional[RouteEndpointSchema] = None
-    end_point: Optional[RouteEndpointSchema] = None
+    points: list[PlannedPointResponseSchema]
+    start_point: RouteEndpointSchema | None = None
+    end_point: RouteEndpointSchema | None = None
 
 
 class PlannedRouteUpdateSchema(BaseModel):
     '''
         Partial update of a route's header.
     '''
-    route_name: Optional[str] = Field(None, max_length = 150)
-    route_code: Optional[str] = Field(None, max_length = 50)
-    description: Optional[str] = Field(None, max_length = 500)
-    seller: Optional[str] = Field(None, max_length = 128)
-    plan_date: Optional[date] = None
+    route_name: str | None = Field(None, max_length = 150)
+    route_code: str | None = Field(None, max_length = 50)
+    description: str | None = Field(None, max_length = 500)
+    seller: str | None = Field(None, max_length = 128)
+    plan_date: date | None = None
 
 
 class RepeatPlannedRouteSchema(BaseModel):
@@ -215,8 +214,8 @@ class RepeatPlannedRouteSchema(BaseModel):
         screen needs, instead of making somebody retype thirty stops.
     """
     plan_date: date
-    seller: Optional[str] = Field(None, max_length = 128)
-    route_code: Optional[str] = Field(
+    seller: str | None = Field(None, max_length = 128)
+    route_code: str | None = Field(
         None, max_length = 50,
         description = 'Code of the new route. Left out, the original code is '
                       'suffixed with the date, which is unique per owner.'
@@ -241,17 +240,17 @@ class PlannedRouteFilterRequestSchema(BaseModel):
     '''
         Filters for POST /routes/planned/filter. All optional, all combined.
     '''
-    planned_route_ids: Optional[List[str]] = None
-    route_code: Optional[str] = None
-    route_name: Optional[str] = Field(None, description = 'Case-insensitive substring.')
-    route_status: Optional[PlannedRouteStatusEnum] = None
-    seller: Optional[str] = None
+    planned_route_ids: list[str] | None = None
+    route_code: str | None = None
+    route_name: str | None = Field(None, description = 'Case-insensitive substring.')
+    route_status: PlannedRouteStatusEnum | None = None
+    seller: str | None = None
     # The window the caller is asking about. What separates "what is coming"
     # from "what already happened": the planning screen asks from today on,
     # the history screen asks backwards. Without a date on the plan there was
     # no way to tell one from the other, and the past was shown as a plan.
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: date | None = None
+    date_to: date | None = None
     undated: bool = Field(
         True,
         description = 'Whether routes with no date —the reusable templates— come '
@@ -266,13 +265,13 @@ class PlannedRouteBulkRowSchema(PointBase):
     '''
     route_name: str = Field(..., max_length = 150)
     route_code: str = Field(..., max_length = 50)
-    plan_date: Optional[date] = None
-    description: Optional[str] = Field(None, max_length = 500)
-    seller: Optional[str] = Field(None, max_length = 128)
+    plan_date: date | None = None
+    description: str | None = Field(None, max_length = 500)
+    seller: str | None = Field(None, max_length = 128)
     point_name: str = Field(..., max_length = 100)
     secuencial: int = Field(..., gt = 0)
-    reference_data: Optional[str] = Field(None, max_length = 255)
-    client_id: Optional[str] = Field(None, max_length = 64)
+    reference_data: str | None = Field(None, max_length = 255)
+    client_id: str | None = Field(None, max_length = 64)
 
 
 class InferPlannedRouteSchema(BaseModel):
@@ -284,10 +283,10 @@ class InferPlannedRouteSchema(BaseModel):
     '''
     seller: str = Field(..., max_length = 128)
     date: str = Field(..., pattern = r'^\d{4}-\d{2}-\d{2}$', description = 'YYYY-MM-DD.')
-    route_code: Optional[str] = Field(
+    route_code: str | None = Field(
         None, max_length = 50, description = 'Defaults to "{seller}-{date}".'
     )
-    route_name: Optional[str] = Field(
+    route_name: str | None = Field(
         None, max_length = 150, description = 'Defaults to the route code.'
     )
 
@@ -298,7 +297,7 @@ class BulkUploadPlannedResponseSchema(BaseModel):
     '''
     routes_created: int
     points_created: int
-    route_ids: List[str] = []
+    route_ids: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +310,7 @@ class ExecutedRouteCreateSchema(BaseModel):
     '''
     seller: str = Field(..., max_length = 128)
     start_time: str = Field(..., description = 'ISO 8601 as sent by the device.')
-    planned_route_id: Optional[str] = None
+    planned_route_id: str | None = None
     start_latitude: float = Field(..., ge = -90.0, le = 90.0)
     start_longitude: float = Field(..., ge = -180.0, le = 180.0)
     max_distance_start_point: float = Field(..., gt = 0, description = 'Metres.')
@@ -322,10 +321,10 @@ class ExecutedRouteResponseSchema(ExecutedRouteCreateSchema):
         A stored executed route.
     '''
     id: str
-    end_time: Optional[str] = None
-    end_latitude: Optional[float] = None
-    end_longitude: Optional[float] = None
-    max_distance_end_point: Optional[float] = None
+    end_time: str | None = None
+    end_latitude: float | None = None
+    end_longitude: float | None = None
+    max_distance_end_point: float | None = None
     points_count: int = 0
 
 
@@ -347,15 +346,15 @@ class ExecutedPointCreateSchema(PointBase):
     '''
     executed_route_id: str
     timestamp: str = Field(..., description = 'ISO 8601 as sent by the device.')
-    client_id: Optional[str] = Field(None, max_length = 64)
-    outcome: Optional[VisitOutcome] = None
-    order_id: Optional[str] = Field(None, max_length = 64)
-    items: List[SaleItemSchema] = Field(
+    client_id: str | None = Field(None, max_length = 64)
+    outcome: VisitOutcome | None = None
+    order_id: str | None = Field(None, max_length = 64)
+    items: list[SaleItemSchema] = Field(
         default_factory = list,
         description = 'Lines sold on this visit; each draws from the day\'s stock, '
                       'all or none.'
     )
-    max_distance_stop_point: Optional[float] = Field(
+    max_distance_stop_point: float | None = Field(
         None, gt = 0,
         description = 'Metres accepted between this reading and the planned stop '
                       'it claims to be at. Optional: a device that knows how good '
@@ -377,17 +376,17 @@ class ExecutedRouteFilterSchema(BaseModel):
         Filters for listing executed routes. Dates bound the start of the
         route, inclusive, YYYY-MM-DD.
     '''
-    seller: Optional[str] = Field(None, max_length = 128)
-    planned_route_id: Optional[str] = None
-    date_from: Optional[str] = Field(None, pattern = r'^\d{4}-\d{2}-\d{2}$')
-    date_to: Optional[str] = Field(None, pattern = r'^\d{4}-\d{2}-\d{2}$')
+    seller: str | None = Field(None, max_length = 128)
+    planned_route_id: str | None = None
+    date_from: str | None = Field(None, pattern = r'^\d{4}-\d{2}-\d{2}$')
+    date_to: str | None = Field(None, pattern = r'^\d{4}-\d{2}-\d{2}$')
 
 
 class ExecutedRouteDetailSchema(ExecutedRouteResponseSchema):
     '''
         An executed route with every position it reported.
     '''
-    points: List[ExecutedPointResponseSchema] = []
+    points: list[ExecutedPointResponseSchema] = []
 
 
 # ---------------------------------------------------------------------------
@@ -399,8 +398,8 @@ class PlannedRouteComparisonSchema(BaseModel):
     '''
     id: str
     route_name: str
-    seller: Optional[str] = None
-    points: List[PlannedPointResponseSchema]
+    seller: str | None = None
+    points: list[PlannedPointResponseSchema]
 
 
 class RouteComparisonFullResponseSchema(BaseModel):
@@ -408,7 +407,7 @@ class RouteComparisonFullResponseSchema(BaseModel):
         A planned route and every execution of it, points included, for the map.
     '''
     planned_route: PlannedRouteComparisonSchema
-    executed_routes: List[ExecutedRouteDetailSchema]
+    executed_routes: list[ExecutedRouteDetailSchema]
 
 
 class RouteComparisonSchema(BaseModel):
@@ -432,7 +431,7 @@ class RouteComparisonsResponseSchema(BaseModel):
     '''
         Every execution of a planned route, scored.
     '''
-    comparisons: List[RouteComparisonSchema]
+    comparisons: list[RouteComparisonSchema]
 
 
 class PointsVisitedResponseSchema(BaseModel):
@@ -441,7 +440,7 @@ class PointsVisitedResponseSchema(BaseModel):
     '''
     seller: str
     total_points_visited: int
-    points_details: List[ExecutedPointResponseSchema]
+    points_details: list[ExecutedPointResponseSchema]
 
 
 class LastKnownLocationResponseSchema(BaseModel):
@@ -459,4 +458,4 @@ class GroupLastKnownLocationsResponseSchema(BaseModel):
     '''
         Last position of each requested seller.
     '''
-    locations: List[LastKnownLocationResponseSchema]
+    locations: list[LastKnownLocationResponseSchema]

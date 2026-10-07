@@ -12,7 +12,6 @@
     The category mix shift moved to `volume.py`: which categories gain weight
     is where the volume comes from, not how fast the total moves.
 '''
-from typing import List, Optional
 
 import pandas as pd
 
@@ -64,7 +63,7 @@ def _monthly_series(
     )
 
 
-def _monthly_variation(monthly: pd.Series) -> List[MonthlyChange]:
+def _monthly_variation(monthly: pd.Series) -> list[MonthlyChange]:
     '''
         Month-by-month series with each month's variation against the previous.
 
@@ -72,11 +71,11 @@ def _monthly_variation(monthly: pd.Series) -> List[MonthlyChange]:
             monthly (pd.Series): Amount per 'YYYY-MM'.
 
         Returns:
-            List[Dict[str, Any]]: MonthlyChange(month, amount, change) rows; the first month
+            list[dict[str, Any]]: MonthlyChange(month, amount, change) rows; the first month
                 has change None because it has nothing to compare against.
     '''
-    rows: List[MonthlyChange] = []
-    previous: Optional[float] = None
+    rows: list[MonthlyChange] = []
+    previous: float | None = None
     for month, amount in monthly.items():
         rows.append(MonthlyChange(
             month = str(month),
@@ -87,7 +86,7 @@ def _monthly_variation(monthly: pd.Series) -> List[MonthlyChange]:
     return rows
 
 
-def _seasonality(monthly: pd.Series) -> List[SeasonIndex]:
+def _seasonality(monthly: pd.Series) -> list[SeasonIndex]:
     '''
         Seasonality index per calendar month: the month's average sales over the
         overall monthly average, as a percentage (100 = an average month).
@@ -96,7 +95,7 @@ def _seasonality(monthly: pd.Series) -> List[SeasonIndex]:
             monthly (pd.Series): Amount per 'YYYY-MM'.
 
         Returns:
-            List[SeasonIndex]: One entry per calendar month, or an empty list
+            list[SeasonIndex]: One entry per calendar month, or an empty list
                 when there is less than a year of data.
     '''
     if len(monthly) < _MIN_MONTHS_FOR_SEASONALITY:
@@ -117,7 +116,7 @@ def _seasonality(monthly: pd.Series) -> List[SeasonIndex]:
     ]
 
 
-def _growth_kpis(monthly: pd.Series) -> List[KpiCard]:
+def _growth_kpis(monthly: pd.Series) -> list[KpiCard]:
     '''
         Headline growth cards: last month's sales and its variation against the
         previous month and against the same month a year earlier.
@@ -126,7 +125,7 @@ def _growth_kpis(monthly: pd.Series) -> List[KpiCard]:
             monthly (pd.Series): Amount per 'YYYY-MM'.
 
         Returns:
-            List[Dict[str, Any]]: KPI cards; percentage values are None when
+            list[dict[str, Any]]: KPI cards; percentage values are None when
                 there is no comparable base period.
     '''
     months = list(monthly.index)

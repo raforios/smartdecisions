@@ -13,7 +13,7 @@
 '''
 from datetime import date, datetime, time as time_type
 from enum import Enum
-from typing import Final, List, Optional
+from typing import Final
 
 from pydantic import BaseModel, Field
 
@@ -167,7 +167,7 @@ class ProductIn(BaseModel):
     laboratory: str = Field(..., min_length = 1, max_length = 150,
                             description = 'Laboratory or importer that supplies it.')
     unit: str = Field('UND', min_length = 1, max_length = 20)
-    barcode: Optional[str] = Field(None, max_length = 60)
+    barcode: str | None = Field(None, max_length = 60)
     min_stock: float = Field(0, ge = 0)
     requires_prescription: bool = False
     is_active: bool = True
@@ -175,13 +175,13 @@ class ProductIn(BaseModel):
     # invoice is rejected, so they are asked for from the start even though
     # nothing is sent yet: asking later would mean walking a whole catalogue
     # product by product.
-    sin_activity_code: Optional[str] = Field(
+    sin_activity_code: str | None = Field(
         None, max_length = 20, description = 'Actividad económica del emisor (ej. 451010).'
     )
-    sin_product_code: Optional[str] = Field(
+    sin_product_code: str | None = Field(
         None, max_length = 20, description = 'Código de producto/servicio del SIN.'
     )
-    sin_unit_code: Optional[int] = Field(
+    sin_unit_code: int | None = Field(
         None, ge = 1, le = 200, description = 'Unidad de medida del catálogo del SIN.'
     )
 
@@ -191,16 +191,16 @@ class ProductPatch(BaseModel):
         What may change about a SKU after it was registered. The SKU itself
         never does: it is the key the lots and the sold lines point at.
     '''
-    description: Optional[str] = Field(None, min_length = 1, max_length = 300)
-    laboratory: Optional[str] = Field(None, min_length = 1, max_length = 150)
-    unit: Optional[str] = Field(None, min_length = 1, max_length = 20)
-    barcode: Optional[str] = Field(None, max_length = 60)
-    min_stock: Optional[float] = Field(None, ge = 0)
-    requires_prescription: Optional[bool] = None
-    is_active: Optional[bool] = None
-    sin_activity_code: Optional[str] = Field(None, max_length = 20)
-    sin_product_code: Optional[str] = Field(None, max_length = 20)
-    sin_unit_code: Optional[int] = Field(None, ge = 1, le = 200)
+    description: str | None = Field(None, min_length = 1, max_length = 300)
+    laboratory: str | None = Field(None, min_length = 1, max_length = 150)
+    unit: str | None = Field(None, min_length = 1, max_length = 20)
+    barcode: str | None = Field(None, max_length = 60)
+    min_stock: float | None = Field(None, ge = 0)
+    requires_prescription: bool | None = None
+    is_active: bool | None = None
+    sin_activity_code: str | None = Field(None, max_length = 20)
+    sin_product_code: str | None = Field(None, max_length = 20)
+    sin_unit_code: int | None = Field(None, ge = 1, le = 200)
 
 
 class ProductOut(BaseModel):
@@ -215,29 +215,29 @@ class ProductOut(BaseModel):
     description: str
     laboratory: str
     unit: str
-    barcode: Optional[str] = None
+    barcode: str | None = None
     min_stock: float
     requires_prescription: bool
     is_active: bool
-    sin_activity_code: Optional[str] = None
-    sin_product_code: Optional[str] = None
-    sin_unit_code: Optional[int] = None
+    sin_activity_code: str | None = None
+    sin_product_code: str | None = None
+    sin_unit_code: int | None = None
     available_quantity: float = 0
-    sale_price: Optional[float] = None
-    next_expiry: Optional[date] = None
+    sale_price: float | None = None
+    next_expiry: date | None = None
     below_minimum: bool = False
     ready_to_invoice: bool = Field(
         False, description = 'Tiene los tres códigos del SIN homologados.'
     )
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class ProductsResponse(BaseModel):
     '''
         The catalogue of one pharmacy.
     '''
-    items: List[ProductOut]
+    items: list[ProductOut]
     total: int
 
 
@@ -253,13 +253,13 @@ class LotOut(BaseModel):
     '''
     lot_id: str
     sku: str
-    lot_code: Optional[str] = None
-    expiry_date: Optional[date] = None
+    lot_code: str | None = None
+    expiry_date: date | None = None
     unit_cost: float
     sale_price: float
     quantity_received: float
     quantity_remaining: float
-    purchase_id: Optional[str] = None
+    purchase_id: str | None = None
     received_at: str
 
 
@@ -268,7 +268,7 @@ class LotsResponse(BaseModel):
         The lots of one SKU, in the order they will be sold.
     '''
     sku: str
-    items: List[LotOut]
+    items: list[LotOut]
     available_quantity: float
 
 
@@ -291,8 +291,8 @@ class PurchaseLineIn(BaseModel):
     quantity: float = Field(..., gt = 0)
     unit_cost: float = Field(..., ge = 0)
     sale_price: float = Field(..., gt = 0)
-    lot_code: Optional[str] = Field(None, max_length = 60)
-    expiry_date: Optional[date] = None
+    lot_code: str | None = Field(None, max_length = 60)
+    expiry_date: date | None = None
 
 
 class PurchaseNoteIn(BaseModel):
@@ -300,12 +300,12 @@ class PurchaseNoteIn(BaseModel):
         Units coming in from a laboratory, importer or distributor.
     '''
     supplier_name: str = Field(..., min_length = 1, max_length = 200)
-    supplier_document: Optional[str] = Field(None, max_length = 40,
+    supplier_document: str | None = Field(None, max_length = 40,
                                              description = 'NIT of the supplier.')
-    invoice_number: Optional[str] = Field(None, max_length = 60)
-    invoice_date: Optional[date] = None
-    notes: Optional[str] = Field(None, max_length = 500)
-    lines: List[PurchaseLineIn] = Field(..., min_length = 1)
+    invoice_number: str | None = Field(None, max_length = 60)
+    invoice_date: date | None = None
+    notes: str | None = Field(None, max_length = 500)
+    lines: list[PurchaseLineIn] = Field(..., min_length = 1)
 
 
 class PurchaseLineOut(PurchaseLineIn):
@@ -323,11 +323,11 @@ class PurchaseNoteOut(BaseModel):
     purchase_id: str
     number: str
     supplier_name: str
-    supplier_document: Optional[str] = None
-    invoice_number: Optional[str] = None
-    invoice_date: Optional[date] = None
-    notes: Optional[str] = None
-    lines: List[PurchaseLineOut]
+    supplier_document: str | None = None
+    invoice_number: str | None = None
+    invoice_date: date | None = None
+    notes: str | None = None
+    lines: list[PurchaseLineOut]
     total_cost: float
     created_by: str
     created_at: str
@@ -337,7 +337,7 @@ class PurchaseNotesResponse(BaseModel):
     '''
         Purchase notes of one pharmacy in a window.
     '''
-    items: List[PurchaseNoteOut]
+    items: list[PurchaseNoteOut]
     total: int
 
 
@@ -348,10 +348,10 @@ class Buyer(BaseModel):
         Who is buying. A pharmacy asks for it to invoice; with nothing given,
         the note is issued to the counter.
     '''
-    name: Optional[str] = Field(None, max_length = 200)
-    document: Optional[str] = Field(None, max_length = 40,
+    name: str | None = Field(None, max_length = 200)
+    document: str | None = Field(None, max_length = 40,
                                     description = 'NIT or CI, as the buyer gives it.')
-    document_type: Optional[int] = Field(
+    document_type: int | None = Field(
         None, ge = 1, le = 5,
         description = 'Código del tipo de documento según la paramétrica del '
                       'SIN. El anexo sólo fija el rango 1 a 5; qué número es '
@@ -381,8 +381,8 @@ class SaleAllocation(BaseModel):
         line, is what carries money and cost.
     '''
     lot_id: str
-    lot_code: Optional[str] = None
-    expiry_date: Optional[date] = None
+    lot_code: str | None = None
+    expiry_date: date | None = None
     quantity: float
     unit_price: float
     unit_cost: float
@@ -397,7 +397,7 @@ class SaleLineOut(BaseModel):
     description: str
     quantity: float
     discount: float
-    allocations: List[SaleAllocation]
+    allocations: list[SaleAllocation]
     subtotal: float = Field(..., description = 'Before the line discount.')
     total: float
     cost: float
@@ -409,9 +409,9 @@ class SaleNoteIn(BaseModel):
     '''
     buyer: Buyer = Field(default_factory = Buyer)
     payment_method: PaymentMethod = PaymentMethod.EFECTIVO
-    notes: Optional[str] = Field(None, max_length = 300)
-    lines: List[SaleLineIn] = Field(..., min_length = 1)
-    card_number: Optional[str] = Field(
+    notes: str | None = Field(None, max_length = 300)
+    lines: list[SaleLineIn] = Field(..., min_length = 1)
+    card_number: str | None = Field(
         None, max_length = 30,
         description = 'Card number, only when paying by card. It is MASKED on '
                       'the way in and only the masked form is ever stored: the '
@@ -429,11 +429,11 @@ class SaleNoteOut(BaseModel):
     status: SaleStatus
     buyer: Buyer
     payment_method: PaymentMethod
-    notes: Optional[str] = None
-    card_number: Optional[str] = Field(
+    notes: str | None = None
+    card_number: str | None = Field(
         None, description = 'Masked, when the sale was paid by card.'
     )
-    lines: List[SaleLineOut]
+    lines: list[SaleLineOut]
     subtotal: float
     discount: float
     total: float
@@ -441,9 +441,9 @@ class SaleNoteOut(BaseModel):
     margin: float = Field(..., description = 'total - cost, in currency.')
     created_by: str
     created_at: str
-    cancelled_at: Optional[str] = None
-    cancelled_by: Optional[str] = None
-    cash_session_id: Optional[str] = Field(
+    cancelled_at: str | None = None
+    cancelled_by: str | None = None
+    cash_session_id: str | None = Field(
         None, description = 'The till the sale went into; empty on notes issued before tills.'
     )
 
@@ -452,7 +452,7 @@ class SaleNotesResponse(BaseModel):
     '''
         Sale notes of one pharmacy in a window, newest first.
     '''
-    items: List[SaleNoteOut]
+    items: list[SaleNoteOut]
     total: int
     total_amount: float
 
@@ -468,10 +468,10 @@ class BillingSettings(BaseModel):
         print their own name.
     '''
     trade_name: str = Field(..., min_length = 1, max_length = 200)
-    document: Optional[str] = Field(None, max_length = 40, description = 'NIT.')
-    address: Optional[str] = Field(None, max_length = 300)
-    phone: Optional[str] = Field(None, max_length = 40)
-    municipality: Optional[str] = Field(
+    document: str | None = Field(None, max_length = 40, description = 'NIT.')
+    address: str | None = Field(None, max_length = 300)
+    phone: str | None = Field(None, max_length = 40)
+    municipality: str | None = Field(
         None, max_length = 25,
         description = 'Municipio o departamento que se imprime en la factura. '
                       'El XSD del SIN lo exige y ningún otro campo lo lleva.'
@@ -480,7 +480,7 @@ class BillingSettings(BaseModel):
     purchase_series: str = Field('C', min_length = 1, max_length = 8)
     discounts_enabled: bool = False
     ticket_width: TicketWidth = TicketWidth.MM_80
-    ticket_footer: Optional[str] = Field(None, max_length = 200)
+    ticket_footer: str | None = Field(None, max_length = 200)
     # --- Electronic invoicing ------------------------------------------------
     # Branch and point of sale are per-tenant and go INTO the CUF, which is why
     # they live here and not in the service configuration: two pharmacies on
@@ -507,7 +507,7 @@ class BillingSettings(BaseModel):
     # --- Cash tills ------------------------------------------------------------
     # Per shop and not in the service configuration: each shop closes at its
     # own hour. Without it there is no end-of-day alert.
-    cash_alert_time: Optional[time_type] = Field(
+    cash_alert_time: time_type | None = Field(
         None,
         description = 'From this hour the screens warn about tills still open.'
     )
@@ -530,7 +530,7 @@ class ExpiringLot(BaseModel):
     '''
     sku: str
     description: str
-    lot_code: Optional[str] = None
+    lot_code: str | None = None
     expiry_date: date
     days_left: int
     quantity_remaining: float
@@ -582,18 +582,18 @@ class BillingDashboard(BaseModel):
     sales_amount: float
     sales_cost: float
     margin: float
-    margin_percent: Optional[float] = Field(
+    margin_percent: float | None = Field(
         None, description = 'Margin over the amount charged; None when nothing sold.'
     )
-    average_ticket: Optional[float] = None
+    average_ticket: float | None = None
     cancelled_count: int
     stock_value_at_cost: float
     expiry_alert_days: int
-    expiring_soon: List[ExpiringLot]
-    expired: List[ExpiringLot]
-    low_stock: List[LowStockProduct]
-    top_products: List[TopProduct]
-    sales_by_method: List['MethodTotal'] = []
+    expiring_soon: list[ExpiringLot]
+    expired: list[ExpiringLot]
+    low_stock: list[LowStockProduct]
+    top_products: list[TopProduct]
+    sales_by_method: list[MethodTotal] = []
 
 
 # --- grouped arguments -------------------------------------------------------
@@ -603,8 +603,8 @@ class DateWindow(BaseModel):
         The days a listing covers. The two bounds are one concept: they travel
         together and neither is useful alone.
     '''
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: date | None = None
+    date_to: date | None = None
 
 
 class LotQuery(BaseModel):
@@ -649,9 +649,9 @@ class InvoiceContext(BaseModel):
     trade_name: str = Field(..., min_length = 1, max_length = 200)
     municipality: str = Field(..., min_length = 1, max_length = 25)
     address: str = Field(..., min_length = 1, max_length = 500)
-    phone: Optional[str] = Field(None, max_length = 25)
+    phone: str | None = Field(None, max_length = 25)
     branch: int = Field(0, ge = 0, le = 9999)
-    point_of_sale: Optional[int] = Field(None, ge = 0, le = 9999)
+    point_of_sale: int | None = Field(None, ge = 0, le = 9999)
     invoice_number: int = Field(..., ge = 1)
     cuf: str = Field(..., min_length = 1, max_length = 100)
     cufd: str = Field(
@@ -666,7 +666,7 @@ class InvoiceContext(BaseModel):
     )
     currency_code: int = Field(..., ge = 1, le = 154)
     exchange_rate: float = Field(..., gt = 0)
-    cafc: Optional[str] = Field(
+    cafc: str | None = Field(
         None, max_length = 50,
         description = 'Only on a contingency invoice; empty online.'
     )
@@ -687,9 +687,9 @@ class InvoiceLine(BaseModel):
     unit_price: float = Field(..., gt = 0)
     discount: float = Field(0, ge = 0)
     subtotal: float = Field(..., gt = 0)
-    sin_activity_code: Optional[str] = None
-    sin_product_code: Optional[str] = None
-    sin_unit_code: Optional[int] = None
+    sin_activity_code: str | None = None
+    sin_product_code: str | None = None
+    sin_unit_code: int | None = None
 
 
 class CuisResponse(BaseModel):
@@ -728,8 +728,8 @@ class SiatReceipt(BaseModel):
         them would lose the only text a person can use to argue with them.
     """
     accepted: bool
-    reception_code: Optional[str] = Field(
+    reception_code: str | None = Field(
         None, description = 'Code to ask later whether it was validated.'
     )
-    state: Optional[str] = None
-    messages: List[str] = Field(default_factory = list)
+    state: str | None = None
+    messages: list[str] = Field(default_factory = list)

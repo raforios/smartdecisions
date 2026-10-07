@@ -11,7 +11,6 @@
     does not know is CREATED; one already there is NOT rewritten. Linking a
     seller to a user is a separate, explicit act.
 '''
-from typing import List, Optional
 
 import pandas as pd
 from boto3.resources.base import ServiceResource
@@ -60,18 +59,18 @@ def to_seller_response(item: SellerItem) -> SellerResponseSchema:
 def list_sellers(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    user_email: Optional[str] = None
-) -> List[SellerItem]:
+    user_email: str | None = None
+) -> list[SellerItem]:
     '''
         The owner's sellers, optionally only the ones linked to one user.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account that owns the data.
-            user_email (Optional[str]): Keep only the sellers this user is.
+            user_email (str | None): Keep only the sellers this user is.
 
         Returns:
-            List[SellerItem]: Matching sellers, by code.
+            list[SellerItem]: Matching sellers, by code.
     '''
     items = query_by_partition(
         dynamodb_resource = dynamodb_resource,
@@ -86,12 +85,12 @@ def list_sellers(
     return sorted(items, key = lambda item: item['id'])
 
 
-def to_seller_list_response(items: List[SellerItem]) -> SellerListResponseSchema:
+def to_seller_list_response(items: list[SellerItem]) -> SellerListResponseSchema:
     '''
         Wraps a list of sellers with how many can already sign in.
 
         Args:
-            items (List[SellerItem]): Stored sellers.
+            items (list[SellerItem]): Stored sellers.
 
         Returns:
             SellerListResponseSchema: The list and its counts.
@@ -104,7 +103,7 @@ def to_seller_list_response(items: List[SellerItem]) -> SellerListResponseSchema
     )
 
 
-def sellers_from_frame(frame: pd.DataFrame) -> List[str]:
+def sellers_from_frame(frame: pd.DataFrame) -> list[str]:
     '''
         The distinct sellers a validated frame mentions.
 
@@ -112,7 +111,7 @@ def sellers_from_frame(frame: pd.DataFrame) -> List[str]:
             frame (pd.DataFrame): Validated sales or visits frame.
 
         Returns:
-            List[str]: Seller codes, trimmed and without blanks.
+            list[str]: Seller codes, trimmed and without blanks.
     '''
     if frame.empty or SELLER_COLUMN not in frame.columns:
         return []
@@ -123,7 +122,7 @@ def sellers_from_frame(frame: pd.DataFrame) -> List[str]:
 def register_sellers(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    sellers: List[str],
+    sellers: list[str],
     source: ClientSource
 ) -> int:
     '''
@@ -135,7 +134,7 @@ def register_sellers(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account that owns the data.
-            sellers (List[str]): Seller codes found in a load.
+            sellers (list[str]): Seller codes found in a load.
             source (ClientSource): Which door they came through.
 
         Returns:

@@ -1,7 +1,6 @@
 '''
     Analytics: routes handler.
 '''
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, status
 from boto3.resources.base import ServiceResource
@@ -121,7 +120,7 @@ class FxScenario(DateWindow): # pylint: disable=too-few-public-methods
         date_to: str = Query(None, pattern = _ISO_DATE, description = 'Inclusive end.'),
         source: str = Query('USD', pattern = '^(USD|USDT)$',
                             description = 'USD (official) or USDT (P2P parallel).'),
-        rate: Optional[float] = Query(None, gt = 0,
+        rate: float | None = Query(None, gt = 0,
                                       description = 'Hypothetical rate to simulate.'),
         authorization: str = Header(None)
     ): # pylint: disable=super-init-not-called

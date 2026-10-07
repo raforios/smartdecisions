@@ -12,8 +12,9 @@
     codes. What this module adds is the merge: a push lands on top of what is
     stored, and the companion's own key decides what counts as a repeat.
 '''
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Any, Callable, Dict
+from typing import Any
 
 import pandas as pd
 from boto3.resources.base import ServiceResource
@@ -105,7 +106,7 @@ class LoadContext:
 
 
 def _merge_if_appending(
-    context: 'LoadContext',
+    context: LoadContext,
     result: Any
 ) -> Any:
     '''
@@ -528,7 +529,7 @@ _SALES_MERGE_KEYS: tuple[str, ...] = ('order_id', 'product_id')
 
 
 def _merge_sales(
-    dataset: Dict[str, Any],
+    dataset: dict[str, Any],
     accepted: Any,
     auth_token: str
 ) -> Any:
@@ -540,7 +541,7 @@ def _merge_sales(
         on one side and a string on the other never matches.
 
         Args:
-            dataset (Dict[str, Any]): The dataset item.
+            dataset (dict[str, Any]): The dataset item.
             accepted (pd.DataFrame): The lines just accepted.
             auth_token (str): The caller's Authorization header, forwarded to FILES.
 

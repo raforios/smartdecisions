@@ -20,7 +20,7 @@
 '''
 import re
 from datetime import date as date_type, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError
@@ -115,7 +115,7 @@ HISTORY_FLOAT_REGIME_ONLY = bool(ENV_VARS['HISTORY_FLOAT_REGIME_ONLY'])
 RATE_DECIMALS = ENV_VARS['RATE_DECIMALS']
 
 
-def validity_of(day: date_type) -> Tuple[date_type, date_type]:
+def validity_of(day: date_type) -> tuple[date_type, date_type]:
     '''
     Returns the window a published rate governs.
 
@@ -134,7 +134,7 @@ def validity_of(day: date_type) -> Tuple[date_type, date_type]:
         day (date): Date the rate was published for.
 
     Returns:
-        Tuple[date, date]: First and last day the rate is in force.
+        tuple[date, date]: First and last day the rate is in force.
     '''
     if day.weekday() not in RATE_BLOCK_WEEKDAYS:
         return day, day
@@ -151,7 +151,7 @@ def validity_of(day: date_type) -> Tuple[date_type, date_type]:
 async def sync_rates_service(
     days_back: int = SYNC_DEFAULT_DAYS,
     currency: str = USD
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
     Pulls the published rate for the recent dates into our own history.
 
@@ -165,7 +165,7 @@ async def sync_rates_service(
         currency (str): ISO 4217 code; only USD is published today.
 
     Returns:
-        Dict[str, Any]: Payload matching SyncResult shape.
+        dict[str, Any]: Payload matching SyncResult shape.
 
     Raises:
         InvalidInputError: If the requested window is out of bounds.
@@ -222,11 +222,11 @@ async def sync_rates_service(
 
 @handle_service_errors('QUOTES')
 async def get_history_service(
-    date_from: Optional[date_type] = None,
-    date_to: Optional[date_type] = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
     currency: str = USD,
     float_regime_only: bool = HISTORY_FLOAT_REGIME_ONLY
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
     Returns the stored series for a currency.
 
@@ -240,7 +240,7 @@ async def get_history_service(
             spanning both reads as a cliff rather than as two regimes.
 
     Returns:
-        Dict[str, Any]: Payload matching ExchangeRateHistory shape.
+        dict[str, Any]: Payload matching ExchangeRateHistory shape.
 
     Raises:
         InvalidInputError: If the window is inverted.
@@ -266,9 +266,9 @@ async def get_history_service(
 
 def stored_rates(
     currency: str = USD,
-    start: Optional[date_type] = None,
-    end: Optional[date_type] = None
-) -> List[ExchangeRateItem]:
+    start: date_type | None = None,
+    end: date_type | None = None
+) -> list[ExchangeRateItem]:
     '''
     Reads the stored series directly, for callers inside the service.
 
@@ -278,7 +278,7 @@ def stored_rates(
         end (date | None): Last date to include.
 
     Returns:
-        List[ExchangeRateItem]: Rates ordered by date.
+        list[ExchangeRateItem]: Rates ordered by date.
     '''
     return query_rates(currency, start or FLOAT_REGIME_START, end)
 
@@ -288,8 +288,8 @@ async def sale_scenario_service(
     quantity: float,
     unit_price_usd: float,
     days_ahead: int = SCENARIO_DEFAULT_DAYS,
-    mineral_change_percent: Optional[float] = None
-) -> Dict[str, Any]:
+    mineral_change_percent: float | None = None
+) -> dict[str, Any]:
     '''
     Compares settling a sale today against settling it after a wait.
 
@@ -311,7 +311,7 @@ async def sale_scenario_service(
             price over the horizon. None prices the currency move alone.
 
     Returns:
-        Dict[str, Any]: Payload matching SaleScenario shape.
+        dict[str, Any]: Payload matching SaleScenario shape.
 
     Raises:
         InvalidInputError: If the horizon is out of bounds.
@@ -387,7 +387,7 @@ async def sale_scenario_service(
 async def get_forecast_service(
     days_ahead: int = SCENARIO_DEFAULT_DAYS,
     currency: str = USD
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
     Projects the exchange rate forward on its own.
 
@@ -400,7 +400,7 @@ async def get_forecast_service(
         currency (str): ISO 4217 code.
 
     Returns:
-        Dict[str, Any]: Payload matching RateForecast shape.
+        dict[str, Any]: Payload matching RateForecast shape.
 
     Raises:
         InvalidInputError: If the horizon is out of bounds.
@@ -450,7 +450,7 @@ async def get_forecast_service(
 
 
 @handle_service_errors('QUOTES')
-async def scheduled_sync_service(currency: str = USD) -> Dict[str, Any]:
+async def scheduled_sync_service(currency: str = USD) -> dict[str, Any]:
     '''
     Runs the sync the way the daily schedule needs it.
 
@@ -462,7 +462,7 @@ async def scheduled_sync_service(currency: str = USD) -> Dict[str, Any]:
         currency (str): ISO 4217 code.
 
     Returns:
-        Dict[str, Any]: Payload matching SyncResult shape.
+        dict[str, Any]: Payload matching SyncResult shape.
     '''
     message = f'Scheduled {currency} sync over {SCHEDULED_SYNC_DAYS} day(s).'
     logger.info(message)
@@ -509,8 +509,8 @@ def store_today_usdt() -> bool:
 async def get_bench_service(
     days_ahead: int = SCENARIO_DEFAULT_DAYS,
     currency: str = USD,
-    models: Optional[List[str]] = None
-) -> Dict[str, Any]:
+    models: list[str] | None = None
+) -> dict[str, Any]:
     '''
     Runs several models over the same series and returns them measured.
 
@@ -522,10 +522,10 @@ async def get_bench_service(
     Args:
         days_ahead (int): Days to project.
         currency (str): ISO 4217 code.
-        models (List[str] | None): Models to run. None runs them all.
+        models (list[str] | None): Models to run. None runs them all.
 
     Returns:
-        Dict[str, Any]: Payload matching the ModelBench shape.
+        dict[str, Any]: Payload matching the ModelBench shape.
 
     Raises:
         InvalidInputError: If the horizon is out of range.
@@ -570,7 +570,7 @@ async def get_bench_service(
 async def rate_on_service(
     day: date_type,
     currency: str = USD
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
     The rate in force on a day, and where it comes from.
 
@@ -590,7 +590,7 @@ async def rate_on_service(
         currency (str): ISO 4217 code.
 
     Returns:
-        Dict[str, Any]: The rate, the day it was published, and its regime.
+        dict[str, Any]: The rate, the day it was published, and its regime.
 
     Raises:
         ResourceNotFoundError: When nothing was published on or before the day

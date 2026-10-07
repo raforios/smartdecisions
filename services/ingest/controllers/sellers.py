@@ -5,7 +5,6 @@
     API is the part only a person can decide. Linking is audited, because it
     decides whose phone sees which route.
 '''
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -23,7 +22,7 @@ from services.utils import audit_event, handle_service_errors
 @handle_service_errors('INGEST')
 async def list_sellers_controller(
     dynamodb_resource: ServiceResource,
-    user_email: Optional[str],
+    user_email: str | None,
     current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> SellerListResponseSchema:
@@ -32,7 +31,7 @@ async def list_sellers_controller(
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
-            user_email (Optional[str]): Keep only the sellers linked to this user.
+            user_email (str | None): Keep only the sellers linked to this user.
             current_user (str): Authenticated caller and owner of the data.
             request (Request): Incoming request, used by the decorators.
 

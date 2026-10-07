@@ -29,7 +29,6 @@
 '''
 import csv
 import io
-from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -213,7 +212,7 @@ def _balance_clusters(
     return labels
 
 
-def _nearest_neighbour(distances: np.ndarray) -> List[int]:
+def _nearest_neighbour(distances: np.ndarray) -> list[int]:
     '''
         Builds an initial tour by always hopping to the closest unvisited stop.
 
@@ -221,7 +220,7 @@ def _nearest_neighbour(distances: np.ndarray) -> List[int]:
             distances (np.ndarray): Square distance matrix.
 
         Returns:
-            List[int]: Visit order as indices into the matrix.
+            list[int]: Visit order as indices into the matrix.
     '''
     count = len(distances)
     unvisited = set(range(1, count))
@@ -235,9 +234,9 @@ def _nearest_neighbour(distances: np.ndarray) -> List[int]:
 
 
 def _two_opt(
-    tour: List[int],
+    tour: list[int],
     distances: np.ndarray
-) -> List[int]:
+) -> list[int]:
     '''
         Removes crossings from a tour by reversing any segment that shortens it.
 
@@ -246,11 +245,11 @@ def _two_opt(
         greedy nearest-neighbour tour looks like.
 
         Args:
-            tour (List[int]): Initial visit order.
+            tour (list[int]): Initial visit order.
             distances (np.ndarray): Square distance matrix.
 
         Returns:
-            List[int]: Improved visit order.
+            list[int]: Improved visit order.
     '''
     best = tour[:]
     for _ in range(_TWO_OPT_PASSES):
@@ -273,7 +272,7 @@ def _two_opt(
     return best
 
 
-def order_stops(points: np.ndarray) -> List[int]:
+def order_stops(points: np.ndarray) -> list[int]:
     '''
         Produces the visit order for one day's stops.
 
@@ -281,7 +280,7 @@ def order_stops(points: np.ndarray) -> List[int]:
             points (np.ndarray): Array of shape (n, 2) with (lat, lon).
 
         Returns:
-            List[int]: Visit order as indices into `points`.
+            list[int]: Visit order as indices into `points`.
     '''
     if len(points) <= 2:
         return list(range(len(points)))
@@ -291,7 +290,7 @@ def order_stops(points: np.ndarray) -> List[int]:
 
 def _value_tier(
     amount: float,
-    thresholds: Tuple[float, float]
+    thresholds: tuple[float, float]
 ) -> str:
     '''
         Labels a client by purchase value, using the same cut-offs as the
@@ -313,7 +312,7 @@ def _value_tier(
 
 def build_client_points(
     dataframe: pd.DataFrame,
-    seller: Optional[str] = None
+    seller: str | None = None
 ) -> pd.DataFrame:
     '''
         Collapses the sales rows into one geolocated row per client, carrying
@@ -427,7 +426,7 @@ def _stop_payload(
 def plan_day(
     clients: pd.DataFrame,
     day: int
-) -> List[RouteStop]:
+) -> list[RouteStop]:
     '''
         Orders one day's stops and shapes them for the response.
 
@@ -436,7 +435,7 @@ def plan_day(
             day (int): The day to plan (1-based).
 
         Returns:
-            List[RouteStop]: Ordered stops of that day.
+            list[RouteStop]: Ordered stops of that day.
     '''
     scoped = clients[clients['day'] == day]
     if scoped.empty:
@@ -570,8 +569,6 @@ def resolve_road_route(dtf: pd.DataFrame) -> pd.DataFrame:
     return df_route_segments
 
 
-
-
 # Accepted headers for the bulk route CSV. Same contract as everywhere else:
 # the client fills in the format we publish.
 _COLUMN_ALIASES = {
@@ -585,7 +582,7 @@ _COLUMN_ALIASES = {
 REQUIRED_COLUMNS = {'route_id', 'day', 'client_id', 'latitude', 'longitude'}
 
 
-def _resolve_route_header(raw_header: str) -> Optional[str]:
+def _resolve_route_header(raw_header: str) -> str | None:
     '''
         Maps a CSV header column to its canonical name. Returns None when
         the header is not part of the recognized set.
@@ -597,7 +594,7 @@ def _resolve_route_header(raw_header: str) -> Optional[str]:
     return None
 
 
-def _resolve_and_validate_route_header(header: List[str]) -> List[Optional[str]]:
+def _resolve_and_validate_route_header(header: list[str]) -> list[str | None]:
     '''
         Maps each raw header cell to its canonical name and ensures every
         required column is present.
@@ -619,8 +616,8 @@ def _resolve_and_validate_route_header(header: List[str]) -> List[Optional[str]]
 
 
 def _parse_route_csv_row(
-    raw_row: List[str],
-    resolved: List[Optional[str]],
+    raw_row: list[str],
+    resolved: list[str | None],
     line_no: int
 ) -> dict:
     '''
@@ -652,7 +649,7 @@ def _parse_route_csv_row(
     return record
 
 
-def parse_route_csv(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
+def parse_route_csv(raw_text: str) -> tuple[list[dict], list[str], int, int]:
     '''
         Parses the CSV body. Returns:
             - rows: list of dicts keyed by canonical column name
@@ -671,7 +668,7 @@ def parse_route_csv(raw_text: str) -> Tuple[List[dict], List[str], int, int]:
 
     resolved = _resolve_and_validate_route_header(header)
 
-    rows: List[dict] = []
+    rows: list[dict] = []
     for line_no, raw_row in enumerate(rows_iter, start = 2):
         if not raw_row or all((cell or '').strip() == '' for cell in raw_row):
             continue
@@ -727,7 +724,7 @@ def scope_to_period(
     return scoped
 
 
-def available_sellers(dataframe: pd.DataFrame) -> List[str]:
+def available_sellers(dataframe: pd.DataFrame) -> list[str]:
     '''
         Lists the salespeople present in the dataset, for the UI selector.
 
@@ -735,7 +732,7 @@ def available_sellers(dataframe: pd.DataFrame) -> List[str]:
             dataframe (pd.DataFrame): Normalized sales rows.
 
         Returns:
-            List[str]: Sorted, de-duplicated salesperson names.
+            list[str]: Sorted, de-duplicated salesperson names.
     '''
     if SELLER not in dataframe.columns:
         return []

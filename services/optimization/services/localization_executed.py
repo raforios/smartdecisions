@@ -13,7 +13,7 @@
 '''
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -109,14 +109,14 @@ def build_executed_id(start_time: str) -> str:
 
 
 def _day_bounds(
-    date_from: Optional[str],
-    date_to: Optional[str]
-) -> Optional[Dict[str, str]]:
+    date_from: str | None,
+    date_to: str | None
+) -> dict[str, str] | None:
     '''
         Sort-key bounds for a date range: "YYYYMMDD" sorts before every key of
         that day and "YYYYMMDD~" after every key of that day.
     '''
-    bounds: Dict[str, str] = {}
+    bounds: dict[str, str] = {}
     if date_from:
         bounds['from'] = date_from.replace('-', '')
     if date_to:
@@ -210,7 +210,7 @@ def list_executed_routes(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     filters: ExecutedRouteFilterSchema
-) -> List[ExecutedRouteItem]:
+) -> list[ExecutedRouteItem]:
     '''
         The owner's executed routes in a date range, then narrowed by seller
         and planned route. Oldest first.
@@ -221,7 +221,7 @@ def list_executed_routes(
             filters (ExecutedRouteFilterSchema): Optional criteria.
 
         Returns:
-            List[ExecutedRouteItem]: Matching route items.
+            list[ExecutedRouteItem]: Matching route items.
     '''
     items = from_dynamo(query_by_partition(
         dynamodb_resource = dynamodb_resource,
@@ -279,8 +279,8 @@ def _active_plan(
 
 
 def _assert_within(
-    stop: Optional[Dict[str, Any]],
-    position: Tuple[float, float],
+    stop: dict[str, Any] | None,
+    position: tuple[float, float],
     limit_m: float,
     code: LocalizationError
 ) -> None:
@@ -300,7 +300,7 @@ def _assert_within(
 def _endpoint(
     plan: PlannedRouteItem,
     which: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         The start or end point the plan fixes, or None when it is open.
 
@@ -313,7 +313,7 @@ def _endpoint(
             which (str): 'start_point' or 'end_point'.
 
         Returns:
-            Dict[str, Any] | None: {name, latitude, longitude}, or None.
+            dict[str, Any] | None: {name, latitude, longitude}, or None.
     '''
     point = plan.get(which)
     return point if point and point.get('latitude') is not None else None
@@ -383,7 +383,7 @@ def register_executed_point(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     point_data: ExecutedPointCreateSchema
-) -> Tuple[ExecutedRouteItem, ExecutedPointItem]:
+) -> tuple[ExecutedRouteItem, ExecutedPointItem]:
     '''
         The device reports a position — a visit when it names the client and
         what came of it, a sale when it carries lines. The route must still be
@@ -396,7 +396,7 @@ def register_executed_point(
             point_data (ExecutedPointCreateSchema): The report.
 
         Returns:
-            Tuple[ExecutedRouteItem, ExecutedPointItem]: Updated route and new point.
+            tuple[ExecutedRouteItem, ExecutedPointItem]: Updated route and new point.
     '''
     route = get_executed_route(dynamodb_resource, owner_email, point_data.executed_route_id)
     _assert_open(route)
@@ -581,7 +581,7 @@ def reopen_executed_route(
 
 def link_routes_to_plan(
     dynamodb_resource: ServiceResource,
-    routes: List[ExecutedRouteItem],
+    routes: list[ExecutedRouteItem],
     planned_route_id: str
 ) -> int:
     '''
@@ -590,7 +590,7 @@ def link_routes_to_plan(
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            routes (List[ExecutedRouteItem]): Executed route items (already the owner's).
+            routes (list[ExecutedRouteItem]): Executed route items (already the owner's).
             planned_route_id (str): The inferred plan.
 
         Returns:
@@ -614,8 +614,8 @@ def link_routes_to_plan(
 def last_known_locations(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    sellers: List[str]
-) -> List[LastKnownLocationResponseSchema]:
+    sellers: list[str]
+) -> list[LastKnownLocationResponseSchema]:
     '''
         Where each requested seller last reported from, looking back
         `ROUTES_LIVE_LOOKBACK_DAYS` days so a route left open on Friday still
@@ -624,10 +624,10 @@ def last_known_locations(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
-            sellers (List[str]): Sellers to locate.
+            sellers (list[str]): Sellers to locate.
 
         Returns:
-            List[LastKnownLocationResponseSchema]: One entry per located seller.
+            list[LastKnownLocationResponseSchema]: One entry per located seller.
     '''
     today = get_current_time_gmt().date()
     window = ExecutedRouteFilterSchema(
@@ -635,7 +635,7 @@ def last_known_locations(
         date_to = today.isoformat()
     )
     wanted = set(sellers)
-    latest: Dict[str, Dict[str, Any]] = {}
+    latest: dict[str, dict[str, Any]] = {}
     for route in list_executed_routes(dynamodb_resource, owner_email, window):
         if route['seller'] not in wanted or not route.get('last_timestamp'):
             continue

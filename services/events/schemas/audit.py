@@ -1,7 +1,7 @@
 '''
     Audit Schemas (Request/Response)
 '''
-from typing import Optional, Any, Union
+from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 class AuditRecordCreateSchema(BaseModel):
@@ -10,11 +10,11 @@ class AuditRecordCreateSchema(BaseModel):
     '''
     microservice: str = Field(..., max_length = 50)
     entity_name: str = Field(..., max_length = 50)
-    entity_id: Union[int, str] = Field(...,
+    entity_id: int | str = Field(...,
                 description = 'ID of the entity, stored as a string.')
     action: str = Field(..., max_length = 15)
-    user_id: Union[int, str] = Field(..., max_length = 50)
-    old_values: Optional[Any] = Field(None,
+    user_id: int | str = Field(..., max_length = 50)
+    old_values: Any | None = Field(None,
                 description = 'The objects state before the change.')
     new_values: Any = Field(...,
                 description = 'The objects new state after the change.')
@@ -32,18 +32,18 @@ class AuditRecordQuerySchema(BaseModel):
     '''
         Pydantic schema for filtering audit records.
     '''
-    microservice: Optional[str] = Field(None, max_length = 50)
-    entity_name: Optional[str] = Field(None, max_length = 50)
-    entity_id: Optional[str] = Field(None,
+    microservice: str | None = Field(None, max_length = 50)
+    entity_name: str | None = Field(None, max_length = 50)
+    entity_id: str | None = Field(None,
                 description = 'ID of the entity to filter by.')
-    action: Optional[str] = Field(None, max_length = 15)
-    user_id: Optional[str] = Field(None, max_length = 50)
-    start_date: Optional[str] = Field(None,
+    action: str | None = Field(None, max_length = 15)
+    user_id: str | None = Field(None, max_length = 50)
+    start_date: str | None = Field(None,
                 description = 'Start date for filtering (ISO 8601 format).')
-    end_date: Optional[str] = Field(None,
+    end_date: str | None = Field(None,
                 description = 'End date for filtering (ISO 8601 format).')
     limit: int = Field(100, ge = 1, le = 100)
-    last_evaluated_key: Optional[str] = Field(None,
+    last_evaluated_key: str | None = Field(None,
                 description = 'The last evaluated key for pagination.')
 
 

@@ -186,7 +186,7 @@ def test_batch_write_sends_every_quotation_once():
         def Table( # pylint: disable=invalid-name
             self,
             name: str # pylint: disable=unused-argument
-        ) -> '_Table':
+        ) -> _Table:
             '''Returns the capturing table.'''
             return _Table()
 

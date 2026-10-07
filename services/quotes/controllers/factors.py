@@ -6,7 +6,6 @@
     it has to be possible to say who.
 '''
 from datetime import date as date_type
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -118,7 +117,7 @@ async def load_factor_values_controller(
 async def read_factor_series_controller(
     dynamodb_resource: ServiceResource,
     code: str,
-    window: tuple[Optional[date_type], Optional[date_type]],
+    window: tuple[date_type | None, date_type | None],
     current_user: str,
     request: Request, # pylint: disable=unused-argument
     series: str = SERIES_VALUE
@@ -169,7 +168,7 @@ async def read_factor_state_controller(
 @handle_service_errors('QUOTES')
 async def transport_cost_controller(
     dynamodb_resource: ServiceResource,
-    trip: tuple[float, Optional[float]],
+    trip: tuple[float, float | None],
     day: date_type,
     current_user: str,
     request: Request # pylint: disable=unused-argument

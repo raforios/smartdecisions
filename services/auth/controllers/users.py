@@ -2,7 +2,7 @@
     User and Auth Controller
 '''
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -33,7 +33,7 @@ from schemas.role import Role
 
 async def get_user_payload(
     token: HTTPAuthorizationCredentials = Depends(HTTPBearer())
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Function to extract and decode the JWT token payload.
     '''
@@ -50,7 +50,7 @@ async def get_user_payload(
 
     return payload
 
-async def get_current_user(payload: Dict[str, Any] = Depends(get_user_payload)) -> UserResponse:
+async def get_current_user(payload: dict[str, Any] = Depends(get_user_payload)) -> UserResponse:
     '''
         Function to get the full User object from the JWT token.
     '''
@@ -107,7 +107,7 @@ async def get_current_admin_user(
 
 async def authenticate_user(
     email: str, password: str
-) -> Optional[InternalUser]:
+) -> InternalUser | None:
     '''
         Function to authenticate a user by verifying their credentials against DynamoDB.
     '''
@@ -119,7 +119,7 @@ async def authenticate_user(
 
     return InternalUser(**user_item)
 
-async def create_user(user_data: UserRequest) -> Dict[str, Any]:
+async def create_user(user_data: UserRequest) -> dict[str, Any]:
     '''
         Create User
     '''
@@ -148,14 +148,14 @@ async def create_user(user_data: UserRequest) -> Dict[str, Any]:
     logger.info(message)
     return {'user_email': created_item['email'], 'message': 'User created successfully'}
 
-async def read_users() -> List[UserResponse]:
+async def read_users() -> list[UserResponse]:
     '''
         Read all users from database.
     '''
     user_items = scan_all_users()
     return [UserResponse(**item) for item in user_items]
 
-async def read_user_by_email(email: str) -> Optional[UserResponse]:
+async def read_user_by_email(email: str) -> UserResponse | None:
     '''
         Read user by email.
     '''
@@ -213,7 +213,7 @@ def build_user_update_params(user_update_data: UserUpdateRequest) -> tuple[str, 
 async def update_user(
     email: str,
     user_update_data: UserUpdateRequest
-) -> Optional[UserResponse]:
+) -> UserResponse | None:
     '''
         Update user.
     '''

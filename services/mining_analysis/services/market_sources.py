@@ -15,9 +15,9 @@
     Prices are stored in the unit the Ministry publishes: USD per troy ounce
     for the fixes, USD per fine pound for the LME metals.
 '''
+from collections.abc import Callable
 import re
 from datetime import date as date_type, timedelta
-from typing import Callable, Dict, List, Optional, Tuple
 
 import requests
 from boto3.resources.base import ServiceResource
@@ -52,7 +52,7 @@ _MONTHS = {name: index for index, name in enumerate(
     ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
      'September', 'October', 'November', 'December'], start = 1)}
 
-Series = Dict[date_type, float]
+Series = dict[date_type, float]
 
 
 def _get(url: str) -> str:
@@ -156,7 +156,7 @@ def fetch_westmetall(symbol: str) -> Series:
 Fetcher = Callable[[], Series]
 
 
-def source_for(name: str) -> Optional[Tuple[MarketSource, Fetcher, str, str]]:
+def source_for(name: str) -> tuple[MarketSource, Fetcher, str, str] | None:
     '''
         The daily source of a catalogue mineral, by its published metadata.
 
@@ -187,8 +187,8 @@ class _SourceReader:
     '''
 
     def __init__(self) -> None:
-        self.series: Dict[str, Series] = {}
-        self.failed: List[MarketSource] = []
+        self.series: dict[str, Series] = {}
+        self.failed: list[MarketSource] = []
 
     def read(
         self,
@@ -218,12 +218,12 @@ class _SourceReader:
                     self.failed.append(source)
         return self.series[key]
 
-    def failures(self) -> List[MarketSource]:
+    def failures(self) -> list[MarketSource]:
         '''
             The sources that could not be read in this run, once each.
 
             Returns:
-                List[MarketSource]: Failed sources in the order they failed.
+                list[MarketSource]: Failed sources in the order they failed.
         '''
         return list(self.failed)
 
@@ -233,8 +233,8 @@ def _missing_rows(
     mineral_id: str,
     source: MarketSource,
     series: Series,
-    window: Tuple[date_type, date_type]
-) -> Tuple[List[MarketPriceItem], int, int]:
+    window: tuple[date_type, date_type]
+) -> tuple[list[MarketPriceItem], int, int]:
     '''
         The window days the store lacks and the source has.
 
@@ -242,10 +242,10 @@ def _missing_rows(
             mineral_id (str): Catalogue id.
             source (MarketSource): Where the values come from.
             series (Series): The source values by date.
-            window (Tuple[date, date]): First and last day, inclusive.
+            window (tuple[date, date]): First and last day, inclusive.
 
         Returns:
-            Tuple[List[MarketPriceItem], int, int]: rows to write, days already
+            tuple[list[MarketPriceItem], int, int]: rows to write, days already
             present, days without publication.
     '''
     start, end = window
@@ -254,7 +254,7 @@ def _missing_rows(
         item.date
         for item in query_market_prices(dynamodb_resource, mineral_id, {'from': start, 'to': end})
     }
-    rows: List[MarketPriceItem] = []
+    rows: list[MarketPriceItem] = []
     present, missing = 0, 0
     for offset in range((end - start).days + 1):
         day = start + timedelta(days = offset)

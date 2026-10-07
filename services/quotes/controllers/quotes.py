@@ -2,7 +2,6 @@
     QUOTES controllers.
 '''
 from datetime import date as date_type
-from typing import List, Optional
 
 from fastapi import Request
 
@@ -53,8 +52,8 @@ async def sync_rates_controller(
 
 @handle_service_errors('QUOTES')
 async def get_history_controller(
-    date_from: Optional[date_type],
-    date_to: Optional[date_type],
+    date_from: date_type | None,
+    date_to: date_type | None,
     current_user: str, # pylint: disable=unused-argument
     request: Request, # pylint: disable=unused-argument
     currency: str = USD
@@ -132,7 +131,7 @@ async def get_forecast_controller(
 async def get_bench_controller(
     days_ahead: int,
     currency: str,
-    models: Optional[List[str]],
+    models: list[str] | None,
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> ModelBench:
@@ -142,7 +141,7 @@ async def get_bench_controller(
         Args:
             days_ahead (int): Days to project.
             currency (str): ISO 4217 code.
-            models (List[str] | None): Models to run; None runs them all.
+            models (list[str] | None): Models to run; None runs them all.
             current_user (str): Authenticated caller.
             request (Request): Incoming request, used by the audit decorator.
 

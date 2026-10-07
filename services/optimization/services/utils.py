@@ -19,6 +19,7 @@
           async SQLAlchemy services.
 '''
 import asyncio
+from collections.abc import Callable
 import decimal
 import enum
 import inspect
@@ -27,7 +28,7 @@ import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 import requests as req
 from fastapi import HTTPException, Request
@@ -71,7 +72,7 @@ def get_current_time_gmt() -> datetime:
     return datetime.now(tz = tz)
 
 
-def process_query_params(query_params: Any) -> Dict[str, Any]:
+def process_query_params(query_params: Any) -> dict[str, Any]:
     '''
         Processes query parameters from a Pydantic model or dictionary into a
         dictionary for DynamoDB queries. Prefers Pydantic V2's `model_dump()`
@@ -122,9 +123,9 @@ class UsageLogData(BaseModel):
 async def _perform_request(
     method: str,
     url: str,
-    payload: Optional[Dict[str, Any]] = None,
-    authorization: Optional[str] = None
-) -> Optional[req.Response]:
+    payload: dict[str, Any] | None = None,
+    authorization: str | None = None
+) -> req.Response | None:
     '''
         Helper function to perform a request call in a thread pool executor.
         Only POST is needed to reach the EVENTS microservice. Returns None on
@@ -148,7 +149,7 @@ async def _perform_request(
 
 async def send_audit_event(
     audit_data: dict,
-    authorization: Optional[str] = None
+    authorization: str | None = None
 ) -> None:
     '''
         Asynchronous function to send an audit event to the EVENTS microservice.
@@ -174,7 +175,7 @@ async def send_audit_event(
 
 async def send_usage_log(
     log_data: dict,
-    authorization: Optional[str] = None
+    authorization: str | None = None
 ) -> None:
     '''
         Asynchronous function to send a usage log to the EVENTS microservice.
@@ -198,7 +199,7 @@ async def send_usage_log(
 
 async def _process_and_send_usage_log(
     log_data: UsageLogData,
-    authorization: Optional[str] = None
+    authorization: str | None = None
 ) -> None:
     '''
         Processes and sends a usage log to the EVENTS microservice.
@@ -218,7 +219,7 @@ async def _process_and_send_usage_log(
         logger.error(error_msg, exc_info = True)
 
 
-async def _get_request_body_for_logging(request: Optional[Request]) -> dict | None:
+async def _get_request_body_for_logging(request: Request | None) -> dict | None:
     '''
         Helper to safely extract the request body for logging, handling the
         different content types.
@@ -341,7 +342,7 @@ def handle_service_errors(
     return decorator
 
 
-def _resolve_audit_entity(result: Any) -> tuple[str, Optional[Any]]:
+def _resolve_audit_entity(result: Any) -> tuple[str, Any | None]:
     '''
         Extracts (entity_id, new_values) from the wrapped function result.
 
@@ -350,7 +351,7 @@ def _resolve_audit_entity(result: Any) -> tuple[str, Optional[Any]]:
     '''
     candidate_keys = ('id', 'run_id', 'dataset_id', 'client_id')
 
-    def _pick_id(values: Dict[str, Any]) -> str:
+    def _pick_id(values: dict[str, Any]) -> str:
         for key in candidate_keys:
             if values.get(key) is not None:
                 return str(values[key])
@@ -366,7 +367,7 @@ def _resolve_audit_entity(result: Any) -> tuple[str, Optional[Any]]:
 
 def _schedule_audit(
     result: Any,
-    kwargs: Dict[str, Any],
+    kwargs: dict[str, Any],
     microservice_name: str,
     entity_name: str,
     action: str
@@ -426,7 +427,7 @@ def audit_event(
     return decorator
 
 
-def _caller_authorization(request: Optional[Request]) -> Optional[str]:
+def _caller_authorization(request: Request | None) -> str | None:
     '''
         The Authorization header of the request being served, forwarded to
         EVENTS so it can check that whoever writes a log is a real caller.
@@ -435,9 +436,9 @@ def _caller_authorization(request: Optional[Request]) -> Optional[str]:
         again because its POST endpoints are reachable from the internet.
 
         Args:
-            request (Optional[Request]): The incoming request, when there is one.
+            request (Request | None): The incoming request, when there is one.
 
         Returns:
-            Optional[str]: The header, or None for calls with no request.
+            str | None: The header, or None for calls with no request.
     '''
     return request.headers.get('authorization') if request is not None else None

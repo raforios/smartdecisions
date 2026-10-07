@@ -1,7 +1,7 @@
 '''
     Exceptions service
 '''
-from typing import Optional, Dict, Any
+from typing import Any
 from fastapi import HTTPException, status
 
 class RegisterNotFoundError(HTTPException):
@@ -12,7 +12,7 @@ class RegisterNotFoundError(HTTPException):
     def __init__(
         self,
         detail: str = 'Register not found',
-        headers: Optional[Dict[str, Any]] = None
+        headers: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code = status.HTTP_404_NOT_FOUND,
@@ -28,7 +28,7 @@ class ResourceNotFoundError(HTTPException):
     def __init__(
         self,
         detail: str = 'Resource not found',
-        headers: Optional[Dict[str, Any]] = None
+        headers: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code = status.HTTP_404_NOT_FOUND,
@@ -45,7 +45,7 @@ class RegisterAlreadyExistsError(HTTPException):
     def __init__(
         self,
         detail: str = 'A register with this code already exists',
-        headers: Optional[Dict[str, Any]] = None
+        headers: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code = status.HTTP_409_CONFLICT,
@@ -62,7 +62,7 @@ class InvalidInputError(HTTPException):
     def __init__(
         self,
         detail: str = 'Invalid input data',
-        headers: Optional[Dict[str, Any]] = None
+        headers: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code = status.HTTP_400_BAD_REQUEST,
@@ -80,7 +80,7 @@ class UnauthorizedError(HTTPException):
     def __init__(
         self,
         detail: str = 'Unauthorized',
-        headers: Optional[Dict[str, Any]] = None
+        headers: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code = status.HTTP_401_UNAUTHORIZED,
@@ -98,7 +98,7 @@ class ForbiddenError(HTTPException):
     def __init__(
         self,
         detail: str = 'Access Forbidden',
-        headers: Optional[Dict[str, Any]] = None
+        headers: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code = status.HTTP_403_FORBIDDEN,
@@ -114,7 +114,7 @@ class ServiceUnavailableError(HTTPException):
     def __init__(
         self,
         detail: str = 'Service is currently unavailable. Please try again later.',
-        headers: Optional[Dict[str, Any]] = None
+        headers: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code = status.HTTP_503_SERVICE_UNAVAILABLE,

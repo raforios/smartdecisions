@@ -3,7 +3,6 @@
     mounted under the same prefix as the planning endpoints, so the frontend
     talks to one service for everything about routes.
 '''
-from typing import List
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Body, Depends, Path, Query, Request, status
@@ -128,7 +127,7 @@ async def create_planned_route_endpoint(
 
 @router.get(
     '/routes/planned',
-    response_model = List[PlannedRouteResponseSchema],
+    response_model = list[PlannedRouteResponseSchema],
     status_code = status.HTTP_200_OK,
     summary = 'List the planned routes of the caller'
 )
@@ -136,7 +135,7 @@ async def get_all_planned_routes_endpoint(
     request: Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(require_roles(*FIELD_ROLES))
-) -> List[PlannedRouteResponseSchema]:
+) -> list[PlannedRouteResponseSchema]:
     '''
         Endpoint to list planned routes.
     '''
@@ -151,7 +150,7 @@ async def get_all_planned_routes_endpoint(
 
 @router.post(
     '/routes/planned/filter',
-    response_model = List[PlannedRouteResponseSchema],
+    response_model = list[PlannedRouteResponseSchema],
     status_code = status.HTTP_200_OK,
     summary = 'Filter the planned routes of the caller',
     description = 'Any combination of ids, code, name fragment, status and seller.'
@@ -163,7 +162,7 @@ async def filter_planned_routes_endpoint(
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(require_roles(*FIELD_ROLES))
-) -> List[PlannedRouteResponseSchema]:
+) -> list[PlannedRouteResponseSchema]:
     '''
         Endpoint to filter planned routes.
     '''
@@ -536,7 +535,7 @@ async def create_executed_route_endpoint(
 
 @router.get(
     '/routes/executed',
-    response_model = List[ExecutedRouteResponseSchema],
+    response_model = list[ExecutedRouteResponseSchema],
     status_code = status.HTTP_200_OK,
     summary = 'List executed routes',
     description = 'Bounded by start date, narrowed by seller and/or planned route.'
@@ -547,7 +546,7 @@ async def list_executed_routes_endpoint(
     caller: CallerClaims = Depends(get_caller),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(require_roles(*FIELD_ROLES))
-) -> List[ExecutedRouteResponseSchema]:
+) -> list[ExecutedRouteResponseSchema]:
     '''
         Endpoint to list executed routes. A seller only sees their own.
     '''
@@ -596,7 +595,7 @@ async def register_executed_point_endpoint(
 )
 async def get_last_known_locations_endpoint(
     request: Request,
-    sellers: List[str] = Query(..., min_length = 1),
+    sellers: list[str] = Query(..., min_length = 1),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
 ) -> GroupLastKnownLocationsResponseSchema:

@@ -18,7 +18,6 @@
         make a stockout date look measured when it is inferred.
 '''
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -86,7 +85,7 @@ _URGENCY = {
 }
 
 
-def _latest_snapshot(stock: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[pd.Timestamp]]:
+def _latest_snapshot(stock: pd.DataFrame) -> tuple[pd.DataFrame, pd.Timestamp | None]:
     '''
         Keeps the most recent photo of each product.
 
@@ -203,7 +202,7 @@ def _abc_classes(sales: pd.DataFrame) -> pd.Series:
 
 
 def _status_of(
-    coverage: Optional[float],
+    coverage: float | None,
     on_hand: float,
     demand: float
 ) -> StockStatus:
@@ -239,8 +238,8 @@ def _rows(
     demand: pd.Series,
     costs: pd.Series,
     classes: pd.Series,
-    as_of: Optional[pd.Timestamp]
-) -> List[StockRow]:
+    as_of: pd.Timestamp | None
+) -> list[StockRow]:
     '''
         Builds one row per product in the warehouse.
 
@@ -252,7 +251,7 @@ def _rows(
             as_of (pd.Timestamp | None): Date of the photo, for the stockout date.
 
         Returns:
-            List[StockRow]: Rows sorted by how urgent they are.
+            list[StockRow]: Rows sorted by how urgent they are.
     '''
     grouped = snapshot.groupby(snapshot[PRODUCT_ID].astype(str)).agg(
         label = (PRODUCT_NAME, 'first') if PRODUCT_NAME in snapshot.columns
@@ -288,13 +287,13 @@ class _Context:
     demand: pd.Series
     costs: pd.Series
     classes: pd.Series
-    as_of: Optional[pd.Timestamp]
+    as_of: pd.Timestamp | None
 
 
 def _excess_units(
     on_hand: float,
     daily: float,
-    coverage: Optional[float]
+    coverage: float | None
 ) -> float:
     '''
         Units above the configured coverage ceiling.
@@ -377,14 +376,14 @@ _EXCESS = (StockStatus.EXCESS, StockStatus.NO_DEMAND)
 
 
 def _kpis(
-    rows: List[StockRow],
-    as_of: Optional[pd.Timestamp]
+    rows: list[StockRow],
+    as_of: pd.Timestamp | None
 ) -> StockKpis:
     '''
         The headline figures of the warehouse.
 
         Args:
-            rows (List[StockRow]): Every product of the snapshot.
+            rows (list[StockRow]): Every product of the snapshot.
             as_of (pd.Timestamp | None): Date of the photo.
 
         Returns:
@@ -421,7 +420,7 @@ def _kpis(
 
 def build_stock(
     sales: pd.DataFrame,
-    stock: Optional[pd.DataFrame] = None
+    stock: pd.DataFrame | None = None
 ) -> StockBlock:
     '''
         Builds the stock view from the snapshot and the sales that measure it.

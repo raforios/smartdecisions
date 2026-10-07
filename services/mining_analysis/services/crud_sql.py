@@ -3,7 +3,7 @@
     Ministry's royalties tables and the local loads. The DynamoDB CRUD every
     published endpoint uses is `crud.py`, the shared boilerplate.
 '''
-from typing import List, Optional, Dict, Any, Type, Union
+from typing import Any
 from sqlalchemy.orm import Session, DeclarativeBase, selectinload, Load
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from pydantic import BaseModel
@@ -54,18 +54,18 @@ def handle_db_exception(
     raise RuntimeError('An unexpected internal error occurred.') from e
 
 def create_record(
-    db: Session, model: Type[DeclarativeBase], create_data: BaseModel,
-    extra_fields: Optional[Dict[str, Any]] = None,
-    exclude_relations: Optional[List[str]] = None
+    db: Session, model: type[DeclarativeBase], create_data: BaseModel,
+    extra_fields: dict[str, Any] | None = None,
+    exclude_relations: list[str] | None = None
 ) -> DeclarativeBase:
     '''
         Generic function to create a new record in the database.
 
         Args:
             db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class.
+            model (type[DeclarativeBase]): The SQLAlchemy model class.
             create_data (BaseModel): Pydantic schema with data for the new record.
-            extra_fields (Optional[Dict[str, Any]]): Additional fields to add/override.
+            extra_fields (dict[str, Any] | None): Additional fields to add/override.
 
         Returns:
             DeclarativeBase: The newly created database record.
@@ -106,18 +106,18 @@ def create_record(
         raise
 
 def get_record(
-    db: Session, model: Type[DeclarativeBase],
+    db: Session, model: type[DeclarativeBase],
     record_id: int,
-    eager_load_options: Optional[List[Union[str, Load]]] = None
+    eager_load_options: list[str | Load] | None = None
 ) -> DeclarativeBase:
     '''
         Generic function to retrieve a record by ID with flexible eager loading.
 
         Args:
             db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class to query.
+            model (type[DeclarativeBase]): The SQLAlchemy model class to query.
             record_id (int): The ID of the record to retrieve.
-            eager_load_options (Optional[List[Union[str, Load]]]):
+            eager_load_options (list[str | Load] | None):
                 A list of relationship names (strings) or
                 SQLAlchemy Load objects for eager loading.
 
@@ -163,7 +163,7 @@ def get_record(
 def update_record(
     db: Session, db_record: DeclarativeBase,
     update_data: BaseModel,
-    exclude_relations: Optional[List[str]] = None
+    exclude_relations: list[str] | None = None
 ) -> DeclarativeBase:
     '''
         Generic function to update an existing record.
@@ -199,7 +199,7 @@ def update_record(
 
 def delete_record(
     db: Session,
-    model: Type[DeclarativeBase],
+    model: type[DeclarativeBase],
     record_id: int
 ) -> None:
     '''
@@ -207,7 +207,7 @@ def delete_record(
 
         Args:
             db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class.
+            model (type[DeclarativeBase]): The SQLAlchemy model class.
             record_id (int): The ID of the record to delete.
 
         Raises:
@@ -226,22 +226,22 @@ def delete_record(
         raise
 
 def get_all_records_paginated(
-    db: Session, model: Type[DeclarativeBase],
+    db: Session, model: type[DeclarativeBase],
     skip: int = 0, limit: int = 100,
-    eager_load_options: Optional[List] = None
-) -> List[DeclarativeBase]:
+    eager_load_options: list | None = None
+) -> list[DeclarativeBase]:
     '''
         Generic function to retrieve a paginated list of all records for a given model.
 
         Args:
             db (Session): The database session.
-            model (Type[DeclarativeBase]): The SQLAlchemy model class to query.
+            model (type[DeclarativeBase]): The SQLAlchemy model class to query.
             skip (int): The number of records to skip (offset).
             limit (int): The maximum number of records to retrieve.
-            eager_load_options (Optional[List]): List of joinedload options for eager loading.
+            eager_load_options (list | None): List of joinedload options for eager loading.
 
         Returns:
-            List[DeclarativeBase]: A list of retrieved database records.
+            list[DeclarativeBase]: A list of retrieved database records.
 
         Raises:
             SQLAlchemyError: For database-related errors (handled by handle_db_exception).

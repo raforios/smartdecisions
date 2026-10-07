@@ -6,7 +6,6 @@
     Same query-string contract (route_id, day, dist) so existing notebook /
     frontend clients only need to swap the base URL.
 '''
-from typing import Dict, List
 from fastapi import APIRouter, Depends, Path, Request, status
 from boto3.resources.base import ServiceResource
 
@@ -41,7 +40,7 @@ router = APIRouter(prefix = '/v1/optimization', tags = ['Optimization'])
 
 @router.get(
     '/data_model',
-    response_model = List[DataMapResponse],
+    response_model = list[DataMapResponse],
     status_code = status.HTTP_200_OK,
     summary = 'Base map data for a (route_id, day)',
     description = 'Returns the geolocated client points tagged with start/middle/end colors.'
@@ -51,7 +50,7 @@ async def get_base_data_endpoint(
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
-) -> List[DataMapResponse]:
+) -> list[DataMapResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/data_model.
     '''
@@ -71,7 +70,7 @@ async def get_base_data_endpoint(
 
 @router.get(
     '/distances',
-    response_model = List[OptimizationResponse],
+    response_model = list[OptimizationResponse],
     status_code = status.HTTP_200_OK,
     summary = 'Ordered linear distances between points',
     description = 'Returns the ordered (origin, target, distance) triples for the route.'
@@ -81,7 +80,7 @@ async def get_distances_endpoint(
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
-) -> List[OptimizationResponse]:
+) -> list[OptimizationResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/distances.
     '''
@@ -101,7 +100,7 @@ async def get_distances_endpoint(
 
 @router.get(
     '/optimal_route',
-    response_model = List[RouteResponse],
+    response_model = list[RouteResponse],
     status_code = status.HTTP_200_OK,
     summary = 'Optimized route projected on the road network (OSRM)',
     description = (
@@ -114,7 +113,7 @@ async def get_optimal_route_endpoint(
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
-) -> List[RouteResponse]:
+) -> list[RouteResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/optimal_route.
     '''
@@ -134,7 +133,7 @@ async def get_optimal_route_endpoint(
 
 @router.get(
     '/distance_matrix',
-    response_model = Dict,
+    response_model = dict,
     status_code = status.HTTP_200_OK,
     summary = 'Geodesic distance matrix between all points',
     description = (
@@ -147,7 +146,7 @@ async def get_distance_matrix_endpoint(
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
-) -> Dict:
+) -> dict:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/distance_matrix.
     '''
@@ -167,7 +166,7 @@ async def get_distance_matrix_endpoint(
 
 @router.get(
     '/route',
-    response_model = List[RouteResponse],
+    response_model = list[RouteResponse],
     status_code = status.HTTP_200_OK,
     summary = 'Per-segment route data (alias of /optimal_route)',
     description = 'Mirrors the legacy /route endpoint kept for notebook compatibility.'
@@ -177,7 +176,7 @@ async def get_route_endpoint(
     query_params: OptimizationQueryParams = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
-) -> List[RouteResponse]:
+) -> list[RouteResponse]:
     '''
         Endpoint mirroring legacy GET /api/v1/optimization/route.
     '''

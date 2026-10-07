@@ -9,7 +9,6 @@
     Returns per-tier totals plus the list of clients (capped) so the frontend can
     show both a summary chart and an actionable table.
 '''
-from typing import List
 
 import pandas as pd
 
@@ -62,7 +61,7 @@ def build_segmentation(dataframe: pd.DataFrame) -> SegmentationBlock:
             dataframe (pd.DataFrame): Normalized sales rows.
 
         Returns:
-            Dict[str, Any]: 'tiers' (per-tier count, total and share) and
+            dict[str, Any]: 'tiers' (per-tier count, total and share) and
                 'clients' (capped list of {client, tier, amount, compras}),
                 highest value first.
     '''
@@ -95,7 +94,7 @@ def build_segmentation(dataframe: pd.DataFrame) -> SegmentationBlock:
     agg = agg.assign(tier = tiers)
 
     grand_total = float(agg['amount'].sum()) or 1.0
-    tier_summary: List[SegmentTier] = []
+    tier_summary: list[SegmentTier] = []
     for tier in _TIER_ORDER:
         subset = agg[agg['tier'] == tier]
         tier_amount = float(subset['amount'].sum())

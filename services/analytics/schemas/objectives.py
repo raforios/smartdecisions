@@ -15,7 +15,6 @@
     until the cash does not arrive.
 '''
 from enum import Enum
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -43,29 +42,29 @@ class CommercialPolicySchema(BaseModel):
         green, and on what a bolivian is worth in points. What the client
         does not set falls back to the service default, field by field.
     """
-    yellow_from: Optional[float] = Field(
+    yellow_from: float | None = Field(
         None, ge = 0,
         description = 'Attainment where RED becomes YELLOW, as a fraction.'
     )
-    green_from: Optional[float] = Field(
+    green_from: float | None = Field(
         None, ge = 0,
         description = 'Attainment where YELLOW becomes GREEN, as a fraction.'
     )
-    bs_per_point: Optional[float] = Field(
+    bs_per_point: float | None = Field(
         None, gt = 0,
         description = 'Currency per point for a cluster with no rate of its own.'
     )
-    points_per_cluster: Optional[Dict[str, float]] = Field(
+    points_per_cluster: dict[str, float] | None = Field(
         None,
         description = 'Currency per point, by cluster. The cluster names are '
                       'the account\'s own: the product declares none.'
     )
-    usd_cost_share: Optional[float] = Field(
+    usd_cost_share: float | None = Field(
         None, ge = 0, le = 1,
         description = 'Share of the cost bought in dollars, for any category '
                       'without one of its own. 1.0 is a pure importer.'
     )
-    usd_cost_share_by_category: Optional[Dict[str, float]] = Field(
+    usd_cost_share_by_category: dict[str, float] | None = Field(
         None,
         description = 'Share of the cost bought in dollars, by category.'
     )
@@ -76,13 +75,13 @@ class ClientScoreSchema(BaseModel):
         One client in one month, judged against their objective.
     '''
     pos_id: str
-    pos_name: Optional[str] = None
+    pos_name: str | None = None
     period: str = Field(..., description = "The month, as 'YYYY-MM'.")
-    cluster: Optional[str] = None
-    supervisor: Optional[str] = None
-    market: Optional[str] = None
-    channel: Optional[str] = None
-    seller: Optional[str] = None
+    cluster: str | None = None
+    supervisor: str | None = None
+    market: str | None = None
+    channel: str | None = None
+    seller: str | None = None
     target_amount: float = Field(..., ge = 0)
     invoiced_amount: float = Field(..., ge = 0)
     collected_amount: float = Field(..., ge = 0)
@@ -119,7 +118,7 @@ class ObjectivesTotalsSchema(BaseModel):
         The header figures: the whole account in one line.
     '''
     clients_count: int = Field(..., ge = 0)
-    periods: List[str] = Field(default_factory = list)
+    periods: list[str] = Field(default_factory = list)
     target_amount: float = Field(..., ge = 0)
     invoiced_amount: float = Field(..., ge = 0)
     collected_amount: float = Field(..., ge = 0)
@@ -139,8 +138,8 @@ class ObjectivesBlockSchema(BaseModel):
         a screen stops being used.
     """
     totals: ObjectivesTotalsSchema
-    by_cluster: List[ClusterCellSchema] = Field(default_factory = list)
-    clients: List[ClientScoreSchema] = Field(default_factory = list)
+    by_cluster: list[ClusterCellSchema] = Field(default_factory = list)
+    clients: list[ClientScoreSchema] = Field(default_factory = list)
     policy: CommercialPolicySchema
     clients_without_objective: int = Field(
         0, ge = 0,
@@ -156,7 +155,7 @@ class ObjectivesResponse(ObjectivesBlockSchema):
     """
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
-    available_periods: List[str] = Field(
+    available_periods: list[str] = Field(
         default_factory = list,
         description = 'Every month the objectives file has; without a window '
                       'only the latest is judged.'

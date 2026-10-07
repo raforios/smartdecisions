@@ -3,7 +3,7 @@
 '''
 import socket
 from datetime import datetime, date
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -106,12 +106,12 @@ async def favicon() -> FileResponse:
 # Root path (Healtcheck function)
 @app.get('/', tags = ['Home'])
 @app.get(f'{DOCS_BASE}/health', tags = ['Home'])
-def root() -> Dict[str, Any]:
+def root() -> dict[str, Any]:
     '''
         Function root: health check function
 
         Returns:
-            Dict[str, Any]: A dictionary with system info.
+            dict[str, Any]: A dictionary with system info.
     '''
     today = datetime.now()
     copyright_symbol = '\u00A9'
@@ -130,7 +130,7 @@ def root() -> Dict[str, Any]:
 
 @app.get('/openapi.json', include_in_schema = False)
 @app.get(OPENAPI_URL, include_in_schema = False)
-def custom_openapi() -> Dict[str, Any]:
+def custom_openapi() -> dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
     '''

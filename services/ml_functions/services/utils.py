@@ -1,24 +1,25 @@
 '''
     Utility services for handling common tasks.
 '''
+from collections.abc import Callable
 import traceback
 from functools import wraps
-from typing import Callable, Type, Optional, Any
+from typing import Any
 from fastapi import HTTPException, status
 from services.logger_config import custom_logger as logger
 
 def handle_operation(
-    exc_type: Type[Exception] = Exception,
-    error_detail: Optional[str] = None
+    exc_type: type[Exception] = Exception,
+    error_detail: str | None = None
 ):
     '''
     Decorator to handle exceptions for any operation in a standardized way.
     It catches a specified exception type and raises a custom HTTP exception.
     
     Args:
-        exc_type (Type[Exception]): The type of exception to catch.
+        exc_type (type[Exception]): The type of exception to catch.
                                     Defaults to the base Exception class.
-        error_detail (Optional[str]): A custom error message to use for
+        error_detail (str | None): A custom error message to use for
                                       the HTTPException.
     '''
     def decorator(func: Callable):

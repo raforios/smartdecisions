@@ -1,9 +1,10 @@
 '''
     Mining Analysis Microservice Main Handler
 '''
+from collections.abc import AsyncGenerator
 import socket
 from datetime import datetime, date
-from typing import Dict, Any, AsyncGenerator
+from typing import Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -107,12 +108,12 @@ setup_exception_handlers(app)
 
 @app.get('/', tags = ['Healthcheck'])
 @app.get(f'{DOCS_BASE}/health', tags = ['Home'])
-def root() -> Dict[str, Any]:
+def root() -> dict[str, Any]:
     '''
         Function root: health check function
 
         Returns:
-            Dict[str, Any]: A dictionary with system info.
+            dict[str, Any]: A dictionary with system info.
     '''
     today = datetime.now()
     copyright_symbol = '\u00A9'
@@ -132,7 +133,7 @@ def root() -> Dict[str, Any]:
 
 @app.get('/openapi.json', include_in_schema = False)
 @app.get(OPENAPI_URL, include_in_schema = False)
-def custom_openapi() -> Dict[str, Any]:
+def custom_openapi() -> dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
     '''
@@ -200,12 +201,12 @@ _SCHEDULED_SOURCE = 'aws.events'
 _SYNC_TASK = 'sync_market'
 
 
-def _is_scheduled_sync(event: Dict[str, Any]) -> bool:
+def _is_scheduled_sync(event: dict[str, Any]) -> bool:
     '''
         Tells a scheduled invocation apart from an HTTP one.
 
         Args:
-            event (Dict[str, Any]): Raw Lambda event.
+            event (dict[str, Any]): Raw Lambda event.
 
         Returns:
             bool: True when the event asks for the market sync.
@@ -216,14 +217,14 @@ def _is_scheduled_sync(event: Dict[str, Any]) -> bool:
 
 
 def handler(
-    event: Dict[str, Any],
+    event: dict[str, Any],
     context: Any
 ) -> Any:
     '''
         Lambda entry point.
 
         Args:
-            event (Dict[str, Any]): Raw Lambda event.
+            event (dict[str, Any]): Raw Lambda event.
             context (Any): Lambda context, passed through to Mangum.
 
         Returns:

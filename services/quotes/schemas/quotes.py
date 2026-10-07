@@ -7,7 +7,6 @@
 '''
 from datetime import date
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -44,7 +43,7 @@ class RateOnDate(BaseModel):
     date: str
     currency: str
     rate: float
-    published_on: Optional[str] = Field(
+    published_on: str | None = Field(
         None, description = 'The day the BCB published it. None under the fixed regime.'
     )
     regime: str = Field(..., description = 'FIXED or FLOAT.')
@@ -56,9 +55,9 @@ class ExchangeRateHistory(BaseModel):
     '''
     currency: str
     days: int = Field(..., ge = 0, description = 'Days with a published rate.')
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
-    rates: List[ExchangeRatePoint] = []
+    date_from: date | None = None
+    date_to: date | None = None
+    rates: list[ExchangeRatePoint] = []
 
 
 class SyncResult(BaseModel):
@@ -73,8 +72,8 @@ class SyncResult(BaseModel):
         ..., ge = 0,
         description = 'Dates the source publishes nothing for, weekends included.'
     )
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: date | None = None
+    date_to: date | None = None
 
 
 class RateConfidence(str, Enum):
@@ -114,11 +113,11 @@ class ForecastAccuracy(BaseModel):
         its place.
     '''
     method: ForecastMethod
-    mean_absolute_error: Optional[float] = Field(
+    mean_absolute_error: float | None = Field(
         None, description = 'Average miss of the model, in the unit of the series.'
     )
     baseline_method: ForecastMethod = ForecastMethod.NAIVE
-    baseline_error: Optional[float] = Field(
+    baseline_error: float | None = Field(
         None, description = 'Average miss of the baseline, same measurement.'
     )
     windows: int = Field(0, ge = 0, description = 'Replays the average is over.')
@@ -134,10 +133,10 @@ class ModelRun(BaseModel):
         that looks measured and is not.
     '''
     model: str
-    change_percent: Optional[float] = None
-    final_rate: Optional[float] = None
-    mean_absolute_error: Optional[float] = None
-    projected: List[ExchangeRatePoint] = Field(default_factory = list)
+    change_percent: float | None = None
+    final_rate: float | None = None
+    mean_absolute_error: float | None = None
+    projected: list[ExchangeRatePoint] = Field(default_factory = list)
 
 
 class ModelBench(BaseModel):
@@ -151,13 +150,13 @@ class ModelBench(BaseModel):
     currency: str
     days_ahead: int = Field(..., ge = 1)
     confidence: RateConfidence
-    last_rate: Optional[float] = None
-    last_date: Optional[date] = None
-    valid_from: Optional[date] = None
-    valid_to: Optional[date] = None
+    last_rate: float | None = None
+    last_date: date | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
     windows: int = Field(0, ge = 0, description = 'Réplicas que promedia el error.')
-    history: List[ExchangeRatePoint] = Field(default_factory = list)
-    runs: List[ModelRun] = Field(default_factory = list)
+    history: list[ExchangeRatePoint] = Field(default_factory = list)
+    runs: list[ModelRun] = Field(default_factory = list)
 
 
 class SaleOutcome(BaseModel):
@@ -165,7 +164,7 @@ class SaleOutcome(BaseModel):
         What a sale is worth under one set of conditions.
     '''
     exchange_rate: float = Field(..., description = 'Bolivianos per dollar applied.')
-    mineral_price: Optional[float] = Field(
+    mineral_price: float | None = Field(
         None, description = 'Unit price applied, when the caller supplied one.'
     )
     amount_usd: float = Field(..., ge = 0, description = 'Value of the sale in dollars.')
@@ -183,18 +182,18 @@ class SaleScenario(BaseModel):
     '''
     days_ahead: int = Field(..., ge = 1)
     rate_confidence: RateConfidence
-    rate_change_percent: Optional[float] = None
-    mineral_change_percent: Optional[float] = Field(
+    rate_change_percent: float | None = None
+    mineral_change_percent: float | None = Field(
         None, description = 'Expected change of the mineral price, as supplied.'
     )
     today: SaleOutcome
-    projected: Optional[SaleOutcome] = Field(
+    projected: SaleOutcome | None = Field(
         None, description = 'Absent when the history cannot support a projection.'
     )
-    difference_bob: Optional[float] = Field(
+    difference_bob: float | None = Field(
         None, description = 'Projected minus today, in bolivianos.'
     )
-    difference_percent: Optional[float] = None
+    difference_percent: float | None = None
 
 
 class SaleScenarioRequest(BaseModel):
@@ -206,7 +205,7 @@ class SaleScenarioRequest(BaseModel):
         ..., gt = 0, description = 'Price per unit today, in dollars.'
     )
     days_ahead: int = Field(30, ge = 1, le = 90, description = 'Days to wait.')
-    mineral_change_percent: Optional[float] = Field(
+    mineral_change_percent: float | None = Field(
         None,
         description = 'Expected change of the unit price over the horizon, from '
                       'the MINING_ANALYSIS projection. Omit to price the '
@@ -225,22 +224,22 @@ class RateForecast(BaseModel):
     currency: str
     days_ahead: int = Field(..., ge = 1)
     confidence: RateConfidence
-    change_percent: Optional[float] = None
-    last_rate: Optional[float] = None
-    last_date: Optional[date] = None
-    valid_from: Optional[date] = Field(
+    change_percent: float | None = None
+    last_rate: float | None = None
+    last_date: date | None = None
+    valid_from: date | None = Field(
         None, description = 'First day the published rate is in force.'
     )
-    valid_to: Optional[date] = Field(
+    valid_to: date | None = Field(
         None,
         description = 'Last day it is in force. The rate published for a '
                       'Saturday governs Saturday, Sunday and Monday.'
     )
-    final_rate: Optional[float] = Field(
+    final_rate: float | None = Field(
         None, description = 'Projected rate at the end of the horizon.'
     )
-    accuracy: Optional[ForecastAccuracy] = Field(
+    accuracy: ForecastAccuracy | None = Field(
         None, description = 'What the projection has been worth on this series.'
     )
-    history: List[ExchangeRatePoint] = []
-    projected: List[ExchangeRatePoint] = []
+    history: list[ExchangeRatePoint] = []
+    projected: list[ExchangeRatePoint] = []

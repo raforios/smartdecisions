@@ -31,7 +31,7 @@ import argparse
 import re
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
@@ -59,7 +59,7 @@ DEFAULT_SOURCE = (
 )
 
 
-def _parse_period_title(title: str) -> Optional[Tuple[int, int]]:
+def _parse_period_title(title: str) -> tuple[int, int] | None:
     '''
     Extracts (year, month) from titles like 'PRIMERA QUINCENA DE ABRIL 2026 (...)'.
     Returns None when the title does not match the expected pattern.
@@ -73,22 +73,22 @@ def _parse_period_title(title: str) -> Optional[Tuple[int, int]]:
     return int(match.group(2)), SPANISH_MONTHS[match.group(1).lower()]
 
 
-def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[str]]:
+def _extract_mineral_columns(header_row: tuple) -> tuple[dict[int, str], list[str]]:
     '''
     Splits header columns into matched/unmatched against OFFICIAL_MINERALS.
 
     Args:
-        header_row (Tuple): Raw row 3 of the Diario sheet (column headers).
+        header_row (tuple): Raw row 3 of the Diario sheet (column headers).
 
     Returns:
-        Tuple[Dict[int, str], List[str]]:
+        tuple[dict[int, str], list[str]]:
             - {column_index: normalized_mineral_name} for catalog hits.
             - Raw header labels that did not match the catalog (caller may
               choose to warn). Column A (the day number) is always skipped.
     '''
     official = {normalize_name(m['name']) for m in OFFICIAL_MINERALS}
-    matched: Dict[int, str] = {}
-    unmatched: List[str] = []
+    matched: dict[int, str] = {}
+    unmatched: list[str] = []
     for idx, cell in enumerate(header_row):
         if idx == 0 or cell is None:
             continue
@@ -106,7 +106,7 @@ def _extract_mineral_columns(header_row: Tuple) -> Tuple[Dict[int, str], List[st
 def _iter_daily_rows(
     sheet: Worksheet,
     sheet_name: str
-) -> List[Tuple[date, Dict[str, float]]]:
+) -> list[tuple[date, dict[str, float]]]:
     '''
     Yields (price_date, {normalized_mineral: price}) for every numeric day row
     in a Diario sheet. Returns [] if the sheet does not match the expected
@@ -130,7 +130,7 @@ def _iter_daily_rows(
                      f'OFFICIAL_MINERALS, ignored: {", ".join(unmatched)}.')
         logger.warning(error_msg)
 
-    parsed: List[Tuple[date, Dict[str, float]]] = []
+    parsed: list[tuple[date, dict[str, float]]] = []
     for row in rows[3:]:
         price_date = _row_date(row, year, month)
         if price_date is None:
@@ -142,10 +142,10 @@ def _iter_daily_rows(
 
 
 def _row_date(
-    row: Tuple[Any, ...],
+    row: tuple[Any, ...],
     year: int,
     month: int
-) -> Optional[date]:
+) -> date | None:
     '''
     Reads the day number in the first cell and builds the quotation date.
 
@@ -168,20 +168,20 @@ def _row_date(
 
 
 def _row_prices(
-    row: Tuple[Any, ...],
-    mineral_cols: Dict[int, str]
-) -> Dict[str, float]:
+    row: tuple[Any, ...],
+    mineral_cols: dict[int, str]
+) -> dict[str, float]:
     '''
     Reads the quotations of one day row, skipping blanks and unparseable cells.
 
     Args:
         row (tuple): Row of the sheet, values only.
-        mineral_cols (Dict[int, str]): Column index -> normalized mineral name.
+        mineral_cols (dict[int, str]): Column index -> normalized mineral name.
 
     Returns:
-        Dict[str, float]: Price per mineral present in that row.
+        dict[str, float]: Price per mineral present in that row.
     '''
-    prices: Dict[str, float] = {}
+    prices: dict[str, float] = {}
     for col_idx, mineral_norm in mineral_cols.items():
         value = row[col_idx] if col_idx < len(row) else None
         if value is None or value == '':
@@ -195,9 +195,9 @@ def _row_prices(
 
 def _upsert_prices(
     session: Session,
-    mineral_id_by_norm: Dict[str, int],
-    parsed_rows: List[Tuple[date, Dict[str, float]]]
-) -> Tuple[int, int]:
+    mineral_id_by_norm: dict[str, int],
+    parsed_rows: list[tuple[date, dict[str, float]]]
+) -> tuple[int, int]:
     '''
     Inserts new MiningPrice rows for each (date, mineral) pair. Existing rows
     are left untouched so the operation is idempotent.
@@ -256,7 +256,7 @@ def main() -> int:
         print('No Diario sheets detected. Nothing to do.')
         return 0
 
-    all_parsed: List[Tuple[date, Dict[str, float]]] = []
+    all_parsed: list[tuple[date, dict[str, float]]] = []
     for sheet_name in diary_sheets:
         rows = _iter_daily_rows(workbook[sheet_name], sheet_name)
         print(f'[{sheet_name}] {len(rows)} day-rows with prices.')

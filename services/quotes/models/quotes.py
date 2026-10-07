@@ -18,7 +18,7 @@
 '''
 from dataclasses import dataclass
 from datetime import date as date_type
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 RATES_PARTITION_KEY = 'currency'
@@ -41,19 +41,19 @@ class ExchangeRateItem:
     currency: str
     date: date_type
     official_rate: float
-    source: Optional[str] = None
-    retrieved_at: Optional[str] = None
+    source: str | None = None
+    retrieved_at: str | None = None
 
     @classmethod
     def from_item(
         cls,
-        item: Dict[str, Any]
-    ) -> 'ExchangeRateItem':
+        item: dict[str, Any]
+    ) -> ExchangeRateItem:
         '''
             Builds the record from a raw DynamoDB item.
 
             Args:
-                item (Dict[str, Any]): Item as returned by boto3.
+                item (dict[str, Any]): Item as returned by boto3.
 
             Returns:
                 ExchangeRateItem: The typed record, with the date parsed.
@@ -66,12 +66,12 @@ class ExchangeRateItem:
             retrieved_at = item.get('retrieved_at')
         )
 
-    def to_item(self) -> Dict[str, Any]:
+    def to_item(self) -> dict[str, Any]:
         '''
             Renders the record as the item DynamoDB stores.
 
             Returns:
-                Dict[str, Any]: Item ready for put_item.
+                dict[str, Any]: Item ready for put_item.
         '''
         return {
             RATES_PARTITION_KEY: self.currency,

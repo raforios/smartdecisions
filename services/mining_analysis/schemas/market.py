@@ -5,7 +5,6 @@
 '''
 from datetime import date
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -62,7 +61,7 @@ class MarketSyncResult(BaseModel):
     stored: int
     already_present: int
     without_publication: int
-    failed_sources: List[MarketSource] = Field(
+    failed_sources: list[MarketSource] = Field(
         default_factory = list,
         description = 'Sources that could not be read this run; the others were stored.'
     )
@@ -84,7 +83,7 @@ class MarketPricesResponse(BaseModel):
     mineral_id: str
     name: str
     unit: str
-    items: List[MarketPriceRow]
+    items: list[MarketPriceRow]
 
 
 class RoyaltyRuleSchema(BaseModel):
@@ -100,14 +99,14 @@ class RoyaltyRuleSchema(BaseModel):
     max_rate: float = Field(..., ge = 0, le = 100)
     internal_factor: float = Field(..., gt = 0, le = 1)
     legal_basis: str = Field(..., max_length = 120)
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
 
 class RoyaltyRulesResponse(BaseModel):
     '''
         Every scale.
     '''
-    rules: List[RoyaltyRuleSchema]
+    rules: list[RoyaltyRuleSchema]
 
 
 class EstimateRow(BaseModel):
@@ -119,23 +118,23 @@ class EstimateRow(BaseModel):
     name: str
     chemical_symbol: str
     unit: str
-    source: Optional[MarketSource] = Field(
+    source: MarketSource | None = Field(
         None, description = 'None when the mineral has no free daily source (Asian Metal).'
     )
     days_quoted: int
     calendar_days_elapsed: int
-    running_average: Optional[float] = None
-    latest_price: Optional[float] = None
-    latest_date: Optional[date] = None
-    previous_official: Optional[float] = Field(
+    running_average: float | None = None
+    latest_price: float | None = None
+    latest_date: date | None = None
+    previous_official: float | None = Field(
         None, description = 'The quotation in force now: the average of the fortnight before.'
     )
-    change_percent: Optional[float] = Field(
+    change_percent: float | None = Field(
         None, description = 'Running average against the quotation in force.'
     )
-    export_rate: Optional[float] = Field(None, description = 'Art. 227 rate, percent.')
-    internal_rate: Optional[float] = None
-    rate_basis: Optional[RateBasis] = None
+    export_rate: float | None = Field(None, description = 'Art. 227 rate, percent.')
+    internal_rate: float | None = None
+    rate_basis: RateBasis | None = None
     confidence: EstimateConfidence
 
 
@@ -151,7 +150,7 @@ class EstimateResponse(BaseModel):
     period_end: date
     valid_from: date = Field(..., description = 'First day the averaged fortnight will rule.')
     valid_to: date
-    rows: List[EstimateRow]
+    rows: list[EstimateRow]
 
 
 class MarketWindow(BaseModel):
@@ -162,5 +161,5 @@ class MarketWindow(BaseModel):
         as one argument: the controller stays within the argument budget and
         neither bound can be passed without the other.
     '''
-    date_from: Optional[date] = Field(None, description = 'First day; open when absent.')
-    date_to: Optional[date] = Field(None, description = 'Last day; open when absent.')
+    date_from: date | None = Field(None, description = 'First day; open when absent.')
+    date_to: date | None = Field(None, description = 'Last day; open when absent.')

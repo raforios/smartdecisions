@@ -17,7 +17,7 @@
     the master before the frame is analysed, which is what keeps Routes alive
     when the ERP of the month exports no latitude.
 '''
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 from boto3.resources.base import ServiceResource
@@ -50,7 +50,7 @@ CLIENTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_CLIENTS']
 
 # How a client is identified inside a validated frame: its code and its name.
 # Stated once so the sales, visits and field pipelines cannot disagree.
-CLIENT_FRAME_COLUMNS: Tuple[str, str] = ('pos_id', 'pos_name')
+CLIENT_FRAME_COLUMNS: tuple[str, str] = ('pos_id', 'pos_name')
 
 # A client registered from the street with no code of its own gets one built
 # from the reading that created it: stable, and it says where it came from.
@@ -84,19 +84,19 @@ def _is_empty(value: Any) -> bool:
     return False
 
 
-def _clean(attributes: Dict[str, Any]) -> Dict[str, Any]:
+def _clean(attributes: dict[str, Any]) -> dict[str, Any]:
     '''
         Drops the attributes that carry no information, so an absent field never
         travels as a value that overwrites a known one. Coordinates at exactly
         zero are dropped with them.
 
         Args:
-            attributes (Dict[str, Any]): Raw attributes of one client.
+            attributes (dict[str, Any]): Raw attributes of one client.
 
         Returns:
-            Dict[str, Any]: Only the attributes worth storing.
+            dict[str, Any]: Only the attributes worth storing.
     '''
-    cleaned: Dict[str, Any] = {}
+    cleaned: dict[str, Any] = {}
     for key, value in attributes.items():
         if _is_empty(value):
             continue
@@ -155,18 +155,18 @@ def get_client(
 def list_clients(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    seller: Optional[str] = None
-) -> List[ClientItem]:
+    seller: str | None = None
+) -> list[ClientItem]:
     '''
         The owner's clients, optionally narrowed to one seller's portfolio.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account that owns the data.
-            seller (Optional[str]): Salesperson the client is assigned to.
+            seller (str | None): Salesperson the client is assigned to.
 
         Returns:
-            List[ClientItem]: Matching clients, by code.
+            list[ClientItem]: Matching clients, by code.
     '''
     items = query_by_partition(
         dynamodb_resource = dynamodb_resource,
@@ -179,13 +179,13 @@ def list_clients(
     return sorted(items, key = lambda item: item['id'])
 
 
-def to_client_list_response(items: List[ClientItem]) -> ClientListResponseSchema:
+def to_client_list_response(items: list[ClientItem]) -> ClientListResponseSchema:
     '''
         Wraps a list of clients with the two counts that matter when deciding
         whether Routes has anything to draw.
 
         Args:
-            items (List[ClientItem]): Stored clients.
+            items (list[ClientItem]): Stored clients.
 
         Returns:
             ClientListResponseSchema: The list and its counts.
@@ -205,7 +205,7 @@ def to_client_list_response(items: List[ClientItem]) -> ClientListResponseSchema
 def upsert_clients(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    clients: List[ClientUpsertSchema],
+    clients: list[ClientUpsertSchema],
     source: ClientSource
 ) -> ClientUpsertResultSchema:
     '''
@@ -218,7 +218,7 @@ def upsert_clients(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account that owns the data.
-            clients (List[ClientUpsertSchema]): Clients to feed in.
+            clients (list[ClientUpsertSchema]): Clients to feed in.
             source (ClientSource): Which of the three doors they came through.
 
         Returns:
@@ -311,7 +311,7 @@ def clients_from_frame(
     frame: pd.DataFrame,
     id_column: str,
     name_column: str
-) -> List[ClientUpsertSchema]:
+) -> list[ClientUpsertSchema]:
     '''
         The clients a validated frame implies, each once.
 
@@ -325,7 +325,7 @@ def clients_from_frame(
             name_column (str): Column holding the client name.
 
         Returns:
-            List[ClientUpsertSchema]: One entry per distinct client.
+            list[ClientUpsertSchema]: One entry per distinct client.
     '''
     if frame.empty or id_column not in frame.columns:
         return []
@@ -335,7 +335,7 @@ def clients_from_frame(
     ]
     rows = frame[[id_column] + ([name_column] if name_column in frame.columns else [])
                  + columns].drop_duplicates(subset = [id_column], keep = 'last')
-    clients: List[ClientUpsertSchema] = []
+    clients: list[ClientUpsertSchema] = []
     for record in rows.to_dict(orient = 'records'):
         client_id = record.get(id_column)
         if _is_empty(client_id):
@@ -352,7 +352,7 @@ def clients_from_frame(
 
 def enrich_frame(
     frame: pd.DataFrame,
-    master: List[ClientItem],
+    master: list[ClientItem],
     id_column: str
 ) -> pd.DataFrame:
     '''
@@ -364,7 +364,7 @@ def enrich_frame(
 
         Args:
             frame (pd.DataFrame): Validated frame to complete.
-            master (List[ClientItem]): The owner's clients.
+            master (list[ClientItem]): The owner's clients.
             id_column (str): Column holding the client code.
 
         Returns:
@@ -396,7 +396,7 @@ def sync_master(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     frame: pd.DataFrame,
-    columns: Tuple[str, str],
+    columns: tuple[str, str],
     source: ClientSource
 ) -> pd.DataFrame:
     '''
@@ -413,7 +413,7 @@ def sync_master(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account that owns the data.
             frame (pd.DataFrame): Validated sales or visits frame.
-            columns (Tuple[str, str]): Client code column and client name column.
+            columns (tuple[str, str]): Client code column and client name column.
             source (ClientSource): Which door the frame came through.
 
         Returns:

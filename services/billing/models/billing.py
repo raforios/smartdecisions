@@ -21,7 +21,7 @@
     window a bounded Query on the sort key rather than a filter over the table.
 '''
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from services.environment import load_and_validate_env_vars
 
@@ -89,18 +89,18 @@ class ProductItem:
     description: str
     laboratory: str
     unit: str = 'UND'
-    barcode: Optional[str] = None
+    barcode: str | None = None
     min_stock: float = 0
     requires_prescription: bool = False
     is_active: bool = True
     # Homologation before the SIN: economic activity, product code and unit of
     # measure, each from its catalogue. Empty until the pharmacy fills them in;
     # without them the product cannot travel on an electronic invoice.
-    sin_activity_code: Optional[str] = None
-    sin_product_code: Optional[str] = None
-    sin_unit_code: Optional[int] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    sin_activity_code: str | None = None
+    sin_product_code: str | None = None
+    sin_unit_code: int | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 @dataclass
@@ -118,9 +118,9 @@ class LotItem:
     quantity_received: float
     quantity_remaining: float
     received_at: str
-    lot_code: Optional[str] = None
-    expiry_date: Optional[str] = None
-    purchase_id: Optional[str] = None
+    lot_code: str | None = None
+    expiry_date: str | None = None
+    purchase_id: str | None = None
 
     @property
     def sort_key(self) -> str:
@@ -145,23 +145,23 @@ class SaleItem:
     number: str
     status: str
     payment_method: str
-    lines: List[Dict[str, Any]]
+    lines: list[dict[str, Any]]
     subtotal: float
     discount: float
     total: float
     cost: float
     created_by: str
     created_at: str
-    buyer: Dict[str, Any] = field(default_factory = dict)
-    notes: Optional[str] = None
+    buyer: dict[str, Any] = field(default_factory = dict)
+    notes: str | None = None
     # Already masked when it gets here. The full number is never written: the
     # norm requires the middle digits zeroed, and a number we do not hold is a
     # number that cannot leak.
-    card_number: Optional[str] = None
-    cancelled_at: Optional[str] = None
-    cancelled_by: Optional[str] = None
+    card_number: str | None = None
+    cancelled_at: str | None = None
+    cancelled_by: str | None = None
     # The till the sale went into. Empty on notes issued before tills existed.
-    cash_session_id: Optional[str] = None
+    cash_session_id: str | None = None
 
 
 @dataclass
@@ -173,14 +173,14 @@ class PurchaseItem:
     purchase_id: str
     number: str
     supplier_name: str
-    lines: List[Dict[str, Any]]
+    lines: list[dict[str, Any]]
     total_cost: float
     created_by: str
     created_at: str
-    supplier_document: Optional[str] = None
-    invoice_number: Optional[str] = None
-    invoice_date: Optional[str] = None
-    notes: Optional[str] = None
+    supplier_document: str | None = None
+    invoice_number: str | None = None
+    invoice_date: str | None = None
+    notes: str | None = None
 
 
 def movement_key(
@@ -213,12 +213,12 @@ class CashSessionItem:
     business_day: str
     opened_at: str
     opening_cash: float
-    closed_at: Optional[str] = None
-    closed_by: Optional[str] = None
-    counted_cash: Optional[float] = None
-    expected_cash: Optional[float] = None
-    difference: Optional[float] = None
-    note: Optional[str] = None
+    closed_at: str | None = None
+    closed_by: str | None = None
+    counted_cash: float | None = None
+    expected_cash: float | None = None
+    difference: float | None = None
+    note: str | None = None
 
 
 @dataclass
@@ -237,6 +237,6 @@ class CashMovementItem:
     status: str
     created_by: str
     created_at: str
-    purchase_id: Optional[str] = None
-    cancelled_by: Optional[str] = None
-    cancelled_at: Optional[str] = None
+    purchase_id: str | None = None
+    cancelled_by: str | None = None
+    cancelled_at: str | None = None

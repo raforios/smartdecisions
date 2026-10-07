@@ -2,7 +2,6 @@
     QUOTES: routes handler
 '''
 from datetime import date as date_type
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
@@ -44,10 +43,10 @@ router = APIRouter(prefix = '/v1/quotes', tags = ['Quotes'])
 )
 async def get_exchange_rates_endpoint(
     request: Request,
-    date_from: Optional[date_type] = Query(
+    date_from: date_type | None = Query(
         None, description = 'Inclusive start (YYYY-MM-DD).'
     ),
-    date_to: Optional[date_type] = Query(
+    date_to: date_type | None = Query(
         None, description = 'Inclusive end (YYYY-MM-DD).'
     ),
     currency: str = Query(USD, min_length = 3, max_length = 4,
@@ -204,7 +203,7 @@ async def get_rate_forecast_endpoint(
 async def get_bench_endpoint(
     request: Request,
     days_ahead: int = Query(30, ge = 1, le = 90, description = 'Días a proyectar.'),
-    models: Optional[List[str]] = Query(
+    models: list[str] | None = Query(
         None, description = 'Modelos a correr. Omitir para correr todos.'
     ),
     currency: str = Query(USD, min_length = 3, max_length = 3,

@@ -15,7 +15,7 @@
           storage.
 '''
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 
 PROMPTS_PARTITION_KEY = 'view'
@@ -39,7 +39,7 @@ class PromptItem: # pylint: disable=too-many-instance-attributes
     version: int
     role: str
     instructions: str
-    rules: List[str]
+    rules: list[str]
     max_tokens: int
     model_id: str
     active: bool
@@ -48,13 +48,13 @@ class PromptItem: # pylint: disable=too-many-instance-attributes
     @classmethod
     def from_item(
         cls,
-        item: Dict[str, Any]
-    ) -> 'PromptItem':
+        item: dict[str, Any]
+    ) -> PromptItem:
         '''
             Builds the record from a raw DynamoDB item.
 
             Args:
-                item (Dict[str, Any]): Item as returned by boto3.
+                item (dict[str, Any]): Item as returned by boto3.
 
             Returns:
                 PromptItem: The typed record.
@@ -71,12 +71,12 @@ class PromptItem: # pylint: disable=too-many-instance-attributes
             created_at = str(item.get('created_at', ''))
         )
 
-    def to_item(self) -> Dict[str, Any]:
+    def to_item(self) -> dict[str, Any]:
         '''
             Renders the record as the item DynamoDB stores.
 
             Returns:
-                Dict[str, Any]: Item ready for put_item.
+                dict[str, Any]: Item ready for put_item.
         '''
         return {
             PROMPTS_PARTITION_KEY: self.view,
@@ -115,13 +115,13 @@ class ExplanationItem: # pylint: disable=too-many-instance-attributes
     @classmethod
     def from_item(
         cls,
-        item: Dict[str, Any]
-    ) -> 'ExplanationItem':
+        item: dict[str, Any]
+    ) -> ExplanationItem:
         '''
             Builds the record from a raw DynamoDB item.
 
             Args:
-                item (Dict[str, Any]): Item as returned by boto3.
+                item (dict[str, Any]): Item as returned by boto3.
 
             Returns:
                 ExplanationItem: The typed record.
@@ -137,12 +137,12 @@ class ExplanationItem: # pylint: disable=too-many-instance-attributes
             expires_at = int(item.get(CACHE_TTL_ATTRIBUTE, 0))
         )
 
-    def to_item(self) -> Dict[str, Any]:
+    def to_item(self) -> dict[str, Any]:
         '''
             Renders the record as the item DynamoDB stores.
 
             Returns:
-                Dict[str, Any]: Item ready for put_item.
+                dict[str, Any]: Item ready for put_item.
         '''
         return {
             CACHE_PARTITION_KEY: self.cache_key,

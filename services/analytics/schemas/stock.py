@@ -9,7 +9,6 @@
     and the sentence a manager reads belongs to whoever renders it.
 '''
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -56,30 +55,30 @@ class StockRow(BaseModel):
     available: float = 0.0
     in_transit: float = 0.0
     daily_demand: float = 0.0
-    coverage_days: Optional[float] = None
-    stockout_date: Optional[str] = None
+    coverage_days: float | None = None
+    stockout_date: str | None = None
     status_code: StockStatus = StockStatus.HEALTHY
-    abc_class: Optional[str] = None
-    stock_value: Optional[float] = None
+    abc_class: str | None = None
+    stock_value: float | None = None
     excess_units: float = 0.0
-    excess_value: Optional[float] = None
+    excess_value: float | None = None
 
 
 class StockKpis(BaseModel):
     '''
         The position of the warehouse and the money sitting in it.
     '''
-    snapshot_date: Optional[str] = Field(None, description = 'Date of the photo, ISO.')
+    snapshot_date: str | None = Field(None, description = 'Date of the photo, ISO.')
     products: int = 0
     units_on_hand: float = 0.0
     units_committed: float = 0.0
     units_available: float = 0.0
-    stock_value: Optional[float] = None
+    stock_value: float | None = None
     out_of_stock: int = 0
     at_risk: int = 0
     excess_products: int = 0
-    excess_value: Optional[float] = None
-    average_coverage_days: Optional[float] = None
+    excess_value: float | None = None
+    average_coverage_days: float | None = None
     stockout_value_at_risk: float = 0.0
 
 
@@ -93,7 +92,7 @@ class StockBlock(BaseModel):
         ERP already made; nothing here reserves, holds or promises anything.
     '''
     available: bool = False
-    reason_code: Optional[str] = None
+    reason_code: str | None = None
     kpis: StockKpis = StockKpis()
     at_risk: list[StockRow] = []
     excess: list[StockRow] = []
@@ -107,7 +106,7 @@ class StockResponse(BaseModel):
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
     available: bool = False
-    reason_code: Optional[str] = None
+    reason_code: str | None = None
     kpis: StockKpis = StockKpis()
     at_risk: list[StockRow] = []
     excess: list[StockRow] = []

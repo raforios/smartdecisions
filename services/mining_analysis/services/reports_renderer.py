@@ -6,13 +6,14 @@
     `assets/templates/` and the layout configuration is colocated here so the
     backend does not depend on the dashboard package.
 '''
+from collections.abc import Iterable
 import io
 import os
 import tempfile
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 from fpdf import FPDF
@@ -26,16 +27,16 @@ DAILY_TEMPLATE_PATH = str(_ASSETS_DIR / 'Minerales_01.png')
 BIWEEKLY_TEMPLATE_PATH = str(_ASSETS_DIR / 'Minerales_02.png')
 
 # Vertical centers for the 9 rows in both templates.
-ROW_Y_FRACTIONS: Tuple[float, ...] = (
+ROW_Y_FRACTIONS: tuple[float, ...] = (
     0.300, 0.367, 0.434, 0.501, 0.568, 0.635, 0.702, 0.769, 0.836,
 )
 
-DAILY_COLUMN_X_FRACTIONS: Dict[str, float] = {
+DAILY_COLUMN_X_FRACTIONS: dict[str, float] = {
     'price_low':  0.54,
     'price_high': 0.71,
     'price_date': 0.85,
 }
-BIWEEKLY_COLUMN_X_FRACTIONS: Dict[str, float] = {
+BIWEEKLY_COLUMN_X_FRACTIONS: dict[str, float] = {
     'avg_price_low': 0.73,
 }
 
@@ -49,7 +50,7 @@ SUBTITLE_COLOR = (90, 90, 90)
 SUBTITLE_X_FRACTION = 0.06
 SUBTITLE_Y_FRACTION = 0.205
 
-CANDIDATE_FONT_PATHS: Tuple[str, ...] = (
+CANDIDATE_FONT_PATHS: tuple[str, ...] = (
     '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
     '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
@@ -85,9 +86,9 @@ def _load_font(
 def _draw_centered(
     draw: ImageDraw.ImageDraw,
     text: str,
-    center: Tuple[int, int],
+    center: tuple[int, int],
     font: ImageFont.ImageFont,
-    color: Tuple[int, int, int],
+    color: tuple[int, int, int],
 ) -> None:
     '''Centers a string around `center` using textbbox metrics.'''
     bbox = draw.textbbox((0, 0), text, font = font)
@@ -103,7 +104,7 @@ _SETTINGS = load_and_validate_env_vars({'PUBLISHED_PRICE_DECIMALS': int})
 _PRICE_QUANTUM: Decimal = Decimal(1).scaleb(-_SETTINGS['PUBLISHED_PRICE_DECIMALS'])
 
 
-def _format_price(value: Optional[float]) -> str:
+def _format_price(value: float | None) -> str:
     '''
     Two decimals for fractional values, no decimals for integer-like quotes
     (Antimonio 27,000, Wolfram 116,355). Matches the published bulletins.
@@ -151,7 +152,7 @@ def _open_template(path: str) -> Image.Image:
 def _draw_subtitle(
     image: Image.Image,
     draw: ImageDraw.ImageDraw,
-    subtitle: Optional[str],
+    subtitle: str | None,
 ) -> None:
     '''Optional period caption drawn between the title and the table header.'''
     if not subtitle:
@@ -165,8 +166,8 @@ def _draw_subtitle(
 
 
 def render_daily_png(
-    rows: List[Dict[str, Any]],
-    subtitle: Optional[str] = None
+    rows: list[dict[str, Any]],
+    subtitle: str | None = None
 ) -> bytes:
     '''Renders the daily report (Minerales_01) and returns PNG bytes.'''
     image = _open_template(DAILY_TEMPLATE_PATH)
@@ -194,8 +195,8 @@ def render_daily_png(
 
 
 def render_biweekly_png(
-    rows: List[Dict[str, Any]],
-    subtitle: Optional[str] = None
+    rows: list[dict[str, Any]],
+    subtitle: str | None = None
 ) -> bytes:
     '''Renders the biweekly report (Minerales_02) and returns PNG bytes.'''
     image = _open_template(BIWEEKLY_TEMPLATE_PATH)
@@ -264,7 +265,7 @@ def png_to_pdf(png_bytes: bytes) -> bytes:
     return bytes(pdf.output())
 
 
-def _model_to_dict(payload: Any) -> Dict[str, Any]:
+def _model_to_dict(payload: Any) -> dict[str, Any]:
     '''Best-effort conversion of pydantic models / dicts to a plain dict.'''
     if hasattr(payload, 'model_dump'):
         return payload.model_dump()
@@ -276,7 +277,7 @@ def _model_to_dict(payload: Any) -> Dict[str, Any]:
 def build_daily_report_assets(
     payload: Any,
     formats: Iterable[str] = ('png', 'pdf'),
-) -> Tuple[Optional[bytes], Optional[bytes]]:
+) -> tuple[bytes | None, bytes | None]:
     '''
     Renders the daily report into the requested formats and returns
     (png_bytes, pdf_bytes). Either entry is None when its format is skipped.
@@ -292,7 +293,7 @@ def build_daily_report_assets(
 def build_biweekly_report_assets(
     payload: Any,
     formats: Iterable[str] = ('png', 'pdf'),
-) -> Tuple[Optional[bytes], Optional[bytes]]:
+) -> tuple[bytes | None, bytes | None]:
     '''
     Renders the biweekly report into the requested formats and returns
     (png_bytes, pdf_bytes). Either entry is None when its format is skipped.

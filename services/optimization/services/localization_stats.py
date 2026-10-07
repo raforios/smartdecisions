@@ -7,7 +7,6 @@
     within `ROUTES_VISIT_MATCH_RADIUS_M` metres of it. The map still gets both
     lists through the full comparison.
 '''
-from typing import List, Optional
 
 from boto3.resources.base import ServiceResource
 
@@ -42,7 +41,7 @@ VISIT_MATCH_RADIUS_M = _SETTINGS['ROUTES_VISIT_MATCH_RADIUS_M']
 
 def _stop_was_visited(
     stop: PlannedPointItem,
-    points: List[ExecutedPointItem]
+    points: list[ExecutedPointItem]
 ) -> bool:
     '''
         True when any reported point names the stop's client or lies within the
@@ -92,8 +91,8 @@ def _executions_of(
     owner_email: str,
     plan: PlannedRouteItem,
     filters: ExecutedRouteFilterSchema,
-    auth_token: Optional[str]
-) -> List[ExecutedRouteItem]:
+    auth_token: str | None
+) -> list[ExecutedRouteItem]:
     '''
         The executed routes that followed the plan, run by the plan's own seller.
 
@@ -118,7 +117,7 @@ def route_comparisons(
     owner_email: str,
     planned_route_id: str,
     filters: ExecutedRouteFilterSchema,
-    auth_token: Optional[str] = None
+    auth_token: str | None = None
 ) -> RouteComparisonsResponseSchema:
     '''
         Every execution of a plan, scored.
@@ -128,7 +127,7 @@ def route_comparisons(
             owner_email (str): Authenticated account.
             planned_route_id (str): The plan.
             filters (ExecutedRouteFilterSchema): Period and seller.
-            auth_token (Optional[str]): Caller's token, to ask INGEST who the
+            auth_token (str | None): Caller's token, to ask INGEST who the
                 plan's seller signs in as.
 
         Returns:
@@ -148,7 +147,7 @@ def full_route_comparison(
     owner_email: str,
     planned_route_id: str,
     filters: ExecutedRouteFilterSchema,
-    auth_token: Optional[str] = None
+    auth_token: str | None = None
 ) -> RouteComparisonFullResponseSchema:
     '''
         The plan with its stops and every execution with its points, for the map.
@@ -158,7 +157,7 @@ def full_route_comparison(
             owner_email (str): Authenticated account.
             planned_route_id (str): The plan.
             filters (ExecutedRouteFilterSchema): Period and seller.
-            auth_token (Optional[str]): Caller's token, to ask INGEST who the
+            auth_token (str | None): Caller's token, to ask INGEST who the
                 plan's seller signs in as.
 
         Returns:

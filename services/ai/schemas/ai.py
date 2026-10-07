@@ -13,7 +13,7 @@
 '''
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -69,7 +69,7 @@ class ExplainRequest(BaseModel):
         would create two contracts for one thing.
     '''
     view: ViewName
-    data: Dict[str, Any] = Field(
+    data: dict[str, Any] = Field(
         ...,
         description = 'The response of the service that produced the view, as it '
                       'returned it.'
@@ -106,7 +106,7 @@ class RoleDefinition(BaseModel):
     version: int = Field(..., ge = 1)
     role: str = Field(..., description = 'Who the model is, in one line.')
     instructions: str = Field(..., description = 'How to read this view.')
-    rules: List[str] = Field(
+    rules: list[str] = Field(
         default_factory = list,
         description = 'What it must never do. Kept as a list so a new rule is '
                       'one row and not a rewrite of the prompt.'
@@ -128,4 +128,4 @@ class RoleSummary(BaseModel):
 class RoleListResponse(BaseModel):
     '''The roles currently configured, so they can be reviewed without a deploy.'''
     count: int = Field(..., ge = 0)
-    roles: List[RoleSummary] = Field(default_factory = list)
+    roles: list[RoleSummary] = Field(default_factory = list)

@@ -8,7 +8,6 @@
 '''
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -30,9 +29,9 @@ class Opportunity(BaseModel):
         A single actionable recommendation for a point of sale.
     '''
     pdv_id: str
-    pdv_name: Optional[str] = None
+    pdv_name: str | None = None
     recommended_product_id: str
-    recommended_product_name: Optional[str] = None
+    recommended_product_name: str | None = None
     based_on_products: list[str] = Field(
         ..., description = 'Antecedent SKUs the PdV already purchases.'
     )
@@ -44,7 +43,7 @@ class Opportunity(BaseModel):
     confidence: float = Field(..., ge = 0, le = 1)
     lift: float = Field(..., ge = 0)
     expected_drop_size_units: float = Field(..., ge = 0)
-    expected_drop_size_amount: Optional[float] = Field(
+    expected_drop_size_amount: float | None = Field(
         default = None, ge = 0,
         description = 'Only present when unit_price is available in the source.'
     )
@@ -61,7 +60,7 @@ class AnalyticsSummary(BaseModel):
     '''
     total_pos_with_opportunities: int = Field(..., ge = 0)
     total_opportunities: int = Field(..., ge = 0)
-    total_expected_value: Optional[float] = Field(
+    total_expected_value: float | None = Field(
         default = None,
         description = '''Sum of expected_drop_size_amount across all opportunities
         (when prices are available).'''
@@ -94,7 +93,7 @@ class RunSummary(BaseModel):
     status: str
     total_opportunities: int = 0
     total_pos_with_opportunities: int = 0
-    total_expected_value: Optional[float] = None
+    total_expected_value: float | None = None
     created_at: str
 
 
@@ -107,7 +106,7 @@ class RunListResponse(BaseModel):
     '''
     owner_email: str
     count: int = Field(..., ge = 0)
-    runs: List[RunSummary] = Field(default_factory = list)
+    runs: list[RunSummary] = Field(default_factory = list)
 
 
 class AnalyticsResultsResponse(BaseModel):
@@ -179,9 +178,9 @@ class KpiCard(BaseModel):
         percentage. The UI renders those as '—' instead of a misleading 0%.
     '''
     metric_code: MetricCode
-    value: Optional[float] = None
+    value: float | None = None
     format: str
-    reference: Optional[str] = Field(None,
+    reference: str | None = Field(None,
                 description = "Period or entity the value refers to, e.g. '2026-05'.")
 
 
@@ -278,13 +277,13 @@ class PeriodInfo(BaseModel):
         'Enero a Marzo de 2024' instead of leaving the user guessing whether a
         filter was applied.
     '''
-    available_from: Optional[str] = None
-    available_to: Optional[str] = None
-    from_date: Optional[str] = None
-    to_date: Optional[str] = None
+    available_from: str | None = None
+    available_to: str | None = None
+    from_date: str | None = None
+    to_date: str | None = None
     filtered: bool = False
     rows: int = 0
-    currency: Optional['CurrencyApplied'] = None
+    currency: CurrencyApplied | None = None
 
 
 class CurrencyApplied(BaseModel):
@@ -306,7 +305,7 @@ class CurrencyApplied(BaseModel):
         description = 'In USDT: rows read at the official rate because the USDT series '
                       'had not started on their day.'
     )
-    fallback_currency: Optional[str] = None
+    fallback_currency: str | None = None
     rows_total: int = Field(0, ge = 0)
     rows_without_rate: int = Field(0, ge = 0)
 
@@ -317,7 +316,7 @@ class MonthlyChange(BaseModel):
     '''One month of the sales series with its variation against the previous one.'''
     month: str
     amount: float
-    change: Optional[float] = None
+    change: float | None = None
 
 
 class SeasonIndex(BaseModel):
@@ -339,7 +338,7 @@ class CategoryMix(BaseModel):
     label: str
     current_amount: float
     previous_amount: float
-    change: Optional[float] = None
+    change: float | None = None
     current_share: float
     previous_share: float
     share_change: float
@@ -383,7 +382,7 @@ class ClientConcentration(BaseModel):
     pareto_clients: int = 0
     pareto_client_percentage: float = 0.0
     hhi: float = 0.0
-    hhi_level: Optional[str] = None
+    hhi_level: str | None = None
 
 
 class AbcClass(BaseModel):
@@ -427,7 +426,7 @@ class PriceDrift(BaseModel):
     product: str
     current_price: float
     previous_price: float
-    change: Optional[float] = None
+    change: float | None = None
 
 
 class EfficiencyBlock(BaseModel):
@@ -488,7 +487,7 @@ class PortfolioMovement(BaseModel):
     recovered: int
     retained: int
     lost: int
-    churn: Optional[float] = None
+    churn: float | None = None
 
 
 class RiskReason(str, Enum):
@@ -513,10 +512,10 @@ class ClientAtRisk(BaseModel):
     client: str
     monthly_average_amount: float
     last_month_amount: float
-    change: Optional[float] = None
+    change: float | None = None
     days_without_purchase: int
-    last_purchase: Optional[str] = None
-    reason_code: Optional[RiskReason] = None
+    last_purchase: str | None = None
+    reason_code: RiskReason | None = None
 
 
 class PortfolioBlock(BaseModel):
@@ -593,7 +592,7 @@ class VolumeClient(BaseModel):
     share: float
     cumulative: float
     products: int = 0
-    anchor_product: Optional[str] = None
+    anchor_product: str | None = None
     anchor_share: float = 0.0
 
 
@@ -624,7 +623,7 @@ class VolumeEffect(BaseModel):
                       'LOST_CLIENTS | RETAINED_CLIENTS. The UI words it.'
     )
     amount: float
-    percentage: Optional[float] = None
+    percentage: float | None = None
 
 
 class VolumeDecomposition(BaseModel):
@@ -641,12 +640,12 @@ class VolumeDecomposition(BaseModel):
         and selling 8% more because clients bought more are the same number and
         two different meetings.
     '''
-    current_month: Optional[str] = None
-    previous_month: Optional[str] = None
+    current_month: str | None = None
+    previous_month: str | None = None
     current_amount: float = 0.0
     previous_amount: float = 0.0
     change: float = 0.0
-    change_percentage: Optional[float] = None
+    change_percentage: float | None = None
     by_product: list[VolumeEffect] = []
     by_client: list[VolumeEffect] = []
 
@@ -663,7 +662,7 @@ class VolumeHeadline(BaseModel):
     top_products_percentage: float = 0.0
     top_products_count: int = 0
     hhi: float = 0.0
-    hhi_level: Optional[str] = None
+    hhi_level: str | None = None
 
 
 class VolumeSourceBlock(BaseModel):

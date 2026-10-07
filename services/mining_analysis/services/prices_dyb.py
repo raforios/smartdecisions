@@ -18,7 +18,7 @@
           own table so the official history is never mixed with a proxy.
 '''
 from datetime import date as date_type
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -58,7 +58,7 @@ RULES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_MINING_ROYALTY_RULES']
 def _scan(
     dynamodb_resource: ServiceResource,
     table_name: str
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Every item of a small table. Deliberate on the catalogue and on the
         royalty scales: a handful of rows, where an index would cost more to
@@ -70,11 +70,11 @@ def _scan(
             table_name (str): Table to read whole.
 
         Returns:
-            List[Dict[str, Any]]: Every item.
+            list[dict[str, Any]]: Every item.
     '''
     table = dynamodb_resource.Table(table_name)
-    items: List[Dict[str, Any]] = []
-    kwargs: Dict[str, Any] = {}
+    items: list[dict[str, Any]] = []
+    kwargs: dict[str, Any] = {}
     while True:
         response = table.scan(**kwargs)
         items.extend(response.get('Items', []))
@@ -87,7 +87,7 @@ def _scan(
 def _write(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    items: List[Dict[str, Any]]
+    items: list[dict[str, Any]]
 ) -> int:
     '''
         Writes items in one batch, replacing any row with the same key.
@@ -95,7 +95,7 @@ def _write(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target table.
-            items (List[Dict[str, Any]]): Items to write.
+            items (list[dict[str, Any]]): Items to write.
 
         Returns:
             int: How many were written.
@@ -109,7 +109,7 @@ def _write(
     return len(items)
 
 
-def list_minerals(dynamodb_resource: ServiceResource) -> List[MineralItem]:
+def list_minerals(dynamodb_resource: ServiceResource) -> list[MineralItem]:
     '''
         The whole mineral catalogue.
 
@@ -117,7 +117,7 @@ def list_minerals(dynamodb_resource: ServiceResource) -> List[MineralItem]:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
 
         Returns:
-            List[MineralItem]: Every mineral on record.
+            list[MineralItem]: Every mineral on record.
     '''
     return [MineralItem.from_item(item)
             for item in _scan(dynamodb_resource, MINERALS_TABLE)]
@@ -153,7 +153,7 @@ def get_price(
     dynamodb_resource: ServiceResource,
     mineral_id: str,
     day: date_type
-) -> Optional[MiningPriceItem]:
+) -> MiningPriceItem | None:
     '''
         The official quotation of one mineral on one date.
 
@@ -176,21 +176,21 @@ def get_price(
 def query_prices(
     dynamodb_resource: ServiceResource,
     mineral_id: str,
-    window: Optional[Dict[str, date_type]] = None,
+    window: dict[str, date_type] | None = None,
     descending: bool = False
-) -> List[MiningPriceItem]:
+) -> list[MiningPriceItem]:
     '''
         The official quotations of one mineral, optionally within a window.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             mineral_id (str): Mineral identifier.
-            window (Dict[str, date] | None): 'from' and/or 'to', inclusive.
+            window (dict[str, date] | None): 'from' and/or 'to', inclusive.
             descending (bool): Walk the partition newest first, so a caller
                 that only wants the last quotations stops early.
 
         Returns:
-            List[MiningPriceItem]: Quotations by date, newest first when
+            list[MiningPriceItem]: Quotations by date, newest first when
                 `descending` is set.
     '''
     items = query_by_partition(
@@ -208,7 +208,7 @@ def query_prices(
     return list(reversed(quotations)) if descending else quotations
 
 
-def scan_prices(dynamodb_resource: ServiceResource) -> List[MiningPriceItem]:
+def scan_prices(dynamodb_resource: ServiceResource) -> list[MiningPriceItem]:
     '''
         Every official quotation on record. Only the full export needs this;
         the day-to-day reads go through `query_prices`.
@@ -217,7 +217,7 @@ def scan_prices(dynamodb_resource: ServiceResource) -> List[MiningPriceItem]:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
 
         Returns:
-            List[MiningPriceItem]: Every quotation.
+            list[MiningPriceItem]: Every quotation.
     '''
     return [MiningPriceItem.from_item(item)
             for item in _scan(dynamodb_resource, PRICES_TABLE)]
@@ -225,14 +225,14 @@ def scan_prices(dynamodb_resource: ServiceResource) -> List[MiningPriceItem]:
 
 def put_prices_batch(
     dynamodb_resource: ServiceResource,
-    prices: List[MiningPriceItem]
+    prices: list[MiningPriceItem]
 ) -> int:
     '''
         Writes many official quotations at once.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            prices (List[MiningPriceItem]): Quotations to store.
+            prices (list[MiningPriceItem]): Quotations to store.
 
         Returns:
             int: How many were written.
@@ -260,18 +260,18 @@ def put_price(
 def query_market_prices(
     dynamodb_resource: ServiceResource,
     mineral_id: str,
-    window: Optional[Dict[str, date_type]] = None
-) -> List[MarketPriceItem]:
+    window: dict[str, date_type] | None = None
+) -> list[MarketPriceItem]:
     '''
         The market prices of one mineral, oldest first, optionally in a window.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             mineral_id (str): Catalogue id.
-            window (Dict[str, date] | None): 'from' and/or 'to', inclusive.
+            window (dict[str, date] | None): 'from' and/or 'to', inclusive.
 
         Returns:
-            List[MarketPriceItem]: Prices ordered by date.
+            list[MarketPriceItem]: Prices ordered by date.
     '''
     items = query_by_partition(
         dynamodb_resource = dynamodb_resource,
@@ -286,14 +286,14 @@ def query_market_prices(
 
 def put_market_prices(
     dynamodb_resource: ServiceResource,
-    prices: List[MarketPriceItem]
+    prices: list[MarketPriceItem]
 ) -> int:
     '''
         Writes market prices, replacing any row of the same day.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            prices (List[MarketPriceItem]): Rows to write.
+            prices (list[MarketPriceItem]): Rows to write.
 
         Returns:
             int: Rows written.
@@ -305,7 +305,7 @@ def put_market_prices(
     return written
 
 
-def list_royalty_rules(dynamodb_resource: ServiceResource) -> List[RoyaltyRuleItem]:
+def list_royalty_rules(dynamodb_resource: ServiceResource) -> list[RoyaltyRuleItem]:
     '''
         Every Art. 227 scale stored, by mineral id.
 
@@ -313,7 +313,7 @@ def list_royalty_rules(dynamodb_resource: ServiceResource) -> List[RoyaltyRuleIt
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
 
         Returns:
-            List[RoyaltyRuleItem]: The scales.
+            list[RoyaltyRuleItem]: The scales.
     '''
     rules = [RoyaltyRuleItem.from_item(item)
              for item in _scan(dynamodb_resource, RULES_TABLE)]
@@ -324,7 +324,7 @@ def list_royalty_rules(dynamodb_resource: ServiceResource) -> List[RoyaltyRuleIt
 def get_royalty_rule(
     dynamodb_resource: ServiceResource,
     mineral_id: str
-) -> Optional[RoyaltyRuleItem]:
+) -> RoyaltyRuleItem | None:
     '''
         One scale, or None.
 
@@ -333,7 +333,7 @@ def get_royalty_rule(
             mineral_id (str): Catalogue id.
 
         Returns:
-            Optional[RoyaltyRuleItem]: The rule when stored.
+            RoyaltyRuleItem | None: The rule when stored.
     '''
     item = find_item_by_key(
         dynamodb_resource = dynamodb_resource,
@@ -359,19 +359,19 @@ def put_royalty_rule(
     logger.info(message)
 
 
-def _bounds(window: Optional[Dict[str, date_type]]) -> Optional[Dict[str, str]]:
+def _bounds(window: dict[str, date_type] | None) -> dict[str, str] | None:
     '''
         A date window as the ISO strings the sort key is compared against.
 
         Args:
-            window (Dict[str, date] | None): 'from' and/or 'to'.
+            window (dict[str, date] | None): 'from' and/or 'to'.
 
         Returns:
-            Dict[str, str] | None: The same bounds as text, or None.
+            dict[str, str] | None: The same bounds as text, or None.
     '''
     if not window:
         return None
-    bounds: Dict[str, Any] = {}
+    bounds: dict[str, Any] = {}
     for edge in ('from', 'to'):
         if window.get(edge):
             bounds[edge] = window[edge].isoformat()

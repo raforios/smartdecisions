@@ -1,7 +1,7 @@
 '''
     Usage Log controllers.
 '''
-from typing import Dict, Any
+from typing import Any
 import uuid
 from boto3.resources.base import ServiceResource
 from schemas.usage_log import (
@@ -42,7 +42,7 @@ def create_usage_log_controller(
 def get_usage_logs_controller(
     dynamodb_resource: ServiceResource,
     query_params: UsageLogQuerySchema
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Controller to retrieve a paginated list of usage logs with optional filters.
     '''

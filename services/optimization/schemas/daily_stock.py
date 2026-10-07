@@ -7,7 +7,6 @@
     the historical stock analysis INGEST and ANALYTICS run on the uploaded file.
 '''
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -28,7 +27,7 @@ class StockItemLoadSchema(BaseModel):
         One SKU as loaded at the start of the day.
     '''
     sku: str = Field(..., min_length = 1, max_length = 64)
-    product_name: Optional[str] = Field(None, max_length = 150)
+    product_name: str | None = Field(None, max_length = 150)
     quantity: float = Field(..., ge = 0, description = 'Units available when the day starts.')
 
 
@@ -37,7 +36,7 @@ class DailyStockLoadSchema(BaseModel):
         The day's opening stock. Loading the same day again replaces it.
     '''
     date: str = Field(..., pattern = r'^\d{4}-\d{2}-\d{2}$', description = 'YYYY-MM-DD.')
-    items: List[StockItemLoadSchema] = Field(..., min_length = 1)
+    items: list[StockItemLoadSchema] = Field(..., min_length = 1)
 
 
 class DailyStockFromIngestSchema(BaseModel):
@@ -65,7 +64,7 @@ class StockItemResponseSchema(BaseModel):
     '''
     date: str
     sku: str
-    product_name: Optional[str] = None
+    product_name: str | None = None
     opening_quantity: float
     sold_quantity: float
     available_quantity: float
@@ -77,6 +76,6 @@ class DailyStockResponseSchema(BaseModel):
         The day's stock, one row per SKU.
     '''
     date: str
-    items: List[StockItemResponseSchema]
+    items: list[StockItemResponseSchema]
     skus_loaded: int
     skus_out_of_stock: int

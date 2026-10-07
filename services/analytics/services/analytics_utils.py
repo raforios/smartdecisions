@@ -10,7 +10,7 @@ import uuid
 from decimal import Decimal
 from io import BytesIO
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any
 
 import boto3
 import pandas as pd
@@ -128,7 +128,7 @@ def hhi_level(
 
 
 def unavailable_block(
-    model: Type[BaseModel],
+    model: type[BaseModel],
     label: str,
     code: Enum
 ) -> BaseModel:
@@ -138,7 +138,7 @@ def unavailable_block(
         that can be skipped, so the log line and the shape never drift.
 
         Args:
-            model (Type[BaseModel]): Block model with `available` and
+            model (type[BaseModel]): Block model with `available` and
                 `reason_code` fields.
             label (str): Block name for the log.
             code (Enum): Why it cannot be built.
@@ -153,8 +153,8 @@ def unavailable_block(
 
 def percent_change(
     current: float,
-    previous: Optional[float]
-) -> Optional[float]:
+    previous: float | None
+) -> float | None:
     '''
         Percentage variation between two periods.
 
@@ -180,7 +180,7 @@ def label_series(
     dataframe: pd.DataFrame,
     id_col: str,
     name_col: str
-) -> Optional[pd.Series]:
+) -> pd.Series | None:
     '''
         Returns a readable label per row: the human name when available, else
         the id. Lets rankings show 'Tienda Doña Rosa' instead of 'PDV-007'.
@@ -203,7 +203,7 @@ def label_series(
     return None
 
 
-def dates(dataframe: pd.DataFrame) -> Optional[pd.Series]:
+def dates(dataframe: pd.DataFrame) -> pd.Series | None:
     '''
         Parses the 'date' column into datetimes.
 
@@ -241,9 +241,9 @@ def order_count(dataframe: pd.DataFrame) -> int:
 # ---------------------------------------------------------------------------
 
 def _parse_boundary(
-    raw: Optional[str],
+    raw: str | None,
     field: str
-) -> Optional[pd.Timestamp]:
+) -> pd.Timestamp | None:
     '''
         Parses an ISO date coming from the query string.
 
@@ -268,8 +268,8 @@ def _parse_boundary(
 
 
 def _describe(
-    available: Tuple[Any, Any],
-    applied: Tuple[Any, Any],
+    available: tuple[Any, Any],
+    applied: tuple[Any, Any],
     rows: int
 ) -> PeriodInfo:
     '''
@@ -283,7 +283,7 @@ def _describe(
         Returns:
             PeriodInfo: Period metadata ready for the UI date pickers.
     '''
-    def _iso(value: Any) -> Optional[str]:
+    def _iso(value: Any) -> str | None:
         return None if value is None or pd.isna(value) else pd.Timestamp(value).strftime('%Y-%m-%d')
 
     return PeriodInfo(
@@ -298,9 +298,9 @@ def _describe(
 
 def apply_date_range(
     dataframe: pd.DataFrame,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None
-) -> Tuple[pd.DataFrame, PeriodInfo]:
+    date_from: str | None = None,
+    date_to: str | None = None
+) -> tuple[pd.DataFrame, PeriodInfo]:
     '''
         Restricts a sales frame to a date window and describes the result.
 
@@ -314,7 +314,7 @@ def apply_date_range(
             date_to (str | None): Inclusive upper bound, 'YYYY-MM-DD'.
 
         Returns:
-            Tuple[pd.DataFrame, PeriodInfo]: The scoped frame and the period
+            tuple[pd.DataFrame, PeriodInfo]: The scoped frame and the period
                 descriptor (available range, applied window, filtered, rows).
 
         Raises:
@@ -368,7 +368,7 @@ _s3_client = boto3.client('s3')
 def get_credit_policy(
     dynamodb_resource: ServiceResource,
     owner_email: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         Reads the credit policy of one client of SmartDecisions.
 
@@ -381,7 +381,7 @@ def get_credit_policy(
             owner_email (str): Authenticated caller and owner of the policy.
 
         Returns:
-            Dict[str, Any] | None: The stored policy, or None when the client
+            dict[str, Any] | None: The stored policy, or None when the client
                 never set one — in which case the service defaults apply.
     '''
     return _read_policy(dynamodb_resource, CREDIT_POLICIES_TABLE, owner_email, 'credit')
@@ -390,8 +390,8 @@ def get_credit_policy(
 def save_credit_policy(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    policy: Dict[str, Any]
-) -> Dict[str, Any]:
+    policy: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Stores the credit policy of one client, replacing the previous one.
 
@@ -403,10 +403,10 @@ def save_credit_policy(
         Args:
             dynamodb_resource (ServiceResource): The shared DynamoDB resource.
             owner_email (str): Authenticated caller and owner of the policy.
-            policy (Dict[str, Any]): Parameters to store; empty values dropped.
+            policy (dict[str, Any]): Parameters to store; empty values dropped.
 
         Returns:
-            Dict[str, Any]: The stored item.
+            dict[str, Any]: The stored item.
     '''
     return _write_policy(dynamodb_resource, CREDIT_POLICIES_TABLE,
                          (owner_email, 'credit'), policy)
@@ -417,7 +417,7 @@ def _read_policy(
     table_name: str,
     owner_email: str,
     kind: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         Reads one account's parameter set from its table.
 
@@ -432,7 +432,7 @@ def _read_policy(
             kind (str): What the policy governs, for the log.
 
         Returns:
-            Dict[str, Any] | None: The stored policy, or None when the account
+            dict[str, Any] | None: The stored policy, or None when the account
                 never set one — in which case the service defaults apply.
     '''
     item = dynamodb_resource.Table(table_name).get_item(
@@ -449,8 +449,8 @@ def _write_policy(
     dynamodb_resource: ServiceResource,
     table_name: str,
     owner: tuple[str, str],
-    policy: Dict[str, Any]
-) -> Dict[str, Any]:
+    policy: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Stores one account's parameter set, replacing the previous one.
 
@@ -458,10 +458,10 @@ def _write_policy(
             dynamodb_resource (ServiceResource): The shared DynamoDB resource.
             table_name (str): Table holding this kind of policy.
             owner (tuple[str, str]): Owner e-mail and what the policy governs.
-            policy (Dict[str, Any]): Parameters to store; empty values dropped.
+            policy (dict[str, Any]): Parameters to store; empty values dropped.
 
         Returns:
-            Dict[str, Any]: The stored item.
+            dict[str, Any]: The stored item.
     '''
     owner_email, kind = owner
     item = {
@@ -478,7 +478,7 @@ def _write_policy(
 def get_commercial_policy(
     dynamodb_resource: ServiceResource,
     owner_email: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         Reads the commercial policy of one account: the semaphore cuts and
         what a bolivian is worth in points, by cluster.
@@ -488,7 +488,7 @@ def get_commercial_policy(
             owner_email (str): Authenticated caller and owner of the policy.
 
         Returns:
-            Dict[str, Any] | None: The stored policy, or None for defaults.
+            dict[str, Any] | None: The stored policy, or None for defaults.
     '''
     return _read_policy(dynamodb_resource, COMMERCIAL_POLICIES_TABLE,
                         owner_email, 'commercial')
@@ -497,18 +497,18 @@ def get_commercial_policy(
 def save_commercial_policy(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    policy: Dict[str, Any]
-) -> Dict[str, Any]:
+    policy: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Stores the commercial policy of one account, replacing the previous.
 
         Args:
             dynamodb_resource (ServiceResource): The shared DynamoDB resource.
             owner_email (str): Authenticated caller and owner of the policy.
-            policy (Dict[str, Any]): Parameters to store; empty values dropped.
+            policy (dict[str, Any]): Parameters to store; empty values dropped.
 
         Returns:
-            Dict[str, Any]: The stored item.
+            dict[str, Any]: The stored item.
     '''
     return _write_policy(dynamodb_resource, COMMERCIAL_POLICIES_TABLE,
                          (owner_email, 'commercial'), policy)
@@ -517,7 +517,7 @@ def save_commercial_policy(
 def get_dataset_metadata(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    owner_email: Optional[str] = None
+    owner_email: str | None = None
 ) -> dict:
     '''
         Retrieves a dataset record from the ingest service's table.
@@ -525,7 +525,7 @@ def get_dataset_metadata(
         Args:
             dynamodb_resource (ServiceResource): The shared DynamoDB resource.
             dataset_id (str): UUID issued by the ingest service.
-            owner_email (Optional[str]): When given, a dataset of another owner
+            owner_email (str | None): When given, a dataset of another owner
                 answers exactly like a missing one (`CLAUDE.md` §8).
 
         Returns:
@@ -613,7 +613,6 @@ def load_dataframe_from_s3(s3_key: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-
 def _floats_to_decimal(value: Any) -> Any:
     '''
         Recursively converts floats to Decimal so DynamoDB accepts them.
@@ -642,7 +641,7 @@ def _decimal_to_native(value: Any) -> Any:
     return value
 
 
-def _build_run_item(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _build_run_item(payload: dict[str, Any]) -> dict[str, Any]:
     '''
         Materializes the DynamoDB item shape for a finished analytics run.
 
@@ -669,8 +668,8 @@ def _build_run_item(payload: Dict[str, Any]) -> Dict[str, Any]:
 @audit_event('ANALYTICS', 'AnalyticsRun', 'CREATE')
 def persist_run(
     dynamodb_resource: ServiceResource,
-    payload: Dict[str, Any]
-) -> Dict[str, Any]:
+    payload: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Persists a finished analytics run.
     '''
@@ -708,7 +707,7 @@ def list_runs_for_owner(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     limit: int = HISTORY_DEFAULT_LIMIT
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Returns the caller's own analyses, most recent first.
 
@@ -723,11 +722,11 @@ def list_runs_for_owner(
             limit (int): Most rows to return.
 
         Returns:
-            List[Dict[str, Any]]: Stored runs, newest first.
+            list[dict[str, Any]]: Stored runs, newest first.
     '''
     table = dynamodb_resource.Table(ANALYTICS_RUNS_TABLE)
-    items: List[Dict[str, Any]] = []
-    scan_kwargs: Dict[str, Any] = {
+    items: list[dict[str, Any]] = []
+    scan_kwargs: dict[str, Any] = {
         'FilterExpression': Attr('owner_email').eq(owner_email)
     }
     while True:
@@ -746,7 +745,7 @@ def get_latest_run_for_dataset(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     owner_email: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Returns the most recent run for the given dataset, if it is the
         caller's.
@@ -766,14 +765,14 @@ def get_latest_run_for_dataset(
             owner_email (str): Authenticated caller.
 
         Returns:
-            Dict[str, Any]: The most recent run.
+            dict[str, Any]: The most recent run.
 
         Raises:
             RegisterNotFoundError: If no run of that dataset belongs to the
                 caller.
     '''
     table = dynamodb_resource.Table(ANALYTICS_RUNS_TABLE)
-    items: List[Dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
     last_evaluated_key = None
     while True:
         scan_kwargs = {

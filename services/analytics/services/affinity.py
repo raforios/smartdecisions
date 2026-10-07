@@ -19,7 +19,7 @@
 '''
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -40,11 +40,11 @@ class _EngineData:
         Read-only bundle of the pre-computed indices shared across every PdV
         while building opportunities.
     '''
-    rules: List[Dict[str, Any]]
+    rules: list[dict[str, Any]]
     avg_units: pd.Series
     avg_amount: pd.Series
-    product_names: Dict[str, str]
-    pdv_names: Dict[str, str]
+    product_names: dict[str, str]
+    pdv_names: dict[str, str]
 
 
 @dataclass
@@ -54,11 +54,11 @@ class _PdvBasket:
         buys — the unit of work for `_candidates_for_pdv`.
     '''
     pdv_id: str
-    pdv_name: Optional[str]
+    pdv_name: str | None
     products_bought: set
 
 
-def _build_transactions(dataframe: pd.DataFrame) -> List[List[str]]:
+def _build_transactions(dataframe: pd.DataFrame) -> list[list[str]]:
     '''
         Groups the sales dataframe by `order_id` and returns one list of
         product SKUs per transaction. Duplicate products in the same order
@@ -69,7 +69,7 @@ def _build_transactions(dataframe: pd.DataFrame) -> List[List[str]]:
             dataframe (pd.DataFrame): Sales rows (one product per row).
 
         Returns:
-            List[List[str]]: Transactions as lists of unique product SKUs.
+            list[list[str]]: Transactions as lists of unique product SKUs.
     '''
     grouped = dataframe.groupby('order_id')['product_id'].apply(
         lambda values: sorted({str(value) for value in values})
@@ -77,11 +77,11 @@ def _build_transactions(dataframe: pd.DataFrame) -> List[List[str]]:
     return [products for products in grouped.tolist() if products]
 
 
-def _count_singletons(transaction_sets: List[frozenset]) -> Dict[frozenset, int]:
+def _count_singletons(transaction_sets: list[frozenset]) -> dict[frozenset, int]:
     '''
         Counts how many transactions contain each single product.
     '''
-    counts: Dict[frozenset, int] = {}
+    counts: dict[frozenset, int] = {}
     for items in transaction_sets:
         for item in items:
             single = frozenset((item,))
@@ -90,7 +90,7 @@ def _count_singletons(transaction_sets: List[frozenset]) -> Dict[frozenset, int]
 
 
 def _generate_candidates(
-    previous_frequent: List[frozenset],
+    previous_frequent: list[frozenset],
     size: int
 ) -> set:
     '''
@@ -110,13 +110,13 @@ def _generate_candidates(
 
 
 def _count_supersets(
-    transaction_sets: List[frozenset],
+    transaction_sets: list[frozenset],
     candidates: set
-) -> Dict[frozenset, int]:
+) -> dict[frozenset, int]:
     '''
         Counts, for each candidate itemset, the transactions that contain it.
     '''
-    candidate_counts: Dict[frozenset, int] = {candidate: 0 for candidate in candidates}
+    candidate_counts: dict[frozenset, int] = {candidate: 0 for candidate in candidates}
     for items in transaction_sets:
         for candidate in candidates:
             if candidate <= items:
@@ -125,18 +125,18 @@ def _count_supersets(
 
 
 def _frequent_itemsets(
-    transactions: List[List[str]],
+    transactions: list[list[str]],
     min_support: float
-) -> Dict[frozenset, float]:
+) -> dict[frozenset, float]:
     '''
         Apriori frequent-itemset mining without external dependencies.
 
         Args:
-            transactions (List[List[str]]): One list of unique SKUs per order.
+            transactions (list[list[str]]): One list of unique SKUs per order.
             min_support (float): Minimum fraction of transactions (0..1).
 
         Returns:
-            Dict[frozenset, float]: Frequent itemsets mapped to their support.
+            dict[frozenset, float]: Frequent itemsets mapped to their support.
     '''
     total = len(transactions)
     if total == 0:
@@ -150,7 +150,7 @@ def _frequent_itemsets(
         for itemset, count in _count_singletons(transaction_sets).items()
         if count >= min_count
     }
-    supports: Dict[frozenset, float] = dict(current)
+    supports: dict[frozenset, float] = dict(current)
 
     size = 2
     while current:
@@ -172,15 +172,15 @@ def _frequent_itemsets(
 def _rules_from_itemset(
     itemset: frozenset,
     itemset_support: float,
-    supports: Dict[frozenset, float],
+    supports: dict[frozenset, float],
     min_lift: float
-) -> List[Opportunity]:
+) -> list[Opportunity]:
     '''
         Evaluates every non-empty antecedent → consequent partition of a
         single frequent itemset and keeps the rules whose lift reaches
         `min_lift`.
     '''
-    rules: List[Dict[str, Any]] = []
+    rules: list[dict[str, Any]] = []
     items = sorted(itemset)
     for antecedent_size in range(1, len(items)):
         for antecedent_items in combinations(items, antecedent_size):
@@ -205,7 +205,7 @@ def _rules_from_itemset(
 
 
 def _compute_affinity_rules(
-    transactions: List[List[str]],
+    transactions: list[list[str]],
     min_support: float,
     min_lift: float
 ) -> pd.DataFrame:
@@ -226,7 +226,7 @@ def _compute_affinity_rules(
     if not supports:
         return pd.DataFrame(columns = _RULE_COLUMNS)
 
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for itemset, itemset_support in supports.items():
         if len(itemset) >= 2:
             records.extend(
@@ -238,7 +238,7 @@ def _compute_affinity_rules(
     return pd.DataFrame(records, columns = _RULE_COLUMNS)
 
 
-def _compute_drop_size(dataframe: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+def _compute_drop_size(dataframe: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     '''
         For each product, computes:
             - avg units per transaction (quantity)
@@ -248,7 +248,7 @@ def _compute_drop_size(dataframe: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
             dataframe (pd.DataFrame): Sales rows.
 
         Returns:
-            Tuple[pd.Series, pd.Series]: (avg_units_by_product, avg_amount_by_product).
+            tuple[pd.Series, pd.Series]: (avg_units_by_product, avg_amount_by_product).
             Both indexed by product_id. The amount series can be all-NaN when
             the source did not provide pricing.
     '''
@@ -262,7 +262,7 @@ def _compute_drop_size(dataframe: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
     return avg_units, avg_amount
 
 
-def _build_product_name_index(dataframe: pd.DataFrame) -> Dict[str, str]:
+def _build_product_name_index(dataframe: pd.DataFrame) -> dict[str, str]:
     '''
         Builds a stable product_id → product_name map for the UI layer.
     '''
@@ -275,7 +275,7 @@ def _build_product_name_index(dataframe: pd.DataFrame) -> Dict[str, str]:
     }
 
 
-def _build_pdv_name_index(dataframe: pd.DataFrame) -> Dict[str, str]:
+def _build_pdv_name_index(dataframe: pd.DataFrame) -> dict[str, str]:
     '''
         Builds a stable pos_id → pos_name map for the UI layer.
     '''
@@ -288,7 +288,7 @@ def _build_pdv_name_index(dataframe: pd.DataFrame) -> Dict[str, str]:
     }
 
 
-def _index_pdv_products(dataframe: pd.DataFrame) -> Dict[str, set]:
+def _index_pdv_products(dataframe: pd.DataFrame) -> dict[str, set]:
     '''
         Maps each pos_id to the set of product SKUs it already buys.
     '''
@@ -303,7 +303,7 @@ def _index_pdv_products(dataframe: pd.DataFrame) -> Dict[str, set]:
 def _drop_size_for(
     consequent_id: str,
     data: _EngineData
-) -> Tuple[float, Optional[float]]:
+) -> tuple[float, float | None]:
     '''
         Returns (expected units, expected amount) for a recommended product.
         The amount is None when the source provided no pricing.
@@ -320,11 +320,11 @@ def _drop_size_for(
 
 def _build_candidate(
     basket: _PdvBasket,
-    rule: Dict[str, Any],
+    rule: dict[str, Any],
     consequent_id: str,
     antecedents: set,
     data: _EngineData
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Materializes a single opportunity dict for a (PdV, recommended
         product) pair, scoring it by monetary impact when prices exist and
@@ -358,7 +358,7 @@ def _build_candidate(
 def _candidates_for_pdv(
     basket: _PdvBasket,
     data: _EngineData
-) -> List[Opportunity]:
+) -> list[Opportunity]:
     '''
         Builds every candidate opportunity for a single PdV: rules only fire
         when the PdV already buys all antecedents, and products it already
@@ -369,7 +369,7 @@ def _candidates_for_pdv(
         With 11 180 rules and 274 PdVs that was 118 s on the Lambda, past the
         29 s API Gateway limit, so the screen answered "Service Unavailable".
     '''
-    candidates: List[Dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     for rule in data.rules:
         antecedents = rule['antecedents']
         if not antecedents.issubset(basket.products_bought):
@@ -384,15 +384,15 @@ def _candidates_for_pdv(
 
 
 def _dedupe_and_rank(
-    candidates: List[Dict[str, Any]],
+    candidates: list[dict[str, Any]],
     top_n: int
-) -> List[Opportunity]:
+) -> list[Opportunity]:
     '''
         Collapses duplicate (pdv, product) candidates keeping the highest
         score — a product can be the consequent of several rules for the same
         PdV — then returns the top N by opportunity score.
     '''
-    deduped: Dict[str, Opportunity] = {}
+    deduped: dict[str, Opportunity] = {}
     for candidate in candidates:
         key = candidate.recommended_product_id
         existing = deduped.get(key)
@@ -410,12 +410,12 @@ def _collect_opportunities(
     dataframe: pd.DataFrame,
     data: _EngineData,
     top_n_per_pdv: int
-) -> List[Opportunity]:
+) -> list[Opportunity]:
     '''
         Iterates over every PdV, builds and ranks its candidates and returns
         the flattened opportunity list.
     '''
-    opportunities: List[Opportunity] = []
+    opportunities: list[Opportunity] = []
     for pdv_id, products_bought in _index_pdv_products(dataframe).items():
         pdv_id_str = str(pdv_id)
         basket = _PdvBasket(
@@ -429,10 +429,10 @@ def _collect_opportunities(
 
 
 def _build_summary(
-    opportunities: List[Opportunity],
+    opportunities: list[Opportunity],
     rules_count: int,
-    parameters: Dict[str, Any]
-) -> Dict[str, Any]:
+    parameters: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Aggregates the run-level statistics returned alongside the
         opportunities.
@@ -484,7 +484,7 @@ def compute_opportunities(
     min_lift: float = 1.0,
     top_n_per_pdv: int = 10,
     item_level: str = 'product'
-) -> Tuple[List[Opportunity], AnalyticsSummary]:
+) -> tuple[list[Opportunity], AnalyticsSummary]:
     '''
         End-to-end orchestration. Returns the opportunity list + summary stats.
 
@@ -497,7 +497,7 @@ def compute_opportunities(
                 controller for mass-consumption data) or 'product' (SKU).
 
         Returns:
-            Tuple[List[Opportunity], AnalyticsSummary]:
+            tuple[list[Opportunity], AnalyticsSummary]:
                 - Flat list of Opportunity dicts (ready to wrap in the schema).
                 - Summary dict with run-level stats and the parameters used.
     '''

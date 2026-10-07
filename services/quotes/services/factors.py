@@ -19,7 +19,6 @@
     factor, and an abstract "weight" on top of it meant nothing.
 '''
 from datetime import date as date_type
-from typing import List, Optional, Tuple
 
 from boto3.resources.base import ServiceResource
 
@@ -305,7 +304,7 @@ def _figure_on(
     code: str,
     day: date_type,
     series: str
-) -> Optional[float]:
+) -> float | None:
     '''
         The last figure of a series on or before a day, or None.
 
@@ -317,7 +316,7 @@ def _figure_on(
             series (str): Which series.
 
         Returns:
-            Optional[float]: The figure in force, or None when there is none.
+            float | None: The figure in force, or None when there is none.
     '''
     found = read_series(dynamodb_resource, owner_email, code, end = day, series = series)
     return found.values[-1].value if found.values else None
@@ -354,7 +353,7 @@ def active_factors_on(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     day: date_type
-) -> List[FactorStateSchema]:
+) -> list[FactorStateSchema]:
     '''
         The factors a calculation for a given day is allowed to take into
         account, each with the value it had THAT day.
@@ -369,7 +368,7 @@ def active_factors_on(
             day (date): The day the calculation is about.
 
         Returns:
-            List[FactorStateSchema]: The factors in force that day.
+            list[FactorStateSchema]: The factors in force that day.
     '''
     declared = list_factors(dynamodb_resource, owner_email).factors
     states = [
@@ -383,7 +382,7 @@ def load_values(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     code: str,
-    values: List[FactorValueSchema]
+    values: list[FactorValueSchema]
 ) -> FactorItem:
     '''
         Loads readings of a factor, by hand or from an ERP.
@@ -396,7 +395,7 @@ def load_values(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
             code (str): Factor identifier.
-            values (List[FactorValueSchema]): The readings.
+            values (list[FactorValueSchema]): The readings.
 
         Returns:
             FactorItem: The factor with its latest reading.
@@ -433,8 +432,8 @@ def read_series(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     code: str,
-    start: Optional[date_type] = None,
-    end: Optional[date_type] = None,
+    start: date_type | None = None,
+    end: date_type | None = None,
     series: str = SERIES_VALUE
 ) -> FactorSeriesResponseSchema:
     '''
@@ -444,8 +443,8 @@ def read_series(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
             code (str): Factor identifier.
-            start (Optional[date]): First day to include.
-            end (Optional[date]): Last day to include.
+            start (date | None): First day to include.
+            end (date | None): Last day to include.
             series (str): Which series — the readings or the statuses.
 
         Returns:
@@ -518,7 +517,7 @@ def value_on(
 def transport_cost(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    trip: Tuple[float, Optional[float]],
+    trip: tuple[float, float | None],
     day: date_type
 ) -> TransportCostSchema:
     '''
@@ -543,7 +542,7 @@ def transport_cost(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
-            trip (Tuple[float, Optional[float]]): Kilometres of the route ONE
+            trip (tuple[float, float | None]): Kilometres of the route ONE
                 WAY, and the units carried when the caller knows them.
             day (date): The day the trip belongs to.
 

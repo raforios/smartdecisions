@@ -6,7 +6,7 @@
     interfaces are unchanged so existing notebook contracts keep working.
 '''
 import random
-from typing import Any, Tuple
+from typing import Any
 import pandas as pd
 from geopy.distance import geodesic
 
@@ -150,7 +150,7 @@ def build_route_object(
     counter: int,
     values: list,
     df: pd.DataFrame
-) -> Tuple[pd.DataFrame, Any, Any, list]:
+) -> tuple[pd.DataFrame, Any, Any, list]:
     '''
         Build route object using data from a dataset.
     '''

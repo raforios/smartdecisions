@@ -3,7 +3,7 @@
 '''
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any
 from fastapi import Request
 from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
@@ -72,7 +72,7 @@ async def get_mineral_prices_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
     current_user: str
-) -> List[MiningPriceResponseSchema]:
+) -> list[MiningPriceResponseSchema]:
     ''' 
         Controller to fetch all processed prices.
     '''
@@ -112,7 +112,7 @@ async def upload_royalties_controller(
     file_name: str,
     file_content: bytes,
     exchange_rate: Decimal = DEFAULT_EXCHANGE_RATE
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Controller to handle in-memory bulk upload of Royalties with currency conversion.
     '''

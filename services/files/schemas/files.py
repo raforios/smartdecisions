@@ -3,7 +3,6 @@
 '''
 
 import os
-from typing import Optional, List
 from pydantic import BaseModel, Field
 
 class BaseS3FileModel(BaseModel):
@@ -11,7 +10,7 @@ class BaseS3FileModel(BaseModel):
         Base model for S3 file-related requests with common fields and key logic.
     '''
     bucket_name: str = Field(..., description = 'Name of the S3 bucket.')
-    file_path: Optional[str] = Field('', description = 'Path within the S3 bucket.')
+    file_path: str | None = Field('', description = 'Path within the S3 bucket.')
     file_name: str = Field(..., description = 'Name of the file.')
 
     @property
@@ -45,9 +44,9 @@ class ListFilesRequest(BaseModel):
     '''
         ListFiles Request model for S3 bucket file listing.
     '''
-    bucket_name: Optional[str] = Field(None,
+    bucket_name: str | None = Field(None,
                 description = 'Optional: Name of the S3 bucket.')
-    prefix: Optional[str] = Field('',
+    prefix: str | None = Field('',
                 description = 'Optional prefix to filter files.')
 
 class ListFilesResponse(BaseModel):
@@ -56,7 +55,7 @@ class ListFilesResponse(BaseModel):
     '''
     bucket_name: str = Field(..., description = 'Name of the S3 bucket.')
     prefix: str = Field(..., description = 'Prefix used to filter files.')
-    files: List[str] = Field(..., description = 'List of file keys found.')
+    files: list[str] = Field(..., description = 'List of file keys found.')
     count: int = Field(..., description = 'Number of files in the list.')
 
 class PresignedUrlRequest(BaseS3FileModel):
@@ -67,7 +66,7 @@ class PresignedUrlRequest(BaseS3FileModel):
                     description = 'Expiration time of the URL in seconds.')
     validation: bool = Field(...,
                     description = 'If validation for file extension should be used.')
-    content_type: Optional[str] = Field(None,
+    content_type: str | None = Field(None,
                     description = 'Optional: The Content-Type of the file.')
 
 class PresignedUrlResponse(BaseModel):

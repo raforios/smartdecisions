@@ -2,7 +2,6 @@
     User Schema (Request/Response)
 '''
 from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 from schemas.role import Role
 
@@ -23,17 +22,17 @@ class UserUpdateRequest(BaseModel):
     '''
         User Update Request Class
     '''
-    first_name: Optional[str] = Field(None, min_length = 3, max_length = 30,
+    first_name: str | None = Field(None, min_length = 3, max_length = 30,
                             description = 'User\'s updated first name.')
-    last_name: Optional[str] = Field(None, min_length = 3, max_length = 30,
+    last_name: str | None = Field(None, min_length = 3, max_length = 30,
                             description = 'User\'s updated last name.')
-    password: Optional[str] = Field(None, min_length = 8, max_length = 100,
+    password: str | None = Field(None, min_length = 8, max_length = 100,
                             description = 'User\'s updated password.')
-    client: Optional[str] = Field(None, min_length = 3, max_length = 50,
+    client: str | None = Field(None, min_length = 3, max_length = 50,
                             description = 'Client associated with the user.')
-    role: Optional[Role] = Field(None,
+    role: Role | None = Field(None,
                             description = 'User\'s role. Only ADMIN should be allowed to update.')
-    status: Optional[bool] = Field(None,
+    status: bool | None = Field(None,
                             description = 'User\'s active status (True/False).')
 
 class UserResponse(BaseModel):
@@ -43,7 +42,7 @@ class UserResponse(BaseModel):
     email: EmailStr = Field(..., description = 'User email address.')
     first_name: str = Field(..., description = 'User\'s first name.')
     last_name: str = Field(..., description = 'User\'s last name.')
-    client: Optional[str] = Field(None, description = 'Client associated with the user.')
+    client: str | None = Field(None, description = 'Client associated with the user.')
     role: Role = Field(..., description = 'User\'s assigned role.')
     status: bool = Field(..., description = 'User\'s active status.')
     date_register: datetime = Field(...,

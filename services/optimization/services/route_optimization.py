@@ -14,7 +14,7 @@
 
     It proposes and never writes. Accepting the proposal is a separate act.
 '''
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import numpy as np
 from boto3.resources.base import ServiceResource
@@ -39,15 +39,15 @@ _MIN_STOPS = 3
 _NO_COORDINATE = 0.0
 
 
-def _placeable(points: List[PlannedPointItem]) -> List[PlannedPointItem]:
+def _placeable(points: list[PlannedPointItem]) -> list[PlannedPointItem]:
     '''
         The stops that can go on a map, in their current order.
 
         Args:
-            points (List[PlannedPointItem]): Stops of the route.
+            points (list[PlannedPointItem]): Stops of the route.
 
         Returns:
-            List[PlannedPointItem]: Those with a real coordinate.
+            list[PlannedPointItem]: Those with a real coordinate.
     '''
     return [
         point for point in sorted(points, key = lambda stop: stop['secuencial'])
@@ -57,15 +57,15 @@ def _placeable(points: List[PlannedPointItem]) -> List[PlannedPointItem]:
 
 
 def _shape(
-    points: List[PlannedPointItem],
-    order: List[int]
+    points: list[PlannedPointItem],
+    order: list[int]
 ) -> RouteShapeSchema:
     '''
         One ordering of the stops, measured on real streets.
 
         Args:
-            points (List[PlannedPointItem]): Stops, in their original order.
-            order (List[int]): Indices into `points`, in visiting order.
+            points (list[PlannedPointItem]): Stops, in their original order.
+            order (list[int]): Indices into `points`, in visiting order.
 
         Returns:
             RouteShapeSchema: The ordering, its length and its geometry.
@@ -93,7 +93,7 @@ def _shape(
 def _savings(
     current: RouteShapeSchema,
     optimized: RouteShapeSchema
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     '''
         What the proposal saves against the order the route has today.
 
@@ -102,7 +102,7 @@ def _savings(
             optimized (RouteShapeSchema): The proposal.
 
         Returns:
-            Tuple[float, float, float]: Metres, seconds and percentage saved.
+            tuple[float, float, float]: Metres, seconds and percentage saved.
     '''
     metres = current.distance_metres - optimized.distance_metres
     seconds = current.duration_seconds - optimized.duration_seconds
@@ -168,9 +168,9 @@ def optimize_planned_route(
 
 
 def apply_optimized_order(
-    points: List[PlannedPointItem],
+    points: list[PlannedPointItem],
     optimization: RouteOptimizationSchema
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         The stops of a route renumbered into the proposed order.
 
@@ -178,11 +178,11 @@ def apply_optimized_order(
         it are two decisions, and only the second one changes a route.
 
         Args:
-            points (List[PlannedPointItem]): Stops as stored.
+            points (list[PlannedPointItem]): Stops as stored.
             optimization (RouteOptimizationSchema): The accepted proposal.
 
         Returns:
-            List[Dict[str, Any]]: The same stops, with `secuencial` reassigned.
+            list[dict[str, Any]]: The same stops, with `secuencial` reassigned.
     '''
     placeable = _placeable(points)
     reordered = []

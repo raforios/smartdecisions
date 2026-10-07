@@ -6,7 +6,7 @@ import zipfile
 import unicodedata
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, Any, Tuple, List
+from typing import Any
 import pandas as pd
 from sqlalchemy.orm import Session
 from models.mining_analysis import (
@@ -51,7 +51,7 @@ def excel_date_to_py_date(excel_date: Any) -> date:
 def build_municipality_maps(
     db_session: Session,
     summary_df: pd.DataFrame
-) -> Tuple[Dict[int, int], List[Dict[str, Any]]]:
+) -> tuple[dict[int, int], list[dict[str, Any]]]:
     '''
         Builds an in-memory alias map mapping SIN Excel codes to Official Municipality IDs.
         STRICT MATCHING: Only matches by official_code to prevent homonym collisions 
@@ -98,7 +98,7 @@ def build_municipality_maps(
 def get_or_create_companies(
     db_session: Session,
     details_df: pd.DataFrame
-) -> Dict[str, int]:
+) -> dict[str, int]:
     ''' Caches existing companies and creates new ones. Returns a NIT -> ID mapping. '''
     nit_map = {}
     with db_session.begin_nested():
@@ -129,8 +129,8 @@ def load_transactions(
     db_session: Session,
     details_df: pd.DataFrame,
     exchange_rate: Decimal,
-    nit_map: Dict[str, int],
-    alias_map: Dict[int, int]
+    nit_map: dict[str, int],
+    alias_map: dict[int, int]
 ) -> int:
     ''' Loads individual transactions leveraging in-memory mapping. '''
     processed_count = 0
@@ -180,8 +180,8 @@ def load_summary(
     summary_df: pd.DataFrame,
     exchange_rate: Decimal,
     period_date: date,
-    alias_map: Dict[int, int]
-) -> Tuple[int, int]:
+    alias_map: dict[int, int]
+) -> tuple[int, int]:
     ''' Loads the monthly summary using the alias map. '''
     counts = {'processed': 0, 'updated': 0}
     seen_munis = set()
@@ -240,7 +240,7 @@ async def process_royalties_excel_service(
     db_session: Session,
     file_content: bytes,
     exchange_rate: Decimal
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     ''' Extracts, transforms and loads the source files natively matching official records. '''
     try:
         excel_data = pd.ExcelFile(io.BytesIO(file_content), engine='openpyxl')

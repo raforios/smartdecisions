@@ -6,7 +6,7 @@
     package) with lightweight HTTP calls to OSRM. The package stays small
     while each route segment is still projected onto real street geometry.
 '''
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import requests
 
@@ -26,7 +26,7 @@ OSRM_BASE_URL = _SETTINGS['OSRM_BASE_URL']
 _REQUEST_TIMEOUT_SECONDS = _SETTINGS['OSRM_REQUEST_TIMEOUT_SECONDS']
 
 
-def _fetch_osrm_route(coordinates: str) -> Dict[str, Any]:
+def _fetch_osrm_route(coordinates: str) -> dict[str, Any]:
     '''
         Calls OSRM for a coordinate pair and returns the parsed JSON payload.
 
@@ -48,20 +48,20 @@ def _fetch_osrm_route(coordinates: str) -> Dict[str, Any]:
 
 
 def road_segment(
-    origin: Tuple[float, float],
-    destination: Tuple[float, float]
-) -> Dict[str, Any]:
+    origin: tuple[float, float],
+    destination: tuple[float, float]
+) -> dict[str, Any]:
     '''
         Projects a single origin → destination segment onto the road network
         using OSRM and returns its real driving distance, duration and the
         polyline geometry along the streets.
 
         Args:
-            origin (Tuple[float, float]): (latitude, longitude) of the start.
-            destination (Tuple[float, float]): (latitude, longitude) of the end.
+            origin (tuple[float, float]): (latitude, longitude) of the start.
+            destination (tuple[float, float]): (latitude, longitude) of the end.
 
         Returns:
-            Dict[str, Any]: Keys `distance` (meters), `duration` (seconds) and
+            dict[str, Any]: Keys `distance` (meters), `duration` (seconds) and
                 `geometry` (list of [longitude, latitude] pairs).
 
         Raises:
@@ -90,7 +90,7 @@ def road_segment(
     }
 
 
-def road_trip(stops: list[tuple[float, float]]) -> Dict[str, Any]:
+def road_trip(stops: list[tuple[float, float]]) -> dict[str, Any]:
     '''
         Projects a whole ordered route onto the street network in ONE call.
 
@@ -105,7 +105,7 @@ def road_trip(stops: list[tuple[float, float]]) -> Dict[str, Any]:
                 pairs of the visit sequence.
 
         Returns:
-            Dict[str, Any]: Keys `distance` (metres), `duration` (seconds) and
+            dict[str, Any]: Keys `distance` (metres), `duration` (seconds) and
                 `geometry` (list of [longitude, latitude] pairs along the
                 streets). An empty geometry when there is nothing to draw.
 

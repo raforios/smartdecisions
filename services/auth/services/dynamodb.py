@@ -1,7 +1,7 @@
 '''
     Database connection service (DynamoDB)
 '''
-from typing import Dict, Any, Optional, List
+from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
@@ -46,7 +46,7 @@ def get_table() -> Any:
             detail = 'Unexpected database initialization error.'
         ) from e
 
-def create_user_item(user_data: Dict[str, Any]) -> Dict[str, Any]:
+def create_user_item(user_data: dict[str, Any]) -> dict[str, Any]:
     '''
         Create a new user item in the DynamoDB table.
         user_data must contain 'email' (Partition Key), 'hashed_password', etc.
@@ -80,7 +80,7 @@ def create_user_item(user_data: Dict[str, Any]) -> Dict[str, Any]:
             detail='Unexpected database write error.'
         ) from e
 
-def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+def get_user_by_email(email: str) -> dict[str, Any] | None:
     '''
         Gets a user from the DynamoDB table by their email (Partition Key).
     '''
@@ -110,9 +110,9 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
 
 def update_user_item(
     email: str, update_expression: str,
-    expression_attribute_values: Dict,
-    expression_attribute_names: Optional[Dict] = None
-) -> Optional[Dict[str, Any]]:
+    expression_attribute_values: dict,
+    expression_attribute_names: dict | None = None
+) -> dict[str, Any] | None:
     '''
         Updates a user item in the DynamoDB table.
         email: The partition key of the user to update.
@@ -181,7 +181,7 @@ def delete_user_item(email: str) -> bool:
             detail = 'Unexpected database delete error.'
         ) from e
 
-def scan_all_users() -> List[Dict[str, Any]]:
+def scan_all_users() -> list[dict[str, Any]]:
     '''
         Scans the entire user table.
         WARNING: Very inefficient for large tables. For administration/debugging purposes only.

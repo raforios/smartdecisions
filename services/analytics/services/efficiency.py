@@ -11,7 +11,6 @@
         * Selling price drift: the average price actually charged per product
           against the previous period, which surfaces silent discounting.
 '''
-from typing import List, Optional
 
 import pandas as pd
 
@@ -52,7 +51,7 @@ _MAX_PRICE_ROWS = _SETTINGS['EFFICIENCY_MAX_PRICE_ROWS']
 _MIN_UNITS_FOR_PRICE = _SETTINGS['EFFICIENCY_MIN_UNITS_FOR_PRICE']
 
 
-def _drop_size_kpis(dataframe: pd.DataFrame) -> List[KpiCard]:
+def _drop_size_kpis(dataframe: pd.DataFrame) -> list[KpiCard]:
     '''
         Builds the drop-size cards: units per order, distinct lines per order
         and the average amount per order.
@@ -61,7 +60,7 @@ def _drop_size_kpis(dataframe: pd.DataFrame) -> List[KpiCard]:
             dataframe (pd.DataFrame): Normalized sales rows.
 
         Returns:
-            List[Dict[str, Any]]: KPI cards ready for the UI.
+            list[dict[str, Any]]: KPI cards ready for the UI.
     '''
     orders = order_count(dataframe)
     units = float(dataframe[QUANTITY].sum()) if QUANTITY in dataframe.columns else 0.0
@@ -81,7 +80,7 @@ def _drop_size_kpis(dataframe: pd.DataFrame) -> List[KpiCard]:
     ]
 
 
-def _seller_productivity(dataframe: pd.DataFrame) -> List[SellerProductivity]:
+def _seller_productivity(dataframe: pd.DataFrame) -> list[SellerProductivity]:
     '''
         Compares sellers on sales, clients served, orders, average ticket and
         lines per order.
@@ -90,7 +89,7 @@ def _seller_productivity(dataframe: pd.DataFrame) -> List[SellerProductivity]:
             dataframe (pd.DataFrame): Normalized sales rows.
 
         Returns:
-            List[Dict[str, Any]]: One row per seller, best sales first. Empty
+            list[dict[str, Any]]: One row per seller, best sales first. Empty
                 when the file has no seller column.
     '''
     if SELLER not in dataframe.columns or AMOUNT not in dataframe.columns:
@@ -98,7 +97,7 @@ def _seller_productivity(dataframe: pd.DataFrame) -> List[SellerProductivity]:
 
     labelled = dataframe.assign(
         _seller = dataframe[SELLER].fillna('').astype(str))
-    rows: List[SellerProductivity] = []
+    rows: list[SellerProductivity] = []
     for seller, group in labelled.groupby('_seller'):
         orders = order_count(group)
         amount = float(group[AMOUNT].sum())
@@ -116,7 +115,7 @@ def _seller_productivity(dataframe: pd.DataFrame) -> List[SellerProductivity]:
     return rows[:_MAX_SELLERS]
 
 
-def _average_price(group: pd.DataFrame) -> Optional[float]:
+def _average_price(group: pd.DataFrame) -> float | None:
     '''
         Average price actually charged: amount divided by units, which reflects
         discounts far better than the nominal unit price.
@@ -134,7 +133,7 @@ def _average_price(group: pd.DataFrame) -> Optional[float]:
     return ratio(float(group[AMOUNT].sum()), units)
 
 
-def _price_drift(dataframe: pd.DataFrame) -> List[PriceDrift]:
+def _price_drift(dataframe: pd.DataFrame) -> list[PriceDrift]:
     '''
         Realized average price per product in the second half of the period
         against the first half.
@@ -147,7 +146,7 @@ def _price_drift(dataframe: pd.DataFrame) -> List[PriceDrift]:
             dataframe (pd.DataFrame): Normalized sales rows.
 
         Returns:
-            List[Dict[str, Any]]: Products whose price moved, largest drop
+            list[dict[str, Any]]: Products whose price moved, largest drop
                 first. Empty when quantities, amounts or dates are missing.
     '''
     parsed_dates = dates(dataframe)
@@ -176,7 +175,7 @@ def _price_drift(dataframe: pd.DataFrame) -> List[PriceDrift]:
         label: _average_price(group) for label, group in earlier.groupby('_label')
     }
 
-    rows: List[PriceDrift] = []
+    rows: list[PriceDrift] = []
     for label, current in recent_prices.items():
         previous = earlier_prices.get(label)
         if current is None or previous is None:
@@ -202,7 +201,7 @@ def build_efficiency(dataframe: pd.DataFrame) -> EfficiencyBlock:
             dataframe (pd.DataFrame): Normalized sales rows as produced by ingest.
 
         Returns:
-            Dict[str, Any]: 'kpis' (drop size), 'sellers' (productivity
+            dict[str, Any]: 'kpis' (drop size), 'sellers' (productivity
                 table) and 'prices' (realized price drift). Sections the data
                 cannot support come back empty rather than raising.
     '''

@@ -21,7 +21,7 @@
 '''
 from dataclasses import dataclass
 from datetime import date as date_type
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 MINERALS_TABLE_KEY = 'mineral_id'
@@ -40,21 +40,21 @@ class MineralItem:
     mineral_id: str
     name: str
     unit: str
-    chemical_symbol: Optional[str] = None
-    quoted_in: Optional[str] = None
-    method: Optional[str] = None
-    created_at: Optional[str] = None
+    chemical_symbol: str | None = None
+    quoted_in: str | None = None
+    method: str | None = None
+    created_at: str | None = None
 
     @classmethod
     def from_item(
         cls,
-        item: Dict[str, Any]
-    ) -> 'MineralItem':
+        item: dict[str, Any]
+    ) -> MineralItem:
         '''
             Builds the record from a raw DynamoDB item.
 
             Args:
-                item (Dict[str, Any]): Item as returned by boto3.
+                item (dict[str, Any]): Item as returned by boto3.
 
             Returns:
                 MineralItem: The typed record.
@@ -80,20 +80,20 @@ class MiningPriceItem:
     '''
     mineral_id: str
     date: date_type
-    price_low: Optional[float] = None
-    price_high: Optional[float] = None
-    created_at: Optional[str] = None
+    price_low: float | None = None
+    price_high: float | None = None
+    created_at: str | None = None
 
     @classmethod
     def from_item(
         cls,
-        item: Dict[str, Any]
-    ) -> 'MiningPriceItem':
+        item: dict[str, Any]
+    ) -> MiningPriceItem:
         '''
             Builds the record from a raw DynamoDB item.
 
             Args:
-                item (Dict[str, Any]): Item as returned by boto3.
+                item (dict[str, Any]): Item as returned by boto3.
 
             Returns:
                 MiningPriceItem: The typed record, with the date parsed.
@@ -106,12 +106,12 @@ class MiningPriceItem:
             created_at = item.get('created_at')
         )
 
-    def to_item(self) -> Dict[str, Any]:
+    def to_item(self) -> dict[str, Any]:
         '''
             Renders the record as the item DynamoDB stores.
 
             Returns:
-                Dict[str, Any]: Item ready for put_item.
+                dict[str, Any]: Item ready for put_item.
         '''
         return {
             PRICES_PARTITION_KEY: self.mineral_id,

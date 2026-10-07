@@ -15,7 +15,7 @@
         Until then every call fails with ResourceNotFoundException.
 '''
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -50,7 +50,7 @@ def invoke(
     system_prompt: str,
     user_prompt: str,
     max_tokens: int
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Asks the model for one answer and returns it with what it cost.
 
@@ -61,7 +61,7 @@ def invoke(
             max_tokens (int): Ceiling on the answer.
 
         Returns:
-            Dict[str, Any]: `text`, `input_tokens` and `output_tokens`.
+            dict[str, Any]: `text`, `input_tokens` and `output_tokens`.
 
         Raises:
             ServiceUnavailableError: If Bedrock cannot be reached or refuses.
@@ -93,7 +93,7 @@ def invoke(
     }
 
 
-def _first_text(content: List[Dict[str, Any]]) -> str:
+def _first_text(content: list[dict[str, Any]]) -> str:
     '''
         Returns the text of the answer.
 
@@ -102,7 +102,7 @@ def _first_text(content: List[Dict[str, Any]]) -> str:
         as a refusal rather than publish nothing as if it were an answer.
 
         Args:
-            content (List[Dict[str, Any]]): Content blocks from the model.
+            content (list[dict[str, Any]]): Content blocks from the model.
 
         Returns:
             str: The first text block, stripped, or an empty string.

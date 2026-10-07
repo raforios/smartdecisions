@@ -22,7 +22,7 @@
 import json
 from dataclasses import replace
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any
 
 from models.ai import ExplanationItem, PromptItem
 from schemas.ai import AIError, ViewName
@@ -92,7 +92,7 @@ def _system_prompt(prompt: PromptItem) -> str:
 
 def _trim(
     value: Any,
-    budget_hit: List[bool]
+    budget_hit: list[bool]
 ) -> Any:
     '''
         Walks a structure and cuts every long list, at any depth.
@@ -104,7 +104,7 @@ def _trim(
 
         Args:
             value (Any): Node of the response being walked.
-            budget_hit (List[bool]): Single-element flag set when something was
+            budget_hit (list[bool]): Single-element flag set when something was
                 actually cut, so the caller can log it once.
 
         Returns:
@@ -127,7 +127,7 @@ def _trim(
     return value
 
 
-def _fit_to_budget(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _fit_to_budget(payload: dict[str, Any]) -> dict[str, Any]:
     '''
         Shrinks a response that does not fit the token budget, without
         re-declaring its shape.
@@ -144,10 +144,10 @@ def _fit_to_budget(payload: Dict[str, Any]) -> Dict[str, Any]:
         it were the whole.
 
         Args:
-            payload (Dict[str, Any]): The response as the service returned it.
+            payload (dict[str, Any]): The response as the service returned it.
 
         Returns:
-            Dict[str, Any]: The same response, trimmed only if it had to be.
+            dict[str, Any]: The same response, trimmed only if it had to be.
     '''
     if len(json.dumps(payload, default = str)) <= MAX_PAYLOAD_CHARACTERS:
         return payload
@@ -167,17 +167,17 @@ def _fit_to_budget(payload: Dict[str, Any]) -> Dict[str, Any]:
 @handle_service_errors('AI')
 async def explain_service(
     view: ViewName,
-    data: Dict[str, Any]
-) -> Dict[str, Any]:
+    data: dict[str, Any]
+) -> dict[str, Any]:
     '''
     Explains what a view is showing, from the point of view of its expert.
 
     Args:
         view (ViewName): View being explained.
-        data (Dict[str, Any]): The payload the view is displaying.
+        data (dict[str, Any]): The payload the view is displaying.
 
     Returns:
-        Dict[str, Any]: Payload matching ExplainResponse shape.
+        dict[str, Any]: Payload matching ExplainResponse shape.
 
     Raises:
         InvalidInputError: If the payload is empty.
@@ -258,7 +258,7 @@ async def explain_service(
 
 
 @handle_service_errors('AI')
-async def list_roles_service() -> Dict[str, Any]:
+async def list_roles_service() -> dict[str, Any]:
     '''
     Returns the roles currently configured.
 
@@ -267,7 +267,7 @@ async def list_roles_service() -> Dict[str, Any]:
     changes often has to be inspectable.
 
     Returns:
-        Dict[str, Any]: Payload matching RoleListResponse shape.
+        dict[str, Any]: Payload matching RoleListResponse shape.
     '''
     prompts = list_prompts()
     return {
@@ -286,7 +286,7 @@ async def list_roles_service() -> Dict[str, Any]:
 
 
 @handle_service_errors('AI')
-async def save_role_service(definition: Dict[str, Any]) -> Dict[str, Any]:
+async def save_role_service(definition: dict[str, Any]) -> dict[str, Any]:
     '''
     Stores a version of the role a view is explained from.
 
@@ -298,10 +298,10 @@ async def save_role_service(definition: Dict[str, Any]) -> Dict[str, Any]:
     produced without deleting a single row.
 
     Args:
-        definition (Dict[str, Any]): Payload matching RoleDefinition shape.
+        definition (dict[str, Any]): Payload matching RoleDefinition shape.
 
     Returns:
-        Dict[str, Any]: The stored role, as RoleSummary shape.
+        dict[str, Any]: The stored role, as RoleSummary shape.
     '''
     prompt = PromptItem(
         view = definition['view'],

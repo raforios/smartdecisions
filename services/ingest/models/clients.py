@@ -1,7 +1,7 @@
 '''
     Client master model for DynamoDB.
 '''
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class ClientItem(TypedDict, total = False):
@@ -20,22 +20,22 @@ class ClientItem(TypedDict, total = False):
     owner_email: str
     id: str
     name: str
-    tax_id: Optional[str]
-    client_type: Optional[str]
-    channel: Optional[str]
-    zone: Optional[str]
-    city: Optional[str]
-    region: Optional[str]
-    address: Optional[str]
-    latitude: Optional[float]
-    longitude: Optional[float]
-    phone: Optional[str]
-    contact: Optional[str]
-    seller: Optional[str]
-    credit_limit: Optional[float]
-    cluster: Optional[str]
-    supervisor: Optional[str]
-    market: Optional[str]
+    tax_id: str | None
+    client_type: str | None
+    channel: str | None
+    zone: str | None
+    city: str | None
+    region: str | None
+    address: str | None
+    latitude: float | None
+    longitude: float | None
+    phone: str | None
+    contact: str | None
+    seller: str | None
+    credit_limit: float | None
+    cluster: str | None
+    supervisor: str | None
+    market: str | None
     source: str
     created_at: str
     updated_at: str

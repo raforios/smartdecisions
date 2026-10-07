@@ -1,7 +1,7 @@
 '''
     Daily stock item for DynamoDB.
 '''
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class DailyStockItem(TypedDict, total = False):
@@ -22,7 +22,7 @@ class DailyStockItem(TypedDict, total = False):
     stock_key: str
     date: str
     sku: str
-    product_name: Optional[str]
+    product_name: str | None
     opening_quantity: float
     sold_quantity: float
     available_quantity: float

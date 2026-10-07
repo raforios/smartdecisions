@@ -4,7 +4,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from functools import wraps
-from typing import Any, Dict
+from typing import Any
 from botocore.exceptions import ClientError as AWSClientError
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
@@ -59,7 +59,7 @@ def handle_service_errors(func):
 
 def process_query_params(
     query_params: Any
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Processes query parameters from a Pydantic model or dictionary
         into a dictionary for DynamoDB queries. Prefers Pydantic V2's

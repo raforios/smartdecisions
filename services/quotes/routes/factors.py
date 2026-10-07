@@ -11,7 +11,6 @@
     need a release to change.
 '''
 from datetime import date as date_type
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path as PathParam, Query, Request, status
@@ -160,7 +159,7 @@ async def transport_cost_endpoint(
     request: Request,
     km: float = Query(..., gt = 0, description = 'Kilometres of the route, one way.'),
     day: date_type = Query(..., alias = 'date', description = 'YYYY-MM-DD.'),
-    units: Optional[float] = Query(
+    units: float | None = Query(
         None, gt = 0, description = 'Units carried, to get the cost per unit.'
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
@@ -223,8 +222,8 @@ async def read_factor_state_endpoint(
 async def read_factor_series_endpoint(
     request: Request,
     code: str = _CODE,
-    start: Optional[date_type] = Query(None, description = 'First day to include.'),
-    end: Optional[date_type] = Query(None, description = 'Last day to include.'),
+    start: date_type | None = Query(None, description = 'First day to include.'),
+    end: date_type | None = Query(None, description = 'Last day to include.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> FactorSeriesResponseSchema:

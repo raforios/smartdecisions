@@ -20,7 +20,6 @@
         product_id, product_name, category, channel, region, city,
         seller, date
 '''
-from typing import List
 
 import pandas as pd
 
@@ -66,7 +65,7 @@ def _label_series(
     return dataframe[id_col].astype(str)
 
 
-def _kpis(dataframe: pd.DataFrame) -> List[KpiCard]:
+def _kpis(dataframe: pd.DataFrame) -> list[KpiCard]:
     '''
         Builds the headline KPI cards: a metric code and its value, so the UI
         renders each one without the backend naming it.
@@ -75,7 +74,7 @@ def _kpis(dataframe: pd.DataFrame) -> List[KpiCard]:
             dataframe (pd.DataFrame): Normalized sales rows.
 
         Returns:
-            List[KpiCard]: The headline cards of the commercial summary.
+            list[KpiCard]: The headline cards of the commercial summary.
     '''
     total_sales = _money(dataframe[_AMOUNT].sum()) if _AMOUNT in dataframe else 0.0
     sales_count = int(dataframe[_ORDER].nunique()) if _ORDER in dataframe else len(dataframe)
@@ -99,7 +98,7 @@ def _ranking(
     label_series: pd.Series,
     top: int,
     ascending: bool
-) -> List[RankRow]:
+) -> list[RankRow]:
     '''
         Aggregates total_amount by a label and returns the top (or bottom) N as
         {label, amount} rows. Shared by best/worst client and top/bottom products.
@@ -119,7 +118,7 @@ def _ranking(
 def _distribution(
     dataframe: pd.DataFrame,
     dimension: str
-) -> List[DistRow]:
+) -> list[DistRow]:
     '''
         Sales share by a categorical dimension (category/channel/region/...),
         returned as {label, amount, percentage} sorted by amount desc. Empty when
@@ -144,7 +143,7 @@ def _distribution(
     ]
 
 
-def _monthly_trend(dataframe: pd.DataFrame) -> List[TrendPoint]:
+def _monthly_trend(dataframe: pd.DataFrame) -> list[TrendPoint]:
     '''
         Monthly sales series as {month: 'YYYY-MM', amount}. Empty when there is no
         parseable date column.
@@ -174,7 +173,7 @@ def build_commercial_summary(dataframe: pd.DataFrame) -> CommercialSummaryBlock:
                 per row) as produced by the ingest service.
 
         Returns:
-            Dict[str, Any]: KPIs, best/worst client, top/bottom products, the
+            dict[str, Any]: KPIs, best/worst client, top/bottom products, the
                 distributions by dimension and the monthly trend — all labeled
                 and aggregated, ready for tables and charts.
     '''

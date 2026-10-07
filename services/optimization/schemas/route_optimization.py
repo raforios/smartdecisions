@@ -12,7 +12,6 @@
     the screen draws them side by side.
 '''
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -32,7 +31,7 @@ class OptimizedStopSchema(BaseModel):
         the plan showing up first says more than any total.
     '''
     point_name: str
-    client_id: Optional[str] = None
+    client_id: str | None = None
     latitude: float
     longitude: float
     order: int = Field(..., gt = 0, description = 'Position in this ordering.')
@@ -43,10 +42,10 @@ class RouteShapeSchema(BaseModel):
     '''
         One ordering of the same stops, measured and drawable.
     '''
-    stops: List[OptimizedStopSchema]
+    stops: list[OptimizedStopSchema]
     distance_metres: float = Field(..., ge = 0)
     duration_seconds: float = Field(..., ge = 0)
-    geometry: List[List[float]] = Field(
+    geometry: list[list[float]] = Field(
         default_factory = list,
         description = 'The path along real streets, as [longitude, latitude] '
                       'pairs. Empty when OSRM could not be reached: the order '

@@ -7,7 +7,7 @@
     today without touching last week.
 '''
 import asyncio
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import patch
 
 import pandas as pd
@@ -62,8 +62,8 @@ def world_fixture():
         Returns:
             dict: `dataset` and `objects`, for assertions.
     '''
-    objects: Dict[str, bytes] = {}
-    dataset: Dict[str, Any] = {
+    objects: dict[str, bytes] = {}
+    dataset: dict[str, Any] = {
         'dataset_id': DATASET_ID, 'owner_email': OWNER, 'status': 'validated',
         'created_at': '2026-02-15T10:00:00Z',
         'file_s3_key': 'ingest/normalized/sales.csv'
@@ -116,12 +116,12 @@ def _stored_rows(world: dict) -> pd.DataFrame:
     return read_file(world['objects'][world['dataset'][key]], 'stored.csv')
 
 
-def _payments(rows: List[Dict[str, Any]]) -> CollectionsPushSchema:
+def _payments(rows: list[dict[str, Any]]) -> CollectionsPushSchema:
     '''
         Builds a payments push.
 
         Args:
-            rows (List[Dict[str, Any]]): Row dictionaries.
+            rows (list[dict[str, Any]]): Row dictionaries.
 
         Returns:
             CollectionsPushSchema: The push payload.
@@ -325,10 +325,10 @@ def test_a_file_staged_in_s3_takes_the_same_path(world):
         API Gateway.
     '''
     world['objects']['ingest/raw/cobros.csv'] = (
-        'Nro Factura,Fecha Cobro,Monto Cobrado\n'
-        'F-0001,2026-02-10,40\n'
-        'F-0002,2026-02-11,50\n'
-    ).encode('utf-8')
+        b'Nro Factura,Fecha Cobro,Monto Cobrado\n'
+        b'F-0001,2026-02-10,40\n'
+        b'F-0002,2026-02-11,50\n'
+    )
 
     response = asyncio.run(channels.ingest_collections_from_s3_controller(
         dynamodb_resource = None,
@@ -353,9 +353,9 @@ def test_the_s3_door_feeds_the_client_master_like_the_others(world):
         prospect it named existed or not depending on the endpoint used.
     """
     world['objects']['ingest/raw/visitas.csv'] = (
-        'Fecha,Vendedor,Cliente,Hora\n'
-        '2026-02-15,Mario,Prospecto Nuevo,09:30\n'
-    ).encode('utf-8')
+        b'Fecha,Vendedor,Cliente,Hora\n'
+        b'2026-02-15,Mario,Prospecto Nuevo,09:30\n'
+    )
     synced: list = []
 
     with patch.object(common, 'sync_master',
@@ -381,8 +381,8 @@ def test_a_companion_that_does_not_name_clients_never_touches_the_master(world):
         master from them would invent a client out of an invoice number.
     """
     world['objects']['ingest/raw/cobros.csv'] = (
-        'Nro Factura,Fecha Cobro,Monto Cobrado\nF-0001,2026-02-10,40\n'
-    ).encode('utf-8')
+        b'Nro Factura,Fecha Cobro,Monto Cobrado\nF-0001,2026-02-10,40\n'
+    )
     synced: list = []
 
     with patch.object(common, 'sync_master',
@@ -418,14 +418,14 @@ def _sale(**overrides: Any) -> SaleRowSchema:
 
 
 def _push_sales(
-    rows: List[SaleRowSchema],
+    rows: list[SaleRowSchema],
     **kwargs: Any
 ) -> Any:
     '''
         Runs the sales push controller.
 
         Args:
-            rows (List[SaleRowSchema]): Lines to push.
+            rows (list[SaleRowSchema]): Lines to push.
             **kwargs (Any): Extra push fields, such as `mode`.
 
         Returns:
@@ -542,11 +542,11 @@ def test_the_objectives_and_stock_s3_doors_load_their_files(world):
         and untested until now for the same reason: they look trivial.
     '''
     world['objects']['ingest/raw/objetivos.csv'] = (
-        'Cliente,Periodo,Objetivo\nTienda 1,2026-02,15000\n'
-    ).encode('utf-8')
+        b'Cliente,Periodo,Objetivo\nTienda 1,2026-02,15000\n'
+    )
     world['objects']['ingest/raw/stock.csv'] = (
-        'Fecha,Producto,Existencia\n2026-02-10,Producto 1,40\n'
-    ).encode('utf-8')
+        b'Fecha,Producto,Existencia\n2026-02-10,Producto 1,40\n'
+    )
 
     with patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']):
         objectives = asyncio.run(channels.ingest_objectives_from_s3_controller(

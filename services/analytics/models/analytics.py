@@ -1,7 +1,7 @@
 '''
     Analytics Run Model for DynamoDB.
 '''
-from typing import Any, Dict, List, TypedDict
+from typing import Any, TypedDict
 
 
 class AnalyticsRun(TypedDict, total = False):
@@ -22,7 +22,7 @@ class AnalyticsRun(TypedDict, total = False):
     run_id: str
     status: str
     owner_email: str
-    summary: Dict[str, Any]
-    opportunities: List[Dict[str, Any]]
-    parameters: Dict[str, Any]
+    summary: dict[str, Any]
+    opportunities: list[dict[str, Any]]
+    parameters: dict[str, Any]
     created_at: str

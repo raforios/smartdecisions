@@ -21,7 +21,7 @@ import csv
 import io
 import unicodedata
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -92,7 +92,7 @@ BULK_HEADER_FIELDS = ('route_name', 'route_code', 'plan_date', 'description', 's
 # English names, and this is the mapper between the two — the same shape
 # INGEST uses for its own headers. The canonical names are accepted too, so
 # a system already exporting them keeps working.
-BULK_HEADER_LOOKUP: Dict[str, str] = {
+BULK_HEADER_LOOKUP: dict[str, str] = {
     'codigo ruta': 'route_code',
     'nombre ruta': 'route_name',
     'fecha': 'plan_date',
@@ -107,7 +107,7 @@ BULK_HEADER_LOOKUP: Dict[str, str] = {
 }
 
 
-def parse_planned_routes_csv(csv_text: str) -> List[PlannedRouteBulkRowSchema]:
+def parse_planned_routes_csv(csv_text: str) -> list[PlannedRouteBulkRowSchema]:
     '''
         Reads the bulk CSV into validated rows. Blank lines are skipped; a
         missing required column or an invalid value refuses the whole file.
@@ -116,7 +116,7 @@ def parse_planned_routes_csv(csv_text: str) -> List[PlannedRouteBulkRowSchema]:
             csv_text (str): The decoded CSV.
 
         Returns:
-            List[PlannedRouteBulkRowSchema]: One validated row per stop.
+            list[PlannedRouteBulkRowSchema]: One validated row per stop.
 
         Raises:
             InvalidInputError: MISSING_COLUMNS, EMPTY_UPLOAD or INVALID_ROW.
@@ -130,7 +130,7 @@ def parse_planned_routes_csv(csv_text: str) -> List[PlannedRouteBulkRowSchema]:
         raise InvalidInputError(detail = LocalizationError.MISSING_COLUMNS.value)
     reader.fieldnames = header
 
-    rows: List[PlannedRouteBulkRowSchema] = []
+    rows: list[PlannedRouteBulkRowSchema] = []
     for line_no, raw in enumerate(reader, start = 2):
         cleaned = {key: (value or '').strip() or None for key, value in raw.items() if key}
         if not any(cleaned.values()):
@@ -161,18 +161,18 @@ def _canonical_header(name: str) -> str:
     return BULK_HEADER_LOOKUP.get(cleaned, cleaned.replace(' ', '_'))
 
 
-def group_rows_into_routes(rows: List[PlannedRouteBulkRowSchema]) -> List[PlannedRouteCreateSchema]:
+def group_rows_into_routes(rows: list[PlannedRouteBulkRowSchema]) -> list[PlannedRouteCreateSchema]:
     '''
         Folds the stop rows into one route per `route_code`, keeping the header
         of the first row of each code and the stops in file order.
 
         Args:
-            rows (List[PlannedRouteBulkRowSchema]): Validated CSV rows.
+            rows (list[PlannedRouteBulkRowSchema]): Validated CSV rows.
 
         Returns:
-            List[PlannedRouteCreateSchema]: Routes ready to be created.
+            list[PlannedRouteCreateSchema]: Routes ready to be created.
     '''
-    grouped: Dict[str, Dict[str, Any]] = {}
+    grouped: dict[str, dict[str, Any]] = {}
     for row in rows:
         bucket = grouped.setdefault(row.route_code, {
             **row.model_dump(include = set(BULK_HEADER_FIELDS)), 'points': []
@@ -202,10 +202,10 @@ def bulk_create_planned_routes(
     '''
     routes = group_rows_into_routes(parse_planned_routes_csv(csv_text))
     existing = list_planned_routes(dynamodb_resource, owner_email)
-    items: List[PlannedRouteItem] = []
+    items: list[PlannedRouteItem] = []
     for route in routes:
         _assert_route_code_free(existing, route.route_code)
-        points: List[PlannedPointItem] = []
+        points: list[PlannedPointItem] = []
         for point in route.points:
             _assert_sequence_free(points, point.secuencial)
             points.append(build_point_item(point))
@@ -229,23 +229,23 @@ def bulk_create_planned_routes(
 # ---------------------------------------------------------------------------
 # Plan inferred from the execution
 # ---------------------------------------------------------------------------
-def visits_as_stops(routes: List[PlannedRouteItem]) -> List[PlannedPointSchema]:
+def visits_as_stops(routes: list[PlannedRouteItem]) -> list[PlannedPointSchema]:
     '''
         The clients a seller visited across `routes`, in the order they were
         reached, each once. Positions that name no client are breadcrumbs, not
         stops.
 
         Args:
-            routes (List[ExecutedRouteItem]): Executed route items of one seller and day.
+            routes (list[ExecutedRouteItem]): Executed route items of one seller and day.
 
         Returns:
-            List[PlannedPointSchema]: Stops with visiting order.
+            list[PlannedPointSchema]: Stops with visiting order.
     '''
     visits = sorted(
         (point for route in routes for point in route.get('points', [])),
         key = lambda point: point['timestamp']
     )
-    stops: List[PlannedPointSchema] = []
+    stops: list[PlannedPointSchema] = []
     seen: set = set()
     for point in visits:
         # A stop names a client when the seller knew it; when it does not, the
@@ -267,12 +267,12 @@ def visits_as_stops(routes: List[PlannedRouteItem]) -> List[PlannedPointSchema]:
     return stops
 
 
-def _position_key(point: Dict[str, Any]) -> str:
+def _position_key(point: dict[str, Any]) -> str:
     '''
         The identity of a stop that names no client: where it was.
 
         Args:
-            point (Dict[str, Any]): A reported position.
+            point (dict[str, Any]): A reported position.
 
         Returns:
             str: A stable key built from the coordinates.
@@ -286,7 +286,7 @@ def infer_planned_route(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     request: InferPlannedRouteSchema,
-    executed_routes: List[ExecutedRouteItem]
+    executed_routes: list[ExecutedRouteItem]
 ) -> PlannedRouteItem:
     '''
         Creates the plan a seller's day implies and links that day's routes to
@@ -297,7 +297,7 @@ def infer_planned_route(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
             request (InferPlannedRouteSchema): Seller, date and optional naming.
-            executed_routes (List[ExecutedRouteItem]): That seller's routes that day.
+            executed_routes (list[ExecutedRouteItem]): That seller's routes that day.
 
         Returns:
             PlannedRouteItem: The stored plan, IN CREATION.
@@ -396,7 +396,7 @@ def _seller_stops(
     dataframe: pd.DataFrame,
     seller: str,
     request: PlansBySellerSchema
-) -> List[PlannedPointSchema]:
+) -> list[PlannedPointSchema]:
     '''
         The stops of one day of one seller's portfolio, in visiting order.
 
@@ -411,7 +411,7 @@ def _seller_stops(
             request (PlansBySellerSchema): Days, day and period.
 
         Returns:
-            List[PlannedPointSchema]: The day's stops; empty when that day of
+            list[PlannedPointSchema]: The day's stops; empty when that day of
                 the seller's split has no placeable client.
     '''
     try:
@@ -434,9 +434,9 @@ def _seller_stops(
 def _create_seller_plan(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    seller_stops: Tuple[str, List[PlannedPointSchema]],
+    seller_stops: tuple[str, list[PlannedPointSchema]],
     request: PlansBySellerSchema,
-    endpoints: Tuple[Optional[RouteEndpointSchema], Optional[RouteEndpointSchema]]
+    endpoints: tuple[RouteEndpointSchema | None, RouteEndpointSchema | None]
 ) -> SellerPlanSchema | None:
     '''
         Saves one seller's day as their plan.
@@ -447,10 +447,10 @@ def _create_seller_plan(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
-            seller_stops (Tuple[str, List[PlannedPointSchema]]): The seller as
+            seller_stops (tuple[str, list[PlannedPointSchema]]): The seller as
                 the file writes it, and the day's stops in order.
             request (PlansBySellerSchema): Day and date.
-            endpoints (Tuple): Fixed start and end point, or None when open.
+            endpoints (tuple): Fixed start and end point, or None when open.
 
         Returns:
             SellerPlanSchema | None: The plan created, or None when a plan with
@@ -480,7 +480,7 @@ def _base_endpoints(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     request: PlansBySellerSchema
-) -> Tuple[Optional[RouteEndpointSchema], Optional[RouteEndpointSchema]]:
+) -> tuple[RouteEndpointSchema | None, RouteEndpointSchema | None]:
     '''
         The start and end the plans get: the company base point where the
         request asks for it, nothing where it does not.
@@ -542,9 +542,9 @@ def plans_by_seller(
         raise InvalidInputError(detail = OptimizationError.NO_SELLERS_IN_FILE.value)
 
     endpoints = _base_endpoints(dynamodb_resource, owner_email, request)
-    created: List[SellerPlanSchema] = []
-    without_stops: List[str] = []
-    already_planned: List[str] = []
+    created: list[SellerPlanSchema] = []
+    without_stops: list[str] = []
+    already_planned: list[str] = []
     for seller in sellers:
         stops = _seller_stops(dataframe, seller, request)
         if not stops:

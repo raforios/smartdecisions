@@ -10,7 +10,7 @@
     queries its own partition, so a foreign route is indistinguishable from a
     missing one.
 '''
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, TypedDict
 
 
 class PlannedPointItem(TypedDict, total = False):
@@ -22,8 +22,8 @@ class PlannedPointItem(TypedDict, total = False):
     secuencial: int
     latitude: float
     longitude: float
-    reference_data: Optional[str]
-    client_id: Optional[str]
+    reference_data: str | None
+    client_id: str | None
 
 
 class PlannedRouteItem(TypedDict, total = False):
@@ -48,16 +48,16 @@ class PlannedRouteItem(TypedDict, total = False):
     id: str
     route_code: str
     route_name: str
-    description: Optional[str]
-    seller: Optional[str]
-    plan_date: Optional[str]
+    description: str | None
+    seller: str | None
+    plan_date: str | None
     status: str
     created_at: str
-    points: List[PlannedPointItem]
+    points: list[PlannedPointItem]
     # Where the route starts and ends, when the plan fixes it ({name,
     # latitude, longitude}). Absent: open, the seller starts and ends anywhere.
-    start_point: Optional[Dict[str, Any]]
-    end_point: Optional[Dict[str, Any]]
+    start_point: dict[str, Any] | None
+    end_point: dict[str, Any] | None
 
 
 class ExecutedPointItem(TypedDict, total = False):
@@ -69,10 +69,10 @@ class ExecutedPointItem(TypedDict, total = False):
     latitude: float
     longitude: float
     timestamp: str
-    client_id: Optional[str]
-    outcome: Optional[str]
-    order_id: Optional[str]
-    items: List[dict]
+    client_id: str | None
+    outcome: str | None
+    order_id: str | None
+    items: list[dict]
 
 
 class ExecutedRouteItem(TypedDict, total = False):
@@ -91,16 +91,16 @@ class ExecutedRouteItem(TypedDict, total = False):
     owner_email: str
     id: str
     seller: str
-    planned_route_id: Optional[str]
+    planned_route_id: str | None
     start_time: str
-    end_time: Optional[str]
+    end_time: str | None
     start_latitude: float
     start_longitude: float
     max_distance_start_point: float
-    end_latitude: Optional[float]
-    end_longitude: Optional[float]
-    max_distance_end_point: Optional[float]
-    last_latitude: Optional[float]
-    last_longitude: Optional[float]
-    last_timestamp: Optional[str]
-    points: List[ExecutedPointItem]
+    end_latitude: float | None
+    end_longitude: float | None
+    max_distance_end_point: float | None
+    last_latitude: float | None
+    last_longitude: float | None
+    last_timestamp: str | None
+    points: list[ExecutedPointItem]

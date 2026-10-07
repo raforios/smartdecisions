@@ -7,7 +7,7 @@
 '''
 import hashlib
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -51,7 +51,7 @@ def _table(name: str) -> Any:
 
 def build_cache_key(
     view: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     prompt_version: int
 ) -> str:
     '''
@@ -67,7 +67,7 @@ def build_cache_key(
 
         Args:
             view (str): View being explained.
-            payload (Dict[str, Any]): Validated view payload.
+            payload (dict[str, Any]): Validated view payload.
             prompt_version (int): Version of the role in force.
 
         Returns:
@@ -81,7 +81,7 @@ def build_cache_key(
     return hashlib.sha256(material.encode('utf-8')).hexdigest()
 
 
-def get_active_prompt(view: str) -> Optional[PromptItem]:
+def get_active_prompt(view: str) -> PromptItem | None:
     '''
         Returns the role in force for a view.
 
@@ -115,18 +115,18 @@ def get_active_prompt(view: str) -> Optional[PromptItem]:
     return None
 
 
-def list_prompts() -> List[PromptItem]:
+def list_prompts() -> list[PromptItem]:
     '''
         Returns every configured role, so they can be reviewed.
 
         Returns:
-            List[PromptItem]: All stored roles.
+            list[PromptItem]: All stored roles.
 
         Raises:
             ServiceUnavailableError: If the table cannot be read.
     '''
-    items: List[Dict[str, Any]] = []
-    kwargs: Dict[str, Any] = {}
+    items: list[dict[str, Any]] = []
+    kwargs: dict[str, Any] = {}
     try:
         while True:
             response = _table(PROMPTS_TABLE).scan(**kwargs)
@@ -164,7 +164,7 @@ def put_prompt(prompt: PromptItem) -> None:
         raise ServiceUnavailableError(detail = AIError.ROLE_NOT_CONFIGURED.value) from error
 
 
-def get_cached(cache_key: str) -> Optional[ExplanationItem]:
+def get_cached(cache_key: str) -> ExplanationItem | None:
     '''
         Returns an answer already produced for this exact key.
 

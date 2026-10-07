@@ -7,7 +7,7 @@
 '''
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import boto3
 import pandas as pd
@@ -39,8 +39,6 @@ FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 # ---------------------------------------------------------------------------
 
 
-
-
 def _build_route_day_key(
     owner_email: str,
     route_id: int,
@@ -68,11 +66,11 @@ def _build_route_day_key(
 
 
 def _point_to_item(
-    raw: Dict[str, Any],
+    raw: dict[str, Any],
     route_id: int,
     day: int,
     partition_key: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Converts a raw CSV point dict into the DynamoDB item shape.
 
@@ -89,7 +87,7 @@ def _point_to_item(
         logger.warning(error_msg)
         raise InvalidInputError(detail = OptimizationError.INVALID_POINT.value) from e
 
-    item: Dict[str, Any] = {
+    item: dict[str, Any] = {
         'route_day_key': partition_key,
         'client_id': client_id,
         'route_id': int(route_id),
@@ -110,7 +108,7 @@ def get_route_points(
     route_id: int,
     day: int,
     owner_email: str
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Retrieves all client geolocation points for a (route_id, day) pair.
 
@@ -120,7 +118,7 @@ def get_route_points(
             day (int): Day index within the plan.
 
         Returns:
-            List[Dict[str, Any]]: Items shaped as RoutePoint TypedDict.
+            list[dict[str, Any]]: Items shaped as RoutePoint TypedDict.
 
         Raises:
             RegisterNotFoundError: If no points exist for that (route_id, day).
@@ -131,7 +129,7 @@ def get_route_points(
     response = table.query(
         KeyConditionExpression = Key('route_day_key').eq(partition_key)
     )
-    items: List[Dict[str, Any]] = response.get('Items', [])
+    items: list[dict[str, Any]] = response.get('Items', [])
 
     if not items:
         error_msg = (
@@ -198,7 +196,7 @@ def bulk_upload_points(
     dynamodb_resource: ServiceResource,
     route_id: int,
     day: int,
-    points: List[Dict[str, Any]],
+    points: list[dict[str, Any]],
     owner_email: str
 ) -> int:
     '''
@@ -210,7 +208,7 @@ def bulk_upload_points(
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             route_id (int): Identifier of the planned route.
             day (int): Day index within the plan.
-            points (List[Dict[str, Any]]): One dict per client. Required keys:
+            points (list[dict[str, Any]]): One dict per client. Required keys:
                 client_id (int), latitude (float), longitude (float). Optional:
                 client (str).
 
@@ -257,7 +255,6 @@ def bulk_upload_points(
 # ---------------------------------------------------------------------------
 
 
-
 # boto3 resolves region + credentials from the default chain (Lambda IAM
 # role in AWS, ~/.aws/credentials in local dev) — same way AUTH and EVENTS
 # do it. No region_name argument needed.
@@ -267,7 +264,7 @@ _s3_client = boto3.client('s3')
 def get_dataset_metadata(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    owner_email: Optional[str] = None
+    owner_email: str | None = None
 ) -> dict:
     '''
         Retrieves a dataset record from the ingest service's table.
@@ -275,7 +272,7 @@ def get_dataset_metadata(
         Args:
             dynamodb_resource (ServiceResource): The shared DynamoDB resource.
             dataset_id (str): UUID issued by the ingest service.
-            owner_email (Optional[str]): When given, a dataset of another owner
+            owner_email (str | None): When given, a dataset of another owner
                 answers exactly like a missing one (`CLAUDE.md` §8).
 
         Returns:

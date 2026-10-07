@@ -177,10 +177,10 @@ def test_delete_planned_route_and_missing_route_is_404(client):
 def test_bulk_upload_planned_routes_from_a_csv_file(client):
     '''A multipart CSV creates the routes; a non-CSV is refused with a code.'''
     csv_body = (
-        'route_code,route_name,point_name,secuencial,latitude,longitude\n'
-        'R-020,Zona oeste,Tienda X,1,-16.50,-68.20\n'
-        'R-020,Zona oeste,Tienda Y,2,-16.51,-68.21\n'
-    ).encode('utf-8')
+        b'route_code,route_name,point_name,secuencial,latitude,longitude\n'
+        b'R-020,Zona oeste,Tienda X,1,-16.50,-68.20\n'
+        b'R-020,Zona oeste,Tienda Y,2,-16.51,-68.21\n'
+    )
     uploaded = client.post(
         f'{BASE}/bulk-upload', files = {'file': ('plan.csv', csv_body, 'text/csv')}
     )

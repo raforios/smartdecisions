@@ -26,7 +26,7 @@
 '''
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Final, Optional
+from typing import Any, Final
 
 import requests
 from zeep import Client, Settings
@@ -68,7 +68,7 @@ SERVICE_SYNC = 'sincronizacion'
 # Authorization scheme of the `apikey` header, fixed by the SIAT protocol.
 TOKEN_SCHEME: Final[str] = 'TokenApi'
 
-_clients: Dict[str, Client] = {}
+_clients: dict[str, Client] = {}
 
 
 @dataclass(frozen = True)
@@ -82,7 +82,7 @@ class Emitter:
     '''
     nit: str
     branch: int
-    point_of_sale: Optional[int] = None
+    point_of_sale: int | None = None
 
 
 def wsdl_path(service: str) -> str:
@@ -139,7 +139,7 @@ def _client(service: str) -> Client:
 def _invoke(
     service: str,
     operation: str,
-    request: Dict[str, Any]
+    request: dict[str, Any]
 ) -> Any:
     '''
         The single seam that talks to the SIAT.
@@ -151,7 +151,7 @@ def _invoke(
         Args:
             service (str): Service name, as `SERVICE_*` spells it.
             operation (str): Operation name, as the WSDL spells it.
-            request (Dict[str, Any]): The request object's fields.
+            request (dict[str, Any]): The request object's fields.
 
         Returns:
             Any: The response as zeep returns it.
@@ -173,7 +173,7 @@ def _invoke(
     return answer
 
 
-def _base_request(emitter: Emitter) -> Dict[str, Any]:
+def _base_request(emitter: Emitter) -> dict[str, Any]:
     '''
         The fields every SIAT request carries.
 
@@ -181,9 +181,9 @@ def _base_request(emitter: Emitter) -> Dict[str, Any]:
             emitter (Emitter): Who is issuing.
 
         Returns:
-            Dict[str, Any]: The common parameters.
+            dict[str, Any]: The common parameters.
     '''
-    request: Dict[str, Any] = {
+    request: dict[str, Any] = {
         'codigoAmbiente': ENVIRONMENT,
         'codigoSistema': CODIGO_SISTEMA,
         'nit': emitter.nit,
@@ -277,7 +277,7 @@ def verify_document(
 
 def send_invoice(
     emitter: Emitter,
-    codes: Dict[str, str],
+    codes: dict[str, str],
     packed_xml: str
 ) -> SiatReceipt:
     '''
@@ -289,7 +289,7 @@ def send_invoice(
 
         Args:
             emitter (Emitter): Who is issuing.
-            codes (Dict[str, str]): The `cuis`, `cufd` and `cuf` in force.
+            codes (dict[str, str]): The `cuis`, `cufd` and `cuf` in force.
             packed_xml (str): The invoice, packed and encoded.
 
         Returns:
@@ -314,7 +314,7 @@ def send_invoice(
 
 def cancel_invoice(
     emitter: Emitter,
-    codes: Dict[str, str],
+    codes: dict[str, str],
     reason_code: int
 ) -> SiatReceipt:
     '''
@@ -322,7 +322,7 @@ def cancel_invoice(
 
         Args:
             emitter (Emitter): Who is issuing.
-            codes (Dict[str, str]): The `cuis`, `cufd` and `cuf` of the invoice.
+            codes (dict[str, str]): The `cuis`, `cufd` and `cuf` of the invoice.
             reason_code (int): Reason, from the SIN's parametric.
 
         Returns:
@@ -368,7 +368,7 @@ def _receipt_from(answer: Any) -> SiatReceipt:
     )
 
 
-def _text(value: Any) -> Optional[str]:
+def _text(value: Any) -> str | None:
     '''
         One answer field as text, or nothing when it came back empty.
 

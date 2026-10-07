@@ -11,7 +11,6 @@
     whole service.
 '''
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -54,13 +53,13 @@ _CRITICAL_DAYS = _SETTINGS['RECEIVABLES_CRITICAL_DAYS']
 # Windows of the collection calendar. Overdue goes on its own because it is not
 # a cash projection: it is money that should already have been collected.
 _WINDOW_OVERDUE = 'OVERDUE'
-_WINDOWS: Tuple[Tuple[str, int], ...] = (
+_WINDOWS: tuple[tuple[str, int], ...] = (
     ('DAYS_7', 7), ('DAYS_15', 15), ('DAYS_30', 30)
 )
 _WINDOW_BEYOND = 'BEYOND'
 
 # Horizons of the collection curve, in days.
-_CURVE_DAYS: Tuple[int, ...] = (30, 60, 90)
+_CURVE_DAYS: tuple[int, ...] = (30, 60, 90)
 
 
 @dataclass(frozen = True)
@@ -69,8 +68,8 @@ class DueCalendar:
         The collection calendar: the windows for the cash projection and the
         per-date detail for the agenda.
     '''
-    windows: List[DueWindow]
-    dates: List[DueDateRow]
+    windows: list[DueWindow]
+    dates: list[DueDateRow]
 
 
 def risk_of(
@@ -119,7 +118,7 @@ def _weighted_late(group: pd.DataFrame) -> float:
 def build_debtors(
     book: pd.DataFrame,
     delinquent_days: int
-) -> List[DebtorRow]:
+) -> list[DebtorRow]:
     '''
         Who owes, largest open balance first.
 
@@ -128,14 +127,14 @@ def build_debtors(
             delinquent_days (int): Policy threshold for delinquency.
 
         Returns:
-            List[DebtorRow]: One row per client with debt, capped at the
+            list[DebtorRow]: One row per client with debt, capped at the
                 configured top.
     '''
     open_book = book.loc[book['is_open']]
     if open_book.empty:
         return []
 
-    rows: List[DebtorRow] = []
+    rows: list[DebtorRow] = []
     for client, group in open_book.groupby('client'):
         limit = pd.to_numeric(group['credit_limit'], errors = 'coerce').max()
         open_amount = float(group['balance'].sum())
@@ -167,7 +166,7 @@ def build_debtors(
     return rows[:_TOP_CLIENTS]
 
 
-def build_collectors(book: pd.DataFrame) -> List[CollectorRow]:
+def build_collectors(book: pd.DataFrame) -> list[CollectorRow]:
     '''
         Who is responsible for collecting what.
 
@@ -179,12 +178,12 @@ def build_collectors(book: pd.DataFrame) -> List[CollectorRow]:
             book (pd.DataFrame): The credit book.
 
         Returns:
-            List[CollectorRow]: One row per collector, largest open first.
+            list[CollectorRow]: One row per collector, largest open first.
     '''
     if 'collector' not in book.columns or not book['collector'].notna().any():
         return []
 
-    rows: List[CollectorRow] = []
+    rows: list[CollectorRow] = []
     for collector, group in book.loc[book['collector'].notna()].groupby('collector'):
         open_group = group.loc[group['is_open']]
         settled = group.loc[group['days_late'].notna()]
@@ -212,7 +211,7 @@ def build_collectors(book: pd.DataFrame) -> List[CollectorRow]:
 def _due_windows(
     open_book: pd.DataFrame,
     as_of: pd.Timestamp
-) -> List[DueWindow]:
+) -> list[DueWindow]:
     '''
         The open balance split into the windows a cash projection needs.
 
@@ -221,9 +220,9 @@ def _due_windows(
             as_of (pd.Timestamp): Reference date.
 
         Returns:
-            List[DueWindow]: Overdue first, then each horizon, then the rest.
+            list[DueWindow]: Overdue first, then each horizon, then the rest.
     '''
-    windows: List[DueWindow] = []
+    windows: list[DueWindow] = []
     overdue = open_book.loc[open_book['days_past_due'] > 0]
     if not overdue.empty:
         windows.append(DueWindow(
@@ -295,8 +294,8 @@ def build_due_calendar(
 
 def build_collection_curve(
     book: pd.DataFrame,
-    collections: Optional[pd.DataFrame]
-) -> List[CollectionCurvePoint]:
+    collections: pd.DataFrame | None
+) -> list[CollectionCurvePoint]:
     '''
         How fast each month's credit sales came back.
 
@@ -313,7 +312,7 @@ def build_collection_curve(
             collections (pd.DataFrame | None): Normalized payment rows.
 
         Returns:
-            List[CollectionCurvePoint]: One point per cohort, oldest first.
+            list[CollectionCurvePoint]: One point per cohort, oldest first.
     '''
     if collections is None or collections.empty or book.empty:
         return []
@@ -337,7 +336,7 @@ def build_collection_curve(
     totals = book_cohorts.groupby('cohort')['amount'].sum()
     last_activity = payments['payment_date'].max()
 
-    points: List[CollectionCurvePoint] = []
+    points: list[CollectionCurvePoint] = []
     for cohort in sorted(totals.index)[-_COHORT_MONTHS:]:
         credit_amount = float(totals.loc[cohort])
         if credit_amount <= 0:
@@ -365,7 +364,7 @@ def build_collection_curve(
 def build_priority(
     book: pd.DataFrame,
     delinquent_days: int
-) -> List[PriorityRow]:
+) -> list[PriorityRow]:
     '''
         Who to call today.
 
@@ -379,7 +378,7 @@ def build_priority(
             delinquent_days (int): Policy threshold for delinquency.
 
         Returns:
-            List[PriorityRow]: The actionable list, best expected recovery first.
+            list[PriorityRow]: The actionable list, best expected recovery first.
     '''
     overdue = book.loc[book['is_open'] & (book['days_past_due'] > 0)]
     if overdue.empty:
@@ -388,7 +387,7 @@ def build_priority(
     frame = overdue.assign(
         recovery = (1.0 - overdue['loss_rate']) * overdue['balance']
     )
-    rows: List[PriorityRow] = []
+    rows: list[PriorityRow] = []
     for client, group in frame.groupby('client'):
         amount = float(group['balance'].sum())
         recovery = float(group['recovery'].sum())

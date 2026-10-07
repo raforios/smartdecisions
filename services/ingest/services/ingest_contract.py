@@ -14,7 +14,7 @@
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Final, Optional
+from typing import Final
 
 import pandas as pd
 import pandera.pandas as pa
@@ -96,7 +96,7 @@ OBJECTIVE_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(OBJECTIVE_
 
 def map_columns(
     dataframe: pd.DataFrame,
-    lookup: Optional[dict[str, str]] = None
+    lookup: dict[str, str] | None = None
 ) -> pd.DataFrame:
     '''
         Renames the source columns to the canonical contract names.
@@ -264,7 +264,7 @@ class ValidationResult:
         return not self.issues
 
 
-def _rule_code(check_name: Optional[str]) -> ValidationRule:
+def _rule_code(check_name: str | None) -> ValidationRule:
     '''
         Maps a pandera check name to the stable code the API exposes.
 
@@ -284,7 +284,7 @@ def _rule_code(check_name: Optional[str]) -> ValidationRule:
 
 def validate(
     dataframe: pd.DataFrame,
-    schema: Optional[pa.DataFrameSchema] = None
+    schema: pa.DataFrameSchema | None = None
 ) -> ValidationResult:
     '''
         Validates a DataFrame against a published contract.

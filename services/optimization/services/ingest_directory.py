@@ -6,7 +6,7 @@
     real user and applies its own ownership rule— and an INGEST that cannot be
     reached is a stable code, never a hang or a half answer.
 '''
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 import requests
 
@@ -28,7 +28,7 @@ SELLERS_UNAVAILABLE = 'SELLERS_UNAVAILABLE'
 def ingest_get(
     path: str,
     auth_token: str,
-    params: Optional[Dict[str, Any]],
+    params: dict[str, Any] | None,
     unavailable_code: str
 ) -> requests.Response:
     '''
@@ -40,7 +40,7 @@ def ingest_get(
         Args:
             path (str): Path under the INGEST base URL, starting with '/'.
             auth_token (str): The caller's Authorization header.
-            params (Optional[Dict[str, Any]]): Query string.
+            params (dict[str, Any] | None): Query string.
             unavailable_code (str): Code to answer when INGEST cannot be used.
 
         Returns:
@@ -72,7 +72,7 @@ def ingest_get(
 def users_of_seller(
     seller: str,
     auth_token: str
-) -> Set[str]:
+) -> set[str]:
     '''
         The user emails a seller of the files signs in as.
 
@@ -85,7 +85,7 @@ def users_of_seller(
             auth_token (str): The caller's Authorization header.
 
         Returns:
-            Set[str]: Linked emails, lower case; empty when nobody is linked.
+            set[str]: Linked emails, lower case; empty when nobody is linked.
 
         Raises:
             ServiceUnavailableError: SELLERS_UNAVAILABLE when INGEST cannot answer.

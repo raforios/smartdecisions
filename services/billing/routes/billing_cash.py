@@ -7,7 +7,7 @@
     neither is a parameter.
 '''
 from datetime import date as date_type
-from typing import Any, Dict, Optional
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path, Query, Request, status
@@ -48,12 +48,12 @@ MANAGERS = ('ADMIN', 'MANAGER')
 SESSION_ID = Path(..., min_length = 1, max_length = 120, description = 'The till.')
 
 
-def is_manager(payload: Dict[str, Any] = Depends(get_current_payload)) -> bool:
+def is_manager(payload: dict[str, Any] = Depends(get_current_payload)) -> bool:
     '''
         Whether the caller sees every till of the shop.
 
         Args:
-            payload (Dict[str, Any]): Decoded token claims.
+            payload (dict[str, Any]): Decoded token claims.
 
         Returns:
             bool: True for a manager.
@@ -63,9 +63,9 @@ def is_manager(payload: Dict[str, Any] = Depends(get_current_payload)) -> bool:
 
 def till_query(
     manager: bool = Depends(is_manager),
-    user_email: Optional[str] = Query(None, description = 'Only this user (managers).'),
-    date_from: Optional[date_type] = Query(None, description = 'First day.'),
-    date_to: Optional[date_type] = Query(None, description = 'Last day.')
+    user_email: str | None = Query(None, description = 'Only this user (managers).'),
+    date_from: date_type | None = Query(None, description = 'First day.'),
+    date_to: date_type | None = Query(None, description = 'Last day.')
 ) -> TillQuery:
     '''
         The filters of a till list, as one argument.

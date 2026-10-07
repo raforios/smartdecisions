@@ -11,7 +11,6 @@
     sentence a manager reads.
 '''
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -76,7 +75,7 @@ class ReceivablesKpis(BaseModel):
         last day with activity in the dataset, not the day the request runs, or
         a file from last quarter would report its whole book as overdue.
     '''
-    as_of: Optional[str] = Field(None, description = 'Reference date, ISO.')
+    as_of: str | None = Field(None, description = 'Reference date, ISO.')
     credit_amount: float = 0.0
     cash_amount: float = 0.0
     credit_share: float = 0.0
@@ -90,15 +89,15 @@ class ReceivablesKpis(BaseModel):
     uncollectible_amount: float = 0.0
     recoverable_rate: float = 0.0
     uncollectible_rate: float = 0.0
-    days_sales_outstanding: Optional[float] = None
+    days_sales_outstanding: float | None = None
     average_days_delinquent: float = 0.0
     weighted_days_late: float = 0.0
-    collection_effectiveness: Optional[float] = Field(
+    collection_effectiveness: float | None = Field(
         None, description = 'CEI over the configured window, 0-100.'
     )
-    on_time_rate: Optional[float] = None
-    average_term_granted: Optional[float] = None
-    average_term_real: Optional[float] = None
+    on_time_rate: float | None = None
+    average_term_granted: float | None = None
+    average_term_real: float | None = None
 
 
 class CreditMargin(BaseModel):
@@ -111,16 +110,16 @@ class CreditMargin(BaseModel):
         client whose gross margin looks fine.
     '''
     available: bool = False
-    reason_code: Optional[str] = None
+    reason_code: str | None = None
     credit_revenue: float = 0.0
     credit_gross_margin: float = 0.0
-    credit_gross_margin_rate: Optional[float] = None
+    credit_gross_margin_rate: float | None = None
     financing_cost: float = 0.0
     delinquency_cost: float = 0.0
     expected_loss: float = 0.0
     net_margin: float = 0.0
-    net_margin_rate: Optional[float] = None
-    cash_gross_margin_rate: Optional[float] = None
+    net_margin_rate: float | None = None
+    cash_gross_margin_rate: float | None = None
 
 
 class DebtorRow(BaseModel):
@@ -136,10 +135,10 @@ class DebtorRow(BaseModel):
     oldest_days: int = 0
     weighted_days_late: float = 0.0
     invoices: int = 0
-    credit_limit: Optional[float] = None
-    limit_utilization: Optional[float] = None
+    credit_limit: float | None = None
+    limit_utilization: float | None = None
     risk_code: CreditRisk = CreditRisk.HEALTHY
-    collector: Optional[str] = None
+    collector: str | None = None
 
 
 class CollectorRow(BaseModel):
@@ -157,7 +156,7 @@ class CollectorRow(BaseModel):
     clients: int = 0
     invoices: int = 0
     weighted_days_late: float = 0.0
-    on_time_rate: Optional[float] = None
+    on_time_rate: float | None = None
 
 
 class DueWindow(BaseModel):
@@ -187,9 +186,9 @@ class CollectionCurvePoint(BaseModel):
     '''
     cohort_month: str
     credit_amount: float = 0.0
-    collected_30: Optional[float] = None
-    collected_60: Optional[float] = None
-    collected_90: Optional[float] = None
+    collected_30: float | None = None
+    collected_60: float | None = None
+    collected_90: float | None = None
 
 
 class PriorityRow(BaseModel):
@@ -199,7 +198,7 @@ class PriorityRow(BaseModel):
         not — which is the opposite of sorting by days overdue.
     '''
     label: str
-    collector: Optional[str] = None
+    collector: str | None = None
     overdue_amount: float = 0.0
     oldest_days: int = 0
     recovery_probability: float = 0.0
@@ -236,8 +235,8 @@ class ReceivablesBlock(BaseModel):
         which is a different and false statement.
     '''
     available: bool = False
-    reason_code: Optional[str] = None
-    policy: Optional[CreditPolicy] = None
+    reason_code: str | None = None
+    policy: CreditPolicy | None = None
     kpis: ReceivablesKpis = ReceivablesKpis()
     margin: CreditMargin = CreditMargin()
     aging: list[AgingRow] = []
@@ -256,8 +255,8 @@ class ReceivablesResponse(BaseModel):
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
     available: bool = False
-    reason_code: Optional[str] = None
-    policy: Optional[CreditPolicy] = None
+    reason_code: str | None = None
+    policy: CreditPolicy | None = None
     kpis: ReceivablesKpis = ReceivablesKpis()
     margin: CreditMargin = CreditMargin()
     aging: list[AgingRow] = []
@@ -277,18 +276,18 @@ class CreditPolicyRequest(BaseModel):
         default, field by field: somebody who only wants to change the interest
         rate should not have to restate the whole policy.
     '''
-    aging_buckets: Optional[list[int]] = Field(
+    aging_buckets: list[int] | None = Field(
         None, min_length = 1, max_length = 10,
         description = 'Upper bound of each overdue bucket, in days, ascending.'
     )
-    loss_rates: Optional[list[float]] = Field(
+    loss_rates: list[float] | None = Field(
         None, min_length = 2, max_length = 11,
         description = 'Expected loss per bucket, 0 to 1: one for CURRENT plus '
                       'one per overdue bucket.'
     )
-    financial_rate_daily: Optional[float] = Field(None, ge = 0, le = 1)
-    delinquent_days: Optional[int] = Field(None, ge = 0, le = 365)
-    default_term_days: Optional[int] = Field(None, ge = 0, le = 365)
+    financial_rate_daily: float | None = Field(None, ge = 0, le = 1)
+    delinquent_days: int | None = Field(None, ge = 0, le = 365)
+    default_term_days: int | None = Field(None, ge = 0, le = 365)
 
 
 class CreditPolicyResponse(CreditPolicy):

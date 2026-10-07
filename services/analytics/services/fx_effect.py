@@ -19,7 +19,6 @@
     has no purchase date, so the rate of the sale's day stands in for the rate
     the merchandise was bought at.
 '''
-from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -57,7 +56,7 @@ _NO_CATEGORY = 'SIN_CATEGORIA'
 def _percent(
     numerator: float,
     denominator: float
-) -> Optional[float]:
+) -> float | None:
     '''
         A percentage with two decimals, or None over nothing.
 
@@ -71,7 +70,7 @@ def _percent(
     return round(ratio(numerator, denominator) * _PERCENT, 2) if denominator else None
 
 
-def _monthly(frame: pd.DataFrame) -> List[MonthlyFx]:
+def _monthly(frame: pd.DataFrame) -> list[MonthlyFx]:
     '''
         Sales by month in both currencies.
 
@@ -79,7 +78,7 @@ def _monthly(frame: pd.DataFrame) -> List[MonthlyFx]:
             frame (pd.DataFrame): Rows with `month`, `total_amount` and `usd`.
 
         Returns:
-            List[MonthlyFx]: One row per month, oldest first.
+            list[MonthlyFx]: One row per month, oldest first.
     '''
     grouped = frame.groupby('month', as_index = False)[[AMOUNT, 'usd']].sum()
     return [MonthlyFx(month = row['month'], sales_bob = money(row[AMOUNT]),
@@ -89,12 +88,12 @@ def _monthly(frame: pd.DataFrame) -> List[MonthlyFx]:
             for _, row in grouped.sort_values('month').iterrows()]
 
 
-def _growth(monthly: List[MonthlyFx]) -> tuple:
+def _growth(monthly: list[MonthlyFx]) -> tuple:
     '''
         First month against last, in each currency.
 
         Args:
-            monthly (List[MonthlyFx]): The series.
+            monthly (list[MonthlyFx]): The series.
 
         Returns:
             tuple: Growth in bolivianos and in dollars, percent; None with
@@ -121,7 +120,7 @@ def _shares(
         Returns:
             pd.Series: Share per row, 0 to 1.
     '''
-    by_category: Dict[str, float] = policy.usd_cost_share_by_category or {}
+    by_category: dict[str, float] = policy.usd_cost_share_by_category or {}
     default = policy.usd_cost_share if policy.usd_cost_share is not None else 1.0
     return frame[CATEGORY].map(lambda category: by_category.get(category, default))
 
@@ -170,7 +169,7 @@ def _totals(frame: pd.DataFrame) -> FxTotals:
     )
 
 
-def _by_category(frame: pd.DataFrame) -> List[CategoryFx]:
+def _by_category(frame: pd.DataFrame) -> list[CategoryFx]:
     '''
         The comparison by category, the largest first.
 
@@ -178,7 +177,7 @@ def _by_category(frame: pd.DataFrame) -> List[CategoryFx]:
             frame (pd.DataFrame): Rows with costs and share.
 
         Returns:
-            List[CategoryFx]: One row per category.
+            list[CategoryFx]: One row per category.
     '''
     grouped = frame.groupby(CATEGORY, as_index = False).agg(
         revenue = (AMOUNT, 'sum'), historical = ('historical', 'sum'),
@@ -192,7 +191,7 @@ def _by_category(frame: pd.DataFrame) -> List[CategoryFx]:
     ) for _, row in grouped.iterrows()]
 
 
-def _uncovered(frame: pd.DataFrame) -> List[UncoveredProduct]:
+def _uncovered(frame: pd.DataFrame) -> list[UncoveredProduct]:
     '''
         The products whose last price is below what replacing one unit costs,
         the widest gap first.
@@ -201,7 +200,7 @@ def _uncovered(frame: pd.DataFrame) -> List[UncoveredProduct]:
             frame (pd.DataFrame): Rows with costs, sorted by date.
 
         Returns:
-            List[UncoveredProduct]: Every product in that situation.
+            list[UncoveredProduct]: Every product in that situation.
     '''
     last = frame.sort_values(DATE).groupby(PRODUCT_ID, as_index = False).last()
     unit_replacement = last['replacement'] / last[QUANTITY]

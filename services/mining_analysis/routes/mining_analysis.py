@@ -2,7 +2,7 @@
     Mining Analysis: routes handler
 '''
 from datetime import date as date_type
-from typing import Any, Dict, List, Optional
+from typing import Any
 from fastapi import (
     APIRouter,
     Depends,
@@ -99,7 +99,7 @@ async def upload_mining_data_endpoint(
 
 @router.get(
     '/prices',
-    response_model = List[MiningPriceResponseSchema],
+    response_model = list[MiningPriceResponseSchema],
     status_code = status.HTTP_200_OK,
     summary = 'Get all mineral prices',
     description = 'Retrieves a normalized list of all mineral prices with their metadata.'
@@ -108,7 +108,7 @@ async def get_mining_prices_endpoint(
     request: Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
-) -> List[MiningPriceResponseSchema]:
+) -> list[MiningPriceResponseSchema]:
     ''' Endpoint to retrieve processed prices. '''
     message = f'User: {current_user}. Requested all mineral prices.'
 
@@ -126,7 +126,7 @@ async def upload_royalties_excel(
     file: UploadFile = File(...),
     db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     ''' Endpoint to trigger the Excel ETL process directly in memory. '''
     message = f'User: {current_user}. Uploading file: {file.filename}'
     logger.info(message)
@@ -145,7 +145,7 @@ async def upload_royalties_excel(
 @router.get('/royalties/summary', response_model = RoyaltySummaryResponse)
 async def get_royalties_summary(
     request: Request,
-    year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
+    year: int | None = Query(None, description='Gestión fiscal a consultar'),
     db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> RoyaltySummaryResponse:
@@ -166,7 +166,7 @@ async def get_royalties_summary(
 )
 async def get_royalties_transactions(
     request: Request,
-    year: Optional[int] = Query(None, description='Gestión fiscal a consultar'),
+    year: int | None = Query(None, description='Gestión fiscal a consultar'),
     db: Session = Depends(GET_SQL_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> TransactionSummaryResponse:

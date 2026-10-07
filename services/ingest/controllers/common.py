@@ -11,7 +11,7 @@
 '''
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from typing import Any, Dict, Optional, Type
+from typing import Any
 from uuid import uuid4
 
 import pandas as pd
@@ -70,7 +70,7 @@ def template_key(contract: str) -> str:
     return f'{TEMPLATES_S3_PREFIX}/plantilla_{contract}.xlsx'
 
 
-def summary_of(item: Dict[str, Any]) -> IngestSummary:
+def summary_of(item: dict[str, Any]) -> IngestSummary:
     '''
         The summary a stored dataset carries.
 
@@ -79,7 +79,7 @@ def summary_of(item: Dict[str, Any]) -> IngestSummary:
         same question differently the first time a field is added.
 
         Args:
-            item (Dict[str, Any]): Stored dataset record.
+            item (dict[str, Any]): Stored dataset record.
 
         Returns:
             IngestSummary: Its counts and its date range.
@@ -96,14 +96,14 @@ def summary_of(item: Dict[str, Any]) -> IngestSummary:
 
 
 def to_ingest_response(
-    item: Dict[str, Any],
+    item: dict[str, Any],
     already_stored: bool = False
 ) -> IngestResponse:
     '''
         Maps a persisted DynamoDB item into the public IngestResponse schema.
 
         Args:
-            item (Dict[str, Any]): Stored dataset record.
+            item (dict[str, Any]): Stored dataset record.
             already_stored (bool): True when the upload matched a dataset the
                 caller already had, so the client can say so instead of
                 reporting a load that did not happen.
@@ -122,12 +122,11 @@ def to_ingest_response(
     )
 
 
-
 def store_frame(
     frame: Any,
     folder: str,
     auth_token: str
-) -> Optional[str]:
+) -> str | None:
     '''
         Stores a frame as a CSV under its folder and returns the object key.
 
@@ -141,7 +140,7 @@ def store_frame(
             auth_token (str): The caller's Authorization header.
 
         Returns:
-            Optional[str]: The object key, or None when there is nothing to store.
+            str | None: The object key, or None when there is nothing to store.
     '''
     if frame.empty:
         return None
@@ -162,7 +161,7 @@ def rows_frame(rows: Any) -> Any:
         needs and rejoins the shared path.
 
         Args:
-            rows (List[BaseModel]): Rows as the ERP posted them.
+            rows (list[BaseModel]): Rows as the ERP posted them.
 
         Returns:
             pd.DataFrame: One row per DTO, canonical columns.
@@ -171,20 +170,20 @@ def rows_frame(rows: Any) -> Any:
 
 
 def stored_companion_frame(
-    dataset: Dict[str, Any],
-    spec: 'CompanionSpec',
+    dataset: dict[str, Any],
+    spec: CompanionSpec,
     auth_token: str
-) -> Optional[Any]:
+) -> Any | None:
     '''
         The rows a dataset already holds for one companion.
 
         Args:
-            dataset (Dict[str, Any]): The dataset item.
+            dataset (dict[str, Any]): The dataset item.
             spec (CompanionSpec): Which companion to read.
             auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
-            Optional[pd.DataFrame]: The stored rows, or None when there are
+            pd.DataFrame | None: The stored rows, or None when there are
                 none or the companion cannot be merged.
     '''
     stored_key = dataset.get(f'{spec.name}_s3_key')
@@ -194,15 +193,15 @@ def stored_companion_frame(
     return None if previous.empty else previous
 
 
-def native_numbers(stored: Dict[str, Any]) -> Dict[str, Any]:
+def native_numbers(stored: dict[str, Any]) -> dict[str, Any]:
     '''
         Turns the Decimals DynamoDB returns back into plain numbers.
 
         Args:
-            stored (Dict[str, Any]): Attribute map as it came from the table.
+            stored (dict[str, Any]): Attribute map as it came from the table.
 
         Returns:
-            Dict[str, Any]: The same map, with numbers Pydantic accepts.
+            dict[str, Any]: The same map, with numbers Pydantic accepts.
     '''
     return {
         key: float(value) if isinstance(value, Decimal) else value
@@ -211,7 +210,7 @@ def native_numbers(stored: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def load_sales_frame(
-    dataset: Dict[str, Any],
+    dataset: dict[str, Any],
     auth_token: str
 ) -> Any:
     '''
@@ -222,7 +221,7 @@ def load_sales_frame(
         is the one every other service reads.
 
         Args:
-            dataset (Dict[str, Any]): The dataset item.
+            dataset (dict[str, Any]): The dataset item.
             auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
@@ -247,7 +246,7 @@ class CompanionSpec:
         issues— so one storage routine serves the three.
     '''
     name: str
-    response_model: Type[BaseModel]
+    response_model: type[BaseModel]
     # What makes two rows THE SAME row. It is what lets an ERP push every day
     # without counting a payment twice on a retry, and what makes a stock push
     # for today replace today and leave last week alone. Empty means the
@@ -268,7 +267,7 @@ class CompanionSpec:
 
 async def store_companion(
     dynamodb_resource: ServiceResource,
-    dataset: Dict[str, Any],
+    dataset: dict[str, Any],
     result: Any,
     spec: CompanionSpec,
     origin: tuple[str, str]
@@ -282,7 +281,7 @@ async def store_companion(
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset (Dict[str, Any]): Dataset the load belongs to.
+            dataset (dict[str, Any]): Dataset the load belongs to.
             result (Any): Outcome of the companion pipeline: `accepted`,
                 `issues` and `summary`.
             spec (CompanionSpec): Which companion this is.
@@ -306,7 +305,7 @@ async def store_companion(
     has_rows = len(result.accepted) > 0
     issues = result.issues[:MAX_ISSUES_ON_RESPONSE]
 
-    stored_key: Optional[str] = None
+    stored_key: str | None = None
     if has_rows:
         stored_key = upload_bytes(
             file_key = f'ingest/{spec.name}/{uuid4().hex}.csv',

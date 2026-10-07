@@ -3,7 +3,6 @@
     public sources, the anticipated official quotation, and the Art. 227 scales.
 '''
 from datetime import date as date_type
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path, Query, Request, status
@@ -35,8 +34,8 @@ RULE_EDITORS = ('ADMIN', 'MANAGER')
 
 
 def market_window(
-    date_from: Optional[date_type] = Query(None, description = 'First day; open when absent.'),
-    date_to: Optional[date_type] = Query(None, description = 'Last day; open when absent.')
+    date_from: date_type | None = Query(None, description = 'First day; open when absent.'),
+    date_to: date_type | None = Query(None, description = 'Last day; open when absent.')
 ) -> MarketWindow:
     '''
         The date range of the series as one argument.
@@ -91,7 +90,7 @@ async def sync_market_endpoint(
 )
 async def estimate_endpoint(
     request: Request,
-    as_of: Optional[date_type] = Query(None,
+    as_of: date_type | None = Query(None,
                                        description = 'Day of the estimate; today by default.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)

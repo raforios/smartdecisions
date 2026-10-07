@@ -10,7 +10,6 @@
     actually cares about: the biggest seller and the biggest earner are rarely
     the same product, the same client or the same salesperson.
 '''
-from typing import List, Optional
 
 import pandas as pd
 
@@ -94,7 +93,7 @@ def _with_margin(dataframe: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def _kpis(frame: pd.DataFrame) -> List[KpiCard]:
+def _kpis(frame: pd.DataFrame) -> list[KpiCard]:
     '''
         Builds the headline profitability cards.
 
@@ -102,7 +101,7 @@ def _kpis(frame: pd.DataFrame) -> List[KpiCard]:
             frame (pd.DataFrame): Rows already carrying the margin columns.
 
         Returns:
-            List[Dict[str, Any]]: KPI cards ready for the dashboard.
+            list[dict[str, Any]]: KPI cards ready for the dashboard.
     '''
     revenue = float(frame[AMOUNT].sum())
     cost = float(frame['line_cost'].sum())
@@ -129,9 +128,9 @@ def _kpis(frame: pd.DataFrame) -> List[KpiCard]:
 
 def _breakdown(
     frame: pd.DataFrame,
-    labels: Optional[pd.Series],
+    labels: pd.Series | None,
     top: int
-) -> List[MarginRow]:
+) -> list[MarginRow]:
     '''
         Aggregates revenue, cost and margin by an arbitrary label series.
 
@@ -142,7 +141,7 @@ def _breakdown(
             top (int): Maximum rows returned, ordered by margin contribution.
 
         Returns:
-            List[Dict[str, Any]]: One row per group, richest margin first.
+            list[dict[str, Any]]: One row per group, richest margin first.
     '''
     if labels is None or labels.empty:
         return []
@@ -165,7 +164,7 @@ def _breakdown(
     ]
 
 
-def _thin_margin_products(frame: pd.DataFrame) -> List[MarginAlert]:
+def _thin_margin_products(frame: pd.DataFrame) -> list[MarginAlert]:
     '''
         Lists products whose realized margin is negative or negligible.
 
@@ -176,7 +175,7 @@ def _thin_margin_products(frame: pd.DataFrame) -> List[MarginAlert]:
             frame (pd.DataFrame): Rows carrying the margin columns.
 
         Returns:
-            List[Dict[str, Any]]: Loss-making or barely profitable products.
+            list[dict[str, Any]]: Loss-making or barely profitable products.
         '''
     labels = label_series(frame, PRODUCT_ID, PRODUCT_NAME)
     if labels is None:
@@ -213,7 +212,7 @@ def build_margin(dataframe: pd.DataFrame) -> MarginBlock:
             dataframe (pd.DataFrame): Normalized sales rows as produced by ingest.
 
         Returns:
-            Dict[str, Any]: 'available' (whether the file carried cost data),
+            dict[str, Any]: 'available' (whether the file carried cost data),
                 'kpis', 'by_category', 'by_product', 'by_client',
                 'by_seller' and 'alerts'. When cost data is absent every
                 section is empty and 'available' is False — never an error.

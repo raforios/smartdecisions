@@ -1,7 +1,6 @@
 '''
     Prediction Schemas (Request/Response)
 '''
-from typing import Union, List
 from pydantic import BaseModel, Field
 
 from schemas.base import NumPyValidatorBase
@@ -10,15 +9,15 @@ class ComputeCostLinearRequest(NumPyValidatorBase):
     '''
         Request model for calculating linear regression cost.
     '''
-    x: Union[List[float], List[List[float]]] = Field(
+    x: list[float] | list[list[float]] = Field(
         ...,
         description = 'Feature vector/matrix X for linear regression cost calculation.'
     )
-    y: List[float] = Field(
+    y: list[float] = Field(
         ...,
         description = 'Target vector y for linear regression cost calculation.'
     )
-    w: Union[float, List[float]] = Field(
+    w: float | list[float] = Field(
         ...,
         description = 'Weight parameter(s) w for linear regression cost calculation.'
     )
@@ -59,15 +58,15 @@ class ComputeGradientLinearRequest(NumPyValidatorBase):
     '''
         Request model for calculating linear regression gradient.
     '''
-    x: Union[List[float], List[List[float]]] = Field(
+    x: list[float] | list[list[float]] = Field(
         ...,
         description = 'Feature vector/matrix X for linear regression gradient calculation.'
     )
-    y: List[float] = Field(
+    y: list[float] = Field(
         ...,
         description = 'Target vector y for linear regression gradient calculation.'
     )
-    w: Union[float, List[float]] = Field(
+    w: float | list[float] = Field(
         ...,
         description = 'Weight parameter(s) w for linear regression gradient calculation.'
     )
@@ -103,7 +102,7 @@ class ComputeGradientLinearResponse(BaseModel):
         ...,
         description = 'Gradient of cost with respect to bias (b).'
     )
-    dj_dw: Union[float, List[float]] = Field(
+    dj_dw: float | list[float] = Field(
         ...,
         description = 'Gradient of cost with respect to weight(s) (w).'
     )
@@ -112,15 +111,15 @@ class TrainLinearRegressionRequest(NumPyValidatorBase):
     '''
         Request model for performing linear regression training (gradient descent).
     '''
-    x: Union[List[float], List[List[float]]] = Field(
+    x: list[float] | list[list[float]] = Field(
         ...,
         description = 'Feature vector/matrix X for linear regression training.'
     )
-    y: List[float] = Field(
+    y: list[float] = Field(
         ...,
         description = 'Target vector y for linear regression training.'
     )
-    w_in: Union[float, List[float]] = Field(
+    w_in: float | list[float] = Field(
         ...,
         description = 'Initial weight parameter(s) w for linear regression.'
     )
@@ -164,7 +163,7 @@ class TrainLinearRegressionResponse(BaseModel):
     '''
         Response model for linear regression training results.
     '''
-    w_final: Union[float, List[float]] = Field(
+    w_final: float | list[float] = Field(
         ...,
         description = 'Final weight parameter(s) w after training.'
     )
@@ -172,11 +171,11 @@ class TrainLinearRegressionResponse(BaseModel):
         ...,
         description = 'Final bias parameter b after training.'
     )
-    J_history: List[float] = Field(
+    J_history: list[float] = Field(
         ...,
         description = 'History of cost function J during training.'
     )
-    p_history: List[List[Union[float, List[float]]]] = Field(
+    p_history: list[list[float | list[float]]] = Field(
         ...,
         description = 'History of [w_epoch, b_epoch] during training.'
     )
@@ -189,11 +188,11 @@ class PredictLinearRequest(NumPyValidatorBase):
     '''
         Request model for linear regression prediction.
     '''
-    x_test: Union[List[float], List[List[float]]] = Field(
+    x_test: list[float] | list[list[float]] = Field(
         ...,
         description = 'Test feature vector/matrix X for prediction.'
     )
-    w: Union[float, List[float]] = Field(
+    w: float | list[float] = Field(
         ...,
         description = 'Weight parameter(s) w (from trained model).'
     )
@@ -223,7 +222,7 @@ class PredictLinearResponse(BaseModel):
     '''
         Response model for linear regression prediction.
     '''
-    predictions: List[float] = Field(
+    predictions: list[float] = Field(
         ...,
         description = 'List of predicted numerical values for new inputs.'
     )

@@ -29,7 +29,7 @@
 from dataclasses import dataclass
 from datetime import date as date_type, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from boto3.resources.base import ServiceResource
@@ -132,10 +132,10 @@ class Projection:
         always the one requested: a linear fit that collapses falls back, and
         the caller has to be able to say which one it published.
     '''
-    points: List[Tuple[date_type, float]]
+    points: list[tuple[date_type, float]]
     method: ForecastMethod
     confidence: ForecastConfidence
-    change_percent: Optional[float]
+    change_percent: float | None
 
 def confidence_for(sample_size: int) -> ForecastConfidence:
     '''
@@ -157,9 +157,9 @@ def confidence_for(sample_size: int) -> ForecastConfidence:
 
 
 def _project_damped(
-    prices: List[float],
+    prices: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Extends the series with exponential smoothing and a damped trend.
 
@@ -175,11 +175,11 @@ def _project_damped(
         zero the way the line did with Wólfram.
 
         Args:
-            prices (List[float]): Observed quotations in chronological order.
+            prices (list[float]): Observed quotations in chronological order.
             days_ahead (int): How many days to project.
 
         Returns:
-            List[float]: Projected values.
+            list[float]: Projected values.
     '''
     level, trend = prices[0], prices[1] - prices[0]
     for price in prices[1:]:
@@ -192,10 +192,10 @@ def _project_damped(
 
 
 def _backtest(
-    prices: List[float],
+    prices: list[float],
     days_ahead: int,
     naive: bool = False
-) -> Optional[float]:
+) -> float | None:
     '''
         Measures how far a model has missed on this very mineral.
 
@@ -205,14 +205,14 @@ def _backtest(
         than decorative.
 
         Args:
-            prices (List[float]): Observed quotations in chronological order.
+            prices (list[float]): Observed quotations in chronological order.
             days_ahead (int): Horizon to measure.
             naive (bool): Measure the benchmark instead of the model.
 
         Returns:
             float | None: Mean absolute error, or None with too few windows.
     '''
-    errors: List[float] = []
+    errors: list[float] = []
     for cut in range(BACKTEST_MIN_TRAIN, len(prices) - days_ahead + 1):
         actual = np.array(prices[cut:cut + days_ahead])
         forecast = (np.full(days_ahead, prices[cut - 1]) if naive
@@ -225,18 +225,18 @@ def _backtest(
 
 
 def _project_linear(
-    prices: List[float],
+    prices: list[float],
     days_ahead: int
-) -> Optional[List[float]]:
+) -> list[float] | None:
     '''
         Extends the least-squares line fitted over the series.
 
         Args:
-            prices (List[float]): Observed quotations in chronological order.
+            prices (list[float]): Observed quotations in chronological order.
             days_ahead (int): How many days to project.
 
         Returns:
-            List[float] | None: Projected values, or None when the fitted line
+            list[float] | None: Projected values, or None when the fitted line
                 runs into the floor. A steep decline over a short window sends
                 the line below zero within the horizon, and clamping it at zero
                 would publish "this mineral will be worth nothing" as if it were
@@ -255,18 +255,18 @@ def _project_linear(
 
 
 def _project_moving_average(
-    prices: List[float],
+    prices: list[float],
     days_ahead: int
-) -> List[float]:
+) -> list[float]:
     '''
         Projects the mean of the most recent days as a flat line.
 
         Args:
-            prices (List[float]): Observed quotations in chronological order.
+            prices (list[float]): Observed quotations in chronological order.
             days_ahead (int): How many days to project.
 
         Returns:
-            List[float]: The same value repeated; a moving average carries no
+            list[float]: The same value repeated; a moving average carries no
                 direction of its own.
     '''
     window = prices[-MOVING_AVERAGE_WINDOW:]
@@ -277,7 +277,7 @@ def _project_moving_average(
 def _future_dates(
     last_day: date_type,
     days_ahead: int
-) -> List[date_type]:
+) -> list[date_type]:
     '''
         Builds the calendar dates a projection covers.
 
@@ -286,7 +286,7 @@ def _future_dates(
             days_ahead (int): How many days to project.
 
         Returns:
-            List[date]: Consecutive dates after the last observed one.
+            list[date]: Consecutive dates after the last observed one.
     '''
     return [last_day + timedelta(days = offset) for offset in range(1, days_ahead + 1)]
 
@@ -300,7 +300,7 @@ _PROJECTORS = {
     ForecastMethod.MOVING_AVERAGE: _project_moving_average,
 }
 def project(
-    prices: List[PriceRecord],
+    prices: list[PriceRecord],
     days_ahead: int,
     method: ForecastMethod = ForecastMethod.DAMPED_TREND
 ) -> Projection:
@@ -308,7 +308,7 @@ def project(
         Projects one mineral's quotations forward.
 
         Args:
-            prices (List[PriceRecord]): Observed quotations, any order.
+            prices (list[PriceRecord]): Observed quotations, any order.
             days_ahead (int): How many days to project.
             method (ForecastMethod): Which projection to apply.
 
@@ -382,10 +382,10 @@ def official_round(value: float) -> float:
 
 
 def _official_average(
-    window: Tuple[date_type, date_type],
-    observed: Dict[date_type, float],
-    projected: Dict[date_type, float]
-) -> Optional[Dict[str, Any]]:
+    window: tuple[date_type, date_type],
+    observed: dict[date_type, float],
+    projected: dict[date_type, float]
+) -> dict[str, Any] | None:
     '''
     Averages one biweekly window, using observations first and the projection
     only for the days still to come.
@@ -397,15 +397,15 @@ def _official_average(
 
     Args:
         window (tuple[date, date]): Period start and end, inclusive.
-        observed (Dict[date, float]): Quotations already published.
-        projected (Dict[date, float]): Projected daily values.
+        observed (dict[date, float]): Quotations already published.
+        projected (dict[date, float]): Projected daily values.
 
     Returns:
-        Dict[str, Any] | None: The average and how it was composed, or None
+        dict[str, Any] | None: The average and how it was composed, or None
             when no day of the window has a value at all.
     '''
     start, end = window
-    values: List[float] = []
+    values: list[float] = []
     observed_days, projected_days, working_days = 0, 0, 0
 
     day = start
@@ -436,7 +436,7 @@ def _official_average(
     }
 
 
-def _validity_of(period: Tuple[int, int, int]) -> Tuple[date_type, date_type]:
+def _validity_of(period: tuple[int, int, int]) -> tuple[date_type, date_type]:
     '''
     Returns the window a period's average rules over.
 
@@ -450,7 +450,7 @@ def _validity_of(period: Tuple[int, int, int]) -> Tuple[date_type, date_type]:
         period (tuple[int, int, int]): The averaged (year, month, half).
 
     Returns:
-        Tuple[date, date]: First and last day the average is in force.
+        tuple[date, date]: First and last day the average is in force.
     '''
     return biweekly_period_bounds(*next_biweekly_period(*period))
 
@@ -458,9 +458,9 @@ def _validity_of(period: Tuple[int, int, int]) -> Tuple[date_type, date_type]:
 def _projected_officials(
     reference: date_type,
     horizon_end: date_type,
-    observed: Dict[date_type, float],
-    projected: Dict[date_type, float]
-) -> List[Dict[str, Any]]:
+    observed: dict[date_type, float],
+    projected: dict[date_type, float]
+) -> list[dict[str, Any]]:
     '''
     Builds the upcoming official quotations the horizon reaches.
 
@@ -471,13 +471,13 @@ def _projected_officials(
     Args:
         reference (date): Today.
         horizon_end (date): Last projected date.
-        observed (Dict[date, float]): Quotations already published.
-        projected (Dict[date, float]): Projected daily values.
+        observed (dict[date, float]): Quotations already published.
+        projected (dict[date, float]): Projected daily values.
 
     Returns:
-        List[Dict[str, Any]]: One entry per period, chronologically.
+        list[dict[str, Any]]: One entry per period, chronologically.
     '''
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     period = period_of(reference)
     while True:
         entry = _official_average(biweekly_period_bounds(*period), observed, projected)
@@ -494,9 +494,9 @@ def _projected_officials(
 
 def _official_history(
     reference: date_type,
-    observed: Dict[date_type, float],
+    observed: dict[date_type, float],
     periods: int
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
     Returns the official quotations already published, newest first.
 
@@ -506,13 +506,13 @@ def _official_history(
 
     Args:
         reference (date): Today.
-        observed (Dict[date, float]): Quotations already published.
+        observed (dict[date, float]): Quotations already published.
         periods (int): How many closed fortnights to walk back.
 
     Returns:
-        List[Dict[str, Any]]: One entry per period that had quotations.
+        list[dict[str, Any]]: One entry per period that had quotations.
     '''
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     # Two steps back: one lands on the period in force, which already travels
     # as `official_current` and would only repeat itself here.
     period = prev_biweekly_period(*prev_biweekly_period(*period_of(reference)))
@@ -526,12 +526,12 @@ def _official_history(
 
 
 def _official_block(
-    mineral_id: Optional[str],
+    mineral_id: str | None,
     projection: Projection,
     reference: date_type,
-    dynamodb_resource: Optional[ServiceResource] = None,
-    db: Optional[Session] = None
-) -> Dict[str, Any]:
+    dynamodb_resource: ServiceResource | None = None,
+    db: Session | None = None
+) -> dict[str, Any]:
     '''
     Builds the official-quotation view of one mineral.
 
@@ -542,10 +542,10 @@ def _official_block(
         db (Session | None): Relational session; ignored on DynamoDB.
 
     Returns:
-        Dict[str, Any]: `official_current`, `official_forecast` and the change
+        dict[str, Any]: `official_current`, `official_forecast` and the change
             between the price in force and the next one.
     '''
-    empty: Dict[str, Any] = {
+    empty: dict[str, Any] = {
         'official_current': None,
         'official_history': [],
         'official_forecast': [],
@@ -600,11 +600,11 @@ def _official_block(
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_price_forecast_service(
-    dynamodb_resource: Optional[ServiceResource],
+    dynamodb_resource: ServiceResource | None,
     days_ahead: int = 30,
     method: ForecastMethod = ForecastMethod.DAMPED_TREND,
-    db: Optional[Session] = None
-) -> Dict[str, Any]:
+    db: Session | None = None
+) -> dict[str, Any]:
     '''
     Projects every official mineral forward and returns the payload the API
     publishes.
@@ -620,11 +620,11 @@ async def get_price_forecast_service(
         method (ForecastMethod): Requested projection method.
 
     Returns:
-        Dict[str, Any]: Payload matching PriceForecastResponse shape.
+        dict[str, Any]: Payload matching PriceForecastResponse shape.
     '''
     mineral_ids = resolve_mineral_id_map(dynamodb_resource, db = db)
-    minerals: List[Dict[str, Any]] = []
-    observed_dates: List[date_type] = []
+    minerals: list[dict[str, Any]] = []
+    observed_dates: list[date_type] = []
     # One reference for every mineral, so the whole payload agrees on which
     # fortnight is in force even if the request straddles midnight.
     reference = get_current_time_gmt().date()
@@ -672,19 +672,19 @@ class ForecastRequest:
     the history, the horizon, the method and who to ask for the official
     average — more arguments than a function should carry.
     '''
-    catalog: Dict[str, str]
-    history: List[PriceRecord]
+    catalog: dict[str, str]
+    history: list[PriceRecord]
     days_ahead: int
     method: ForecastMethod
-    mineral_id: Optional[str] = None
-    reference: Optional[date_type] = None
+    mineral_id: str | None = None
+    reference: date_type | None = None
 
 
 def _forecast_row(
     request: ForecastRequest,
-    dynamodb_resource: Optional[ServiceResource] = None,
-    db: Optional[Session] = None
-) -> Dict[str, Any]:
+    dynamodb_resource: ServiceResource | None = None,
+    db: Session | None = None
+) -> dict[str, Any]:
     '''
     Builds one mineral's entry of the forecast payload.
 
@@ -693,7 +693,7 @@ def _forecast_row(
         db (Session | None): Relational session; ignored on DynamoDB.
 
     Returns:
-        Dict[str, Any]: The mineral's row, daily projection and official
+        dict[str, Any]: The mineral's row, daily projection and official
             quotation included.
     '''
     catalog, history = request.catalog, request.history

@@ -11,7 +11,7 @@
 '''
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -75,9 +75,9 @@ class TillFilter:
     '''
         Which tills a list returns.
     '''
-    user_email: Optional[str] = None
-    date_from: Optional[str] = None
-    date_to: Optional[str] = None
+    user_email: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
 
 
 def now() -> datetime:
@@ -120,7 +120,7 @@ def _read_session(
     dynamodb_resource: ServiceResource,
     owner: str,
     session_id: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         One till of the shop, or None.
 
@@ -130,7 +130,7 @@ def _read_session(
             session_id (str): The till.
 
         Returns:
-            Dict[str, Any] | None: The stored till.
+            dict[str, Any] | None: The stored till.
     '''
     response = dynamodb_resource.Table(CASH_SESSIONS_TABLE).get_item(
         Key = {OWNER_KEY: owner, CASH_SESSION_SORT_KEY: session_id}
@@ -143,7 +143,7 @@ def _visible_session(
     owner: str,
     viewer: Viewer,
     session_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         A till the viewer may see. Somebody else's, for a seller, answers like
         one that does not exist.
@@ -155,7 +155,7 @@ def _visible_session(
             session_id (str): The till.
 
         Returns:
-            Dict[str, Any]: The stored till.
+            dict[str, Any]: The stored till.
 
         Raises:
             RegisterNotFoundError: No such till for this viewer.
@@ -171,7 +171,7 @@ def _own_open_session(
     owner: str,
     user_email: str,
     session_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         The user's own till, still open and of today: the only one that takes
         movements.
@@ -183,7 +183,7 @@ def _own_open_session(
             session_id (str): The till.
 
         Returns:
-            Dict[str, Any]: The stored till.
+            dict[str, Any]: The stored till.
 
         Raises:
             RegisterNotFoundError: Not this user's till.
@@ -200,7 +200,7 @@ def _own_open_session(
 def _open_sessions(
     dynamodb_resource: ServiceResource,
     owner: str
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Every till of the shop still open.
 
@@ -209,18 +209,18 @@ def _open_sessions(
             owner (str): The shop.
 
         Returns:
-            List[Dict[str, Any]]: Open tills, oldest first.
+            list[dict[str, Any]]: Open tills, oldest first.
     '''
     return [row for row in read_partition(dynamodb_resource, CASH_SESSIONS_TABLE, owner)
             if row['status'] == CashSessionStatus.OPEN.value]
 
 
-def _is_expired(stored: Dict[str, Any]) -> bool:
+def _is_expired(stored: dict[str, Any]) -> bool:
     '''
         Whether an open till belongs to an earlier day.
 
         Args:
-            stored (Dict[str, Any]): The till.
+            stored (dict[str, Any]): The till.
 
         Returns:
             bool: True when it should have been closed already.
@@ -232,18 +232,18 @@ def _is_expired(stored: Dict[str, Any]) -> bool:
 def _session_sales(
     dynamodb_resource: ServiceResource,
     owner: str,
-    stored: Dict[str, Any]
-) -> List[Dict[str, Any]]:
+    stored: dict[str, Any]
+) -> list[dict[str, Any]]:
     '''
         The issued sales of a till.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The shop.
-            stored (Dict[str, Any]): The till.
+            stored (dict[str, Any]): The till.
 
         Returns:
-            List[Dict[str, Any]]: Sales not cancelled.
+            list[dict[str, Any]]: Sales not cancelled.
     '''
     sales = read_partition(dynamodb_resource, SALES_TABLE, owner,
                            SortBounds(SALE_SORT_KEY, between = {'from': stored['opened_at']}))
@@ -256,7 +256,7 @@ def _session_movements(
     dynamodb_resource: ServiceResource,
     owner: str,
     session_id: str
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Every expense of a till, cancelled ones included.
 
@@ -266,25 +266,25 @@ def _session_movements(
             session_id (str): The till.
 
         Returns:
-            List[Dict[str, Any]]: Movements in the order they were made.
+            list[dict[str, Any]]: Movements in the order they were made.
     '''
     return read_partition(dynamodb_resource, CASH_MOVEMENTS_TABLE, owner,
                           SortBounds(CASH_MOVEMENT_SORT_KEY,
                                      begins_with = movement_key(session_id, '')))
 
 
-def method_totals(sales: List[Any]) -> List[MethodTotal]:
+def method_totals(sales: list[Any]) -> list[MethodTotal]:
     '''
         What each payment method brought in. Works on stored items and on
         `SaleNoteOut`, so the till and the daily report count the same way.
 
         Args:
-            sales (List[Any]): Issued sales.
+            sales (list[Any]): Issued sales.
 
         Returns:
-            List[MethodTotal]: One row per method used, in the enum's order.
+            list[MethodTotal]: One row per method used, in the enum's order.
     '''
-    totals: Dict[str, List[float]] = {}
+    totals: dict[str, list[float]] = {}
     for sale in sales:
         method = sale['payment_method'] if isinstance(sale, dict) \
             else sale.payment_method.value
@@ -298,7 +298,7 @@ def method_totals(sales: List[Any]) -> List[MethodTotal]:
 def _summary(
     dynamodb_resource: ServiceResource,
     owner: str,
-    stored: Dict[str, Any]
+    stored: dict[str, Any]
 ) -> CashSessionOut:
     '''
         A till and its count.
@@ -306,7 +306,7 @@ def _summary(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The shop.
-            stored (Dict[str, Any]): The till.
+            stored (dict[str, Any]): The till.
 
         Returns:
             CashSessionOut: Income by method, expenses by type and the
@@ -316,7 +316,7 @@ def _summary(
     movements = _session_movements(dynamodb_resource, owner, stored['session_id'])
     active = [row for row in movements if row['status'] == MovementStatus.ACTIVE.value]
 
-    by_type: Dict[str, List[float]] = {}
+    by_type: dict[str, list[float]] = {}
     for row in active:
         by_type.setdefault(row['expense_type'], []).append(row['amount'])
     expenses = [ExpenseTotal(expense_type = kind, count = len(amounts),
@@ -606,7 +606,7 @@ def list_sessions(
     dynamodb_resource: ServiceResource,
     owner: str,
     viewer: Viewer,
-    till_filter: Optional[TillFilter] = None
+    till_filter: TillFilter | None = None
 ) -> CashSessionsResponse:
     '''
         The tills of the shop, newest first: every user's for a manager, the

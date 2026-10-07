@@ -1,7 +1,6 @@
 '''
     Normalized Schemas (Request/Response)
 '''
-from typing import List
 from pydantic import BaseModel, Field
 
 from schemas.base import NumPyValidatorBase
@@ -10,7 +9,7 @@ class NormalizeFeaturesRequest(NumPyValidatorBase):
     '''
         Request model for feature normalization (z-score).
     '''
-    x_matrix: List[List[float]] = Field(
+    x_matrix: list[list[float]] = Field(
         ...,
         description = 'Feature matrix X to normalize using Z-score.'
     )
@@ -29,15 +28,15 @@ class NormalizeFeaturesResponse(BaseModel):
     '''
         Response model for feature normalization (z-score).
     '''
-    x_norm: List[List[float]] = Field(
+    x_norm: list[list[float]] = Field(
         ...,
         description = 'Column-normalized feature matrix X using Z-score.'
     )
-    mu: List[float] = Field(
+    mu: list[float] = Field(
         ...,
         description = 'Average (mean) of each feature (column) used for normalization.'
     )
-    sigma: List[float] = Field(
+    sigma: list[float] = Field(
         ...,
         description = 'Standard deviation of each feature (column) used for normalization.'
     )

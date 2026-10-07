@@ -6,7 +6,7 @@ import io
 import re
 import unicodedata
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from fastapi import Request
 import pandas as pd
 from boto3.resources.base import ServiceResource
@@ -69,7 +69,7 @@ def normalize_name(name: str) -> str:
 
 # Canonical mineral catalog rendered in the official Minerales_0X templates.
 # Order is significant: the PNG report mirrors this sequence top-to-bottom.
-OFFICIAL_MINERALS: Tuple[Dict[str, str], ...] = (
+OFFICIAL_MINERALS: tuple[dict[str, str], ...] = (
     {'name': 'Estaño',    'chemical_symbol': 'Sn', 'unit': 'LF',  'quoted_in': 'LME'},
     {'name': 'Plomo',     'chemical_symbol': 'Pb', 'unit': 'LF',  'quoted_in': 'LME'},
     {'name': 'Zinc',      'chemical_symbol': 'Zn', 'unit': 'LF',  'quoted_in': 'LME'},
@@ -256,7 +256,7 @@ async def process_mining_etl_service(
     file_content: bytes,
     file_name: str,
     delimiter: str = ','
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     ''' 
         Optimized ETL logic using Pandas for both CSV and Excel parsing with
         dynamic reference mapping.
@@ -294,9 +294,9 @@ async def process_mining_etl_service(
     }
 
 async def get_all_prices_service(
-    dynamodb_resource: Optional[ServiceResource],
-    db: Optional[Session] = None
-) -> List[Dict[str, Any]]:
+    dynamodb_resource: ServiceResource | None,
+    db: Session | None = None
+) -> list[dict[str, Any]]:
     '''
     Retrieves every quotation with the metadata of its mineral.
 
@@ -309,12 +309,12 @@ async def get_all_prices_service(
         db (Session): Database session; ignored when running on DynamoDB.
 
     Returns:
-        List[Dict[str, Any]]: Rows matching MiningPriceResponseSchema.
+        list[dict[str, Any]]: Rows matching MiningPriceResponseSchema.
     '''
     catalog = {
         normalize_name(entry['name']): entry for entry in OFFICIAL_MINERALS
     }
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for record in all_quotations(dynamodb_resource, db = db):
         entry = catalog.get(normalize_name(record.mineral_name), {})
         rows.append({
@@ -332,19 +332,19 @@ async def get_all_prices_service(
     return rows
 
 def _calculate_advanced_kpis(
-    data: List[Dict[str, Any]],
-    prev_data: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+    data: list[dict[str, Any]],
+    prev_data: list[dict[str, Any]]
+) -> dict[str, Any]:
     '''
     Calculates YoY variations by mapping exactly Month, Department, and Municipality.
     Aggregates annual performance to prevent single-month anomalies in Top 5 KPIs.
 
     Args:
-        data (List[Dict[str, Any]]): Current period data to be evaluated.
-        prev_data (List[Dict[str, Any]]): Previous period data for baseline comparison.
+        data (list[dict[str, Any]]): Current period data to be evaluated.
+        prev_data (list[dict[str, Any]]): Previous period data for baseline comparison.
 
     Returns:
-        Dict[str, Any]: A dictionary containing the detailed records and aggregated KPIs.
+        dict[str, Any]: A dictionary containing the detailed records and aggregated KPIs.
     '''
     comparison_map = {
         (d['month'], d['department'], d['municipality']): d for d in prev_data
@@ -413,7 +413,7 @@ async def get_royalties_summary_service(
     quarter: int = None, # pylint: disable=unused-argument
     request: Request = None, # pylint: disable=unused-argument
     current_user: str = None # pylint: disable=unused-argument
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Aggregates financial metrics.
         Returns data for the target year AND the previous year to allow
@@ -494,7 +494,7 @@ async def get_royalties_summary_service(
 async def get_transactions_summary_service(
     db: Session,
     year: int = None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
     Retrieves aggregated transactions data joined with companies.
     
@@ -503,7 +503,7 @@ async def get_transactions_summary_service(
         year (int, optional): Fiscal year to filter by.
         
     Returns:
-        Dict[str, Any]: Dictionary containing status, message, and formatted transaction data.
+        dict[str, Any]: Dictionary containing status, message, and formatted transaction data.
     '''
     query = db.query(
         Company.name.label('company_name'),

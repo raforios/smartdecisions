@@ -4,19 +4,19 @@
     The tracking tables are composite-key tables (owner + id); this provisions
     them the way the deploy does so every fixture only declares its seed.
 '''
-from typing import Iterable, Tuple
+from collections.abc import Iterable
 
 import boto3
 
 
-def build_resource(table_specs: Iterable[Tuple[str, str, str]]):
+def build_resource(table_specs: Iterable[tuple[str, str, str]]):
     '''
         Creates a mocked DynamoDB resource with the given composite-key tables.
 
         Must be called inside an active ``moto.mock_aws()`` context.
 
         Args:
-            table_specs (Iterable[Tuple[str, str, str]]): (table_name,
+            table_specs (Iterable[tuple[str, str, str]]): (table_name,
                 partition_key, sort_key) triples to provision. Keys are strings.
 
         Returns:

@@ -2,7 +2,7 @@
     JWT Service Provider
 '''
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional
+from typing import Any
 from jose import jwt, JWTError
 
 from services.logger_config import custom_logger as logger
@@ -20,8 +20,8 @@ ALGORITHM = ENV_VARS['ALGORITHM']
 ACCESS_TOKEN_EXPIRE_MINUTES = ENV_VARS['ACCESS_TOKEN_EXPIRE_MINUTES']
 
 def create_access_token(
-    data: Dict[str, Any],
-    expires_delta: Optional[timedelta] = None
+    data: dict[str, Any],
+    expires_delta: timedelta | None = None
 ) -> str:
     '''
         Creates a JWT access token.
@@ -48,7 +48,7 @@ def create_access_token(
             detail = 'Failed to create authentication token.'
         ) from e
 
-def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
+def decode_access_token(token: str) -> dict[str, Any] | None:
     '''
         Decodes and validates a JWT access token.
         Returns the token data if valid, None if not.

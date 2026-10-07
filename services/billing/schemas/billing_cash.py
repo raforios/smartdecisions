@@ -11,7 +11,6 @@
 '''
 from datetime import date, time as time_type
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -57,7 +56,7 @@ class ExpenseIn(BaseModel):
     expense_type: ExpenseType
     amount: float = Field(..., gt = 0)
     concept: str = Field(..., min_length = 1, max_length = 200)
-    purchase_id: Optional[str] = Field(
+    purchase_id: str | None = Field(
         None, max_length = 120,
         description = 'Delivery note the supplier payment settles, when there is one.'
     )
@@ -72,7 +71,7 @@ class CashCloseIn(BaseModel):
         write one.
     '''
     counted_cash: float = Field(..., ge = 0)
-    note: Optional[str] = Field(None, max_length = 500)
+    note: str | None = Field(None, max_length = 500)
 
 
 class ExpenseOut(BaseModel):
@@ -83,12 +82,12 @@ class ExpenseOut(BaseModel):
     expense_type: ExpenseType
     amount: float
     concept: str
-    purchase_id: Optional[str] = None
+    purchase_id: str | None = None
     status: MovementStatus
     created_by: str
     created_at: str
-    cancelled_by: Optional[str] = None
-    cancelled_at: Optional[str] = None
+    cancelled_by: str | None = None
+    cancelled_at: str | None = None
 
 
 class ExpenseTotal(BaseModel):
@@ -113,28 +112,28 @@ class CashSessionOut(BaseModel):
     )
     opened_at: str
     opening_cash: float
-    income: List[MethodTotal]
+    income: list[MethodTotal]
     income_total: float
-    expenses: List[ExpenseTotal]
+    expenses: list[ExpenseTotal]
     expenses_total: float
     expected_cash: float = Field(
         ..., description = 'Opening cash plus cash sales minus active expenses.'
     )
-    movements: List[ExpenseOut]
-    closed_at: Optional[str] = None
-    closed_by: Optional[str] = None
-    counted_cash: Optional[float] = None
-    difference: Optional[float] = Field(
+    movements: list[ExpenseOut]
+    closed_at: str | None = None
+    closed_by: str | None = None
+    counted_cash: float | None = None
+    difference: float | None = Field(
         None, description = 'Counted minus expected: negative is missing cash.'
     )
-    note: Optional[str] = None
+    note: str | None = None
 
 
 class CashSessionsResponse(BaseModel):
     '''
         A list of tills, newest first.
     '''
-    items: List[CashSessionOut]
+    items: list[CashSessionOut]
 
 
 class CashAlert(BaseModel):
@@ -154,8 +153,8 @@ class CashAlertsResponse(BaseModel):
         The tills to close now. Empty when the shop set no alert time and no
         till was left open from an earlier day.
     '''
-    alert_time: Optional[time_type] = None
-    items: List[CashAlert]
+    alert_time: time_type | None = None
+    items: list[CashAlert]
 
 
 # --- grouped arguments -------------------------------------------------------
@@ -175,9 +174,9 @@ class TillQuery(BaseModel):
         Which tills a list returns, and for whom.
     '''
     is_manager: bool = False
-    user_email: Optional[str] = Field(None, max_length = 100)
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    user_email: str | None = Field(None, max_length = 100)
+    date_from: date | None = None
+    date_to: date | None = None
 
 
 class TillExpense(BaseModel):

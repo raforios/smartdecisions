@@ -1,7 +1,7 @@
 '''
     Route parameters item for DynamoDB.
 '''
-from typing import Any, Dict, Optional, TypedDict
+from typing import Any, TypedDict
 
 
 class RouteSettingsItem(TypedDict, total = False):
@@ -15,5 +15,5 @@ class RouteSettingsItem(TypedDict, total = False):
         end when a plan asks for it.
     '''
     owner_email: str
-    base_point: Optional[Dict[str, Any]]
+    base_point: dict[str, Any] | None
     updated_at: str

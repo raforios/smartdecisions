@@ -9,7 +9,6 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -19,14 +18,14 @@ class ValueRules:
         Value constraints of one contract column, grouped so the column itself
         stays readable and within the attribute budget.
     '''
-    max_length: Optional[int] = None
-    minimum: Optional[float] = None
-    exclusive_minimum: Optional[float] = None
-    value_range: Optional[tuple[float, float]] = None
+    max_length: int | None = None
+    minimum: float | None = None
+    exclusive_minimum: float | None = None
+    value_range: tuple[float, float] | None = None
     # Accepted values of a closed-option column. It exists because a badly
     # typed payment condition must not pass as cash by omission: that would
     # change the receivable balance without anybody noticing.
-    allowed: Optional[tuple[str, ...]] = None
+    allowed: tuple[str, ...] | None = None
 
 
 @dataclass(frozen = True)
@@ -358,7 +357,7 @@ class ValidationIssue(BaseModel):
     '''
     row: int = Field(..., description = 'Excel row number (1-based, header is row 1).')
     column: str = Field(..., description = 'Column name where the issue occurred.')
-    value: Optional[str] = Field(None, description = 'Raw value that failed validation.')
+    value: str | None = Field(None, description = 'Raw value that failed validation.')
     rule_code: ValidationRule = Field(..., description = 'Why it failed.')
 
 
@@ -371,9 +370,9 @@ class IngestSummary(BaseModel):
     error_rows: int = Field(..., ge = 0)
     unique_points_of_sale: int = Field(..., ge = 0)
     unique_products: int = Field(..., ge = 0)
-    date_range_start: Optional[str] = Field(None,
+    date_range_start: str | None = Field(None,
                     description = 'ISO date of the earliest valid sale.')
-    date_range_end: Optional[str] = Field(None,
+    date_range_end: str | None = Field(None,
                     description = 'ISO date of the latest valid sale.')
 
 
@@ -394,8 +393,8 @@ class ObjectivesSummary(BaseModel):
     unmatched_rows: int = Field(0, ge = 0)
     periods_count: int = Field(0, ge = 0)
     target_amount: float = Field(0.0, ge = 0)
-    period_start: Optional[str] = Field(None, description = "'YYYY-MM', if any.")
-    period_end: Optional[str] = Field(None, description = "'YYYY-MM', if any.")
+    period_start: str | None = Field(None, description = "'YYYY-MM', if any.")
+    period_end: str | None = Field(None, description = "'YYYY-MM', if any.")
 
 
 class CollectionsSummary(BaseModel):
@@ -412,8 +411,8 @@ class CollectionsSummary(BaseModel):
     matched_invoices: int = Field(0, ge = 0)
     unmatched_rows: int = Field(0, ge = 0)
     collected_amount: float = Field(0.0, ge = 0)
-    payment_date_start: Optional[str] = Field(None, description = 'ISO date, if any.')
-    payment_date_end: Optional[str] = Field(None, description = 'ISO date, if any.')
+    payment_date_start: str | None = Field(None, description = 'ISO date, if any.')
+    payment_date_end: str | None = Field(None, description = 'ISO date, if any.')
 
 
 class StockSummary(BaseModel):
@@ -430,8 +429,8 @@ class StockSummary(BaseModel):
     products: int = Field(0, ge = 0)
     unknown_products: int = Field(0, ge = 0)
     units_on_hand: float = Field(0.0)
-    snapshot_start: Optional[str] = Field(None, description = 'ISO date, if any.')
-    snapshot_end: Optional[str] = Field(None, description = 'ISO date, if any.')
+    snapshot_start: str | None = Field(None, description = 'ISO date, if any.')
+    snapshot_end: str | None = Field(None, description = 'ISO date, if any.')
 
 
 class VisitsSummary(BaseModel):
@@ -451,8 +450,8 @@ class VisitsSummary(BaseModel):
     unknown_sellers: int = Field(0, ge = 0)
     with_coordinates: int = Field(0, ge = 0, description = 'Rows carrying a GPS pair.')
     with_outcome: int = Field(0, ge = 0, description = 'Rows carrying a result code.')
-    visit_date_start: Optional[str] = Field(None, description = 'ISO date, if any.')
-    visit_date_end: Optional[str] = Field(None, description = 'ISO date, if any.')
+    visit_date_start: str | None = Field(None, description = 'ISO date, if any.')
+    visit_date_end: str | None = Field(None, description = 'ISO date, if any.')
 
 
 class VisitsResponse(BaseModel):
@@ -461,11 +460,11 @@ class VisitsResponse(BaseModel):
     '''
     dataset_id: str = Field(..., description = 'Sales dataset the visits belong to.')
     status: str = Field(..., description = "'validated' or 'failed'.")
-    visits_s3_key: Optional[str] = Field(
+    visits_s3_key: str | None = Field(
         None, description = 'Object key of the stored visits file.'
     )
     summary: VisitsSummary = VisitsSummary()
-    issues: List[ValidationIssue] = Field(default_factory = list)
+    issues: list[ValidationIssue] = Field(default_factory = list)
 
 
 class StockResponse(BaseModel):
@@ -474,11 +473,11 @@ class StockResponse(BaseModel):
     '''
     dataset_id: str = Field(..., description = 'Sales dataset the snapshot belongs to.')
     status: str = Field(..., description = "'validated' or 'failed'.")
-    stock_s3_key: Optional[str] = Field(
+    stock_s3_key: str | None = Field(
         None, description = 'Object key of the stored snapshot file.'
     )
     summary: StockSummary = StockSummary()
-    issues: List[ValidationIssue] = Field(default_factory = list)
+    issues: list[ValidationIssue] = Field(default_factory = list)
 
 
 class StockDayItem(BaseModel):
@@ -489,7 +488,7 @@ class StockDayItem(BaseModel):
         promised, which are the ones a seller can still sell on the street.
     '''
     product_id: str
-    product_name: Optional[str] = None
+    product_name: str | None = None
     on_hand: float = Field(..., ge = 0)
     committed: float = Field(0.0, ge = 0)
     available: float = Field(..., ge = 0)
@@ -505,7 +504,7 @@ class StockDayResponse(BaseModel):
     '''
     dataset_id: str
     date: str = Field(..., description = 'YYYY-MM-DD.')
-    items: List[StockDayItem] = Field(default_factory = list)
+    items: list[StockDayItem] = Field(default_factory = list)
 
 
 class ObjectivesResponse(BaseModel):
@@ -517,11 +516,11 @@ class ObjectivesResponse(BaseModel):
     """
     dataset_id: str = Field(..., description = 'Sales dataset the objectives belong to.')
     status: str = Field(..., description = "'validated' or 'failed'.")
-    objectives_s3_key: Optional[str] = Field(
+    objectives_s3_key: str | None = Field(
         None, description = 'Object key of the stored objectives file.'
     )
     summary: ObjectivesSummary = ObjectivesSummary()
-    issues: List[ValidationIssue] = Field(default_factory = list)
+    issues: list[ValidationIssue] = Field(default_factory = list)
 
 
 class CollectionsResponse(BaseModel):
@@ -530,11 +529,11 @@ class CollectionsResponse(BaseModel):
     '''
     dataset_id: str = Field(..., description = 'Sales dataset the payments belong to.')
     status: str = Field(..., description = "'validated' or 'failed'.")
-    collections_s3_key: Optional[str] = Field(
+    collections_s3_key: str | None = Field(
         None, description = 'Object key of the stored payments file.'
     )
     summary: CollectionsSummary = CollectionsSummary()
-    issues: List[ValidationIssue] = Field(default_factory = list)
+    issues: list[ValidationIssue] = Field(default_factory = list)
 
 
 class IngestResponse(BaseModel):
@@ -556,17 +555,17 @@ class IngestResponse(BaseModel):
     file_s3_key: str = Field(..., description = 'Object key in the S3 bucket managed by FILES.')
     summary: IngestSummary
     issues: list[ValidationIssue] = Field(default_factory = list)
-    collections: Optional[CollectionsSummary] = Field(
+    collections: CollectionsSummary | None = Field(
         None,
         description = 'Filled when the uploaded workbook also carried a payments '
                       'sheet, so one upload answers both contracts.'
     )
-    stock: Optional[StockSummary] = Field(
+    stock: StockSummary | None = Field(
         None,
         description = 'Filled when the uploaded workbook also carried a stock '
                       'sheet: the same upload feeds the stock module too.'
     )
-    visits: Optional[VisitsSummary] = Field(
+    visits: VisitsSummary | None = Field(
         None,
         description = 'Filled when the uploaded workbook also carried a visits '
                       'sheet: the executed side of the routes.'
@@ -589,8 +588,8 @@ class DatasetSummary(BaseModel):
     error_rows: int = 0
     unique_points_of_sale: int = 0
     unique_products: int = 0
-    date_range_start: Optional[date] = None
-    date_range_end: Optional[date] = None
+    date_range_start: date | None = None
+    date_range_end: date | None = None
     created_at: datetime
 
 
@@ -604,7 +603,7 @@ class DatasetListResponse(BaseModel):
     '''
     owner_email: str
     count: int = Field(..., ge = 0)
-    datasets: List[DatasetSummary] = Field(default_factory = list)
+    datasets: list[DatasetSummary] = Field(default_factory = list)
 
 
 class IngestStatusResponse(BaseModel):
@@ -618,18 +617,18 @@ class IngestStatusResponse(BaseModel):
     file_s3_key: str
     summary: IngestSummary
     issues: list[ValidationIssue] = Field(default_factory = list)
-    collections: Optional[CollectionsSummary] = Field(
+    collections: CollectionsSummary | None = Field(
         None,
         description = 'Payments loaded against this dataset, when there are any. '
                       'Its absence is what tells the frontend not to offer the '
                       'receivables view.'
     )
-    stock: Optional[StockSummary] = Field(
+    stock: StockSummary | None = Field(
         None,
         description = 'Latest stock snapshot loaded against this dataset, when '
                       'there is one. A new load replaces the previous snapshot.'
     )
-    visits: Optional[VisitsSummary] = Field(
+    visits: VisitsSummary | None = Field(
         None,
         description = 'Visits loaded against this dataset, when there are any: '
                       'the executed side of the routes.'

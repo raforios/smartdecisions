@@ -23,7 +23,7 @@
     the interest rate should not have to restate the whole policy.
 '''
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -74,7 +74,7 @@ _SETTINGS = load_and_validate_env_vars({
 })
 
 
-def _numbers(raw: str) -> List[float]:
+def _numbers(raw: str) -> list[float]:
     '''
         Reads a dash-separated list of numbers from configuration.
 
@@ -86,15 +86,15 @@ def _numbers(raw: str) -> List[float]:
             raw (str): Value as configured, e.g. '15-30-60-90-120'.
 
         Returns:
-            List[float]: The numbers, in the order given.
+            list[float]: The numbers, in the order given.
     '''
     return [float(found) for found in raw.replace('-', ' ').split()]
 
 
-_DEFAULT_BUCKETS: Tuple[int, ...] = tuple(
+_DEFAULT_BUCKETS: tuple[int, ...] = tuple(
     int(value) for value in _numbers(_SETTINGS['RECEIVABLES_AGING_BUCKETS'])
 )
-_DEFAULT_LOSS_RATES: Tuple[float, ...] = tuple(
+_DEFAULT_LOSS_RATES: tuple[float, ...] = tuple(
     _numbers(_SETTINGS['RECEIVABLES_LOSS_RATES'])
 )
 _DEFAULT_RATE = _SETTINGS['RECEIVABLES_FINANCIAL_RATE_DAILY']
@@ -117,7 +117,7 @@ CASH = 'CONTADO'
 
 # The aging scale, in the order the buckets are reported. CURRENT is not an
 # overdue bucket: it is what has not fallen due yet.
-_BUCKET_ORDER: Tuple[AgingBucket, ...] = (
+_BUCKET_ORDER: tuple[AgingBucket, ...] = (
     AgingBucket.CURRENT,
     AgingBucket.DAYS_1_15,
     AgingBucket.DAYS_16_30,
@@ -139,8 +139,8 @@ class Policy:
         `policy.loss_rates` instead of guessing a key, and so an unknown
         parameter fails at construction instead of silently defaulting to zero.
     '''
-    buckets: Tuple[int, ...] = _DEFAULT_BUCKETS
-    loss_rates: Tuple[float, ...] = _DEFAULT_LOSS_RATES
+    buckets: tuple[int, ...] = _DEFAULT_BUCKETS
+    loss_rates: tuple[float, ...] = _DEFAULT_LOSS_RATES
     financial_rate_daily: float = _DEFAULT_RATE
     delinquent_days: int = _DEFAULT_DELINQUENT_DAYS
     default_term_days: int = _DEFAULT_TERM_DAYS
@@ -163,12 +163,12 @@ class Policy:
         )
 
 
-def resolve_policy(stored: Optional[Dict[str, Any]]) -> Policy:
+def resolve_policy(stored: dict[str, Any] | None) -> Policy:
     '''
         Builds the policy to apply, falling back field by field.
 
         Args:
-            stored (Dict[str, Any] | None): The client's stored policy, if any.
+            stored (dict[str, Any] | None): The client's stored policy, if any.
 
         Returns:
             Policy: The resolved parameters, tagged with where they came from.
@@ -194,14 +194,14 @@ def resolve_policy(stored: Optional[Dict[str, Any]]) -> Policy:
 
 def _bucket_of(
     days_past_due: float,
-    buckets: Tuple[int, ...]
+    buckets: tuple[int, ...]
 ) -> AgingBucket:
     '''
         Places a balance on the aging scale.
 
         Args:
             days_past_due (float): Days beyond the due date; 0 or less is not due.
-            buckets (Tuple[int, ...]): Upper bound of each overdue bucket.
+            buckets (tuple[int, ...]): Upper bound of each overdue bucket.
 
         Returns:
             AgingBucket: The bucket code.
@@ -236,7 +236,7 @@ def _loss_rate_of(
     return float(policy.loss_rates[-1]) if policy.loss_rates else 0.0
 
 
-def _invoice_frame(sales: pd.DataFrame) -> Optional[pd.DataFrame]:
+def _invoice_frame(sales: pd.DataFrame) -> pd.DataFrame | None:
     '''
         Collapses the sales rows into one row per invoice.
 
@@ -307,7 +307,7 @@ def _with_terms(
     return frame
 
 
-def _payments_by_invoice(collections: Optional[pd.DataFrame]) -> pd.DataFrame:
+def _payments_by_invoice(collections: pd.DataFrame | None) -> pd.DataFrame:
     '''
         Totals the payments of each invoice and finds its last payment date.
 
@@ -391,7 +391,7 @@ def _book(
 def _aging(
     book: pd.DataFrame,
     policy: Policy
-) -> List[AgingRow]:
+) -> list[AgingRow]:
     '''
         The aging of the open book, bucket by bucket.
 
@@ -400,11 +400,11 @@ def _aging(
             policy (Policy): Resolved parameters.
 
         Returns:
-            List[AgingRow]: One row per bucket that holds something.
+            list[AgingRow]: One row per bucket that holds something.
     '''
     open_book = book.loc[book['is_open']]
     total = float(open_book['balance'].sum())
-    rows: List[AgingRow] = []
+    rows: list[AgingRow] = []
 
     for bucket in _BUCKET_ORDER:
         held = open_book.loc[open_book['bucket'] == bucket.value]
@@ -427,7 +427,7 @@ def _dso(
     book: pd.DataFrame,
     as_of: pd.Timestamp,
     receivable: float
-) -> Optional[float]:
+) -> float | None:
     '''
         Days sales outstanding over the configured window.
 
@@ -450,7 +450,7 @@ def _dso(
 
 def _balance_at(
     book: pd.DataFrame,
-    collections: Optional[pd.DataFrame],
+    collections: pd.DataFrame | None,
     moment: pd.Timestamp
 ) -> float:
     '''
@@ -482,9 +482,9 @@ def _balance_at(
 
 def _collection_effectiveness(
     book: pd.DataFrame,
-    collections: Optional[pd.DataFrame],
+    collections: pd.DataFrame | None,
     as_of: pd.Timestamp
-) -> Optional[float]:
+) -> float | None:
     '''
         Collection Effectiveness Index over the configured window.
 
@@ -546,8 +546,8 @@ def _kpis(
     book: pd.DataFrame,
     cash_amount: float,
     as_of: pd.Timestamp,
-    aging: List[AgingRow],
-    collections: Optional[pd.DataFrame] = None
+    aging: list[AgingRow],
+    collections: pd.DataFrame | None = None
 ) -> ReceivablesKpis:
     '''
         The headline figures of the book: position, speed and recoverability.
@@ -556,7 +556,7 @@ def _kpis(
             book (pd.DataFrame): The credit book.
             cash_amount (float): Amount sold in cash, for the mix.
             as_of (pd.Timestamp): Reference date.
-            aging (List[AgingRow]): The aging rows, to total the provision.
+            aging (list[AgingRow]): The aging rows, to total the provision.
             collections (pd.DataFrame | None): Payment rows, for the index that
                 needs the balance at a past date.
 
@@ -615,7 +615,7 @@ def _kpis(
 def _gross_margin(
     sales: pd.DataFrame,
     credit_rows: pd.Series
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     '''
         Gross margin of the credit sales and of the cash ones.
 
@@ -624,7 +624,7 @@ def _gross_margin(
             credit_rows (pd.Series): Boolean mask of the credit rows.
 
         Returns:
-            Tuple[float, float, float]: Credit revenue, credit margin and cash
+            tuple[float, float, float]: Credit revenue, credit margin and cash
                 margin rate. Zeros when the file has no cost column.
     '''
     if COST not in sales.columns or PRICE not in sales.columns:
@@ -696,8 +696,8 @@ def _credit_margin(
 
 def build_receivables(
     sales: pd.DataFrame,
-    collections: Optional[pd.DataFrame] = None,
-    stored_policy: Optional[Dict[str, Any]] = None
+    collections: pd.DataFrame | None = None,
+    stored_policy: dict[str, Any] | None = None
 ) -> ReceivablesBlock:
     '''
         Builds the receivables view from the sales and their payments.
@@ -708,7 +708,7 @@ def build_receivables(
             collections (pd.DataFrame | None): Normalized payment rows, when the
                 dataset has any. Their absence means every credit invoice is
                 still open, which is a fact and not an error.
-            stored_policy (Dict[str, Any] | None): The client's own policy.
+            stored_policy (dict[str, Any] | None): The client's own policy.
 
         Returns:
             ReceivablesBlock: The whole view, or an unavailable block with its

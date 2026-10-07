@@ -7,7 +7,8 @@
     local loads still live on MySQL, so their routes ask for
     `GET_SQL_DB_DEPENDENCY` and nothing else in the service knows about it.
 '''
-from typing import TypedDict, Callable, Generator
+from collections.abc import Callable, Generator
+from typing import TypedDict
 from sqlalchemy import create_engine, URL
 from sqlalchemy.orm import sessionmaker, declarative_base, DeclarativeMeta, Session
 from sqlalchemy.engine.base import Engine
@@ -100,7 +101,7 @@ def get_db_session(engine: Engine) -> Callable:
     '''
     session_factory = sessionmaker(autocommit = False, autoflush = False, bind = engine)
 
-    def _get_db() -> Generator[Session, None, None]:
+    def _get_db() -> Generator[Session]:
         '''
             Obtains and manages the connection to the database.
         '''

@@ -4,7 +4,6 @@
     The API door of the master: the owner's ERP pushes who its clients are and
     where they stand, once, and every later upload stops having to repeat it.
 '''
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path as PathParam, Query, Request, status
@@ -112,7 +111,7 @@ async def register_field_client_endpoint(
 )
 async def list_clients_endpoint(
     request: Request,
-    seller: Optional[str] = _SELLER,
+    seller: str | None = _SELLER,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     current_user: str = Depends(get_current_owner)
 ) -> ClientListResponseSchema:

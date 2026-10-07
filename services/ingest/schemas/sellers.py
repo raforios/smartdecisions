@@ -7,7 +7,6 @@
     ana@empresa.com.
 '''
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -31,7 +30,7 @@ class SellerResponseSchema(BaseModel):
     '''
     id: str = Field(..., description = 'As the owner\'s files write it.')
     name: str
-    user_email: Optional[str] = None
+    user_email: str | None = None
     source: ClientSource = Field(..., description = 'The door it first came through.')
     created_at: str
     updated_at: str
@@ -41,7 +40,7 @@ class SellerListResponseSchema(BaseModel):
     '''
         The owner's sellers and how many are already linked to a user.
     '''
-    sellers: List[SellerResponseSchema]
+    sellers: list[SellerResponseSchema]
     total: int = Field(..., ge = 0)
     linked: int = Field(..., ge = 0, description = 'Sellers with a user to sign in with.')
 
@@ -52,10 +51,10 @@ class SellerUpdateSchema(BaseModel):
 
         Fields left out are untouched; `user_email` set to null unlinks.
     '''
-    name: Optional[str] = Field(None, min_length = 1, max_length = 128)
+    name: str | None = Field(None, min_length = 1, max_length = 128)
     # A plain pattern and not EmailStr: that needs email-validator, which this
     # service does not carry, and AUTH already validated the address it issued.
-    user_email: Optional[str] = Field(
+    user_email: str | None = Field(
         None, max_length = 100, pattern = r'^[^@\s]+@[^@\s]+\.[^@\s]+$'
     )
 

@@ -3,7 +3,6 @@
 '''
 from dataclasses import replace
 from pathlib import Path
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -100,7 +99,7 @@ async def ingest_excel_controller(
     result = parse_and_validate(file_bytes, filename)
     is_valid = not result.issues
 
-    file_s3_key: Optional[str] = None
+    file_s3_key: str | None = None
     if is_valid:
         # The client master learns from the file and then completes it. A
         # company that uploaded coordinates once should not have to upload them

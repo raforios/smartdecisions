@@ -9,7 +9,6 @@
     scale to say what royalty rate it implies.
 '''
 from datetime import date as date_type
-from typing import Dict, List, Optional
 
 from boto3.resources.base import ServiceResource
 
@@ -68,7 +67,7 @@ def confidence_for(days_quoted: int) -> EstimateConfidence:
     return EstimateConfidence.LOW
 
 
-def _catalogue_entry(name: str) -> Dict[str, str]:
+def _catalogue_entry(name: str) -> dict[str, str]:
     '''
         Published metadata (symbol, unit) of a catalogue mineral.
     '''
@@ -80,7 +79,7 @@ def _previous_official(
     dynamodb_resource: ServiceResource,
     mineral_id: str,
     as_of: date_type
-) -> Optional[float]:
+) -> float | None:
     '''
         The quotation in force on `as_of`: the official mean of the fortnight
         before the one in progress, from the official daily series.
@@ -144,7 +143,7 @@ def estimate_row(
 
 def estimate_all(
     dynamodb_resource: ServiceResource,
-    as_of: Optional[date_type] = None
+    as_of: date_type | None = None
 ) -> EstimateResponse:
     '''
         The anticipated official quotation of every catalogue mineral.
@@ -176,8 +175,8 @@ def estimate_all(
 def market_series(
     dynamodb_resource: ServiceResource,
     mineral_id: str,
-    date_from: Optional[date_type],
-    date_to: Optional[date_type]
+    date_from: date_type | None,
+    date_to: date_type | None
 ) -> MarketPricesResponse:
     '''
         The stored market series of one mineral, for the chart.
@@ -200,7 +199,7 @@ def market_series(
     if source_for(mineral.name) is None:
         raise InvalidInputError(detail = MarketError.MINERAL_NOT_MARKET_QUOTED.value)
     entry = _catalogue_entry(mineral.name)
-    rows: List[MarketPriceRow] = [
+    rows: list[MarketPriceRow] = [
         MarketPriceRow(date = item.date, price = item.price, source = MarketSource(item.source))
         for item in query_market_prices(
             dynamodb_resource, mineral_id, {'from': date_from, 'to': date_to}

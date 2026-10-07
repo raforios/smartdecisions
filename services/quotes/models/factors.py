@@ -1,7 +1,7 @@
 '''
     Fluctuating factor models for DynamoDB.
 '''
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class FactorItem(TypedDict, total = False):
@@ -19,10 +19,10 @@ class FactorItem(TypedDict, total = False):
     code: str
     name: str
     unit: str
-    source: Optional[str]
+    source: str | None
     status: str
-    latest_date: Optional[str]
-    latest_value: Optional[float]
+    latest_date: str | None
+    latest_value: float | None
     created_at: str
     updated_at: str
 

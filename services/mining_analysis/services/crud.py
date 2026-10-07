@@ -3,7 +3,7 @@
 '''
 import json
 import decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from boto3.resources.base import ServiceResource
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError as AWSClientError
@@ -31,9 +31,9 @@ def _convert_floats_to_decimals(data: Any) -> Any:
 def create_item(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    item_data: Dict[str, Any],
+    item_data: dict[str, Any],
     unique_key_attribute: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Adds a new item to a DynamoDB table, enforcing uniqueness on the
         partition-key attribute supplied by the caller.
@@ -41,12 +41,12 @@ def create_item(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            item_data (Dict[str, Any]): Item to insert.
+            item_data (dict[str, Any]): Item to insert.
             unique_key_attribute (str): Attribute used to enforce uniqueness via
                 an 'attribute_not_exists' condition (typically the partition key).
 
         Returns:
-            Dict[str, Any]: The persisted item.
+            dict[str, Any]: The persisted item.
 
         Raises:
             RegisterAlreadyExistsError: If an item with the same key already exists.
@@ -79,7 +79,7 @@ def get_item_by_id(
     dynamodb_resource: ServiceResource,
     table_name: str,
     item_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Retrieves an item from a DynamoDB table by its ID.
     '''
@@ -102,8 +102,8 @@ def get_item_by_id(
 def get_all_records_paginated(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    query_params: Dict[str, Any],
-) -> Dict[str, Any]:
+    query_params: dict[str, Any],
+) -> dict[str, Any]:
     '''
         Retrieves all items from a DynamoDB table with optional pagination and filters.
     '''
@@ -171,8 +171,8 @@ def get_all_records_paginated(
 def get_item_by_key(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    key: Dict[str, Any]
-) -> Dict[str, Any]:
+    key: dict[str, Any]
+) -> dict[str, Any]:
     '''
         Retrieves an item from a DynamoDB table by its primary key (single or
         composite). Raises RegisterNotFoundError if the item does not exist.
@@ -180,11 +180,11 @@ def get_item_by_key(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            key (Dict[str, Any]): Primary key mapping (e.g., {'ci': '123'} or
+            key (dict[str, Any]): Primary key mapping (e.g., {'ci': '123'} or
                 {'ci': '123', 'attendance_date': '2026-05-04'}).
 
         Returns:
-            Dict[str, Any]: The retrieved item.
+            dict[str, Any]: The retrieved item.
     '''
     table = dynamodb_resource.Table(table_name)
     response = table.get_item(Key = key)
@@ -201,8 +201,8 @@ def get_item_by_key(
 def find_item_by_key(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    key: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+    key: dict[str, Any]
+) -> dict[str, Any] | None:
     '''
         Retrieves an item from a DynamoDB table by its primary key, returning
         None if the item does not exist (no exception is raised).
@@ -210,10 +210,10 @@ def find_item_by_key(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            key (Dict[str, Any]): Primary key mapping.
+            key (dict[str, Any]): Primary key mapping.
 
         Returns:
-            Optional[Dict[str, Any]]: The retrieved item or None.
+            dict[str, Any] | None: The retrieved item or None.
     '''
     table = dynamodb_resource.Table(table_name)
     response = table.get_item(Key = key)
@@ -223,10 +223,10 @@ def find_item_by_key(
 def put_unique_composite_item(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    item_data: Dict[str, Any],
+    item_data: dict[str, Any],
     partition_key: str,
     sort_key: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     '''
         Inserts an item into a composite-key DynamoDB table enforcing
         uniqueness on the (partition_key, sort_key) tuple.
@@ -234,12 +234,12 @@ def put_unique_composite_item(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target DynamoDB table.
-            item_data (Dict[str, Any]): Item to insert.
+            item_data (dict[str, Any]): Item to insert.
             partition_key (str): Partition key attribute name.
             sort_key (str): Sort key attribute name.
 
         Returns:
-            Dict[str, Any]: The persisted item.
+            dict[str, Any]: The persisted item.
 
         Raises:
             RegisterAlreadyExistsError: If a record with the same composite
@@ -279,9 +279,9 @@ def query_by_partition(
     table_name: str,
     partition_key: str,
     partition_value: str,
-    sort_key: Optional[str] = None,
-    sort_between: Optional[Dict[str, str]] = None
-) -> List[Dict[str, Any]]:
+    sort_key: str | None = None,
+    sort_between: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     '''
         Performs an efficient Query (not Scan) on a composite-key table by
         partition value, optionally bounding the sort key.
@@ -291,12 +291,12 @@ def query_by_partition(
             table_name (str): Target DynamoDB table.
             partition_key (str): Partition key attribute name.
             partition_value (str): Partition key value to match.
-            sort_key (Optional[str]): Sort key attribute name (when bounding).
-            sort_between (Optional[Dict[str, str]]): Bounds for the sort key,
+            sort_key (str | None): Sort key attribute name (when bounding).
+            sort_between (dict[str, str] | None): Bounds for the sort key,
                 accepting 'from' and/or 'to' (inclusive).
 
         Returns:
-            List[Dict[str, Any]]: Matched items.
+            list[dict[str, Any]]: Matched items.
     '''
     table = dynamodb_resource.Table(table_name)
     key_condition = Key(partition_key).eq(partition_value)

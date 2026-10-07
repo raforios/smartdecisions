@@ -8,7 +8,6 @@
     registration a seller makes from the street — plus the reading side.
 '''
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -39,26 +38,26 @@ class ClientBase(BaseModel):
     '''
         The attributes of a client, all optional but the identity.
     '''
-    name: Optional[str] = Field(None, max_length = 150)
-    tax_id: Optional[str] = Field(None, max_length = 40)
-    client_type: Optional[str] = Field(None, max_length = 64)
-    channel: Optional[str] = Field(None, max_length = 64)
-    zone: Optional[str] = Field(None, max_length = 100)
-    city: Optional[str] = Field(None, max_length = 100)
-    region: Optional[str] = Field(None, max_length = 100)
-    address: Optional[str] = Field(None, max_length = 255)
-    latitude: Optional[float] = Field(None, ge = -90.0, le = 90.0)
-    longitude: Optional[float] = Field(None, ge = -180.0, le = 180.0)
-    phone: Optional[str] = Field(None, max_length = 40)
-    contact: Optional[str] = Field(None, max_length = 150)
-    seller: Optional[str] = Field(None, max_length = 128)
-    credit_limit: Optional[float] = Field(None, ge = 0.0)
+    name: str | None = Field(None, max_length = 150)
+    tax_id: str | None = Field(None, max_length = 40)
+    client_type: str | None = Field(None, max_length = 64)
+    channel: str | None = Field(None, max_length = 64)
+    zone: str | None = Field(None, max_length = 100)
+    city: str | None = Field(None, max_length = 100)
+    region: str | None = Field(None, max_length = 100)
+    address: str | None = Field(None, max_length = 255)
+    latitude: float | None = Field(None, ge = -90.0, le = 90.0)
+    longitude: float | None = Field(None, ge = -180.0, le = 180.0)
+    phone: str | None = Field(None, max_length = 40)
+    contact: str | None = Field(None, max_length = 150)
+    seller: str | None = Field(None, max_length = 128)
+    credit_limit: float | None = Field(None, ge = 0.0)
     # The commercial hierarchy. Declared in the file contract since Fase H but
     # missing here, so a clients upload carrying them lost them in silence —
     # the master could not hold what the validator accepted.
-    cluster: Optional[str] = Field(None, max_length = 40)
-    supervisor: Optional[str] = Field(None, max_length = 128)
-    market: Optional[str] = Field(None, max_length = 100)
+    cluster: str | None = Field(None, max_length = 40)
+    supervisor: str | None = Field(None, max_length = 128)
+    market: str | None = Field(None, max_length = 100)
 
 
 class ClientUpsertSchema(ClientBase):
@@ -78,7 +77,7 @@ class ClientBulkUpsertSchema(BaseModel):
     '''
         A batch of clients pushed in one call.
     '''
-    clients: List[ClientUpsertSchema] = Field(..., min_length = 1)
+    clients: list[ClientUpsertSchema] = Field(..., min_length = 1)
 
 
 class CallerClaims(BaseModel):
@@ -90,8 +89,8 @@ class CallerClaims(BaseModel):
         person walked to that door.
     """
     email: str
-    role: Optional[str] = None
-    client: Optional[str] = None
+    role: str | None = None
+    client: str | None = None
 
 
 class FieldClientSchema(BaseModel):
@@ -105,19 +104,19 @@ class FieldClientSchema(BaseModel):
         `id` is optional because the seller often does not know the code the
         ERP uses — and may be registering a client the ERP has never seen.
     """
-    id: Optional[str] = Field(
+    id: str | None = Field(
         None, min_length = 1, max_length = 64,
         description = 'Client code in the owner\'s system, when the seller knows it.'
     )
     name: str = Field(..., min_length = 1, max_length = 150)
     latitude: float = Field(..., ge = -90.0, le = 90.0)
     longitude: float = Field(..., ge = -180.0, le = 180.0)
-    address: Optional[str] = Field(None, max_length = 255)
-    zone: Optional[str] = Field(None, max_length = 100)
-    city: Optional[str] = Field(None, max_length = 100)
-    client_type: Optional[str] = Field(None, max_length = 64)
-    phone: Optional[str] = Field(None, max_length = 40)
-    contact: Optional[str] = Field(None, max_length = 150)
+    address: str | None = Field(None, max_length = 255)
+    zone: str | None = Field(None, max_length = 100)
+    city: str | None = Field(None, max_length = 100)
+    client_type: str | None = Field(None, max_length = 64)
+    phone: str | None = Field(None, max_length = 40)
+    contact: str | None = Field(None, max_length = 150)
 
 
 class ClientUpdateSchema(ClientBase):
@@ -142,7 +141,7 @@ class ClientListResponseSchema(BaseModel):
     '''
         The owner's clients.
     '''
-    clients: List[ClientResponseSchema]
+    clients: list[ClientResponseSchema]
     total: int = Field(..., ge = 0)
     with_coordinates: int = Field(
         ..., ge = 0,

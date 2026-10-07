@@ -10,7 +10,7 @@
     units it took to exactly the batches they came from — that is why each line
     stores its allocations instead of just a quantity.
 '''
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -122,7 +122,7 @@ def _price_lines(
     owner: str,
     note: SaleNoteIn,
     discounts_enabled: bool
-) -> Tuple[List[SaleLineOut], Dict[str, List[SaleAllocation]]]:
+) -> tuple[list[SaleLineOut], dict[str, list[SaleAllocation]]]:
     '''
         Every line priced against the batches it will actually take.
 
@@ -137,7 +137,7 @@ def _price_lines(
             discounts_enabled (bool): Whether this pharmacy allows discounts.
 
         Returns:
-            Tuple[List[SaleLineOut], Dict[str, List[SaleAllocation]]]: The
+            tuple[list[SaleLineOut], dict[str, list[SaleAllocation]]]: The
                 priced lines and the units each SKU takes from each batch.
 
         Raises:
@@ -147,8 +147,8 @@ def _price_lines(
     products = products_by_sku(dynamodb_resource, owner)
     lots = _available_lots_by_sku(dynamodb_resource, owner)
 
-    lines: List[SaleLineOut] = []
-    consumption: Dict[str, List[SaleAllocation]] = {}
+    lines: list[SaleLineOut] = []
+    consumption: dict[str, list[SaleAllocation]] = {}
     for line in note.lines:
         product = products.get(line.sku)
         if product is None:
@@ -163,7 +163,7 @@ def _price_lines(
     return lines, consumption
 
 
-def _totals(lines: List[SaleLineOut]) -> Dict[str, float]:
+def _totals(lines: list[SaleLineOut]) -> dict[str, float]:
     '''
         What the note adds up to.
 
@@ -171,10 +171,10 @@ def _totals(lines: List[SaleLineOut]) -> Dict[str, float]:
         they are charged, so the printed note adds up to what it says.
 
         Args:
-            lines (List[SaleLineOut]): The priced lines.
+            lines (list[SaleLineOut]): The priced lines.
 
         Returns:
-            Dict[str, float]: subtotal, discount, total and cost.
+            dict[str, float]: subtotal, discount, total and cost.
     '''
     return {
         'subtotal': round(sum(line.subtotal for line in lines), MONEY_DECIMALS),
@@ -256,8 +256,8 @@ def get_sale(
 def list_sales(
     dynamodb_resource: ServiceResource,
     owner: str,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None
+    date_from: str | None = None,
+    date_to: str | None = None
 ) -> SaleNotesResponse:
     '''
         The notes of a window, newest first.
@@ -317,7 +317,7 @@ def _require_buyer(
         raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
 
 
-def _masked_card(note: SaleNoteIn) -> Optional[str]:
+def _masked_card(note: SaleNoteIn) -> str | None:
     """
         The card number as it may be stored: masked, or nothing at all.
 
@@ -354,13 +354,13 @@ def _masked_card(note: SaleNoteIn) -> Optional[str]:
         ) from error
 
 
-def _reject_repeated_lines(lines: List[SaleLineIn]) -> None:
+def _reject_repeated_lines(lines: list[SaleLineIn]) -> None:
     '''
         A SKU twice in one note is a mistake at the till, not two sales: the
         second line would be priced against the batches the first already took.
 
         Args:
-            lines (List[SaleLineIn]): Lines as sent.
+            lines (list[SaleLineIn]): Lines as sent.
 
         Raises:
             InvalidInputError: The same SKU appears more than once.
@@ -373,7 +373,7 @@ def _reject_repeated_lines(lines: List[SaleLineIn]) -> None:
 def _line_out(
     line: SaleLineIn,
     description: str,
-    allocations: List[SaleAllocation],
+    allocations: list[SaleAllocation],
     discounts_enabled: bool
 ) -> SaleLineOut:
     '''
@@ -382,7 +382,7 @@ def _line_out(
         Args:
             line (SaleLineIn): The line as sent.
             description (str): What the product is called.
-            allocations (List[SaleAllocation]): Units taken from each batch.
+            allocations (list[SaleAllocation]): Units taken from each batch.
             discounts_enabled (bool): Whether this pharmacy allows discounts.
 
         Returns:
@@ -411,7 +411,7 @@ def _line_out(
 def _available_lots_by_sku(
     dynamodb_resource: ServiceResource,
     owner: str
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> dict[str, list[dict[str, Any]]]:
     '''
         Every batch with units left, grouped by SKU.
 
@@ -423,9 +423,9 @@ def _available_lots_by_sku(
             owner (str): The pharmacy.
 
         Returns:
-            Dict[str, List[Dict[str, Any]]]: {sku: lots}.
+            dict[str, list[dict[str, Any]]]: {sku: lots}.
     '''
-    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    grouped: dict[str, list[dict[str, Any]]] = {}
     for row in read_partition(dynamodb_resource, LOTS_TABLE, owner):
         if row.get('quantity_remaining', 0) > 0:
             grouped.setdefault(row['sku'], []).append(row)
@@ -436,7 +436,7 @@ def _read_sale(
     dynamodb_resource: ServiceResource,
     owner: str,
     sale_id: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         One stored note, or None.
 
@@ -446,7 +446,7 @@ def _read_sale(
             sale_id (str): Note to read.
 
         Returns:
-            Dict[str, Any] | None: The item as stored.
+            dict[str, Any] | None: The item as stored.
     '''
     response = dynamodb_resource.Table(SALES_TABLE).get_item(
         Key = {OWNER_KEY: owner, SALE_SORT_KEY: sale_id}
@@ -454,12 +454,12 @@ def _read_sale(
     return from_dynamo(response.get('Item'))
 
 
-def _sale_out(stored: Dict[str, Any]) -> SaleNoteOut:
+def _sale_out(stored: dict[str, Any]) -> SaleNoteOut:
     '''
         A stored note as the API returns it.
 
         Args:
-            stored (Dict[str, Any]): The sale item.
+            stored (dict[str, Any]): The sale item.
 
         Returns:
             SaleNoteOut: The note.

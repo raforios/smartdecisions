@@ -10,7 +10,6 @@
     is what lets the EVENTS decorators report the call and audit the change.
 '''
 from datetime import date as date_type
-from typing import Optional
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Body, Depends, Path, Query, Request, status
@@ -66,8 +65,8 @@ MANAGERS = ('ADMIN', 'MANAGER')
 
 
 def date_window(
-    date_from: Optional[date_type] = Query(None, description = 'First day.'),
-    date_to: Optional[date_type] = Query(None, description = 'Last day.')
+    date_from: date_type | None = Query(None, description = 'First day.'),
+    date_to: date_type | None = Query(None, description = 'Last day.')
 ) -> DateWindow:
     '''
         The window a listing covers, as one argument.

@@ -2,24 +2,24 @@
     Load environment variables
 '''
 import os
-from typing import Dict, Any, Type
+from typing import Any
 from dotenv import dotenv_values
 from services.logger_config import custom_logger as logger
 from services.exceptions import ServiceUnavailableError
 
 def load_and_validate_env_vars(
-    env_vars: Dict[str, Type],
-    optional_env_vars: Dict[str, Type] = None
-) -> Dict[str, Any]:
+    env_vars: dict[str, type],
+    optional_env_vars: dict[str, type] = None
+) -> dict[str, Any]:
     '''
         Loads and validates a dictionary of environment variables,
         with optional fallback to .env file.
         Args:
-            env_vars (Dict[str, Type]): Dictionary of required variable names and their types.
-            optional_env_vars (Dict[str, Type]): Dictionary of optional variable names and
+            env_vars (dict[str, Type]): Dictionary of required variable names and their types.
+            optional_env_vars (dict[str, Type]): Dictionary of optional variable names and
             their types.
         Returns:
-            Dict[str, Any]: A dictionary with the loaded and validated values.
+            dict[str, Any]: A dictionary with the loaded and validated values.
         Raises:
             ServiceUnavailableError: If a required variable is missing or has an invalid type.
     '''

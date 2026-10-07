@@ -6,7 +6,6 @@
     can consume them anonymously.
 '''
 from datetime import date as date_type
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from boto3.resources.base import ServiceResource
@@ -88,9 +87,9 @@ async def public_biweekly_report(
 )
 async def public_biweekly_history(
     request: Request,
-    period_from: Optional[date_type] = Query(
+    period_from: date_type | None = Query(
         None, alias = 'from', description = 'Inclusive lower bound (YYYY-MM-DD).'),
-    period_to: Optional[date_type] = Query(
+    period_to: date_type | None = Query(
         None, alias = 'to', description = 'Inclusive upper bound (YYYY-MM-DD).'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
 ) -> BiweeklyHistoryResponse:

@@ -13,7 +13,7 @@
 '''
 from dataclasses import dataclass
 from datetime import date as date_type
-from typing import Any, Dict, Optional
+from typing import Any
 
 MARKET_PARTITION_KEY = 'mineral_id'
 MARKET_SORT_KEY = 'date'
@@ -30,18 +30,18 @@ class MarketPriceItem:
     date: date_type
     price: float
     source: str
-    retrieved_at: Optional[str] = None
+    retrieved_at: str | None = None
 
     @classmethod
     def from_item(
         cls,
-        item: Dict[str, Any]
-    ) -> 'MarketPriceItem':
+        item: dict[str, Any]
+    ) -> MarketPriceItem:
         '''
             Builds the record from a raw DynamoDB item.
 
             Args:
-                item (Dict[str, Any]): Item as returned by boto3.
+                item (dict[str, Any]): Item as returned by boto3.
 
             Returns:
                 MarketPriceItem: The typed record.
@@ -54,13 +54,13 @@ class MarketPriceItem:
             retrieved_at = item.get('retrieved_at')
         )
 
-    def to_item(self) -> Dict[str, Any]:
+    def to_item(self) -> dict[str, Any]:
         '''
             The record as a DynamoDB item (floats still native; the store
             converts them).
 
             Returns:
-                Dict[str, Any]: Item ready to be written.
+                dict[str, Any]: Item ready to be written.
         '''
         return {
             MARKET_PARTITION_KEY: self.mineral_id,
@@ -85,18 +85,18 @@ class RoyaltyRuleItem:
     max_rate: float
     internal_factor: float
     legal_basis: str
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
     @classmethod
     def from_item(
         cls,
-        item: Dict[str, Any]
-    ) -> 'RoyaltyRuleItem':
+        item: dict[str, Any]
+    ) -> RoyaltyRuleItem:
         '''
             Builds the record from a raw DynamoDB item.
 
             Args:
-                item (Dict[str, Any]): Item as returned by boto3.
+                item (dict[str, Any]): Item as returned by boto3.
 
             Returns:
                 RoyaltyRuleItem: The typed record.
@@ -112,12 +112,12 @@ class RoyaltyRuleItem:
             updated_at = item.get('updated_at')
         )
 
-    def to_item(self) -> Dict[str, Any]:
+    def to_item(self) -> dict[str, Any]:
         '''
             The record as a DynamoDB item.
 
             Returns:
-                Dict[str, Any]: Item ready to be written.
+                dict[str, Any]: Item ready to be written.
         '''
         return {
             RULES_TABLE_KEY: self.mineral_id,

@@ -7,7 +7,6 @@
     entirely or is refused entirely, and two sellers selling the last units
     at the same moment cannot both succeed.
 '''
-from typing import Dict, List
 
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
@@ -77,14 +76,14 @@ def to_stock_item_response(item: DailyStockItem) -> StockItemResponseSchema:
 
 def to_daily_stock_response(
     day: str,
-    items: List[DailyStockItem]
+    items: list[DailyStockItem]
 ) -> DailyStockResponseSchema:
     '''
         The day's rows -> DTO with the two counts the screen shows first.
 
         Args:
             day (str): YYYY-MM-DD.
-            items (List[DailyStockItem]): Stored rows of that day.
+            items (list[DailyStockItem]): Stored rows of that day.
 
         Returns:
             DailyStockResponseSchema: The day's stock.
@@ -102,7 +101,7 @@ def get_daily_stock(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     day: str
-) -> List[DailyStockItem]:
+) -> list[DailyStockItem]:
     '''
         Every SKU loaded for the owner on `day`.
 
@@ -112,7 +111,7 @@ def get_daily_stock(
             day (str): YYYY-MM-DD.
 
         Returns:
-            List[DailyStockItem]: Rows with native numbers.
+            list[DailyStockItem]: Rows with native numbers.
     '''
     items = query_by_partition(
         dynamodb_resource = dynamodb_resource,
@@ -129,7 +128,7 @@ def load_daily_stock(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     load: DailyStockLoadSchema
-) -> List[DailyStockItem]:
+) -> list[DailyStockItem]:
     '''
         Loads the day's opening stock, replacing whatever the day had: the
         previous rows go first, so a SKU dropped from the new load disappears.
@@ -141,7 +140,7 @@ def load_daily_stock(
             load (DailyStockLoadSchema): Date and items.
 
         Returns:
-            List[DailyStockItem]: The rows as stored.
+            list[DailyStockItem]: The rows as stored.
 
         Raises:
             InvalidInputError: DUPLICATE_SKU when a SKU repeats in the load.
@@ -155,7 +154,7 @@ def load_daily_stock(
     previous = {row['sku']: row
                 for row in get_daily_stock(dynamodb_resource, owner_email, load.date)}
     stamp = now_iso()
-    rows: List[DailyStockItem] = []
+    rows: list[DailyStockItem] = []
     for item in load.items:
         sold = previous.get(item.sku, {}).get('sold_quantity', 0)
         rows.append({
@@ -181,11 +180,11 @@ def load_daily_stock(
     return rows
 
 
-def _merge_sale_lines(items: List[SaleItemSchema]) -> Dict[str, float]:
+def _merge_sale_lines(items: list[SaleItemSchema]) -> dict[str, float]:
     '''
         Units per SKU, adding repeated lines together.
     '''
-    merged: Dict[str, float] = {}
+    merged: dict[str, float] = {}
     for line in items:
         merged[line.sku] = merged.get(line.sku, 0.0) + line.quantity
     return merged
@@ -195,7 +194,7 @@ def draw_down_stock(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     day: str,
-    items: List[SaleItemSchema]
+    items: list[SaleItemSchema]
 ) -> None:
     '''
         Registers a sale against the day's stock, all SKUs or none.
@@ -204,7 +203,7 @@ def draw_down_stock(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
             day (str): YYYY-MM-DD of the sale.
-            items (List[SaleItemSchema]): Lines sold.
+            items (list[SaleItemSchema]): Lines sold.
 
         Raises:
             InvalidInputError: STOCK_NOT_LOADED when a SKU has no row that day,

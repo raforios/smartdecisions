@@ -38,7 +38,7 @@ import argparse
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
@@ -93,7 +93,7 @@ def _is_promedio_cell(day_value: Any) -> bool:
 
 def _analyze_sheet(
     sheet: Worksheet # mineral_columns analysis # promedio_row by mineral # daily values by mineral
-) -> Tuple[ List[Dict], Dict[str, float], Dict[str, List[float]] ]:
+) -> tuple[ list[dict], dict[str, float], dict[str, list[float]] ]:
     '''
         Walks one Diario sheet and returns the per-column type counters,
         the `Promedio` row content and the list of daily values.
@@ -103,7 +103,7 @@ def _analyze_sheet(
         return [], {}, {}
 
     header_cells = rows[2]
-    mineral_cols: Dict[int, str] = {}
+    mineral_cols: dict[int, str] = {}
     for idx, cell in enumerate(header_cells):
         if idx == 0 or cell.value is None:
             continue
@@ -111,8 +111,8 @@ def _analyze_sheet(
         if label:
             mineral_cols[idx] = label
 
-    promedio_by_mineral: Dict[str, float] = {}
-    daily_by_mineral: Dict[str, List[float]] = defaultdict(list)
+    promedio_by_mineral: dict[str, float] = {}
+    daily_by_mineral: dict[str, list[float]] = defaultdict(list)
     per_column = {idx: {
         'mineral': label,
         'int': 0,
@@ -151,9 +151,9 @@ def _analyze_sheet(
 
 def _print_sheet_section(
     sheet_name: str,
-    columns: List[Dict],
-    promedio_by_mineral: Dict[str, float],
-    daily_by_mineral: Dict[str, List[float]],
+    columns: list[dict],
+    promedio_by_mineral: dict[str, float],
+    daily_by_mineral: dict[str, list[float]],
     tolerance: float
 ) -> int:
     '''
@@ -172,9 +172,9 @@ def _print_sheet_section(
 
 
 def _report_columns(
-    columns: List[Dict],
-    promedio_by_mineral: Dict[str, float]
-) -> Tuple[int, List[str]]:
+    columns: list[dict],
+    promedio_by_mineral: dict[str, float]
+) -> tuple[int, list[str]]:
     '''
         Prints one line per mineral column and flags the suspicious ones.
 
@@ -184,14 +184,14 @@ def _report_columns(
         happen if the days really were integers.
 
         Args:
-            columns (List[Dict]): Per-column counters gathered from the sheet.
-            promedio_by_mineral (Dict[str, float]): The sheet's Promedio row.
+            columns (list[Dict]): Per-column counters gathered from the sheet.
+            promedio_by_mineral (dict[str, float]): The sheet's Promedio row.
 
         Returns:
-            Tuple[int, List[str]]: Warnings raised and the suspicious minerals.
+            tuple[int, list[str]]: Warnings raised and the suspicious minerals.
     '''
     warnings = 0
-    suspect_columns: List[str] = []
+    suspect_columns: list[str] = []
 
     for col in columns:
         mineral = col['mineral']
@@ -226,8 +226,8 @@ def _report_columns(
 
 
 def _report_average_crosscheck(
-    promedio_by_mineral: Dict[str, float],
-    daily_by_mineral: Dict[str, List[float]],
+    promedio_by_mineral: dict[str, float],
+    daily_by_mineral: dict[str, list[float]],
     tolerance: float
 ) -> int:
     '''
@@ -238,8 +238,8 @@ def _report_average_crosscheck(
         average was computed, or the days were truncated.
 
         Args:
-            promedio_by_mineral (Dict[str, float]): The sheet's Promedio row.
-            daily_by_mineral (Dict[str, List[float]]): Daily values per mineral.
+            promedio_by_mineral (dict[str, float]): The sheet's Promedio row.
+            daily_by_mineral (dict[str, list[float]]): Daily values per mineral.
             tolerance (float): Largest accepted difference.
 
         Returns:

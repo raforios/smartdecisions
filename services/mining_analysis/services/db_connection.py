@@ -1,7 +1,7 @@
 '''
     DynamoDB Connection
 '''
-from typing import Callable
+from collections.abc import Callable
 import boto3
 from botocore.exceptions import ClientError
 from services.logger_config import custom_logger as logger

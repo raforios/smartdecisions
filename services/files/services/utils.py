@@ -1,7 +1,8 @@
 '''
     Utility functions and decorators for the Files service.
 '''
-from typing import Dict, Any, Callable, Awaitable
+from collections.abc import Callable, Awaitable
+from typing import Any
 from functools import wraps
 from botocore.exceptions import ClientError
 from services.exceptions import (
@@ -13,14 +14,14 @@ from services.logger_config import custom_logger as logger
 
 def handle_aws_client_error(
     e: ClientError,
-    context_info: Dict[str, Any]
+    context_info: dict[str, Any]
 ) -> None:
     '''
         Handles Boto3 ClientError exceptions, translating them to custom HTTP exceptions.
         
         Args:
             e (ClientError): The Boto3 ClientError exception to handle.
-            context_info (Dict[str, Any]): A dictionary containing contextual information
+            context_info (dict[str, Any]): A dictionary containing contextual information
                                         like 'bucket_name', 'file_key', or 'prefix'.
         
         Raises:

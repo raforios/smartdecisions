@@ -8,7 +8,7 @@
 '''
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from boto3.dynamodb.conditions import Key
@@ -60,7 +60,7 @@ def now_iso() -> str:
     return get_current_time_gmt().isoformat(timespec = 'seconds')
 
 
-def document_id(stamp: Optional[str] = None) -> str:
+def document_id(stamp: str | None = None) -> str:
     '''
         Identifier of a sale or purchase note.
 
@@ -120,7 +120,7 @@ def to_dynamo(value: Any) -> Any:
 def write_item(
     dynamodb_resource: ServiceResource,
     table_name: str,
-    item: Dict[str, Any]
+    item: dict[str, Any]
 ) -> None:
     '''
         Stores one item, converting floats on the way in.
@@ -128,7 +128,7 @@ def write_item(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             table_name (str): Target table.
-            item (Dict[str, Any]): Item to store.
+            item (dict[str, Any]): Item to store.
     '''
     dynamodb_resource.Table(table_name).put_item(
         Item = to_dynamo({key: value for key, value in item.items() if value is not None})
@@ -145,13 +145,13 @@ class SortBounds:
         combination of loose parameters is meaningful.
     '''
     sort_key: str
-    begins_with: Optional[str] = None
-    between: Optional[Dict[str, str]] = None
+    begins_with: str | None = None
+    between: dict[str, str] | None = None
 
 
 def _key_condition(
     owner: str,
-    bounds: Optional[SortBounds]
+    bounds: SortBounds | None
 ) -> Any:
     '''
         The key condition of a partition query.
@@ -183,9 +183,9 @@ def read_partition(
     dynamodb_resource: ServiceResource,
     table_name: str,
     owner: str,
-    bounds: Optional[SortBounds] = None,
+    bounds: SortBounds | None = None,
     descending: bool = False
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Every item of one owner, optionally bounded on the sort key.
 
@@ -197,11 +197,11 @@ def read_partition(
             descending (bool): Newest first when True.
 
         Returns:
-            List[Dict[str, Any]]: Matched items, Decimals already converted.
+            list[dict[str, Any]]: Matched items, Decimals already converted.
     '''
     table = dynamodb_resource.Table(table_name)
-    items: List[Dict[str, Any]] = []
-    arguments: Dict[str, Any] = {
+    items: list[dict[str, Any]] = []
+    arguments: dict[str, Any] = {
         'KeyConditionExpression': _key_condition(owner, bounds),
         'ScanIndexForward': not descending
     }
@@ -221,7 +221,7 @@ def read_partition(
 def products_by_sku(
     dynamodb_resource: ServiceResource,
     owner: str
-) -> Dict[str, Dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     '''
         The catalogue keyed by SKU.
 
@@ -233,16 +233,16 @@ def products_by_sku(
             owner (str): The pharmacy.
 
         Returns:
-            Dict[str, Dict[str, Any]]: {sku: product item}.
+            dict[str, dict[str, Any]]: {sku: product item}.
     '''
     return {row[PRODUCT_SORT_KEY]: row
             for row in read_partition(dynamodb_resource, PRODUCTS_TABLE, owner)}
 
 
 def date_window(
-    date_from: Optional[str],
-    date_to: Optional[str]
-) -> Optional[Dict[str, str]]:
+    date_from: str | None,
+    date_to: str | None
+) -> dict[str, str] | None:
     '''
         A pair of days as bounds on a document sort key.
 
@@ -255,11 +255,11 @@ def date_window(
             date_to (str | None): Last day, ISO date.
 
         Returns:
-            Dict[str, str] | None: Bounds for `read_partition`, or None.
+            dict[str, str] | None: Bounds for `read_partition`, or None.
     '''
     if not date_from and not date_to:
         return None
-    bounds: Dict[str, str] = {}
+    bounds: dict[str, str] = {}
     if date_from:
         bounds['from'] = date_from
     if date_to:
@@ -475,12 +475,12 @@ def list_products(
     products = read_partition(dynamodb_resource, PRODUCTS_TABLE, owner)
     lots = read_partition(dynamodb_resource, LOTS_TABLE, owner)
 
-    by_sku: Dict[str, List[Dict[str, Any]]] = {}
+    by_sku: dict[str, list[dict[str, Any]]] = {}
     for lot in lots:
         if lot.get('quantity_remaining', 0) > 0:
             by_sku.setdefault(lot['sku'], []).append(lot)
 
-    items: List[ProductOut] = []
+    items: list[ProductOut] = []
     for stored in sorted(products, key = lambda row: row[PRODUCT_SORT_KEY]):
         if only_active and not stored.get('is_active', True):
             continue
@@ -522,7 +522,7 @@ def _read_product(
     dynamodb_resource: ServiceResource,
     owner: str,
     sku: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     '''
         The stored product item, or None.
 
@@ -532,7 +532,7 @@ def _read_product(
             sku (str): Product to read.
 
         Returns:
-            Dict[str, Any] | None: The item as stored.
+            dict[str, Any] | None: The item as stored.
     '''
     response = dynamodb_resource.Table(PRODUCTS_TABLE).get_item(
         Key = {OWNER_KEY: owner, PRODUCT_SORT_KEY: sku}
@@ -541,15 +541,15 @@ def _read_product(
 
 
 def _product_out(
-    stored: Dict[str, Any],
-    lots: List[Dict[str, Any]]
+    stored: dict[str, Any],
+    lots: list[dict[str, Any]]
 ) -> ProductOut:
     '''
         A stored product plus what its lots say about stock and price.
 
         Args:
-            stored (Dict[str, Any]): The product item.
-            lots (List[Dict[str, Any]]): Its lots with units left.
+            stored (dict[str, Any]): The product item.
+            lots (list[dict[str, Any]]): Its lots with units left.
 
         Returns:
             ProductOut: The product as the API returns it.
@@ -574,14 +574,14 @@ def _product_out(
     )
 
 
-def expiry_order(lot: Dict[str, Any]) -> tuple:
+def expiry_order(lot: dict[str, Any]) -> tuple:
     '''
         Sort key for FEFO: soonest expiry first, and a batch with no expiry
         last — not first, because an unknown date must never jump ahead of a
         box that is about to expire.
 
         Args:
-            lot (Dict[str, Any]): The lot item.
+            lot (dict[str, Any]): The lot item.
 
         Returns:
             tuple: (has no expiry, expiry date, reception time).

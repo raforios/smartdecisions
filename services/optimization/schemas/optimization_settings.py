@@ -5,7 +5,6 @@
     It is an option and not a rule —start and end are open per route— so a
     company that never sets it loses nothing.
 '''
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -16,11 +15,11 @@ class RouteSettingsSchema(BaseModel):
     '''
         What the company configured for its routes.
     '''
-    base_point: Optional[RouteEndpointSchema] = None
+    base_point: RouteEndpointSchema | None = None
 
 
 class RouteSettingsResponseSchema(RouteSettingsSchema):
     '''
         The stored parameters, with when they last changed.
     '''
-    updated_at: Optional[str] = None
+    updated_at: str | None = None

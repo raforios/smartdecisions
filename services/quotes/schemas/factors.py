@@ -17,7 +17,6 @@
 '''
 from datetime import date
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -53,7 +52,7 @@ class FactorDefinitionSchema(BaseModel):
     name: str = Field(..., min_length = 1, max_length = 150)
     unit: str = Field(..., min_length = 1, max_length = 40,
                       description = 'What the value is measured in, e.g. Bs/litro.')
-    source: Optional[str] = Field(
+    source: str | None = Field(
         None, max_length = 255,
         description = 'Where the value comes from, so a reader can check it.'
     )
@@ -62,7 +61,7 @@ class FactorDefinitionSchema(BaseModel):
         description = 'Born ACTIVE. Only the active ones are taken into account; '
                       'an inactive one keeps its readings and simply stops counting.'
     )
-    effective_from: Optional[date] = Field(
+    effective_from: date | None = Field(
         None,
         description = 'The day this status starts to apply. '
                       'Today when left out. It exists because a client loading '
@@ -88,15 +87,15 @@ class FactorValuesLoadSchema(BaseModel):
         A load is idempotent by day: sending the same day again corrects it
         instead of adding a second truth for it.
     '''
-    values: List[FactorValueSchema] = Field(..., min_length = 1)
+    values: list[FactorValueSchema] = Field(..., min_length = 1)
 
 
 class FactorResponseSchema(FactorDefinitionSchema):
     '''
         A factor as it is stored, with its latest reading.
     '''
-    latest_date: Optional[str] = None
-    latest_value: Optional[float] = None
+    latest_date: str | None = None
+    latest_value: float | None = None
     updated_at: str
 
 
@@ -106,7 +105,7 @@ class FactorSeriesResponseSchema(BaseModel):
     '''
     code: str
     unit: str
-    values: List[FactorValueSchema]
+    values: list[FactorValueSchema]
 
 
 class FactorStateSchema(BaseModel):
@@ -125,7 +124,7 @@ class FactorStateSchema(BaseModel):
     code: str
     unit: str
     active: bool
-    value: Optional[float] = Field(
+    value: float | None = Field(
         None, description = 'The reading in force that day. None when nothing '
                             'had been loaded yet.'
     )
@@ -136,7 +135,7 @@ class FactorListResponseSchema(BaseModel):
     '''
         Every factor the account declared.
     '''
-    factors: List[FactorResponseSchema]
+    factors: list[FactorResponseSchema]
     total: int = Field(..., ge = 0)
 
 
@@ -174,11 +173,11 @@ class TransportCostSchema(BaseModel):
     price_per_litre: float = Field(..., ge = 0, description = 'The fuel price factor.')
     litres: float = Field(..., ge = 0, description = 'round_trip_km / efficiency.')
     cost: float = Field(..., ge = 0, description = 'litres x price.')
-    units: Optional[float] = Field(
+    units: float | None = Field(
         None, gt = 0,
         description = 'Units carried, when the caller knows them. Given, the '
                       'answer also says what the trip costs per unit, which is '
                       'the figure that reaches the margin.'
     )
-    cost_per_unit: Optional[float] = Field(None, ge = 0)
+    cost_per_unit: float | None = Field(None, ge = 0)
     as_of: str = Field(..., description = 'The day every figure was read for.')

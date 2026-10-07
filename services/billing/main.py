@@ -6,9 +6,10 @@
     the nota de venta. Wires the billing router and exposes the
     Lambda-friendly ASGI handler via Mangum.
 '''
+from collections.abc import AsyncIterator
 import socket
 from datetime import date, datetime
-from typing import Any, AsyncIterator, Dict
+from typing import Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -108,7 +109,7 @@ setup_exception_handlers(app)
 
 @app.get('/', tags = ['Home'])
 @app.get(f'{DOCS_BASE}/health', tags = ['Home'])
-def root() -> Dict[str, Any]:
+def root() -> dict[str, Any]:
     '''
         Healthcheck endpoint. Returns runtime metadata for monitoring.
     '''
@@ -130,7 +131,7 @@ def root() -> Dict[str, Any]:
 
 @app.get('/openapi.json', include_in_schema = False)
 @app.get(OPENAPI_URL, include_in_schema = False)
-def custom_openapi() -> Dict[str, Any]:
+def custom_openapi() -> dict[str, Any]:
     '''
         Returns the OpenAPI schema (JSON file) for the service.
     '''
