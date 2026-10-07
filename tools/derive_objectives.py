@@ -25,7 +25,6 @@
 '''
 import argparse
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -114,7 +113,7 @@ def _rounded(amount: float) -> float:
     return float(round(amount / ROUNDING_STEP) * ROUNDING_STEP)
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
 

@@ -23,7 +23,6 @@ import sys
 import urllib.request
 from collections import defaultdict
 from statistics import mean, median
-from typing import Dict, List, Tuple
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -57,7 +56,7 @@ def fetch(url: str) -> str:
         return response.read().decode('utf-8', errors = 'ignore')
 
 
-def lbma_series(series: str) -> Dict[str, float]:
+def lbma_series(series: str) -> dict[str, float]:
     '''
         LBMA daily USD fixes keyed by ISO date.
 
@@ -65,13 +64,13 @@ def lbma_series(series: str) -> Dict[str, float]:
             series (str): 'gold_am', 'gold_pm' or 'silver'.
 
         Returns:
-            Dict[str, float]: {date: usd}.
+            dict[str, float]: {date: usd}.
     '''
     rows = json.loads(fetch(LBMA_URL.format(series = series)))
     return {row['d']: row['v'][0] for row in rows if row.get('v') and row['v'][0]}
 
 
-def westmetall_series(symbol: str) -> Dict[str, float]:
+def westmetall_series(symbol: str) -> dict[str, float]:
     '''
         LME cash settlement (USD/t) for the current year, keyed by ISO date.
 
@@ -79,10 +78,10 @@ def westmetall_series(symbol: str) -> Dict[str, float]:
             symbol (str): 'Cu', 'Sn', 'Pb' or 'Zn'.
 
         Returns:
-            Dict[str, float]: {date: usd_per_tonne}.
+            dict[str, float]: {date: usd_per_tonne}.
     '''
     html = fetch(WESTMETALL_URL.format(symbol = symbol))
-    series: Dict[str, float] = {}
+    series: dict[str, float] = {}
     for row in re.findall(r'<tr>(.*?)</tr>', html, re.S):
         cells = [re.sub(r'<[^>]+>', '', cell).strip()
                  for cell in re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.S)]
@@ -98,7 +97,7 @@ def westmetall_series(symbol: str) -> Dict[str, float]:
 def official_prices(
     profile: str,
     mineral_id: str
-) -> Dict[str, float]:
+) -> dict[str, float]:
     '''
         Official daily quotations of one mineral as stored in DynamoDB.
 
@@ -107,7 +106,7 @@ def official_prices(
             mineral_id (str): Catalogue id.
 
         Returns:
-            Dict[str, float]: {date: price_low}.
+            dict[str, float]: {date: price_low}.
     '''
     table = boto3.Session(profile_name = profile, region_name = 'us-east-1') \
         .resource('dynamodb').Table('mining_prices')
@@ -116,20 +115,20 @@ def official_prices(
 
 
 def compare(
-    official: Dict[str, float],
-    source: Dict[str, float],
+    official: dict[str, float],
+    source: dict[str, float],
     scale: float = 1.0
-) -> Tuple[int, int, List[float]]:
+) -> tuple[int, int, list[float]]:
     '''
         Matches official days with the source and measures the gap.
 
         Args:
-            official (Dict[str, float]): Official values by date.
-            source (Dict[str, float]): Source values by date (same unit after `scale`).
+            official (dict[str, float]): Official values by date.
+            source (dict[str, float]): Source values by date (same unit after `scale`).
             scale (float): Multiplier taking the source into the official unit.
 
         Returns:
-            Tuple[int, int, List[float]]: days compared, exact matches (to the
+            tuple[int, int, list[float]]: days compared, exact matches (to the
             official's own rounding), relative gaps in percent.
     '''
     compared, exact, gaps = 0, 0, []
@@ -148,7 +147,7 @@ def compare(
 
 def report(
     label: str,
-    result: Tuple[int, int, List[float]]
+    result: tuple[int, int, list[float]]
 ) -> None:
     '''
         Prints one comparison line.
@@ -187,7 +186,7 @@ def main() -> int:
 
     print('Westmetall (LME cash settlement, USD/t -> USD/lb):')
     names = {'1': 'estaño', '2': 'plomo', '3': 'zinc', '4': 'cobre'}
-    missing: Dict[str, List[str]] = defaultdict(list)
+    missing: dict[str, list[str]] = defaultdict(list)
     for mineral_id, symbol in LME_MINERALS.items():
         source = westmetall_series(symbol)
         official = official_prices(args.profile, mineral_id)

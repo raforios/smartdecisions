@@ -1,6 +1,6 @@
 ---
 name: verificar-servicio
-description: Corre TODAS las revisiones mecánicas de un microservicio con un solo comando (tests, Pylint 10.00, firmas, type hints, tamaño, duplicados, except mudo, comas en .env, os.getenv, variables de log) y después los tres puntos de criterio. Se corre antes de CADA reporte de avance que agregue código, no sólo al entregar.
+description: Corre TODAS las revisiones mecánicas de un microservicio con un solo comando (tests, Pylint 10.00, firmas, type hints, sintaxis moderna de tipos, tamaño, duplicados, except mudo, comas en .env, os.getenv, variables de log) y después los tres puntos de criterio. Se corre antes de CADA reporte de avance que agregue código, no sólo al entregar.
 argument-hint: [nombre-del-servicio | --all]
 allowed-tools: Bash(cd *), Bash(python3 *), Bash(grep *), Bash(ls *), Bash(find *), Read
 ---
@@ -32,6 +32,7 @@ cubre, y cómo se corrige cada cosa:
 | `env-shorthand` | ningún valor del `.env` con coma ni llave | listas con guion; plantillas con `%s`, no `{x}` |
 | `events` | todo controlador reporta a EVENTS y toda escritura se audita | `@handle_service_errors` en cada controlador, `@audit_event` en POST/PUT/PATCH/DELETE |
 | `getenv` | sólo `load_and_validate_env_vars` | mover al módulo que usa el valor |
+| `modern-typing` | `list[str]`, `str \| None`; nada de `List`, `Dict`, `Optional`, `Union` de `typing` (boilerplate y tests incluidos) | `pyupgrade --py314-plus` desde `SmartBear/.venv` |
 | `log-vars` | `message` en INFO, `error_msg` en WARNING/ERROR | renombrar |
 
 **Antes de escribir una función nueva paralela a otra** (un contrato más, un

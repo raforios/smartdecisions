@@ -19,7 +19,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 
 PORTAL_ROOT = Path(__file__).resolve().parent.parent / 'portal' / 'demo'
@@ -66,7 +65,7 @@ def _stamp(page: Path) -> bool:
     '''
     original = page.read_text(encoding = 'utf-8')
 
-    def _replace(match: 're.Match[str]') -> str:
+    def _replace(match: re.Match[str]) -> str:
         # A reference starting with "/" is rooted at the site, not at the disk.
         # Joining it to the page's folder made pathlib drop the folder and look
         # for the file at the filesystem root, where it never is: the reference
@@ -87,12 +86,12 @@ def _stamp(page: Path) -> bool:
     return True
 
 
-def _run(command: List[str]) -> None:
+def _run(command: list[str]) -> None:
     '''
         Runs a command and stops the deploy if it fails.
 
         Args:
-            command (List[str]): Command and arguments.
+            command (list[str]): Command and arguments.
 
         Raises:
             SystemExit: If the command returns a non-zero status.
@@ -102,7 +101,7 @@ def _run(command: List[str]) -> None:
         raise SystemExit(f'Falló: {" ".join(command)}')
 
 
-def _pages(only: Optional[str]) -> List[Path]:
+def _pages(only: str | None) -> list[Path]:
     '''
         Returns the HTML pages to stamp.
 
@@ -110,13 +109,13 @@ def _pages(only: Optional[str]) -> List[Path]:
             only (str | None): Restrict to one module directory.
 
         Returns:
-            List[Path]: Pages found under the portal.
+            list[Path]: Pages found under the portal.
     '''
     root = PORTAL_ROOT / only if only else PORTAL_ROOT
     return sorted(root.rglob('*.html'))
 
 
-def _publish(only: Optional[str]) -> None:
+def _publish(only: str | None) -> None:
     '''
         Uploads the portal and invalidates the distribution.
 
@@ -142,7 +141,7 @@ def _publish(only: Optional[str]) -> None:
           '--profile', PROFILE, '--query', 'Invalidation.Status', '--output', 'text'])
 
 
-def _valid_module(only: Optional[str]) -> Optional[str]:
+def _valid_module(only: str | None) -> str | None:
     '''
         Rejects a `--only` that is not one real module directory.
 
@@ -179,12 +178,12 @@ def _valid_module(only: Optional[str]) -> Optional[str]:
     return module
 
 
-def _modules() -> List[str]:
+def _modules() -> list[str]:
     '''
         Returns the module directories the portal actually has.
 
         Returns:
-            List[str]: Directory names directly under the portal root.
+            list[str]: Directory names directly under the portal root.
     '''
     return [item.name for item in PORTAL_ROOT.iterdir()
             if item.is_dir() and not item.name.startswith('.')]

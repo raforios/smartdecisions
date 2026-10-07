@@ -21,7 +21,6 @@ import argparse
 import io
 import sys
 from pathlib import Path
-from typing import Optional
 
 import boto3
 import pandas as pd
@@ -74,12 +73,12 @@ def _sales_frame(
     return pd.read_csv(io.BytesIO(body), dtype = str)
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Registers the sellers of every validated dataset.
 
         Args:
-            argument_list (Optional[list]): CLI arguments, for tests.
+            argument_list (list | None): CLI arguments, for tests.
 
         Returns:
             int: Process exit code.

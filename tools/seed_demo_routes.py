@@ -31,7 +31,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import boto3
@@ -129,7 +129,7 @@ def _query(
     resource,
     table: str,
     owner: str
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     '''
         Every item of one owner in an INGEST table.
 
@@ -139,10 +139,10 @@ def _query(
             owner (str): Owner key.
 
         Returns:
-            List[Dict[str, Any]]: The items.
+            list[dict[str, Any]]: The items.
     '''
-    items: List[Dict[str, Any]] = []
-    arguments: Dict[str, Any] = {'KeyConditionExpression': Key('owner_email').eq(owner)}
+    items: list[dict[str, Any]] = []
+    arguments: dict[str, Any] = {'KeyConditionExpression': Key('owner_email').eq(owner)}
     while True:
         page = resource.Table(table).query(**arguments)
         items.extend(page['Items'])
@@ -174,17 +174,17 @@ def _stock_frame(
     return frame[frame['available'] > 0]
 
 
-def _portfolios(clients: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+def _portfolios(clients: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     '''
         The clients with coordinates of the busiest sellers.
 
         Args:
-            clients (List[Dict[str, Any]]): The client master of the company.
+            clients (list[dict[str, Any]]): The client master of the company.
 
         Returns:
-            Dict[str, List[Dict[str, Any]]]: Seller name to their clients.
+            dict[str, list[dict[str, Any]]]: Seller name to their clients.
     '''
-    by_seller: Dict[str, List[Dict[str, Any]]] = {}
+    by_seller: dict[str, list[dict[str, Any]]] = {}
     for client in clients:
         if client.get('seller') and client.get('latitude') and client.get('longitude'):
             by_seller.setdefault(client['seller'], []).append(client)
@@ -193,19 +193,19 @@ def _portfolios(clients: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]
 
 
 def _ordered(
-    clients: List[Dict[str, Any]],
-    shuffle: Optional[random.Random] = None
-) -> List[Dict[str, Any]]:
+    clients: list[dict[str, Any]],
+    shuffle: random.Random | None = None
+) -> list[dict[str, Any]]:
     '''
         Clients in visiting order from the depot: OPTIMIZATION's own order, or
         shuffled when the plan is meant to be optimised.
 
         Args:
-            clients (List[Dict[str, Any]]): Clients to visit.
+            clients (list[dict[str, Any]]): Clients to visit.
             shuffle (random.Random | None): Generator for a deliberately bad order.
 
         Returns:
-            List[Dict[str, Any]]: Clients in order.
+            list[dict[str, Any]]: Clients in order.
     '''
     if shuffle is not None:
         bad = list(clients)
@@ -220,16 +220,16 @@ def _ordered(
 BASE_POINT = RouteEndpointSchema(name = DEPOT_NAME, latitude = DEPOT[0], longitude = DEPOT[1])
 
 
-def _plan_points(clients: List[Dict[str, Any]]) -> List[PlannedPointSchema]:
+def _plan_points(clients: list[dict[str, Any]]) -> list[PlannedPointSchema]:
     '''
         The clients as stops. The base point is the plan's start and end, not
         a stop.
 
         Args:
-            clients (List[Dict[str, Any]]): Clients in visiting order.
+            clients (list[dict[str, Any]]): Clients in visiting order.
 
         Returns:
-            List[PlannedPointSchema]: The stops.
+            list[PlannedPointSchema]: The stops.
     '''
     return [PlannedPointSchema(secuencial = position, point_name = c['name'][:100],
                                client_id = c['id'], latitude = float(c['latitude']),
@@ -240,20 +240,20 @@ def _plan_points(clients: List[Dict[str, Any]]) -> List[PlannedPointSchema]:
 def _create_plan(
     resource,
     owner: str,
-    header: Dict[str, Any],
-    clients: List[Dict[str, Any]]
-) -> Optional[Dict[str, Any]]:
+    header: dict[str, Any],
+    clients: list[dict[str, Any]]
+) -> dict[str, Any] | None:
     '''
         Creates and activates a plan, or skips it when its code exists.
 
         Args:
             resource: DynamoDB resource.
             owner (str): Owner key.
-            header (Dict[str, Any]): route_code, route_name, seller, plan_date.
-            clients (List[Dict[str, Any]]): Clients in visiting order.
+            header (dict[str, Any]): route_code, route_name, seller, plan_date.
+            clients (list[dict[str, Any]]): Clients in visiting order.
 
         Returns:
-            Dict[str, Any] | None: The plan, or None when it already existed.
+            dict[str, Any] | None: The plan, or None when it already existed.
     '''
     existing = {plan['route_code'] for plan in list_planned_routes(resource, owner)}
     if header['route_code'] in existing:
@@ -269,8 +269,8 @@ def _create_plan(
 def _run_plan(
     resource,
     owner: str,
-    plan: Dict[str, Any],
-    run: Tuple[str, pd.DataFrame, random.Random]
+    plan: dict[str, Any],
+    run: tuple[str, pd.DataFrame, random.Random]
 ) -> int:
     '''
         Runs a past plan as a seller would: starts at the depot, visits most
@@ -280,8 +280,8 @@ def _run_plan(
         Args:
             resource: DynamoDB resource.
             owner (str): Owner key.
-            plan (Dict[str, Any]): The plan, of a past day.
-            run (Tuple[str, pd.DataFrame, random.Random]): Who runs it, the
+            plan (dict[str, Any]): The plan, of a past day.
+            run (tuple[str, pd.DataFrame, random.Random]): Who runs it, the
                 stock to sell from and the generator.
 
         Returns:
@@ -467,7 +467,7 @@ def reset_demo(
     resource,
     owner: str,
     days: set
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     '''
         Deletes the DEMO-* plans of the given days and the runs made against
         them. Nothing else of the company is touched.
@@ -478,7 +478,7 @@ def reset_demo(
             days (set): ISO days to clear.
 
         Returns:
-            Tuple[int, int]: Plans and runs deleted.
+            tuple[int, int]: Plans and runs deleted.
     '''
     plans = [plan for plan in _query(resource, 'optimization_planned_routes', owner)
              if str(plan.get('route_code', '')).startswith('DEMO-')
@@ -494,7 +494,7 @@ def reset_demo(
     return len(plans), len(runs)
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
 

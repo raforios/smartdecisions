@@ -17,11 +17,11 @@
         python scripts/seed_from_csv.py --csv path/to/routes.csv
 '''
 import argparse
+from collections.abc import Iterable
 import csv
 import os
 from decimal import Decimal
 from pathlib import Path
-from typing import Iterable
 
 import boto3
 from boto3.resources.base import ServiceResource
@@ -94,8 +94,7 @@ def _iter_rows(csv_path: Path) -> Iterable[dict]:
                 f'CSV is missing required columns: {sorted(missing)}. '
                 f'Expected at least {sorted(REQUIRED_COLUMNS)}.'
             )
-        for row in reader:
-            yield row
+        yield from reader
 
 
 def seed(csv_path: Path, table_name: str, dynamodb_resource: ServiceResource) -> int:

@@ -24,7 +24,6 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import List, Tuple
 
 BASE = 'https://siatinfo.impuestos.gob.bo'
 INDEX_PATH = '/index.php/informacion/generalidades-sfvl'
@@ -32,7 +31,7 @@ INDEX_PATH = '/index.php/informacion/generalidades-sfvl'
 # Lo que hace falta para facturar desde BILLING: cómo se autoriza el sistema,
 # cómo se obtienen los códigos, cómo se manda la factura y cómo se lee un
 # rechazo. El resto del sitio son sectores que no nos tocan.
-PAGES: Tuple[Tuple[str, str], ...] = (
+PAGES: tuple[tuple[str, str], ...] = (
     ('Proceso de autorización del sistema',
      '/index.php/facturacion-en-linea/autorizacion-de-sistemas/proceso-de-autorizacion'),
     ('Fase I — pruebas',
@@ -144,7 +143,7 @@ def to_text(html: str) -> str:
     return '\n'.join(line.strip() for line in body.splitlines() if line.strip())
 
 
-def downloads(html: str) -> List[str]:
+def downloads(html: str) -> list[str]:
     '''
         Los archivos descargables que la página enlaza.
 
@@ -152,7 +151,7 @@ def downloads(html: str) -> List[str]:
             html (str): HTML de la página.
 
         Returns:
-            List[str]: URLs de PDF, XSD, WSDL o ZIP.
+            list[str]: URLs de PDF, XSD, WSDL o ZIP.
     '''
     found = re.findall(r'href="([^"]+\.(?:pdf|xsd|wsdl|zip|xml))"', html, re.I)
     return list(dict.fromkeys(found))

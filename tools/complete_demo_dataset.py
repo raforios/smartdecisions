@@ -34,7 +34,6 @@
 import argparse
 from datetime import date
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -105,7 +104,7 @@ def shift_dates(
     return frame
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
 

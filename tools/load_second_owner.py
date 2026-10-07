@@ -29,7 +29,6 @@
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
 from uuid import uuid4
 
 import boto3
@@ -89,7 +88,7 @@ def _store(
     frame,
     folder: str,
     dry_run: bool
-) -> Optional[str]:
+) -> str | None:
     '''
         Writes one frame where the service expects to find it.
 
@@ -114,7 +113,7 @@ def _store(
     return key
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
 

@@ -24,7 +24,7 @@
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -36,17 +36,17 @@ from schemas.ingest import COLLECTIONS_TEMPLATE, STOCK_TEMPLATE   # noqa: E402  
 
 # Terms seen in the Bolivian mass-consumption market, with the weight of each.
 # The 5- and 15-day ones belong to corner shops; 90 and 120, to chains.
-TERM_DAYS: Tuple[int, ...] = (5, 15, 30, 45, 60, 90, 120)
-TERM_WEIGHTS: Tuple[float, ...] = (0.08, 0.20, 0.34, 0.14, 0.14, 0.07, 0.03)
+TERM_DAYS: tuple[int, ...] = (5, 15, 30, 45, 60, 90, 120)
+TERM_WEIGHTS: tuple[float, ...] = (0.08, 0.20, 0.34, 0.14, 0.14, 0.07, 0.03)
 
 # Payment methods, so the column is not empty in the demo.
-PAYMENT_METHODS: Tuple[str, ...] = ('EFECTIVO', 'TRANSFERENCIA', 'CHEQUE', 'QR')
-METHOD_WEIGHTS: Tuple[float, ...] = (0.46, 0.34, 0.08, 0.12)
+PAYMENT_METHODS: tuple[str, ...] = ('EFECTIVO', 'TRANSFERENCIA', 'CHEQUE', 'QR')
+METHOD_WEIGHTS: tuple[float, ...] = (0.46, 0.34, 0.08, 0.12)
 
 # Payment behaviours. Each scenario's weights add up to 1.
-BEHAVIOURS: Tuple[str, ...] = ('ON_TIME', 'LATE', 'VERY_LATE', 'PARTIAL', 'UNPAID')
+BEHAVIOURS: tuple[str, ...] = ('ON_TIME', 'LATE', 'VERY_LATE', 'PARTIAL', 'UNPAID')
 
-SCENARIOS: Dict[str, Tuple[float, ...]] = {
+SCENARIOS: dict[str, tuple[float, ...]] = {
     # Healthy book: collected on time, with marginal delinquency.
     'sana': (0.70, 0.18, 0.05, 0.05, 0.02),
     # Stressed book: delinquency weighs and some balances never come back.
@@ -100,8 +100,8 @@ def _credit_flags(invoices: pd.DataFrame, rng: np.random.Generator) -> np.ndarra
     return rng.random(len(invoices)) < probability
 
 
-def _payment_rows(invoice: Dict[str, Any], behaviour: str,
-                  rng: np.random.Generator, as_of: pd.Timestamp) -> List[Dict[str, Any]]:
+def _payment_rows(invoice: dict[str, Any], behaviour: str,
+                  rng: np.random.Generator, as_of: pd.Timestamp) -> list[dict[str, Any]]:
     '''
         Builds the payment rows of one credit invoice.
 
@@ -110,13 +110,13 @@ def _payment_rows(invoice: Dict[str, Any], behaviour: str,
         a recent invoice is open and current, an old one is open and overdue.
 
         Args:
-            invoice (Dict[str, Any]): Invoice number, amount, due date, collector.
+            invoice (dict[str, Any]): Invoice number, amount, due date, collector.
             behaviour (str): One of BEHAVIOURS.
             rng (np.random.Generator): Seeded generator.
             as_of (pd.Timestamp): The book's cut-off date.
 
         Returns:
-            List[Dict[str, Any]]: Payment rows, possibly empty.
+            list[dict[str, Any]]: Payment rows, possibly empty.
     '''
     if behaviour == 'UNPAID':
         return []
@@ -233,7 +233,7 @@ def build_credit_book(sheet: pd.DataFrame, scenario: str, seed: int) -> CreditBo
     # would look overdue only because time passed.
     as_of = invoices['date'].max()
 
-    payments: List[Dict[str, Any]] = []
+    payments: list[dict[str, Any]] = []
     for invoice in invoices.loc[invoices['is_credit']].to_dict('records'):
         payments.extend(_payment_rows(invoice, invoice['behaviour'], rng, as_of))
 
@@ -300,11 +300,11 @@ def describe(book: CreditBook) -> None:
 # Warehouse scenarios. Each one splits the catalogue into situations: out of
 # stock, critical, low, healthy, excess and no demand. A photo where everything
 # is healthy proves nothing in a demo.
-STOCK_SITUATIONS: Tuple[str, ...] = (
+STOCK_SITUATIONS: tuple[str, ...] = (
     'OUT', 'CRITICAL', 'LOW', 'HEALTHY', 'EXCESS', 'DEAD'
 )
 
-STOCK_SCENARIOS: Dict[str, Tuple[float, ...]] = {
+STOCK_SCENARIOS: dict[str, tuple[float, ...]] = {
     'sano': (0.01, 0.04, 0.10, 0.65, 0.15, 0.05),
     'ajustado': (0.05, 0.12, 0.20, 0.45, 0.13, 0.05),
     'critico': (0.12, 0.20, 0.22, 0.30, 0.10, 0.06),
@@ -312,7 +312,7 @@ STOCK_SCENARIOS: Dict[str, Tuple[float, ...]] = {
 
 # Days of coverage given to each situation, so the photo falls on the right
 # side of the thresholds the engine reads.
-COVERAGE_BY_SITUATION: Dict[str, Tuple[float, float]] = {
+COVERAGE_BY_SITUATION: dict[str, tuple[float, float]] = {
     'OUT': (0.0, 0.0),
     'CRITICAL': (1.0, 6.0),
     'LOW': (8.0, 14.0),
@@ -323,7 +323,7 @@ COVERAGE_BY_SITUATION: Dict[str, Tuple[float, float]] = {
 
 # Share of the balance the ERP already committed in orders. It is READ, never
 # written: the dashboard reflects a decision the ERP took.
-COMMITTED_SHARE: Tuple[float, float] = (0.0, 0.25)
+COMMITTED_SHARE: tuple[float, float] = (0.0, 0.25)
 
 
 def build_stock_snapshot(sheet: pd.DataFrame, scenario: str, seed: int,
@@ -368,7 +368,7 @@ def build_stock_snapshot(sheet: pd.DataFrame, scenario: str, seed: int,
     catalogue['demand'] = demand.reindex(catalogue.index).fillna(0.0)
 
     situations = rng.choice(STOCK_SITUATIONS, size = len(catalogue), p = weights)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for (product, row), situation in zip(catalogue.iterrows(), situations):
         daily = float(row['demand'])

@@ -20,7 +20,7 @@ import argparse
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import boto3
 import pandas as pd
@@ -52,7 +52,7 @@ SAMPLE_PRODUCTS = [
 ]
 
 
-def _sample_rows(count: int) -> List[Dict[str, Any]]:
+def _sample_rows(count: int) -> list[dict[str, Any]]:
     '''
         Builds the sample rows that accompany the headers.
 
@@ -60,10 +60,10 @@ def _sample_rows(count: int) -> List[Dict[str, Any]]:
             count (int): How many rows to generate.
 
         Returns:
-            List[Dict[str, Any]]: Rows ready for the DataFrame.
+            list[dict[str, Any]]: Rows ready for the DataFrame.
     '''
     start = date.today().replace(day = 1) - timedelta(days = 60)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for index in range(count):
         client = SAMPLE_CLIENTS[index % len(SAMPLE_CLIENTS)]
@@ -98,7 +98,7 @@ def _sample_rows(count: int) -> List[Dict[str, Any]]:
     return rows
 
 
-def _sample_objectives(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _sample_objectives(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     '''
         Builds the sample objectives: one per client and per month.
 
@@ -108,13 +108,13 @@ def _sample_objectives(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         clearly than any instruction.
 
         Args:
-            rows (List[Dict[str, Any]]): Rows of the sales sheet.
+            rows (list[dict[str, Any]]): Rows of the sales sheet.
 
         Returns:
-            List[Dict[str, Any]]: Rows of the objectives sheet.
+            list[dict[str, Any]]: Rows of the objectives sheet.
     '''
     clients = {row['Cliente']: row['Fecha'] for row in rows}
-    objectives: List[Dict[str, Any]] = []
+    objectives: list[dict[str, Any]] = []
     for position, (client, when) in enumerate(clients.items()):
         for offset, target in enumerate((12000.0, 13500.0)):
             month = (when.year, when.month + offset)
@@ -127,7 +127,7 @@ def _sample_objectives(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return objectives
 
 
-def _sample_collections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _sample_collections(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     '''
         Builds the sample payments of the credit sales.
 
@@ -136,13 +136,13 @@ def _sample_collections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         whatever is missing.
 
         Args:
-            rows (List[Dict[str, Any]]): Rows of the sales sheet.
+            rows (list[dict[str, Any]]): Rows of the sales sheet.
 
         Returns:
-            List[Dict[str, Any]]: Rows of the collections sheet.
+            list[dict[str, Any]]: Rows of the collections sheet.
     '''
     credit = [row for row in rows if row['Condicion Venta'] == 'CREDITO']
-    payments: List[Dict[str, Any]] = []
+    payments: list[dict[str, Any]] = []
 
     for position, sale in enumerate(credit):
         due = sale['Fecha'] + timedelta(days = int(sale['Plazo Dias']))
@@ -174,7 +174,7 @@ def _sample_collections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return payments
 
 
-def _sample_stock(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _sample_stock(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     '''
         Builds the sample stock snapshot: one row per product, dated on the last
         day the sales sheet covers.
@@ -185,13 +185,13 @@ def _sample_stock(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         actually available to sell.
 
         Args:
-            rows (List[Dict[str, Any]]): Rows of the sales sheet.
+            rows (list[dict[str, Any]]): Rows of the sales sheet.
 
         Returns:
-            List[Dict[str, Any]]: Rows of the stock sheet.
+            list[dict[str, Any]]: Rows of the stock sheet.
     '''
     last_day = max(row['Fecha'] for row in rows)
-    seen: Dict[str, Dict[str, Any]] = {}
+    seen: dict[str, dict[str, Any]] = {}
 
     for row in rows:
         product = row['Producto']
@@ -212,19 +212,19 @@ def _sample_stock(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return list(seen.values())
 
 
-def _sample_visits(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _sample_visits(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     '''
         Builds the sample visits: one per sale of the sheet, in the order the
         seller would have made them, with the hour and the outcome filled in
         so the two optional columns are visible in the template.
 
         Args:
-            rows (List[Dict[str, Any]]): Rows of the sales sheet.
+            rows (list[dict[str, Any]]): Rows of the sales sheet.
 
         Returns:
-            List[Dict[str, Any]]: Rows of the visits sheet.
+            list[dict[str, Any]]: Rows of the visits sheet.
     '''
-    visits: List[Dict[str, Any]] = []
+    visits: list[dict[str, Any]] = []
     for index, row in enumerate(rows):
         sold = index % 4 != 3
         visits.append({
@@ -240,7 +240,7 @@ def _sample_visits(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return visits
 
 
-def _contracts() -> List[Tuple[str, Any, Any, Any]]:
+def _contracts() -> list[tuple[str, Any, Any, Any]]:
     """
         The five contracts a client fills in, each one its own template.
 
@@ -251,7 +251,7 @@ def _contracts() -> List[Tuple[str, Any, Any, Any]]:
         yesterday's stock to hand over the whole book again.
 
         Returns:
-            List[Tuple[str, Any, Any, Any]]: Name, columns, headers and the
+            list[tuple[str, Any, Any, Any]]: Name, columns, headers and the
                 function that builds sample rows from the sales sample.
     """
     from schemas.ingest import ( # pylint: disable=import-outside-toplevel
@@ -308,9 +308,9 @@ def _guide(columns: Any) -> pd.DataFrame:
 def _build_one(
     path: Path,
     headers: Any,
-    data_rows: List[Dict[str, Any]],
+    data_rows: list[dict[str, Any]],
     columns: Any
-) -> List[str]:
+) -> list[str]:
     """
         Writes one template: its data sheet first, its rules second.
 
@@ -320,11 +320,11 @@ def _build_one(
         Args:
             path (Path): Where to write it.
             headers (tuple): Headers of the contract, in contract order.
-            data_rows (List[Dict[str, Any]]): Sample rows.
+            data_rows (list[dict[str, Any]]): Sample rows.
             columns (tuple): The contract's columns, for the rules sheet.
 
         Returns:
-            List[str]: The headers written, in order.
+            list[str]: The headers written, in order.
     """
     with pd.ExcelWriter(path, engine = 'openpyxl') as writer:
         pd.DataFrame(data_rows, columns = list(headers)).to_excel(
@@ -372,7 +372,7 @@ def main() -> int:
     args = parser.parse_args()
 
     sample = _sample_rows(args.rows)
-    built: List[Tuple[str, Path, List[str]]] = []
+    built: list[tuple[str, Path, list[str]]] = []
 
     for name, columns, headers, rows_for in _contracts():
         target = Path(f'/tmp/plantilla_{name}.xlsx')

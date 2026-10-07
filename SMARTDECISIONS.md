@@ -292,6 +292,9 @@ retención de datos y persistencia de lo que produce la capa de IA.
 - **Los WSDL del SIAT se leen de disco**, nunca se bajan en el arranque.
 - **Los tests de los servicios base no importan módulos que validen entorno**
   (GitHub Actions corre sin `.env`).
+- **Tipos con sintaxis moderna** (`list[str]`, `str | None`), en todo el código
+  propio, boilerplate incluido (07-oct). Lo vigila el chequeo `modern-typing`;
+  `pyupgrade` vive sólo en `SmartBear/.venv`. Archivos de hasta 800 líneas.
 
 ### Infraestructura
 

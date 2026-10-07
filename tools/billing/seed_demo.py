@@ -21,7 +21,7 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 DEFAULT_BASE = 'http://localhost:3004'
 ROOT = '/v1/billing'
@@ -103,7 +103,7 @@ class Api:
         self,
         method: str,
         path: str,
-        body: Optional[Dict[str, Any]] = None
+        body: dict[str, Any] | None = None
     ) -> Any:
         '''
             Una llamada al servicio.

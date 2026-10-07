@@ -24,7 +24,6 @@ import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
 BILLING_PATH = Path(__file__).resolve().parents[2] / 'services' / 'billing'
 XSD_PATH = Path(__file__).resolve().parents[2] / 'docs' / 'siat' / \
@@ -82,7 +81,7 @@ SAMPLE_PRODUCTS = [
 ]
 
 
-def _lines(count: int) -> List[InvoiceLine]:
+def _lines(count: int) -> list[InvoiceLine]:
     '''
         The invoice lines of the example.
 
@@ -90,7 +89,7 @@ def _lines(count: int) -> List[InvoiceLine]:
             count (int): How many products to bill.
 
         Returns:
-            List[InvoiceLine]: The lines, homologated.
+            list[InvoiceLine]: The lines, homologated.
     '''
     return [
         InvoiceLine(
@@ -105,12 +104,12 @@ def _lines(count: int) -> List[InvoiceLine]:
     ]
 
 
-def _sale(lines: List[InvoiceLine]) -> SaleNoteOut:
+def _sale(lines: list[InvoiceLine]) -> SaleNoteOut:
     '''
         The sale as it would have been stored at the counter.
 
         Args:
-            lines (List[InvoiceLine]): The lines being billed.
+            lines (list[InvoiceLine]): The lines being billed.
 
         Returns:
             SaleNoteOut: The issued note.
@@ -156,7 +155,7 @@ def _report(
     print(f'   {detail}')
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
 

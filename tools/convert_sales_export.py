@@ -26,7 +26,6 @@ import argparse
 import hashlib
 import sys
 from pathlib import Path
-from typing import Dict, Optional
 
 import pandas as pd
 
@@ -46,7 +45,7 @@ HEADER_ROW = 5
 # Source column for each template header. Everything absent from this map is
 # left empty: the contract marks it optional, and inventing a value would put
 # data in the client's mouth.
-COLUMN_SOURCES: Dict[str, str] = {
+COLUMN_SOURCES: dict[str, str] = {
     'Fecha': 'Fecha',
     'Nro Factura': 'Nro_Trans',
     'Cliente': 'Cliente',
@@ -132,7 +131,7 @@ def _stable_fraction(
         Returns:
             float: The fraction.
     '''
-    digest = hashlib.sha256(f'{seed}|{salt}'.encode('utf-8')).digest()
+    digest = hashlib.sha256(f'{seed}|{salt}'.encode()).digest()
     return int.from_bytes(digest[:4], 'big') / 0x7FFFFFFF - 1.0
 
 
@@ -273,7 +272,7 @@ def _report(
     print('  NOTE: Zona, Latitud and Longitud are SIMULATED — the export has none.')
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
 

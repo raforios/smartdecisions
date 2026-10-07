@@ -25,7 +25,6 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import fitz
 
@@ -38,7 +37,7 @@ HEADING = re.compile(
 )
 
 
-def parse_pages(value: Optional[str], total: int) -> Tuple[int, int]:
+def parse_pages(value: str | None, total: int) -> tuple[int, int]:
     '''
         The page range to convert, as a half-open pair of indexes.
 
@@ -47,7 +46,7 @@ def parse_pages(value: Optional[str], total: int) -> Tuple[int, int]:
             total (int): Pages the document has.
 
         Returns:
-            Tuple[int, int]: (first index, last index), zero-based.
+            tuple[int, int]: (first index, last index), zero-based.
 
         Raises:
             ValueError: The range is not readable or falls outside the document.
@@ -83,18 +82,18 @@ def page_markdown(
     return f'## Página {number}\n\n{text}\n'
 
 
-def build_index(pages: List[str]) -> str:
+def build_index(pages: list[str]) -> str:
     '''
         The headings found, with the page each one is on.
 
         Args:
-            pages (List[str]): The already rendered pages.
+            pages (list[str]): The already rendered pages.
 
         Returns:
             str: A Markdown list, or an empty string when nothing looked like
                 a heading.
     '''
-    entries: List[str] = []
+    entries: list[str] = []
     for block in pages:
         number = block.split('\n', 1)[0].replace('## Página ', '')
         for line in block.splitlines()[1:]:
@@ -108,7 +107,7 @@ def build_index(pages: List[str]) -> str:
 def convert(
     source: Path,
     output: Path,
-    pages: Optional[str] = None
+    pages: str | None = None
 ) -> int:
     '''
         Writes the Markdown of a PDF.

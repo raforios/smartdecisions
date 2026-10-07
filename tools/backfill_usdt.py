@@ -29,7 +29,6 @@ from collections import defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List
 
 import boto3
 import requests
@@ -54,7 +53,7 @@ DECIMALS = 2
 def daily_rates(
     text: str,
     start: date
-) -> Dict[date, float]:
+) -> dict[date, float]:
     '''
         One price per day from the intraday readings.
 
@@ -63,9 +62,9 @@ def daily_rates(
             start (date): First day kept.
 
         Returns:
-            Dict[date, float]: Median of each day's readings, from `start`.
+            dict[date, float]: Median of each day's readings, from `start`.
     '''
-    readings: Dict[date, List[float]] = defaultdict(list)
+    readings: dict[date, list[float]] = defaultdict(list)
     for row in csv.DictReader(io.StringIO(text)):
         # The timestamp carries Bolivia's offset: its first ten characters
         # are already the local day.

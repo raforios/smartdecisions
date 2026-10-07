@@ -13,6 +13,8 @@
         except-pass  no `except ...: pass`
         env-shorthand  no comma and no brace inside a .env value
         getenv       no `os.getenv` / `os.environ` outside environment.py
+        modern-typing  `list[str]`, `str | None`: no List/Dict/Optional/Union
+                     from typing, boilerplate and tests included
         log-vars     WARNING/ERROR logs use `error_msg`, INFO uses `message`
         events       every controller reports usage to EVENTS, and every
                      write is audited
@@ -481,6 +483,28 @@ def check_getenv(service: Path) -> tuple[bool, str]:
     return not hits, ', '.join(hits) if hits else 'none'
 
 
+# Names `typing` still exports but the language spells natively since 3.10:
+# builtins for the containers, `X | None` and `X | Y` for the unions, and
+# `collections.abc` for the abstract ones. Rafael's decision, 07-oct-2026.
+OLD_TYPING = {'List', 'Dict', 'Tuple', 'Set', 'FrozenSet', 'Type', 'Optional', 'Union',
+              'Callable', 'Iterable', 'Iterator', 'Awaitable', 'Sequence', 'Mapping',
+              'Generator', 'AsyncIterator', 'AsyncGenerator'}
+
+
+def check_modern_typing(service: Path) -> tuple[bool, str]:
+    '''Modern annotation syntax in every file of the service.'''
+    hits = []
+    for path in service.rglob('*.py'):
+        if '.venv' in path.parts or '__pycache__' in path.parts:
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module == 'typing':
+                old = sorted(alias.name for alias in node.names if alias.name in OLD_TYPING)
+                if old:
+                    hits.append(f'{path.relative_to(service)}:{node.lineno} ({", ".join(old)})')
+    return not hits, ', '.join(hits[:5]) if hits else 'none'
+
+
 def check_log_vars(service: Path) -> tuple[bool, str]:
     '''`logger.warning/error(error_msg)` and `logger.info(message)`.'''
     hits = []
@@ -659,6 +683,7 @@ CHECKS = (
     ('except-pass', check_except_pass),
     ('env-shorthand', check_env_shorthand),
     ('getenv', check_getenv),
+    ('modern-typing', check_modern_typing),
     ('log-vars', check_log_vars),
     ('comment-language', check_comment_language),
     ('cross-duplicates', check_cross_service_duplicates),

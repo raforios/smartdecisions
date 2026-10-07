@@ -30,11 +30,12 @@
         python -m tools.traffic_report --site smartdecisions
 '''
 import argparse
+from collections.abc import Iterator
 import gzip
 import io
 from collections import Counter, defaultdict
 from datetime import date, timedelta
-from typing import Any, Dict, Iterator, List, Set
+from typing import Any
 
 import boto3
 
@@ -99,7 +100,7 @@ def _log_files(prefix: str, since: date) -> Iterator[str]:
                 yield obj['Key']
 
 
-def _rows(keys: List[str]) -> Iterator[Dict[str, str]]:
+def _rows(keys: list[str]) -> Iterator[dict[str, str]]:
     '''
         Reads every log line as a dictionary.
 
@@ -108,16 +109,16 @@ def _rows(keys: List[str]) -> Iterator[Dict[str, str]]:
         has added fields over the years and a positional parser breaks silently.
 
         Args:
-            keys (List[str]): Object keys to read.
+            keys (list[str]): Object keys to read.
 
         Yields:
-            Dict[str, str]: One request per line.
+            dict[str, str]: One request per line.
     '''
     client = _session().client('s3')
     for key in keys:
         body = client.get_object(Bucket = LOG_BUCKET, Key = key)['Body'].read()
         with gzip.open(io.BytesIO(body), 'rt', encoding = 'utf-8') as handle:
-            fields: List[str] = []
+            fields: list[str] = []
             for line in handle:
                 if line.startswith('#Fields:'):
                     fields = line.split(':', 1)[1].split()
@@ -159,7 +160,7 @@ def _is_person(agent: str) -> bool:
     return not any(marker in lowered for marker in BOT_MARKERS)
 
 
-def _client(row: Dict[str, str]) -> str:
+def _client(row: dict[str, str]) -> str:
     '''
         Returns the address of whoever asked, not of whoever relayed it.
 
@@ -169,7 +170,7 @@ def _client(row: Dict[str, str]) -> str:
         the proxies it crossed.
 
         Args:
-            row (Dict[str, str]): One parsed log line.
+            row (dict[str, str]): One parsed log line.
 
         Returns:
             str: Client address.
@@ -180,7 +181,7 @@ def _client(row: Dict[str, str]) -> str:
     return row.get('c-ip', '')
 
 
-def _collect(rows: Iterator[Dict[str, str]], since: date) -> Dict[str, Any]:
+def _collect(rows: Iterator[dict[str, str]], since: date) -> dict[str, Any]:
     '''
         Reduces the log lines to the figures the report prints.
 
@@ -191,15 +192,15 @@ def _collect(rows: Iterator[Dict[str, str]], since: date) -> Dict[str, Any]:
         settles it.
 
         Args:
-            rows (Iterator[Dict[str, str]]): Parsed log lines.
+            rows (Iterator[dict[str, str]]): Parsed log lines.
             since (date): Earliest day to count.
 
         Returns:
-            Dict[str, Any]: Counters by day, page, edge location and referrer.
+            dict[str, Any]: Counters by day, page, edge location and referrer.
     '''
-    served: List[Dict[str, str]] = []
+    served: list[dict[str, str]] = []
     probed: Counter = Counter()
-    scanners: Set[str] = set()
+    scanners: set[str] = set()
 
     for row in rows:
         day = row.get('date', '')
@@ -234,10 +235,10 @@ def _collect(rows: Iterator[Dict[str, str]], since: date) -> Dict[str, Any]:
 
 
 def _reduce(
-    served: List[Dict[str, str]],
+    served: list[dict[str, str]],
     probed: Counter,
-    scanners: Set[str]
-) -> Dict[str, Any]:
+    scanners: set[str]
+) -> dict[str, Any]:
     '''
         Turns the served requests into the published figures.
 
@@ -246,18 +247,18 @@ def _reduce(
         them there was what made a scan look like an audience.
 
         Args:
-            served (List[Dict[str, str]]): Requests the site answered.
+            served (list[dict[str, str]]): Requests the site answered.
             probed (Counter): Refused paths and how often each was asked for.
-            scanners (Set[str]): Addresses that asked for something absent.
+            scanners (set[str]): Addresses that asked for something absent.
 
         Returns:
-            Dict[str, Any]: Counters ready to print.
+            dict[str, Any]: Counters ready to print.
     '''
-    by_day: Dict[str, Set[str]] = defaultdict(set)
-    counts: Dict[str, Counter] = {
+    by_day: dict[str, set[str]] = defaultdict(set)
+    counts: dict[str, Counter] = {
         name: Counter() for name in ('views', 'pages', 'edges', 'referrers')
     }
-    visitors: Set[str] = set()
+    visitors: set[str] = set()
 
     for entry in served:
         if entry['client'] in scanners:
@@ -284,13 +285,13 @@ def _reduce(
     }
 
 
-def _print(site: str, data: Dict[str, Any], days: int) -> None:
+def _print(site: str, data: dict[str, Any], days: int) -> None:
     '''
         Prints the report.
 
         Args:
             site (str): Site being reported.
-            data (Dict[str, Any]): Collected figures.
+            data (dict[str, Any]): Collected figures.
             days (int): Window in days.
     '''
     print(f'\n{"=" * 62}')
@@ -327,13 +328,13 @@ def _print(site: str, data: Dict[str, Any], days: int) -> None:
     _print_noise(data)
 
 
-def _print_noise(data: Dict[str, Any]) -> None:
+def _print_noise(data: dict[str, Any]) -> None:
     '''
         Prints the rejected traffic, so the scanning is visible instead of
         inflating the visit count.
 
         Args:
-            data (Dict[str, Any]): Collected figures.
+            data (dict[str, Any]): Collected figures.
     '''
     if not data['rejected']:
         return

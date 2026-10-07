@@ -16,11 +16,11 @@
     reading is idempotent by day.
 '''
 import argparse
+from collections.abc import Callable
 import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Callable, List, Tuple
 
 import boto3
 from dotenv import load_dotenv
@@ -103,7 +103,7 @@ def _diesel(day: date) -> float:
     return PARTIAL_DIESEL if day >= SUBSIDY_CUT else SUBSIDISED_DIESEL
 
 
-FACTORS: Tuple[DemoFactor, ...] = (
+FACTORS: tuple[DemoFactor, ...] = (
     DemoFactor(
         FactorDefinitionSchema(code = FUEL_PRICE_CODE, name = 'Diésel', unit = 'Bs/litro',
                                source = 'Precio en surtidor (demo)',
@@ -135,7 +135,7 @@ FACTORS: Tuple[DemoFactor, ...] = (
 def months(
     start: date,
     end: date
-) -> List[date]:
+) -> list[date]:
     '''
         The first day of every month from `start` to `end`.
 
@@ -144,7 +144,7 @@ def months(
             end (date): Last day included.
 
         Returns:
-            List[date]: One date per month.
+            list[date]: One date per month.
     '''
     days, current = [], date(start.year, start.month, 1)
     while current <= end:

@@ -28,7 +28,6 @@ import argparse
 import io
 import sys
 from pathlib import Path
-from typing import Optional
 
 import boto3
 import pandas as pd
@@ -105,7 +104,7 @@ def clusters_from_volume(sales: pd.DataFrame) -> pd.Series:
     )
 
 
-def main(argument_list: Optional[list] = None) -> int:
+def main(argument_list: list | None = None) -> int:
     '''
         Entry point.
 

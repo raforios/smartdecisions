@@ -15,7 +15,6 @@
 import argparse
 import os
 import re
-from typing import List, Optional
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -83,7 +82,7 @@ def _add_rich_text(paragraph, text: str, bold: bool = False) -> None:
             run.bold = True
 
 
-def _add_code_block(document: Document, lines: List[str]) -> None:
+def _add_code_block(document: Document, lines: list[str]) -> None:
     '''
         Renders a fenced code block as a shaded monospace paragraph.
     '''
@@ -96,14 +95,14 @@ def _add_code_block(document: Document, lines: List[str]) -> None:
     _shade(paragraph, CODE_SHADING)
 
 
-def _split_row(line: str) -> List[str]:
+def _split_row(line: str) -> list[str]:
     '''
         Splits a Markdown table row into its trimmed cells.
     '''
     return [cell.strip() for cell in line.strip().strip('|').split('|')]
 
 
-def _add_table(document: Document, rows: List[str]) -> None:
+def _add_table(document: Document, rows: list[str]) -> None:
     '''
         Renders a GitHub-flavoured table, shading the header row.
 
@@ -131,7 +130,7 @@ def _add_table(document: Document, rows: List[str]) -> None:
     document.add_paragraph()
 
 
-def _add_wrapped(document: Document, buffer: List[str]) -> None:
+def _add_wrapped(document: Document, buffer: list[str]) -> None:
     '''
         Emits a soft-wrapped Markdown paragraph as ONE Word paragraph.
 
@@ -150,7 +149,7 @@ def _add_wrapped(document: Document, buffer: List[str]) -> None:
     _add_rich_text(paragraph, text)
 
 
-def _flush(document: Document, buffer: List[str], kind: str) -> None:
+def _flush(document: Document, buffer: list[str], kind: str) -> None:
     '''
         Emits whatever block the parser had accumulated.
     '''
@@ -176,8 +175,8 @@ class _Renderer:
 
     def __init__(self, document: Document):
         self.document = document
-        self.buffer: List[str] = []
-        self.block: Optional[str] = None
+        self.buffer: list[str] = []
+        self.block: str | None = None
 
     def close(self) -> None:
         '''

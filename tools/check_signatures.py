@@ -7,7 +7,7 @@
 
         async def store_companion(
             dynamodb_resource: ServiceResource,
-            dataset: Dict[str, Any],
+            dataset: dict[str, Any],
             result: Any
         ) -> BaseModel:
 
