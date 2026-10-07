@@ -51,7 +51,9 @@ export function money(value, decimals = 2) {
 export function percent(value) {
     if (value === null || value === undefined) return '—';
     const sign = value > 0 ? '+' : '';
-    return `${sign}${Number(value).toFixed(2)}%`;
+    return `${sign}${Number(value).toLocaleString('es-BO', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    })}%`;
 }
 
 /** Fecha corta, como la lee alguien en el mostrador. */
