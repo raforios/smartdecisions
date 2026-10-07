@@ -70,7 +70,8 @@ archivos entra al código como si fuera del producto.
 | Cumplimiento de objetivos | ¿Cumplió cada cliente, en lo facturado y en lo cobrado? |
 | Stock del día | ¿Cuánto me dura, qué quiebra, cuánto capital quieto? |
 | Rutas | ¿En qué orden visito, dónde está cada vendedor, se cumplió el plan? |
-| Cotizaciones | Tipo de cambio, minerales y factores que se mueven |
+| Factores externos y tipo de cambio | ¿Cuánto vale el dólar —oficial y USDT— y qué factores mueven mi costo? |
+| Minerales | Cotización oficial, anticipada y escenario de venta |
 | Interpretación (IA) | ¿Qué significa esto? — sobre cualquiera de las anteriores |
 
 ---
@@ -173,7 +174,7 @@ directo, duplicados entre servicios, cobertura de endpoints).
   servicio desplegado no conoce.
 
 **Revisión del 04/05-oct en el portal**, con las dos empresas: los nueve
-análisis, las ocho secciones de Rutas y Cotizaciones abren sin errores de JS.
+análisis, las ocho secciones de Rutas y Cotizaciones (hoy Minerales) abren sin errores de JS.
 El Cumplimiento de Illimani (24 meses) tarda mucho en llegar con conexión
 lenta: el servicio responde en 1,1 s; lo que pesa es la respuesta.
 
@@ -188,12 +189,22 @@ Ronda nueva de funcionalidades definida el 04-oct (ver §5).
 
 En orden.
 
-1. **Desplegar ANALYTICS** (Rafael): Cumplimiento abre en el último mes.
-   Probar la caja de BILLING de punta a punta en el portal.
-2. **Rutas: depósito por empresa y ruta libre** —
-   `docs/cambios/rutas-deposito-y-ruta-libre/spec.md`, para aprobar.
+1. **Probar la caja de BILLING de punta a punta.**
+2. **Rutas: inicio y fin abiertos, ruta libre, punto de partida opcional** —
+   **en producción** desde el 06-oct, con las rutas de demo sembradas.
 3. **Factores externos y tipo de cambio** —
-   `docs/cambios/smartdecisions-tipo-cambio-factores/spec.md`, para aprobar.
+   `docs/cambios/smartdecisions-tipo-cambio-factores/` (spec aprobado, plan en
+   cuatro fases). Fases 1 a 3 **en producción** desde el 06-oct: USDT (primera lectura
+   Bs 11,86); vista «Efecto del tipo de cambio» en Análisis comercial
+   (Andina: +48,4 % en Bs y −10,8 % en USD, margen 22,4 % → −5,1 % a
+   reposición, 46 productos sin cubrir); y el módulo propio
+   `portal/demo/factores/` (dólar oficial con su banco de modelos, oficial
+   contra USDT día por día, CRUD de factores), con Cotizaciones renombrado
+   «Minerales». El USDT se rellena desde el 27/06 con
+   `tools/backfill_usdt.py` (registro público de Binance P2P). **Fase 4 en
+   curso:** `tools/seed_demo_factors.py` (diésel, rendimiento, arancel,
+   inflación desde oct-2024) escrito; falta definir de dónde salen los km del
+   costo de distribución, y el simulador con diésel.
 4. **SmartBilling, ronda del 04-oct**, por cambios con `intent.md`, `spec.md`
    y `plan.md` en `docs/cambios/` (plantilla en `docs/cambios/_plantilla/`):
    - `billing-proveedores-pedidos`: catálogo de proveedores, producto con

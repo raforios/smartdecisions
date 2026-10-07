@@ -126,7 +126,15 @@ def _publish(only: Optional[str]) -> None:
     source = PORTAL_ROOT / only if only else PORTAL_ROOT
     target = f's3://{BUCKET}/{only}/' if only else f's3://{BUCKET}/'
     _run(['aws', 's3', 'sync', str(source), target,
-          '--profile', PROFILE, '--no-progress', '--exclude', '.*'])
+          '--profile', PROFILE, '--no-progress', '--exclude', '.*', '--exclude', '*.html'])
+    # Pages go up every time with `no-cache`: without a Cache-Control header the
+    # browser kept an old page for as long as it guessed, and that old page
+    # asked for the old scripts — a deploy the user could not see (06-oct).
+    # The scripts themselves carry their content hash, so they can be cached.
+    _run(['aws', 's3', 'cp', str(source), target, '--recursive',
+          '--exclude', '*', '--include', '*.html', '--exclude', '.*',
+          '--cache-control', 'no-cache', '--content-type', 'text/html; charset=utf-8',
+          '--profile', PROFILE, '--no-progress'])
 
     paths = [f'/{only}/*'] if only else ['/*']
     _run(['aws', 'cloudfront', 'create-invalidation',

@@ -41,7 +41,8 @@ al ERP: se conecta al que la empresa tiene.
 **El diferenciador:** `Afinidad × Drop Size = Oportunidad Comercial Real`. No
 muestra lo obvio: le dice al vendedor qué ofrecer en cada tienda y cuánto vale.
 
-**Tres módulos:** Análisis comercial, Rutas y Cotizaciones. Encima de todos,
+**Cuatro módulos:** Análisis comercial, Rutas, Factores externos y tipo de
+cambio, y Minerales. Encima de todos,
 una lectura en lenguaje natural de lo que se está viendo (IA), que no inventa
 números: lee los de la pantalla.
 
@@ -228,13 +229,19 @@ Una visita sólo cuenta si **el vendedor estaba ahí** (geocerca). Un lugar que
 el plan no conocía no se bloquea: es un cliente nuevo y la prueba de que la
 ruta debe crecer. Una venta mayor al stock disponible se rechaza.
 
-### Cotizaciones
+### Factores externos y tipo de cambio
 
-**Tipo de cambio** diario con su historia y proyección; **factores** que se
-mueven (combustible, aranceles, índices) con su valor fechado; **costo de
-distribución** por unidad (km ÷ rendimiento × precio del litro, ida y vuelta).
-Minerales: cotización oficial quincenal y anticipada. Hoy es el módulo de menos
-interés comercial.
+**Dólar oficial** (BCB) diario con su historia y proyección, y el **dólar
+paralelo** (USDT de Binance P2P) junto a él, día por día, con la brecha.
+**Factores** que se mueven (combustible, aranceles, índices) con su valor
+fechado; **costo de distribución** por unidad (km ÷ rendimiento × precio del
+litro, ida y vuelta). Lo que el dólar le hace a la venta y al margen se ve en
+Análisis comercial › Efecto del tipo de cambio.
+
+### Minerales
+
+Cotización oficial quincenal y anticipada, y el escenario «vender hoy o
+esperar». Hoy es el módulo de menos interés comercial.
 
 ---
 
