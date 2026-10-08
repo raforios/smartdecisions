@@ -19,6 +19,7 @@ from boto3.resources.base import ServiceResource
 from pydantic import BaseModel
 
 from schemas.ingest import (
+    TEMPLATE_VERSION,
     IngestError,
     IngestResponse,
     IngestSummary,
@@ -31,6 +32,7 @@ from services.exceptions import ResourceNotFoundError
 from services.ingest_files import serialize_dataframe
 from services.ingest_utils import (
     attach_to_dataset,
+    persist_dataset,
     read_stored_frame,
     upload_bytes
 )
@@ -295,13 +297,10 @@ async def store_companion(
     filename, auth_token = origin
     dataset_id = str(dataset['dataset_id'])
     if spec.names_clients and len(result.accepted) > 0:
-        result = replace(result, accepted = sync_master(
-            dynamodb_resource = dynamodb_resource,
-            owner_email = str(dataset['owner_email']),
-            frame = result.accepted,
-            columns = CLIENT_FRAME_COLUMNS,
-            source = ClientSource.API if filename == API_ORIGIN else ClientSource.FILE
-        ))
+        result = with_known_clients(
+            dynamodb_resource, str(dataset['owner_email']), result,
+            ClientSource.API if filename == API_ORIGIN else ClientSource.FILE
+        )
     has_rows = len(result.accepted) > 0
     issues = result.issues[:MAX_ISSUES_ON_RESPONSE]
 
@@ -333,4 +332,85 @@ async def store_companion(
         summary = result.summary,
         issues = issues,
         **{f'{spec.name}_s3_key': stored_key}
+    )
+
+
+def with_known_clients(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    result: Any,
+    source: ClientSource
+) -> Any:
+    '''
+        The validation result with its accepted rows passed through the client
+        master: the master learns the clients and fills in what it already
+        knew. Every door that loads sales goes through here.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            owner_email (str): The owner.
+            result (Any): A validation result with `accepted` rows.
+            source (ClientSource): The door the rows came through.
+
+        Returns:
+            Any: The same result, with the completed rows.
+    '''
+    return replace(result, accepted = sync_master(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = owner_email,
+        frame = result.accepted,
+        columns = CLIENT_FRAME_COLUMNS,
+        source = source
+    ))
+
+
+def store_new_dataset(
+    dynamodb_resource: ServiceResource,
+    owner: tuple[str, str],
+    result: Any,
+    origin: tuple[str, ClientSource]
+) -> dict[str, Any]:
+    '''
+        Stores a sales dataset that did not exist: the client master learns
+        from the accepted rows, the accepted and rejected rows go to S3, and
+        the dataset is persisted.
+
+        One function for every door that creates a dataset —a file read from
+        S3, lines pushed by an ERP— so they cannot drift apart.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            owner (tuple[str, str]): The owner, and the Authorization header
+                forwarded to FILES.
+            result (Any): The partial validation (`ParseResult`).
+            origin (tuple[str, ClientSource]): The content fingerprint, and
+                the door the rows came through.
+
+        Returns:
+            dict[str, Any]: The persisted dataset.
+    '''
+    current_user, auth_token = owner
+    fingerprint, source = origin
+    has_valid_rows = len(result.accepted) > 0
+    if has_valid_rows:
+        result = with_known_clients(dynamodb_resource, current_user, result, source)
+    # Accepted rows feed analytics, forecast and routes; the rejected ones go
+    # to their own CSV so the client can fix just those and send them again.
+    normalized_key = store_frame(result.accepted, 'normalized', auth_token)
+    rejected_key = store_frame(result.rejected, 'rejected', auth_token)
+    return persist_dataset(
+        dynamodb_resource = dynamodb_resource,
+        payload = {
+            'owner_email': current_user,
+            'status': 'validated' if has_valid_rows else 'failed',
+            'file_s3_key': normalized_key,
+            'rejected_s3_key': rejected_key,
+            'template_version': TEMPLATE_VERSION,
+            'file_fingerprint': fingerprint,
+            **result.summary.model_dump(),
+            'issues': [
+                issue.model_dump(mode = 'json')
+                for issue in result.issues[:MAX_ISSUES_ON_RESPONSE]
+            ]
+        }
     )

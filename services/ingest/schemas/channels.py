@@ -66,12 +66,19 @@ class SaleRowSchema(BaseModel):
     credit_limit: float | None = Field(None, ge = 0)
 
 
-class SalesPushSchema(BaseModel):
+class SalesRowsSchema(BaseModel):
+    """
+        The sales lines an ERP posts to create its dataset, when it has no
+        file to start from.
+    """
+    rows: list[SaleRowSchema] = Field(..., min_length = 1)
+
+
+class SalesPushSchema(SalesRowsSchema):
     """
         The sales lines an ERP posts into an existing dataset.
     """
     mode: LoadMode = LoadMode.APPEND
-    rows: list[SaleRowSchema] = Field(..., min_length = 1)
 
 
 class CollectionRowSchema(BaseModel):

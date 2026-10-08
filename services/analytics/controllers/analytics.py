@@ -46,7 +46,14 @@ from services.margin import build_margin
 from services.portfolio import build_portfolio
 from services.segmentation import build_segmentation
 from services.volume import build_volume_source
-from services.currency import BASE_CURRENCY, convert_frame, current_rate, rates_per_row
+from services.currency import (
+    BASE_CURRENCY,
+    convert_frame,
+    convert_payments,
+    convert_snapshot,
+    current_rate,
+    rates_per_row
+)
 from services.fx_effect import build_fx_effect
 from services.analytics_utils import (
     apply_date_range,
@@ -203,6 +210,30 @@ def _scoped_dataframe(
     return scoped, period
 
 
+def _payments_of(
+    metadata: dict[str, Any],
+    params: dict[str, Any] | None
+) -> Any:
+    '''
+        The payments INGEST attached to the dataset, in the currency the sales
+        were read in.
+
+        Args:
+            metadata (dict[str, Any]): The dataset record.
+            params (dict | None): May carry 'currency' with the caller's token.
+
+        Returns:
+            Any: The payments DataFrame, or None when none were loaded.
+    '''
+    key = metadata.get('collections_s3_key')
+    options = params or {}
+    return convert_payments(
+        load_dataframe_from_s3(key) if key else None,
+        options.get('currency') or BASE_CURRENCY,
+        options.get('auth_token') or ''
+    )
+
+
 @handle_service_errors('ANALYTICS')
 async def commercial_summary_controller(
     dynamodb_resource: ServiceResource,
@@ -258,11 +289,9 @@ async def receivables_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    collections_key = metadata.get('collections_s3_key')
-
     block = build_receivables(
         sales = dataframe,
-        collections = load_dataframe_from_s3(collections_key) if collections_key else None,
+        collections = _payments_of(metadata, params),
         stored_policy = get_credit_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
@@ -301,7 +330,6 @@ async def objectives_controller(
         owner_email = current_user
     )
     objectives_key = metadata.get('objectives_s3_key')
-    collections_key = metadata.get('collections_s3_key')
 
     objectives, available = select_objective_periods(
         load_dataframe_from_s3(objectives_key) if objectives_key else None,
@@ -311,7 +339,7 @@ async def objectives_controller(
     block = build_objectives(
         sales = dataframe,
         objectives = objectives,
-        collections = load_dataframe_from_s3(collections_key) if collections_key else None,
+        collections = _payments_of(metadata, params),
         stored_policy = get_commercial_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
@@ -398,10 +426,18 @@ async def stock_controller(
         owner_email = current_user
     )
     stock_key = metadata.get('stock_s3_key')
+    options = params or {}
 
     block = build_stock(
         sales = dataframe,
-        stock = load_dataframe_from_s3(stock_key) if stock_key else None
+        # Valued in the currency the sales were read in: a photo in bolivianos
+        # next to sales in dollars answered bolivianos labelled "USD".
+        stock = convert_snapshot(
+            load_dataframe_from_s3(stock_key) if stock_key else None,
+            options.get('currency') or BASE_CURRENCY,
+            options.get('auth_token') or '',
+            get_current_time_gmt().date().isoformat()
+        )
     )
     return StockResponse(
         dataset_id = dataset_id,

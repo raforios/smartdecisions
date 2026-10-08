@@ -34,6 +34,7 @@ from schemas.objectives import (
 from schemas.stock import StockResponse
 from schemas.receivables import CreditPolicyRequest, CreditPolicyResponse, ReceivablesResponse
 from controllers import analytics as controllers
+from services import currency
 
 
 def _sales_frame() -> pd.DataFrame:
@@ -773,3 +774,72 @@ def test_the_fx_effect_endpoint_returns_its_model_and_simulates(
     assert today.period.currency is None
     assert simulated.rate_today == 9.0 and simulated.rate_is_hypothetical
     assert simulated.totals.replacement_cost > today.totals.replacement_cost
+
+
+def _flat_rate(monkeypatch) -> None:
+    '''
+        Ten bolivianos per dollar on every day, so any figure in dollars is
+        its bolivianos over ten and every count stays the same.
+    '''
+    monkeypatch.setattr(
+        currency, '_fetch_rates',
+        lambda *args: [{'date': '2020-01-01', 'rate': 10.0}]
+    )
+
+
+def test_receivables_in_dollars_converts_the_payments_too(
+    dataset,
+    monkeypatch
+):
+    '''
+        In dollars the report subtracted payments in bolivianos from invoices
+        in dollars, and the number of open invoices and of debtors moved with
+        the currency. A count cannot depend on the currency.
+    '''
+    monkeypatch.setattr(
+        controllers, 'get_dataset_metadata',
+        lambda **_: {'file_s3_key': 'ingest/normalized/test.csv',
+                     'collections_s3_key': 'ingest/collections/test.csv',
+                     'status': 'validated'}
+    )
+    monkeypatch.setattr(
+        controllers, 'load_dataframe_from_s3',
+        lambda key: _collections_frame() if 'collections' in key else _sales_frame()
+    )
+    monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
+    _flat_rate(monkeypatch)
+
+    in_bob = _call(controllers.receivables_controller, dataset)
+    in_usd = _call(controllers.receivables_controller, dataset,
+                   {'currency': 'USD', 'auth_token': 'Bearer t'})
+
+    assert in_usd.kpis.open_invoices == in_bob.kpis.open_invoices
+    assert in_usd.kpis.clients_with_debt == in_bob.kpis.clients_with_debt
+    assert round(in_usd.kpis.receivable_total * 10, 2) == round(in_bob.kpis.receivable_total, 2)
+
+
+def test_stock_in_dollars_is_valued_in_dollars(
+    dataset,
+    monkeypatch
+):
+    '''
+        The stock in dollars answered the same figures as in bolivianos while
+        saying "USD". The value converts; the units do not.
+    '''
+    monkeypatch.setattr(
+        controllers, 'get_dataset_metadata',
+        lambda **_: {'file_s3_key': 'ingest/normalized/test.csv',
+                     'stock_s3_key': 'ingest/stock/test.csv', 'status': 'validated'}
+    )
+    monkeypatch.setattr(
+        controllers, 'load_dataframe_from_s3',
+        lambda key: _stock_frame() if 'stock' in key else _sales_frame()
+    )
+    _flat_rate(monkeypatch)
+
+    in_bob = _call(controllers.stock_controller, dataset)
+    in_usd = _call(controllers.stock_controller, dataset,
+                   {'currency': 'USD', 'auth_token': 'Bearer t'})
+
+    assert in_usd.kpis.units_on_hand == in_bob.kpis.units_on_hand
+    assert round(in_usd.kpis.stock_value * 10, 2) == round(in_bob.kpis.stock_value, 2)

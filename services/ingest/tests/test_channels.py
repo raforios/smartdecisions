@@ -22,6 +22,7 @@ from schemas.channels import (
     CollectionRowSchema,
     SaleRowSchema,
     SalesPushSchema,
+    SalesRowsSchema,
     CollectionsPushSchema,
     ObjectiveRowSchema,
     ObjectivesPushSchema,
@@ -94,7 +95,7 @@ def world_fixture():
          patch.object(common, 'read_stored_frame', _read_frame), \
          patch.object(common, 'upload_bytes', _upload), \
          patch.object(channels, 'attach_to_dataset', _attach), \
-         patch.object(channels, 'sync_master', lambda **kwargs: kwargs['frame']), \
+         patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
          patch.object(channels, 'delete_stored_file',
                       lambda file_key, auth_token: objects.pop(str(file_key), None)), \
          patch.object(common, 'attach_to_dataset', _attach):
@@ -566,3 +567,67 @@ def test_the_objectives_and_stock_s3_doors_load_their_files(world):
 
     assert objectives.summary.valid_rows == 1
     assert stock.summary.valid_rows == 1
+
+
+def _create_sales(
+    rows: list[SaleRowSchema],
+    persisted: dict[str, Any],
+    existing: dict[str, Any] | None = None
+) -> Any:
+    '''
+        Runs the controller that creates a sales dataset from pushed lines.
+
+        Args:
+            rows (list[SaleRowSchema]): Lines to push.
+            persisted (dict[str, Any]): Collects what was persisted.
+            existing (dict | None): A dataset already holding this content.
+
+        Returns:
+            IngestResponse: What the endpoint answers.
+    '''
+    def _persist(
+        dynamodb_resource, # pylint: disable=unused-argument
+        payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        persisted.update(payload, dataset_id = 'NEW-DATASET-0001',
+                         created_at = '2026-10-07T10:00:00Z')
+        return persisted
+
+    with patch.object(common, 'persist_dataset', _persist), \
+         patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
+         patch.object(channels, 'find_dataset_by_fingerprint', lambda **kwargs: existing):
+        return asyncio.run(channels.create_sales_dataset_controller(
+            dynamodb_resource = None,
+            rows = SalesRowsSchema(rows = rows),
+            current_user = OWNER,
+            auth_token = 'Bearer t',
+            request = None
+        ))
+
+
+def test_an_erp_with_no_file_creates_its_dataset_through_the_api(world): # pylint: disable=unused-argument
+    '''
+        A client whose ERP is the system of record never exports a workbook.
+        Pushing lines required a dataset born from a file, so an API-only
+        client could not start at all.
+    '''
+    persisted: dict[str, Any] = {}
+
+    response = _create_sales([_sale(), _sale(order_id = 'F-0004')], persisted)
+
+    assert response.summary.valid_rows == 2
+    assert response.status == 'validated'
+    assert persisted['owner_email'] == OWNER
+    assert persisted['file_s3_key'].startswith('ingest/normalized/')
+
+
+def test_pushing_the_same_lines_again_returns_the_same_dataset(world): # pylint: disable=unused-argument
+    '''Same content, same dataset: a retry must not create a second one.'''
+    persisted: dict[str, Any] = {}
+    existing = {'dataset_id': DATASET_ID, 'owner_email': OWNER, 'status': 'validated',
+                'created_at': '2026-02-15T10:00:00Z', 'valid_rows': 2, 'total_rows': 2}
+
+    response = _create_sales([_sale()], persisted, existing)
+
+    assert response.dataset_id == DATASET_ID
+    assert not persisted

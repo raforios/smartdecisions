@@ -1,17 +1,17 @@
 '''
     Ingest controllers.
 '''
-from dataclasses import replace
 from pathlib import Path
 
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from controllers.common import (
-    MAX_ISSUES_ON_RESPONSE,
     template_key,
     native_numbers,
     store_frame,
+    store_new_dataset,
+    with_known_clients,
     summary_of,
     to_ingest_response
 )
@@ -35,7 +35,6 @@ from schemas.ingest import (
 from services.exceptions import ResourceNotFoundError
 from services.logger_config import custom_logger as logger
 from services.ingest_utils import HISTORY_DEFAULT_LIMIT
-from services.clients import CLIENT_FRAME_COLUMNS, sync_master
 from services.ingest import parse_and_validate
 from services.ingest import parse_frame as parse_sales_frame
 from services.ingest_files import serialize_dataframe
@@ -105,13 +104,8 @@ async def ingest_excel_controller(
         # company that uploaded coordinates once should not have to upload them
         # again to keep Routes alive, and an export that drops a column must
         # not blank what is already known about the client.
-        result = replace(result, accepted = sync_master(
-            dynamodb_resource = dynamodb_resource,
-            owner_email = current_user,
-            frame = result.accepted,
-            columns = CLIENT_FRAME_COLUMNS,
-            source = ClientSource.FILE
-        ))
+        result = with_known_clients(dynamodb_resource, current_user, result,
+                                    ClientSource.FILE)
         # Store the NORMALIZED dataframe (canonical columns, ids filled) so every
         # downstream service reads a clean, uniform dataset without re-mapping.
         file_s3_key = store_frame(result.accepted, 'normalized', auth_token)
@@ -186,37 +180,9 @@ async def ingest_excel_from_s3_controller(
         logger.info(message)
         return to_ingest_response(existing, already_stored = True)
 
-    result = parse_sales_frame(raw, file_name)
-    has_valid_rows = len(result.accepted) > 0
-    if has_valid_rows:
-        result = replace(result, accepted = sync_master(
-            dynamodb_resource = dynamodb_resource,
-            owner_email = current_user,
-            frame = result.accepted,
-            columns = CLIENT_FRAME_COLUMNS,
-            source = ClientSource.FILE
-        ))
-
-    # Accepted rows feed analytics, forecast and routes; the rejected ones go
-    # to their own CSV so the client can fix just those and re-upload.
-    normalized_key = store_frame(result.accepted, 'normalized', auth_token)
-    rejected_key = store_frame(result.rejected, 'rejected', auth_token)
-
-    persisted = persist_dataset(
-        dynamodb_resource = dynamodb_resource,
-        payload = {
-            'owner_email': current_user,
-            'status': 'validated' if has_valid_rows else 'failed',
-            'file_s3_key': normalized_key,
-            'rejected_s3_key': rejected_key,
-            'template_version': TEMPLATE_VERSION,
-            'file_fingerprint': fingerprint,
-            **result.summary.model_dump(),
-            'issues': [
-                issue.model_dump(mode = 'json')
-                for issue in result.issues[:MAX_ISSUES_ON_RESPONSE]
-            ]
-        }
+    persisted = store_new_dataset(
+        dynamodb_resource, (current_user, auth_token),
+        parse_sales_frame(raw, file_name), (fingerprint, ClientSource.FILE)
     )
 
     # The staged upload is temporary: its rows now live in the normalized

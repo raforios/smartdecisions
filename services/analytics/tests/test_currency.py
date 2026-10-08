@@ -167,3 +167,51 @@ def test_in_usdt_the_days_before_the_series_read_at_the_official_rate():
     assert applied['rows_at_fallback'] == 1
     assert applied['fallback_currency'] == currency.PARALLEL_FALLBACK_CURRENCY
     assert applied['rows_without_rate'] == 0
+
+
+def _payments() -> pd.DataFrame:
+    '''
+        Two payments of the same dollars, months apart, with one quantity
+        that is not money.
+
+        Returns:
+            pd.DataFrame: The collections frame, as INGEST normalizes it.
+    '''
+    return pd.DataFrame([
+        {'order_id': 'F-1', 'payment_date': '2026-07-15', 'paid_amount': 696.0},
+        {'order_id': 'F-2', 'payment_date': '2026-09-15', 'paid_amount': 740.0},
+    ])
+
+
+def test_a_payment_converts_at_the_rate_of_the_day_it_was_paid():
+    '''
+        The receivables report in dollars subtracted payments in bolivianos
+        from invoices in dollars, and even the count of debtors moved with the
+        currency. A payment is money on the day it was paid.
+    '''
+    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
+        converted = currency.convert_payments(_payments(), 'USD', 'Bearer t')
+
+    assert [round(value, 2) for value in converted['paid_amount']] == [100.0, 100.0]
+    assert list(converted['order_id']) == ['F-1', 'F-2']
+
+
+def test_payments_in_the_base_currency_are_untouched():
+    '''Asking for bolivianos converts nothing, and no payments is no payments.'''
+    assert currency.convert_payments(_payments(), currency.BASE_CURRENCY, 'Bearer t') \
+        .equals(_payments())
+    assert currency.convert_payments(None, 'USD', 'Bearer t') is None
+
+
+def test_a_stock_snapshot_is_valued_at_todays_rate():
+    '''
+        The inventory in dollars answered the same figures as in bolivianos
+        while saying "USD". The photo is what the stock is worth today, so it
+        converts at today's rate; units are not money.
+    '''
+    snapshot = pd.DataFrame([{'product_id': 'P1', 'on_hand': 3.0, 'unit_cost': 74.0}])
+    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
+        converted = currency.convert_snapshot(snapshot, 'USD', 'Bearer t', '2026-09-20')
+
+    assert round(float(converted['unit_cost'].iloc[0]), 2) == 10.0
+    assert float(converted['on_hand'].iloc[0]) == 3.0

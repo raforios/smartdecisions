@@ -88,9 +88,10 @@ def _stored():
                       lambda *args, **kwargs: read_file(_template_file(), 'ventas.csv')), \
          patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
          patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
-         patch.object(controllers, 'sync_master', lambda **kwargs: kwargs['frame']), \
+         patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
          patch.object(controllers, 'delete_stored_file', lambda *args: None), \
-         patch.object(controllers, 'persist_dataset', _persist):
+         patch.object(controllers, 'persist_dataset', _persist), \
+         patch.object(common, 'persist_dataset', _persist):
         yield persisted
 
 
@@ -145,7 +146,7 @@ def test_the_multipart_upload_also_feeds_the_client_master():
 
     with patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
          patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
-         patch.object(controllers, 'sync_master', _sync), \
+         patch.object(common, 'sync_master', _sync), \
          patch.object(controllers, 'persist_dataset', _persist):
         response = asyncio.run(controllers.ingest_excel_controller(
             dynamodb_resource = None,

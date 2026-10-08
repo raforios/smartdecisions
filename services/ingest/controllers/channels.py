@@ -32,8 +32,10 @@ from controllers.common import (
     rows_frame,
     store_companion,
     store_frame,
+    store_new_dataset,
     stored_companion_frame,
-    to_ingest_response
+    to_ingest_response,
+    with_known_clients
 )
 from controllers.stock import SPEC as STOCK
 from controllers.visits import SPEC as VISITS
@@ -42,6 +44,7 @@ from schemas.channels import (
     CollectionsPushSchema,
     ObjectivesPushSchema,
     SalesPushSchema,
+    SalesRowsSchema,
     IngestFromS3CompanionRequest,
     LoadMode,
     StockPushSchema,
@@ -54,7 +57,6 @@ from schemas.ingest import (
     StockResponse,
     VisitsResponse
 )
-from services.clients import CLIENT_FRAME_COLUMNS, sync_master
 from services.collections import parse_frame as parse_collections_frame
 from services.collections import validate_rows as validate_collections
 from services.objectives import parse_frame as parse_objectives_frame
@@ -62,8 +64,11 @@ from services.objectives import prepare_rows as prepare_objectives
 from services.objectives import validate_rows as validate_objectives
 from services.ingest import prepare_rows as prepare_sales_rows
 from services.ingest import validate_rows_partial
+from services.ingest_files import serialize_dataframe
 from services.ingest_utils import (
     attach_to_dataset,
+    content_fingerprint,
+    find_dataset_by_fingerprint,
     read_stored_frame,
     get_owned_dataset,
 )
@@ -600,13 +605,7 @@ async def push_sales_controller(
         owner_email = current_user
     )
     result = validate_rows_partial(prepare_sales_rows(rows_frame(push.rows)), API_ORIGIN)
-    result = replace(result, accepted = sync_master(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user,
-        frame = result.accepted,
-        columns = CLIENT_FRAME_COLUMNS,
-        source = ClientSource.API
-    ))
+    result = with_known_clients(dynamodb_resource, current_user, result, ClientSource.API)
 
     whole = result
     if push.mode is LoadMode.APPEND:
@@ -633,3 +632,54 @@ async def push_sales_controller(
                f'({push.mode.value}); {whole.summary.valid_rows} stored.')
     logger.info(message)
     return to_ingest_response(native_numbers(stored))
+
+
+@handle_service_errors('INGEST')
+@audit_event('INGEST', 'Dataset', 'CREATE')
+async def create_sales_dataset_controller(
+    dynamodb_resource: ServiceResource,
+    rows: SalesRowsSchema,
+    current_user: str,
+    auth_token: str,
+    request: Request # pylint: disable=unused-argument
+) -> IngestResponse:
+    '''
+        The client's ERP creates its sales dataset by posting lines, with no
+        file to start from.
+
+        The same partial acceptance and the same client master as the file
+        door, through the same function that stores a new dataset. Identical
+        content is the same dataset, so a retry returns the one it created.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            rows (SalesRowsSchema): The lines.
+            current_user (str): Authenticated caller, owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            IngestResponse: The new dataset, or the one that already held
+                these lines.
+    '''
+    frame = prepare_sales_rows(rows_frame(rows.rows))
+    fingerprint = content_fingerprint(serialize_dataframe(frame, 'raw.csv'))
+    existing = find_dataset_by_fingerprint(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        fingerprint = fingerprint
+    )
+    if existing is not None:
+        message = (f'Dataset {existing["dataset_id"]} already holds these lines for '
+                   f'{current_user}; returning it.')
+        logger.info(message)
+        return to_ingest_response(existing, already_stored = True)
+
+    persisted = store_new_dataset(
+        dynamodb_resource, (current_user, auth_token),
+        validate_rows_partial(frame, API_ORIGIN), (fingerprint, ClientSource.API)
+    )
+    message = (f'Dataset {persisted["dataset_id"]} created for {current_user} from '
+               f'{len(rows.rows)} pushed line(s).')
+    logger.info(message)
+    return to_ingest_response(native_numbers(persisted))

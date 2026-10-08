@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, Path as PathParam, Request, stat
 from controllers.channels import (
     ingest_collections_from_s3_controller,
     ingest_objectives_from_s3_controller,
+    create_sales_dataset_controller,
     push_sales_controller,
     ingest_stock_from_s3_controller,
     ingest_visits_from_s3_controller,
@@ -23,6 +24,7 @@ from schemas.channels import (
     CollectionsPushSchema,
     ObjectivesPushSchema,
     SalesPushSchema,
+    SalesRowsSchema,
     IngestFromS3CompanionRequest,
     StockPushSchema,
     VisitsPushSchema
@@ -175,6 +177,40 @@ async def push_visits_endpoint(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
         push = push,
+        current_user = current_user,
+        auth_token = authorization,
+        request = request
+    )
+
+
+@router.post(
+    '/sales/rows',
+    response_model = IngestResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Create a sales dataset from an ERP',
+    description = (
+        'For a client whose ERP is the system of record and never exports a '
+        'workbook: the first push creates the dataset. Same contract, partial '
+        'acceptance and client master as the file. Identical lines are the '
+        'same dataset, so a retry returns the one already created. Later '
+        'pushes go to /{dataset_id}/sales/rows.'
+    )
+)
+async def create_sales_dataset_endpoint(
+    request: Request,
+    rows: SalesRowsSchema,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> IngestResponse:
+    '''
+        Endpoint to create a sales dataset from pushed lines.
+    '''
+    message = f'User: {current_user}. Creating a dataset from {len(rows.rows)} line(s).'
+    logger.info(message)
+    return await create_sales_dataset_controller(
+        dynamodb_resource = dynamodb_resource,
+        rows = rows,
         current_user = current_user,
         auth_token = authorization,
         request = request
