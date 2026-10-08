@@ -308,6 +308,11 @@ class CurrencyApplied(BaseModel):
     fallback_currency: str | None = None
     rows_total: int = Field(0, ge = 0)
     rows_without_rate: int = Field(0, ge = 0)
+    reference_rate: float | None = Field(
+        None,
+        description = 'Set when the report is counted in bolivianos and shown at this '
+                      'single rate of today, as a reference.'
+    )
 
 
 # --- Growth (month-over-month, year-over-year, seasonality) ---

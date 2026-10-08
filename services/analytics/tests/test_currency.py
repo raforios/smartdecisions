@@ -169,62 +169,23 @@ def test_in_usdt_the_days_before_the_series_read_at_the_official_rate():
     assert applied['rows_without_rate'] == 0
 
 
-def _payments() -> pd.DataFrame:
+def test_the_reference_rate_is_todays_rate():
     '''
-        Two payments of the same dollars, months apart, with one quantity
-        that is not money.
-
-        Returns:
-            pd.DataFrame: The collections frame, as INGEST normalizes it.
+        Receivables, attainment and stock are counted in bolivianos; in
+        dollars they show what that is worth today, at one rate for all.
     '''
-    return pd.DataFrame([
-        {'order_id': 'F-1', 'payment_date': '2026-07-15', 'paid_amount': 696.0},
-        {'order_id': 'F-2', 'payment_date': '2026-09-15', 'paid_amount': 740.0},
-    ])
-
-
-def test_a_payment_converts_at_the_rate_of_its_invoice_day():
-    '''
-        A payment settles part of an invoice, so it converts at the rate the
-        invoice converted at. At the rate of the day it was paid, an invoice
-        paid in full in bolivianos stayed open in dollars, and the count of
-        debtors moved with the currency.
-    '''
-    invoice_days = pd.Series({'F-1': '2026-07-15', 'F-2': '2026-07-20'})
     with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
-        converted = currency.convert_payments(_payments(), 'USD', 'Bearer t', invoice_days)
-
-    # F-2 was paid in September, but its invoice is from July: 6.96.
-    assert [round(value, 2) for value in converted['paid_amount']] == [100.0, 106.32]
-    assert list(converted['order_id']) == ['F-1', 'F-2']
+        assert currency.reference_rate('USD', 'Bearer t', '2026-09-20') == 7.40
+    assert currency.reference_rate(currency.BASE_CURRENCY, 'Bearer t', '2026-09-20') is None
 
 
-def test_a_payment_without_its_invoice_converts_at_the_day_it_was_paid():
-    '''An invoice outside the sales read leaves its payment's own day.'''
-    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
-        converted = currency.convert_payments(_payments(), 'USD', 'Bearer t',
-                                              pd.Series(dtype = str))
-
-    assert [round(value, 2) for value in converted['paid_amount']] == [100.0, 100.0]
-
-
-def test_payments_in_the_base_currency_are_untouched():
-    '''Asking for bolivianos converts nothing, and no payments is no payments.'''
-    no_invoices = pd.Series(dtype = str)
-    assert currency.convert_payments(_payments(), currency.BASE_CURRENCY, 'Bearer t',
-                                     no_invoices).equals(_payments())
-    assert currency.convert_payments(None, 'USD', 'Bearer t', no_invoices) is None
-
-
-def test_a_stock_snapshot_is_valued_at_todays_rate():
-    '''
-        The inventory in dollars answered the same figures as in bolivianos
-        while saying "USD". The photo is what the stock is worth today, so it
-        converts at today's rate; units are not money.
-    '''
+def test_the_reference_rate_divides_money_and_leaves_units():
+    '''One rate for every amount: units, counts and shares do not move.'''
     snapshot = pd.DataFrame([{'product_id': 'P1', 'on_hand': 3.0, 'unit_cost': 74.0}])
-    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
-        converted = currency.convert_snapshot(snapshot, 'USD', 'Bearer t', '2026-09-20')
+
+    converted = currency.divide_money(snapshot, currency.SNAPSHOT_MONEY_COLUMNS, 7.40)
 
     assert round(float(converted['unit_cost'].iloc[0]), 2) == 10.0
     assert float(converted['on_hand'].iloc[0]) == 3.0
+    assert currency.divide_money(snapshot, currency.SNAPSHOT_MONEY_COLUMNS, None).equals(snapshot)
+    assert currency.divide_money(None, currency.SNAPSHOT_MONEY_COLUMNS, 7.40) is None

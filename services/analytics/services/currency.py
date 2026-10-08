@@ -51,9 +51,8 @@ MONEY_COLUMNS: tuple[str, ...] = (
 # photo, never its units.
 PAYMENT_MONEY_COLUMNS: tuple[str, ...] = ('paid_amount',)
 SNAPSHOT_MONEY_COLUMNS: tuple[str, ...] = ('unit_cost', 'unit_price')
+OBJECTIVE_MONEY_COLUMNS: tuple[str, ...] = ('target_amount',)
 _DATE = 'date'
-_PAYMENT_DATE = 'payment_date'
-_ORDER_ID = 'order_id'
 # The regime QUOTES reports for a day before the boliviano floated.
 _FIXED_REGIME = 'FIXED'
 
@@ -285,22 +284,52 @@ def current_rate(
     return float(sorted(rates, key = lambda rate: rate['date'])[-1]['rate'])
 
 
-def _divide_money(
-    frame: pd.DataFrame,
+def reference_rate(
+    currency: str,
+    auth_token: str,
+    today: str
+) -> float | None:
+    '''
+        The one rate a report counted in bolivianos is shown at.
+
+        Receivables, attainment and stock are counted in bolivianos: a credit
+        of 300 bolivianos is collected with 300 bolivianos, whatever the
+        dollar does meanwhile. In another currency they show what that is
+        worth today, at a single rate, so no count or share moves with it.
+
+        Args:
+            currency (str): ISO 4217 code, or the parallel USDT.
+            auth_token (str): The caller's Authorization header, for QUOTES.
+            today (str): Today, YYYY-MM-DD.
+
+        Returns:
+            float | None: Bolivianos per unit of the currency; None in the
+                base currency, where nothing converts.
+    '''
+    if currency == BASE_CURRENCY:
+        return None
+    return current_rate(currency, auth_token, today)
+
+
+def divide_money(
+    frame: pd.DataFrame | None,
     columns: tuple[str, ...],
-    rates: pd.Series | float
-) -> pd.DataFrame:
+    rates: pd.Series | float | None
+) -> pd.DataFrame | None:
     '''
         A copy of the frame with its money columns divided by the rate.
 
         Args:
-            frame (pd.DataFrame): The rows.
+            frame (pd.DataFrame | None): The rows.
             columns (tuple[str, ...]): The columns that hold money.
-            rates (pd.Series | float): One rate per row, or one for all.
+            rates (pd.Series | float | None): One rate per row, one for all,
+                or None to leave the amounts as they are.
 
         Returns:
-            pd.DataFrame: The converted copy.
+            pd.DataFrame | None: The converted copy, or the frame untouched.
     '''
+    if frame is None or rates is None:
+        return frame
     converted = frame.copy()
     for column in columns:
         if column in converted.columns:
@@ -313,74 +342,6 @@ def _divide_money(
             else:
                 converted[column] = converted[column] / rates
     return converted
-
-
-def convert_payments(
-    payments: pd.DataFrame | None,
-    currency: str,
-    auth_token: str,
-    invoice_days: pd.Series
-) -> pd.DataFrame | None:
-    '''
-        The payments read in another currency, each at the rate of the day of
-        the invoice it settles.
-
-        A payment settles part of an invoice, so it converts at the rate the
-        invoice converted at: whatever share of the invoice it paid in
-        bolivianos, it pays in any currency. At the rate of the day it was
-        paid, an invoice paid in full stayed open in dollars once the rate
-        moved, and the count of debtors moved with the currency.
-
-        Args:
-            payments (pd.DataFrame | None): The collections file, normalized.
-            currency (str): ISO 4217 code, or the parallel USDT.
-            auth_token (str): The caller's Authorization header, for QUOTES.
-            invoice_days (pd.Series): Day of each invoice, by `order_id`. A
-                payment whose invoice is not in it converts at its own day.
-
-        Returns:
-            pd.DataFrame | None: The converted payments; untouched in the base
-                currency, and None when there are none.
-    '''
-    if payments is None or payments.empty or currency == BASE_CURRENCY \
-            or _PAYMENT_DATE not in payments.columns:
-        return payments
-    own_day = pd.to_datetime(payments[_PAYMENT_DATE], errors = 'coerce')
-    of_invoice = pd.to_datetime(payments[_ORDER_ID].map(invoice_days), errors = 'coerce') \
-        if _ORDER_ID in payments.columns else own_day
-    dated = payments.assign(**{_DATE: of_invoice.fillna(own_day)})
-    if dated[_DATE].isna().all():
-        return payments
-    series, _ = rates_per_row(dated, currency, auth_token)
-    return _divide_money(payments, PAYMENT_MONEY_COLUMNS, series)
-
-
-def convert_snapshot(
-    snapshot: pd.DataFrame | None,
-    currency: str,
-    auth_token: str,
-    today: str
-) -> pd.DataFrame | None:
-    '''
-        A stock photo valued in another currency, at today's rate.
-
-        The photo is what the stock is worth now, so it converts at the rate
-        of now; its units are not money and stay as they are.
-
-        Args:
-            snapshot (pd.DataFrame | None): The stock file, normalized.
-            currency (str): ISO 4217 code, or the parallel USDT.
-            auth_token (str): The caller's Authorization header, for QUOTES.
-            today (str): Today, YYYY-MM-DD.
-
-        Returns:
-            pd.DataFrame | None: The valued photo; untouched in the base
-                currency, and None when there is none.
-    '''
-    if snapshot is None or snapshot.empty or currency == BASE_CURRENCY:
-        return snapshot
-    return _divide_money(snapshot, SNAPSHOT_MONEY_COLUMNS,
-                         current_rate(currency, auth_token, today))
 
 
 def convert_frame(
@@ -408,7 +369,7 @@ def convert_frame(
     series, counts = rates_per_row(dataframe, currency, auth_token)
     at_fallback, at_fixed = counts['at_fallback'], counts['at_fixed']
 
-    converted = _divide_money(dataframe, MONEY_COLUMNS, series)
+    converted = divide_money(dataframe, MONEY_COLUMNS, series)
 
     applied = int(series.notna().sum())
     message = (f'Converted {applied}/{len(series)} row(s) to {currency} at the rate '

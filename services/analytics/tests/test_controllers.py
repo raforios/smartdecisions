@@ -798,14 +798,21 @@ def _rising_rate(monkeypatch) -> None:
     monkeypatch.setattr(currency, '_fetch_rates', lambda *args: rates)
 
 
-def test_receivables_in_dollars_converts_the_payments_too(
+def _todays_rate() -> float:
+    '''The reference rate the controllers apply today, under the patched series.'''
+    today = controllers.get_current_time_gmt().date().isoformat()
+    return currency.current_rate('USD', 'Bearer t', today)
+
+
+def test_receivables_are_counted_in_bolivianos_whatever_the_currency(
     dataset,
     monkeypatch
 ):
     '''
-        In dollars the report subtracted payments in bolivianos from invoices
-        in dollars, and the number of open invoices and of debtors moved with
-        the currency. A count cannot depend on the currency.
+        A credit of 300 bolivianos is collected with 300 bolivianos: balances,
+        open invoices and debtors are counted in bolivianos, and the dollars
+        are that same figure at today's rate, as a reference. Converting each
+        payment at its own day left invoices paid in full open in dollars.
     '''
     monkeypatch.setattr(
         controllers, 'get_dataset_metadata',
@@ -818,9 +825,6 @@ def test_receivables_in_dollars_converts_the_payments_too(
         lambda key: _collections_frame() if 'collections' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
-    # With a rate that moves between the invoice and its payment: a payment
-    # converted at its own day settled less dollars than the invoice was
-    # worth, and invoices paid in full showed up open.
     _rising_rate(monkeypatch)
 
     in_bob = _call(controllers.receivables_controller, dataset)
@@ -829,7 +833,42 @@ def test_receivables_in_dollars_converts_the_payments_too(
 
     assert in_usd.kpis.open_invoices == in_bob.kpis.open_invoices
     assert in_usd.kpis.clients_with_debt == in_bob.kpis.clients_with_debt
-    assert 0 < in_usd.kpis.receivable_total < in_bob.kpis.receivable_total
+    assert in_usd.kpis.overdue_rate == in_bob.kpis.overdue_rate
+    assert round(in_usd.kpis.receivable_total * _todays_rate(), 0) == \
+        round(in_bob.kpis.receivable_total, 0)
+    assert in_usd.period.currency.reference_rate == _todays_rate()
+
+
+def test_attainment_is_the_same_in_any_currency(
+    dataset,
+    monkeypatch
+):
+    '''
+        The objective is in bolivianos, and so is what was invoiced against
+        it: the attainment does not depend on the currency it is shown in.
+    '''
+    monkeypatch.setattr(
+        controllers, 'get_dataset_metadata',
+        lambda **_: {'file_s3_key': 'ingest/normalized/test.csv',
+                     'objectives_s3_key': 'ingest/objectives/test.csv',
+                     'status': 'validated'}
+    )
+    monkeypatch.setattr(
+        controllers, 'load_dataframe_from_s3',
+        lambda key: _objectives_frame() if 'objectives' in key else _sales_frame()
+    )
+    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
+    _rising_rate(monkeypatch)
+
+    in_bob = _call(controllers.objectives_controller, dataset)
+    in_usd = _call(controllers.objectives_controller, dataset,
+                   {'currency': 'USD', 'auth_token': 'Bearer t'})
+
+    # Equal up to the cent rounding of each amount, which on the test's
+    # small figures reaches the third decimal of the share.
+    assert in_usd.totals.invoiced_ratio == pytest.approx(in_bob.totals.invoiced_ratio, abs = 1e-3)
+    assert in_usd.totals.collected_ratio == pytest.approx(in_bob.totals.collected_ratio,
+                                                          abs = 1e-3)
 
 
 def test_stock_in_dollars_is_valued_in_dollars(
@@ -838,7 +877,7 @@ def test_stock_in_dollars_is_valued_in_dollars(
 ):
     '''
         The stock in dollars answered the same figures as in bolivianos while
-        saying "USD". The value converts; the units do not.
+        saying "USD". The value converts at today's rate; the units do not.
     '''
     monkeypatch.setattr(
         controllers, 'get_dataset_metadata',
