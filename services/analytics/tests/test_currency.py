@@ -183,24 +183,37 @@ def _payments() -> pd.DataFrame:
     ])
 
 
-def test_a_payment_converts_at_the_rate_of_the_day_it_was_paid():
+def test_a_payment_converts_at_the_rate_of_its_invoice_day():
     '''
-        The receivables report in dollars subtracted payments in bolivianos
-        from invoices in dollars, and even the count of debtors moved with the
-        currency. A payment is money on the day it was paid.
+        A payment settles part of an invoice, so it converts at the rate the
+        invoice converted at. At the rate of the day it was paid, an invoice
+        paid in full in bolivianos stayed open in dollars, and the count of
+        debtors moved with the currency.
     '''
+    invoice_days = pd.Series({'F-1': '2026-07-15', 'F-2': '2026-07-20'})
     with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
-        converted = currency.convert_payments(_payments(), 'USD', 'Bearer t')
+        converted = currency.convert_payments(_payments(), 'USD', 'Bearer t', invoice_days)
+
+    # F-2 was paid in September, but its invoice is from July: 6.96.
+    assert [round(value, 2) for value in converted['paid_amount']] == [100.0, 106.32]
+    assert list(converted['order_id']) == ['F-1', 'F-2']
+
+
+def test_a_payment_without_its_invoice_converts_at_the_day_it_was_paid():
+    '''An invoice outside the sales read leaves its payment's own day.'''
+    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
+        converted = currency.convert_payments(_payments(), 'USD', 'Bearer t',
+                                              pd.Series(dtype = str))
 
     assert [round(value, 2) for value in converted['paid_amount']] == [100.0, 100.0]
-    assert list(converted['order_id']) == ['F-1', 'F-2']
 
 
 def test_payments_in_the_base_currency_are_untouched():
     '''Asking for bolivianos converts nothing, and no payments is no payments.'''
-    assert currency.convert_payments(_payments(), currency.BASE_CURRENCY, 'Bearer t') \
-        .equals(_payments())
-    assert currency.convert_payments(None, 'USD', 'Bearer t') is None
+    no_invoices = pd.Series(dtype = str)
+    assert currency.convert_payments(_payments(), currency.BASE_CURRENCY, 'Bearer t',
+                                     no_invoices).equals(_payments())
+    assert currency.convert_payments(None, 'USD', 'Bearer t', no_invoices) is None
 
 
 def test_a_stock_snapshot_is_valued_at_todays_rate():

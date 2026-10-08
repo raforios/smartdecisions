@@ -53,6 +53,7 @@ PAYMENT_MONEY_COLUMNS: tuple[str, ...] = ('paid_amount',)
 SNAPSHOT_MONEY_COLUMNS: tuple[str, ...] = ('unit_cost', 'unit_price')
 _DATE = 'date'
 _PAYMENT_DATE = 'payment_date'
+_ORDER_ID = 'order_id'
 # The regime QUOTES reports for a day before the boliviano floated.
 _FIXED_REGIME = 'FIXED'
 
@@ -317,20 +318,25 @@ def _divide_money(
 def convert_payments(
     payments: pd.DataFrame | None,
     currency: str,
-    auth_token: str
+    auth_token: str,
+    invoice_days: pd.Series
 ) -> pd.DataFrame | None:
     '''
-        The payments read in another currency, each at the rate of the day it
-        was paid.
+        The payments read in another currency, each at the rate of the day of
+        the invoice it settles.
 
-        A receivables report in dollars has to subtract dollars from dollars:
-        payments left in bolivianos against converted invoices closed invoices
-        that were open, and even the count of debtors moved with the currency.
+        A payment settles part of an invoice, so it converts at the rate the
+        invoice converted at: whatever share of the invoice it paid in
+        bolivianos, it pays in any currency. At the rate of the day it was
+        paid, an invoice paid in full stayed open in dollars once the rate
+        moved, and the count of debtors moved with the currency.
 
         Args:
             payments (pd.DataFrame | None): The collections file, normalized.
             currency (str): ISO 4217 code, or the parallel USDT.
             auth_token (str): The caller's Authorization header, for QUOTES.
+            invoice_days (pd.Series): Day of each invoice, by `order_id`. A
+                payment whose invoice is not in it converts at its own day.
 
         Returns:
             pd.DataFrame | None: The converted payments; untouched in the base
@@ -339,9 +345,10 @@ def convert_payments(
     if payments is None or payments.empty or currency == BASE_CURRENCY \
             or _PAYMENT_DATE not in payments.columns:
         return payments
-    dated = payments.assign(**{
-        _DATE: pd.to_datetime(payments[_PAYMENT_DATE], errors = 'coerce')
-    })
+    own_day = pd.to_datetime(payments[_PAYMENT_DATE], errors = 'coerce')
+    of_invoice = pd.to_datetime(payments[_ORDER_ID].map(invoice_days), errors = 'coerce') \
+        if _ORDER_ID in payments.columns else own_day
+    dated = payments.assign(**{_DATE: of_invoice.fillna(own_day)})
     if dated[_DATE].isna().all():
         return payments
     series, _ = rates_per_row(dated, currency, auth_token)

@@ -2,6 +2,8 @@
     Analytics controllers.
 '''
 from typing import Any
+
+import pandas as pd
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
@@ -212,15 +214,17 @@ def _scoped_dataframe(
 
 def _payments_of(
     metadata: dict[str, Any],
-    params: dict[str, Any] | None
+    params: dict[str, Any] | None,
+    sales: Any
 ) -> Any:
     '''
         The payments INGEST attached to the dataset, in the currency the sales
-        were read in.
+        were read in: each at the rate of the day of the invoice it settles.
 
         Args:
             metadata (dict[str, Any]): The dataset record.
             params (dict | None): May carry 'currency' with the caller's token.
+            sales (Any): The sales read, for the day of each invoice.
 
         Returns:
             Any: The payments DataFrame, or None when none were loaded.
@@ -230,9 +234,10 @@ def _payments_of(
     return convert_payments(
         load_dataframe_from_s3(key) if key else None,
         options.get('currency') or BASE_CURRENCY,
-        options.get('auth_token') or ''
+        options.get('auth_token') or '',
+        sales.groupby('order_id')['date'].min() if 'order_id' in sales
+        else pd.Series(dtype = object)
     )
-
 
 @handle_service_errors('ANALYTICS')
 async def commercial_summary_controller(
@@ -291,7 +296,7 @@ async def receivables_controller(
     )
     block = build_receivables(
         sales = dataframe,
-        collections = _payments_of(metadata, params),
+        collections = _payments_of(metadata, params, dataframe),
         stored_policy = get_credit_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
@@ -339,7 +344,7 @@ async def objectives_controller(
     block = build_objectives(
         sales = dataframe,
         objectives = objectives,
-        collections = _payments_of(metadata, params),
+        collections = _payments_of(metadata, params, dataframe),
         stored_policy = get_commercial_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user

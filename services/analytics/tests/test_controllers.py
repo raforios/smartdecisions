@@ -787,6 +787,17 @@ def _flat_rate(monkeypatch) -> None:
     )
 
 
+def _rising_rate(monkeypatch) -> None:
+    '''
+        A rate that moves every day, so an invoice and its payment, twenty
+        days apart, never share a rate.
+    '''
+    days = pd.date_range('2025-12-01', '2026-12-31', freq = 'D')
+    rates = [{'date': day.date().isoformat(), 'rate': 7.0 + 0.01 * index}
+             for index, day in enumerate(days)]
+    monkeypatch.setattr(currency, '_fetch_rates', lambda *args: rates)
+
+
 def test_receivables_in_dollars_converts_the_payments_too(
     dataset,
     monkeypatch
@@ -807,7 +818,10 @@ def test_receivables_in_dollars_converts_the_payments_too(
         lambda key: _collections_frame() if 'collections' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
-    _flat_rate(monkeypatch)
+    # With a rate that moves between the invoice and its payment: a payment
+    # converted at its own day settled less dollars than the invoice was
+    # worth, and invoices paid in full showed up open.
+    _rising_rate(monkeypatch)
 
     in_bob = _call(controllers.receivables_controller, dataset)
     in_usd = _call(controllers.receivables_controller, dataset,
@@ -815,7 +829,7 @@ def test_receivables_in_dollars_converts_the_payments_too(
 
     assert in_usd.kpis.open_invoices == in_bob.kpis.open_invoices
     assert in_usd.kpis.clients_with_debt == in_bob.kpis.clients_with_debt
-    assert round(in_usd.kpis.receivable_total * 10, 2) == round(in_bob.kpis.receivable_total, 2)
+    assert 0 < in_usd.kpis.receivable_total < in_bob.kpis.receivable_total
 
 
 def test_stock_in_dollars_is_valued_in_dollars(
