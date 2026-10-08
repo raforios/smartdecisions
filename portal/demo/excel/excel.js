@@ -854,7 +854,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const converted = periodo.currency;
         const currencyNote = qs('#currencyNote');
         currencyNote.hidden = !converted;
-        if (converted) {
+        if (converted && converted.reference_rate) {
+            // Receivables, attainment and stock are counted in bolivianos; the
+            // dollars are that same figure at today's rate, as a reference.
+            const moneda = converted.currency === 'USDT' ? 'USDT' : 'dólar oficial';
+            currencyNote.textContent =
+                `Se calcula en bolivianos; en ${converted.currency} se muestra al ` +
+                `${moneda} de hoy (Bs ${formatDecimal(converted.reference_rate, 2)}), ` +
+                'como referencia.';
+        } else if (converted) {
             const fuente = converted.currency === 'USDT'
                 ? 'al precio del USDT (Binance P2P, dólar paralelo) de su propio día.'
                 : 'al tipo de cambio oficial de su propio día.';
