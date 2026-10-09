@@ -245,11 +245,11 @@
 
 .card-head .ai-ask { margin-left: auto; }
 
-/* Cuando el panel se abre entre la cabecera y la tabla necesita aire de los
-   dos lados, o queda pegado al encabezado de columnas. */
+/* When the panel opens between the header and the table it needs room on
+   both sides, or it sticks to the column headers. */
 .card-head + .ai-answer { margin-bottom: 1.4rem; }
 
-/* --- Sections (Planificar, Planes, Stock del día, En vivo, Comparación) --- */
+/* --- Sections (Plan, Plans, Today's stock, Live, Comparison) --- */
 .routes-section { margin-top: 1.5rem; }
 .card-head .form-actions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; }
 .card-head select, .card-head input[type="date"] { padding: 0.35rem 0.5rem; }

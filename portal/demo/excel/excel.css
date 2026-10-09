@@ -343,7 +343,7 @@
     flex: 1 1 auto;
 }
 .section-head .btn { flex: 0 0 auto; }
-/* El botón de interpretación cierra la cabecera, igual que en Rutas. */
+/* The interpretation button closes the header, same as in Routes. */
 .section-head .ai-ask { margin-left: auto; }
 .section-head + .ai-answer { margin-bottom: 1.4rem; }
 
@@ -549,3 +549,26 @@
    stayed on top of the map, and the period bar showed before it had dates.
    This makes hiding work regardless of what the layout rules say. */
 [hidden] { display: none !important; }
+
+/* ============ Money in three currencies (Bs · USD · USDT) ============ */
+.money3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+}
+.money3-col { display: flex; flex-direction: column; min-width: 0; }
+.money3-label {
+    color: var(--muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+}
+.money3-value {
+    font-size: 0.98rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.money3-col:first-child .money3-value { color: var(--text-strong); }
+.data-table thead th.money-group { text-align: center; }
+.data-table thead .money-subhead th { padding-top: 0.3rem; padding-bottom: 0.3rem; font-size: 0.7rem; }
+.data-table td.money-cell { font-size: 0.84rem; }

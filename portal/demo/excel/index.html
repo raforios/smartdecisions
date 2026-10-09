@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análisis Comercial — SmartDecisions</title>
     <link rel="stylesheet" href="../styles/demo.css?v=8d34ccaf11">
-    <link rel="stylesheet" href="excel.css?v=d7743f97de">
+    <link rel="stylesheet" href="excel.css?v=921dd93516">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
@@ -15,8 +15,9 @@
     <script src="../js/ui.js?v=bd318da6b9" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../js/money.js?v=7b096f5137" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-    <script src="excel.js?v=2a5175fb29" defer></script>
+    <script src="excel.js?v=eacb91583e" defer></script>
 </head>
 <body>
 
@@ -260,7 +261,7 @@
                 </div>
             </div>
 
-            <!-- ---------- Rentabilidad (solo si el archivo trae Costo Unitario) ---------- -->
+            <!-- ---------- Profitability (only if the file carries Costo Unitario) ---------- -->
             <div class="analysis-block" id="marginBlock" hidden>
                 <h3 class="block-title">Rentabilidad</h3>
                 <p class="block-subtitle">
@@ -386,9 +387,9 @@
         </section>
 
         <!-- ===================== Fuente de volumen ===================== -->
-        <!-- Vive en su propia vista, no como un bloque más del resumen: de dónde
-             sale el volumen es una pregunta propia. Sale de la misma respuesta
-             que el resumen comercial, así que pedirla no cuesta otra llamada. -->
+        <!-- Lives in its own view, not as one more block of the summary: where
+             the volume comes from is a question of its own. It comes from the
+             same response as the commercial summary, so asking costs no call. -->
         <section id="stepVolume" class="step-section" hidden>
             <div class="section-head">
                 <h2 class="section-title">Fuente de volumen</h2>
@@ -402,8 +403,8 @@
                 De qué productos y de qué clientes sale la venta, qué producto
                 sostiene a cada cliente, y de dónde vino el movimiento del último mes.
             </p>
-            <!-- La nota de vacío existe para que la vista nunca quede en blanco:
-                 una pantalla sin nada fue exactamente lo que rompió una demo. -->
+            <!-- The empty note exists so the view is never blank: a screen with
+                 nothing is exactly what broke a demo. -->
             <p class="form-note" id="volumeEmpty" hidden>
                 Este archivo no tiene columnas de producto y monto suficientes para
                 responder de dónde sale el volumen.
@@ -555,13 +556,13 @@
             </div>
         </section>
 
-        <!-- ===================== Cuentas por cobrar ===================== -->
-        <!-- Vive en su propio endpoint porque necesita los cobros, que se cargan
-             aparte y después de la venta. Cuando el archivo no trae crédito, el
-             backend responde con un código y la vista lo dice. -->
-        <!-- Cumplimiento: el objetivo es la única cifra que ningún movimiento
-             implica, así que se carga aparte. Sin objetivos cargados la vista lo
-             dice y sigue mostrando a los clientes que sí facturaron. -->
+        <!-- ===================== Receivables ===================== -->
+        <!-- Lives in its own endpoint because it needs the payments, which are
+             loaded separately and after the sales. When the file carries no
+             credit, the backend answers with a code and the view says so. -->
+        <!-- Attainment: the target is the only figure no movement implies, so
+             it is loaded separately. With no targets loaded the view says so
+             and still shows the clients that did invoice. -->
         <section id="stepObjectives" class="step-section" hidden>
             <div class="section-head">
                 <h2 class="section-title">Cumplimiento de objetivos</h2>
@@ -697,10 +698,10 @@
                                 <th>Tramo</th>
                                 <th class="numeric">Facturas</th>
                                 <th class="numeric">Clientes</th>
-                                <th class="numeric">Saldo</th>
+                                <th class="numeric" data-money>Saldo</th>
                                 <th class="numeric">% del saldo</th>
                                 <th class="numeric">Pérdida esperada</th>
-                                <th class="numeric">Provisión</th>
+                                <th class="numeric" data-money>Provisión</th>
                             </tr></thead>
                             <tbody></tbody>
                         </table>
@@ -717,7 +718,7 @@
                     <p class="insight-line" id="creditMarginNote"></p>
                 </div>
 
-                <div class="split-layout split-even">
+                <div>
                     <div class="chart-card">
                         <h3 class="chart-title">Quiénes deben</h3>
                         <p class="chart-hint">
@@ -728,8 +729,8 @@
                             <table class="data-table" id="debtorsTable">
                                 <thead><tr>
                                     <th>Cliente</th>
-                                    <th class="numeric">Saldo</th>
-                                    <th class="numeric">Vencido</th>
+                                    <th class="numeric" data-money>Saldo</th>
+                                    <th class="numeric" data-money>Vencido</th>
                                     <th class="numeric">Días</th>
                                     <th class="numeric">Uso de línea</th>
                                     <th>Riesgo</th>
@@ -748,8 +749,8 @@
                             <table class="data-table" id="collectorsTable">
                                 <thead><tr>
                                     <th>Responsable</th>
-                                    <th class="numeric">Saldo</th>
-                                    <th class="numeric">Vencido</th>
+                                    <th class="numeric" data-money>Saldo</th>
+                                    <th class="numeric" data-money>Vencido</th>
                                     <th class="numeric">Clientes</th>
                                     <th class="numeric">A tiempo</th>
                                 </tr></thead>
@@ -771,7 +772,7 @@
                             <table class="data-table" id="dueDatesTable">
                                 <thead><tr>
                                     <th>Vence</th>
-                                    <th class="numeric">Monto</th>
+                                    <th class="numeric" data-money>Monto</th>
                                     <th class="numeric">Facturas</th>
                                     <th class="numeric">Clientes</th>
                                 </tr></thead>
@@ -801,10 +802,10 @@
                             <thead><tr>
                                 <th>Cliente</th>
                                 <th>Responsable</th>
-                                <th class="numeric">Vencido</th>
+                                <th class="numeric" data-money>Vencido</th>
                                 <th class="numeric">Días</th>
                                 <th class="numeric">Probabilidad</th>
-                                <th class="numeric">Recupero esperado</th>
+                                <th class="numeric" data-money>Recupero esperado</th>
                             </tr></thead>
                             <tbody></tbody>
                         </table>
@@ -813,9 +814,9 @@
             </div>
         </section>
 
-        <!-- ===================== Stock del día ===================== -->
-        <!-- BI, no transaccional: «Disponible» refleja lo que el ERP del cliente
-             ya comprometió. Acá no se reserva ni se promete stock. -->
+        <!-- ===================== Today's stock ===================== -->
+        <!-- BI, not transactional: «Disponible» reflects what the client's ERP
+             already committed. Nothing is reserved or promised here. -->
         <section id="stepStock" class="step-section" hidden>
             <div class="section-head">
                 <h2 class="section-title">Stock del día</h2>
@@ -1053,7 +1054,7 @@
             </div>
         </section>
 
-        <!-- ===================== Pronóstico de Demanda ===================== -->
+        <!-- ===================== Demand forecast ===================== -->
         <section id="stepForecast" class="step-section" hidden>
             <div class="section-head">
                 <h2 class="section-title">Pronóstico de Demanda</h2>

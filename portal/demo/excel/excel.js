@@ -10,6 +10,8 @@
  *   4. Render opportunities table sortable by columns and filterable by PdV.
  */
 document.addEventListener('DOMContentLoaded', () => {
+    // Every amount column shows Bs, USD and USDT under one header.
+    window.SD_MONEY.expandHeaders(document);
     if (!window.SD_AUTH.requireAuth()) return;
 
     const { qs, qsAll, toast, setButtonBusy } = window.SD_UI;
@@ -90,6 +92,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // the P2P market (the parallel dollar).
     const CONVERTED = new Set(['USD', 'USDT']);
 
+    /** A Money {bob, usd, usdt} as the selected currency; a plain number as is. */
+    function chartAmount(value) {
+        return window.SD_MONEY.pick(value, state.period.currency);
+    }
+
     function currencySymbol() {
         return CURRENCY_SYMBOLS[state.period.currency] || CURRENCY_SYMBOLS.BOB;
     }
@@ -133,9 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return readCache().results[kind] || null;
     }
 
-    // Un análisis puede alimentar más de una vista: el resumen y la fuente de
-    // volumen salen de la misma respuesta, y las dos tienen que mostrar cuándo
-    // se calculó. Por eso el sello se marca por lista de nodos y no por uno.
+    // One analysis can feed more than one view: the summary and the volume
+    // source come from the same response, and both have to show when it was
+    // computed. That is why the stamp is set on a list of nodes, not on one.
     const STAMP_IDS = {
         summary: ['stampSummary', 'stampVolume'],
         opportunities: ['stampOpportunities'],
@@ -542,11 +549,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // A few KPIs read better with the period the number belongs to.
     /**
-     * Etiqueta de una tarjeta KPI.
+     * Label of a KPI card.
      *
-     * Las que vienen del backend traen `metric_code` y se traducen acá. Las que
-     * arma el frontend —concentración, fuente de volumen— traen su etiqueta
-     * escrita: sin este respaldo salían a pantalla sin título.
+     * Cards from the backend carry `metric_code` and are translated here. Cards
+     * the frontend builds —concentration, volume source— carry their label
+     * written in: without this fallback they reached the screen untitled.
      */
     function kpiLabel(card) {
         const entry = KPI_LABELS[card && card.metric_code];
@@ -589,9 +596,9 @@ document.addEventListener('DOMContentLoaded', () => {
         DATASET_UNREADABLE: 'No se pudo leer el archivo del bucket de FILES.'
     };
 
-    // El mismo código de nivel, leído sobre productos en vez de clientes: la
-    // frase cambia porque la dependencia de un SKU no se gestiona como la
-    // dependencia de una cuenta.
+    // The same level code, read over products instead of clients: the
+    // sentence changes because depending on a SKU is not managed like
+    // depending on an account.
     const VOLUME_LEVELS = {
         HIGH: 'Alta: el volumen depende de muy pocos productos.',
         MODERATE: 'Moderada: hay dependencia de algunos productos clave.',
@@ -625,8 +632,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `Mismo mes de ${String(card.reference).slice(0, 4)} (YoY)`
                 : 'Se necesita un año de historial';
         }
-        // Igual que la etiqueta: la nota de una tarjeta armada a mano es la que
-        // trae la tarjeta.
+        // Same as the label: a hand-built card's note is the one the card
+        // carries.
         return entry ? entry[1] : ((card && card.hint) || null);
     }
 
@@ -1425,6 +1432,8 @@ document.addEventListener('DOMContentLoaded', () => {
         (cards || []).forEach((card) => box.appendChild(metricCard({
             label: kpiLabel(card),
             value: formatKpi(card),
+            // Money travels as {bob, usd, usdt}: the three side by side.
+            valueHtml: card.format === 'money3' ? window.SD_MONEY.card(card.value) : '',
             hint: kpiHint(card),
             variant: variantFor ? variantFor(card) : ''
         })));
@@ -1444,9 +1453,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * El resumen comercial y la fuente de volumen salen de la misma respuesta.
-     * `view` dice en qué vista terminar, porque el usuario puede haber pedido
-     * cualquiera de las dos y el archivo se lee una sola vez.
+     * The commercial summary and the volume source come from the same response.
+     * `view` says which view to end on, because the user may have asked for
+     * either one and the file is read only once.
      */
     function renderCommercialSummary(data, view) {
         // KPIs
@@ -1604,8 +1613,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- Volume source ----------
-    // Códigos que reporta el motor, redactados acá. El backend nombra el
-    // efecto; la frase que lo explica es del frontend.
+    // Codes the engine reports, worded here. The backend names the effect;
+    // the sentence that explains it belongs to the frontend.
     const VOLUME_EFFECTS = {
         PRICE: ['Precio', 'Lo mismo vendido a otro precio'],
         QUANTITY: ['Cantidad', 'Más o menos unidades al precio anterior'],
@@ -1636,17 +1645,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * De dónde sale el volumen: productos, clientes, el cruce entre ambos y la
-     * descomposición del último movimiento.
+     * Where the volume comes from: products, clients, the cross between both
+     * and the breakdown of the latest movement.
      *
-     * Las piezas que antes estaban repartidas —el mix de categorías dentro de
-     * Crecimiento y el ABC dentro de Concentración— se muestran acá y sólo acá.
+     * The pieces that used to be scattered —the category mix inside Growth and
+     * the ABC inside Concentration— are shown here and only here.
      */
     function renderVolumeSource(volumen) {
         const headline = (volumen && volumen.headline) || {};
-        // Sin productos no hay nada que contestar, pero la vista se muestra
-        // igual con su explicación: si el usuario pidió este análisis, dejarlo
-        // frente a una pantalla vacía es peor que decirle por qué no hay nada.
+        // With no products there is nothing to answer, but the view still
+        // shows with its explanation: if the user asked for this analysis,
+        // leaving them in front of a blank screen is worse than saying why.
         const empty = !headline.total_products;
         qs('#volumeEmpty').hidden = !empty;
         qs('#volumeContent').hidden = empty;
@@ -1843,7 +1852,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let riskClients = [];
 
     // ---------- Stock ----------
-    // Códigos del motor, redactados acá.
+    // Engine codes, worded here.
     const STOCK_STATUS_LABELS = {
         OUT_OF_STOCK: 'Sin stock',
         CRITICAL: 'Crítico',
@@ -1861,7 +1870,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'cruzar con el catálogo de ventas.'
     };
 
-    // El orden en que se leen las situaciones: primero lo que falta.
+    // The order in which the situations are read: what is missing first.
     const STOCK_STATUS_ORDER = ['OUT_OF_STOCK', 'CRITICAL', 'LOW', 'HEALTHY',
         'EXCESS', 'NO_DEMAND'];
 
@@ -1877,8 +1886,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * El stock del día: cuánto dura, qué está por quebrar y qué capital está
-     * quieto. `Disponible` refleja lo que el ERP ya comprometió.
+     * Today's stock: how long it lasts, what is about to run out and how much
+     * capital sits idle. `Disponible` reflects what the ERP already committed.
      */
     function renderStock(data) {
         const empty = qs('#stockEmpty');
@@ -1998,8 +2007,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- Receivables ----------
-    // Códigos del backend, redactados acá. El servicio devuelve
-    // AgingBucket.DAYS_31_60 y CreditRisk.CRITICAL; la frase es del frontend.
+    // Backend codes, worded here. The service returns AgingBucket.DAYS_31_60
+    // and CreditRisk.CRITICAL; the sentence belongs to the frontend.
     const AGING_LABELS = {
         CURRENT: 'Por vencer',
         DAYS_1_15: '1 a 15 días',
@@ -2044,8 +2053,8 @@ document.addEventListener('DOMContentLoaded', () => {
                `${escapeHtml(RISK_LABELS[code] || code)}</span>`;
     }
 
-    // Los códigos del backend; el color y la palabra son del frontend, que es
-    // donde deben estar.
+    // The backend codes; the color and the word belong to the frontend,
+    // which is where they should be.
     const SEMAPHORE_LABEL = { GREEN: 'Verde', YELLOW: 'Amarillo', RED: 'Rojo' };
     const SEMAPHORE_COLOR = { GREEN: '#2d7d46', YELLOW: '#c4a378', RED: '#c0392b' };
     const SEMAPHORE_ORDER = ['GREEN', 'YELLOW', 'RED'];
@@ -2057,9 +2066,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Cumplimiento contra objetivo: cuánto se vendió contra lo que se debía
-     * vender, por cliente y por mes, con el semáforo de facturado y el de
-     * cobrado, que no son la misma pregunta.
+     * Attainment against target: how much was sold against what should have
+     * been sold, per client and per month, with the invoiced and the collected
+     * traffic lights, which are not the same question.
      */
     function renderObjectives(data) {
         const empty = qs('#objectivesEmpty');
@@ -2085,8 +2094,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const meses = totals.periods || [];
         const disponibles = data.available_periods || [];
-        // Sin período elegido el servicio juzga sólo el último mes: se dice,
-        // para que el gerente sepa que puede ampliar con las fechas de arriba.
+        // With no period chosen the service judges only the last month: it is
+        // said, so the manager knows the dates above can widen it.
         const alcance = meses.length === 1
             ? `en ${meses[0]}`
             : `en ${meses.length} meses, de ${meses[0] || '—'} a ${meses[meses.length - 1] || '—'}`;
@@ -2174,8 +2183,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `<td class="num">${formatDecimal(cell.weight_on_target * 100, 1)}%</td>`,
             { emptyText: 'Sin celdas para mostrar.' });
 
-        // Peor cumplimiento primero: la lista existe para encontrar al que no
-        // llega, no para felicitar al que sí.
+        // Worst attainment first: the list exists to find who falls short,
+        // not to congratulate who does not.
         const clients = (data.clients || []).slice()
             .sort((a, b) => a.invoiced_ratio - b.invoiced_ratio);
 
@@ -2196,8 +2205,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * La cartera por cobrar: posición, antigüedad, recuperabilidad, quién debe,
-     * quién cobra, qué vence cuándo y qué deja el crédito.
+     * The receivables book: position, aging, recoverability, who owes, who
+     * collects, what falls due when and what the credit leaves.
      */
     function renderReceivables(data) {
         const empty = qs('#receivablesEmpty');
@@ -2220,21 +2229,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const kpis = data.kpis || {};
         qs('#receivablesSubtitle').textContent =
             `Cartera al ${formatDate(kpis.as_of)}, el último día con movimiento del ` +
-            'archivo. Todas las antigüedades se miden contra esa fecha.';
+            'archivo. Todas las antigüedades se miden contra esa fecha. Se calcula en ' +
+            `bolivianos; USD y USDT al tipo de hoy. ${window.SD_MONEY.ratesNote(data.rates)}`;
 
         fillKpis('receivablesKpis', [
-            { label: 'Saldo por cobrar', value: kpis.receivable_total, format: 'money',
+            { label: 'Saldo por cobrar', value: kpis.receivable_total, format: 'money3',
               hint: `${formatInt(kpis.open_invoices)} facturas abiertas de ` +
                     `${formatInt(kpis.clients_with_debt)} clientes` },
-            { label: 'Vencido', value: kpis.overdue_amount, format: 'money',
+            { label: 'Vencido', value: kpis.overdue_amount, format: 'money3',
               hint: `${formatDecimal(kpis.overdue_rate, 1)}% del saldo` },
-            { label: 'Recuperable', value: kpis.recoverable_amount, format: 'money',
+            { label: 'Recuperable', value: kpis.recoverable_amount, format: 'money3',
               hint: `${formatDecimal(kpis.recoverable_rate, 1)}% del saldo` },
             { label: 'Incobrable estimado', value: kpis.uncollectible_amount,
-              format: 'money',
+              format: 'money3',
               hint: `${formatDecimal(kpis.uncollectible_rate, 1)}% del saldo` },
             { label: 'Venta a crédito', value: kpis.credit_share, format: 'percent',
-              hint: `${currencySymbol()} ${formatDecimal(kpis.credit_amount, 0)} de la venta del período` },
+              hint: `${window.SD_MONEY.inline(kpis.credit_amount)} de la venta del período` },
             { label: 'DSO', value: kpis.days_sales_outstanding, format: 'decimal',
               hint: 'Días que tarda en volver la venta a crédito' },
             { label: 'Mora promedio', value: kpis.weighted_days_late, format: 'decimal',
@@ -2257,8 +2267,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         fillTable('debtorsTable', data.debtors, (row) =>
             `<td>${escapeHtml(row.label)}</td>` +
-            `<td class="numeric">${formatCurrency(row.open_amount)}</td>` +
-            `<td class="numeric">${formatCurrency(row.overdue_amount)}</td>` +
+            window.SD_MONEY.cells(row.open_amount) +
+            window.SD_MONEY.cells(row.overdue_amount) +
             `<td class="numeric">${formatInt(row.oldest_days)}</td>` +
             `<td class="numeric">${row.limit_utilization == null
                 ? '<span class="cell-note">sin línea</span>'
@@ -2267,8 +2277,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         fillTable('collectorsTable', data.collectors, (row) =>
             `<td>${escapeHtml(row.label)}</td>` +
-            `<td class="numeric">${formatCurrency(row.open_amount)}</td>` +
-            `<td class="numeric">${formatCurrency(row.overdue_amount)}</td>` +
+            window.SD_MONEY.cells(row.open_amount) +
+            window.SD_MONEY.cells(row.overdue_amount) +
             `<td class="numeric">${formatInt(row.clients)}</td>` +
             `<td class="numeric">${row.on_time_rate == null
                 ? '—' : `${formatDecimal(row.on_time_rate, 1)}%`}</td>`);
@@ -2279,10 +2289,10 @@ document.addEventListener('DOMContentLoaded', () => {
         fillTable('priorityTable', data.priority, (row) =>
             `<td>${escapeHtml(row.label)}</td>` +
             `<td>${escapeHtml(row.collector || '—')}</td>` +
-            `<td class="numeric">${formatCurrency(row.overdue_amount)}</td>` +
+            window.SD_MONEY.cells(row.overdue_amount) +
             `<td class="numeric">${formatInt(row.oldest_days)}</td>` +
             `<td class="numeric">${formatDecimal(row.recovery_probability * 100, 0)}%</td>` +
-            `<td class="numeric">${formatCurrency(row.expected_recovery)}</td>`);
+            window.SD_MONEY.cells(row.expected_recovery));
 
         showPeriodBar(data.period);
         showAnalysisView('stepReceivables');
@@ -2307,7 +2317,8 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: aging.map((row) => AGING_LABELS[row.bucket_code] || row.bucket_code),
                 datasets: [{
-                    label: `Saldo (${currencySymbol()})`, data: aging.map((row) => row.amount),
+                    label: `Saldo (${currencySymbol()})`,
+                    data: aging.map((row) => chartAmount(row.amount)),
                     backgroundColor: aging.map((row) =>
                         row.bucket_code === 'CURRENT' ? BRAND[3] : BRAND[1])
                 }]
@@ -2315,7 +2326,8 @@ document.addEventListener('DOMContentLoaded', () => {
             options: chartOptions('money')
         });
 
-        const recoverable = aging.map((row) => row.amount - row.provision);
+        const recoverable = aging.map((row) =>
+            chartAmount(row.amount) - chartAmount(row.provision));
         makeChart('chartRecovery', {
             type: 'bar',
             data: {
@@ -2324,7 +2336,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     { label: 'Recuperable', data: recoverable, backgroundColor: BRAND[3] },
                     {
                         label: 'Incobrable', backgroundColor: BRAND[1],
-                        data: aging.map((row) => row.provision)
+                        data: aging.map((row) => chartAmount(row.provision))
                     }
                 ]
             },
@@ -2339,10 +2351,10 @@ document.addEventListener('DOMContentLoaded', () => {
             `<td>${escapeHtml(AGING_LABELS[row.bucket_code] || row.bucket_code)}</td>` +
             `<td class="numeric">${formatInt(row.invoices)}</td>` +
             `<td class="numeric">${formatInt(row.clients)}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            window.SD_MONEY.cells(row.amount) +
             `<td class="numeric">${formatDecimal(row.share, 1)}%</td>` +
             `<td class="numeric">${formatDecimal(row.expected_loss_rate * 100, 0)}%</td>` +
-            `<td class="numeric">${formatCurrency(row.provision)}</td>`);
+            window.SD_MONEY.cells(row.provision));
     }
 
     function renderCreditMargin(margin) {
@@ -2359,21 +2371,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         fillKpis('creditMarginKpis', [
             { label: 'Margen bruto del crédito', value: margin.credit_gross_margin,
-              format: 'money',
+              format: 'money3',
               hint: `${formatDecimal(margin.credit_gross_margin_rate, 1)}% de la venta a ` +
                     `crédito · al contado ${formatDecimal(margin.cash_gross_margin_rate, 1)}%` },
-            { label: 'Costo financiero', value: margin.financing_cost, format: 'money',
-              hint: `De los cuales ${currencySymbol()} ${formatDecimal(margin.delinquency_cost, 0)} son ` +
+            { label: 'Costo financiero', value: margin.financing_cost, format: 'money3',
+              hint: `De los cuales ${window.SD_MONEY.inline(margin.delinquency_cost)} son ` +
                     'por mora' },
-            { label: 'Incobrable esperado', value: margin.expected_loss, format: 'money',
+            { label: 'Incobrable esperado', value: margin.expected_loss, format: 'money3',
               hint: 'Provisión sobre el saldo abierto' },
-            { label: 'Margen neto del crédito', value: margin.net_margin, format: 'money',
+            { label: 'Margen neto del crédito', value: margin.net_margin, format: 'money3',
               hint: `${formatDecimal(margin.net_margin_rate, 1)}% de la venta a crédito` }
         ]);
 
-        const lost = margin.credit_gross_margin - margin.net_margin;
+        const lost = window.SD_MONEY.minus(margin.credit_gross_margin, margin.net_margin);
         qs('#creditMarginNote').textContent =
-            `Financiar y provisionar la cartera se lleva ${currencySymbol()} ${formatDecimal(lost, 0)} ` +
+            `Financiar y provisionar la cartera se lleva ${window.SD_MONEY.inline(lost)} ` +
             `del margen bruto: de ${formatDecimal(margin.credit_gross_margin_rate, 1)}% ` +
             `queda ${formatDecimal(margin.net_margin_rate, 1)}%.`;
     }
@@ -2384,7 +2396,8 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: windows.map((row) => DUE_WINDOW_LABELS[row.window_code] || row.window_code),
                 datasets: [{
-                    label: `Monto (${currencySymbol()})`, data: windows.map((row) => row.amount),
+                    label: `Monto (${currencySymbol()})`,
+                    data: windows.map((row) => chartAmount(row.amount)),
                     backgroundColor: windows.map((row) =>
                         row.window_code === 'OVERDUE' ? BRAND[1] : BRAND[0])
                 }]
@@ -2394,7 +2407,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         fillTable('dueDatesTable', dates, (row) =>
             `<td>${escapeHtml(formatDate(row.due_date))}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
+            window.SD_MONEY.cells(row.amount) +
             `<td class="numeric">${formatInt(row.invoices)}</td>` +
             `<td class="numeric">${formatInt(row.clients)}</td>`);
     }
@@ -2412,8 +2425,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: curve.map((point) => point[`collected_${days}`]),
                     borderColor: [BRAND[0], BRAND[3], BRAND[2]][index],
                     backgroundColor: 'transparent',
-                    // Un horizonte que no transcurrió viaja en null: la línea se
-                    // corta en vez de caer a cero, que se leería como un desplome.
+                    // A horizon that has not elapsed travels as null: the line
+                    // breaks instead of dropping to zero, which would read as a crash.
                     spanGaps: false, tension: 0.3
                 }))
             },
@@ -2679,12 +2692,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- helpers ----------
-    function metricCard({ label, value, variant, hint }) {
+    function metricCard({ label, value, valueHtml, variant, hint }) {
         const node = document.createElement('div');
         node.className = 'metric';
         node.innerHTML = `
             <p class="metric-label">${escapeHtml(label)}</p>
-            <p class="metric-value ${variant || ''}">${escapeHtml(String(value))}</p>
+            ${valueHtml || `<p class="metric-value ${variant || ''}">${escapeHtml(String(value))}</p>`}
             ${hint ? `<p class="metric-hint">${escapeHtml(hint)}</p>` : ''}
         `;
         return node;
@@ -2714,9 +2727,9 @@ document.addEventListener('DOMContentLoaded', () => {
         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
     /**
-     * 'YYYY-MM' escrito como lo diría una persona. Se arma con los nombres de
-     * mes y no con `new Date('2026-03')`, que en zonas al oeste de Greenwich
-     * devuelve el mes anterior.
+     * 'YYYY-MM' written the way a person says it. Built from the month names
+     * and not with `new Date('2026-03')`, which west of Greenwich returns the
+     * previous month.
      */
     function formatDateMonth(key) {
         if (!key) return '—';
@@ -2726,8 +2739,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * 'YYYY-MM-DD' a dd/mm/aaaa, partiendo el texto y no con `new Date`, que al
-     * oeste de Greenwich devuelve el día anterior.
+     * 'YYYY-MM-DD' to dd/mm/yyyy, splitting the text and not with `new Date`,
+     * which west of Greenwich returns the previous day.
      */
     function formatDate(value) {
         if (!value) return '—';
@@ -2808,9 +2821,9 @@ document.addEventListener('DOMContentLoaded', () => {
             window.SD_AI.registerView(viewId, () => {
                 const cached = cachedResult(kind);
                 if (!cached) return null;
-                // Fuente de volumen comparte la respuesta con el resumen, pero
-                // explica su propio bloque: mandar la respuesta entera haría que
-                // la explicación hablara de pantallas que no se están viendo.
+                // Volume source shares the response with the summary, but
+                // explains its own block: sending the whole response would make
+                // the explanation talk about screens that are not on view.
                 return viewId === 'volume_source'
                     ? cached.payload.volume_source
                     : cached.payload;

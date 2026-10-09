@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
         money, percent, changeClass, shortDate, fullDate, sparkline
     } = window.SD_MIN;
 
-    // `modelPicked` distingue el modelo que eligió el usuario del que elegimos
-    // por él: mientras no elija, manda el de menor error medido.
+    // `modelPicked` tells the model the user chose from the one we chose
+    // for them: until they choose, the one with the lowest measured error wins.
     const state = { bench: null, model: null, modelPicked: false, ratePage: 0,
                     parallel: [], parallelPage: 0 };
 
@@ -65,8 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const observed = data.history.map((point) => ({
             date: point.date, rate: point.rate, projected: false
         }));
-        // Lo proyectado sale del modelo elegido, no de un método fijo: es la
-        // misma serie que dibuja el gráfico de arriba.
+        // The projection comes from the chosen model, not a fixed method: it
+        // is the same series the chart above draws.
         const projected = (withProjection && run)
             ? run.projected.map((point) => ({
                 date: point.date, rate: point.rate, projected: true
@@ -112,10 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Cuánto histórico sostiene a los modelos, en los dos números que no se
-     * deducen uno del otro: cotizaciones publicadas y días de calendario que
-     * cubren. El BCB publica en días hábiles y el viernes cubre el fin de
-     * semana, así que 60 cotizaciones no son 60 días ni al revés.
+     * How much history backs the models, in the two numbers that cannot be
+     * derived from each other: published rates and calendar days covered. The
+     * BCB publishes on business days and Friday covers the weekend, so 60
+     * rates are not 60 days, nor the other way around.
      */
     function seriesSpan(data) {
         const history = data.history || [];
@@ -179,14 +179,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     /**
-     * El modelo por defecto es el que menos ha errado, medido sobre esta misma
-     * serie — no un nombre elegido en el código.
+     * The default model is the one that erred least, measured on this same
+     * series — not a name chosen in the code.
      *
-     * El servicio devuelve los modelos ordenados por su error y deja al final
-     * los que no pudo medir, así que el primero medido es el más ajustado al
-     * plazo pedido. Fijar uno acá era una decisión de negocio escondida en el
-     * frontend, y además podía quedar desactualizada: el mejor a 7 días no es
-     * necesariamente el mejor a 90.
+     * The service returns the models sorted by their error and leaves the
+     * ones it could not measure at the end, so the first measured one fits the
+     * requested horizon best. Fixing one here was a business decision hidden
+     * in the frontend, and it could go stale: the best at 7 days is not
+     * necessarily the best at 90.
      */
     function bestModel(data) {
         const measured = data.runs.find(
@@ -202,8 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `${QUOTES_URL}/v1/quotes/exchange-rates/bench`, { days_ahead: days }
         );
         state.bench = data;
-        // Mientras el usuario no haya elegido, manda el medido. Si eligió, se
-        // respeta salvo que ese modelo ya no venga en la respuesta.
+        // Until the user chooses, the measured one wins. If they chose, it is
+        // kept unless that model no longer comes in the response.
         if (!state.modelPicked
             || !data.runs.some((run) => run.model === state.model)) {
             state.model = bestModel(data);
@@ -216,8 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function fillModelSelect(data) {
         const select = qs('#rateModel');
-        // En el orden en que el servicio los devolvió: del que menos erró al que
-        // más, para que la lista misma sea una recomendación.
+        // In the order the service returned them: from the one that erred
+        // least to the most, so the list itself is a recommendation.
         select.innerHTML = data.runs.map((run) => {
             const label = MODEL_LABELS[run.model] || run.model;
             const error = run.mean_absolute_error === null
@@ -235,11 +235,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * La proyección del modelo elegido: gráfico, cifras y la serie día por día.
+     * The projection of the chosen model: chart, figures and the day-by-day
+     * series.
      *
-     * Una sola línea proyectada, no nueve. Superponerlas contestaba una pregunta
-     * que nadie hizo y hacía ilegible la que importa — cuánto va a valer el
-     * dólar según el modelo que elegí.
+     * One projected line, not nine. Overlaying them answered a question nobody
+     * asked and made the one that matters unreadable — what the dollar will be
+     * worth according to the model I chose.
      */
     function renderModel() {
         const run = currentRun();
@@ -249,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#rateModelNote').textContent = MODEL_HINTS[run.model] || '';
         renderDefaultNote(data, run);
 
-        // Cifras de cabecera, ahora del modelo elegido.
+        // Headline figures, now from the chosen model.
         const projectedLabel = run.final_rate === null
             ? 'Sin proyección'
             : `${money(run.final_rate)} Bs`;
@@ -294,13 +295,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Por qué el modelo que se ve al entrar es ese y no otro.
+     * Why the model shown on entry is that one and not another.
      *
-     * Se dice con el número que lo decidió —su error medido y sobre cuántas
-     * réplicas— porque "es el más preciso" sin la cifra es una afirmación que
-     * el lector no puede auditar. Cuando el usuario elige otro, la nota deja de
-     * justificar y pasa a señalar cuál era el medido, para que la comparación
-     * siga estando a la vista.
+     * It is said with the number that decided it —its measured error and over
+     * how many replicas— because "it is the most accurate" without the figure
+     * is a claim the reader cannot audit. When the user picks another, the
+     * note stops justifying and points out which one was measured, so the
+     * comparison stays in view.
      */
     function renderDefaultNote(data, run) {
         const best = bestModel(data);
@@ -328,11 +329,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * La comparación entre modelos, plegada.
+     * The comparison between models, folded.
      *
-     * Va aparte y explicada porque el error medido es un promedio sobre toda la
-     * historia al horizonte pedido — no dice nada sobre si la cifra de hoy va a
-     * acertar. Presentarlo junto a la proyección los hacía parecer lo mismo.
+     * It goes apart and explained because the measured error is an average
+     * over the whole history at the requested horizon — it says nothing about
+     * whether today's figure will be right. Showing it next to the projection
+     * made them look like the same thing.
      */
     function renderBenchTable(data) {
         qs('#benchHorizon').textContent = data.days_ahead;

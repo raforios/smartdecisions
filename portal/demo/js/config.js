@@ -25,9 +25,9 @@ window.SD_CONFIG = {
     MINING_URL:        'https://api.bearsoft.com.bo',
     QUOTES_URL:        'https://api.bearsoft.com.bo',
 
-    // Capa de interpretación. Definirla es lo que hace aparecer el botón
-    // "¿Qué significa esto?" en cada vista: sin ella el portal funciona igual,
-    // sólo que sin explicaciones.
+    // Interpretation layer. Defining it is what makes the
+    // "¿Qué significa esto?" button appear on each view: without it the portal
+    // works the same, only without explanations.
     AI_URL:            'https://api.bearsoft.com.bo',
 
     // S3 bucket where large sales files are staged (direct-to-S3 upload via

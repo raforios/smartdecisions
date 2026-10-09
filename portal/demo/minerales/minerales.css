@@ -51,10 +51,9 @@
 
 .ai-slot { margin-left: auto; }
 
-/* El panel de interpretación se estiliza una sola vez, en demo.css. La copia
-   que vivía aquí pisaba aquella —este archivo carga después— y hacía que la
-   misma nota se viera de un tamaño en Cotizaciones y de otro en Resumen
-   Comercial. */
+/* The interpretation panel is styled once, in demo.css. The copy that
+   lived here overrode that one —this file loads later— and made the same note
+   look one size in Quotes and another in the Commercial Summary. */
 
 /* Wide tables scroll on their own instead of pushing the page sideways. */
 .table-scroll { overflow-x: auto; }
@@ -340,7 +339,7 @@
 }
 
 
-/* El panel abre entre la cabecera del panel y su contenido: aire abajo también. */
+/* The panel opens between the panel header and its content: room below too. */
 .panel-head + .ai-answer { margin-bottom: 1.4rem; }
 
 /* --- Selector de modelo y su proyección ---------------------------------- */
@@ -372,8 +371,8 @@
 
 #benchTable { min-width: 38rem; }
 
-/* La fila del modelo elegido, destacada: la tabla explica por qué está
-   seleccionado, no compite con el selector. */
+/* The row of the chosen model, highlighted: the table explains why it is
+   selected, it does not compete with the selector. */
 .model-on td { font-weight: 600; background: #f4f8fd; }
 
 /* --- Cotización anticipada -------------------------------------------------
