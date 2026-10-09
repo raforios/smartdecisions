@@ -178,13 +178,14 @@ def test_receivables_returns_a_full_response(
         lambda key: _collections_frame() if 'collections' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
+    _rising_rate(monkeypatch)
 
     response = _call(controllers.receivables_controller, dataset)
 
     assert isinstance(response, ReceivablesResponse)
     assert response.available is True
     assert response.policy.source_code == 'DEFAULT'
-    assert response.kpis.receivable_total > 0
+    assert response.kpis.receivable_total.bob > 0
     assert response.kpis.credit_share > 0
     assert response.aging and response.debtors and response.collectors
     assert response.margin.available is True
@@ -199,11 +200,12 @@ def test_receivables_says_so_when_the_dataset_has_no_payments(
         of the data, not a failure, and the view has to build anyway.
     '''
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
+    _rising_rate(monkeypatch)
 
     response = _call(controllers.receivables_controller, dataset)
 
     assert response.available is True
-    assert response.kpis.receivable_total > 0
+    assert response.kpis.receivable_total.bob > 0
     assert response.kpis.collection_effectiveness is None or response.kpis.on_time_rate is None
 
 
@@ -804,15 +806,15 @@ def _todays_rate() -> float:
     return currency.current_rate('USD', 'Bearer t', today)
 
 
-def test_receivables_are_counted_in_bolivianos_whatever_the_currency(
+def test_receivables_carry_every_amount_in_three_currencies(
     dataset,
     monkeypatch
 ):
     '''
-        A credit of 300 bolivianos is collected with 300 bolivianos: balances,
-        open invoices and debtors are counted in bolivianos, and the dollars
-        are that same figure at today's rate, as a reference. Converting each
-        payment at its own day left invoices paid in full open in dollars.
+        The manager sees bolivianos, official dollars and USDT side by side:
+        every amount travels as the three, at today's rate, and the counts
+        stay what the bolivianos say. Asking for a currency changes nothing:
+        it only picks what a chart draws, on the screen.
     '''
     monkeypatch.setattr(
         controllers, 'get_dataset_metadata',
@@ -827,16 +829,20 @@ def test_receivables_are_counted_in_bolivianos_whatever_the_currency(
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
     _rising_rate(monkeypatch)
 
-    in_bob = _call(controllers.receivables_controller, dataset)
-    in_usd = _call(controllers.receivables_controller, dataset,
-                   {'currency': 'USD', 'auth_token': 'Bearer t'})
+    response = _call(controllers.receivables_controller, dataset,
+                     {'auth_token': 'Bearer t'})
+    asked_in_usd = _call(controllers.receivables_controller, dataset,
+                         {'currency': 'USD', 'auth_token': 'Bearer t'})
 
-    assert in_usd.kpis.open_invoices == in_bob.kpis.open_invoices
-    assert in_usd.kpis.clients_with_debt == in_bob.kpis.clients_with_debt
-    assert in_usd.kpis.overdue_rate == in_bob.kpis.overdue_rate
-    assert round(in_usd.kpis.receivable_total * _todays_rate(), 0) == \
-        round(in_bob.kpis.receivable_total, 0)
-    assert in_usd.period.currency.reference_rate == _todays_rate()
+    rate = _todays_rate()
+    total = response.kpis.receivable_total
+    assert response.rates.usd == rate
+    assert total.usd == round(total.bob / rate, 2)
+    assert total.usdt == round(total.bob / response.rates.usdt, 2)
+    assert response.debtors[0].open_amount.usd == \
+        round(response.debtors[0].open_amount.bob / rate, 2)
+    assert asked_in_usd.kpis == response.kpis
+    assert isinstance(response.kpis.open_invoices, int)
 
 
 def test_attainment_is_the_same_in_any_currency(

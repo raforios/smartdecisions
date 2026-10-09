@@ -8,7 +8,9 @@
 '''
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, Field
+from typing import Annotated, Any
+
+from pydantic import BaseModel, BeforeValidator, Field, ValidationInfo
 
 
 class AnalyticsError(str, Enum):
@@ -268,6 +270,65 @@ class SegmentationResponse(SegmentationBlock):
         Customer value segmentation for GET /v1/analytics/segmentation/{dataset_id}.
     '''
     dataset_id: str
+
+# --- Money in three currencies (bolivianos, official dollar, USDT) ---
+
+class Money(BaseModel):
+    '''
+        One amount as the manager reads it: the bolivianos it was recorded in
+        and what they are worth in the official dollar and in USDT. The three
+        travel together so a screen shows them side by side, not one at a time.
+    '''
+    bob: float
+    usd: float | None = None
+    usdt: float | None = None
+
+
+class ReferenceRates(BaseModel):
+    '''
+        Bolivianos per unit of each dollar a report is shown at: the latest
+        published rate of the official dollar and of USDT.
+    '''
+    usd: float
+    usdt: float
+
+
+def _in_three_currencies(
+    value: Any,
+    info: ValidationInfo
+) -> Any:
+    '''
+        Turns an amount in bolivianos into its `Money`, when the response is
+        validated with the reference rates in its context.
+
+        The engines compute, sort and add in bolivianos; they never see this.
+        The conversion happens once, where the response is assembled, so no
+        engine can mix a dollar with a boliviano by accident.
+
+        Args:
+            value (Any): The amount, in bolivianos, or something else.
+            info (ValidationInfo): Carries 'rates' (ReferenceRates) and
+                'decimals' (int) when the response is being assembled.
+
+        Returns:
+            Any: A `Money`, or the value untouched outside that moment.
+    '''
+    context = info.context or {}
+    rates = context.get('rates')
+    if rates is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    decimals = context['decimals']
+    return Money(
+        bob = round(float(value), decimals),
+        usd = round(value / rates.usd, decimals),
+        usdt = round(value / rates.usdt, decimals)
+    )
+
+
+# A money field of a response: a float while the engines work, a `Money` once
+# the response is assembled with the rates of today.
+Amount = Annotated[float | Money, BeforeValidator(_in_three_currencies)]
+
 
 # --- Period scoping (shared by every analysis endpoint) ---
 

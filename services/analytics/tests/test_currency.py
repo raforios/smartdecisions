@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
+from schemas.receivables import ReceivablesResponse
 from services import currency
 from services.exceptions import ServiceUnavailableError
 
@@ -189,3 +190,25 @@ def test_the_reference_rate_divides_money_and_leaves_units():
     assert float(converted['on_hand'].iloc[0]) == 3.0
     assert currency.divide_money(snapshot, currency.SNAPSHOT_MONEY_COLUMNS, None).equals(snapshot)
     assert currency.divide_money(None, currency.SNAPSHOT_MONEY_COLUMNS, 7.40) is None
+
+
+def test_a_response_counted_in_bolivianos_carries_the_three_currencies(monkeypatch):
+    '''
+        8.000 bolivianos at 11,85 and 11,90 read 675,11 USD and 672,27 USDT;
+        a count is not money and stays as it is.
+    '''
+    rates = {'USD': 11.85, 'USDT': 11.90}
+    monkeypatch.setattr(currency, '_fetch_rates', lambda code, *args: [
+        {'date': '2026-10-08', 'rate': rates[code]}
+    ])
+
+    response = currency.in_three_currencies(
+        ReceivablesResponse,
+        {'dataset_id': 'd', 'kpis': {'receivable_total': 8000.0, 'open_invoices': 3}},
+        'Bearer t', '2026-10-08'
+    )
+
+    assert response.kpis.receivable_total.model_dump() == \
+        {'bob': 8000.0, 'usd': 675.11, 'usdt': 672.27}
+    assert response.kpis.open_invoices == 3
+    assert response.rates.usdt == 11.90

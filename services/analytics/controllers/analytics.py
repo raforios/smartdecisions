@@ -55,6 +55,7 @@ from services.currency import (
     PAYMENT_MONEY_COLUMNS,
     SNAPSHOT_MONEY_COLUMNS,
     divide_money,
+    in_three_currencies,
     reference_rate,
     current_rate,
     rates_per_row
@@ -324,8 +325,11 @@ async def receivables_controller(
         Read-only: everything is derived on the fly, so nothing is persisted as
         a run.
     '''
-    dataframe, period, rate = _counted_in_bolivianos(dynamodb_resource, dataset_id,
-                                                     current_user, params)
+    # Counted in bolivianos: the currency of the request only moves charts,
+    # and the screen draws them from the three amounts every field carries.
+    in_bolivianos = {key: value for key, value in (params or {}).items() if key != 'currency'}
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user,
+                                          in_bolivianos)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -333,16 +337,17 @@ async def receivables_controller(
     )
     block = build_receivables(
         sales = dataframe,
-        collections = _payments_of(metadata, rate),
+        collections = _payments_of(metadata, None),
         stored_policy = get_credit_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
         )
     )
-    return ReceivablesResponse(
-        dataset_id = dataset_id,
-        period = period,
-        **block.model_dump()
+    return in_three_currencies(
+        ReceivablesResponse,
+        {'dataset_id': dataset_id, 'period': period, **block.model_dump()},
+        (params or {}).get('auth_token') or '',
+        get_current_time_gmt().date().isoformat()
     )
 
 

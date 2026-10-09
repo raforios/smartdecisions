@@ -14,7 +14,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from schemas.analytics import PeriodInfo
+from schemas.analytics import Amount, PeriodInfo, ReferenceRates
 
 
 class AgingBucket(str, Enum):
@@ -61,10 +61,10 @@ class AgingRow(BaseModel):
     bucket_code: AgingBucket
     invoices: int = 0
     clients: int = 0
-    amount: float = 0.0
+    amount: Amount = 0.0
     share: float = 0.0
     expected_loss_rate: float = 0.0
-    provision: float = 0.0
+    provision: Amount = 0.0
 
 
 class ReceivablesKpis(BaseModel):
@@ -76,17 +76,17 @@ class ReceivablesKpis(BaseModel):
         a file from last quarter would report its whole book as overdue.
     '''
     as_of: str | None = Field(None, description = 'Reference date, ISO.')
-    credit_amount: float = 0.0
-    cash_amount: float = 0.0
+    credit_amount: Amount = 0.0
+    cash_amount: Amount = 0.0
     credit_share: float = 0.0
-    receivable_total: float = 0.0
-    current_amount: float = 0.0
-    overdue_amount: float = 0.0
+    receivable_total: Amount = 0.0
+    current_amount: Amount = 0.0
+    overdue_amount: Amount = 0.0
     overdue_rate: float = 0.0
     clients_with_debt: int = 0
     open_invoices: int = 0
-    recoverable_amount: float = 0.0
-    uncollectible_amount: float = 0.0
+    recoverable_amount: Amount = 0.0
+    uncollectible_amount: Amount = 0.0
     recoverable_rate: float = 0.0
     uncollectible_rate: float = 0.0
     days_sales_outstanding: float | None = None
@@ -111,13 +111,13 @@ class CreditMargin(BaseModel):
     '''
     available: bool = False
     reason_code: str | None = None
-    credit_revenue: float = 0.0
-    credit_gross_margin: float = 0.0
+    credit_revenue: Amount = 0.0
+    credit_gross_margin: Amount = 0.0
     credit_gross_margin_rate: float | None = None
-    financing_cost: float = 0.0
-    delinquency_cost: float = 0.0
-    expected_loss: float = 0.0
-    net_margin: float = 0.0
+    financing_cost: Amount = 0.0
+    delinquency_cost: Amount = 0.0
+    expected_loss: Amount = 0.0
+    net_margin: Amount = 0.0
     net_margin_rate: float | None = None
     cash_gross_margin_rate: float | None = None
 
@@ -130,12 +130,12 @@ class DebtorRow(BaseModel):
         file: an unknown limit is not an unused one.
     '''
     label: str
-    open_amount: float = 0.0
-    overdue_amount: float = 0.0
+    open_amount: Amount = 0.0
+    overdue_amount: Amount = 0.0
     oldest_days: int = 0
     weighted_days_late: float = 0.0
     invoices: int = 0
-    credit_limit: float | None = None
+    credit_limit: Amount | None = None
     limit_utilization: float | None = None
     risk_code: CreditRisk = CreditRisk.HEALTHY
     collector: str | None = None
@@ -151,8 +151,8 @@ class CollectorRow(BaseModel):
         how a good collector on a bad zone gets blamed.
     '''
     label: str
-    open_amount: float = 0.0
-    overdue_amount: float = 0.0
+    open_amount: Amount = 0.0
+    overdue_amount: Amount = 0.0
     clients: int = 0
     invoices: int = 0
     weighted_days_late: float = 0.0
@@ -166,14 +166,14 @@ class DueWindow(BaseModel):
     window_code: str = Field(
         ..., description = 'OVERDUE | DAYS_7 | DAYS_15 | DAYS_30 | BEYOND.'
     )
-    amount: float = 0.0
+    amount: Amount = 0.0
     invoices: int = 0
 
 
 class DueDateRow(BaseModel):
     '''One calendar date with what it is due to collect.'''
     due_date: str
-    amount: float = 0.0
+    amount: Amount = 0.0
     invoices: int = 0
     clients: int = 0
 
@@ -185,7 +185,7 @@ class CollectionCurvePoint(BaseModel):
         which a single DSO figure cannot.
     '''
     cohort_month: str
-    credit_amount: float = 0.0
+    credit_amount: Amount = 0.0
     collected_30: float | None = None
     collected_60: float | None = None
     collected_90: float | None = None
@@ -199,10 +199,10 @@ class PriorityRow(BaseModel):
     '''
     label: str
     collector: str | None = None
-    overdue_amount: float = 0.0
+    overdue_amount: Amount = 0.0
     oldest_days: int = 0
     recovery_probability: float = 0.0
-    expected_recovery: float = 0.0
+    expected_recovery: Amount = 0.0
     risk_code: CreditRisk = CreditRisk.HEALTHY
 
 
@@ -254,6 +254,10 @@ class ReceivablesResponse(BaseModel):
     '''
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
+    rates: ReferenceRates | None = Field(
+        None, description = 'Today\'s rates every amount is shown at: the view is '
+                            'counted in bolivianos and the dollars are a reference.'
+    )
     available: bool = False
     reason_code: str | None = None
     policy: CreditPolicy | None = None

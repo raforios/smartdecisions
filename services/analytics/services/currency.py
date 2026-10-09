@@ -19,8 +19,10 @@ from typing import Any
 
 import pandas as pd
 import requests
+from pydantic import BaseModel
 
-from schemas.analytics import AnalyticsError
+from schemas.analytics import AnalyticsError, ReferenceRates
+from services.analytics_utils import AMOUNT_DECIMALS
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
@@ -389,3 +391,36 @@ def convert_frame(
         # Saying so is the difference between a gap and a silent lie.
         'rows_without_rate': int(len(series) - applied)
     }
+
+
+def in_three_currencies[ResponseModel: BaseModel](
+    response_type: type[ResponseModel],
+    payload: dict[str, Any],
+    auth_token: str,
+    today: str
+) -> ResponseModel:
+    '''
+        Assembles a response counted in bolivianos with every amount also in
+        the official dollar and in USDT, at today's rates.
+
+        The engines worked in bolivianos; this is the one place the dollars
+        appear, so a balance, a count and a share never move with the rate.
+
+        Args:
+            response_type (type[ResponseModel]): The response DTO.
+            payload (dict[str, Any]): Its fields, amounts in bolivianos.
+            auth_token (str): The caller's Authorization header, for QUOTES.
+            today (str): Today, YYYY-MM-DD.
+
+        Returns:
+            ResponseModel: The response, each `Amount` field a `Money`.
+    '''
+    # The official dollar is the fallback of the parallel one: the same code.
+    rates = ReferenceRates(
+        usd = current_rate(PARALLEL_FALLBACK_CURRENCY, auth_token, today),
+        usdt = current_rate(PARALLEL_CURRENCY, auth_token, today)
+    )
+    return response_type.model_validate(
+        {**payload, 'rates': rates},
+        context = {'rates': rates, 'decimals': AMOUNT_DECIMALS}
+    )
