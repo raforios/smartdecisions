@@ -84,12 +84,18 @@ untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard']
 total = 0
 for name in sorted(set(changed + untracked)):
     path = Path(name)
-    if path.suffix != '.py' or not path.exists() or not is_ours(path):
+    if path.suffix not in ('.py', '.js', '.css', '.html') or not path.exists() \
+            or not is_ours(path):
         continue
     for number, line in enumerate(path.read_text(encoding = 'utf-8').splitlines(), 1):
         stripped = line.strip()
-        body = stripped.lstrip('#').strip() if stripped.startswith('#') else (
-            stripped.strip("'").strip('"') if stripped.startswith(("'''", '"""')) else '')
+        if path.suffix == '.py':
+            body = stripped.lstrip('#').strip() if stripped.startswith('#') else (
+                stripped.strip("'").strip('"') if stripped.startswith(("'''", '"""')) else '')
+        else:
+            # El portal también es código: //, /* */, el * de un bloque y <!-- -->.
+            body = re.sub(r'^(//|/\*\*?|\*/?|<!--)\s*|\s*(\*/|-->)$', '', stripped) \
+                if stripped.startswith(('//', '/*', '*', '<!--')) else ''
         # Lo que va entre comillas puede ser un valor del contrato citado a
         # propósito ('CREDITO', 'Crédito'): no es documentación en castellano.
         outside = re.sub(r"'[^']*'|\"[^\"]*\"", '', body)
@@ -100,7 +106,9 @@ print(f'\ncomentarios en castellano: {total}')
 PY
 ```
 
-Cero resultados, **sin excepciones y el boilerplate incluido**. El boilerplate
+Cero resultados, **sin excepciones, el boilerplate y el portal incluidos**.
+Todo `portal/` lo escribió Claude (Rafael, 08-oct): un comentario en castellano
+ahí nunca se reporta como «ya estaba», se traduce en el mismo paso. El boilerplate
 nació enteramente en inglés: el `db_connection.py` original de EVENTS (agosto
 2025) no tiene una palabra en castellano, y las que hay hoy las introdujo Claude
 en commits posteriores. Que un archivo sea contrato significa que no se cambia su
