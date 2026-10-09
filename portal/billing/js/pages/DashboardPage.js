@@ -1,9 +1,9 @@
 /**
- * DashboardPage — lo que el mostrador necesita ver al abrir.
+ * DashboardPage — what the counter needs to see on opening.
  *
- * Cuatro preguntas y nada más: cuánto vendí, qué me dejó, qué está por vencer
- * y qué se me está acabando. El tablero del almacén contaba solicitudes; este
- * producto no las tiene y no hereda sus indicadores.
+ * Four questions and nothing else: how much I sold, what it left me, what is
+ * about to expire and what is running out. The warehouse dashboard counted
+ * requests; this product has none and does not inherit its indicators.
  */
 import { BillingService, PAYMENT_LABELS, errorText } from '../services/BillingService.js';
 import { escapeHtml, money, percent, shortDate, todayIso } from '../ui.js';
@@ -37,9 +37,9 @@ function expiryTable(rows, emptyText, showDays) {
 }
 
 /**
- * Pinta el tablero del rango elegido, hoy por defecto.
+ * Paints the dashboard for the chosen range, today by default.
  *
- * @param {HTMLElement} host Dónde se monta la sección.
+ * @param {HTMLElement} host Where the section mounts.
  */
 export async function mountDashboard(host) {
     host.innerHTML = `

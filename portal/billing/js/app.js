@@ -1,10 +1,10 @@
 /**
- * BILLING — arranque y navegación.
+ * BILLING — startup and navigation.
  *
- * Una sola página con secciones, no rutas: el mostrador se abre una vez al
- * empezar el turno y no se recarga en todo el día. El menú esconde lo que el
- * rol no puede hacer, pero quien manda es el backend — esto sólo evita
- * mostrar un botón que iba a responder 403.
+ * One page with sections, not routes: the counter opens once at the start of
+ * the shift and is not reloaded all day. The menu hides what the role cannot
+ * do, but the backend is the one in charge — this only avoids showing a
+ * button that would answer 403.
  */
 import { clearSession, getEmail, getRole, isTokenExpired } from './auth.js';
 import { LOGIN_PATH } from './config.js';
@@ -31,15 +31,15 @@ const SECTIONS = {
     settings: mountSettings
 };
 
-/** La sección abierta sobrevive a un F5: el turno no se pierde por recargar. */
+/** The open section survives an F5: the shift is not lost by reloading. */
 const LAST_SECTION_KEY = 'billing_section';
 
-/** Cada cuánto se revisa si hay cajas por cerrar. */
+/** How often to check for tills left to close. */
 const TILL_ALERT_EVERY_MS = 5 * 60 * 1000;
 
 /**
- * Aviso de cajas abiertas: pasada la hora que configuró el comercio, o
- * abiertas desde otro día. Al vendedor, la suya; al gerente, todas.
+ * Open-till warning: past the hour the merchant configured, or open since
+ * another day. To the seller, their own; to the manager, all of them.
  */
 async function refreshTillAlert() {
     const banner = document.getElementById('till-alert');
@@ -55,7 +55,7 @@ async function refreshTillAlert() {
             Cada caja es de un día: ciérralas antes de que termine.</div>`;
         banner.hidden = false;
     } catch (error) {
-        // El aviso es una ayuda: si falla, el resto del portal sigue igual.
+        // The warning is a help: if it fails, the rest of the portal carries on.
         banner.hidden = true;
     }
 }
@@ -71,10 +71,10 @@ async function show(name) {
     });
     sessionStorage.setItem(LAST_SECTION_KEY, name);
 
-    // Cada sección se monta en su propio contenedor. Si el usuario cambia de
-    // sección mientras la anterior espera al API, la anterior sigue sobre un
-    // contenedor que ya no está en pantalla: ni encuentra nulos al terminar
-    // ni pinta su error encima de la sección nueva.
+    // Each section mounts in its own container. If the user switches section
+    // while the previous one waits for the API, the previous one keeps working
+    // on a container that is no longer on screen: it neither finds nulls when
+    // it finishes nor paints its error over the new section.
     const container = document.createElement('div');
     container.innerHTML = '<p class="muted">Cargando…</p>';
     view.replaceChildren(container);
@@ -101,8 +101,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.replace(LOGIN_PATH);
     });
 
-    // Un botón que el rol no puede usar no se muestra: pulsarlo sólo daría un
-    // 403 y la sensación de que el sistema está roto.
+    // A button the role cannot use is not shown: pressing it would only give
+    // a 403 and the feeling that the system is broken.
     document.querySelectorAll('.nav-item[data-roles]').forEach((item) => {
         if (!item.dataset.roles.split(',').includes(role)) item.hidden = true;
     });
@@ -112,8 +112,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (button && !button.hidden) show(button.dataset.section);
     });
 
-    // El nombre del comercio en la barra: es lo que distingue una farmacia de
-    // otra cuando alguien administra varias.
+    // The merchant's name in the bar: it tells one pharmacy from another when
+    // someone manages several.
     try {
         const settings = await BillingService.getSettings();
         document.getElementById('shopName').textContent = settings.trade_name;

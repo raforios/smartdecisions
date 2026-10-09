@@ -1,9 +1,9 @@
 /**
- * AuthService — habla con el microservicio AUTH.
+ * AuthService — talks to the AUTH microservice.
  *
- * BILLING no tiene usuarios propios: los tres servicios base —AUTH, EVENTS y
- * FILES— son los mismos para todos los productos de BearSoft. Acá sólo vive
- * la parte de red; decodificar el token es cosa de `js/auth.js`.
+ * BILLING has no users of its own: the three base services —AUTH, EVENTS and
+ * FILES— are the same for every BearSoft product. Only the network part lives
+ * here; decoding the token belongs to `js/auth.js`.
  */
 import { AUTH_URL, AUTH_URL_LOCAL, STORAGE_TOKEN_KEY } from '../config.js';
 import { resolveBases, request } from './apiClient.js';
@@ -11,11 +11,11 @@ import { resolveBases, request } from './apiClient.js';
 const BASES = resolveBases({ remote: AUTH_URL, local: AUTH_URL_LOCAL });
 
 /**
- * Pide el token a AUTH y lo guarda.
+ * Asks AUTH for the token and stores it.
  *
- * @param {string} email Correo del usuario.
- * @param {string} password Su contraseña.
- * @returns {Promise<string>} El token emitido.
+ * @param {string} email The user's email.
+ * @param {string} password Their password.
+ * @returns {Promise<string>} The issued token.
  */
 export async function login(email, password) {
     const response = await request(BASES, '/v1/auth/login', {
@@ -32,7 +32,7 @@ export async function login(email, password) {
     return data.access_token;
 }
 
-/** Si hay un token guardado, sea o no válido: expirarlo es cosa de `auth.js`. */
+/** Whether a token is stored, valid or not: expiring it belongs to `auth.js`. */
 export function isAuthenticated() {
     return Boolean(localStorage.getItem(STORAGE_TOKEN_KEY));
 }

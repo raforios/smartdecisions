@@ -3,8 +3,8 @@
  * routes pages. */
 
 :root {
-    /* Misma paleta que bearsoft.com.bo: azules fríos y un verde-azulado de
-       acento. Los cremas y marrones anteriores no jugaban con la marca. */
+    /* Same palette as bearsoft.com.bo: cool blues and a teal accent. The
+       previous creams and browns did not match the brand. */
     --bg:              #f7f9fc;
     --bg-alt:          #eef3fa;
     --panel:           #ffffff;
@@ -19,7 +19,7 @@
     --accent-strong:   #255a94;
     --accent-2:        #12796f;   /* verde-azulado: acento secundario */
     --accent-2-strong: #0d5c55;
-    --accent-3:        #dceafa;   /* azul claro para fondos suaves */
+    --accent-3:        #dceafa;   /* light blue for soft backgrounds */
 
     --success:         #24693c;
     --danger:          #b4373a;
@@ -440,12 +440,12 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 /* --- Interpretación (capa de IA) ------------------------------------------ */
 .ai-ask { white-space: nowrap; }
 
-/* Panel de interpretación.
-   Los selectores llevan `.ai-answer` delante a propósito: `.card p` tiene
-   especificidad 0,1,1 y le ganaba a `.ai-text`, así que en los módulos cuyo
-   contenedor es una tarjeta —Cotizaciones y Rutas— el texto tomaba el tamaño y
-   el color de la tarjeta, y en Análisis Comercial no. De ahí que la misma nota
-   se viera distinta según la pantalla. */
+/* Interpretation panel.
+   The selectors carry `.ai-answer` in front on purpose: `.card p` has
+   specificity 0,1,1 and beat `.ai-text`, so in the modules whose container is
+   a card —Quotes and Routes— the text took the card's size and color, and in
+   the Commercial Analysis it did not. That is why the same note looked
+   different depending on the screen. */
 .ai-answer {
     display: block;
     flex-basis: 100%;

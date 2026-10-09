@@ -1,13 +1,13 @@
 /**
- * CashPage — la caja de quien está en el mostrador.
+ * CashPage — the till of whoever is at the counter.
  *
- * Tres momentos del mismo turno: abrir con el efectivo contado, registrar lo
- * que sale (egresos) y cerrar contando otra vez. Antes de cerrar se ve todo lo
- * del turno, y la observación llega prellenada con la diferencia para que el
- * cajero sólo agregue el motivo.
+ * Three moments of the same shift: open with the counted cash, record what
+ * goes out (expenses) and close counting again. Before closing, everything in
+ * the shift is shown, and the note comes prefilled with the difference so the
+ * cashier only adds the reason.
  *
- * Sólo se cuenta el efectivo: QR y tarjetas se muestran para conciliarlos con
- * el banco y el POS.
+ * Only cash is counted: QR and cards are shown to reconcile them with the
+ * bank and the POS.
  */
 import {
     BillingService,
@@ -18,7 +18,7 @@ import {
 } from '../services/BillingService.js';
 import { escapeHtml, money, notify, setBusy, shortDate, stamp } from '../ui.js';
 
-/** La observación inicial según la diferencia. El usuario la completa. */
+/** The initial note, according to the difference. The user completes it. */
 export function differenceNote(difference) {
     if (Math.abs(difference) < 0.005) return 'Sin diferencia.';
     return difference < 0
@@ -26,7 +26,7 @@ export function differenceNote(difference) {
         : `Sobran Bs ${money(difference)}.`;
 }
 
-/** El arqueo de una caja: ingresos por medio, egresos por tipo y lo esperado. */
+/** The count of a till: income by method, expenses by type and the expected amount. */
 export function tillSummaryHtml(till) {
     const income = till.income.length
         ? till.income.map((row) => `
@@ -79,11 +79,11 @@ export function tillSummaryHtml(till) {
 }
 
 /**
- * Formulario de cierre: efectivo contado, diferencia en vivo y observación
- * prellenada. Lo usan la caja propia y la pantalla del gerente.
+ * Closing form: counted cash, live difference and prefilled note. Used by the
+ * user's own till and by the manager's screen.
  *
- * @param {HTMLElement} holder Dónde se pinta.
- * @param {object} till La caja abierta.
+ * @param {HTMLElement} holder Where it is painted.
+ * @param {object} till The open till.
  * @param {{noteRequired: boolean, onClosed: Function}} options
  */
 export function mountCloseForm(holder, till, { noteRequired, onClosed }) {
@@ -115,8 +115,8 @@ export function mountCloseForm(holder, till, { noteRequired, onClosed }) {
         const difference = value - till.expected_cash;
         holder.querySelector('#difference').textContent =
             `Bs ${money(difference)} — ${differenceNote(difference)}`;
-        // La observación se reemplaza mientras siga siendo la prellenada; si el
-        // usuario ya escribió, se respeta lo suyo y sólo cambia el comienzo.
+        // The note is replaced while it is still the prefilled one; if the
+        // user already wrote, their text is kept and only the beginning changes.
         const next = differenceNote(difference);
         note.value = note.value.startsWith(prefilled)
             ? next + note.value.slice(prefilled.length)
@@ -190,9 +190,9 @@ function movementsHtml(till) {
 }
 
 /**
- * Pinta la caja del usuario y la conecta.
+ * Paints the user's till and wires it.
  *
- * @param {HTMLElement} host Dónde se monta la sección.
+ * @param {HTMLElement} host Where the section mounts.
  */
 export async function mountCash(host) {
     const till = await currentTillOrNull();

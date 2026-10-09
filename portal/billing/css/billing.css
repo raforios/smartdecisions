@@ -1,9 +1,9 @@
 /*
- * BILLING — lo que este producto agrega sobre la base de SmartDecisions.
+ * BILLING — what this product adds on top of the SmartDecisions base.
  *
- * `base.css` trae la paleta, los botones, las tarjetas y la tipografía; acá
- * sólo va lo propio del mostrador. Ningún componente de la base se redefine:
- * si algo se ve distinto entre los dos productos, es un error, no un estilo.
+ * `base.css` brings the palette, buttons, cards and typography; only what is
+ * specific to the counter goes here. No base component is redefined: if
+ * something looks different between the two products, it is a bug, not a style.
  */
 
 /* ---------------------------------------------------------------- Shell -- */
@@ -235,8 +235,8 @@
 .kpi .value { font-size: 1.5rem; font-weight: 700; color: var(--text-strong); }
 .kpi .foot { display: block; font-size: 0.76rem; color: var(--muted); margin-top: 0.2rem; }
 
-/* Las tarjetas del tablero llevan tablas de cinco columnas: por debajo de
-   430 px se cortan, así que el grid baja a una sola columna antes de eso. */
+/* The dashboard cards carry five-column tables: below 430 px they get cut,
+   so the grid drops to a single column before that. */
 .panel-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
@@ -299,7 +299,7 @@
 .toast.is-success { background: var(--success); }
 .toast.is-error { background: var(--danger); }
 
-/* Un producto del catálogo se despliega para ver sus lotes. */
+/* A catalog product expands to show its batches. */
 .link-toggle {
     border: 0;
     background: none;

@@ -36,7 +36,7 @@ export const ERRORS = {
     EXPENSE_NOT_FOUND: 'Ese egreso no existe o ya estaba anulado.'
 };
 
-/** Cómo se llama cada medio de pago en pantalla. */
+/** What each payment method is called on screen. */
 export const PAYMENT_LABELS = {
     EFECTIVO: 'Efectivo',
     QR: 'QR',
@@ -45,10 +45,10 @@ export const PAYMENT_LABELS = {
     TARJETA: 'Tarjeta sin detalle'
 };
 
-/** Los medios que se ofrecen al vender: la tarjeta sin detalle es de notas viejas. */
+/** The methods offered when selling: card without detail belongs to old notes. */
 export const SALE_PAYMENT_METHODS = ['EFECTIVO', 'QR', 'TARJETA_DEBITO', 'TARJETA_CREDITO'];
 
-/** Cómo se llama cada tipo de egreso en pantalla. */
+/** What each expense type is called on screen. */
 export const EXPENSE_LABELS = {
     SUPPLIER_PAYMENT: 'Pago a proveedor',
     SERVICE_PAYMENT: 'Pago de servicio',
@@ -139,8 +139,8 @@ export const BillingService = {
 };
 
 /**
- * La caja abierta del usuario, o null si no tiene. Un 404 no es un error
- * aquí: es la respuesta «todavía no abriste la caja».
+ * The user's open till, or null if they have none. A 404 is not an error
+ * here: it is the answer «you have not opened the till yet».
  */
 export async function currentTillOrNull() {
     try {

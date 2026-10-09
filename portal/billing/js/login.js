@@ -1,8 +1,8 @@
 /**
- * Pantalla de acceso.
+ * Sign-in screen.
  *
- * Contra AUTH, como todo producto de BearSoft. Si ya hay sesión, entra
- * directo en vez de pedir las credenciales otra vez.
+ * Against AUTH, like every BearSoft product. If there is already a session, it
+ * goes straight in instead of asking for the credentials again.
  */
 import { isTokenExpired } from './auth.js';
 import { isAuthenticated, login } from './services/AuthService.js';

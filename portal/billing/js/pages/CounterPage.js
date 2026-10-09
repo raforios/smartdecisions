@@ -20,14 +20,14 @@ import {
 import { printTicket } from './TicketPrinter.js';
 import { escapeHtml, money, notify, setBusy } from '../ui.js';
 
-/** Débito y crédito van separados para los reportes; para el SIN son tarjeta. */
+/** Debit and credit stay apart for the reports; for the SIN both are card. */
 const PAYMENT_METHODS = SALE_PAYMENT_METHODS.map((value) => [value, PAYMENT_LABELS[value]]);
 
 /** Lines being sold, keyed by SKU so the same product cannot enter twice. */
 let basket = new Map();
 let catalogue = [];
 let settings = null;
-/** La caja abierta y vigente de quien cobra; sin ella no se vende. */
+/** The open, current till of whoever charges; without it nothing is sold. */
 let tillReady = false;
 
 function total() {
@@ -156,8 +156,8 @@ async function charge(host) {
 }
 
 /**
- * El estado de la caja encima del mostrador. Sin caja abierta de hoy no se
- * cobra: el botón queda deshabilitado y el aviso dice qué hacer.
+ * The till status above the counter. Without a till opened today nothing is
+ * charged: the button stays disabled and the warning says what to do.
  */
 function renderTillBar(host, till) {
     const bar = host.querySelector('#till-bar');
@@ -230,9 +230,9 @@ export async function mountCounter(host) {
                             `<option value="${value}">${label}</option>`).join('')}
                     </select>
                 </label>
-                <!-- El número de tarjeta sólo aparece cuando el pago es con
-                     tarjeta: la norma prohíbe enviarlo en cualquier otro caso. Se
-                     enmascara en el servidor y nunca se guarda completo. -->
+                <!-- The card number only appears when paying by card: the rule
+                     forbids sending it in any other case. It is masked on the
+                     server and never stored in full. -->
                 <label class="field" id="card-field" hidden>
                     <span>Número de tarjeta</span>
                     <input type="text" id="card-number" inputmode="numeric" maxlength="30"
@@ -324,9 +324,9 @@ export async function mountCounter(host) {
         renderBasket(host);
     });
 
-    // El campo de tarjeta sólo existe mientras el pago sea con tarjeta, y se
-    // limpia al cambiar de método: un número que quedó escrito en pantalla
-    // habría viajado con una venta en efectivo, que la norma rechaza.
+    // The card field only exists while the payment is by card, and it is
+    // cleared when the method changes: a number left on screen would have
+    // travelled with a cash sale, which the rule rejects.
     const method = host.querySelector('#payment-method');
     const cardField = host.querySelector('#card-field');
     const cardInput = host.querySelector('#card-number');
@@ -338,8 +338,8 @@ export async function mountCounter(host) {
     method.addEventListener('change', syncCardField);
     syncCardField();
 
-    // Con la nominatividad activada el documento deja de ser opcional, y la
-    // etiqueta lo tiene que decir antes de que el cajero cobre.
+    // With nominativity on, the document stops being optional, and the label
+    // has to say so before the cashier charges.
     if (settings?.buyer_required) {
         host.querySelector('#document-label').textContent = 'NIT / CI (obligatorio)';
         host.querySelector('#buyer-document').required = true;

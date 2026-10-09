@@ -1,9 +1,9 @@
 /**
- * PurchasesPage — la nota de compra o recepción.
+ * PurchasesPage — the purchase or receiving note.
  *
- * Cada línea crea un lote, y el lote es el que lleva el costo, el precio y el
- * vencimiento. Por eso el formulario pide las cuatro cosas juntas: cargarlas
- * después significaría vender a un precio que nadie fijó.
+ * Each line creates a batch, and the batch carries the cost, the price and the
+ * expiry. That is why the form asks for the four together: loading them later
+ * would mean selling at a price nobody set.
  */
 import { BillingService, errorText } from '../services/BillingService.js';
 import { escapeHtml, money, notify, setBusy, shortDate, stamp, todayIso } from '../ui.js';
@@ -67,9 +67,9 @@ async function renderHistory(host) {
 }
 
 /**
- * Pinta la recepción y la deja operable.
+ * Paints the receiving screen and makes it operable.
  *
- * @param {HTMLElement} host Dónde se monta la sección.
+ * @param {HTMLElement} host Where the section mounts.
  */
 export async function mountPurchases(host) {
     lines = [];

@@ -1,9 +1,9 @@
 /**
- * Utilidades de interfaz que comparten todas las pantallas de BILLING.
+ * Interface utilities shared by every BILLING screen.
  *
- * Deliberadamente corto: sólo lo que el mostrador usa de verdad. El módulo
- * anterior arrastraba ayudantes del almacén —selectores de ítems, acordeones,
- * insignias de estados de solicitud— que ya no tienen a quién servir.
+ * Deliberately short: only what the counter really uses. The previous module
+ * dragged warehouse helpers —item pickers, accordions, request status
+ * badges— that no longer have anyone to serve.
  */
 
 /** Avisos efímeros. El host vive en `index.html`. */
@@ -21,10 +21,10 @@ export function notify(message, variant = 'info') {
 }
 
 /**
- * Escapa lo que vino del servicio antes de entrar a innerHTML.
+ * Escapes what came from the service before it enters innerHTML.
  *
- * La descripción de un producto la escribe el comercio, así que es texto no
- * confiable: un laboratorio con un signo de menor no puede volverse marcado.
+ * A product description is written by the merchant, so it is untrusted text:
+ * a laboratory with a less-than sign cannot become markup.
  */
 export function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -33,10 +33,10 @@ export function escapeHtml(value) {
 }
 
 /**
- * Importe con los decimales que correspondan.
+ * Amount with the decimals that apply.
  *
- * Dos por defecto, como en toda nota; cero para contar unidades, donde
- * "12,00 u." se lee como un peso y no como cajas.
+ * Two by default, as on every note; zero to count units, where "12,00 u."
+ * reads as a weight and not as boxes.
  */
 export function money(value, decimals = 2) {
     if (value === null || value === undefined) return '—';
@@ -47,7 +47,7 @@ export function money(value, decimals = 2) {
     });
 }
 
-/** Porcentaje con signo, para una variación. */
+/** Signed percentage, for a variation. */
 export function percent(value) {
     if (value === null || value === undefined) return '—';
     const sign = value > 0 ? '+' : '';
@@ -56,7 +56,7 @@ export function percent(value) {
     })}%`;
 }
 
-/** Fecha corta, como la lee alguien en el mostrador. */
+/** Short date, the way someone at the counter reads it. */
 export function shortDate(value) {
     if (!value) return '—';
     const [date] = String(value).split('T');
@@ -64,14 +64,14 @@ export function shortDate(value) {
     return `${day}/${month}/${year}`;
 }
 
-/** Fecha y hora de una nota. */
+/** Date and time of a note. */
 export function stamp(value) {
     if (!value) return '—';
     const [date, rest = ''] = String(value).split('T');
     return `${shortDate(date)} ${rest.slice(0, 5)}`;
 }
 
-/** El día de hoy en ISO, que es como viajan las ventanas de fechas. */
+/** Today in ISO, which is how date windows travel. */
 export function todayIso(offsetDays = 0) {
     const day = new Date();
     day.setDate(day.getDate() + offsetDays);
@@ -92,7 +92,7 @@ export function setBusy(button, busyLabel) {
     };
 }
 
-/** Tarjeta de error, para cuando una pantalla no puede ni abrirse. */
+/** Error card, for when a screen cannot even open. */
 export function errorCard(title, detail) {
     return `<div class="card empty-state">
         <h3>${escapeHtml(title)}</h3>

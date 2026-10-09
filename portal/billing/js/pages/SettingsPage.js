@@ -1,8 +1,8 @@
 /**
- * SettingsPage — los datos del comercio y cómo numera sus notas.
+ * SettingsPage — the merchant's data and how it numbers its notes.
  *
- * Es la primera pantalla de una instalación nueva: sin estos datos la nota no
- * tiene a quién pertenecer, y el backend se niega a emitir con
+ * It is the first screen of a new installation: without this data the note has
+ * nobody to belong to, and the backend refuses to issue with
  * SETTINGS_NOT_FOUND.
  */
 import { BillingService, errorText } from '../services/BillingService.js';
@@ -11,9 +11,9 @@ import { escapeHtml, notify, setBusy } from '../ui.js';
 const WIDTHS = [['MM_80', '80 mm'], ['MM_58', '58 mm']];
 
 /**
- * Pinta la configuración y la guarda.
+ * Paints the settings and saves them.
  *
- * @param {HTMLElement} host Dónde se monta la sección.
+ * @param {HTMLElement} host Where the section mounts.
  */
 export async function mountSettings(host) {
     let settings = null;
@@ -114,10 +114,10 @@ export async function mountSettings(host) {
 
             </section>
 
-            <!-- Sucursal y punto de venta van DENTRO del CUF, así que son de
-                 la farmacia y no del servicio. La nominatividad es una bandera
-                 porque una farmacia que todavía emite notas internas tiene que
-                 seguir vendiendo hasta que la autoricen. -->
+            <!-- Branch and point of sale go INSIDE the CUF, so they belong to
+                 the pharmacy and not to the service. Nominativity is a flag
+                 because a pharmacy that still issues internal notes has to
+                 keep selling until it is authorized. -->
             <section class="card">
                 <h3>Facturación electrónica</h3>
                 <p class="muted small">
@@ -176,8 +176,8 @@ export async function mountSettings(host) {
         const done = setBusy(event.currentTarget, 'Guardando…');
         const text = (id) => host.querySelector(`#${id}`).value.trim() || null;
         try {
-            // La ficha se guarda entera: lo que este formulario no muestra
-            // (el municipio de la factura, por ejemplo) se conserva tal cual.
+            // The record is saved whole: what this form does not show
+            // (the invoice municipality, for example) is kept as it is.
             const { next_sale_number: _sale, next_purchase_number: _purchase, ...kept } =
                 settings || {};
             await BillingService.saveSettings({

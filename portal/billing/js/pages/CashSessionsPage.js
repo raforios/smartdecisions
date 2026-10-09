@@ -1,9 +1,9 @@
 /**
- * CashSessionsPage — todas las cajas del comercio, para el gerente.
+ * CashSessionsPage — every till of the merchant, for the manager.
  *
- * La conciliación es diaria: aquí se ve cada caja del día con lo esperado, lo
- * contado y la diferencia, y se puede cerrar la caja de alguien que se fue sin
- * cerrarla, dejando escrito por qué.
+ * Reconciliation is daily: each till of the day is shown here with the
+ * expected, the counted and the difference, and the till of someone who left
+ * without closing it can be closed, with the reason written down.
  */
 import { BillingService, errorText } from '../services/BillingService.js';
 import { mountCloseForm, tillSummaryHtml } from './CashPage.js';
@@ -83,9 +83,9 @@ async function load(host) {
 }
 
 /**
- * Pinta la lista de cajas y la conecta.
+ * Paints the list of tills and wires it.
  *
- * @param {HTMLElement} host Dónde se monta la sección.
+ * @param {HTMLElement} host Where the section mounts.
  */
 export async function mountCashSessions(host) {
     host.innerHTML = `

@@ -1,9 +1,9 @@
 /**
- * SalesPage — las notas emitidas, para reimprimir o anular.
+ * SalesPage — the issued notes, to reprint or void.
  *
- * Una nota no se edita: ya está impresa y en manos del comprador. Se anula, y
- * al anularla las unidades vuelven exactamente a los lotes de los que
- * salieron. Por eso la pantalla muestra el estado y no un formulario.
+ * A note is not edited: it is already printed and in the buyer's hands. It is
+ * voided, and on voiding the units go back exactly to the batches they came
+ * from. That is why the screen shows the status and not a form.
  */
 import { BillingService, errorText } from '../services/BillingService.js';
 import { hasRole } from '../auth.js';
@@ -56,9 +56,9 @@ async function load(host) {
 }
 
 /**
- * Pinta las ventas del rango elegido.
+ * Paints the sales of the chosen range.
  *
- * @param {HTMLElement} host Dónde se monta la sección.
+ * @param {HTMLElement} host Where the section mounts.
  */
 export async function mountSales(host) {
     settings = await BillingService.getSettings();
@@ -123,8 +123,8 @@ export async function mountSales(host) {
         }
 
         if (event.target.classList.contains('cancel')) {
-            // Anular devuelve stock: se pregunta una vez, con el número a la
-            // vista, porque después no hay vuelta atrás.
+            // Voiding returns stock: it is asked once, with the number in
+            // view, because there is no way back afterwards.
             const number = row.querySelector('strong').textContent;
             if (!window.confirm(`¿Anular la nota ${number}? Las unidades vuelven a stock.`)) {
                 return;

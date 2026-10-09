@@ -1,14 +1,14 @@
 /**
- * CatalogPage — los SKU y sus lotes.
+ * CatalogPage — the SKUs and their batches.
  *
- * El catálogo no guarda precio: el que se muestra es el del lote que va a
- * salir, y al desplegar un producto se ven todos sus lotes en el orden en que
- * se venderán, con su vencimiento y su costo. Ahí mismo se reprecia uno.
+ * The catalog stores no price: the one shown is that of the batch that will go
+ * out next, and expanding a product shows all its batches in the order they
+ * will be sold, with their expiry and cost. A batch is repriced right there.
  */
 import { BillingService, errorText } from '../services/BillingService.js';
 import { escapeHtml, money, notify, setBusy, shortDate } from '../ui.js';
 
-/** Un lote a menos de estos días pide acción antes de que sea tarde. */
+/** A batch closer than these days to expiry asks for action before it is too late. */
 const EXPIRY_WARNING_DAYS = 60;
 
 let products = [];
@@ -104,9 +104,9 @@ async function showLots(host, sku, holder) {
 }
 
 /**
- * Pinta el catálogo y lo deja operable.
+ * Paints the catalog and makes it operable.
  *
- * @param {HTMLElement} host Dónde se monta la sección.
+ * @param {HTMLElement} host Where the section mounts.
  */
 export async function mountCatalog(host) {
     host.innerHTML = `
