@@ -129,7 +129,7 @@ svg { display: block; }
 
 .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
 
-/* ---------- el contenido se corre cuando el menú aparece ---------- */
+/* ---------- the content shifts when the menu appears ---------- */
 
 .page { transition: margin-left .28s cubic-bezier(.3,.7,.3,1); }
 @media (min-width: 60rem) {
@@ -332,7 +332,7 @@ section + section { border-top: 1px solid var(--border); }
   font-family: "JetBrains Mono", monospace; font-size: .68rem; line-height: 1.6; color: var(--accent-2-str);
 }
 
-/* ---------- producto ---------- */
+/* ---------- product ---------- */
 
 .product {
   display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center;
@@ -840,15 +840,16 @@ const menuBtn = document.getElementById('menuBtn');
 const narrow = () => window.matchMedia('(max-width: 59.99rem)').matches;
 
 function setMenu(open) {
-  // Al cerrar, el foco sale del cajón ANTES de inertizarlo. Marcarlo oculto con
-  // el foco dentro deja a quien navega con teclado o lector de pantalla apuntando
-  // a algo que ya no existe para la tecnología asistiva, y el navegador lo bloquea.
+  // On closing, focus leaves the drawer BEFORE making it inert. Marking it
+  // hidden with focus inside leaves keyboard or screen-reader users pointing
+  // at something that no longer exists for assistive technology, and the
+  // browser blocks it.
   if (!open && drawer.contains(document.activeElement)) menuBtn.focus();
 
   body.classList.toggle('menu-open', open);
-  // `inert` en vez de `aria-hidden`: además de ocultarlo del árbol de
-  // accesibilidad, impide que el foco entre en un panel que está fuera de
-  // pantalla, cosa que `aria-hidden` no hace.
+  // `inert` instead of `aria-hidden`: besides hiding it from the
+  // accessibility tree, it stops focus from entering a panel that is off
+  // screen, which `aria-hidden` does not do.
   drawer.inert = !open;
   menuBtn.setAttribute('aria-expanded', String(open));
   body.style.overflow = open && narrow() ? 'hidden' : '';

@@ -136,8 +136,8 @@ h2{font-size:var(--s4);font-weight:700;letter-spacing:-.02em;line-height:1.14}
 .sec-head p{color:var(--ink-2);margin:.7rem 0 0;font-size:var(--s3);line-height:1.5}
 .band{background:var(--surface-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 
-/* Una banda visual donde el texto se acumula: el ojo necesita dónde apoyarse
-   antes de tres columnas de listas. */
+/* A visual band where the text piles up: the eye needs somewhere to rest
+   before three columns of lists. */
 .wide-art{border-radius:14px;overflow:hidden;border:1px solid var(--line);
   margin-bottom:1.6rem;max-height:15rem}
 .wide-art img{display:block;width:100%;height:15rem;object-fit:cover;object-position:center 45%}
@@ -211,8 +211,8 @@ h2{font-size:var(--s4);font-weight:700;letter-spacing:-.02em;line-height:1.14}
 .detail-hint{font-size:.72rem;color:var(--slate)}
 .detail-link:hover{border-color:var(--blue);background:var(--blue-soft)}
 .detail-link:hover .detail-value{color:var(--blue-deep)}
-/* El correo se copia, no se hace clic: un mailto sin cliente configurado no
-   abre nada y deja al visitante sin la dirección. */
+/* The email is copied, not clicked: a mailto with no client configured
+   opens nothing and leaves the visitor without the address. */
 .pick{user-select:all}
 .contact{background:var(--surface);border:1px solid var(--line);border-radius:16px;
   padding:clamp(1.8rem,4vw,3rem);display:grid;gap:1.7rem}
@@ -223,14 +223,14 @@ h2{font-size:var(--s4);font-weight:700;letter-spacing:-.02em;line-height:1.14}
 footer{border-top:1px solid var(--line);padding:2.2rem 0;color:var(--slate);font-size:var(--s1);
   background:var(--surface)}
 footer .wrap{display:block}
-/* El logo como banda propia sobre el pie: grande sin descuadrar la línea de
-   créditos, que sigue siendo una fila aparte. */
+/* The logo as its own band above the footer: large without breaking the
+   credits line, which remains a separate row. */
 .foot-banner{display:flex;justify-content:center;padding:.5rem 0 1.6rem;
   border-bottom:1px solid var(--line);margin-bottom:1.4rem}
 .foot-banner img{height:clamp(5.5rem,13vw,9rem);width:auto;opacity:.95}
 .foot-line{margin:0;text-align:center}
-/* Marca de visita: dice de dónde se conectó quien mira, en letra chica. Es
-   cortesía y transparencia — la misma información que el servidor ya ve. */
+/* Visit mark: says where the viewer connected from, in small print. It is
+   courtesy and transparency — the same information the server already sees. */
 .visit-note{margin:.7rem 0 0;text-align:center;font-size:.72rem;color:var(--slate);
   font-family:'JetBrains Mono',monospace;letter-spacing:.02em}
 </style>
@@ -740,7 +740,7 @@ document.getElementById('copyright').textContent =
         : `Nos visitas desde ${data.ip}`;
       note.hidden = false;
     })
-    .catch(() => { /* sin ubicación, el pie sigue igual */ });
+    .catch(() => { /* without a location, the footer stays as it is */ });
 })();
 
 /**

@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
 
-            // ---- SmartDecisions (producto) ----
+            // ---- SmartDecisions (product) ----
             const mlAppTitle = document.getElementById('ml-app-title');
             if (mlAppTitle) mlAppTitle.textContent = data.mlApp.title;
 
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             startCarousel('ml-carousel-image', data.mlApp.carouselImages);
 
-            // ---- SmartDecisions (producto completo: fórmula, beneficios, pasos, microservicios) ----
+            // ---- SmartDecisions (full product: formula, benefits, steps, microservices) ----
             if (data.smartDecisions) {
                 const sd = data.smartDecisions;
 
