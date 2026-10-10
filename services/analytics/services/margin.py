@@ -11,6 +11,8 @@
     the same product, the same client or the same salesperson.
 '''
 
+from typing import Any
+
 import pandas as pd
 
 from schemas.analytics import (
@@ -22,6 +24,7 @@ from schemas.analytics import (
     MetricCode
 )
 
+from services.currency import money_row, money_sums, money_total
 from services.environment import load_and_validate_env_vars
 from services.analytics_utils import (
     QUANTITY,
@@ -34,7 +37,6 @@ from services.analytics_utils import (
     PRODUCT_NAME,
     SELLER,
     label_series,
-    money,
     order_count,
     ratio
 )
@@ -93,6 +95,28 @@ def _with_margin(dataframe: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
+def _margin_sums(
+    frame: pd.DataFrame,
+    keys: Any
+) -> pd.DataFrame:
+    '''
+        Revenue, cost and margin per group, each in every currency the frame
+        carries.
+
+        Args:
+            frame (pd.DataFrame): Rows carrying the margin columns.
+            keys (Any): What to group by, as `money_sums` takes it.
+
+        Returns:
+            pd.DataFrame: Columns ('amount' | 'cost' | 'margin', currency).
+    '''
+    return pd.concat({
+        name: money_sums(frame, frame[column], keys)
+        for name, column in (('amount', AMOUNT), ('cost', 'line_cost'),
+                             ('margin', 'line_margin'))
+    }, axis = 1)
+
+
 def _kpis(frame: pd.DataFrame) -> list[KpiCard]:
     '''
         Builds the headline profitability cards.
@@ -103,25 +127,27 @@ def _kpis(frame: pd.DataFrame) -> list[KpiCard]:
         Returns:
             list[dict[str, Any]]: KPI cards ready for the dashboard.
     '''
-    revenue = float(frame[AMOUNT].sum())
-    cost = float(frame['line_cost'].sum())
+    revenue = money_total(frame, frame[AMOUNT])
+    cost = money_total(frame, frame['line_cost'])
     margin = revenue - cost
     orders = order_count(frame)
 
     return [
         KpiCard(
-            metric_code = MetricCode.GROSS_MARGIN.value, value = money(margin), format = 'money'
+            metric_code = MetricCode.GROSS_MARGIN.value, value = money_row(margin),
+            format = 'money'
         ),
         KpiCard(
             metric_code = MetricCode.GROSS_MARGIN_PERCENT.value,
-            value = round(ratio(margin, revenue) * 100, 1), format = 'percent'
+            value = round(ratio(margin['bob'], revenue['bob']) * 100, 1), format = 'percent'
         ),
         KpiCard(
-            metric_code = MetricCode.COST_OF_GOODS.value, value = money(cost), format = 'money'
-        ),
-        KpiCard(
-            metric_code = MetricCode.MARGIN_PER_ORDER.value, value = money(ratio(margin, orders)),
+            metric_code = MetricCode.COST_OF_GOODS.value, value = money_row(cost),
             format = 'money'
+        ),
+        KpiCard(
+            metric_code = MetricCode.MARGIN_PER_ORDER.value,
+            value = money_row(margin / orders) if orders else 0.0, format = 'money'
         ),
     ]
 
@@ -146,19 +172,17 @@ def _breakdown(
     if labels is None or labels.empty:
         return []
 
-    grouped = frame.groupby(labels.values, dropna = False).agg(
-        amount = (AMOUNT, 'sum'),
-        cost = ('line_cost', 'sum'),
-        margin = ('line_margin', 'sum')
-    ).sort_values('margin', ascending = False).head(top)
+    grouped = _margin_sums(frame, pd.Series(labels.values, index = frame.index).fillna(''))
+    grouped = grouped.sort_values(('margin', 'bob'), ascending = False).head(top)
 
     return [
         MarginRow(
             label = str(label),
-            amount = money(row['amount']),
-            cost = money(row['cost']),
-            margin = money(row['margin']),
-            margin_percentage = round(ratio(row['margin'], row['amount']) * 100, 1)
+            amount = money_row(row['amount']),
+            cost = money_row(row['cost']),
+            margin = money_row(row['margin']),
+            margin_percentage = round(
+                ratio(row[('margin', 'bob')], row[('amount', 'bob')]) * 100, 1)
         )
         for label, row in grouped.iterrows()
     ]
@@ -181,22 +205,19 @@ def _thin_margin_products(frame: pd.DataFrame) -> list[MarginAlert]:
     if labels is None:
         return []
 
-    grouped = frame.groupby(labels.values, dropna = False).agg(
-        amount = (AMOUNT, 'sum'),
-        margin = ('line_margin', 'sum')
-    )
-    grouped = grouped[grouped['amount'] > 0]
-    grouped['share'] = grouped['margin'] / grouped['amount']
+    grouped = _margin_sums(frame, pd.Series(labels.values, index = frame.index).fillna(''))
+    grouped = grouped[grouped[('amount', 'bob')] > 0]
+    share = grouped[('margin', 'bob')] / grouped[('amount', 'bob')]
 
-    flagged = grouped[grouped['share'] < _THIN_MARGIN].sort_values('margin')
+    flagged = grouped[share < _THIN_MARGIN].sort_values(('margin', 'bob'))
     return [
         MarginAlert(
             label = str(label),
-            amount = money(row['amount']),
-            margin = money(row['margin']),
-            margin_percentage = round(row['share'] * 100, 1),
+            amount = money_row(row['amount']),
+            margin = money_row(row['margin']),
+            margin_percentage = round(share.loc[label] * 100, 1),
             reason_code = (
-                MarginAlertReason.BELOW_COST.value if row['margin'] < 0
+                MarginAlertReason.BELOW_COST.value if row[('margin', 'bob')] < 0
                 else MarginAlertReason.THIN_MARGIN.value
             )
         )

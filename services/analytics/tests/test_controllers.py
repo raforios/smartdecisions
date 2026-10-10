@@ -101,6 +101,15 @@ def _collections_frame() -> pd.DataFrame:
     })
 
 
+
+@pytest.fixture(autouse = True)
+def _rates_at_ten(monkeypatch) -> None:
+    '''
+        Every controller reads its dollars from QUOTES; here it reads ten
+        bolivianos per dollar unless a test sets its own series.
+    '''
+    _flat_rate(monkeypatch)
+
 @pytest.fixture(name = 'dataset')
 def _dataset(monkeypatch) -> str:
     '''
@@ -140,8 +149,12 @@ def _call(
     ))
 
 
-def test_commercial_summary_returns_a_full_response(dataset):
+def test_commercial_summary_returns_a_full_response(
+    dataset,
+    monkeypatch
+):
     '''The dashboard endpoint must build its response, blocks included.'''
+    _flat_rate(monkeypatch)
     response = _call(controllers.commercial_summary_controller, dataset)
 
     assert isinstance(response, CommercialSummaryResponse)
@@ -713,24 +726,30 @@ def test_reading_the_commercial_policy_shows_the_defaults_in_force(monkeypatch):
     assert (response.yellow_from, response.green_from) == (0.5, 1.0)
 
 
-def test_a_report_in_dollars_says_so_and_names_the_rows_left_unconverted(
+def test_the_summary_carries_each_sale_at_its_own_days_rate(
     dataset: str,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
     '''
-        The controller put the conversion facts in the period, but PeriodInfo
-        had no field for them and Pydantic dropped them: a report in dollars
-        could not tell the screen which rows kept their bolivianos.
+        Sales are counted in bolivianos and each one is also worth its own
+        day's dollars: with a rate that moves every day, the total in dollars
+        is the sum of each sale over its day's rate — not the total over one
+        rate — and every ranking keeps the order the bolivianos give.
     '''
-    applied = {'currency': 'USD', 'base_currency': 'BOB', 'rows_converted': 9,
-               'rows_total': 10, 'rows_without_rate': 1}
-    monkeypatch.setattr(controllers, 'convert_frame',
-                        lambda **kwargs: (kwargs['dataframe'], applied))
+    _rising_rate(monkeypatch)
+    sales = _sales_frame()
+    rates = currency.rates_per_row(sales, 'USD', 'Bearer t')[0]
+    expected = round(float((sales['total_amount'] / rates.to_numpy()).sum()), 2)
 
-    response = _call(controllers.commercial_summary_controller, dataset, {'currency': 'USD'})
+    response = _call(controllers.commercial_summary_controller, dataset,
+                     {'currency': 'USD', 'auth_token': 'Bearer t'})
 
-    assert response.period.currency.currency == 'USD'
-    assert response.period.currency.rows_without_rate == 1
+    total = response.kpis[0].value
+    assert total.bob == round(float(sales['total_amount'].sum()), 2)
+    assert total.usd == expected
+    assert total.usd != round(total.bob / float(rates.iloc[-1]), 2)
+    best = [row.amount.bob for row in response.best_clients]
+    assert best == sorted(best, reverse = True)
 
 
 def test_a_dataset_of_another_owner_answers_like_a_missing_one() -> None:
@@ -776,7 +795,6 @@ def test_the_fx_effect_endpoint_returns_its_model_and_simulates(
 
     assert isinstance(today, FxEffectResponse)
     assert today.rate_today == 8.0 and not today.rate_is_hypothetical
-    assert today.period.currency is None
     assert simulated.rate_today == 9.0 and simulated.rate_is_hypothetical
     assert simulated.totals.replacement_cost > today.totals.replacement_cost
 
@@ -917,3 +935,65 @@ def test_stock_carries_every_amount_in_three_currencies(
         round(response.products[0].stock_value.bob / 10.0, 2)
     assert asked_in_usd.kpis == response.kpis
     assert response.kpis.units_on_hand == float(_stock_frame()['on_hand'].sum())
+
+
+def test_the_forecast_shows_the_past_at_its_days_and_the_future_today(
+    dataset: str,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''
+        What was sold stays at the dollars of its day; what is projected is
+        worth today's dollars, because it has not happened yet.
+    '''
+    _rising_rate(monkeypatch)
+
+    response = _call(controllers.forecast_controller, dataset,
+                     {'months_ahead': 2, 'auth_token': 'Bearer t'})
+
+    series = response.series[0]
+    rate = _todays_rate()
+    projected = series.forecast[0].amount
+    assert projected.usd == round(projected.bob / rate, 2)
+    assert series.total_forecast.usd == round(series.total_forecast.bob / rate, 2)
+    first = series.history[0].amount
+    assert first.usd != round(first.bob / rate, 2)
+
+
+def test_past_sales_by_client_carry_their_own_days_dollars(
+    dataset: str,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''Segmentation and portfolio health read sales already made.'''
+    _rising_rate(monkeypatch)
+    options = {'auth_token': 'Bearer t'}
+
+    tiers = _call(controllers.segmentation_controller, dataset, options).tiers
+    portfolio = _call(controllers.portfolio_controller, dataset, options)
+
+    assert all(tier.amount.usd is not None for tier in tiers if tier.clients)
+    assert sum(tier.amount.bob for tier in tiers) == \
+        round(float(_sales_frame()['total_amount'].sum()), 2)
+    assert isinstance(portfolio, controllers.PortfolioResponse)
+
+
+def test_a_response_at_todays_rate_keeps_its_type_and_adds_the_dollars() -> None:
+    '''`_at_todays_rate`: same DTO, every amount as the three currencies.'''
+    response = controllers.ForecastResponse(
+        dataset_id = 'd', method = 'linear', months_ahead = 1,
+        series = [{'name': '', 'history': [], 'forecast': [{'month': '2026-11',
+                   'amount': 100.0}], 'total_forecast': 100.0}]
+    )
+
+    converted = controllers._at_todays_rate(response, {'auth_token': 'Bearer t'}) # pylint: disable=protected-access
+
+    assert isinstance(converted, controllers.ForecastResponse)
+    assert converted.series[0].total_forecast.usd == 10.0
+    assert converted.rates.usd == 10.0
+
+
+def test_the_callers_token_travels_from_the_header() -> None:
+    '''`_caller_token`: the endpoints without query options still ask QUOTES as the caller.'''
+    request = Mock(headers = {'Authorization': 'Bearer t'})
+
+    assert controllers._caller_token(request) == {'auth_token': 'Bearer t'}
+    assert controllers._caller_token(None) == {} # pylint: disable=protected-access

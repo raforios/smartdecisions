@@ -7,7 +7,6 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from schemas.analytics import (
-    CurrencyApplied,
     AnalyticsPdvResponse,
     AnalyticsResultsResponse,
     RunListResponse,
@@ -48,9 +47,8 @@ from services.portfolio import build_portfolio
 from services.segmentation import build_segmentation
 from services.volume import build_volume_source
 from services.currency import (
-    BASE_CURRENCY,
-    convert_frame,
     in_three_currencies,
+    with_month_close_factors,
     current_rate,
     rates_per_row
 )
@@ -167,9 +165,7 @@ def _scoped_dataframe(
             dataset_id (str): Dataset to load.
             owner_email (str): The caller's owner key; a dataset of another
                 owner answers like a missing one.
-            params (dict | None): May carry 'date_from', 'date_to', and
-                'currency' with the caller's token to read amounts in another
-                currency.
+            params (dict | None): May carry 'date_from' and 'date_to'.
 
         Returns:
             tuple[Any, PeriodInfo]: The scoped DataFrame and the period
@@ -185,57 +181,75 @@ def _scoped_dataframe(
         dataset_id = dataset_id,
         owner_email = owner_email
     )
-    dataframe = load_dataframe_from_s3(metadata['file_s3_key'])
     options = params or {}
-
-    # One seam for the whole service: every analysis reads the frame through
-    # here, so a report in dollars is one conversion and not nine. Each amount
-    # converts at the rate of its own row's day — converting a year at one
-    # rate would turn a devaluation into growth.
-    converted, applied = convert_frame(
-        dataframe = dataframe,
-        currency = options.get('currency') or BASE_CURRENCY,
-        auth_token = options.get('auth_token') or ''
-    )
-
-    scoped, period = apply_date_range(
-        dataframe = converted,
+    # The file is in bolivianos and every engine counts in them. The dollars
+    # come next to them: at today's rate for what is held or projected now
+    # (`in_three_currencies`) and at its month's closing rate for what was sold
+    # (`with_month_close_factors`). The currency a screen asks for only picks what a
+    # chart draws, so it never reaches this.
+    return apply_date_range(
+        dataframe = load_dataframe_from_s3(metadata['file_s3_key']),
         date_from = options.get('date_from'),
         date_to = options.get('date_to')
     )
-    if applied:
-        # `period` is a PeriodInfo, not a dict: spreading it raised TypeError
-        # and every report asked in dollars answered 500.
-        period = period.model_copy(update = {'currency': CurrencyApplied(**applied)})
-    return scoped, period
 
 
-def _counted_in_bolivianos(
-    dynamodb_resource: ServiceResource,
-    dataset_id: str,
-    current_user: str,
+def _at_todays_rate(
+    response: Any,
     params: dict[str, Any] | None
-) -> tuple[Any, PeriodInfo]:
+) -> Any:
     '''
-        The sales of a report counted in bolivianos —receivables, stock,
-        attainment— within the window asked.
-
-        A credit of 300 bolivianos is collected with 300 bolivianos: balances,
-        counts and shares come out of the bolivianos, and the response carries
-        every amount in the three currencies at today's rate
-        (`in_three_currencies`). The currency asked does not apply here.
+        The same response with every amount also in the official dollar and
+        USDT at today's rate: what is held or projected now is worth now.
 
         Args:
-            dynamodb_resource (ServiceResource): Injected DynamoDB resource.
-            dataset_id (str): Dataset to load.
-            current_user (str): The caller's owner key.
-            params (dict | None): Window, 'currency' and the caller's token.
+            response (Any): The response DTO, amounts in bolivianos.
+            params (dict | None): The request options, for the caller's token.
 
         Returns:
-            tuple[Any, PeriodInfo]: The sales in bolivianos and the period.
+            Any: A response of the same type with each `Amount` a `Money`.
     '''
-    in_bolivianos = {key: value for key, value in (params or {}).items() if key != 'currency'}
-    return _scoped_dataframe(dynamodb_resource, dataset_id, current_user, in_bolivianos)
+    return in_three_currencies(
+        type(response), response.model_dump(),
+        (params or {}).get('auth_token') or '',
+        get_current_time_gmt().date().isoformat()
+    )
+
+
+def _at_month_close(
+    dataframe: Any,
+    params: dict[str, Any] | None
+) -> Any:
+    '''
+        The sales with the factor of their month's closing rate: what was sold
+        in August reads at the dollar of August 31.
+
+        Args:
+            dataframe (Any): Sales rows, in bolivianos.
+            params (dict | None): The request options, for the caller's token.
+
+        Returns:
+            Any: The same rows with the official dollar and USDT factors.
+    '''
+    return with_month_close_factors(
+        dataframe, (params or {}).get('auth_token') or '',
+        get_current_time_gmt().date().isoformat()
+    )
+
+
+def _caller_token(request: Request | None) -> dict[str, Any]:
+    '''
+        The caller's Authorization header as request options, for the
+        endpoints that take no query parameters.
+
+        Args:
+            request (Request | None): The incoming request.
+
+        Returns:
+            dict[str, Any]: {'auth_token': header} or empty.
+    '''
+    header = request.headers.get('Authorization') if request is not None else None
+    return {'auth_token': header} if header else {}
 
 
 def _payments_of(metadata: dict[str, Any]) -> Any:
@@ -266,7 +280,10 @@ async def commercial_summary_controller(
         and gross margin. Read-only: everything is derived on the fly from the
         dataset, so nothing is persisted as a run.
     '''
+    # Counted in bolivianos, every month's sales also at its closing official dollar
+    # and USDT: the engines group the three side by side.
     dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe = _at_month_close(dataframe, params)
     summary = build_commercial_summary(dataframe)
     return CommercialSummaryResponse(
         dataset_id = dataset_id,
@@ -303,8 +320,7 @@ async def receivables_controller(
     '''
     # Counted in bolivianos: the currency of the request only moves charts,
     # and the screen draws them from the three amounts every field carries.
-    dataframe, period = _counted_in_bolivianos(dynamodb_resource, dataset_id,
-                                               current_user, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -345,8 +361,7 @@ async def objectives_controller(
         Read-only: everything is derived on the fly, so nothing is persisted
         as a run.
     '''
-    dataframe, period = _counted_in_bolivianos(dynamodb_resource, dataset_id,
-                                               current_user, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -443,8 +458,7 @@ async def stock_controller(
         Read-only, and deliberately so: `available` reflects what the client's
         ERP already committed. Nothing here reserves or promises stock.
     '''
-    dataframe, period = _counted_in_bolivianos(dynamodb_resource, dataset_id,
-                                               current_user, params)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -526,6 +540,7 @@ async def portfolio_controller(
         of clients at risk of being lost. Read-only.
     '''
     dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe = _at_month_close(dataframe, params)
     return PortfolioResponse(
         dataset_id = dataset_id,
         period = period,
@@ -547,12 +562,13 @@ async def forecast_controller(
     '''
     dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     result = build_forecast(
-        dataframe = dataframe,
+        dataframe = _at_month_close(dataframe, params),
         months_ahead = params.get('months_ahead', 3),
         method = params.get('method', 'linear'),
         group_by = params.get('group_by')
     )
-    return ForecastResponse(dataset_id = dataset_id, **result.model_dump())
+    return _at_todays_rate(ForecastResponse(dataset_id = dataset_id, **result.model_dump()),
+                           params)
 
 
 @handle_service_errors('ANALYTICS')
@@ -568,7 +584,8 @@ async def segmentation_controller(
         (Alto/Medio/Bajo). Read-only.
     '''
     dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
-    result = build_segmentation(dataframe)
+    result = build_segmentation(
+        _at_month_close(dataframe, params))
     return SegmentationResponse(dataset_id = dataset_id, **result.model_dump())
 
 
@@ -617,20 +634,20 @@ async def run_analytics_controller(
             'parameters': parameters
         }
     )
-    return AnalyticsRunResponse(
+    return _at_todays_rate(AnalyticsRunResponse(
         dataset_id = persisted['dataset_id'],
         run_id = persisted['run_id'],
         status = persisted['status'],
         summary = _summary_from_item(persisted['summary']),
         opportunities = _opportunities_from_item(persisted['opportunities']),
         created_at = persisted['created_at']
-    )
+    ), params)
 
 
 @handle_service_errors('ANALYTICS')
 async def list_runs_controller(
     dynamodb_resource: ServiceResource,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str,
     limit: int = HISTORY_DEFAULT_LIMIT
 ) -> RunListResponse:
@@ -651,7 +668,7 @@ async def list_runs_controller(
         owner_email = current_user,
         limit = limit
     )
-    return RunListResponse(
+    return _at_todays_rate(RunListResponse(
         owner_email = current_user,
         count = len(items),
         runs = [
@@ -670,7 +687,7 @@ async def list_runs_controller(
             )
             for item in items
         ]
-    )
+    ), _caller_token(request))
 
 
 def _optional_float(value: Any) -> float | None:
@@ -690,7 +707,7 @@ def _optional_float(value: Any) -> float | None:
 async def get_results_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> AnalyticsResultsResponse:
     '''
@@ -701,14 +718,14 @@ async def get_results_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    return AnalyticsResultsResponse(
+    return _at_todays_rate(AnalyticsResultsResponse(
         dataset_id = run['dataset_id'],
         run_id = run['run_id'],
         status = run['status'],
         summary = _summary_from_item(run['summary']),
         opportunities = _opportunities_from_item(run['opportunities']),
         created_at = run['created_at']
-    )
+    ), _caller_token(request))
 
 
 @handle_service_errors('ANALYTICS')
@@ -716,7 +733,7 @@ async def get_pdv_opportunities_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     pdv_id: str,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> AnalyticsPdvResponse:
     '''
@@ -731,11 +748,11 @@ async def get_pdv_opportunities_controller(
         opp for opp in run['opportunities']
         if str(opp.get('pdv_id')) == str(pdv_id)
     ]
-    return AnalyticsPdvResponse(
+    return _at_todays_rate(AnalyticsPdvResponse(
         dataset_id = run['dataset_id'],
         pdv_id = pdv_id,
         opportunities = _opportunities_from_item(pdv_opportunities)
-    )
+    ), _caller_token(request))
 
 
 @handle_service_errors('ANALYTICS')
@@ -753,8 +770,7 @@ async def fx_effect_controller(
         and the rates come from QUOTES: each row's own day, and today's, unless
         the user asks to simulate another.
     '''
-    window = {key: value for key, value in (params or {}).items() if key != 'currency'}
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, window)
+    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     source = params.get('source') or 'USD'
     auth_token = params.get('auth_token')
     rates, _ = rates_per_row(dataframe, source, auth_token)

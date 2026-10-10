@@ -31,11 +31,11 @@ from services.analytics_utils import (
     SELLER,
     dates,
     label_series,
-    money,
     order_count,
     percent_change,
     ratio
 )
+from services.currency import money_row, money_total
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -64,7 +64,8 @@ def _drop_size_kpis(dataframe: pd.DataFrame) -> list[KpiCard]:
     '''
     orders = order_count(dataframe)
     units = float(dataframe[QUANTITY].sum()) if QUANTITY in dataframe.columns else 0.0
-    amount = float(dataframe[AMOUNT].sum()) if AMOUNT in dataframe.columns else 0.0
+    amount = (money_total(dataframe, dataframe[AMOUNT]) if AMOUNT in dataframe.columns
+              else pd.Series({'bob': 0.0}))
     # Every row of the normalized frame is one product line of one order.
     lines_per_order = ratio(len(dataframe), orders)
 
@@ -74,7 +75,7 @@ def _drop_size_kpis(dataframe: pd.DataFrame) -> list[KpiCard]:
         KpiCard(metric_code = MetricCode.PRODUCTS_PER_ORDER,
                 value = round(lines_per_order, 2), format = 'decimal'),
         KpiCard(metric_code = MetricCode.AMOUNT_PER_ORDER,
-                value = money(ratio(amount, orders)), format = 'money'),
+                value = money_row(amount / orders) if orders else 0.0, format = 'money'),
         KpiCard(metric_code = MetricCode.ORDER_COUNT,
                 value = float(orders), format = 'int'),
     ]
@@ -100,22 +101,22 @@ def _seller_productivity(dataframe: pd.DataFrame) -> list[SellerProductivity]:
     rows: list[SellerProductivity] = []
     for seller, group in labelled.groupby('_seller'):
         orders = order_count(group)
-        amount = float(group[AMOUNT].sum())
+        amount = money_total(group, group[AMOUNT])
         clients = int(group[CLIENT_ID].nunique()) if CLIENT_ID in group.columns else 0
-        rows.append(SellerProductivity(
+        rows.append((float(amount['bob']), SellerProductivity(
             seller = str(seller),
-            amount = money(amount),
+            amount = money_row(amount),
             orders = orders,
             clients = clients,
-            average_ticket = money(ratio(amount, orders)),
+            average_ticket = money_row(amount / orders) if orders else 0.0,
             lines_per_order = round(ratio(len(group), orders), 2),
-            amount_per_client = money(ratio(amount, clients)) if clients else 0.0
-        ))
-    rows.sort(key = lambda row: row.amount, reverse = True)
-    return rows[:_MAX_SELLERS]
+            amount_per_client = money_row(amount / clients) if clients else 0.0
+        )))
+    rows.sort(key = lambda pair: pair[0], reverse = True)
+    return [row for _, row in rows[:_MAX_SELLERS]]
 
 
-def _average_price(group: pd.DataFrame) -> float | None:
+def _average_price(group: pd.DataFrame) -> pd.Series | None:
     '''
         Average price actually charged: amount divided by units, which reflects
         discounts far better than the nominal unit price.
@@ -124,13 +125,14 @@ def _average_price(group: pd.DataFrame) -> float | None:
             group (pd.DataFrame): Rows of a single product.
 
         Returns:
-            float | None: The realized average price, or None when the group
-                does not move enough units to be meaningful.
+            pd.Series | None: The realized average price in `bob` and, with
+                the day factors, in the dollars; None when the group does not
+                move enough units to be meaningful.
     '''
     units = float(group[QUANTITY].sum())
     if units < _MIN_UNITS_FOR_PRICE:
         return None
-    return ratio(float(group[AMOUNT].sum()), units)
+    return money_total(group, group[AMOUNT]) / units
 
 
 def _price_drift(dataframe: pd.DataFrame) -> list[PriceDrift]:
@@ -180,13 +182,13 @@ def _price_drift(dataframe: pd.DataFrame) -> list[PriceDrift]:
         previous = earlier_prices.get(label)
         if current is None or previous is None:
             continue
-        variation = percent_change(current, previous)
+        variation = percent_change(float(current['bob']), float(previous['bob']))
         if variation is None or variation == 0:
             continue
         rows.append(PriceDrift(
             product = str(label),
-            current_price = money(current),
-            previous_price = money(previous),
+            current_price = money_row(current),
+            previous_price = money_row(previous),
             change = variation
         ))
     rows.sort(key = lambda row: row.change)

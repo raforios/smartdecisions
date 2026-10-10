@@ -17,6 +17,7 @@ import pandas as pd
 
 from schemas.analytics import ForecastBlock
 from services.analytics_utils import AMOUNT_DECIMALS, FORECAST_MONTHS_AHEAD
+from services.currency import money_row, money_sums
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -79,32 +80,37 @@ def _forecast_values(
     return [round(max(value, 0.0), AMOUNT_DECIMALS) for value in projected]
 
 
-def _monthly_totals(dataframe: pd.DataFrame) -> pd.Series:
+def _monthly_totals(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
-        Returns monthly total sales indexed by 'YYYY-MM' (chronological).
+        Returns monthly total sales indexed by 'YYYY-MM' (chronological):
+        `bob` and, with the month-close factors, each month at its closing dollar.
     '''
     fechas = pd.to_datetime(dataframe['date'], errors = 'coerce')
     valid = fechas.notna()
-    frame = dataframe.loc[valid].assign(_month = fechas[valid].dt.strftime('%Y-%m'))
-    return frame.groupby('_month')[_AMOUNT].sum().sort_index()
+    frame = dataframe.loc[valid]
+    return money_sums(frame, frame[_AMOUNT], fechas[valid].dt.strftime('%Y-%m')).sort_index()
 
 
 def _series_block(
     name: str,
-    monthly: pd.Series,
+    monthly: pd.DataFrame,
     months_ahead: int,
     method: str
 ) -> dict[str, Any] | None:
     '''
         Builds one forecast block (historical + projected) for a named series.
         Returns None when there are fewer than two months (nothing to project).
+
+        The history is what was sold, each month at its closing dollar; the
+        projection is fitted on the bolivianos and stays in them, so the
+        response shows it at today's rate.
     '''
     if len(monthly) < 2:
         return None
-    history = [{'month': str(idx), 'amount': round(float(val), AMOUNT_DECIMALS)}
-               for idx, val in monthly.items()]
+    history = [{'month': str(idx), 'amount': money_row(sums)}
+               for idx, sums in monthly.iterrows()]
     future_months = _next_months(str(monthly.index[-1]), months_ahead)
-    future_values = _forecast_values(list(monthly.values), months_ahead, method)
+    future_values = _forecast_values(list(monthly['bob'].values), months_ahead, method)
     forecast = [{'month': month, 'amount': val}
                 for month, val in zip(future_months, future_values)]
     return {

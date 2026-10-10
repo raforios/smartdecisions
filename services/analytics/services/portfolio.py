@@ -30,10 +30,10 @@ from services.analytics_utils import (
     AMOUNT,
     dates,
     label_series,
-    money,
     order_count,
     ratio
 )
+from services.currency import money_row, money_sums
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -157,12 +157,16 @@ def _client_history(
     last_month = scoped['_month'].max()
     grouped = scoped.groupby('_client')
     history = pd.DataFrame({
-        'total_amount': grouped[AMOUNT].sum(),
         'active_months': grouped['_month'].nunique(),
         'last_purchase': grouped['_date'].max()
     })
-    recent = scoped.loc[scoped['_month'] == last_month].groupby('_client')[AMOUNT].sum()
-    history['last_month_amount'] = recent.reindex(history.index).fillna(0.0)
+    # Totals and last month in each currency: 'total_bob', 'last_usd'...
+    totals = money_sums(scoped, scoped[AMOUNT], '_client')
+    recent_rows = scoped.loc[scoped['_month'] == last_month]
+    recent = money_sums(recent_rows, recent_rows[AMOUNT], '_client')
+    for currency in totals.columns:
+        history[f'total_{currency}'] = totals[currency]
+        history[f'last_{currency}'] = recent[currency].reindex(history.index).fillna(0.0)
     return history
 
 
@@ -214,16 +218,21 @@ def _client_row(
                 ('at_risk', 'lost' or None) and the row itself.
     '''
     months_active = int(record['active_months']) or 1
-    monthly_average = float(record['total_amount']) / months_active
-    last_amount = float(record['last_month_amount'])
+    currencies = [column[len('total_'):] for column in record.index
+                  if column.startswith('total_')]
+    averages = pd.Series({currency: float(record[f'total_{currency}']) / months_active
+                          for currency in currencies})
+    lasts = pd.Series({currency: float(record[f'last_{currency}']) for currency in currencies})
+    monthly_average = float(averages['bob'])
+    last_amount = float(lasts['bob'])
     silence_days = int((reference_date - pd.Timestamp(record['last_purchase'])).days)
     drop = round(ratio(last_amount - monthly_average, monthly_average) * 100, 1)
     verdict = _classify(silence_days, drop)
 
     row = ClientAtRisk(
         client = str(client),
-        monthly_average_amount = money(monthly_average),
-        last_month_amount = money(last_amount),
+        monthly_average_amount = money_row(averages),
+        last_month_amount = money_row(lasts),
         change = drop,
         days_without_purchase = silence_days,
         last_purchase = pd.Timestamp(record['last_purchase']).strftime('%Y-%m-%d'),
@@ -249,15 +258,16 @@ def _split_by_risk(
         Returns:
             tuple: (at-risk rows, lost rows), both capped for readability.
     '''
-    buckets: dict[str, list[ClientAtRisk]] = {'at_risk': [], 'lost': []}
+    buckets: dict[str, list[tuple[float, ClientAtRisk]]] = {'at_risk': [], 'lost': []}
     for client, record in history.iterrows():
         bucket, row = _client_row(client, record, reference_date)
         if bucket:
-            buckets[bucket].append(row)
+            average = float(record['total_bob']) / (int(record['active_months']) or 1)
+            buckets[bucket].append((average, row))
 
-    for rows in buckets.values():
-        rows.sort(key = lambda row: row.monthly_average_amount, reverse = True)
-    return buckets['at_risk'][:_MAX_RISK_CLIENTS], buckets['lost'][:_MAX_LOST_CLIENTS]
+    ranked = {name: [row for _, row in sorted(rows, key = lambda pair: pair[0], reverse = True)]
+              for name, rows in buckets.items()}
+    return ranked['at_risk'][:_MAX_RISK_CLIENTS], ranked['lost'][:_MAX_LOST_CLIENTS]
 
 
 def _portfolio_kpis(

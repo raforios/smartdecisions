@@ -48,6 +48,7 @@ from services.analytics_utils import (
     percent_change,
     ratio
 )
+from services.currency import money_row, money_sums, money_total
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -93,6 +94,19 @@ _EXIT = 'EXIT'
 _NEW_CLIENTS = 'NEW_CLIENTS'
 _LOST_CLIENTS = 'LOST_CLIENTS'
 _RETAINED_CLIENTS = 'RETAINED_CLIENTS'
+
+
+def _currencies(sums: pd.DataFrame) -> list[str]:
+    '''
+        The currency columns of a frame built from `money_sums`.
+
+        Args:
+            sums (pd.DataFrame): Grouped sums.
+
+        Returns:
+            list[str]: 'bob' and, when the dollars are known, 'usd' and 'usdt'.
+    '''
+    return [column for column in ('bob', 'usd', 'usdt') if column in sums.columns]
 
 
 def _labelled(dataframe: pd.DataFrame) -> pd.DataFrame | None:
@@ -175,17 +189,17 @@ def _product_rows(
                 computed over the **whole** catalogue, so a cap never changes
                 a percentage.
     '''
+    # Ranked and shared out in bolivianos; the dollars ride along per row.
     grouped = frame.groupby('_product').agg(
-        amount = (AMOUNT, 'sum'),
         units = (QUANTITY, 'sum'),
         clients = ('_client', 'nunique')
-    ).sort_values('amount', ascending = False)
+    ).join(money_sums(frame, frame[AMOUNT], '_product')).sort_values('bob', ascending = False)
 
-    total = float(grouped['amount'].sum())
+    total = float(grouped['bob'].sum())
     if total <= 0:
         return [], VolumeHeadline(), []
 
-    shares = grouped['amount'] / total
+    shares = grouped['bob'] / total
     cumulative = shares.cumsum()
     classes = [_abc_class(value) for value in (cumulative - shares)]
     grouped = grouped.assign(
@@ -195,11 +209,11 @@ def _product_rows(
     summary = []
     for abc_class in ('A', 'B', 'C'):
         rows = grouped.loc[grouped['abc_class'] == abc_class]
-        class_amount = float(rows['amount'].sum())
+        class_amount = float(rows['bob'].sum())
         summary.append(AbcClass(
             abc_class = abc_class,
             products = int(len(rows)),
-            amount = money(class_amount),
+            amount = money_row(rows[_currencies(rows)].sum()),
             percentage = round(ratio(class_amount, total) * 100, 1)
         ))
 
@@ -207,7 +221,7 @@ def _product_rows(
     products = [
         VolumeProduct(
             label = str(label),
-            amount = money(row['amount']),
+            amount = money_row(row),
             units = money(row['units']),
             share = round(float(row['share']) * 100, _SHARE_DECIMALS),
             cumulative = round(float(row['cumulative']) * 100, _SHARE_DECIMALS),
@@ -218,14 +232,14 @@ def _product_rows(
     ]
 
     hhi = float((shares ** 2).sum())
-    top_amount = float(top['amount'].sum())
+    top_amount = float(top['bob'].sum())
     headline = VolumeHeadline(
         total_products = int(len(grouped)),
         pareto_products = _pareto_point(cumulative),
         pareto_product_percentage = round(
             ratio(_pareto_point(cumulative), len(grouped)) * 100, 1
         ),
-        top_products_amount = money(top_amount),
+        top_products_amount = money_row(top[_currencies(top)].sum()),
         top_products_percentage = round(ratio(top_amount, total) * 100, 1),
         top_products_count = int(len(top)),
         hhi = round(hhi, 4),
@@ -248,15 +262,14 @@ def _client_rows(frame: pd.DataFrame) -> list[VolumeClient]:
         return []
 
     grouped = frame.groupby('_client').agg(
-        amount = (AMOUNT, 'sum'),
         products = ('_product', 'nunique')
-    ).sort_values('amount', ascending = False)
+    ).join(money_sums(frame, frame[AMOUNT], '_client')).sort_values('bob', ascending = False)
 
-    total = float(grouped['amount'].sum())
+    total = float(grouped['bob'].sum())
     if total <= 0:
         return []
 
-    cumulative = (grouped['amount'] / total).cumsum()
+    cumulative = (grouped['bob'] / total).cumsum()
     top = grouped.head(_TOP_CLIENTS)
 
     # The anchor is read per client and only for the rows shown: the full
@@ -273,12 +286,12 @@ def _client_rows(frame: pd.DataFrame) -> list[VolumeClient]:
         anchor_amount = float(client_products.iloc[0])
         rows.append(VolumeClient(
             label = str(label),
-            amount = money(row['amount']),
-            share = round(ratio(row['amount'], total) * 100, _SHARE_DECIMALS),
+            amount = money_row(row),
+            share = round(ratio(row['bob'], total) * 100, _SHARE_DECIMALS),
             cumulative = round(float(cumulative.loc[label]) * 100, _SHARE_DECIMALS),
             products = int(row['products']),
             anchor_product = anchor_label,
-            anchor_share = round(ratio(anchor_amount, row['amount']) * 100, 1)
+            anchor_share = round(ratio(anchor_amount, row['bob']) * 100, 1)
         ))
     return rows
 
@@ -311,20 +324,21 @@ def _matrix_rows(frame: pd.DataFrame) -> list[VolumeMatrixCell]:
         return []
 
     cells = scoped.groupby(['_client', '_product']).agg(
-        amount = (AMOUNT, 'sum'), units = (QUANTITY, 'sum')
-    ).sort_values('amount', ascending = False)
+        units = (QUANTITY, 'sum')
+    ).join(money_sums(scoped, scoped[AMOUNT], ['_client', '_product'])
+           ).sort_values('bob', ascending = False)
 
     return [
         VolumeMatrixCell(
             client = str(client),
             product = str(product),
-            amount = money(row['amount']),
+            amount = money_row(row),
             units = money(row['units']),
             client_share = round(
-                ratio(row['amount'], float(client_totals.loc[client])) * 100, 1
+                ratio(row['bob'], float(client_totals.loc[client])) * 100, 1
             ),
             product_share = round(
-                ratio(row['amount'], float(product_totals.loc[product])) * 100, 1
+                ratio(row['bob'], float(product_totals.loc[product])) * 100, 1
             )
         )
         for (client, product), row in cells.iterrows()
@@ -360,9 +374,11 @@ def _category_mix(
         _month = parsed_dates.dt.strftime('%Y-%m'),
         _cat = frame[CATEGORY].fillna('').astype(str)
     )
-    current = labelled.loc[labelled['_month'] == current_key].groupby('_cat')[AMOUNT].sum()
-    previous = labelled.loc[labelled['_month'] == previous_key].groupby('_cat')[AMOUNT].sum()
-    current_total, previous_total = float(current.sum()), float(previous.sum())
+    current_rows = labelled.loc[labelled['_month'] == current_key]
+    previous_rows = labelled.loc[labelled['_month'] == previous_key]
+    current = money_sums(current_rows, current_rows[AMOUNT], '_cat')
+    previous = money_sums(previous_rows, previous_rows[AMOUNT], '_cat')
+    current_total, previous_total = float(current['bob'].sum()), float(previous['bob'].sum())
 
     rows = [
         _mix_row(str(category), (current, previous), (current_total, previous_total))
@@ -373,7 +389,7 @@ def _category_mix(
 
 def _mix_row(
     category: str,
-    amounts: tuple[pd.Series, pd.Series],
+    amounts: tuple[pd.DataFrame, pd.DataFrame],
     totals: tuple[float, float]
 ) -> CategoryMix:
     '''
@@ -381,7 +397,8 @@ def _mix_row(
 
         Args:
             category (str): Category being described.
-            amounts (tuple): (current month series, previous month series).
+            amounts (tuple): (current month sums, previous month sums), one
+                row per category with `bob` and, when known, the dollars.
             totals (tuple): (current month total, previous month total).
 
         Returns:
@@ -389,15 +406,18 @@ def _mix_row(
     '''
     current, previous = amounts
     current_total, previous_total = totals
-    current_amount = float(current.get(category, 0.0))
-    previous_amount = float(previous.get(category, 0.0))
+    empty = pd.Series(0.0, index = current.columns)
+    current_sums = current.loc[category] if category in current.index else empty
+    previous_sums = previous.loc[category] if category in previous.index else empty
+    current_amount = float(current_sums['bob'])
+    previous_amount = float(previous_sums['bob'])
     current_share = round(ratio(current_amount, current_total) * 100, 1)
     previous_share = round(ratio(previous_amount, previous_total) * 100, 1)
 
     return CategoryMix(
         label = category,
-        current_amount = money(current_amount),
-        previous_amount = money(previous_amount),
+        current_amount = money_row(current_sums),
+        previous_amount = money_row(previous_sums),
         change = percent_change(current_amount, previous_amount),
         current_share = current_share,
         previous_share = previous_share,
@@ -406,34 +426,37 @@ def _mix_row(
 
 
 def _effects(
-    terms: list[tuple[str, float]],
+    terms: dict[str, list[tuple[str, float]]],
     change: float
 ) -> list[VolumeEffect]:
     '''
         Turns raw decomposition terms into rows with their weight.
 
         Args:
-            terms (list): (code, amount) pairs.
-            change (float): The move being explained.
+            terms (dict): (code, amount) pairs per currency ('bob' always,
+                'usd' and 'usdt' when the dollars are known), in the same
+                order in every currency.
+            change (float): The move being explained, in bolivianos.
 
         Returns:
             list[VolumeEffect]: The terms that are not zero, largest absolute
                 first. The percentage is against the absolute change, so a term
                 that pushes against the move reads negative.
     '''
-    rows = [
-        VolumeEffect(
+    rows = []
+    for index, (code, amount) in enumerate(terms['bob']):
+        if round(amount, 2) == 0.0:
+            continue
+        rows.append((abs(amount), VolumeEffect(
             effect_code = code,
-            amount = money(amount),
+            amount = money_row(pd.Series({currency: pairs[index][1]
+                                          for currency, pairs in terms.items()})),
             percentage = (
                 round(amount / abs(change) * 100, CHANGE_DECIMALS)
                 if change else None
             )
-        )
-        for code, amount in terms
-        if round(amount, 2) != 0.0
-    ]
-    return sorted(rows, key = lambda row: abs(row.amount), reverse = True)
+        )))
+    return [row for _, row in sorted(rows, key = lambda pair: pair[0], reverse = True)]
 
 
 def _product_effects(
@@ -505,6 +528,55 @@ def _client_effects(
             (_RETAINED_CLIENTS, retained)]
 
 
+def _product_terms(
+    current_rows: pd.DataFrame,
+    previous_rows: pd.DataFrame
+) -> dict[str, list[tuple[str, float]]]:
+    '''
+        The product decomposition once per currency: the identity holds in
+        each one with that currency's amounts and the same units.
+
+        Args:
+            current_rows (pd.DataFrame): Labelled rows of the last month.
+            previous_rows (pd.DataFrame): Labelled rows of the month before.
+
+        Returns:
+            dict[str, list[tuple[str, float]]]: (code, amount) terms per currency.
+    '''
+    def _by_product(rows: pd.DataFrame) -> pd.DataFrame:
+        return rows.groupby('_product').agg(units = (QUANTITY, 'sum')).join(
+            money_sums(rows, rows[AMOUNT], '_product'))
+
+    current, previous = _by_product(current_rows), _by_product(previous_rows)
+    return {
+        currency: _product_effects(
+            current[['units', currency]].rename(columns = {currency: 'amount'}),
+            previous[['units', currency]].rename(columns = {currency: 'amount'})
+        )
+        for currency in _currencies(current)
+    }
+
+
+def _client_terms(
+    current_rows: pd.DataFrame,
+    previous_rows: pd.DataFrame
+) -> dict[str, list[tuple[str, float]]]:
+    '''
+        The client decomposition once per currency.
+
+        Args:
+            current_rows (pd.DataFrame): Labelled rows of the last month.
+            previous_rows (pd.DataFrame): Labelled rows of the month before.
+
+        Returns:
+            dict[str, list[tuple[str, float]]]: (code, amount) terms per currency.
+    '''
+    current = money_sums(current_rows, current_rows[AMOUNT], '_client')
+    previous = money_sums(previous_rows, previous_rows[AMOUNT], '_client')
+    return {currency: _client_effects(current[currency], previous[currency])
+            for currency in _currencies(current)}
+
+
 def _monthly_keys(
     frame: pd.DataFrame,
     parsed_dates: pd.Series
@@ -519,10 +591,7 @@ def _monthly_keys(
         Returns:
             tuple[str, str] | None: (current, previous) as 'YYYY-MM'.
     '''
-    monthly = (
-        frame.assign(_month = parsed_dates.dt.strftime('%Y-%m'))
-        .groupby('_month')[AMOUNT].sum().sort_index()
-    )
+    monthly = frame.groupby(parsed_dates.dt.strftime('%Y-%m'))[AMOUNT].sum().sort_index()
     monthly = monthly[monthly > 0]
     if len(monthly) < 2:
         return None
@@ -551,34 +620,23 @@ def _decomposition(
     current_rows = labelled.loc[labelled['_month'] == current_key]
     previous_rows = labelled.loc[labelled['_month'] == previous_key]
 
-    def _by_product(rows: pd.DataFrame) -> pd.DataFrame:
-        return rows.groupby('_product').agg(amount = (AMOUNT, 'sum'),
-                                            units = (QUANTITY, 'sum'))
-
-    current_products = _by_product(current_rows)
-    previous_products = _by_product(previous_rows)
-    current_amount = float(current_products['amount'].sum())
-    previous_amount = float(previous_products['amount'].sum())
-    change = current_amount - previous_amount
+    current_total = money_total(current_rows, current_rows[AMOUNT])
+    previous_total = money_total(previous_rows, previous_rows[AMOUNT])
+    change = float(current_total['bob'] - previous_total['bob'])
 
     by_client: list[VolumeEffect] = []
     if current_rows['_client'].astype(str).str.strip().any():
-        by_client = _effects(
-            _client_effects(
-                current_rows.groupby('_client')[AMOUNT].sum(),
-                previous_rows.groupby('_client')[AMOUNT].sum()
-            ),
-            change
-        )
+        by_client = _effects(_client_terms(current_rows, previous_rows), change)
 
     return VolumeDecomposition(
         current_month = current_key,
         previous_month = previous_key,
-        current_amount = money(current_amount),
-        previous_amount = money(previous_amount),
-        change = money(change),
-        change_percentage = percent_change(current_amount, previous_amount),
-        by_product = _effects(_product_effects(current_products, previous_products), change),
+        current_amount = money_row(current_total),
+        previous_amount = money_row(previous_total),
+        change = money_row(current_total - previous_total),
+        change_percentage = percent_change(float(current_total['bob']),
+                                           float(previous_total['bob'])),
+        by_product = _effects(_product_terms(current_rows, previous_rows), change),
         by_client = by_client
     )
 

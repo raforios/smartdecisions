@@ -24,9 +24,9 @@ from services.analytics_utils import (
     AMOUNT,
     hhi_level,
     label_series,
-    money,
     ratio
 )
+from services.currency import money_row, money_sums
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -47,37 +47,42 @@ _HHI_HIGH = _SETTINGS['CONCENTRATION_HHI_HIGH']
 def _sorted_totals(
     dataframe: pd.DataFrame,
     labels: pd.Series | None
-) -> pd.Series | None:
+) -> pd.DataFrame | None:
     '''
-        Aggregates amounts by label, descending, dropping non-positive rows.
+        Aggregates amounts by label, descending in bolivianos, dropping
+        non-positive rows.
 
         Args:
             dataframe (pd.DataFrame): Normalized sales rows.
             labels (pd.Series | None): Readable label per row.
 
         Returns:
-            pd.Series | None: Amount per label sorted high to low, or None when
-                the frame cannot support the aggregation.
+            pd.DataFrame | None: Sums per label sorted high to low (`bob` and,
+                with the month-close factors, the dollars), or None when the frame
+                cannot support the aggregation.
     '''
     if labels is None or AMOUNT not in dataframe.columns:
         return None
-    totals = dataframe.assign(_label = labels.values).groupby('_label')[AMOUNT].sum()
-    totals = totals[totals > 0].sort_values(ascending = False)
+    totals = money_sums(dataframe, dataframe[AMOUNT],
+                        pd.Series(labels.values, index = dataframe.index))
+    totals = totals[totals['bob'] > 0].sort_values('bob', ascending = False)
     return totals if not totals.empty else None
 
 
-def _client_concentration(totals: pd.Series) -> ClientConcentration:
+def _client_concentration(sums: pd.DataFrame) -> ClientConcentration:
     '''
         Top-10 share, Pareto point and HHI over the client totals.
 
         Args:
-            totals (pd.Series): Amount per client, descending.
+            sums (pd.DataFrame): Sums per client, descending; every measure
+                is taken in bolivianos.
 
         Returns:
             ClientConcentration: The concentration measures. The list of names
                 behind them lives in the volume-source block, where each client
                 travels with the product that anchors it.
     '''
+    totals = sums['bob']
     grand_total = float(totals.sum())
     shares = totals / grand_total
     cumulative = shares.cumsum()
@@ -89,7 +94,7 @@ def _client_concentration(totals: pd.Series) -> ClientConcentration:
 
     return ClientConcentration(
         total_clients = int(len(totals)),
-        top10_amount = money(totals.head(_TOP_CLIENTS).sum()),
+        top10_amount = money_row(sums.head(_TOP_CLIENTS).sum()),
         top10_percentage = round(ratio(totals.head(_TOP_CLIENTS).sum(), grand_total) * 100, 1),
         pareto_clients = pareto_clients,
         pareto_client_percentage = round(ratio(pareto_clients, len(totals)) * 100, 1),

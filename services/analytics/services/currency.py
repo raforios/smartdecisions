@@ -21,7 +21,7 @@ import pandas as pd
 import requests
 from pydantic import BaseModel
 
-from schemas.analytics import AnalyticsError, ReferenceRates
+from schemas.analytics import AnalyticsError, Money, ReferenceRates
 from services.analytics_utils import AMOUNT_DECIMALS
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
@@ -30,25 +30,16 @@ from services.logger_config import custom_logger as logger
 ENV_VARS = load_and_validate_env_vars({
     'QUOTES_SERVICE_URL': str,
     'QUOTES_TIMEOUT_SECONDS': int,
-    'BASE_CURRENCY': str,
     'PARALLEL_CURRENCY': str,
     'PARALLEL_FALLBACK_CURRENCY': str,
 })
 QUOTES_SERVICE_URL = ENV_VARS['QUOTES_SERVICE_URL'].rstrip('/')
 QUOTES_TIMEOUT_SECONDS = ENV_VARS['QUOTES_TIMEOUT_SECONDS']
-# What the file is written in. Asking for it is asking for no conversion.
-BASE_CURRENCY = ENV_VARS['BASE_CURRENCY']
 # The USDT series (Binance P2P, the parallel dollar) starts the day it was
 # connected; days before it read at the official rate, and the answer says so.
 PARALLEL_CURRENCY = ENV_VARS['PARALLEL_CURRENCY']
 PARALLEL_FALLBACK_CURRENCY = ENV_VARS['PARALLEL_FALLBACK_CURRENCY']
 
-# The columns that hold money. A rate applies to an amount, not to a quantity
-# or a coordinate, so the list is explicit: converting a latitude would be
-# silent nonsense.
-MONEY_COLUMNS: tuple[str, ...] = (
-    'unit_price', 'unit_cost', 'total_amount', 'credit_limit'
-)
 _DATE = 'date'
 # The regime QUOTES reports for a day before the boliviano floated.
 _FIXED_REGIME = 'FIXED'
@@ -281,86 +272,6 @@ def current_rate(
     return float(sorted(rates, key = lambda rate: rate['date'])[-1]['rate'])
 
 
-def divide_money(
-    frame: pd.DataFrame | None,
-    columns: tuple[str, ...],
-    rates: pd.Series | float | None
-) -> pd.DataFrame | None:
-    '''
-        A copy of the frame with its money columns divided by the rate.
-
-        Args:
-            frame (pd.DataFrame | None): The rows.
-            columns (tuple[str, ...]): The columns that hold money.
-            rates (pd.Series | float | None): One rate per row, one for all,
-                or None to leave the amounts as they are.
-
-        Returns:
-            pd.DataFrame | None: The converted copy, or the frame untouched.
-    '''
-    if frame is None or rates is None:
-        return frame
-    converted = frame.copy()
-    for column in columns:
-        if column in converted.columns:
-            if isinstance(rates, pd.Series):
-                # A row with no rate keeps its own amount: dividing by nothing
-                # turned it into NaN, and a NaN sums as zero.
-                converted[column] = (converted[column] / rates).where(
-                    rates.notna(), converted[column]
-                )
-            else:
-                converted[column] = converted[column] / rates
-    return converted
-
-
-def convert_frame(
-    dataframe: pd.DataFrame,
-    currency: str,
-    auth_token: str
-) -> tuple[pd.DataFrame, dict[str, Any] | None]:
-    '''
-        The same rows, with every amount read in another currency.
-
-        Args:
-            dataframe (pd.DataFrame): Normalized sales rows.
-            currency (str): ISO 4217 code to read the report in.
-            auth_token (str): The caller's Authorization header, for QUOTES.
-
-        Returns:
-            tuple[pd.DataFrame, dict[str, Any] | None]: The converted frame
-                and what the conversion was based on. The descriptor is None
-                when nothing was converted, so a caller can say so instead of
-                implying a rate that was never applied.
-    '''
-    if currency == BASE_CURRENCY or dataframe.empty or _DATE not in dataframe.columns:
-        return dataframe, None
-
-    series, counts = rates_per_row(dataframe, currency, auth_token)
-    at_fallback, at_fixed = counts['at_fallback'], counts['at_fixed']
-
-    converted = divide_money(dataframe, MONEY_COLUMNS, series)
-
-    applied = int(series.notna().sum())
-    message = (f'Converted {applied}/{len(series)} row(s) to {currency} at the rate '
-               f'of each row\'s own day.')
-    logger.info(message)
-    return converted, {
-        'currency': currency,
-        'base_currency': BASE_CURRENCY,
-        'rows_converted': applied,
-        'rows_at_fixed_rate': at_fixed,
-        # USDT only: rows read at the official rate because the USDT series
-        # had not started yet on their day.
-        'rows_at_fallback': at_fallback,
-        'fallback_currency': PARALLEL_FALLBACK_CURRENCY if at_fallback else None,
-        'rows_total': int(len(series)),
-        # Rows before the first published rate keep their original amounts.
-        # Saying so is the difference between a gap and a silent lie.
-        'rows_without_rate': int(len(series) - applied)
-    }
-
-
 def in_three_currencies[ResponseModel: BaseModel](
     response_type: type[ResponseModel],
     payload: dict[str, Any],
@@ -392,3 +303,127 @@ def in_three_currencies[ResponseModel: BaseModel](
         {**payload, 'rates': rates},
         context = {'rates': rates, 'decimals': AMOUNT_DECIMALS}
     )
+
+
+# What one boliviano of a sale is worth in each reference currency at the
+# close of its month: 1 / the rate of the month's last day (today's, for the
+# month in progress). An analyst reads sales by month, and a month closes at
+# one rate; a sum of amounts times the factor is that month's sales at its
+# close, so the engines group the dollars next to the bolivianos and every
+# ranking, share and count stays the one the bolivianos give.
+USD_FACTOR = '_per_usd'
+USDT_FACTOR = '_per_usdt'
+
+
+def with_month_close_factors(
+    dataframe: pd.DataFrame,
+    auth_token: str,
+    today: str
+) -> pd.DataFrame:
+    '''
+        The sales with the factor of their month's closing rate in the
+        official dollar and in USDT.
+
+        Args:
+            dataframe (pd.DataFrame): Normalized sales rows, in bolivianos.
+            auth_token (str): The caller's Authorization header, for QUOTES.
+            today (str): Today, YYYY-MM-DD: the close of the month in progress.
+
+        Returns:
+            pd.DataFrame: The same rows with `USD_FACTOR` and `USDT_FACTOR`.
+    '''
+    if dataframe.empty or _DATE not in dataframe.columns:
+        return dataframe
+    days = pd.to_datetime(dataframe[_DATE])
+    closes = pd.DataFrame({_DATE: (days + pd.offsets.MonthEnd(0)).clip(
+        upper = pd.Timestamp(today))}, index = dataframe.index)
+    usd, _ = rates_per_row(closes, PARALLEL_FALLBACK_CURRENCY, auth_token)
+    usdt, _ = rates_per_row(closes, PARALLEL_CURRENCY, auth_token)
+    return dataframe.assign(**{USD_FACTOR: 1 / usd.to_numpy(dtype = float),
+                               USDT_FACTOR: 1 / usdt.to_numpy(dtype = float)})
+
+
+def money_sums(
+    dataframe: pd.DataFrame,
+    values: pd.Series,
+    keys: Any
+) -> pd.DataFrame:
+    '''
+        The sum of `values` per group in bolivianos and, when the frame
+        carries the month-close factors, in the official dollar and USDT.
+
+        Args:
+            dataframe (pd.DataFrame): The rows `values` belongs to.
+            values (pd.Series): Amounts in bolivianos, aligned with the rows.
+            keys (Any): What to group by: a column, a list of them, or a
+                Series aligned with the rows.
+
+        Returns:
+            pd.DataFrame: Columns `bob` and, with factors, `usd` and `usdt`.
+    '''
+    parts = {'bob': values}
+    if USD_FACTOR in dataframe.columns:
+        parts['usd'] = values * dataframe[USD_FACTOR]
+        parts['usdt'] = values * dataframe[USDT_FACTOR]
+    frame = pd.DataFrame(parts, index = dataframe.index)
+    if isinstance(keys, str):
+        keys = dataframe[keys]
+    elif isinstance(keys, list):
+        keys = [dataframe[key] for key in keys]
+    return frame.groupby(keys).sum()
+
+
+def to_money(
+    bob: float,
+    usd: float | None = None,
+    usdt: float | None = None
+) -> float | Money:
+    '''
+        An amount in bolivianos, as `Money` when its dollars are known.
+
+        Args:
+            bob (float): Bolivianos.
+            usd (float | None): Official dollars, None when not computed.
+            usdt (float | None): USDT, None when not computed.
+
+        Returns:
+            float | Money: The rounded bolivianos alone, or the three.
+    '''
+    bolivianos = round(float(bob), AMOUNT_DECIMALS) if pd.notna(bob) else 0.0
+    if usd is None or pd.isna(usd):
+        return bolivianos
+    return Money(bob = bolivianos, usd = round(float(usd), AMOUNT_DECIMALS),
+                 usdt = round(float(usdt), AMOUNT_DECIMALS)
+                 if usdt is not None and pd.notna(usdt) else None)
+
+
+def money_row(sums: pd.Series) -> float | Money:
+    '''
+        One row of `money_sums` as an amount.
+
+        Args:
+            sums (pd.Series): `bob` and, when computed, `usd` and `usdt`.
+
+        Returns:
+            float | Money: The amount.
+    '''
+    return to_money(sums['bob'], sums.get('usd'), sums.get('usdt'))
+
+
+def money_total(
+    dataframe: pd.DataFrame,
+    values: pd.Series
+) -> pd.Series:
+    '''
+        The sum of `values` over the whole frame in each currency it carries.
+
+        Args:
+            dataframe (pd.DataFrame): The rows `values` belongs to.
+            values (pd.Series): Amounts in bolivianos, aligned with the rows.
+
+        Returns:
+            pd.Series: `bob` and, with the month-close factors, `usd` and `usdt`.
+    '''
+    if dataframe.empty:
+        return pd.Series({'bob': 0.0})
+    return money_sums(dataframe, values, pd.Series(0, index = dataframe.index)).sum()

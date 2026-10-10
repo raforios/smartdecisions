@@ -3,6 +3,7 @@
 '''
 import pandas as pd
 
+from services import segmentation
 from services.segmentation import build_segmentation
 
 
@@ -48,3 +49,14 @@ def test_missing_columns_returns_empty():
     result = build_segmentation(pd.DataFrame([{'foo': 1}]))
     assert not result.tiers
     assert result.total_clients == 0
+
+
+def test_each_tier_sums_its_clients_in_every_currency():
+    '''`_tier_summary`: amount per tier in the three currencies, share in bolivianos.'''
+    agg = pd.DataFrame({'tier': ['HIGH', 'LOW'], 'bob': [300.0, 100.0],
+                        'usd': [30.0, 10.0], 'usdt': [29.0, 9.0]}, index = ['A', 'B'])
+
+    tiers = {row.tier: row for row in segmentation._tier_summary(agg)} # pylint: disable=protected-access
+
+    assert tiers['HIGH'].amount.usd == 30.0
+    assert tiers['HIGH'].percentage == 75.0

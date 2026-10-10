@@ -23,11 +23,11 @@ from schemas.analytics import (
     SeasonIndex
 )
 
+from services.currency import money_row, money_sums
 from services.environment import load_and_validate_env_vars
 from services.analytics_utils import (
     AMOUNT,
     dates,
-    money,
     percent_change,
     ratio
 )
@@ -44,7 +44,7 @@ _MIN_MONTHS_FOR_SEASONALITY = _SETTINGS['GROWTH_MIN_MONTHS_FOR_SEASONALITY']
 def _monthly_series(
     dataframe: pd.DataFrame,
     parsed_dates: pd.Series
-) -> pd.Series:
+) -> pd.DataFrame:
     '''
         Aggregates sales by calendar month.
 
@@ -53,22 +53,22 @@ def _monthly_series(
             parsed_dates (pd.Series): Coerced datetimes aligned to the frame.
 
         Returns:
-            pd.Series: Amount per 'YYYY-MM', chronologically sorted.
+            pd.DataFrame: Per 'YYYY-MM', chronologically sorted: `bob` and,
+                with the month-close factors, `usd` and `usdt`.
     '''
     valid = parsed_dates.notna()
-    return (
-        dataframe.loc[valid]
-        .assign(_month = parsed_dates[valid].dt.strftime('%Y-%m'))
-        .groupby('_month')[AMOUNT].sum().sort_index()
-    )
+    rows = dataframe.loc[valid]
+    return money_sums(rows, rows[AMOUNT],
+                      parsed_dates[valid].dt.strftime('%Y-%m')).sort_index()
 
 
-def _monthly_variation(monthly: pd.Series) -> list[MonthlyChange]:
+def _monthly_variation(monthly: pd.DataFrame) -> list[MonthlyChange]:
     '''
         Month-by-month series with each month's variation against the previous.
 
         Args:
-            monthly (pd.Series): Amount per 'YYYY-MM'.
+            monthly (pd.DataFrame): Sums per 'YYYY-MM'; the variation is
+                measured in bolivianos.
 
         Returns:
             list[dict[str, Any]]: MonthlyChange(month, amount, change) rows; the first month
@@ -76,23 +76,25 @@ def _monthly_variation(monthly: pd.Series) -> list[MonthlyChange]:
     '''
     rows: list[MonthlyChange] = []
     previous: float | None = None
-    for month, amount in monthly.items():
+    for month, sums in monthly.iterrows():
+        amount = float(sums['bob'])
         rows.append(MonthlyChange(
             month = str(month),
-            amount = money(amount),
+            amount = money_row(sums),
             change = percent_change(amount, previous) if previous is not None else None
         ))
-        previous = float(amount)
+        previous = amount
     return rows
 
 
-def _seasonality(monthly: pd.Series) -> list[SeasonIndex]:
+def _seasonality(monthly: pd.DataFrame) -> list[SeasonIndex]:
     '''
         Seasonality index per calendar month: the month's average sales over the
         overall monthly average, as a percentage (100 = an average month).
 
         Args:
-            monthly (pd.Series): Amount per 'YYYY-MM'.
+            monthly (pd.DataFrame): Sums per 'YYYY-MM'; the index is measured
+                in bolivianos.
 
         Returns:
             list[SeasonIndex]: One entry per calendar month, or an empty list
@@ -100,29 +102,27 @@ def _seasonality(monthly: pd.Series) -> list[SeasonIndex]:
     '''
     if len(monthly) < _MIN_MONTHS_FOR_SEASONALITY:
         return []
-    frame = pd.DataFrame({
-        'period': pd.to_datetime(monthly.index + '-01'),
-        'amount': monthly.values
-    })
-    overall_average = frame['amount'].mean()
-    by_month = frame.assign(_month = frame['period'].dt.month).groupby('_month')['amount'].mean()
+    calendar_month = pd.to_datetime(monthly.index + '-01').month
+    overall_average = monthly['bob'].mean()
+    by_month = monthly.groupby(calendar_month).mean()
     return [
         SeasonIndex(
             month = int(month),
-            index_value = round(ratio(average, overall_average) * 100, 1),
-            average_amount = money(average)
+            index_value = round(ratio(averages['bob'], overall_average) * 100, 1),
+            average_amount = money_row(averages)
         )
-        for month, average in by_month.sort_index().items()
+        for month, averages in by_month.sort_index().iterrows()
     ]
 
 
-def _growth_kpis(monthly: pd.Series) -> list[KpiCard]:
+def _growth_kpis(monthly: pd.DataFrame) -> list[KpiCard]:
     '''
         Headline growth cards: last month's sales and its variation against the
         previous month and against the same month a year earlier.
 
         Args:
-            monthly (pd.Series): Amount per 'YYYY-MM'.
+            monthly (pd.DataFrame): Sums per 'YYYY-MM'; variations in
+                bolivianos.
 
         Returns:
             list[dict[str, Any]]: KPI cards; percentage values are None when
@@ -130,15 +130,17 @@ def _growth_kpis(monthly: pd.Series) -> list[KpiCard]:
     '''
     months = list(monthly.index)
     last_key = months[-1]
-    last_amount = float(monthly.iloc[-1])
-    previous_amount = float(monthly.iloc[-2]) if len(months) >= 2 else None
+    last_amount = float(monthly['bob'].iloc[-1])
+    previous_amount = float(monthly['bob'].iloc[-2]) if len(months) >= 2 else None
 
     # Same calendar month, previous year: only meaningful when that month exists.
     year_ago_key = f'{int(last_key[:4]) - 1}-{last_key[5:7]}'
-    year_ago_amount = float(monthly[year_ago_key]) if year_ago_key in monthly.index else None
+    year_ago_amount = (float(monthly.loc[year_ago_key, 'bob'])
+                       if year_ago_key in monthly.index else None)
 
     return [
-        KpiCard(metric_code = MetricCode.LAST_MONTH_SALES.value, value = money(last_amount),
+        KpiCard(metric_code = MetricCode.LAST_MONTH_SALES.value,
+         value = money_row(monthly.iloc[-1]),
          format = 'money', reference = last_key),
         KpiCard(metric_code = MetricCode.MOM_CHANGE.value,
          value = percent_change(last_amount, previous_amount),
@@ -150,7 +152,7 @@ def _growth_kpis(monthly: pd.Series) -> list[KpiCard]:
          format = 'percent',
          reference = year_ago_key if year_ago_amount else None),
         KpiCard(metric_code = MetricCode.MONTHLY_AVERAGE.value,
-         value = money(monthly.mean()), format = 'money'),
+         value = money_row(monthly.mean()), format = 'money'),
     ]
 
 

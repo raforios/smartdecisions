@@ -33,6 +33,7 @@ from schemas.analytics import (
 )
 
 from services.analytics_utils import AMOUNT_DECIMALS, RANKING_SIZE
+from services.currency import money_row, money_sums, money_total
 from services.logger_config import custom_logger as logger
 
 _AMOUNT = 'total_amount'
@@ -76,10 +77,13 @@ def _kpis(dataframe: pd.DataFrame) -> list[KpiCard]:
         Returns:
             list[KpiCard]: The headline cards of the commercial summary.
     '''
-    total_sales = _money(dataframe[_AMOUNT].sum()) if _AMOUNT in dataframe else 0.0
     sales_count = int(dataframe[_ORDER].nunique()) if _ORDER in dataframe else len(dataframe)
     units = _money(dataframe[_QUANTITY].sum()) if _QUANTITY in dataframe else 0.0
-    ticket = _money(total_sales / sales_count) if sales_count else 0.0
+    # The whole frame as one group: the total in each currency at once.
+    totals = (money_total(dataframe, dataframe[_AMOUNT]) if _AMOUNT in dataframe
+              else pd.Series({'bob': 0.0}))
+    total_sales = money_row(totals)
+    ticket = money_row(totals / sales_count) if sales_count else 0.0
     client_count = int(dataframe[_CLIENT_ID].nunique()) if _CLIENT_ID in dataframe else 0
     product_count = int(dataframe[_PRODUCT_ID].nunique()) if _PRODUCT_ID in dataframe else 0
 
@@ -108,9 +112,10 @@ def _ranking(
     '''
     if _AMOUNT not in dataframe.columns:
         return []
-    grouped = dataframe.assign(_label = label_series.values).groupby('_label')[_AMOUNT].sum()
-    grouped = grouped[grouped > 0].sort_values(ascending = ascending).head(top)
-    rows = [RankRow(label = str(idx), amount = _money(val)) for idx, val in grouped.items()]
+    sums = money_sums(dataframe, dataframe[_AMOUNT],
+                      pd.Series(label_series.values, index = dataframe.index))
+    sums = sums[sums['bob'] > 0].sort_values('bob', ascending = ascending).head(top)
+    rows = [RankRow(label = str(idx), amount = money_row(row)) for idx, row in sums.iterrows()]
     # Bottom rankings read better ascending → smallest first; keep that order.
     return rows
 
@@ -126,20 +131,19 @@ def _distribution(
     '''
     if dimension not in dataframe.columns or _AMOUNT not in dataframe.columns:
         return []
-    grouped = (
-        dataframe.assign(_dim = dataframe[dimension].fillna('').astype(str))
-        .groupby('_dim')[_AMOUNT].sum().sort_values(ascending = False)
-    )
-    total = grouped.sum()
+    sums = money_sums(dataframe, dataframe[_AMOUNT],
+                      dataframe[dimension].fillna('').astype(str)
+                      ).sort_values('bob', ascending = False)
+    total = sums['bob'].sum()
     if total <= 0:
         return []
     return [
         DistRow(
             label = str(idx),
-            amount = _money(val),
-            percentage = round(float(val) / float(total) * 100, 1)
+            amount = money_row(row),
+            percentage = round(float(row['bob']) / float(total) * 100, 1)
         )
-        for idx, val in grouped.items()
+        for idx, row in sums.iterrows()
     ]
 
 
@@ -154,13 +158,12 @@ def _monthly_trend(dataframe: pd.DataFrame) -> list[TrendPoint]:
     valid = parsed_dates.notna()
     if not valid.any():
         return []
-    monthly = (
-        dataframe.loc[valid].assign(_month = parsed_dates[valid].dt.strftime('%Y-%m'))
-        .groupby('_month')[_AMOUNT].sum().sort_index()
-    )
+    rows = dataframe.loc[valid]
+    monthly = money_sums(rows, rows[_AMOUNT],
+                         parsed_dates[valid].dt.strftime('%Y-%m')).sort_index()
     return [
-        TrendPoint(month = str(idx), amount = _money(val))
-        for idx, val in monthly.items()
+        TrendPoint(month = str(idx), amount = money_row(row))
+        for idx, row in monthly.iterrows()
     ]
 
 

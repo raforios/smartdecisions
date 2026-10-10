@@ -14,6 +14,7 @@ import pandas as pd
 
 from schemas.analytics import SegmentationBlock, SegmentClient, SegmentTier
 
+from services.currency import money_row, money_sums
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -53,6 +54,33 @@ def _assign_tier(rank_ratio: float) -> str:
     return _TIER_BAJO
 
 
+def _tier_summary(agg: pd.DataFrame) -> list[SegmentTier]:
+    '''
+        Clients, amount and share of each tier.
+
+        Args:
+            agg (pd.DataFrame): One row per client with its `tier` and its
+                sums (`bob` and, with the month-close factors, the dollars).
+
+        Returns:
+            list[SegmentTier]: One row per tier, in the tier order; the share
+                is measured in bolivianos.
+    '''
+    currencies = [column for column in ('bob', 'usd', 'usdt') if column in agg.columns]
+    grand_total = float(agg['bob'].sum()) or 1.0
+    summary = []
+    for tier in _TIER_ORDER:
+        subset = agg[agg['tier'] == tier]
+        tier_sums = subset[currencies].sum()
+        summary.append(SegmentTier(
+            tier = tier,
+            clients = int(len(subset)),
+            amount = money_row(tier_sums),
+            percentage = round(float(tier_sums['bob']) / grand_total * 100, 1)
+        ))
+    return summary
+
+
 def build_segmentation(dataframe: pd.DataFrame) -> SegmentationBlock:
     '''
         Builds the customer value segmentation from a normalized sales frame.
@@ -79,10 +107,10 @@ def build_segmentation(dataframe: pd.DataFrame) -> SegmentationBlock:
         labels = dataframe[_CLIENT_ID].astype(str)
 
     work = dataframe.assign(_client = labels.values)
+    # Ranked in bolivianos; each month's dollars at its close ride along.
     agg = work.groupby('_client').agg(
-        amount = (_AMOUNT, 'sum'),
         purchases = (_ORDER, 'nunique') if _ORDER in work.columns else (_AMOUNT, 'size')
-    ).sort_values('amount', ascending = False)
+    ).join(money_sums(work, work[_AMOUNT], '_client')).sort_values('bob', ascending = False)
 
     total_clients = len(agg)
     if total_clients == 0:
@@ -93,23 +121,13 @@ def build_segmentation(dataframe: pd.DataFrame) -> SegmentationBlock:
     tiers = [_assign_tier(rank / total_clients) for rank in ranks]
     agg = agg.assign(tier = tiers)
 
-    grand_total = float(agg['amount'].sum()) or 1.0
-    tier_summary: list[SegmentTier] = []
-    for tier in _TIER_ORDER:
-        subset = agg[agg['tier'] == tier]
-        tier_amount = float(subset['amount'].sum())
-        tier_summary.append(SegmentTier(
-            tier = tier,
-            clients = int(len(subset)),
-            amount = round(tier_amount, 2),
-            percentage = round(tier_amount / grand_total * 100, 1)
-        ))
+    tier_summary = _tier_summary(agg)
 
     clients = [
         SegmentClient(
             client = str(idx),
             tier = row['tier'],
-            amount = round(float(row['amount']), 2),
+            amount = money_row(row),
             purchases = int(row['purchases'])
         )
         for idx, row in agg.head(_MAX_CLIENTS).iterrows()
