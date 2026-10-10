@@ -163,7 +163,7 @@ def _client_history(
     # Totals and last month in each currency: 'total_bob', 'last_usd'...
     totals = money_sums(scoped, scoped[AMOUNT], '_client')
     recent_rows = scoped.loc[scoped['_month'] == last_month]
-    recent = money_sums(recent_rows, recent_rows[AMOUNT], '_client')
+    recent = money_sums(recent_rows, recent_rows[AMOUNT], '_client', by_month = True)
     for currency in totals.columns:
         history[f'total_{currency}'] = totals[currency]
         history[f'last_{currency}'] = recent[currency].reindex(history.index).fillna(0.0)

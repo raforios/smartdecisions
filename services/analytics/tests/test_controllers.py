@@ -726,28 +726,27 @@ def test_reading_the_commercial_policy_shows_the_defaults_in_force(monkeypatch):
     assert (response.yellow_from, response.green_from) == (0.5, 1.0)
 
 
-def test_the_summary_carries_each_sale_at_its_own_days_rate(
+def test_the_summary_of_several_months_reads_at_todays_rate(
     dataset: str,
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
     '''
-        Sales are counted in bolivianos and each one is also worth its own
-        day's dollars: with a rate that moves every day, the total in dollars
-        is the sum of each sale over its day's rate — not the total over one
-        rate — and every ranking keeps the order the bolivianos give.
+        Rafael, 10-oct: «los reportes iniciales que son la suma de todo es a
+        hoy». The bolivianos of every month are added and the total is read at
+        today's rate, not month by month; every ranking keeps the order the
+        bolivianos give.
     '''
     _rising_rate(monkeypatch)
     sales = _sales_frame()
-    rates = currency.rates_per_row(sales, 'USD', 'Bearer t')[0]
-    expected = round(float((sales['total_amount'] / rates.to_numpy()).sum()), 2)
+    today = controllers.get_current_time_gmt().date().isoformat()
+    rate_today = currency.current_rate('USD', 'Bearer t', today)
 
     response = _call(controllers.commercial_summary_controller, dataset,
                      {'currency': 'USD', 'auth_token': 'Bearer t'})
 
     total = response.kpis[0].value
     assert total.bob == round(float(sales['total_amount'].sum()), 2)
-    assert total.usd == expected
-    assert total.usd != round(total.bob / float(rates.iloc[-1]), 2)
+    assert total.usd == round(total.bob / rate_today, 2)
     best = [row.amount.bob for row in response.best_clients]
     assert best == sorted(best, reverse = True)
 

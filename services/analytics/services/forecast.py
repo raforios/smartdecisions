@@ -88,7 +88,8 @@ def _monthly_totals(dataframe: pd.DataFrame) -> pd.DataFrame:
     fechas = pd.to_datetime(dataframe['date'], errors = 'coerce')
     valid = fechas.notna()
     frame = dataframe.loc[valid]
-    return money_sums(frame, frame[_AMOUNT], fechas[valid].dt.strftime('%Y-%m')).sort_index()
+    return money_sums(frame, frame[_AMOUNT], fechas[valid].dt.strftime('%Y-%m'),
+                      by_month = True).sort_index()
 
 
 def _series_block(

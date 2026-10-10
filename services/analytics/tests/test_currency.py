@@ -209,11 +209,11 @@ def test_money_sums_groups_the_three_currencies_together():
                           currency.USD_FACTOR: [0.1, 0.05, 0.1],
                           currency.USDT_FACTOR: [0.1, 0.1, 0.1]})
 
-    sums = currency.money_sums(frame, frame['amount'], 'client')
+    sums = currency.money_sums(frame, frame['amount'], 'client', by_month = True)
 
     assert sums.loc['A'].to_dict() == {'bob': 300.0, 'usd': 20.0, 'usdt': 30.0}
     assert list(currency.money_sums(frame[['client', 'amount']], frame['amount'],
-                                    'client').columns) == ['bob']
+                                    'client', by_month = True).columns) == ['bob']
 
 
 def test_an_amount_is_money_only_when_its_dollars_are_known():
@@ -228,6 +228,42 @@ def test_money_total_sums_the_whole_frame():
     frame = pd.DataFrame({'amount': [1.0, 2.0], currency.USD_FACTOR: [1.0, 0.5],
                           currency.USDT_FACTOR: [1.0, 1.0]})
 
-    assert currency.money_total(frame, frame['amount']).to_dict() == \
+    assert currency.money_total(frame, frame['amount'], by_month = True).to_dict() == \
         {'bob': 3.0, 'usd': 2.0, 'usdt': 3.0}
     assert currency.money_total(frame.iloc[0:0], frame['amount'].iloc[0:0])['bob'] == 0.0
+
+
+def test_the_sum_of_several_months_reads_at_todays_rate(monkeypatch):
+    '''
+        The general view says what the business has now: the bolivianos of
+        several months are added first and read at today's rate, while each
+        month on its own still reads at its close.
+    '''
+    series = {'USD': [{'date': '2026-08-31', 'rate': 12.5}, {'date': '2026-10-05', 'rate': 16.0}],
+              'USDT': [{'date': '2026-08-01', 'rate': 8.0}]}
+    monkeypatch.setattr(currency, '_fetch_rates', lambda code, *args: series[code])
+    sales = pd.DataFrame({'date': pd.to_datetime(['2026-08-05', '2026-10-02']),
+                          'total_amount': [100.0, 300.0]})
+
+    read = currency.with_month_close_factors(sales, 'Bearer t', '2026-10-10')
+
+    assert currency.money_total(read, read['total_amount']).to_dict() == \
+        {'bob': 400.0, 'usd': 25.0, 'usdt': 50.0}
+    by_month = currency.money_sums(read, read['total_amount'],
+                                   read['date'].dt.strftime('%Y-%m'), by_month = True)
+    assert by_month.loc['2026-08', 'usd'] == 8.0
+    assert by_month.loc['2026-10', 'usd'] == 18.75
+
+
+def test_a_single_month_asked_for_reads_whole_at_its_close(monkeypatch):
+    '''Choosing August shows August as it was: every sum at August 31.'''
+    series = {'USD': [{'date': '2026-08-31', 'rate': 12.5}, {'date': '2026-10-05', 'rate': 16.0}],
+              'USDT': [{'date': '2026-08-01', 'rate': 8.0}]}
+    monkeypatch.setattr(currency, '_fetch_rates', lambda code, *args: series[code])
+    august = pd.DataFrame({'date': pd.to_datetime(['2026-08-05', '2026-08-20']),
+                           'client': ['A', 'B'], 'total_amount': [100.0, 150.0]})
+
+    read = currency.with_month_close_factors(august, 'Bearer t', '2026-10-10')
+
+    assert currency.money_total(read, read['total_amount'])['usd'] == 20.0
+    assert currency.money_sums(read, read['total_amount'], 'client').loc['B', 'usd'] == 12.0

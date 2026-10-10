@@ -59,7 +59,7 @@ def _monthly_series(
     valid = parsed_dates.notna()
     rows = dataframe.loc[valid]
     return money_sums(rows, rows[AMOUNT],
-                      parsed_dates[valid].dt.strftime('%Y-%m')).sort_index()
+                      parsed_dates[valid].dt.strftime('%Y-%m'), by_month = True).sort_index()
 
 
 def _monthly_variation(monthly: pd.DataFrame) -> list[MonthlyChange]:

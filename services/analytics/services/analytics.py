@@ -160,7 +160,7 @@ def _monthly_trend(dataframe: pd.DataFrame) -> list[TrendPoint]:
         return []
     rows = dataframe.loc[valid]
     monthly = money_sums(rows, rows[_AMOUNT],
-                         parsed_dates[valid].dt.strftime('%Y-%m')).sort_index()
+                         parsed_dates[valid].dt.strftime('%Y-%m'), by_month = True).sort_index()
     return [
         TrendPoint(month = str(idx), amount = money_row(row))
         for idx, row in monthly.iterrows()

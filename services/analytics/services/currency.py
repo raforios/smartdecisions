@@ -307,12 +307,15 @@ def in_three_currencies[ResponseModel: BaseModel](
 
 # What one boliviano of a sale is worth in each reference currency at the
 # close of its month: 1 / the rate of the month's last day (today's, for the
-# month in progress). An analyst reads sales by month, and a month closes at
-# one rate; a sum of amounts times the factor is that month's sales at its
-# close, so the engines group the dollars next to the bolivianos and every
-# ranking, share and count stays the one the bolivianos give.
+# month in progress). A month is a photo: what was sold in it reads at its
+# closing dollar, and that never changes.
 USD_FACTOR = '_per_usd'
 USDT_FACTOR = '_per_usdt'
+# The factor of a sum that is not one month: today's rate, because the
+# general view says what the business has now. When the period asked for is a
+# single month, it is that month's close, because the whole view is its photo.
+TOTAL_USD_FACTOR = '_total_per_usd'
+TOTAL_USDT_FACTOR = '_total_per_usdt'
 
 
 def with_month_close_factors(
@@ -330,7 +333,9 @@ def with_month_close_factors(
             today (str): Today, YYYY-MM-DD: the close of the month in progress.
 
         Returns:
-            pd.DataFrame: The same rows with `USD_FACTOR` and `USDT_FACTOR`.
+            pd.DataFrame: The same rows with `USD_FACTOR` and `USDT_FACTOR`,
+                and the factor of a sum that is not one month in
+                `TOTAL_USD_FACTOR` and `TOTAL_USDT_FACTOR`.
     '''
     if dataframe.empty or _DATE not in dataframe.columns:
         return dataframe
@@ -339,32 +344,45 @@ def with_month_close_factors(
         upper = pd.Timestamp(today))}, index = dataframe.index)
     usd, _ = rates_per_row(closes, PARALLEL_FALLBACK_CURRENCY, auth_token)
     usdt, _ = rates_per_row(closes, PARALLEL_CURRENCY, auth_token)
-    return dataframe.assign(**{USD_FACTOR: 1 / usd.to_numpy(dtype = float),
-                               USDT_FACTOR: 1 / usdt.to_numpy(dtype = float)})
+    usd_factor = 1 / usd.to_numpy(dtype = float)
+    usdt_factor = 1 / usdt.to_numpy(dtype = float)
+    if closes[_DATE].nunique() == 1:
+        total_usd, total_usdt = usd_factor, usdt_factor
+    else:
+        total_usd = 1 / current_rate(PARALLEL_FALLBACK_CURRENCY, auth_token, today)
+        total_usdt = 1 / current_rate(PARALLEL_CURRENCY, auth_token, today)
+    return dataframe.assign(**{USD_FACTOR: usd_factor, USDT_FACTOR: usdt_factor,
+                               TOTAL_USD_FACTOR: total_usd, TOTAL_USDT_FACTOR: total_usdt})
 
 
 def money_sums(
     dataframe: pd.DataFrame,
     values: pd.Series,
-    keys: Any
+    keys: Any,
+    by_month: bool = False
 ) -> pd.DataFrame:
     '''
         The sum of `values` per group in bolivianos and, when the frame
-        carries the month-close factors, in the official dollar and USDT.
+        carries the factors, in the official dollar and USDT.
 
         Args:
             dataframe (pd.DataFrame): The rows `values` belongs to.
             values (pd.Series): Amounts in bolivianos, aligned with the rows.
             keys (Any): What to group by: a column, a list of them, or a
                 Series aligned with the rows.
+            by_month (bool): True when each group is one month, which reads
+                at its own close; otherwise the sum reads at today's rate, or
+                at the close of the only month asked for.
 
         Returns:
             pd.DataFrame: Columns `bob` and, with factors, `usd` and `usdt`.
     '''
     parts = {'bob': values}
-    if USD_FACTOR in dataframe.columns:
-        parts['usd'] = values * dataframe[USD_FACTOR]
-        parts['usdt'] = values * dataframe[USDT_FACTOR]
+    usd_factor, usdt_factor = ((USD_FACTOR, USDT_FACTOR) if by_month
+                               else (TOTAL_USD_FACTOR, TOTAL_USDT_FACTOR))
+    if usd_factor in dataframe.columns:
+        parts['usd'] = values * dataframe[usd_factor]
+        parts['usdt'] = values * dataframe[usdt_factor]
     frame = pd.DataFrame(parts, index = dataframe.index)
     if isinstance(keys, str):
         keys = dataframe[keys]
@@ -412,7 +430,8 @@ def money_row(sums: pd.Series) -> float | Money:
 
 def money_total(
     dataframe: pd.DataFrame,
-    values: pd.Series
+    values: pd.Series,
+    by_month: bool = False
 ) -> pd.Series:
     '''
         The sum of `values` over the whole frame in each currency it carries.
@@ -420,10 +439,12 @@ def money_total(
         Args:
             dataframe (pd.DataFrame): The rows `values` belongs to.
             values (pd.Series): Amounts in bolivianos, aligned with the rows.
+            by_month (bool): True when the frame is one month, read at its close.
 
         Returns:
-            pd.Series: `bob` and, with the month-close factors, `usd` and `usdt`.
+            pd.Series: `bob` and, with the factors, `usd` and `usdt`.
     '''
     if dataframe.empty:
         return pd.Series({'bob': 0.0})
-    return money_sums(dataframe, values, pd.Series(0, index = dataframe.index)).sum()
+    return money_sums(dataframe, values, pd.Series(0, index = dataframe.index),
+                      by_month).sum()

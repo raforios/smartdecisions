@@ -376,8 +376,8 @@ def _category_mix(
     )
     current_rows = labelled.loc[labelled['_month'] == current_key]
     previous_rows = labelled.loc[labelled['_month'] == previous_key]
-    current = money_sums(current_rows, current_rows[AMOUNT], '_cat')
-    previous = money_sums(previous_rows, previous_rows[AMOUNT], '_cat')
+    current = money_sums(current_rows, current_rows[AMOUNT], '_cat', by_month = True)
+    previous = money_sums(previous_rows, previous_rows[AMOUNT], '_cat', by_month = True)
     current_total, previous_total = float(current['bob'].sum()), float(previous['bob'].sum())
 
     rows = [
@@ -545,7 +545,7 @@ def _product_terms(
     '''
     def _by_product(rows: pd.DataFrame) -> pd.DataFrame:
         return rows.groupby('_product').agg(units = (QUANTITY, 'sum')).join(
-            money_sums(rows, rows[AMOUNT], '_product'))
+            money_sums(rows, rows[AMOUNT], '_product', by_month = True))
 
     current, previous = _by_product(current_rows), _by_product(previous_rows)
     return {
@@ -571,8 +571,8 @@ def _client_terms(
         Returns:
             dict[str, list[tuple[str, float]]]: (code, amount) terms per currency.
     '''
-    current = money_sums(current_rows, current_rows[AMOUNT], '_client')
-    previous = money_sums(previous_rows, previous_rows[AMOUNT], '_client')
+    current = money_sums(current_rows, current_rows[AMOUNT], '_client', by_month = True)
+    previous = money_sums(previous_rows, previous_rows[AMOUNT], '_client', by_month = True)
     return {currency: _client_effects(current[currency], previous[currency])
             for currency in _currencies(current)}
 
@@ -620,8 +620,8 @@ def _decomposition(
     current_rows = labelled.loc[labelled['_month'] == current_key]
     previous_rows = labelled.loc[labelled['_month'] == previous_key]
 
-    current_total = money_total(current_rows, current_rows[AMOUNT])
-    previous_total = money_total(previous_rows, previous_rows[AMOUNT])
+    current_total = money_total(current_rows, current_rows[AMOUNT], by_month = True)
+    previous_total = money_total(previous_rows, previous_rows[AMOUNT], by_month = True)
     change = float(current_total['bob'] - previous_total['bob'])
 
     by_client: list[VolumeEffect] = []
