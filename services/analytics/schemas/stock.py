@@ -12,7 +12,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from schemas.analytics import PeriodInfo
+from schemas.analytics import Amount, PeriodInfo, ReferenceRates
 
 
 class StockStatus(str, Enum):
@@ -59,9 +59,9 @@ class StockRow(BaseModel):
     stockout_date: str | None = None
     status_code: StockStatus = StockStatus.HEALTHY
     abc_class: str | None = None
-    stock_value: float | None = None
+    stock_value: Amount | None = None
     excess_units: float = 0.0
-    excess_value: float | None = None
+    excess_value: Amount | None = None
 
 
 class StockKpis(BaseModel):
@@ -73,13 +73,13 @@ class StockKpis(BaseModel):
     units_on_hand: float = 0.0
     units_committed: float = 0.0
     units_available: float = 0.0
-    stock_value: float | None = None
+    stock_value: Amount | None = None
     out_of_stock: int = 0
     at_risk: int = 0
     excess_products: int = 0
-    excess_value: float | None = None
+    excess_value: Amount | None = None
     average_coverage_days: float | None = None
-    stockout_value_at_risk: float = 0.0
+    stockout_value_at_risk: Amount = 0.0
 
 
 class StockBlock(BaseModel):
@@ -105,6 +105,8 @@ class StockResponse(BaseModel):
     '''
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
+    rates: ReferenceRates | None = Field(
+        None, description = 'Official dollar and USDT of today the amounts are shown at.')
     available: bool = False
     reason_code: str | None = None
     kpis: StockKpis = StockKpis()

@@ -18,7 +18,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from schemas.analytics import PeriodInfo
+from schemas.analytics import Amount, PeriodInfo, ReferenceRates
 
 
 class Semaphore(str, Enum):
@@ -82,10 +82,10 @@ class ClientScoreSchema(BaseModel):
     market: str | None = None
     channel: str | None = None
     seller: str | None = None
-    target_amount: float = Field(..., ge = 0)
-    invoiced_amount: float = Field(..., ge = 0)
-    collected_amount: float = Field(..., ge = 0)
-    debt_amount: float = Field(..., description = 'Invoiced minus collected.')
+    target_amount: Amount
+    invoiced_amount: Amount
+    collected_amount: Amount
+    debt_amount: Amount = Field(..., description = 'Invoiced minus collected.')
     invoiced_ratio: float = Field(..., ge = 0)
     collected_ratio: float = Field(..., ge = 0)
     invoiced_semaphore: Semaphore
@@ -105,10 +105,10 @@ class ClusterCellSchema(BaseModel):
     cluster: str
     semaphore: Semaphore
     clients_count: int = Field(..., ge = 0)
-    target_amount: float = Field(..., ge = 0)
-    invoiced_amount: float = Field(..., ge = 0)
-    collected_amount: float = Field(..., ge = 0)
-    debt_amount: float
+    target_amount: Amount
+    invoiced_amount: Amount
+    collected_amount: Amount
+    debt_amount: Amount
     invoiced_ratio: float = Field(..., ge = 0)
     weight_on_target: float = Field(..., ge = 0)
 
@@ -119,10 +119,10 @@ class ObjectivesTotalsSchema(BaseModel):
     '''
     clients_count: int = Field(..., ge = 0)
     periods: list[str] = Field(default_factory = list)
-    target_amount: float = Field(..., ge = 0)
-    invoiced_amount: float = Field(..., ge = 0)
-    collected_amount: float = Field(..., ge = 0)
-    debt_amount: float
+    target_amount: Amount
+    invoiced_amount: Amount
+    collected_amount: Amount
+    debt_amount: Amount
     invoiced_ratio: float = Field(..., ge = 0)
     collected_ratio: float = Field(..., ge = 0)
     debt_ratio: float = Field(..., ge = 0, description = 'Debt over objective.')
@@ -155,6 +155,8 @@ class ObjectivesResponse(ObjectivesBlockSchema):
     """
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
+    rates: ReferenceRates | None = Field(
+        None, description = 'Official dollar and USDT of today the amounts are shown at.')
     available_periods: list[str] = Field(
         default_factory = list,
         description = 'Every month the objectives file has; without a window '

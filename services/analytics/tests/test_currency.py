@@ -170,26 +170,16 @@ def test_in_usdt_the_days_before_the_series_read_at_the_official_rate():
     assert applied['rows_without_rate'] == 0
 
 
-def test_the_reference_rate_is_todays_rate():
-    '''
-        Receivables, attainment and stock are counted in bolivianos; in
-        dollars they show what that is worth today, at one rate for all.
-    '''
-    with patch.object(currency, '_fetch_rates', lambda *args: PUBLISHED):
-        assert currency.reference_rate('USD', 'Bearer t', '2026-09-20') == 7.40
-    assert currency.reference_rate(currency.BASE_CURRENCY, 'Bearer t', '2026-09-20') is None
-
-
-def test_the_reference_rate_divides_money_and_leaves_units():
+def test_one_rate_divides_money_and_leaves_units():
     '''One rate for every amount: units, counts and shares do not move.'''
     snapshot = pd.DataFrame([{'product_id': 'P1', 'on_hand': 3.0, 'unit_cost': 74.0}])
 
-    converted = currency.divide_money(snapshot, currency.SNAPSHOT_MONEY_COLUMNS, 7.40)
+    converted = currency.divide_money(snapshot, ('unit_cost',), 7.40)
 
     assert round(float(converted['unit_cost'].iloc[0]), 2) == 10.0
     assert float(converted['on_hand'].iloc[0]) == 3.0
-    assert currency.divide_money(snapshot, currency.SNAPSHOT_MONEY_COLUMNS, None).equals(snapshot)
-    assert currency.divide_money(None, currency.SNAPSHOT_MONEY_COLUMNS, 7.40) is None
+    assert currency.divide_money(snapshot, ('unit_cost',), None).equals(snapshot)
+    assert currency.divide_money(None, ('unit_cost',), 7.40) is None
 
 
 def test_a_response_counted_in_bolivianos_carries_the_three_currencies(monkeypatch):

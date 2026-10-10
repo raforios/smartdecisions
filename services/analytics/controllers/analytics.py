@@ -50,13 +50,7 @@ from services.volume import build_volume_source
 from services.currency import (
     BASE_CURRENCY,
     convert_frame,
-    MONEY_COLUMNS,
-    OBJECTIVE_MONEY_COLUMNS,
-    PAYMENT_MONEY_COLUMNS,
-    SNAPSHOT_MONEY_COLUMNS,
-    divide_money,
     in_three_currencies,
-    reference_rate,
     current_rate,
     rates_per_row
 )
@@ -221,15 +215,15 @@ def _counted_in_bolivianos(
     dataset_id: str,
     current_user: str,
     params: dict[str, Any] | None
-) -> tuple[Any, PeriodInfo, float | None]:
+) -> tuple[Any, PeriodInfo]:
     '''
-        The sales of a report that is counted in bolivianos —receivables,
-        attainment, stock— and the one rate it is shown at.
+        The sales of a report counted in bolivianos —receivables, stock,
+        attainment— within the window asked.
 
         A credit of 300 bolivianos is collected with 300 bolivianos: balances,
-        counts and shares come out of the bolivianos, and another currency is
-        that same figure at today's rate, as a reference. Converting each
-        payment at its own day left invoices paid in full open in dollars.
+        counts and shares come out of the bolivianos, and the response carries
+        every amount in the three currencies at today's rate
+        (`in_three_currencies`). The currency asked does not apply here.
 
         Args:
             dynamodb_resource (ServiceResource): Injected DynamoDB resource.
@@ -238,42 +232,24 @@ def _counted_in_bolivianos(
             params (dict | None): Window, 'currency' and the caller's token.
 
         Returns:
-            tuple[Any, PeriodInfo, float | None]: The sales at the reference
-                rate, the period, and the rate (None in bolivianos).
+            tuple[Any, PeriodInfo]: The sales in bolivianos and the period.
     '''
-    options = params or {}
-    in_bolivianos = {key: value for key, value in options.items() if key != 'currency'}
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user,
-                                          in_bolivianos)
-    currency = options.get('currency') or BASE_CURRENCY
-    rate = reference_rate(currency, options.get('auth_token') or '',
-                          get_current_time_gmt().date().isoformat())
-    if rate is not None:
-        period = period.model_copy(update = {'currency': CurrencyApplied(
-            currency = currency, base_currency = BASE_CURRENCY,
-            rows_converted = len(dataframe), rows_total = len(dataframe),
-            reference_rate = rate
-        )})
-    return divide_money(dataframe, MONEY_COLUMNS, rate), period, rate
+    in_bolivianos = {key: value for key, value in (params or {}).items() if key != 'currency'}
+    return _scoped_dataframe(dynamodb_resource, dataset_id, current_user, in_bolivianos)
 
 
-def _payments_of(
-    metadata: dict[str, Any],
-    rate: float | None
-) -> Any:
+def _payments_of(metadata: dict[str, Any]) -> Any:
     '''
-        The payments INGEST attached to the dataset, at the report's rate.
+        The payments INGEST attached to the dataset, in bolivianos.
 
         Args:
             metadata (dict[str, Any]): The dataset record.
-            rate (float | None): The reference rate; None in bolivianos.
 
         Returns:
             Any: The payments DataFrame, or None when none were loaded.
     '''
     key = metadata.get('collections_s3_key')
-    return divide_money(load_dataframe_from_s3(key) if key else None,
-                        PAYMENT_MONEY_COLUMNS, rate)
+    return load_dataframe_from_s3(key) if key else None
 
 
 @handle_service_errors('ANALYTICS')
@@ -327,9 +303,8 @@ async def receivables_controller(
     '''
     # Counted in bolivianos: the currency of the request only moves charts,
     # and the screen draws them from the three amounts every field carries.
-    in_bolivianos = {key: value for key, value in (params or {}).items() if key != 'currency'}
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user,
-                                          in_bolivianos)
+    dataframe, period = _counted_in_bolivianos(dynamodb_resource, dataset_id,
+                                               current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -337,7 +312,7 @@ async def receivables_controller(
     )
     block = build_receivables(
         sales = dataframe,
-        collections = _payments_of(metadata, None),
+        collections = _payments_of(metadata),
         stored_policy = get_credit_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
@@ -370,8 +345,8 @@ async def objectives_controller(
         Read-only: everything is derived on the fly, so nothing is persisted
         as a run.
     '''
-    dataframe, period, rate = _counted_in_bolivianos(dynamodb_resource, dataset_id,
-                                                     current_user, params)
+    dataframe, period = _counted_in_bolivianos(dynamodb_resource, dataset_id,
+                                               current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -386,18 +361,19 @@ async def objectives_controller(
     )
     block = build_objectives(
         sales = dataframe,
-        objectives = divide_money(objectives, OBJECTIVE_MONEY_COLUMNS, rate),
-        collections = _payments_of(metadata, rate),
+        objectives = objectives,
+        collections = _payments_of(metadata),
         stored_policy = get_commercial_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
         )
     )
-    return ObjectivesResponse(
-        dataset_id = dataset_id,
-        period = period,
-        available_periods = available,
-        **block.model_dump()
+    return in_three_currencies(
+        ObjectivesResponse,
+        {'dataset_id': dataset_id, 'period': period, 'available_periods': available,
+         **block.model_dump()},
+        (params or {}).get('auth_token') or '',
+        get_current_time_gmt().date().isoformat()
     )
 
 
@@ -453,7 +429,7 @@ async def stock_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     params: dict[str, Any],
-    current_user: str, # pylint: disable=unused-argument
+    current_user: str,
     request: Request # pylint: disable=unused-argument
 ) -> StockResponse:
     '''
@@ -467,8 +443,8 @@ async def stock_controller(
         Read-only, and deliberately so: `available` reflects what the client's
         ERP already committed. Nothing here reserves or promises stock.
     '''
-    dataframe, period, rate = _counted_in_bolivianos(dynamodb_resource, dataset_id,
-                                                     current_user, params)
+    dataframe, period = _counted_in_bolivianos(dynamodb_resource, dataset_id,
+                                               current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -478,14 +454,14 @@ async def stock_controller(
 
     block = build_stock(
         sales = dataframe,
-        # The photo is what the stock is worth now: today's rate.
-        stock = divide_money(load_dataframe_from_s3(stock_key) if stock_key else None,
-                             SNAPSHOT_MONEY_COLUMNS, rate)
+        stock = load_dataframe_from_s3(stock_key) if stock_key else None
     )
-    return StockResponse(
-        dataset_id = dataset_id,
-        period = period,
-        **block.model_dump()
+    # The photo is what the stock is worth now: today's rate.
+    return in_three_currencies(
+        StockResponse,
+        {'dataset_id': dataset_id, 'period': period, **block.model_dump()},
+        (params or {}).get('auth_token') or '',
+        get_current_time_gmt().date().isoformat()
     )
 
 

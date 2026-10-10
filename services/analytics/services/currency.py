@@ -49,11 +49,6 @@ PARALLEL_FALLBACK_CURRENCY = ENV_VARS['PARALLEL_FALLBACK_CURRENCY']
 MONEY_COLUMNS: tuple[str, ...] = (
     'unit_price', 'unit_cost', 'total_amount', 'credit_limit'
 )
-# The same rule for the companion files: the money in a payment and in a stock
-# photo, never its units.
-PAYMENT_MONEY_COLUMNS: tuple[str, ...] = ('paid_amount',)
-SNAPSHOT_MONEY_COLUMNS: tuple[str, ...] = ('unit_cost', 'unit_price')
-OBJECTIVE_MONEY_COLUMNS: tuple[str, ...] = ('target_amount',)
 _DATE = 'date'
 # The regime QUOTES reports for a day before the boliviano floated.
 _FIXED_REGIME = 'FIXED'
@@ -284,33 +279,6 @@ def current_rate(
         logger.error(error_msg)
         raise ServiceUnavailableError(detail = AnalyticsError.RATES_UNAVAILABLE.value)
     return float(sorted(rates, key = lambda rate: rate['date'])[-1]['rate'])
-
-
-def reference_rate(
-    currency: str,
-    auth_token: str,
-    today: str
-) -> float | None:
-    '''
-        The one rate a report counted in bolivianos is shown at.
-
-        Receivables, attainment and stock are counted in bolivianos: a credit
-        of 300 bolivianos is collected with 300 bolivianos, whatever the
-        dollar does meanwhile. In another currency they show what that is
-        worth today, at a single rate, so no count or share moves with it.
-
-        Args:
-            currency (str): ISO 4217 code, or the parallel USDT.
-            auth_token (str): The caller's Authorization header, for QUOTES.
-            today (str): Today, YYYY-MM-DD.
-
-        Returns:
-            float | None: Bolivianos per unit of the currency; None in the
-                base currency, where nothing converts.
-    '''
-    if currency == BASE_CURRENCY:
-        return None
-    return current_rate(currency, auth_token, today)
 
 
 def divide_money(

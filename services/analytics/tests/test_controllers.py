@@ -530,6 +530,7 @@ def test_objectives_returns_a_full_response(
 
     monkeypatch.setattr(controllers, 'load_dataframe_from_s3', _load)
     monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
+    _flat_rate(monkeypatch)
 
     response = _call(controllers.objectives_controller, dataset)
 
@@ -542,8 +543,8 @@ def test_objectives_returns_a_full_response(
     # without knowing which cuts drew it.
     assert (response.policy.yellow_from, response.policy.green_from) == (0.5, 1.0)
     # The identity the whole block rests on.
-    assert response.totals.invoiced_amount == round(
-        response.totals.collected_amount + response.totals.debt_amount, 2
+    assert response.totals.invoiced_amount.bob == round(
+        response.totals.collected_amount.bob + response.totals.debt_amount.bob, 2
     )
 
 
@@ -556,6 +557,7 @@ def test_objectives_without_any_loaded_is_empty_and_not_an_error(
         who did invoice are still reported.
     '''
     monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
+    _flat_rate(monkeypatch)
 
     response = _call(controllers.objectives_controller, dataset)
 
@@ -647,6 +649,7 @@ def test_stock_returns_a_full_response(
         so rather than fail: an account that has not loaded stock is the
         ordinary case, not an error.
     '''
+    _flat_rate(monkeypatch)
     response = _call(controllers.stock_controller, dataset)
     assert isinstance(response, StockResponse)
 
@@ -845,13 +848,14 @@ def test_receivables_carry_every_amount_in_three_currencies(
     assert isinstance(response.kpis.open_invoices, int)
 
 
-def test_attainment_is_the_same_in_any_currency(
+def test_attainment_carries_every_amount_in_three_currencies(
     dataset,
     monkeypatch
 ):
     '''
         The objective is in bolivianos, and so is what was invoiced against
-        it: the attainment does not depend on the currency it is shown in.
+        it: the attainment is judged in bolivianos and every amount travels as
+        the three currencies at today's rate. Asking for one changes nothing.
     '''
     monkeypatch.setattr(
         controllers, 'get_dataset_metadata',
@@ -866,24 +870,28 @@ def test_attainment_is_the_same_in_any_currency(
     monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
     _rising_rate(monkeypatch)
 
-    in_bob = _call(controllers.objectives_controller, dataset)
-    in_usd = _call(controllers.objectives_controller, dataset,
-                   {'currency': 'USD', 'auth_token': 'Bearer t'})
+    response = _call(controllers.objectives_controller, dataset, {'auth_token': 'Bearer t'})
+    asked_in_usd = _call(controllers.objectives_controller, dataset,
+                         {'currency': 'USD', 'auth_token': 'Bearer t'})
 
-    # Equal up to the cent rounding of each amount, which on the test's
-    # small figures reaches the third decimal of the share.
-    assert in_usd.totals.invoiced_ratio == pytest.approx(in_bob.totals.invoiced_ratio, abs = 1e-3)
-    assert in_usd.totals.collected_ratio == pytest.approx(in_bob.totals.collected_ratio,
-                                                          abs = 1e-3)
+    rate = _todays_rate()
+    target = response.totals.target_amount
+    assert response.rates.usd == rate
+    assert target.bob > 0
+    assert target.usd == round(target.bob / rate, 2)
+    assert response.clients[0].invoiced_amount.usdt == \
+        round(response.clients[0].invoiced_amount.bob / response.rates.usdt, 2)
+    assert asked_in_usd.totals == response.totals
 
 
-def test_stock_in_dollars_is_valued_in_dollars(
+def test_stock_carries_every_amount_in_three_currencies(
     dataset,
     monkeypatch
 ):
     '''
-        The stock in dollars answered the same figures as in bolivianos while
-        saying "USD". The value converts at today's rate; the units do not.
+        The photo is what the stock is worth now: every amount travels as
+        bolivianos, official dollars and USDT at today's rate, and the units
+        stay what the photo says. Asking for a currency changes nothing.
     '''
     monkeypatch.setattr(
         controllers, 'get_dataset_metadata',
@@ -896,9 +904,16 @@ def test_stock_in_dollars_is_valued_in_dollars(
     )
     _flat_rate(monkeypatch)
 
-    in_bob = _call(controllers.stock_controller, dataset)
-    in_usd = _call(controllers.stock_controller, dataset,
-                   {'currency': 'USD', 'auth_token': 'Bearer t'})
+    response = _call(controllers.stock_controller, dataset, {'auth_token': 'Bearer t'})
+    asked_in_usd = _call(controllers.stock_controller, dataset,
+                         {'currency': 'USD', 'auth_token': 'Bearer t'})
 
-    assert in_usd.kpis.units_on_hand == in_bob.kpis.units_on_hand
-    assert round(in_usd.kpis.stock_value * 10, 2) == round(in_bob.kpis.stock_value, 2)
+    value = response.kpis.stock_value
+    assert response.rates.usd == 10.0
+    assert value.bob > 0
+    assert value.usd == round(value.bob / 10.0, 2)
+    assert value.usdt == round(value.bob / response.rates.usdt, 2)
+    assert response.products[0].stock_value.usd == \
+        round(response.products[0].stock_value.bob / 10.0, 2)
+    assert asked_in_usd.kpis == response.kpis
+    assert response.kpis.units_on_hand == float(_stock_frame()['on_hand'].sum())
