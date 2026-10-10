@@ -77,10 +77,24 @@
 
 /* ============ Metric cards ============ */
 .metric-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 1rem;
     margin-bottom: 1.6rem;
+}
+/* One row of equal cards; a shorter row is centred (arrangeMetrics). */
+.metric-row {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+.metric-row > .metric {
+    flex: 0 0 calc((100% - (var(--columns) - 1) * 1rem) / var(--columns));
+    min-width: 0;
+}
+@media (max-width: 700px) {
+    .metric-row { flex-wrap: wrap; }
+    .metric-row > .metric { flex: 1 1 100%; }
 }
 .metric {
     background: var(--panel);
@@ -96,7 +110,7 @@
     margin: 0 0 0.4rem;
 }
 .metric-value {
-    font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+    font-size: 0.95rem;
     font-weight: 700;
     margin: 0;
     letter-spacing: -0.02em;
@@ -213,14 +227,14 @@
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.92rem;
+    font-size: 0.78rem;
 }
 .data-table thead th {
     text-align: left;
     padding: 0.7rem 0.9rem;
     background: var(--panel-elevated);
-    color: var(--muted);
-    font-size: 0.78rem;
+    color: var(--text-strong);
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     border-bottom: 1px solid var(--border);
@@ -275,6 +289,22 @@
     font-size: 0.98rem;
     color: var(--text-strong);
 }
+/* A chart title with its own currency selector on the right. */
+.chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.chart-currency {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+.chart-currency select { font-size: 0.82rem; }
 
 /* --- Forecast controls --- */
 .forecast-controls {
@@ -319,7 +349,7 @@
 }
 .product-row td { vertical-align: middle; }
 .detail-row .detail-cell { background: var(--bg-alt); padding: 0.6rem 1rem; }
-.detail-table { font-size: 0.86rem; background: var(--panel); }
+.detail-table { background: var(--panel); }
 .detail-table thead th { background: transparent; }
 
 /* --- Pager (segmentation etc.) --- */
@@ -389,10 +419,24 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
 }
+/* The label and the note sit on the line of the inputs and buttons, which
+   the bar aligns to the bottom under the field captions. */
+.period-label,
+.period-note {
+    align-self: flex-end;
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+}
+/* The link to the exchange rate is an <a>: same height as the buttons. */
+.period-bar .btn {
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+}
 .period-label {
     font-weight: 600;
     color: var(--text-strong);
-    align-self: center;
 }
 .period-field { display: flex; flex-direction: column; gap: 0.25rem; }
 .period-field span { font-size: 0.78rem; color: var(--muted); }
@@ -409,7 +453,6 @@
     color: var(--muted);
     font-size: 0.82rem;
     flex: 1 1 220px;
-    align-self: center;
 }
 @media (max-width: 700px) {
     .period-bar { flex-direction: column; align-items: stretch; }
@@ -460,7 +503,7 @@
 .delta-up { color: var(--success); font-variant-numeric: tabular-nums; }
 .delta-down { color: var(--danger); font-variant-numeric: tabular-nums; }
 .data-table td.hero { font-weight: 600; color: var(--text-strong); }
-.cell-note { color: var(--muted); font-size: 0.85rem; }
+.cell-note { color: var(--muted); }
 
 /* --- ABC class badges --- */
 .badge {
@@ -563,12 +606,11 @@
     letter-spacing: 0.08em;
 }
 .money3-value {
-    font-size: 0.98rem;
+    font-size: 0.95rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
 }
 .money3-col:first-child .money3-value { color: var(--text-strong); }
 .data-table thead th.money-group { text-align: center; }
-.data-table thead .money-subhead th { padding-top: 0.3rem; padding-bottom: 0.3rem; font-size: 0.7rem; }
-.data-table td.money-cell { font-size: 0.84rem; }
+.data-table thead .money-subhead th { padding-top: 0.3rem; padding-bottom: 0.3rem; }

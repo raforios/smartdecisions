@@ -75,38 +75,28 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem(CACHE_KEY);
     }
 
-    /** Builds the ?date_from=&date_to=&currency= suffix every analysis endpoint accepts. */
+    /** Builds the ?date_from=&date_to= suffix every analysis endpoint accepts. */
     function analysisQuery() {
         const params = new URLSearchParams();
         if (state.period.from) params.set('date_from', state.period.from);
         if (state.period.to) params.set('date_to', state.period.to);
-        if (CONVERTED.has(state.period.currency)) params.set('currency', state.period.currency);
         const query = params.toString();
         return query ? `?${query}` : '';
     }
 
-    // The file is in bolivianos; dollars are a reading the backend converts,
-    // each amount at the official rate of its own day.
-    const CURRENCY_SYMBOLS = { BOB: 'Bs', USD: 'US$', USDT: 'US$' };
-    // The readings the service converts: the official dollar and the USDT of
-    // the P2P market (the parallel dollar).
-    const CONVERTED = new Set(['USD', 'USDT']);
+    // Amounts that come in the three currencies are shown side by side; the
+    // only choice left is which one a chart draws, next to that chart.
+    const CHART_CURRENCY_KEY = 'sd_chart_currency';
+    const CHART_SYMBOLS = { BOB: 'Bs', USD: 'USD', USDT: 'USDT' };
+    let chartCurrency = sessionStorage.getItem(CHART_CURRENCY_KEY) || 'BOB';
 
-    /** A Money {bob, usd, usdt} as the selected currency; a plain number as is. */
+    /** A Money {bob, usd, usdt} in the currency the charts draw; a number as is. */
     function chartAmount(value) {
-        return window.SD_MONEY.pick(value, state.period.currency);
+        return window.SD_MONEY.pick(value, chartCurrency);
     }
 
-    function currencySymbol() {
-        return CURRENCY_SYMBOLS[state.period.currency] || CURRENCY_SYMBOLS.BOB;
-    }
-
-    /** Table headers that name the currency follow the one in force. */
-    function paintCurrencyLabels() {
-        document.querySelectorAll('[data-currency]').forEach((cell) => {
-            const template = cell.getAttribute('data-currency') || '%s';
-            cell.textContent = template.replace('%s', currencySymbol());
-        });
+    function chartSymbol() {
+        return CHART_SYMBOLS[chartCurrency] || CHART_SYMBOLS.BOB;
     }
 
     // ---------- Result cache ----------
@@ -454,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = qs('#ingestSummary');
         container.innerHTML = '';
         cards.forEach((card) => container.appendChild(metricCard(card)));
+        arrangeMetrics(container);
     }
 
     // The backend reports WHY a row failed as a stable code; the wording lives
@@ -855,48 +846,42 @@ document.addEventListener('DOMContentLoaded', () => {
               `${formatInt(periodo.rows)} filas`
             : `Datos disponibles: ${formatDateRange(periodo.available_from,
                 periodo.available_to)}`;
-
-        qs('#periodCurrency').value = state.period.currency || 'BOB';
-        paintCurrencyLabels();
-        const converted = periodo.currency;
-        const currencyNote = qs('#currencyNote');
-        currencyNote.hidden = !converted;
-        if (converted && converted.reference_rate) {
-            // Receivables, attainment and stock are counted in bolivianos; the
-            // dollars are that same figure at today's rate, as a reference.
-            const moneda = converted.currency === 'USDT' ? 'USDT' : 'dólar oficial';
-            currencyNote.textContent =
-                `Se calcula en bolivianos; en ${converted.currency} se muestra al ` +
-                `${moneda} de hoy (Bs ${formatDecimal(converted.reference_rate, 2)}), ` +
-                'como referencia.';
-        } else if (converted) {
-            const fuente = converted.currency === 'USDT'
-                ? 'al precio del USDT (Binance P2P, dólar paralelo) de su propio día.'
-                : 'al tipo de cambio oficial de su propio día.';
-            currencyNote.textContent =
-                `En dólares: cada importe ${fuente}` +
-                (converted.rows_at_fallback > 0
-                    ? ` ${formatInt(converted.rows_at_fallback)} fila(s) de antes de que ` +
-                      'empezara la serie USDT, al tipo oficial de su día.'
-                    : '') +
-                (converted.rows_at_fixed_rate > 0
-                    ? ` ${formatInt(converted.rows_at_fixed_rate)} fila(s) de antes de que ` +
-                      'el dólar flotara, al tipo de cambio fijo de ese régimen.'
-                    : '') +
-                (converted.rows_without_rate > 0
-                    ? ` ${formatInt(converted.rows_without_rate)} fila(s) sin cotización ` +
-                      'publicada quedan en bolivianos.'
-                    : '');
-        }
     }
 
-    // Changing the currency is changing the reading, like changing the window:
-    // the cached results were computed in the other one.
-    qs('#periodCurrency').addEventListener('change', () => {
-        setPeriod({ ...state.period, currency: qs('#periodCurrency').value });
-        paintCurrencyLabels();
-        reopenCurrentAnalysis();
-    });
+    /**
+     * Every `[data-chart-currency]` slot gets the same selector, so each chart
+     * card carries its own control. They stay in sync, and changing one only
+     * redraws the charts from the cached response: the amounts are all there.
+     */
+    const CHART_REDRAW = {
+        receivables: (payload) => {
+            renderAging(payload.aging || []);
+            renderDueCalendar(payload.due_windows || [], payload.due_dates || []);
+        },
+        stock: (payload) => renderStockCharts(payload.products || [])
+    };
+
+    function mountChartCurrency() {
+        const options = Object.entries(CHART_SYMBOLS).map(([code, label]) =>
+            `<option value="${code}">${label}</option>`).join('');
+        document.querySelectorAll('[data-chart-currency]').forEach((slot) => {
+            slot.innerHTML = `<span>Moneda del gráfico</span><select>${options}</select>`;
+            const select = slot.querySelector('select');
+            select.value = chartCurrency;
+            select.addEventListener('change', () => {
+                chartCurrency = select.value;
+                sessionStorage.setItem(CHART_CURRENCY_KEY, chartCurrency);
+                document.querySelectorAll('[data-chart-currency] select')
+                    .forEach((other) => { other.value = chartCurrency; });
+                const kind = VIEW_TO_KIND[sessionStorage.getItem(VIEW_KEY)];
+                const cached = cachedResult(kind);
+                if (cached && cached.payload.available && CHART_REDRAW[kind]) {
+                    CHART_REDRAW[kind](cached.payload);
+                }
+            });
+        });
+    }
+    mountChartCurrency();
 
     qs('#periodApply').addEventListener('click', () => {
         const from = qs('#periodFrom').value;
@@ -905,14 +890,14 @@ document.addEventListener('DOMContentLoaded', () => {
             toast('La fecha "Desde" no puede ser posterior a "Hasta".', 'error');
             return;
         }
-        setPeriod({ from: from || null, to: to || null, currency: state.period.currency });
+        setPeriod({ from: from || null, to: to || null });
         reopenCurrentAnalysis();
     });
 
     qs('#periodReset').addEventListener('click', () => {
         qs('#periodFrom').value = '';
         qs('#periodTo').value = '';
-        setPeriod({ currency: state.period.currency });
+        setPeriod({});
         reopenCurrentAnalysis();
     });
 
@@ -961,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
             value: `${formatInt(tier.clients)} · ${formatDecimal(tier.percentage, 1)}%`,
             hint: `${formatCurrency(tier.amount)} de venta`
         })));
+        arrangeMetrics(kpiBox);
 
         // Doughnut of sales share by tier.
         makeChart('chartSegmentos', {
@@ -1059,7 +1045,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (group) params.group_by = group;
             if (state.period.from) params.date_from = state.period.from;
             if (state.period.to) params.date_to = state.period.to;
-            if (CONVERTED.has(state.period.currency)) params.currency = state.period.currency;
             // Both methods, always: seeing them apart tells you what one model
             // says; seeing them together tells you how much the answer depends
             // on the model, which is the useful question. Where the two lines
@@ -1238,7 +1223,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: 'Venta potencial',
                 value: totalValue == null ? '—' : formatCurrency(totalValue),
                 variant: totalValue == null ? '' : 'success',
-                hint: totalValue == null ? 'Faltan precios en el archivo.' : `Impacto esperado en ${currencySymbol()}`
+                hint: totalValue == null ? 'Faltan precios en el archivo.' : `Impacto esperado en Bs`
             },
             {
                 label: 'Categoría estrella',
@@ -1249,6 +1234,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = qs('#opportunitySummary');
         container.innerHTML = '';
         cards.forEach((card) => container.appendChild(metricCard(card)));
+        arrangeMetrics(container);
     }
 
     // ---------- Step 4: product summary with per-store drill-down ----------
@@ -1437,6 +1423,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hint: kpiHint(card),
             variant: variantFor ? variantFor(card) : ''
         })));
+        arrangeMetrics(box);
     }
 
     // The canvas box is fixed by CSS, so the chart has to fill it as it is.
@@ -1465,6 +1452,7 @@ document.addEventListener('DOMContentLoaded', () => {
             label: kpiLabel(card), value: formatKpi(card), hint: kpiHint(card),
             variant: card.metric_code === 'TOTAL_SALES' ? 'success' : ''
         })));
+        arrangeMetrics(kpiBox);
 
         // Monthly trend (line)
         const trend = data.monthly_trend || [];
@@ -1473,7 +1461,7 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: trend.map((p) => p.month),
                 datasets: [{
-                    label: `Venta (${currencySymbol()})`, data: trend.map((p) => p.amount),
+                    label: `Venta (Bs)`, data: trend.map((p) => p.amount),
                     borderColor: BRAND[0], backgroundColor: 'rgba(13,30,76,0.1)',
                     fill: true, tension: 0.3
                 }]
@@ -1493,12 +1481,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Top products / top clients / sellers (horizontal bars)
-        horizontalBar('chartTopProductos', data.top_products, `Venta (${currencySymbol()})`);
-        horizontalBar('chartTopClientes', data.best_clients, `Venta (${currencySymbol()})`);
-        horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), `Venta (${currencySymbol()})`);
+        horizontalBar('chartTopProductos', data.top_products, `Venta (Bs)`);
+        horizontalBar('chartTopClientes', data.best_clients, `Venta (Bs)`);
+        horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), `Venta (Bs)`);
 
         // Bottom products: same bars as the top ten, so the two read alike.
-        horizontalBar('chartBottomProductos', data.bottom_products, `Venta (${currencySymbol()})`);
+        horizontalBar('chartBottomProductos', data.bottom_products, `Venta (Bs)`);
 
         showPeriodBar(data.period);
         renderMargin(data.margin);
@@ -1531,11 +1519,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 labels: categories.map((row) => dimensionLabel(row.label)),
                 datasets: [
                     {
-                        label: `Venta (${currencySymbol()})`, data: categories.map((row) => row.amount),
+                        label: `Venta (Bs)`, data: categories.map((row) => row.amount),
                         backgroundColor: BRAND[5]
                     },
                     {
-                        label: `Margen (${currencySymbol()})`, data: categories.map((row) => row.margin),
+                        label: `Margen (Bs)`, data: categories.map((row) => row.margin),
                         backgroundColor: BRAND[3]
                     }
                 ]
@@ -1910,30 +1898,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const kpis = data.kpis || {};
         qs('#stockSubtitle').textContent =
             `Foto del ${formatDate(kpis.snapshot_date)}. La cobertura se mide con ` +
-            'la venta observada en el período, no con una proyección.';
+            'la venta observada en el período, no con una proyección. Se valoriza ' +
+            `en bolivianos; USD y USDT al tipo de hoy. ${window.SD_MONEY.ratesNote(data.rates)}`;
 
         fillKpis('stockKpis', [
+            { label: 'Valor del inventario', value: kpis.stock_value, format: 'money3',
+              hint: kpis.stock_value == null
+                  ? 'Falta el costo unitario para valorizarlo'
+                  : 'Existencia por su costo unitario' },
+            { label: 'Capital quieto', value: kpis.excess_value, format: 'money3',
+              hint: `${formatInt(kpis.excess_products)} productos con exceso o sin ` +
+                    'rotación' },
+            { label: 'Venta diaria en riesgo', value: kpis.stockout_value_at_risk,
+              format: 'money3',
+              hint: 'Lo que se deja de vender por día si no se repone' },
             { label: 'Productos', value: kpis.products, format: 'int',
               hint: `${formatDecimal(kpis.units_on_hand, 0)} unidades en almacén` },
             { label: 'Disponible', value: kpis.units_available, format: 'int',
               hint: `${formatDecimal(kpis.units_committed, 0)} unidades ya ` +
                     'comprometidas por el ERP' },
-            { label: 'Valor del inventario', value: kpis.stock_value, format: 'money',
-              hint: kpis.stock_value == null
-                  ? 'Falta el costo unitario para valorizarlo'
-                  : 'Existencia por su costo unitario' },
             { label: 'Sin stock', value: kpis.out_of_stock, format: 'int',
               hint: 'Productos en cero que sí tienen demanda' },
             { label: 'Por quebrar', value: kpis.at_risk, format: 'int',
               hint: 'Sin stock, críticos y bajos juntos' },
-            { label: 'Capital quieto', value: kpis.excess_value, format: 'money',
-              hint: `${formatInt(kpis.excess_products)} productos con exceso o sin ` +
-                    'rotación' },
             { label: 'Cobertura promedio', value: kpis.average_coverage_days,
-              format: 'decimal', hint: 'Días que dura el stock al ritmo actual' },
-            { label: 'Venta diaria en riesgo', value: kpis.stockout_value_at_risk,
-              format: 'money',
-              hint: 'Lo que se deja de vender por día si no se repone' }
+              format: 'decimal', hint: 'Días que dura el stock al ritmo actual' }
         ]);
 
         qs('#stockNote').textContent =
@@ -1962,8 +1951,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `<td class="numeric">${formatDecimal(row.on_hand, 0)}</td>` +
             `<td class="numeric">${coverageCell(row)}</td>` +
             `<td class="numeric">${formatDecimal(row.excess_units, 0)}</td>` +
-            `<td class="numeric">${row.excess_value == null
-                ? '—' : formatCurrency(row.excess_value)}</td>` +
+            window.SD_MONEY.cells(row.excess_value) +
             `<td>${stockBadge(row.status_code)}</td>`);
 
         showPeriodBar(data.period);
@@ -1975,7 +1963,7 @@ document.addEventListener('DOMContentLoaded', () => {
             products.filter((row) => row.status_code === code).length);
         const values = STOCK_STATUS_ORDER.map((code) => products
             .filter((row) => row.status_code === code)
-            .reduce((total, row) => total + (row.stock_value || 0), 0));
+            .reduce((total, row) => total + (chartAmount(row.stock_value) || 0), 0));
         const labels = STOCK_STATUS_ORDER.map((code) => STOCK_STATUS_LABELS[code]);
         const colours = [BRAND[1], BRAND[7], BRAND[4], BRAND[3], BRAND[2], BRAND[5]];
 
@@ -1999,7 +1987,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 plugins: {
                     legend: { position: 'right' },
                     tooltip: {
-                        callbacks: { label: (ctx) => formatCurrency(ctx.parsed) }
+                        callbacks: {
+                            label: (ctx) => `${chartSymbol()} ${formatDecimal(ctx.parsed, 2)}`
+                        }
                     }
                 }
             }
@@ -2109,16 +2099,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? ` Otros ${formatInt(data.clients_without_objective)} facturaron ` +
                   'sin objetivo asignado: no se los puntúa, porque no hay meta ' +
                   'contra la cual compararlos.'
-                : '');
+                : '') +
+            ` Se mide en bolivianos; USD y USDT al tipo de hoy. ${window.SD_MONEY.ratesNote(data.rates)}`;
 
         fillKpis('objectivesKpis', [
-            { label: 'Objetivo', value: totals.target_amount, format: 'money',
+            { label: 'Objetivo', value: totals.target_amount, format: 'money3',
               hint: 'Lo que la empresa decidió vender en el período' },
-            { label: 'Facturado', value: totals.invoiced_amount, format: 'money',
+            { label: 'Facturado', value: totals.invoiced_amount, format: 'money3',
               hint: `${formatDecimal(totals.invoiced_ratio * 100, 1)}% del objetivo` },
-            { label: 'Cobrado', value: totals.collected_amount, format: 'money',
+            { label: 'Cobrado', value: totals.collected_amount, format: 'money3',
               hint: `${formatDecimal(totals.collected_ratio * 100, 1)}% del objetivo` },
-            { label: 'Deuda', value: totals.debt_amount, format: 'money',
+            { label: 'Deuda', value: totals.debt_amount, format: 'money3',
               hint: `${formatDecimal(totals.debt_ratio * 100, 1)}% del objetivo — ` +
                     'facturado que todavía no se cobró' },
             { label: 'Puntos', value: totals.points, format: 'decimal',
@@ -2176,9 +2167,9 @@ document.addEventListener('DOMContentLoaded', () => {
             `<td>${escapeHtml(cell.cluster)}</td>` +
             `<td>${semaphoreTag(cell.semaphore)}</td>` +
             `<td class="num">${formatInt(cell.clients_count)}</td>` +
-            `<td class="num">${formatDecimal(cell.target_amount, 0)}</td>` +
-            `<td class="num">${formatDecimal(cell.invoiced_amount, 0)}</td>` +
-            `<td class="num">${formatDecimal(cell.debt_amount, 0)}</td>` +
+            window.SD_MONEY.cells(cell.target_amount, 0) +
+            window.SD_MONEY.cells(cell.invoiced_amount, 0) +
+            window.SD_MONEY.cells(cell.debt_amount, 0) +
             `<td class="num">${formatDecimal(cell.invoiced_ratio * 100, 1)}%</td>` +
             `<td class="num">${formatDecimal(cell.weight_on_target * 100, 1)}%</td>`,
             { emptyText: 'Sin celdas para mostrar.' });
@@ -2192,14 +2183,14 @@ document.addEventListener('DOMContentLoaded', () => {
             `<td>${escapeHtml(row.pos_name || row.pos_id)}</td>` +
             `<td>${escapeHtml(row.period)}</td>` +
             `<td>${escapeHtml(row.cluster || '—')}</td>` +
-            `<td class="num">${formatDecimal(row.target_amount, 0)}</td>` +
-            `<td class="num">${formatDecimal(row.invoiced_amount, 0)}</td>` +
+            window.SD_MONEY.cells(row.target_amount, 0) +
+            window.SD_MONEY.cells(row.invoiced_amount, 0) +
             `<td class="num">${semaphoreTag(row.invoiced_semaphore)} ` +
             `${formatDecimal(row.invoiced_ratio * 100, 1)}%</td>` +
-            `<td class="num">${formatDecimal(row.collected_amount, 0)}</td>` +
+            window.SD_MONEY.cells(row.collected_amount, 0) +
             `<td class="num">${semaphoreTag(row.collected_semaphore)} ` +
             `${formatDecimal(row.collected_ratio * 100, 1)}%</td>` +
-            `<td class="num">${formatDecimal(row.debt_amount, 0)}</td>` +
+            window.SD_MONEY.cells(row.debt_amount, 0) +
             `<td class="num">${formatDecimal(row.points, 0)}</td>`,
             { emptyText: 'Sin clientes con objetivo.' });
     }
@@ -2317,13 +2308,13 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: aging.map((row) => AGING_LABELS[row.bucket_code] || row.bucket_code),
                 datasets: [{
-                    label: `Saldo (${currencySymbol()})`,
+                    label: `Saldo (${chartSymbol()})`,
                     data: aging.map((row) => chartAmount(row.amount)),
                     backgroundColor: aging.map((row) =>
                         row.bucket_code === 'CURRENT' ? BRAND[3] : BRAND[1])
                 }]
             },
-            options: chartOptions('money')
+            options: chartOptions('chartMoney')
         });
 
         const recoverable = aging.map((row) =>
@@ -2396,13 +2387,13 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: windows.map((row) => DUE_WINDOW_LABELS[row.window_code] || row.window_code),
                 datasets: [{
-                    label: `Monto (${currencySymbol()})`,
+                    label: `Monto (${chartSymbol()})`,
                     data: windows.map((row) => chartAmount(row.amount)),
                     backgroundColor: windows.map((row) =>
                         row.window_code === 'OVERDUE' ? BRAND[1] : BRAND[0])
                 }]
             },
-            options: chartOptions('money')
+            options: chartOptions('chartMoney')
         });
 
         fillTable('dueDatesTable', dates, (row) =>
@@ -2538,6 +2529,7 @@ document.addEventListener('DOMContentLoaded', () => {
               hint: power.difference != null ? `${usd(power.difference)} de poder de compra` : '',
               variant: power.difference < 0 ? 'warning' : '' }
         ].forEach((card) => box.appendChild(metricCard(card)));
+        arrangeMetrics(box);
 
         const monthly = data.monthly || [];
         makeChart('chartFx', {
@@ -2681,6 +2673,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         label: (ctx) => {
                             const value = ctx.parsed.y ?? ctx.parsed.x ?? ctx.parsed;
                             if (format === 'money') return formatCurrency(value);
+                            if (format === 'chartMoney') {
+                                return `${chartSymbol()} ${formatDecimal(value, 2)}`;
+                            }
                             if (format === 'percent') return formatDelta(value);
                             if (format === 'int') return formatInt(value);
                             return String(value);
@@ -2692,6 +2687,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- helpers ----------
+    /**
+     * Lays the cards of a metric grid out in symmetric rows: money cards first
+     * and plain cards after, in rows of their own, at most MAX_PER_ROW per row, spread
+     * as evenly as possible, every card the same width and the short rows
+     * centred, so an odd count reads as a pyramid instead of a stray card.
+     */
+    const MAX_PER_ROW = { money: 4, plain: 6 };
+    function arrangeMetrics(box) {
+        const all = Array.from(box.children);
+        const groups = [
+            { kind: 'money', cards: all.filter((card) => card.querySelector('.money3')) },
+            { kind: 'plain', cards: all.filter((card) => !card.querySelector('.money3')) }
+        ].filter((group) => group.cards.length);
+        box.innerHTML = '';
+        groups.forEach(({ kind, cards }) => {
+            const rows = Math.ceil(cards.length / MAX_PER_ROW[kind]);
+            const columns = Math.ceil(cards.length / rows);
+            for (let start = 0; start < cards.length; start += columns) {
+                const row = document.createElement('div');
+                row.className = 'metric-row';
+                row.style.setProperty('--columns', columns);
+                cards.slice(start, start + columns).forEach((card) => row.appendChild(card));
+                box.appendChild(row);
+            }
+        });
+    }
+
     function metricCard({ label, value, valueHtml, variant, hint }) {
         const node = document.createElement('div');
         node.className = 'metric';
@@ -2717,7 +2739,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatCurrency(value) {
         if (value == null || isNaN(value)) return '—';
-        return `${currencySymbol()} ${Number(value).toLocaleString('es-BO', {
+        return `Bs ${Number(value).toLocaleString('es-BO', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         })}`;
@@ -2834,7 +2856,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    paintCurrencyLabels();
     if (state.datasetId) {
         restoreDataset();
     } else {

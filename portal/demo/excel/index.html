@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análisis Comercial — SmartDecisions</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=8d34ccaf11">
-    <link rel="stylesheet" href="excel.css?v=921dd93516">
+    <link rel="stylesheet" href="../styles/demo.css?v=0e0b566906">
+    <link rel="stylesheet" href="excel.css?v=29706edcc4">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
-    <script src="../js/config.js?v=2e8e432ba8"></script>
+    <script src="../js/config.js?v=0b4736ed6f"></script>
     <script src="../js/auth.js?v=16147b32b2" defer></script>
     <script src="../js/api.js?v=5440fa776b" defer></script>
     <script src="../js/ui.js?v=bd318da6b9" defer></script>
@@ -17,7 +17,7 @@
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
     <script src="../js/money.js?v=7b096f5137" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-    <script src="excel.js?v=eacb91583e" defer></script>
+    <script src="excel.js?v=b98e8d91ac" defer></script>
 </head>
 <body>
 
@@ -134,19 +134,10 @@
                     <button type="button" class="btn btn-ghost btn-small" id="periodReset">
                         Todo el período
                     </button>
-                    <label class="period-field">
-                        <span>Moneda</span>
-                        <select id="periodCurrency">
-                            <option value="BOB">Bolivianos</option>
-                            <option value="USD">Dólares (oficial)</option>
-                            <option value="USDT">Dólares (USDT, paralelo)</option>
-                        </select>
-                    </label>
                     <a class="btn btn-ghost btn-small" href="/factores/index.html">
                         Ver el tipo de cambio
                     </a>
                     <span class="period-note" id="periodNote"></span>
-                    <span class="period-note" id="currencyNote" hidden></span>
                 </div>
 
                 <div class="analysis-menu" id="analysisMenu">
@@ -527,7 +518,7 @@
                             <table class="data-table" id="volumeProductEffects">
                                 <thead><tr>
                                     <th>Efecto</th>
-                                    <th class="numeric" data-currency></th>
+                                    <th class="numeric">Bs</th>
                                     <th class="numeric">% del cambio</th>
                                 </tr></thead>
                                 <tbody></tbody>
@@ -544,7 +535,7 @@
                             <table class="data-table" id="volumeClientEffects">
                                 <thead><tr>
                                     <th>Efecto</th>
-                                    <th class="numeric" data-currency></th>
+                                    <th class="numeric">Bs</th>
                                     <th class="numeric">% del cambio</th>
                                 </tr></thead>
                                 <tbody></tbody>
@@ -617,9 +608,9 @@
                                 <th>Cluster</th>
                                 <th>Semáforo</th>
                                 <th class="num">Clientes</th>
-                                <th class="num">Objetivo</th>
-                                <th class="num">Facturado</th>
-                                <th class="num">Deuda</th>
+                                <th class="num" data-money>Objetivo</th>
+                                <th class="num" data-money>Facturado</th>
+                                <th class="num" data-money>Deuda</th>
                                 <th class="num">% Avance</th>
                                 <th class="num">Peso</th>
                             </tr></thead>
@@ -640,12 +631,12 @@
                                 <th>Cliente</th>
                                 <th>Periodo</th>
                                 <th>Cluster</th>
-                                <th class="num">Objetivo</th>
-                                <th class="num">Facturado</th>
+                                <th class="num" data-money>Objetivo</th>
+                                <th class="num" data-money>Facturado</th>
                                 <th class="num">% Fact.</th>
-                                <th class="num">Cobrado</th>
+                                <th class="num" data-money>Cobrado</th>
                                 <th class="num">% Cobr.</th>
-                                <th class="num">Deuda</th>
+                                <th class="num" data-money>Deuda</th>
                                 <th class="num">Puntos</th>
                             </tr></thead>
                             <tbody></tbody>
@@ -673,7 +664,10 @@
 
                 <div class="chart-grid">
                     <div class="chart-card">
-                        <h3 class="chart-title">Antigüedad del saldo</h3>
+                        <div class="chart-head">
+                            <h3 class="chart-title">Antigüedad del saldo</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
                         <p class="chart-hint">
                             Cuánto se debe en cada tramo de atraso. «Por vencer» todavía
                             no venció: no es mora.
@@ -681,7 +675,10 @@
                         <canvas id="chartAging"></canvas>
                     </div>
                     <div class="chart-card">
-                        <h3 class="chart-title">Recuperable vs incobrable</h3>
+                        <div class="chart-head">
+                            <h3 class="chart-title">Recuperable vs incobrable</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
                         <p class="chart-hint">
                             Se aplica la pérdida esperada de cada tramo. Es un parámetro
                             de tu política, no un hecho observado.
@@ -762,23 +759,15 @@
 
                 <div class="chart-grid">
                     <div class="chart-card">
-                        <h3 class="chart-title">Cobros pendientes por fecha</h3>
+                        <div class="chart-head">
+                            <h3 class="chart-title">Cobros pendientes por fecha</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
                         <p class="chart-hint">
                             Proyección de caja de lo que falta cobrar. Lo vencido va
                             aparte: es plata que ya debería estar cobrada.
                         </p>
                         <canvas id="chartDueWindows"></canvas>
-                        <div class="table-wrapper">
-                            <table class="data-table" id="dueDatesTable">
-                                <thead><tr>
-                                    <th>Vence</th>
-                                    <th class="numeric" data-money>Monto</th>
-                                    <th class="numeric">Facturas</th>
-                                    <th class="numeric">Clientes</th>
-                                </tr></thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
                     </div>
                     <div class="chart-card" id="curveCard">
                         <h3 class="chart-title">Curva de cobro</h3>
@@ -787,6 +776,21 @@
                             30, 60 y 90 días. Un plazo que todavía no transcurrió va vacío.
                         </p>
                         <canvas id="chartCurve"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Vencimientos por fecha</h3>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="dueDatesTable">
+                            <thead><tr>
+                                <th>Vence</th>
+                                <th class="numeric" data-money>Monto</th>
+                                <th class="numeric">Facturas</th>
+                                <th class="numeric">Clientes</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -843,7 +847,10 @@
                         <canvas id="chartStockStatus"></canvas>
                     </div>
                     <div class="chart-card">
-                        <h3 class="chart-title">Dónde está el capital</h3>
+                        <div class="chart-head">
+                            <h3 class="chart-title">Dónde está el capital</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
                         <p class="chart-hint">
                             Valor del inventario por situación. El exceso es plata quieta
                             en productos que no rotan.
@@ -889,7 +896,7 @@
                                 <th class="numeric">Existencia</th>
                                 <th class="numeric">Cobertura</th>
                                 <th class="numeric">Sobran</th>
-                                <th class="numeric">Capital quieto</th>
+                                <th class="numeric" data-money>Capital quieto</th>
                                 <th>Situación</th>
                             </tr></thead>
                             <tbody></tbody>
@@ -1149,7 +1156,7 @@
                                 <th>#</th>
                                 <th>Cliente</th><th>Segmento</th>
                                 <th class="numeric">Compras</th>
-                                <th class="numeric" data-currency="Venta (%s)"></th>
+                                <th class="numeric">Venta (Bs)</th>
                                 <th class="numeric">Ticket promedio</th>
                                 <th class="numeric">% de la venta</th>
                             </tr></thead>
