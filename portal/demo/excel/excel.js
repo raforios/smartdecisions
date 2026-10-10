@@ -858,7 +858,8 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAging(payload.aging || []);
             renderDueCalendar(payload.due_windows || [], payload.due_dates || []);
         },
-        stock: (payload) => renderStockCharts(payload.products || [])
+        stock: (payload) => renderStockCharts(payload.products || []),
+        summary: (payload) => renderSummaryCharts(payload)
     };
 
     function mountChartCurrency() {
@@ -1412,6 +1413,12 @@ document.addEventListener('DOMContentLoaded', () => {
         pager.querySelector('[data-pager="next"]').addEventListener('click', () => goTo(page + 1));
     }
 
+    /** A card whose amount came as {bob, usd, usdt}. */
+    function isMoney3(card) {
+        return card.format === 'money3' ||
+            (card.format === 'money' && card.value != null && typeof card.value === 'object');
+    }
+
     function fillKpis(containerId, cards, variantFor) {
         const box = qs('#' + containerId);
         box.innerHTML = '';
@@ -1419,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
             label: kpiLabel(card),
             value: formatKpi(card),
             // Money travels as {bob, usd, usdt}: the three side by side.
-            valueHtml: card.format === 'money3' ? window.SD_MONEY.card(card.value) : '',
+            valueHtml: isMoney3(card) ? window.SD_MONEY.card(card.value) : '',
             hint: kpiHint(card),
             variant: variantFor ? variantFor(card) : ''
         })));
@@ -1446,47 +1453,10 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function renderCommercialSummary(data, view) {
         // KPIs
-        const kpiBox = qs('#dashboardKpis');
-        kpiBox.innerHTML = '';
-        (data.kpis || []).forEach((card) => kpiBox.appendChild(metricCard({
-            label: kpiLabel(card), value: formatKpi(card), hint: kpiHint(card),
-            variant: card.metric_code === 'TOTAL_SALES' ? 'success' : ''
-        })));
-        arrangeMetrics(kpiBox);
+        fillKpis('dashboardKpis', data.kpis, (card) =>
+            card.metric_code === 'TOTAL_SALES' ? 'success' : '');
 
-        // Monthly trend (line)
-        const trend = data.monthly_trend || [];
-        makeChart('chartTrend', {
-            type: 'line',
-            data: {
-                labels: trend.map((p) => p.month),
-                datasets: [{
-                    label: `Venta (Bs)`, data: trend.map((p) => p.amount),
-                    borderColor: BRAND[0], backgroundColor: 'rgba(13,30,76,0.1)',
-                    fill: true, tension: 0.3
-                }]
-            },
-            options: chartOptions('money')
-        });
-
-        // Category distribution (doughnut)
-        const cat = data.by_category || [];
-        makeChart('chartCategoria', {
-            type: 'doughnut',
-            data: {
-                labels: cat.map((c) => dimensionLabel(c.label)),
-                datasets: [{ data: cat.map((c) => c.amount), backgroundColor: BRAND }]
-            },
-            options: { responsive: true, plugins: { legend: { position: 'right' } } }
-        });
-
-        // Top products / top clients / sellers (horizontal bars)
-        horizontalBar('chartTopProductos', data.top_products, `Venta (Bs)`);
-        horizontalBar('chartTopClientes', data.best_clients, `Venta (Bs)`);
-        horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), `Venta (Bs)`);
-
-        // Bottom products: same bars as the top ten, so the two read alike.
-        horizontalBar('chartBottomProductos', data.bottom_products, `Venta (Bs)`);
+        renderSummaryCharts(data);
 
         showPeriodBar(data.period);
         renderMargin(data.margin);
@@ -1496,6 +1466,71 @@ document.addEventListener('DOMContentLoaded', () => {
         renderEfficiency(data.efficiency);
 
         showAnalysisView(view || 'stepDashboard');
+    }
+
+    /** Every chart of the summary that draws money, in the chart currency. */
+    function renderSummaryCharts(data) {
+        const trend = data.monthly_trend || [];
+        makeChart('chartTrend', {
+            type: 'line',
+            data: {
+                labels: trend.map((p) => p.month),
+                datasets: [{
+                    label: `Venta (${chartSymbol()})`, data: trend.map((p) => chartAmount(p.amount)),
+                    borderColor: BRAND[0], backgroundColor: 'rgba(13,30,76,0.1)',
+                    fill: true, tension: 0.3
+                }]
+            },
+            options: chartOptions('chartMoney')
+        });
+
+        const cat = data.by_category || [];
+        makeChart('chartCategoria', {
+            type: 'doughnut',
+            data: {
+                labels: cat.map((c) => dimensionLabel(c.label)),
+                datasets: [{ data: cat.map((c) => chartAmount(c.amount)), backgroundColor: BRAND }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'right' } } }
+        });
+
+        const sales = `Venta (${chartSymbol()})`;
+        horizontalBar('chartTopProductos', data.top_products, sales);
+        horizontalBar('chartTopClientes', data.best_clients, sales);
+        horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), sales);
+        // Bottom products: same bars as the top ten, so the two read alike.
+        horizontalBar('chartBottomProductos', data.bottom_products, sales);
+
+        if (data.margin && data.margin.available) {
+            renderMarginChart(data.margin.by_category || []);
+        }
+        renderAbcChart((data.volume_source && data.volume_source.abc_summary) || []);
+    }
+
+    function renderMarginChart(categories) {
+        makeChart('chartMargenCategoria', {
+            type: 'bar',
+            data: {
+                labels: categories.map((row) => dimensionLabel(row.label)),
+                datasets: [
+                    {
+                        label: `Venta (${chartSymbol()})`,
+                        data: categories.map((row) => chartAmount(row.amount)),
+                        backgroundColor: BRAND[5]
+                    },
+                    {
+                        label: `Margen (${chartSymbol()})`,
+                        data: categories.map((row) => chartAmount(row.margin)),
+                        backgroundColor: BRAND[3]
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: { x: { stacked: false } }
+            }
+        });
     }
 
     // ---------- Profitability ----------
@@ -1513,40 +1548,18 @@ document.addEventListener('DOMContentLoaded', () => {
             card.metric_code === 'GROSS_MARGIN' ? 'success' : '');
 
         const categories = margen.by_category || [];
-        makeChart('chartMargenCategoria', {
-            type: 'bar',
-            data: {
-                labels: categories.map((row) => dimensionLabel(row.label)),
-                datasets: [
-                    {
-                        label: `Venta (Bs)`, data: categories.map((row) => row.amount),
-                        backgroundColor: BRAND[5]
-                    },
-                    {
-                        label: `Margen (Bs)`, data: categories.map((row) => row.margin),
-                        backgroundColor: BRAND[3]
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { position: 'bottom' } },
-                scales: { x: { stacked: false } }
-            }
-        });
-
         fillTable('marginCategoryTable', categories, (row) =>
             `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
-            `<td class="numeric hero">${formatCurrency(row.margin)}</td>` +
+            window.SD_MONEY.cells(row.amount) +
+            window.SD_MONEY.cells(row.margin, 2, 'hero') +
             `<td class="numeric">${formatDecimal(row.margin_percentage, 1)}%</td>`);
 
         const alerts = margen.alerts || [];
         qs('#marginAlerts').hidden = alerts.length === 0;
         fillTable('marginAlertTable', alerts, (row) =>
             `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
-            `<td class="numeric delta-down">${formatCurrency(row.margin)}</td>` +
+            window.SD_MONEY.cells(row.amount) +
+            window.SD_MONEY.cells(row.margin, 2, 'delta-down') +
             `<td>${escapeHtml(MARGIN_ALERT_REASONS[row.reason_code] || '')}</td>`);
     }
 
@@ -1628,7 +1641,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fillTable(tableId, rows, (row) =>
             `<td>${escapeHtml(effectLabel(row.effect_code))}` +
             `<span class="cell-note">${escapeHtml(effectHint(row.effect_code))}</span></td>` +
-            `<td class="numeric ${deltaClass(row.amount)}">${formatCurrency(row.amount)}</td>` +
+            window.SD_MONEY.cells(row.amount, 2, deltaClass(window.SD_MONEY.pick(row.amount, 'BOB'))) +
             `<td class="numeric">${formatDelta(row.percentage)}</td>`);
     }
 
@@ -1696,13 +1709,50 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        const abc = volumen.abc_summary || [];
+        fillTable('volumeProductsTable', products, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            window.SD_MONEY.cells(row.amount) +
+            `<td class="numeric">${formatDecimal(row.share, 2)}%</td>` +
+            `<td class="numeric">${formatDecimal(row.cumulative, 2)}%</td>` +
+            `<td><span class="badge badge-${row.abc_class.toLowerCase()}">` +
+            `${row.abc_class}</span></td>` +
+            `<td class="numeric">${formatInt(row.clients)}</td>`);
+
+        fillTable('volumeClientsTable', volumen.clients, (row) =>
+            `<td>${escapeHtml(row.label)}</td>` +
+            window.SD_MONEY.cells(row.amount) +
+            `<td class="numeric">${formatDecimal(row.share, 2)}%</td>` +
+            `<td>${escapeHtml(row.anchor_product || '—')}</td>` +
+            `<td class="numeric">${formatDecimal(row.anchor_share, 1)}%</td>`);
+
+        const matrix = volumen.matrix || [];
+        qs('#volumeMatrixCard').hidden = matrix.length === 0;
+        fillTable('volumeMatrixTable', matrix, (row) =>
+            `<td>${escapeHtml(row.client)}</td>` +
+            `<td>${escapeHtml(row.product)}</td>` +
+            window.SD_MONEY.cells(row.amount) +
+            `<td class="numeric">${formatDecimal(row.client_share, 1)}%</td>` +
+            `<td class="numeric">${formatDecimal(row.product_share, 1)}%</td>`);
+
+        const mix = volumen.category_mix || [];
+        qs('#volumeMixCard').hidden = mix.length === 0;
+        fillTable('volumeMixTable', mix, (row) =>
+            `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
+            `<td class="numeric">${formatDecimal(row.current_share, 1)}%</td>` +
+            `<td class="numeric ${deltaClass(row.share_change)}">` +
+            `${formatDelta(row.share_change, ' pp')}</td>` +
+            window.SD_MONEY.cells(row.current_amount));
+
+        renderVolumeDecomposition(volumen.decomposition);
+    }
+
+    function renderAbcChart(abc) {
         makeChart('chartVolumeAbc', {
             type: 'doughnut',
             data: {
                 labels: abc.map((row) => `Clase ${row.abc_class}`),
                 datasets: [{
-                    data: abc.map((row) => row.amount),
+                    data: abc.map((row) => chartAmount(row.amount)),
                     backgroundColor: [BRAND[3], BRAND[2], BRAND[5]]
                 }]
             },
@@ -1723,42 +1773,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-
-        fillTable('volumeProductsTable', products, (row) =>
-            `<td>${escapeHtml(row.label)}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
-            `<td class="numeric">${formatDecimal(row.share, 2)}%</td>` +
-            `<td class="numeric">${formatDecimal(row.cumulative, 2)}%</td>` +
-            `<td><span class="badge badge-${row.abc_class.toLowerCase()}">` +
-            `${row.abc_class}</span></td>` +
-            `<td class="numeric">${formatInt(row.clients)}</td>`);
-
-        fillTable('volumeClientsTable', volumen.clients, (row) =>
-            `<td>${escapeHtml(row.label)}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
-            `<td class="numeric">${formatDecimal(row.share, 2)}%</td>` +
-            `<td>${escapeHtml(row.anchor_product || '—')}</td>` +
-            `<td class="numeric">${formatDecimal(row.anchor_share, 1)}%</td>`);
-
-        const matrix = volumen.matrix || [];
-        qs('#volumeMatrixCard').hidden = matrix.length === 0;
-        fillTable('volumeMatrixTable', matrix, (row) =>
-            `<td>${escapeHtml(row.client)}</td>` +
-            `<td>${escapeHtml(row.product)}</td>` +
-            `<td class="numeric">${formatCurrency(row.amount)}</td>` +
-            `<td class="numeric">${formatDecimal(row.client_share, 1)}%</td>` +
-            `<td class="numeric">${formatDecimal(row.product_share, 1)}%</td>`);
-
-        const mix = volumen.category_mix || [];
-        qs('#volumeMixCard').hidden = mix.length === 0;
-        fillTable('volumeMixTable', mix, (row) =>
-            `<td>${escapeHtml(dimensionLabel(row.label))}</td>` +
-            `<td class="numeric">${formatDecimal(row.current_share, 1)}%</td>` +
-            `<td class="numeric ${deltaClass(row.share_change)}">` +
-            `${formatDelta(row.share_change, ' pp')}</td>` +
-            `<td class="numeric">${formatCurrency(row.current_amount)}</td>`);
-
-        renderVolumeDecomposition(volumen.decomposition);
     }
 
     function renderVolumeDecomposition(decomposition) {
@@ -1772,10 +1786,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         qs('#volumeDecompositionNote').textContent =
             `${formatDateMonth(decomposition.current_month)} cerró en ` +
-            `${formatCurrency(decomposition.current_amount)} contra ` +
-            `${formatCurrency(decomposition.previous_amount)} de ` +
+            `${window.SD_MONEY.inline(decomposition.current_amount)} contra ` +
+            `${window.SD_MONEY.inline(decomposition.previous_amount)} de ` +
             `${formatDateMonth(decomposition.previous_month)}: ` +
-            `${formatCurrency(decomposition.change)} ` +
+            `${window.SD_MONEY.inline(decomposition.change)} ` +
             `(${formatDelta(decomposition.change_percentage)}). Las dos lecturas ` +
             'de abajo explican ese mismo cambio.';
 
@@ -1822,17 +1836,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         fillTable('sellerTable', eficiencia.sellers, (row) =>
             `<td>${escapeHtml(row.seller)}</td>` +
-            `<td class="numeric hero">${formatCurrency(row.amount)}</td>` +
+            window.SD_MONEY.cells(row.amount, 2, 'hero') +
             `<td class="numeric">${formatInt(row.orders)}</td>` +
             `<td class="numeric">${formatInt(row.clients)}</td>` +
-            `<td class="numeric">${formatCurrency(row.average_ticket)}</td>`);
+            window.SD_MONEY.cells(row.average_ticket));
 
         const prices = eficiencia.prices || [];
         qs('#priceCard').hidden = prices.length === 0;
         fillTable('priceTable', prices, (row) =>
             `<td>${escapeHtml(row.product)}</td>` +
-            `<td class="numeric">${formatCurrency(row.previous_price)}</td>` +
-            `<td class="numeric">${formatCurrency(row.current_price)}</td>` +
+            window.SD_MONEY.cells(row.previous_price) +
+            window.SD_MONEY.cells(row.current_price) +
             `<td class="numeric ${deltaClass(row.change)}">${formatDelta(row.change)}</td>`);
     }
 
@@ -2613,12 +2627,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function horizontalBar(canvasId, rows, label, valueKey = 'amount') {
         const items = rows || [];
-        const base = chartOptions('money');
+        const base = chartOptions('chartMoney');
         makeChart(canvasId, {
             type: 'bar',
             data: {
                 labels: items.map((r) => shortLabel(r.label)),
-                datasets: [{ label, data: items.map((r) => r[valueKey]), backgroundColor: BRAND[1] }]
+                datasets: [{ label, data: items.map((r) => chartAmount(r[valueKey])),
+                    backgroundColor: BRAND[1] }]
             },
             options: {
                 ...base,

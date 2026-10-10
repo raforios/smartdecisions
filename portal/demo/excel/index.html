@@ -222,32 +222,52 @@
             <p class="page-subtitle">
                 Panorama de ventas del periodo cargado. Pasa el cursor sobre los gráficos
                 para ver los valores exactos.
+                Montos en bolivianos; en USD y USDT, las ventas de cada mes al tipo de
+                cambio del cierre de ese mes.
             </p>
             <div class="metric-grid" id="dashboardKpis"></div>
 
             <div class="chart-grid">
                 <div class="chart-card">
-                    <h3 class="chart-title">Venta por mes</h3>
+                    <div class="chart-head">
+                        <h3 class="chart-title">Venta por mes</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
                     <canvas id="chartTrend"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3 class="chart-title">Venta por categoría</h3>
+                    <div class="chart-head">
+                        <h3 class="chart-title">Venta por categoría</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
                     <canvas id="chartCategoria"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3 class="chart-title">Top 10 productos más vendidos</h3>
+                    <div class="chart-head">
+                        <h3 class="chart-title">Top 10 productos más vendidos</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
                     <canvas id="chartTopProductos"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3 class="chart-title">Top 10 mejores clientes</h3>
+                    <div class="chart-head">
+                        <h3 class="chart-title">Top 10 mejores clientes</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
                     <canvas id="chartTopClientes"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3 class="chart-title">Venta por vendedor</h3>
+                    <div class="chart-head">
+                        <h3 class="chart-title">Venta por vendedor</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
                     <canvas id="chartVendedor"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3 class="chart-title">Productos menos vendidos</h3>
+                    <div class="chart-head">
+                        <h3 class="chart-title">Productos menos vendidos</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
                     <canvas id="chartBottomProductos"></canvas>
                 </div>
             </div>
@@ -262,7 +282,10 @@
                 <div class="metric-grid" id="marginKpis"></div>
                 <div class="split-layout">
                     <div class="chart-card">
-                        <h3 class="chart-title">Margen por categoría</h3>
+                        <div class="chart-head">
+                            <h3 class="chart-title">Margen por categoría</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
                         <canvas id="chartMargenCategoria"></canvas>
                     </div>
                     <div class="chart-card">
@@ -271,8 +294,8 @@
                             <table class="data-table" id="marginCategoryTable">
                                 <thead><tr>
                                     <th>Categoría</th>
-                                    <th class="numeric">Venta</th>
-                                    <th class="numeric">Margen</th>
+                                    <th class="numeric" data-money>Venta</th>
+                                    <th class="numeric" data-money>Margen</th>
                                     <th class="numeric">%</th>
                                 </tr></thead>
                                 <tbody></tbody>
@@ -286,8 +309,8 @@
                         <table class="data-table" id="marginAlertTable">
                             <thead><tr>
                                 <th>Producto</th>
-                                <th class="numeric">Venta</th>
-                                <th class="numeric">Margen</th>
+                                <th class="numeric" data-money>Venta</th>
+                                <th class="numeric" data-money>Margen</th>
                                 <th>Motivo</th>
                             </tr></thead>
                             <tbody></tbody>
@@ -345,10 +368,10 @@
                             <table class="data-table" id="sellerTable">
                                 <thead><tr>
                                     <th>Vendedor</th>
-                                    <th class="numeric">Venta</th>
+                                    <th class="numeric" data-money>Venta</th>
                                     <th class="numeric">Pedidos</th>
                                     <th class="numeric">Clientes</th>
-                                    <th class="numeric">Ticket</th>
+                                    <th class="numeric" data-money>Ticket</th>
                                 </tr></thead>
                                 <tbody></tbody>
                             </table>
@@ -365,8 +388,8 @@
                             <table class="data-table" id="priceTable">
                                 <thead><tr>
                                     <th>Producto</th>
-                                    <th class="numeric">Antes</th>
-                                    <th class="numeric">Ahora</th>
+                                    <th class="numeric" data-money>Antes</th>
+                                    <th class="numeric" data-money>Ahora</th>
                                     <th class="numeric">Cambio</th>
                                 </tr></thead>
                                 <tbody></tbody>
@@ -393,6 +416,8 @@
             <p class="page-subtitle">
                 De qué productos y de qué clientes sale la venta, qué producto
                 sostiene a cada cliente, y de dónde vino el movimiento del último mes.
+                Montos en bolivianos; en USD y USDT, las ventas de cada mes al tipo de
+                cambio del cierre de ese mes.
             </p>
             <!-- The empty note exists so the view is never blank: a screen with
                  nothing is exactly what broke a demo. -->
@@ -415,7 +440,10 @@
                     <canvas id="chartVolumePareto"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3 class="chart-title">Clases ABC del catálogo</h3>
+                    <div class="chart-head">
+                        <h3 class="chart-title">Clases ABC del catálogo</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
                     <p class="chart-hint">
                         A es el primer 80% de la venta, B el siguiente 15%, C la cola.
                     </p>
@@ -434,7 +462,7 @@
                     <table class="data-table" id="volumeProductsTable">
                         <thead><tr>
                             <th>Producto</th>
-                            <th class="numeric">Venta</th>
+                            <th class="numeric" data-money>Venta</th>
                             <th class="numeric">% venta</th>
                             <th class="numeric">Acumulado</th>
                             <th>Clase</th>
@@ -457,7 +485,7 @@
                         <table class="data-table" id="volumeClientsTable">
                             <thead><tr>
                                 <th>Cliente</th>
-                                <th class="numeric">Venta</th>
+                                <th class="numeric" data-money>Venta</th>
                                 <th class="numeric">% venta</th>
                                 <th>Producto ancla</th>
                                 <th class="numeric">% del cliente</th>
@@ -475,7 +503,7 @@
                                 <th>Categoría</th>
                                 <th class="numeric">Participación</th>
                                 <th class="numeric">Cambio</th>
-                                <th class="numeric">Venta</th>
+                                <th class="numeric" data-money>Venta</th>
                             </tr></thead>
                             <tbody></tbody>
                         </table>
@@ -494,7 +522,7 @@
                         <thead><tr>
                             <th>Cliente</th>
                             <th>Producto</th>
-                            <th class="numeric">Venta</th>
+                            <th class="numeric" data-money>Venta</th>
                             <th class="numeric">% del cliente</th>
                             <th class="numeric">% del producto</th>
                         </tr></thead>
@@ -518,7 +546,7 @@
                             <table class="data-table" id="volumeProductEffects">
                                 <thead><tr>
                                     <th>Efecto</th>
-                                    <th class="numeric">Bs</th>
+                                    <th class="numeric" data-money>Monto</th>
                                     <th class="numeric">% del cambio</th>
                                 </tr></thead>
                                 <tbody></tbody>
@@ -535,7 +563,7 @@
                             <table class="data-table" id="volumeClientEffects">
                                 <thead><tr>
                                     <th>Efecto</th>
-                                    <th class="numeric">Bs</th>
+                                    <th class="numeric" data-money>Monto</th>
                                     <th class="numeric">% del cambio</th>
                                 </tr></thead>
                                 <tbody></tbody>

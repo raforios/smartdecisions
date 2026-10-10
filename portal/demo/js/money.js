@@ -23,10 +23,11 @@
         });
     }
 
-    /** The three cells of one amount in a table row. */
-    function cells(money, decimals = 2) {
+    /** The three cells of one amount in a table row, with an optional class. */
+    function cells(money, decimals = 2, extraClass = '') {
+        const cls = `numeric money-cell${extraClass ? ` ${extraClass}` : ''}`;
         return CURRENCIES.map(({ key }) =>
-            `<td class="numeric money-cell">${format(money && money[key], decimals)}</td>`
+            `<td class="${cls}">${format(money && money[key], decimals)}</td>`
         ).join('');
     }
 
