@@ -6,7 +6,7 @@
 
 from pydantic import BaseModel, Field
 
-from schemas.analytics import PeriodInfo
+from schemas.analytics import Amount, PeriodInfo
 
 
 class MonthlyFx(BaseModel):
@@ -37,11 +37,17 @@ class FxTotals(BaseModel):
 
 class CategoryFx(BaseModel):
     '''
-        The same comparison for one category.
+        The same comparison for one category, in amounts and percentages:
+        a percentage alone does not say how much money the rate takes.
     '''
     category: str
-    revenue: float
+    revenue: Amount
     usd_cost_share: float = Field(..., ge = 0, le = 1)
+    historical_margin: Amount = Field(..., description = 'Revenue minus what was paid.')
+    replacement_margin: Amount = Field(
+        ..., description = 'Revenue minus what restocking the same units costs today.')
+    margin_lost: Amount = Field(
+        ..., description = 'Historical minus replacement margin: what the rate takes.')
     historical_margin_pct: float | None = None
     replacement_margin_pct: float | None = None
 

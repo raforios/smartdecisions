@@ -785,5 +785,6 @@ async def fx_effect_controller(
         ))
     )
     block.rate_is_hypothetical = hypothetical is not None
-    return FxEffectResponse(dataset_id = dataset_id, source = source, period = period,
-                            **block.model_dump())
+    # The amounts by category are a general view: at today's rate.
+    return _at_todays_rate(FxEffectResponse(dataset_id = dataset_id, source = source,
+                                            period = period, **block.model_dump()), params)

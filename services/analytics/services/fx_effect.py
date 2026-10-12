@@ -186,6 +186,9 @@ def _by_category(frame: pd.DataFrame) -> list[CategoryFx]:
     return [CategoryFx(
         category = str(row[CATEGORY]), revenue = money(row['revenue']),
         usd_cost_share = float(row['share']),
+        historical_margin = money(row['revenue'] - row['historical']),
+        replacement_margin = money(row['revenue'] - row['replacement']),
+        margin_lost = money(row['replacement'] - row['historical']),
         historical_margin_pct = _percent(row['revenue'] - row['historical'], row['revenue']),
         replacement_margin_pct = _percent(row['revenue'] - row['replacement'], row['revenue'])
     ) for _, row in grouped.iterrows()]

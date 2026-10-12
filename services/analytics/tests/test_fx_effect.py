@@ -126,3 +126,18 @@ def test_purchasing_power_compares_each_day_with_today():
     assert power.usd_at_own_day == 100.0
     assert power.usd_at_today == 87.0
     assert power.difference == -13.0
+
+
+def test_each_category_says_how_much_margin_the_rate_takes():
+    '''
+        Rafael, 12-oct, could not read the category table: two percentages say
+        nothing of money. Each category now carries the amounts: Bs 70 sold at
+        cost 50 is Bs 20 of margin; replacing at 8.00 costs 57.47, so the rate
+        takes Bs 7.47 of it.
+    '''
+    block = _build([_sale('2026-07-10', 'LECHE', 1, (70, 50))], [6.96], 8.00)
+    row = block.by_category[0]
+    assert row.revenue == 70.0
+    assert row.historical_margin == 20.0
+    assert round(row.replacement_margin, 2) == 12.53
+    assert round(row.margin_lost, 2) == 7.47

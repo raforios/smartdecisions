@@ -731,10 +731,10 @@ def test_the_summary_of_several_months_reads_at_todays_rate(
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
     '''
-        Rafael, 10-oct: «los reportes iniciales que son la suma de todo es a
-        hoy». The bolivianos of every month are added and the total is read at
-        today's rate, not month by month; every ranking keeps the order the
-        bolivianos give.
+        Rafael's rule 9 (SMARTDECISIONS.md): the general report is the sum of
+        everything at today's rate. The bolivianos of every month are added
+        and the total is read at today's rate, not month by month; every
+        ranking keeps the order the bolivianos give.
     '''
     _rising_rate(monkeypatch)
     sales = _sales_frame()
@@ -994,5 +994,7 @@ def test_the_callers_token_travels_from_the_header() -> None:
     '''`_caller_token`: the endpoints without query options still ask QUOTES as the caller.'''
     request = Mock(headers = {'Authorization': 'Bearer t'})
 
+    # The helper is private on purpose; the test pins its one behavior.
+    # pylint: disable=protected-access
     assert controllers._caller_token(request) == {'auth_token': 'Bearer t'}
-    assert controllers._caller_token(None) == {} # pylint: disable=protected-access
+    assert not controllers._caller_token(None)
