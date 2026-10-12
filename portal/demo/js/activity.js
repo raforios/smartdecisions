@@ -33,6 +33,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * The expected value arrives as Money {bob, usd, usdt}: every amount is
+     * shown in the three currencies at once, at today's rate.
+     */
+    function expectedValue(money) {
+        if (money == null) return '—';
+        if (typeof money === 'number') return `Bs ${number(Math.round(money))}`;
+        return [['Bs', money.bob], ['USD', money.usd], ['USDT', money.usdt]]
+            .filter(([, value]) => value != null)
+            .map(([label, value]) => `${label} ${number(Math.round(value))}`)
+            .join(' · ');
+    }
+
+    /**
      * Renders a timestamp as "hace N días" — for a history panel, how long ago
      * is the question, not the exact instant.
      */
@@ -130,10 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ['Oportunidades', number(lastRun.total_opportunities)],
                     ['Puntos de venta con oportunidad',
                      number(lastRun.total_pos_with_opportunities)],
-                    ['Valor esperado',
-                     lastRun.total_expected_value === null
-                         ? '—'
-                         : `Bs ${number(Math.round(lastRun.total_expected_value))}`]
+                    ['Valor esperado', expectedValue(lastRun.total_expected_value)]
                 ],
                 '<a class="tile-action" href="excel/index.html">Abrir oportunidades →</a>'
             ));
