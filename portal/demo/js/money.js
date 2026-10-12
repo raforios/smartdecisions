@@ -54,6 +54,29 @@
         return result;
     }
 
+    /**
+     * The sum of two amounts, currency by currency. A plain number counts as
+     * bolivianos, so a total starts from 0 and adds Money as it comes.
+     */
+    function add(left, right) {
+        const asMoney = (value) => (value != null && typeof value === 'object')
+            ? value : { bob: Number(value) || 0, usd: null, usdt: null };
+        const a = asMoney(left);
+        const b = asMoney(right);
+        const result = {};
+        CURRENCIES.forEach(({ key }) => {
+            result[key] = (a[key] == null && b[key] == null)
+                ? null : (Number(a[key]) || 0) + (Number(b[key]) || 0);
+        });
+        return result;
+    }
+
+    /** The bolivianos of an amount: what every ranking and order is decided by. */
+    function bob(money) {
+        if (money == null) return 0;
+        return typeof money === 'object' ? (Number(money.bob) || 0) : (Number(money) || 0);
+    }
+
     /** What a chart draws: the amount in the currency the selector names. */
     function pick(money, currency) {
         if (money == null || typeof money !== 'object') return money;
@@ -99,5 +122,5 @@
         });
     }
 
-    window.SD_MONEY = { cells, card, inline, minus, pick, ratesNote, expandHeaders };
+    window.SD_MONEY = { cells, card, inline, minus, add, bob, pick, ratesNote, expandHeaders };
 })();

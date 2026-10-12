@@ -823,6 +823,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ---------- Reporting window ----------
+    // Today's published rates, asked once to QUOTES, which owns them: the
+    // legend under the period bar says what every total in dollars is at.
+    let todayRates = null;
+
+    async function loadTodayRates() {
+        const today = new Date();
+        const start = new Date(today.getTime() - 14 * 86400000);
+        const iso = (day) => day.toISOString().slice(0, 10);
+        const latest = async (currency) => {
+            const answer = await window.SD_API.get(
+                `${window.SD_CONFIG.QUOTES_URL}/v1/quotes/exchange-rates`,
+                { currency, start: iso(start), end: iso(today) });
+            const rates = (answer && answer.rates) || [];
+            return rates.length ? rates[rates.length - 1].rate : null;
+        };
+        try {
+            const [usd, usdt] = await Promise.all([latest('USD'), latest('USDT')]);
+            todayRates = { usd, usdt: usdt || usd };
+        } catch (error) {
+            todayRates = null;
+        }
+        renderRatesLegend();
+    }
+
+    function renderRatesLegend() {
+        const legend = qs('#ratesLegend');
+        if (!legend) return;
+        const from = state.period.from || '';
+        const to = state.period.to || '';
+        if (from && to && from.slice(0, 7) === to.slice(0, 7)) {
+            legend.textContent = `Mes elegido (${formatDateMonth(from.slice(0, 7))}): ` +
+                'los montos en USD y USDT están al tipo de cambio del último día de ese mes.';
+            return;
+        }
+        const rates = todayRates
+            ? ` (oficial Bs ${formatDecimal(todayRates.usd, 2)} · ` +
+              `USDT Bs ${formatDecimal(todayRates.usdt, 2)})` : '';
+        legend.textContent = `Totales en USD y USDT al tipo de cambio de hoy${rates}. ` +
+            'Los gráficos por mes, al tipo del último día de cada mes.';
+    }
+    loadTodayRates();
+
     // The bar stays hidden until an analysis reports which dates the file
     // actually covers: offering a date picker before knowing the range invites
     // the user to select a window with no sales in it.
@@ -840,6 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
         from.value = state.period.from || '';
         to.value = state.period.to || '';
         bar.hidden = false;
+        renderRatesLegend();
 
         qs('#periodNote').textContent = periodo.filtered
             ? `Mostrando ${formatDateRange(periodo.from_date, periodo.to_date)} · ` +
@@ -859,7 +902,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderDueCalendar(payload.due_windows || [], payload.due_dates || []);
         },
         stock: (payload) => renderStockCharts(payload.products || []),
-        summary: (payload) => renderSummaryCharts(payload)
+        summary: (payload) => renderSummaryCharts(payload),
+        forecast: (payload) => renderForecast(payload.data, payload.compare),
+        segmentation: (payload) => renderSegmentation(payload)
     };
 
     function mountChartCurrency() {
@@ -876,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .forEach((other) => { other.value = chartCurrency; });
                 const kind = VIEW_TO_KIND[sessionStorage.getItem(VIEW_KEY)];
                 const cached = cachedResult(kind);
-                if (cached && cached.payload.available && CHART_REDRAW[kind]) {
+                if (cached && cached.payload.available !== false && CHART_REDRAW[kind]) {
                     CHART_REDRAW[kind](cached.payload);
                 }
             });
@@ -933,7 +978,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSegmentation(data) {
         const tiers = data.tiers || [];
         segmentClients = data.clients || [];
-        segmentTotal = tiers.reduce((sum, tier) => sum + (Number(tier.amount) || 0), 0);
+        // Shares are decided in bolivianos: the rate never reorders clients.
+        segmentTotal = tiers.reduce((sum, tier) => sum + window.SD_MONEY.bob(tier.amount), 0);
         segmentAllClients = data.total_clients || segmentClients.length;
 
         // KPI per tier: client count + sales share.
@@ -956,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 labels: tiers.map(
                     (t) => `${tierLabel(t.tier)} (${formatDecimal(t.percentage, 1)}%)`
                 ),
-                datasets: [{ data: tiers.map((t) => t.amount),
+                datasets: [{ data: tiers.map((t) => chartAmount(t.amount)),
                     backgroundColor: tiers.map((t) => TIER_COLOR[t.tier] || BRAND[0]) }]
             },
             options: { responsive: true, plugins: { legend: { position: 'right' } } }
@@ -978,16 +1024,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = filteredSegmentClients();
         fillTable('segmentTable', rows, (client, position) => {
             const purchases = Number(client.purchases) || 0;
-            const amount = Number(client.amount) || 0;
-            const ticket = purchases ? amount / purchases : 0;
-            const share = segmentTotal ? (amount / segmentTotal) * 100 : 0;
+            const amount = client.amount;
+            const ticket = {};
+            ['bob', 'usd', 'usdt'].forEach((key) => {
+                const value = amount && typeof amount === 'object' ? amount[key] : amount;
+                ticket[key] = purchases && value != null ? value / purchases : null;
+            });
+            const share = segmentTotal
+                ? (window.SD_MONEY.bob(amount) / segmentTotal) * 100 : 0;
             return `<td class="rank-cell">${position + 1}</td>` +
                 `<td>${escapeHtml(client.client)}</td>` +
                 `<td><span class="tier-badge tier-${client.tier}">` +
                 `${escapeHtml(tierLabel(client.tier))}</span></td>` +
                 `<td class="numeric">${formatInt(purchases)}</td>` +
-                `<td class="numeric strong">${formatCurrency(amount)}</td>` +
-                `<td class="numeric">${formatCurrency(ticket)}</td>` +
+                window.SD_MONEY.cells(amount, 2, 'strong') +
+                window.SD_MONEY.cells(ticket) +
                 `<td class="numeric">${formatDecimal(share, 2)}%</td>`;
         }, { emptyText: 'Sin clientes para ese filtro.' });
         // The API caps the client list, so say so instead of letting the user
@@ -1109,12 +1160,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Continuous x-axis: historical months then projected months. The
             // forecast line starts from the last historical point for continuity.
             const labels = hist.map((p) => p.month).concat(fore.map((p) => p.month));
-            const histData = hist.map((p) => p.amount).concat(fore.map(() => null));
-            const foreData = hist.map((p, i) => (i === hist.length - 1 ? p.amount : null))
-                .concat(fore.map((p) => p.amount));
+            // Each point is {bob, usd, usdt}: the chart draws the currency
+            // its selector names, never the object itself.
+            const histData = hist.map((p) => chartAmount(p.amount)).concat(fore.map(() => null));
+            const foreData = hist.map((p, i) => (i === hist.length - 1 ? chartAmount(p.amount) : null))
+                .concat(fore.map((p) => chartAmount(p.amount)));
             const twinData = twin
-                ? hist.map((p, i) => (i === hist.length - 1 ? p.amount : null))
-                    .concat((twin.forecast || []).map((p) => p.amount))
+                ? hist.map((p, i) => (i === hist.length - 1 ? chartAmount(p.amount) : null))
+                    .concat((twin.forecast || []).map((p) => chartAmount(p.amount)))
                 : null;
             makeChart(`forecast_${index}`, {
                 type: 'line',
@@ -1138,7 +1191,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     plugins: {
                         legend: { display: true, position: 'bottom' },
                         tooltip: { callbacks: { label: (ctx) => ctx.parsed.y == null ? ''
-                            : `${ctx.dataset.label}: ${formatCurrency(ctx.parsed.y)}` } }
+                            : `${ctx.dataset.label}: ${chartSymbol()} ` +
+                              `${formatDecimal(ctx.parsed.y, 0)}` } }
                     }
                 }
             });
@@ -1161,11 +1215,12 @@ document.addEventListener('DOMContentLoaded', () => {
         opportunities.forEach((opp) => {
             const name = opp.recommended_product_name || opp.recommended_product_id || '—';
             const entry = byCategory.get(name) || { name, value: 0, count: 0 };
-            entry.value += Number(opp.expected_drop_size_amount) || 0;
+            entry.value = window.SD_MONEY.add(entry.value, opp.expected_drop_size_amount);
             entry.count += 1;
             byCategory.set(name, entry);
         });
-        const ranking = [...byCategory.values()].sort((a, b) => b.value - a.value);
+        const ranking = [...byCategory.values()].sort((a, b) =>
+            window.SD_MONEY.bob(b.value) - window.SD_MONEY.bob(a.value));
         return {
             count: summary.total_opportunities || 0,
             pdvs: summary.total_pos_with_opportunities || 0,
@@ -1222,9 +1277,10 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             {
                 label: 'Venta potencial',
-                value: totalValue == null ? '—' : formatCurrency(totalValue),
+                value: '—',
+                valueHtml: totalValue == null ? '' : window.SD_MONEY.card(totalValue),
                 variant: totalValue == null ? '' : 'success',
-                hint: totalValue == null ? 'Faltan precios en el archivo.' : `Impacto esperado en Bs`
+                hint: totalValue == null ? 'Faltan precios en el archivo.' : 'Impacto esperado'
             },
             {
                 label: 'Categoría estrella',
@@ -1250,14 +1306,15 @@ document.addEventListener('DOMContentLoaded', () => {
         opportunities.forEach((opp) => {
             const key = opp.recommended_product_name || opp.recommended_product_id || '—';
             const group = byProduct.get(key) || { product: key, total: 0, stores: [] };
-            group.total += Number(opp.expected_drop_size_amount) || 0;
+            group.total = window.SD_MONEY.add(group.total, opp.expected_drop_size_amount);
             group.stores.push(opp);
             byProduct.set(key, group);
         });
         const groups = [...byProduct.values()];
-        groups.forEach((g) => g.stores.sort(
-            (a, b) => (b.expected_drop_size_amount || 0) - (a.expected_drop_size_amount || 0)));
-        return groups.sort((a, b) => b.total - a.total);
+        const bob = window.SD_MONEY.bob;
+        groups.forEach((g) => g.stores.sort((a, b) =>
+            bob(b.expected_drop_size_amount) - bob(a.expected_drop_size_amount)));
+        return groups.sort((a, b) => bob(b.total) - bob(a.total));
     }
 
     function renderProductOpportunities() {
@@ -1273,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `${formatInt(state.opportunities.length)} acciones en total`;
 
         if (groups.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Sin oportunidades para ese filtro.</td></tr>';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Sin oportunidades para ese filtro.</td></tr>';
             return;
         }
         groups.forEach((group, index) => {
@@ -1283,7 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td><button type="button" class="expand-btn" data-idx="${index}">▸</button>
                     <strong>${escapeHtml(group.product)}</strong></td>
                  <td class="numeric">${formatInt(group.stores.length)}</td>
-                 <td class="numeric strong">${formatCurrency(group.total)}</td>
+                 ${window.SD_MONEY.cells(group.total, 2, 'strong')}
                  <td class="based-on">Ofrecer a estos comercios en la próxima visita</td>`;
             tbody.appendChild(row);
 
@@ -1298,18 +1355,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${escapeHtml(store)}</td>
                     <td class="based-on">porque compra ${escapeHtml(based)}</td>
                     <td class="numeric">${formatPercent(opp.confidence)}</td>
-                    <td class="numeric strong">${formatCurrency(opp.expected_drop_size_amount || 0)}</td>
+                    ${window.SD_MONEY.cells(opp.expected_drop_size_amount, 2, 'strong')}
                 </tr>`;
             }).join('');
-            detail.innerHTML = `<td colspan="4" class="detail-cell">
+            detail.innerHTML = `<td colspan="6" class="detail-cell">
                 <table class="data-table detail-table"><thead><tr>
                     <th>Comercio</th><th>Motivo</th>
-                    <th class="numeric">Probabilidad</th><th class="numeric">Venta potencial</th>
+                    <th class="numeric">Probabilidad</th>
+                    <th class="numeric" data-money>Venta potencial</th>
                 </tr></thead><tbody>${inner}</tbody></table>
                 ${group.stores.length > 50 ? `<p class="based-on" style="margin:.5rem 0 0">` +
                     `Mostrando 50 de ${formatInt(group.stores.length)} comercios.</p>` : ''}
             </td>`;
             tbody.appendChild(detail);
+            window.SD_MONEY.expandHeaders(detail);
 
             row.querySelector('.expand-btn').addEventListener('click', (ev) => {
                 detail.hidden = !detail.hidden;
@@ -2502,7 +2561,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#lostCard').hidden = lost.length === 0;
         fillTable('lostTable', lost, (row) =>
             `<td>${escapeHtml(row.client)}</td>` +
-            `<td class="numeric">${formatCurrency(row.monthly_average_amount)}</td>` +
+            window.SD_MONEY.cells(row.monthly_average_amount) +
             `<td class="numeric">${escapeHtml(row.last_purchase || '—')}</td>` +
             `<td class="numeric">${formatInt(row.days_without_purchase)}</td>`);
 
@@ -2571,10 +2630,11 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#fxCategoryCard').hidden = !totals;
         fillTable('fxCategoryTable', data.by_category || [], (row) =>
             `<td>${escapeHtml(row.category)}</td>` +
-            `<td class="numeric">${bs(row.revenue)}</td>` +
+            window.SD_MONEY.cells(row.revenue, 0) +
             `<td class="numeric">${formatDecimal(row.usd_cost_share * 100, 0)}%</td>` +
-            `<td class="numeric">${pct(row.historical_margin_pct)}</td>` +
-            `<td class="numeric">${pct(row.replacement_margin_pct)}</td>`);
+            window.SD_MONEY.cells(row.historical_margin, 0) +
+            window.SD_MONEY.cells(row.replacement_margin, 0) +
+            window.SD_MONEY.cells(row.margin_lost, 0, 'delta-down'));
 
         const uncovered = data.uncovered || [];
         qs('#fxUncoveredCard').hidden = !totals;
@@ -2602,8 +2662,8 @@ document.addEventListener('DOMContentLoaded', () => {
             : riskClients;
         fillTable('riskTable', rows, (row) =>
             `<td>${escapeHtml(row.client)}</td>` +
-            `<td class="numeric">${formatCurrency(row.monthly_average_amount)}</td>` +
-            `<td class="numeric">${formatCurrency(row.last_month_amount)}</td>` +
+            window.SD_MONEY.cells(row.monthly_average_amount) +
+            window.SD_MONEY.cells(row.last_month_amount) +
             `<td class="numeric ${deltaClass(row.change)}">${formatDelta(row.change)}</td>` +
             `<td class="numeric">${formatInt(row.days_without_purchase)}</td>` +
             `<td class="cell-note">${escapeHtml(riskReasonText(row))}</td>`);
@@ -2753,6 +2813,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatCurrency(value) {
+        // An amount in the three currencies reads as one line wherever text,
+        // not a table, carries it.
+        if (value != null && typeof value === 'object') return window.SD_MONEY.inline(value);
         if (value == null || isNaN(value)) return '—';
         return `Bs ${Number(value).toLocaleString('es-BO', {
             minimumFractionDigits: 2,

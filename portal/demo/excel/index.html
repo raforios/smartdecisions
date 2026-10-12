@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Análisis Comercial — SmartDecisions</title>
     <link rel="stylesheet" href="../styles/demo.css?v=0e0b566906">
-    <link rel="stylesheet" href="excel.css?v=29706edcc4">
+    <link rel="stylesheet" href="excel.css?v=988e80646f">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
@@ -15,9 +15,9 @@
     <script src="../js/ui.js?v=bd318da6b9" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/ai.js?v=ee4edb4da5" defer></script>
-    <script src="../js/money.js?v=000038058c" defer></script>
+    <script src="../js/money.js?v=39559a151a" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-    <script src="excel.js?v=61d6ba841a" defer></script>
+    <script src="excel.js?v=70fe03b4b4" defer></script>
 </head>
 <body>
 
@@ -138,6 +138,7 @@
                         Ver el tipo de cambio
                     </a>
                     <span class="period-note" id="periodNote"></span>
+                    <p class="rates-legend" id="ratesLegend"></p>
                 </div>
 
                 <div class="analysis-menu" id="analysisMenu">
@@ -361,7 +362,9 @@
                     el precio realmente cobrado.
                 </p>
                 <div class="metric-grid" id="efficiencyKpis"></div>
-                <div class="chart-grid">
+                <!-- One full-width card each: two tables of different length side
+                     by side never line up. -->
+                <div class="card-stack">
                     <div class="chart-card">
                         <h3 class="chart-title">Productividad por vendedor</h3>
                         <div class="table-wrapper">
@@ -473,7 +476,9 @@
                 </div>
             </div>
 
-            <div class="split-layout split-even">
+            <!-- One full-width card each: two tables of different length side
+                 by side never line up. -->
+            <div class="card-stack">
                 <div class="chart-card">
                     <h3 class="chart-title">Clientes y el producto que los sostiene</h3>
                     <p class="chart-hint">
@@ -980,15 +985,23 @@
                 </div>
             </div>
             <div class="card" id="fxCategoryCard">
-                <h3 class="chart-title">Margen por categoría: compra contra reposición</h3>
+                <h3 class="chart-title">Cuánto margen se come el tipo de cambio, por categoría</h3>
+                <p class="chart-hint">
+                    <strong>Ganaste</strong>: lo vendido menos lo que pagaste por esa
+                    mercadería. <strong>Ganarías hoy</strong>: lo mismo, pero si tuvieras
+                    que volver a comprarla con el dólar de hoy. <strong>Se pierde</strong>:
+                    la diferencia, lo que la devaluación se lleva del margen. Montos al
+                    tipo de cambio de hoy.
+                </p>
                 <div class="table-wrapper">
                     <table class="data-table" id="fxCategoryTable">
                         <thead><tr>
                             <th>Categoría</th>
-                            <th class="num">Venta Bs</th>
-                            <th class="num">% costo en USD</th>
-                            <th class="num">Margen a costo de compra</th>
-                            <th class="num">Margen a costo de reposición</th>
+                            <th class="numeric" data-money>Venta</th>
+                            <th class="numeric">Costo comprado en dólares</th>
+                            <th class="numeric" data-money>Ganaste</th>
+                            <th class="numeric" data-money>Ganarías hoy</th>
+                            <th class="numeric" data-money>Se pierde</th>
                         </tr></thead>
                         <tbody></tbody>
                     </table>
@@ -1058,8 +1071,8 @@
                     <table class="data-table" id="riskTable">
                         <thead><tr>
                             <th>Cliente</th>
-                            <th class="numeric">Promedio mensual</th>
-                            <th class="numeric">Último mes</th>
+                            <th class="numeric" data-money>Promedio mensual</th>
+                            <th class="numeric" data-money>Último mes</th>
                             <th class="numeric">Variación</th>
                             <th class="numeric">Días sin comprar</th>
                             <th>Motivo</th>
@@ -1079,7 +1092,7 @@
                     <table class="data-table" id="lostTable">
                         <thead><tr>
                             <th>Cliente</th>
-                            <th class="numeric">Compraba al mes</th>
+                            <th class="numeric" data-money>Compraba al mes</th>
                             <th class="numeric">Última compra</th>
                             <th class="numeric">Días</th>
                         </tr></thead>
@@ -1134,6 +1147,7 @@
                 <button type="button" class="btn btn-primary btn-small" id="forecastRun">
                     Actualizar
                 </button>
+                <label class="chart-currency" data-chart-currency></label>
             </div>
             <p class="forecast-note" id="forecastNote"></p>
             <div class="chart-grid" id="forecastCharts"></div>
@@ -1158,6 +1172,7 @@
             <div class="segment-layout">
                 <div class="chart-card">
                     <h3 class="chart-title">Participación de la venta por segmento</h3>
+                    <label class="chart-currency" data-chart-currency></label>
                     <canvas id="chartSegmentos"></canvas>
                 </div>
                 <div class="chart-card">
@@ -1184,8 +1199,8 @@
                                 <th>#</th>
                                 <th>Cliente</th><th>Segmento</th>
                                 <th class="numeric">Compras</th>
-                                <th class="numeric">Venta (Bs)</th>
-                                <th class="numeric">Ticket promedio</th>
+                                <th class="numeric" data-money>Venta</th>
+                                <th class="numeric" data-money>Ticket promedio</th>
                                 <th class="numeric">% de la venta</th>
                             </tr></thead>
                             <tbody></tbody>
@@ -1232,7 +1247,7 @@
                         <tr>
                             <th>Producto a ofrecer</th>
                             <th class="numeric">Comercios interesados</th>
-                            <th class="numeric">Venta potencial total</th>
+                            <th class="numeric" data-money>Venta potencial total</th>
                             <th>Acción</th>
                         </tr>
                     </thead>

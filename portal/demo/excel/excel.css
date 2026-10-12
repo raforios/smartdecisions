@@ -278,6 +278,13 @@
     gap: 1.25rem;
     margin-top: 1.5rem;
 }
+/* Cards one under the other, each the full width of the page. */
+.card-stack {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
 .chart-card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -454,6 +461,15 @@
     font-size: 0.82rem;
     flex: 1 1 220px;
 }
+/* Says on every view which rate the dollars are at: today's, or the close
+   of the one month chosen. Its own full-width line, so it is always read. */
+.rates-legend {
+    flex: 1 1 100%;
+    margin: 0;
+    color: var(--text);
+    font-size: 0.85rem;
+}
+.rates-legend:empty { display: none; }
 @media (max-width: 700px) {
     .period-bar { flex-direction: column; align-items: stretch; }
     .period-note { flex: 1 1 auto; }
