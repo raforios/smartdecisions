@@ -115,11 +115,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td>${T.escapeHtml(item.product_name || '—')}</td>` +
                 `<td class="numeric">${T.formatQuantity(item.opening_quantity)}</td>` +
                 `<td class="numeric">${T.formatQuantity(item.sold_quantity)}</td>` +
-                `<td class="numeric"><strong>${T.formatQuantity(item.available_quantity)}</strong></td>`;
+                `<td class="numeric"><strong>${T.formatQuantity(item.available_quantity)}</strong></td>` +
+                `<td class="numeric">${item.unit_price == null ? '—' : T.formatDecimal(item.unit_price, 2)}</td>`;
             tbody.appendChild(row);
         });
         if (items.length > ROWS_PER_PAGE) {
-            tbody.innerHTML += '<tr class="row-filler"><td colspan="5">&nbsp;</td></tr>'
+            tbody.innerHTML += '<tr class="row-filler"><td colspan="6">&nbsp;</td></tr>'
                 .repeat(ROWS_PER_PAGE - shown.length);
         }
         qs('#stockCount').textContent = items.length === 1 ? '1 producto' : `${items.length} productos`;

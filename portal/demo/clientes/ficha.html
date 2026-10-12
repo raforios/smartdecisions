@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ficha del cliente — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="../styles/analyses.css?v=2f2ce3040a">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=16147b32b2" defer></script>
+    <script src="../js/api.js?v=5440fa776b" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/area.js?v=a942ec36d4" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/client_card.js?v=ab6db86fb9" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="/home.html" class="brand">
+            <img src="/assets/bear-face.jpg?v=e028b9fcd7" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <a href="index.html" class="btn btn-ghost btn-small">← Clientes</a>
+            <span class="session-chip" id="sessionChip" hidden></span>
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Ficha del cliente</h1>
+        <p class="page-subtitle">Todo lo de un cliente en un lugar, y la línea de tiempo de sus facturas y pagos.</p>
+
+        <section class="card">
+            <div class="form-actions">
+                <label class="field"><span>Cliente</span>
+                    <input type="text" id="clientSearch" list="clientOptions"
+                           placeholder="Escribe o elige el código del cliente"></label>
+                <datalist id="clientOptions"></datalist>
+                <button type="button" class="btn btn-primary btn-small" id="clientOpen">Ver ficha</button>
+            </div>
+            <p class="form-note" id="clientNote" aria-live="polite"></p>
+        </section>
+
+        <div id="clientCard" hidden>
+            <section class="step-section">
+                <h2 class="section-title" id="clientName"></h2>
+                <p class="page-subtitle" id="clientIdentity"></p>
+                <div class="metric-grid" id="clientFigures"></div>
+            </section>
+
+            <section class="step-section">
+                <h3 class="block-title">Lo que debe</h3>
+                <p class="legend-hint">Lo que te debe no cambia con el tipo de cambio: se debe y se
+                    cobra en bolivianos. En dólares, al tipo de hoy.</p>
+                <div class="metric-grid" id="clientReceivable"></div>
+            </section>
+
+            <section class="step-section">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Lo que compró cada mes (al cierre de cada mes)</h3>
+                        <label class="chart-currency"><span>Moneda del gráfico</span>
+                            <select id="clientCurrency">
+                                <option value="BOB">Bs</option>
+                                <option value="USD">USD</option>
+                                <option value="USDT">USDT</option>
+                            </select></label>
+                    </div>
+                    <canvas id="clientMonths"></canvas>
+                </div>
+            </section>
+
+            <section class="step-section">
+                <h3 class="block-title">Lo que más compra</h3>
+                <div class="table-wrapper">
+                    <table class="data-table" id="clientProducts">
+                        <thead><tr><th>Producto</th><th class="numeric">Unidades</th>
+                            <th class="numeric" data-money>Monto (hoy)</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="step-section">
+                <h3 class="block-title">Seguimiento: facturas y pagos</h3>
+                <p class="legend-hint">De lo más reciente a lo más antiguo. Montos en bolivianos,
+                    como se registraron.</p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="clientTimeline">
+                        <thead><tr><th>Fecha</th><th>Movimiento</th><th>Factura</th><th>Condición</th>
+                            <th>Vence</th><th class="numeric">Monto (Bs)</th>
+                            <th class="numeric">Cobrado (Bs)</th><th class="numeric">Saldo (Bs)</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        Una iniciativa de <strong>BearSoft</strong> · SmartDecisions
+    </div>
+</footer>
+
+</body>
+</html>

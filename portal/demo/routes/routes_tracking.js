@@ -264,6 +264,14 @@
         (shown[name] || []).forEach((callback) => callback());
     }
     document.addEventListener('DOMContentLoaded', () => {
+        // A page that carries sections of Rutas on their own (Inventario,
+        // Clientes, Parámetros) opens all of them on load; deferred so every
+        // section script has registered its `onShow` first.
+        const standalone = document.querySelectorAll('.routes-section[data-autoshow]');
+        setTimeout(() => standalone.forEach((panel) => {
+            panel.hidden = false;
+            (shown[panel.dataset.section] || []).forEach((callback) => callback());
+        }), 0);
         const menu = document.getElementById('sectionMenu');
         if (!menu) return;
         menu.addEventListener('click', (event) => {

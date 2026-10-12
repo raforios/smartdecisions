@@ -31,12 +31,38 @@
         ).join('');
     }
 
-    /** The value of a metric card: three columns, each with its currency. */
-    function card(money) {
-        return '<div class="money3">' + CURRENCIES.map(({ key, label }) =>
+    /**
+     * The value of a metric card: three columns, each with its currency.
+     * With `todayRates` (a chosen month), a line under them says what the
+     * same bolivianos are worth at today's rate, and the difference.
+     */
+    function card(money, todayRates) {
+        const columns = '<div class="money3">' + CURRENCIES.map(({ key, label }) =>
             `<span class="money3-col"><span class="money3-label">${label}</span>` +
             `<span class="money3-value">${format(money && money[key], 0)}</span></span>`
         ).join('') + '</div>';
+        return columns + todayLine(money, todayRates);
+    }
+
+    /** "A hoy: USD 15.625 (−4.375) · USDT 31.250 (0)" for a chosen month. */
+    function todayLine(money, todayRates) {
+        if (!todayRates || !money || typeof money !== 'object' || money.bob == null) {
+            return '';
+        }
+        const today = atRates(money.bob, todayRates);
+        const parts = ['usd', 'usdt'].map((key) => {
+            const label = key === 'usd' ? 'USD' : 'USDT';
+            const diff = money[key] == null ? null : today[key] - money[key];
+            const sign = diff > 0 ? '+' : '';
+            return `${label} ${format(today[key], 0)}` +
+                (diff == null ? '' : ` (${sign}${format(diff, 0)})`);
+        });
+        return `<div class="money3-today">A hoy: ${parts.join(' · ')}</div>`;
+    }
+
+    /** Bolivianos in the three currencies at the given rates. */
+    function atRates(bob, rates) {
+        return { bob, usd: bob / rates.usd, usdt: bob / rates.usdt };
     }
 
     /** One line for a hint: "Bs 1.000 · USD 84 · USDT 84". */
@@ -122,5 +148,7 @@
         });
     }
 
-    window.SD_MONEY = { cells, card, inline, minus, add, bob, pick, ratesNote, expandHeaders };
+    window.SD_MONEY = {
+        cells, card, inline, minus, add, bob, pick, ratesNote, expandHeaders, atRates
+    };
 })();

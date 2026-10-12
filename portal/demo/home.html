@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartDecisions</title>
-    <link rel="stylesheet" href="styles/demo.css?v=0e0b566906">
+    <link rel="stylesheet" href="styles/demo.css?v=92e8abf645">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
@@ -12,7 +12,9 @@
     <script src="js/auth.js?v=16147b32b2" defer></script>
     <script src="js/api.js?v=5440fa776b" defer></script>
     <script src="js/ui.js?v=bd318da6b9" defer></script>
-    <script src="js/activity.js?v=fcbf02f670" defer></script>
+    <script src="js/money.js?v=b4de0251ff" defer></script>
+    <script src="js/dashboard.js?v=36e83ee6e3" defer></script>
+    <script src="js/activity.js?v=ae97b1d6f2" defer></script>
 </head>
 <body>
 
@@ -31,8 +33,8 @@
 
 <main>
     <div class="container">
-        <h1 class="page-title">Módulos</h1>
-        <p class="page-subtitle">Inteligencia de negocios para decidir con números: qué pasó, qué viene y qué conviene hacer.</p>
+        <h1 class="page-title">Tablero</h1>
+        <p class="page-subtitle">Lo más importante de cada área, en bolivianos, dólares y USDT. Entra al área para ver el detalle.</p>
 
         <!-- What the account already has: filled from the caller's own history. -->
         <section class="card activity-card" id="activityCard" hidden>
@@ -44,31 +46,67 @@
         </section>
 
         <div class="card-grid">
-            <a class="module-card" href="excel/index.html">
+            <a class="module-card" href="ventas/index.html">
                 <div class="module-icon">📊</div>
-                <h3>Análisis comercial</h3>
-                <p>Qué ofrecerle a cada cliente, cuánto vas a vender, a quién estás por perder y cuánto margen deja cada línea.</p>
+                <h3>Ventas</h3>
+                <p>Cuánto vendes, de dónde sale, a quién ofrecerle qué, el pronóstico, el cumplimiento y el efecto del tipo de cambio.</p>
+                <div class="area-figures" data-figures="ventas" hidden></div>
+                <span class="module-tag">ingest · analytics</span>
+            </a>
+
+            <a class="module-card" href="clientes/index.html">
+                <div class="module-icon">🏪</div>
+                <h3>Clientes</h3>
+                <p>Tu cartera, con los clientes nuevos que los vendedores dieron de alta en la calle.</p>
+                <div class="area-figures" data-figures="clientes" hidden></div>
+                <span class="module-tag">ingest</span>
+            </a>
+
+            <a class="module-card" href="inventario/index.html">
+                <div class="module-icon">📦</div>
+                <h3>Inventario</h3>
+                <p>Cuántos días te dura lo que tienes, qué está por quebrar y lo que va quedando en el día.</p>
+                <div class="area-figures" data-figures="inventario" hidden></div>
+                <span class="module-tag">ingest · analytics · optimization</span>
+            </a>
+
+            <a class="module-card" href="compras/index.html">
+                <div class="module-icon">🧾</div>
+                <h3>Compras</h3>
+                <p>Cuánto te costó la última compra frente a las anteriores y cuánto te cuesta hoy reponerla.</p>
+                <div class="area-figures" data-figures="compras" hidden></div>
+                <span class="module-tag">ingest · analytics</span>
+            </a>
+
+            <a class="module-card" href="cobranza/index.html">
+                <div class="module-icon">💳</div>
+                <h3>Cobranza</h3>
+                <p>Cuánto te deben, qué tan vencido está, cuánto vas a recuperar y qué le quitó el tipo de cambio.</p>
+                <div class="area-figures" data-figures="cobranza" hidden></div>
                 <span class="module-tag">ingest · analytics</span>
             </a>
 
             <a class="module-card" href="routes/index.html">
                 <div class="module-icon">🗺️</div>
                 <h3>Rutas</h3>
-                <p>Días de visita agrupados por cercanía y paradas ordenadas sobre la red vial.</p>
+                <p>Lo que ya se hizo, los planes, los vendedores en vivo, la ruta optimizada y la comparación.</p>
+                <div class="area-figures" data-figures="rutas" hidden></div>
                 <span class="module-tag">optimization</span>
             </a>
 
-            <a class="module-card" href="factores/index.html">
-                <div class="module-icon">💱</div>
-                <h3>Factores externos y tipo de cambio</h3>
-                <p>El dólar oficial y el paralelo, su proyección, y los factores que mueven tu costo.</p>
-                <span class="module-tag">quotes</span>
+            <a class="module-card" href="parametros/index.html">
+                <div class="module-icon">⚙️</div>
+                <h3>Parámetros</h3>
+                <p>Punto de partida, vendedores, políticas, factores externos y tipo de cambio.</p>
+                <div class="area-figures" data-figures="parametros" hidden></div>
+                <span class="module-tag">analytics · optimization · quotes</span>
             </a>
 
             <a class="module-card" href="minerales/index.html">
                 <div class="module-icon">⛏️</div>
                 <h3>Minerales</h3>
                 <p>Cotización oficial de minerales, cotización anticipada y escenario de venta.</p>
+                <div class="area-figures" data-figures="minerales" hidden></div>
                 <span class="module-tag">mining_analysis · quotes</span>
             </a>
         </div>

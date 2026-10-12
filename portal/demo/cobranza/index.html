@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cobranza — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="../styles/analyses.css?v=2f2ce3040a">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=16147b32b2" defer></script>
+    <script src="../js/api.js?v=5440fa776b" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/analyses/format.js?v=7835219735" defer></script>
+    <script src="../js/analyses/labels.js?v=4475306c45" defer></script>
+    <script src="../js/analyses/core.js?v=78fa70c398" defer></script>
+    <script src="../js/analyses/upload.js?v=90263bffd2" defer></script>
+    <script src="../js/analyses/receivables.js?v=74168abc34" defer></script>
+</head>
+<body>
+
+<header class="demo-header">
+    <div class="container demo-nav">
+        <a href="/home.html" class="brand">
+            <img src="/assets/bear-face.jpg?v=e028b9fcd7" alt="" aria-hidden="true">
+            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
+        </a>
+        <div class="demo-nav-actions">
+            <a href="/home.html" class="btn btn-ghost btn-small">← Tablero</a>
+            <span class="session-chip" id="sessionChip" hidden></span>
+            <span class="user-chip" id="userChip">…</span>
+            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Cobranza</h1>
+        <p class="page-subtitle">Cuánto te deben, qué tan vencido está, cuánto vas a recuperar, quién cobra qué y qué le quitó el tipo de cambio al crédito.</p>
+
+        <section id="stepUpload" class="step-grid">
+            <article class="card">
+                <span class="step-pill">1</span>
+                <h3 id="templateTitle">Plantilla</h3>
+                <p>Los cobros se enganchan al conjunto de datos de <strong>Ventas</strong>: cada pago con su factura y su fecha.</p>
+                <label class="field">
+                    <span>¿Qué vas a cargar?</span>
+                    <select id="contractSelect">
+                        <option value="cobros" selected>Cobros</option>
+                    </select>
+                </label>
+                <button id="downloadTemplateButton" class="btn btn-ghost">
+                    Descargar plantilla
+                </button>
+                <p class="form-note" id="templateNote" aria-live="polite"></p>
+            </article>
+
+            <article class="card">
+                <span class="step-pill">2</span>
+                <h3>Subir tu archivo</h3>
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".xlsx,.csv" hidden>
+                    <p class="upload-hint">
+                        Arrastra tu <code>.xlsx</code> o <code>.csv</code> aquí
+                        <br>o <a href="#" id="chooseFileLink">elige un archivo</a>.
+                    </p>
+                    <p id="fileChip" class="file-chip" hidden></p>
+                </div>
+                <button id="uploadButton" class="btn btn-primary" disabled>
+                    Subir y validar
+                </button>
+                <p class="form-note" id="uploadNote" aria-live="polite"></p>
+            </article>
+        </section>
+
+        <!-- What the dataset can show in this area: the period applies to all. -->
+        <section id="analysisArea" class="step-section" hidden>
+                <!-- Reporting window: applies to every analysis below. -->
+            <div class="period-bar" id="periodBar" hidden>
+                <span class="period-label">Período analizado</span>
+                <label class="period-field">
+                    <span>Desde</span>
+                    <input type="date" id="periodFrom">
+                </label>
+                <label class="period-field">
+                    <span>Hasta</span>
+                    <input type="date" id="periodTo">
+                </label>
+                <button type="button" class="btn btn-secondary btn-small" id="periodApply">
+                    Aplicar
+                </button>
+                <button type="button" class="btn btn-ghost btn-small" id="periodReset">
+                    Todo el período
+                </button>
+                <a class="btn btn-ghost btn-small" href="/parametros/factores.html">
+                    Ver el tipo de cambio
+                </a>
+                <span class="period-note" id="periodNote"></span>
+                <p class="rates-legend" id="ratesLegend"></p>
+            </div>
+
+            <div class="analysis-menu" id="analysisMenu">
+                    <button type="button" class="analysis-card" data-analysis="receivables">
+                    <span class="analysis-icon">💳</span>
+                    <span class="analysis-title">Cuentas por cobrar</span>
+                    <span class="analysis-desc">Cuánto te deben, qué tan vencido está,
+                        cuánto vas a recuperar, quién cobra qué y qué deja el crédito
+                        después de financiarlo.</span>
+                </button>
+            </div>
+            <p class="form-note" id="runNote" aria-live="polite"></p>
+        </section>
+
+        <section id="stepReceivables" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Cuentas por cobrar</h2>
+                <span class="cache-stamp" id="stampReceivables"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="receivables">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle" id="receivablesSubtitle"></p>
+
+            <p class="form-note" id="receivablesEmpty" hidden></p>
+
+            <div id="receivablesContent">
+                <div class="metric-grid" id="receivablesKpis"></div>
+                <p class="insight-line" id="receivablesPolicyNote"></p>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <div class="chart-head">
+                            <h3 class="chart-title">Antigüedad del saldo</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
+                        <p class="chart-hint">
+                            Cuánto se debe en cada tramo de atraso. «Por vencer» todavía
+                            no venció: no es mora.
+                        </p>
+                        <canvas id="chartAging"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-head">
+                            <h3 class="chart-title">Recuperable vs incobrable</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
+                        <p class="chart-hint">
+                            Se aplica la pérdida esperada de cada tramo. Es un parámetro
+                            de tu política, no un hecho observado.
+                        </p>
+                        <canvas id="chartRecovery"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Tramos de antigüedad</h3>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="agingTable">
+                            <thead><tr>
+                                <th>Tramo</th>
+                                <th class="numeric">Facturas</th>
+                                <th class="numeric">Clientes</th>
+                                <th class="numeric" data-money>Saldo</th>
+                                <th class="numeric">% del saldo</th>
+                                <th class="numeric">Pérdida esperada</th>
+                                <th class="numeric" data-money>Provisión</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="analysis-block" id="creditMarginBlock" hidden>
+                    <h3 class="block-title">Qué deja el crédito</h3>
+                    <p class="block-subtitle">
+                        El margen bruto de una venta a crédito no es lo que queda: el
+                        dinero está afuera un tiempo y una parte no vuelve.
+                    </p>
+                    <div class="metric-grid" id="creditMarginKpis"></div>
+                    <p class="insight-line" id="creditMarginNote"></p>
+                </div>
+
+                <div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Quiénes deben</h3>
+                        <p class="chart-hint">
+                            «Línea» es el límite de crédito del cliente; vacío significa
+                            que el archivo no lo trae, no que esté sin usar.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="debtorsTable">
+                                <thead><tr>
+                                    <th>Cliente</th>
+                                    <th class="numeric" data-money>Saldo</th>
+                                    <th class="numeric" data-money>Vencido</th>
+                                    <th class="numeric">Días</th>
+                                    <th class="numeric">Uso de línea</th>
+                                    <th>Riesgo</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Responsables de cobro</h3>
+                        <p class="chart-hint">
+                            El vencido mide la cartera que le tocó; «a tiempo» lo mide a
+                            él. Van juntos para no confundir una cosa con la otra.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="collectorsTable">
+                                <thead><tr>
+                                    <th>Responsable</th>
+                                    <th class="numeric" data-money>Saldo</th>
+                                    <th class="numeric" data-money>Vencido</th>
+                                    <th class="numeric">Clientes</th>
+                                    <th class="numeric">A tiempo</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <div class="chart-head">
+                            <h3 class="chart-title">Cobros pendientes por fecha</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
+                        <p class="chart-hint">
+                            Proyección de caja de lo que falta cobrar. Lo vencido va
+                            aparte: es plata que ya debería estar cobrada.
+                        </p>
+                        <canvas id="chartDueWindows"></canvas>
+                    </div>
+                    <div class="chart-card" id="curveCard">
+                        <h3 class="chart-title">Curva de cobro</h3>
+                        <p class="chart-hint">
+                            De lo facturado a crédito cada mes, cuánto había vuelto a los
+                            30, 60 y 90 días. Un plazo que todavía no transcurrió va vacío.
+                        </p>
+                        <canvas id="chartCurve"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">Vencimientos por fecha</h3>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="dueDatesTable">
+                            <thead><tr>
+                                <th>Vence</th>
+                                <th class="numeric" data-money>Monto</th>
+                                <th class="numeric">Facturas</th>
+                                <th class="numeric">Clientes</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3 class="chart-title">A quién llamar hoy</h3>
+                    <p class="chart-hint">
+                        Ordenado por lo que se puede recuperar —saldo vencido por la
+                        probabilidad de recuperarlo— y no por antigüedad: el saldo más
+                        viejo suele ser el que menos vuelve.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="priorityTable">
+                            <thead><tr>
+                                <th>Cliente</th>
+                                <th>Responsable</th>
+                                <th class="numeric" data-money>Vencido</th>
+                                <th class="numeric">Días</th>
+                                <th class="numeric">Probabilidad</th>
+                                <th class="numeric" data-money>Recupero esperado</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rule 8: the balance never changes; the dollars measure the devaluation. -->
+            <div class="card" id="creditFxCard" hidden>
+                <h3 class="chart-title">Lo que el tipo de cambio le quitó al crédito</h3>
+                <p class="chart-hint">
+                    Lo que te deben no cambia: se debe y se cobra en bolivianos. En dólares se
+                    ve cuánto valía el crédito el día que lo diste y cuánto valió el día que lo
+                    cobraste; lo pendiente, frente a hoy.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="creditFxTable">
+                        <thead><tr>
+                            <th>Concepto</th>
+                            <th class="numeric" data-money>Monto</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        Una iniciativa de <strong>BearSoft</strong> · SmartDecisions
+    </div>
+</footer>
+
+</body>
+</html>

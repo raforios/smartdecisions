@@ -552,3 +552,27 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     color: var(--accent-2); background: var(--bg-alt);
     padding: 0.15rem 0.45rem; border-radius: 999px;
 }
+
+/* Parámetros: a policy edited in place, and where its values come from. */
+.form-table input { width: 100%; }
+.policy-source { font-size: 0.8rem; padding: 2px 8px; border-radius: var(--radius-sm); }
+.policy-source.is-set { color: var(--success); }
+.policy-source.is-default { color: var(--warning); }
+.row-actions { white-space: nowrap; }
+
+/* An analysis computed with a parameter the account never set. */
+.param-notice {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--warning);
+    background: var(--panel);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+}
+
+/* Tablero: the salient figures of an area, on the area's own card. */
+.area-figures { margin-top: 10px; display: grid; gap: 4px; }
+.figure-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.85rem; }
+.figure-label { color: var(--muted); }
+.figure-value { color: var(--text-strong); text-align: right; font-variant-numeric: tabular-nums; }
+

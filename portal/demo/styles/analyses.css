@@ -1,4 +1,4 @@
-/* Module-specific styles for /demo/excel/. Continues the shared demo.css palette. */
+/* Styles of the analysis pages (Ventas, Inventario, Cobranza). Continues the shared demo.css palette. */
 
 /* This module renders wide analytical tables and chart grids, so it uses more
    of the screen than the marketing-oriented pages of the demo. */
@@ -628,5 +628,10 @@
     white-space: nowrap;
 }
 .money3-col:first-child .money3-value { color: var(--text-strong); }
+.money3-today {
+    margin-top: 4px;
+    font-size: 0.78rem;
+    color: var(--muted);
+}
 .data-table thead th.money-group { text-align: center; }
 .data-table thead .money-subhead th { padding-top: 0.3rem; padding-bottom: 0.3rem; }

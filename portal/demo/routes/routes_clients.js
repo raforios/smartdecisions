@@ -67,7 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
             && !(Number(client.latitude) === 0 && Number(client.longitude) === 0);
         const tbody = qs('#clientsTable tbody');
         tbody.innerHTML = slice.map((client) =>
-            `<tr><td>${T.escapeHtml(client.name || client.id)}</td>` +
+            `<tr><td><a href="ficha.html?client=${encodeURIComponent(client.id)}">` +
+            `${T.escapeHtml(client.name || client.id)}</a></td>` +
             `<td>${SOURCE_LABELS[client.source] || T.escapeHtml(client.source)}</td>` +
             `<td>${T.escapeHtml(client.seller || '—')}</td>` +
             `<td>${T.escapeHtml(client.zone || '—')}</td>` +
