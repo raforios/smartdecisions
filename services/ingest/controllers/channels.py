@@ -13,7 +13,7 @@
     stored, and the companion's own key decides what counts as a repeat.
 '''
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Any
 
 import pandas as pd
@@ -24,6 +24,8 @@ from pydantic import BaseModel
 from controllers.collections import SPEC as COLLECTIONS
 from controllers.objectives import SPEC as OBJECTIVES
 from controllers.common import (
+    LoadContext,
+    merge_if_appending,
     API_ORIGIN,
     MAX_ISSUES_ON_RESPONSE,
     CompanionSpec,
@@ -33,10 +35,10 @@ from controllers.common import (
     store_companion,
     store_frame,
     store_new_dataset,
-    stored_companion_frame,
     to_ingest_response,
     with_known_clients
 )
+from controllers.purchases import SPEC as PURCHASES
 from controllers.stock import SPEC as STOCK
 from controllers.visits import SPEC as VISITS
 from schemas.clients import ClientSource
@@ -47,6 +49,7 @@ from schemas.channels import (
     SalesRowsSchema,
     IngestFromS3CompanionRequest,
     LoadMode,
+    PurchasesPushSchema,
     StockPushSchema,
     VisitsPushSchema
 )
@@ -54,6 +57,7 @@ from schemas.ingest import (
     CollectionsResponse,
     ObjectivesResponse,
     IngestResponse,
+    PurchasesResponse,
     StockResponse,
     VisitsResponse
 )
@@ -62,6 +66,7 @@ from services.collections import validate_rows as validate_collections
 from services.objectives import parse_frame as parse_objectives_frame
 from services.objectives import prepare_rows as prepare_objectives
 from services.objectives import validate_rows as validate_objectives
+from services.ingest import fill_product_ids
 from services.ingest import prepare_rows as prepare_sales_rows
 from services.ingest import validate_rows_partial
 from services.ingest_files import serialize_dataframe
@@ -72,6 +77,8 @@ from services.ingest_utils import (
     read_stored_frame,
     get_owned_dataset,
 )
+from services.purchases import parse_frame as parse_purchases_frame
+from services.purchases import validate_rows as validate_purchases
 from services.stock import parse_frame as parse_stock_frame
 from services.stock import prepare_rows as prepare_stock
 from services.stock import validate_rows as validate_stock
@@ -86,75 +93,16 @@ from services.visits import validate_rows as validate_visits
 _VALIDATORS: dict = {
     COLLECTIONS.name: validate_collections,
     OBJECTIVES.name: validate_objectives,
+    PURCHASES.name: validate_purchases,
     STOCK.name: validate_stock,
     VISITS.name: validate_visits,
 }
 
 
-@dataclass(frozen = True)
-class LoadContext:
-    '''
-        What a merge needs to know, grouped so the signature stays readable.
-    '''
-    dataset: dict
-    spec: CompanionSpec
-    mode: LoadMode
-    sales: Any
-    validate_rows: Callable[..., Any]
-    origin: str
-    auth_token: str
-
 # The controller signature is fixed by the route, and the three push
 # controllers are the same adapter over their own pipeline — as the three file
 # controllers already are. What varies is the spec and the pipeline.
 # pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
-
-
-def _merge_if_appending(
-    context: LoadContext,
-    result: Any
-) -> Any:
-    '''
-        Lands a load on top of what the dataset already holds.
-
-        The summary ends up describing EVERYTHING stored, because that is what
-        the analysis reads; the issues keep describing only this load, because
-        those are the rows the caller can still fix. Reporting this load's own
-        count as the total would say five payments when the dataset holds five
-        hundred.
-
-        Args:
-            context (LoadContext): Dataset, spec, mode and how to re-validate.
-            result (Any): Outcome of validating what just arrived.
-
-        Returns:
-            Any: The same result, or the merged one with this load's issues.
-    '''
-    if context.mode is not LoadMode.APPEND:
-        return result
-    previous = stored_companion_frame(context.dataset, context.spec,
-                                      context.auth_token)
-    if previous is None:
-        return result
-
-    # The stored rows come back from CSV as text, so they are put through the
-    # very same contract before being compared: a date that is a Timestamp on
-    # one side and a string on the other is never equal, and the merge key
-    # would silently stop deduplicating. That bug was caught by the retry test.
-    aligned = context.validate_rows(previous, context.sales, context.origin).accepted
-    merged = pd.concat([aligned, result.accepted], ignore_index = True)
-    keys = [key for key in context.spec.merge_keys if key in merged.columns]
-    if keys:
-        merged = merged.drop_duplicates(subset = keys, keep = 'last')
-    merged = merged.reset_index(drop = True)
-
-    message = (f'{context.spec.name.capitalize()} merge: {len(aligned)} stored + '
-               f'{len(result.accepted)} new = {len(merged)} row(s).')
-    logger.info(message)
-    if len(merged) == len(result.accepted):
-        return result
-    whole = context.validate_rows(merged, context.sales, context.origin)
-    return replace(whole, issues = result.issues)
 
 
 async def _push(
@@ -180,7 +128,7 @@ async def _push(
     prepare, validate_rows, auth_token = pipeline
     sales = load_sales_frame(dataset, auth_token)
     result = validate_rows(prepare(rows_frame(push.rows)), sales, API_ORIGIN)
-    result = _merge_if_appending(
+    result = merge_if_appending(
         LoadContext(dataset, spec, push.mode, sales, validate_rows,
                     API_ORIGIN, auth_token),
         result
@@ -379,7 +327,7 @@ async def _from_s3(
     # FILES owns the bucket: the staged object comes back as rows, not bytes.
     raw = read_stored_frame(payload.file_key, auth_token)
     result = parse_rows(raw, sales, payload.file_name)
-    result = _merge_if_appending(
+    result = merge_if_appending(
         LoadContext(dataset, spec, payload.mode, sales,
                     _VALIDATORS[spec.name], payload.file_name, auth_token),
         result
@@ -683,3 +631,74 @@ async def create_sales_dataset_controller(
                f'{len(rows.rows)} pushed line(s).')
     logger.info(message)
     return to_ingest_response(native_numbers(persisted))
+
+
+@handle_service_errors('INGEST')
+@audit_event('INGEST', 'Purchases', 'UPLOAD')
+async def push_purchases_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    push: PurchasesPushSchema,
+    current_user: str,
+    auth_token: str,
+    request: Request # pylint: disable=unused-argument
+) -> PurchasesResponse:
+    '''
+        The ERP posts the purchases made.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            dataset_id (str): Sales dataset the purchases belong to.
+            push (PurchasesPushSchema): Mode and rows.
+            current_user (str): Authenticated caller and owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            PurchasesResponse: Summary of what is stored and this push's issues.
+    '''
+    dataset = get_owned_dataset(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        owner_email = current_user
+    )
+    return await _push(
+        dynamodb_resource = dynamodb_resource,
+        dataset = dataset,
+        push = push,
+        spec = PURCHASES,
+        pipeline = (fill_product_ids, validate_purchases, auth_token)
+    )
+
+
+@handle_service_errors('INGEST')
+@audit_event('INGEST', 'Purchases', 'UPLOAD')
+async def ingest_purchases_from_s3_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    payload: IngestFromS3CompanionRequest,
+    current_user: str,
+    auth_token: str,
+    request: Request # pylint: disable=unused-argument
+) -> PurchasesResponse:
+    '''
+        Loads a purchases file already staged in S3 by FILES.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            dataset_id (str): Sales dataset the purchases belong to.
+            payload (IngestFromS3CompanionRequest): Object key, name and mode.
+            current_user (str): Authenticated caller and owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            PurchasesResponse: Summary of the load and its issues.
+    '''
+    dataset = get_owned_dataset(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        owner_email = current_user
+    )
+    return await _from_s3(dynamodb_resource, dataset, payload, PURCHASES,
+                          (parse_purchases_frame, auth_token))

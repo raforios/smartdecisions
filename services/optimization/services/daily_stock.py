@@ -70,6 +70,8 @@ def to_stock_item_response(item: DailyStockItem) -> StockItemResponseSchema:
         opening_quantity = item['opening_quantity'],
         sold_quantity = item['sold_quantity'],
         available_quantity = item['available_quantity'],
+        unit_price = item.get('unit_price'),
+        unit_cost = item.get('unit_cost'),
         updated_at = item['updated_at']
     )
 
@@ -166,6 +168,8 @@ def load_daily_stock(
             'opening_quantity': item.quantity,
             'sold_quantity': sold,
             'available_quantity': item.quantity - sold,
+            'unit_price': item.unit_price,
+            'unit_cost': item.unit_cost,
             'updated_at': stamp
         })
     table = dynamodb_resource.Table(DAILY_STOCK_TABLE)
@@ -291,13 +295,21 @@ def fetch_stock_from_ingest(
         raise ServiceUnavailableError(detail = StockError.STOCK_SOURCE_UNAVAILABLE.value)
 
     items = (response.json() or {}).get('items') or []
+    # The day is sold at its price: a photo loaded before the price was
+    # required cannot open a day, and that is said rather than priced at zero.
+    if any(item.get('unit_price') is None for item in items):
+        error_msg = f'The stock of {source.date} in INGEST carries no sale price.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = StockError.MISSING_PRICE.value)
     return DailyStockLoadSchema(
         date = source.date,
         items = [
             StockItemLoadSchema(
                 sku = item['product_id'],
                 product_name = item.get('product_name'),
-                quantity = item['available']
+                quantity = item['available'],
+                unit_price = item['unit_price'],
+                unit_cost = item.get('unit_cost')
             )
             for item in items
         ]

@@ -18,24 +18,23 @@ from schemas.analytics import (
     Opportunity,
     PeriodInfo,
     PortfolioResponse,
+    ReferenceRates,
     SegmentationResponse
 )
 from schemas.receivables import (
-    CreditPolicyRequest,
-    CreditPolicyResponse,
     ReceivablesResponse
 )
-from schemas.stock import StockResponse
+from schemas.stock import StockHistoryResponse, StockResponse, StockUnavailable
 from schemas.fx_effect import FxEffectResponse
 from schemas.objectives import (
-    CommercialPolicyResponse,
-    CommercialPolicySchema,
     ObjectivesResponse
 )
 from services.objectives import build_objectives, select_objective_periods
 from services.objectives import resolve_policy as resolve_commercial_policy
-from services.receivables import build_receivables, resolve_policy
+from services.receivables import build_receivables
+from services.receivables_fx import build_credit_devaluation
 from services.stock import build_stock
+from services.stock_history import build_stock_history
 from services.affinity import compute_opportunities
 from services.analytics import build_commercial_summary
 from services.concentration import build_concentration
@@ -43,10 +42,13 @@ from services.efficiency import build_efficiency
 from services.forecast import build_forecast
 from services.growth import build_growth
 from services.margin import build_margin
+from services.month import build_chosen_month
 from services.portfolio import build_portfolio
 from services.segmentation import build_segmentation
 from services.volume import build_volume_source
 from services.currency import (
+    PARALLEL_CURRENCY,
+    PARALLEL_FALLBACK_CURRENCY,
     in_three_currencies,
     with_month_close_factors,
     current_rate,
@@ -62,9 +64,7 @@ from services.analytics_utils import (
     HISTORY_DEFAULT_LIMIT,
     list_runs_for_owner,
     load_dataframe_from_s3,
-    persist_run,
-    save_commercial_policy,
-    save_credit_policy
+    persist_run
 )
 from services.environment import load_and_validate_env_vars
 from services.utils import audit_event, get_current_time_gmt, handle_service_errors
@@ -293,6 +293,9 @@ async def commercial_summary_controller(
         concentration = build_concentration(dataframe),
         efficiency = build_efficiency(dataframe),
         margin = build_margin(dataframe),
+        chosen_month = build_chosen_month(
+            dataframe, (params or {}).get('auth_token') or '',
+            get_current_time_gmt().date().isoformat()),
         **summary.model_dump()
     )
 
@@ -326,19 +329,23 @@ async def receivables_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
+    payments = _payments_of(metadata)
     block = build_receivables(
         sales = dataframe,
-        collections = _payments_of(metadata),
+        collections = payments,
         stored_policy = get_credit_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
         )
     )
+    token = (params or {}).get('auth_token') or ''
+    today = get_current_time_gmt().date().isoformat()
+    devaluation = build_credit_devaluation(dataframe, payments, token, today)
     return in_three_currencies(
         ReceivablesResponse,
-        {'dataset_id': dataset_id, 'period': period, **block.model_dump()},
-        (params or {}).get('auth_token') or '',
-        get_current_time_gmt().date().isoformat()
+        {'dataset_id': dataset_id, 'period': period, **block.model_dump(),
+         'devaluation': devaluation.model_dump() if devaluation else None},
+        token, today
     )
 
 
@@ -393,53 +400,6 @@ async def objectives_controller(
 
 
 @handle_service_errors('ANALYTICS')
-async def get_commercial_policy_controller(
-    dynamodb_resource: ServiceResource,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str
-) -> CommercialPolicyResponse:
-    '''
-        Returns the yardstick the caller's attainment is judged with: their
-        own where they set it, the service default everywhere else.
-    '''
-    resolved = resolve_commercial_policy(get_commercial_policy(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user
-    ))
-    return CommercialPolicyResponse(
-        owner_email = current_user,
-        **resolved.model_dump()
-    )
-
-
-@handle_service_errors('ANALYTICS')
-@audit_event('ANALYTICS', 'CommercialPolicy', 'UPSERT')
-async def save_commercial_policy_controller(
-    dynamodb_resource: ServiceResource,
-    policy: CommercialPolicySchema,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str
-) -> CommercialPolicyResponse:
-    '''
-        Stores the caller's commercial policy and answers with how it resolves.
-
-        Answering with the resolved policy and not with what was sent is
-        deliberate: the caller has to see which defaults filled the gaps
-        before a semaphore is drawn with them.
-    '''
-    save_commercial_policy(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user,
-        policy = policy.model_dump(exclude_none = True)
-    )
-    return await get_commercial_policy_controller(
-        dynamodb_resource = dynamodb_resource,
-        request = request,
-        current_user = current_user
-    )
-
-
-@handle_service_errors('ANALYTICS')
 async def stock_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -476,53 +436,6 @@ async def stock_controller(
         {'dataset_id': dataset_id, 'period': period, **block.model_dump()},
         (params or {}).get('auth_token') or '',
         get_current_time_gmt().date().isoformat()
-    )
-
-
-@handle_service_errors('ANALYTICS')
-async def get_credit_policy_controller(
-    dynamodb_resource: ServiceResource,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str
-) -> CreditPolicyResponse:
-    '''
-        Returns the credit policy that will be applied to the caller's book:
-        their own where they set it, the service default everywhere else.
-    '''
-    resolved = resolve_policy(get_credit_policy(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user
-    ))
-    return CreditPolicyResponse(
-        owner_email = current_user,
-        **resolved.as_dto().model_dump()
-    )
-
-
-@handle_service_errors('ANALYTICS')
-@audit_event('ANALYTICS', 'CreditPolicy', 'UPSERT')
-async def save_credit_policy_controller(
-    dynamodb_resource: ServiceResource,
-    policy: CreditPolicyRequest,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str
-) -> CreditPolicyResponse:
-    '''
-        Stores the caller's credit policy and answers with how it resolves.
-
-        Answering with the resolved policy and not with what was sent is
-        deliberate: the caller has to be able to see which defaults filled the
-        gaps before a provision is computed with them.
-    '''
-    save_credit_policy(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user,
-        policy = policy.model_dump(exclude_none = True)
-    )
-    return await get_credit_policy_controller(
-        dynamodb_resource = dynamodb_resource,
-        request = request,
-        current_user = current_user
     )
 
 
@@ -788,3 +701,30 @@ async def fx_effect_controller(
     # The amounts by category are a general view: at today's rate.
     return _at_todays_rate(FxEffectResponse(dataset_id = dataset_id, source = source,
                                             period = period, **block.model_dump()), params)
+
+
+@handle_service_errors('ANALYTICS')
+async def stock_history_controller(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    params: dict[str, Any],
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> StockHistoryResponse:
+    '''
+        The inventory over time: every photo INGEST kept, valued at cost and at
+        price in the dollars of its day, next to the same at today's rate.
+    '''
+    metadata = get_dataset_metadata(dynamodb_resource = dynamodb_resource,
+                                    dataset_id = dataset_id, owner_email = current_user)
+    stock_key = metadata.get('stock_s3_key')
+    if not stock_key:
+        return StockHistoryResponse(dataset_id = dataset_id,
+                                    reason_code = StockUnavailable.NO_SNAPSHOT.value)
+    token = (params or {}).get('auth_token') or ''
+    today = get_current_time_gmt().date().isoformat()
+    rates = ReferenceRates(usd = current_rate(PARALLEL_FALLBACK_CURRENCY, token, today),
+                           usdt = current_rate(PARALLEL_CURRENCY, token, today))
+    photos = build_stock_history(load_dataframe_from_s3(stock_key), token, rates)
+    return StockHistoryResponse(dataset_id = dataset_id, available = bool(photos),
+                                rates = rates, photos = photos)

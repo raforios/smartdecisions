@@ -121,6 +121,20 @@ class StockRowSchema(BaseModel):
     in_transit: float | None = Field(None, ge = 0)
     warehouse: str | None = Field(None, max_length = 64)
     unit_cost: float | None = Field(None, ge = 0)
+    unit_price: float = Field(..., ge = 0, description = 'What one unit sells for.')
+
+
+class PurchaseRowSchema(BaseModel):
+    '''
+        One product bought: from whom, when, how many and at what unit cost
+        put in the warehouse, in the currency it was paid in (BOB, USD, USDT).
+    '''
+    purchase_date: datetime.date
+    supplier: str = Field(..., min_length = 1, max_length = 128)
+    product_name: str = Field(..., min_length = 1, max_length = 150)
+    quantity: float = Field(..., gt = 0)
+    unit_cost: float = Field(..., ge = 0)
+    currency: str = Field(..., min_length = 3, max_length = 8)
 
 
 class VisitRowSchema(BaseModel):
@@ -159,6 +173,14 @@ class StockPushSchema(BaseModel):
     '''
     mode: LoadMode = LoadMode.APPEND
     rows: list[StockRowSchema] = Field(..., min_length = 1)
+
+
+class PurchasesPushSchema(BaseModel):
+    '''
+        The purchases an ERP posts for a sales dataset.
+    '''
+    mode: LoadMode = LoadMode.APPEND
+    rows: list[PurchaseRowSchema] = Field(..., min_length = 1)
 
 
 class VisitsPushSchema(BaseModel):

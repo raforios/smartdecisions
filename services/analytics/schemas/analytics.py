@@ -24,6 +24,7 @@ class AnalyticsError(str, Enum):
     DATASET_UNREADABLE = 'DATASET_UNREADABLE'
     RUN_NOT_FOUND = 'RUN_NOT_FOUND'
     RATES_UNAVAILABLE = 'RATES_UNAVAILABLE'
+    CLIENT_NOT_FOUND = 'CLIENT_NOT_FOUND'
 
 
 # --- Money in three currencies (bolivianos, official dollar, USDT) ---
@@ -728,6 +729,32 @@ class VolumeSourceBlock(BaseModel):
     decomposition: VolumeDecomposition = VolumeDecomposition()
 
 
+class DaySale(BaseModel):
+    '''
+        One day of a chosen month: what was sold, in bolivianos and in the
+        dollars of that same day. The day is history and is never re-read.
+    '''
+    date: str
+    amount: Money
+
+
+class ChosenMonth(BaseModel):
+    '''
+        The month the period was narrowed to, set against today: the total at
+        the month's close, the same bolivianos at today's rate and the
+        difference. The days add up to the total in bolivianos; their dollars,
+        each at its own day, may not match the month's, and are not adjusted.
+    '''
+    month: str
+    close_rates: ReferenceRates
+    today_rates: ReferenceRates
+    total: Money
+    total_today: Money
+    difference: Money
+    days: list[DaySale] = []
+    days_total: Money
+
+
 class CommercialSummaryResponse(CommercialSummaryBlock):
     '''
         Full commercial summary for GET /v1/analytics/summary/{dataset_id}.
@@ -745,3 +772,4 @@ class CommercialSummaryResponse(CommercialSummaryBlock):
     concentration: ConcentrationBlock = ConcentrationBlock()
     efficiency: EfficiencyBlock = EfficiencyBlock()
     margin: MarginBlock = MarginBlock()
+    chosen_month: ChosenMonth | None = None

@@ -14,7 +14,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from schemas.analytics import Amount, PeriodInfo, ReferenceRates
+from schemas.analytics import Amount, Money, PeriodInfo, ReferenceRates
 
 
 class AgingBucket(str, Enum):
@@ -248,6 +248,22 @@ class ReceivablesBlock(BaseModel):
     priority: list[PriorityRow] = []
 
 
+class CreditDevaluation(BaseModel):
+    '''
+        What the rate took from the credit (Rafael, rule 8). The balance in
+        bolivianos never changes; the dollars show the devaluation between the
+        day the credit was given and the day it was collected, and for what is
+        still open, between that day and today.
+    '''
+    credit: Money
+    collected_at_credit: Money
+    collected_at_payment: Money
+    collected_lost: Money
+    open_at_credit: Money
+    open_today: Money
+    open_lost: Money
+
+
 class ReceivablesResponse(BaseModel):
     '''
         Full receivables view for GET /v1/analytics/receivables/{dataset_id}.
@@ -270,6 +286,7 @@ class ReceivablesResponse(BaseModel):
     due_dates: list[DueDateRow] = []
     collection_curve: list[CollectionCurvePoint] = []
     priority: list[PriorityRow] = []
+    devaluation: CreditDevaluation | None = None
 
 
 class CreditPolicyRequest(BaseModel):

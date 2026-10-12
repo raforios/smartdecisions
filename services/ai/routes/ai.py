@@ -5,15 +5,19 @@ from fastapi import APIRouter, Depends, Request, status
 
 from controllers.ai import (
     explain_controller,
+    get_role_controller,
     list_roles_controller,
-    save_role_controller
+    save_role_controller,
+    set_role_active_controller
 )
 from schemas.ai import (
     ExplainRequest,
     ExplainResponse,
+    RoleActiveRequest,
     RoleDefinition,
     RoleListResponse,
-    RoleSummary
+    RoleSummary,
+    ViewName
 )
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner
@@ -97,6 +101,63 @@ async def save_role_endpoint(
 
     return await save_role_controller(
         definition = definition,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/roles/{view}/{version}',
+    response_model = RoleDefinition,
+    status_code = status.HTTP_200_OK,
+    summary = 'One version of a view\'s expert role, in full.',
+    description = 'The role with its instructions and rules, to edit it. An edit '
+                  'is stored as the next version through POST /roles, never over '
+                  'this one.'
+)
+async def get_role_endpoint(
+    request: Request,
+    view: ViewName,
+    version: int,
+    current_user: str = Depends(get_current_owner)
+) -> RoleDefinition:
+    ''' Endpoint returning one version of an expert role. '''
+    message = f'User: {current_user}. Requested role {view.value} v{version}.'
+    logger.info(message)
+
+    return await get_role_controller(
+        view = view,
+        version = version,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.patch(
+    '/roles/{view}/{version}/active',
+    response_model = RoleSummary,
+    status_code = status.HTTP_200_OK,
+    summary = 'Turn one version of a view\'s expert role on or off.',
+    description = 'Turning a version on retires the other versions of the same '
+                  'view. Turning it off leaves the view without a role until '
+                  'another is turned on. Nothing is deleted.'
+)
+async def set_role_active_endpoint(
+    request: Request,
+    view: ViewName,
+    version: int,
+    change: RoleActiveRequest,
+    current_user: str = Depends(get_current_owner)
+) -> RoleSummary:
+    ''' Endpoint turning a version of an expert role on or off. '''
+    message = (f'User: {current_user}. Set role {view.value} v{version} '
+               f'active={change.active}.')
+    logger.info(message)
+
+    return await set_role_active_controller(
+        view = view,
+        version = version,
+        change = change,
         current_user = current_user,
         request = request
     )

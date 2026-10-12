@@ -26,4 +26,6 @@ class DailyStockItem(TypedDict, total = False):
     opening_quantity: float
     sold_quantity: float
     available_quantity: float
+    unit_price: float | None
+    unit_cost: float | None
     updated_at: str

@@ -26,13 +26,9 @@ from schemas.analytics import (
     PortfolioResponse,
     SegmentationResponse
 )
-from schemas.objectives import (
-    CommercialPolicyResponse,
-    CommercialPolicySchema,
-    ObjectivesResponse
-)
+from schemas.objectives import ObjectivesResponse
 from schemas.stock import StockResponse
-from schemas.receivables import CreditPolicyRequest, CreditPolicyResponse, ReceivablesResponse
+from schemas.receivables import ReceivablesResponse
 from controllers import analytics as controllers
 from services import currency
 
@@ -99,7 +95,6 @@ def _collections_frame() -> pd.DataFrame:
         'payment_method': 'EFECTIVO',
         'collector': 'Ana'
     })
-
 
 
 @pytest.fixture(autouse = True)
@@ -220,33 +215,6 @@ def test_receivables_says_so_when_the_dataset_has_no_payments(
     assert response.available is True
     assert response.kpis.receivable_total.bob > 0
     assert response.kpis.collection_effectiveness is None or response.kpis.on_time_rate is None
-
-
-def test_credit_policy_round_trip(monkeypatch):
-    '''
-        Writing a policy answers with the RESOLVED one, so the caller sees
-        which defaults filled the gaps before a provision uses them.
-    '''
-    stored: dict = {}
-    monkeypatch.setattr(
-        controllers, 'save_credit_policy',
-        lambda dynamodb_resource, owner_email, policy: stored.update(policy) or stored
-    )
-    monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: stored or None)
-
-    response = asyncio.run(controllers.save_credit_policy_controller(
-        dynamodb_resource = None,
-        policy = CreditPolicyRequest(financial_rate_daily = 0.002),
-        request = None,
-        current_user = 'tester@bearsoft.com.bo'
-    ))
-
-    assert isinstance(response, CreditPolicyResponse)
-    assert response.source_code == 'CLIENT'
-    assert response.financial_rate_daily == 0.002
-    # What was not sent falls back to the service default.
-    assert response.aging_buckets
-    assert response.loss_rates
 
 
 def test_portfolio_returns_a_full_response(dataset):
@@ -579,33 +547,6 @@ def test_objectives_without_any_loaded_is_empty_and_not_an_error(
     assert response.clients_without_objective == 8
 
 
-def test_the_commercial_policy_round_trips_and_answers_resolved(monkeypatch):
-    '''
-        Saving must answer with the RESOLVED yardstick, not with what was
-        sent: the caller has to see which defaults filled the gaps before a
-        semaphore is drawn with them.
-    '''
-    stored: dict = {}
-    monkeypatch.setattr(controllers, 'save_commercial_policy',
-                        lambda **kwargs: stored.update(kwargs['policy']))
-    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: stored)
-
-    response = asyncio.run(controllers.save_commercial_policy_controller(
-        dynamodb_resource = None,
-        policy = CommercialPolicySchema(
-            green_from = 0.9, points_per_cluster = {'PLATINIUM': 20.0}
-        ),
-        request = None,
-        current_user = 'tester@bearsoft.com.bo'
-    ))
-
-    assert isinstance(response, CommercialPolicyResponse)
-    assert response.green_from == 0.9
-    assert response.points_per_cluster == {'PLATINIUM': 20.0}
-    # Untouched by the caller, so the default has to be showing.
-    assert response.yellow_from == 0.5
-
-
 def test_run_analytics_returns_a_full_response(
     dataset,
     monkeypatch
@@ -694,36 +635,6 @@ def _stock_frame() -> pd.DataFrame:
          'on_hand': 100.0 + index, 'committed': 0.0, 'unit_cost': 6.0}
         for index in range(6)
     ])
-
-
-def test_the_credit_policy_controller_answers_the_resolved_policy(monkeypatch):
-    '''
-        The read side of the credit policy: it must show which defaults are
-        in force, because a provision computed with them cannot be audited
-        otherwise.
-    '''
-    monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
-
-    response = asyncio.run(controllers.get_credit_policy_controller(
-        dynamodb_resource = None, request = None,
-        current_user = 'tester@bearsoft.com.bo'
-    ))
-
-    assert isinstance(response, CreditPolicyResponse)
-    assert response.source_code == 'DEFAULT'
-
-
-def test_reading_the_commercial_policy_shows_the_defaults_in_force(monkeypatch):
-    '''An account that never set one reads the service defaults.'''
-    monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
-
-    response = asyncio.run(controllers.get_commercial_policy_controller(
-        dynamodb_resource = None, request = None,
-        current_user = 'tester@bearsoft.com.bo'
-    ))
-
-    assert isinstance(response, CommercialPolicyResponse)
-    assert (response.yellow_from, response.green_from) == (0.5, 1.0)
 
 
 def test_the_summary_of_several_months_reads_at_todays_rate(
@@ -998,3 +909,11 @@ def test_the_callers_token_travels_from_the_header() -> None:
     # pylint: disable=protected-access
     assert controllers._caller_token(request) == {'auth_token': 'Bearer t'}
     assert not controllers._caller_token(None)
+
+
+def test_stock_history_says_so_without_a_snapshot(dataset):
+    '''A dataset with no stock file answers NO_SNAPSHOT, not an empty history.'''
+    response = _call(controllers.stock_history_controller, dataset)
+
+    assert response.available is False
+    assert response.reason_code == 'NO_SNAPSHOT'

@@ -448,3 +448,23 @@ def money_total(
         return pd.Series({'bob': 0.0})
     return money_sums(dataframe, values, pd.Series(0, index = dataframe.index),
                       by_month).sum()
+
+
+def money_at(
+    bob: float,
+    rates: ReferenceRates
+) -> Money:
+    '''
+        Bolivianos with their dollars at the given rates: a month's close, a
+        day's own rate, today's.
+
+        Args:
+            bob (float): Bolivianos.
+            rates (ReferenceRates): Bolivianos per unit of each dollar.
+
+        Returns:
+            Money: The three amounts, rounded.
+    '''
+    return Money(bob = round(bob, AMOUNT_DECIMALS),
+                 usd = round(bob / rates.usd, AMOUNT_DECIMALS),
+                 usdt = round(bob / rates.usdt, AMOUNT_DECIMALS))

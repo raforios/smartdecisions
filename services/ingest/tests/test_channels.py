@@ -28,6 +28,8 @@ from schemas.channels import (
     ObjectivesPushSchema,
     IngestFromS3CompanionRequest,
     LoadMode,
+    PurchaseRowSchema,
+    PurchasesPushSchema,
     StockPushSchema,
     StockRowSchema,
     VisitRowSchema,
@@ -239,9 +241,12 @@ def test_a_stock_push_replaces_the_day_and_leaves_the_others(world):
             request = None
         ))
 
-    _push([{'snapshot_date': '2026-02-14', 'product_name': 'Producto 1', 'on_hand': 10}])
-    _push([{'snapshot_date': '2026-02-15', 'product_name': 'Producto 1', 'on_hand': 7}])
-    _push([{'snapshot_date': '2026-02-15', 'product_name': 'Producto 1', 'on_hand': 5}])
+    _push([{'snapshot_date': '2026-02-14', 'product_name': 'Producto 1', 'on_hand': 10,
+            'unit_price': 8.5}])
+    _push([{'snapshot_date': '2026-02-15', 'product_name': 'Producto 1', 'on_hand': 7,
+            'unit_price': 8.5}])
+    _push([{'snapshot_date': '2026-02-15', 'product_name': 'Producto 1', 'on_hand': 5,
+            'unit_price': 8.5}])
 
     stored = _stored_rows(world).sort_values('snapshot_date')
     assert len(stored) == 2
@@ -260,11 +265,11 @@ def test_the_stock_of_one_day_is_read_back_with_what_is_free(world):
         dataset_id = DATASET_ID,
         push = StockPushSchema(rows = [
             StockRowSchema(snapshot_date = '2026-02-14', product_name = 'Producto 1',
-                           on_hand = 10),
+                           on_hand = 10, unit_price = 8.5),
             StockRowSchema(snapshot_date = '2026-02-15', product_name = 'Producto 1',
-                           on_hand = 7, committed = 2),
+                           on_hand = 7, committed = 2, unit_price = 8.5),
             StockRowSchema(snapshot_date = '2026-02-15', product_name = 'Producto 2',
-                           on_hand = 4),
+                           on_hand = 4, unit_price = 8.5),
         ]),
         current_user = OWNER,
         auth_token = 'Bearer t',
@@ -546,7 +551,7 @@ def test_the_objectives_and_stock_s3_doors_load_their_files(world):
         b'Cliente,Periodo,Objetivo\nTienda 1,2026-02,15000\n'
     )
     world['objects']['ingest/raw/stock.csv'] = (
-        b'Fecha,Producto,Existencia\n2026-02-10,Producto 1,40\n'
+        b'Fecha,Producto,Existencia,Precio de Venta\n2026-02-10,Producto 1,40,8.5\n'
     )
 
     with patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']):
@@ -568,6 +573,26 @@ def test_the_objectives_and_stock_s3_doors_load_their_files(world):
     assert objectives.summary.valid_rows == 1
     assert stock.summary.valid_rows == 1
 
+
+
+def test_a_stock_file_keeps_the_days_already_loaded(world):
+    '''
+        A file loaded in REPLACE mode still keeps the earlier photos: the stock
+        has a history, and loading a new day must not erase the last one.
+    '''
+    for day, units in (('2026-02-10', 40), ('2026-02-11', 35)):
+        world['objects'][f'ingest/raw/stock-{day}.csv'] = (
+            f'Fecha,Producto,Existencia,Precio de Venta\n{day},Producto 1,{units},8.5\n'
+        ).encode()
+        stock = asyncio.run(channels.ingest_stock_from_s3_controller(
+            dynamodb_resource = None, dataset_id = DATASET_ID,
+            payload = IngestFromS3CompanionRequest(
+                file_key = f'ingest/raw/stock-{day}.csv', file_name = 'stock.csv'
+            ),
+            current_user = OWNER, auth_token = 'Bearer t', request = None
+        ))
+
+    assert stock.summary.valid_rows == 2
 
 def _create_sales(
     rows: list[SaleRowSchema],
@@ -631,3 +656,63 @@ def test_pushing_the_same_lines_again_returns_the_same_dataset(world): # pylint:
 
     assert response.dataset_id == DATASET_ID
     assert not persisted
+
+
+def _push_purchases(rows: list[dict[str, Any]]) -> Any:
+    '''
+        Runs the purchases push controller.
+
+        Args:
+            rows (list[dict[str, Any]]): Purchase rows.
+
+        Returns:
+            PurchasesResponse: What the endpoint answers.
+    '''
+    return asyncio.run(channels.push_purchases_controller(
+        dynamodb_resource = None,
+        dataset_id = DATASET_ID,
+        push = PurchasesPushSchema(rows = [PurchaseRowSchema(**row) for row in rows]),
+        current_user = OWNER,
+        auth_token = 'Bearer t',
+        request = None
+    ))
+
+
+def test_purchases_add_up_and_a_retry_counts_once(world):
+    '''A second purchase is added; sending the first again does not double it.'''
+    first = {'purchase_date': '2026-02-10', 'supplier': 'Plastiforte',
+             'product_name': 'Producto 1', 'quantity': 10, 'unit_cost': 6.2, 'currency': 'USD'}
+    _push_purchases([first])
+    _push_purchases([{**first, 'purchase_date': '2026-02-20', 'unit_cost': 6.5}])
+    response = _push_purchases([first])
+
+    assert response.summary.valid_rows == 2
+    assert len(_stored_rows(world)) == 2
+
+
+def test_a_purchase_in_an_unknown_currency_is_refused(world):
+    '''Only bolivianos, the official dollar and USDT: anything else is an issue.'''
+    response = _push_purchases([{'purchase_date': '2026-02-10', 'supplier': 'Plastiforte',
+                                 'product_name': 'Producto 1', 'quantity': 10,
+                                 'unit_cost': 6.2, 'currency': 'EUR'}])
+
+    assert response.status == 'failed'
+    assert response.issues
+    assert world['dataset'].get('purchases_s3_key') is None
+
+
+def test_the_purchases_s3_door_loads_its_file(world):
+    '''The staged file reaches the same pipeline as the push.'''
+    world['objects']['ingest/raw/compras.csv'] = (
+        b'Fecha,Proveedor,Producto,Cantidad,Costo Unitario,Moneda\n'
+        b'2026-02-10,Plastiforte,Producto 1,10,45.5,bob\n'
+    )
+    response = asyncio.run(channels.ingest_purchases_from_s3_controller(
+        dynamodb_resource = None, dataset_id = DATASET_ID,
+        payload = IngestFromS3CompanionRequest(file_key = 'ingest/raw/compras.csv',
+                                               file_name = 'compras.csv'),
+        current_user = OWNER, auth_token = 'Bearer t', request = None
+    ))
+
+    assert response.summary.valid_rows == 1
+    assert _stored_rows(world)['currency'].tolist() == ['BOB']

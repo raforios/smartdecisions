@@ -10,18 +10,21 @@ from fastapi import APIRouter, Depends, Header, Path as PathParam, Request, stat
 
 from controllers.channels import (
     ingest_collections_from_s3_controller,
+    ingest_purchases_from_s3_controller,
     ingest_objectives_from_s3_controller,
     create_sales_dataset_controller,
     push_sales_controller,
     ingest_stock_from_s3_controller,
     ingest_visits_from_s3_controller,
     push_collections_controller,
+    push_purchases_controller,
     push_objectives_controller,
     push_stock_controller,
     push_visits_controller
 )
 from schemas.channels import (
     CollectionsPushSchema,
+    PurchasesPushSchema,
     ObjectivesPushSchema,
     SalesPushSchema,
     SalesRowsSchema,
@@ -31,6 +34,7 @@ from schemas.channels import (
 )
 from schemas.ingest import (
     CollectionsResponse,
+    PurchasesResponse,
     ObjectivesResponse,
     IngestResponse,
     StockResponse,
@@ -381,6 +385,69 @@ async def ingest_visits_from_s3_endpoint(
                f'({payload.mode.value}) into dataset {dataset_id}.')
     logger.info(message)
     return await ingest_visits_from_s3_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        payload = payload,
+        current_user = current_user,
+        auth_token = authorization,
+        request = request
+    )
+
+
+@router.post(
+    '/{dataset_id}/purchases/rows',
+    response_model = PurchasesResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Push the purchases made, from an ERP',
+    description = 'A purchase is its day, supplier, product, quantity, unit cost and '
+                  'currency. ' + _APPEND_NOTE
+)
+async def push_purchases_endpoint(
+    request: Request,
+    push: PurchasesPushSchema,
+    dataset_id: str = _DATASET_ID,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> PurchasesResponse:
+    '''
+        Endpoint to push purchases as JSON.
+    '''
+    message = (f'User: {current_user}. Pushing {len(push.rows)} purchase(s) '
+               f'({push.mode.value}) to dataset {dataset_id}.')
+    logger.info(message)
+    return await push_purchases_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        push = push,
+        current_user = current_user,
+        auth_token = authorization,
+        request = request
+    )
+
+
+@router.post(
+    '/{dataset_id}/purchases/from-s3',
+    response_model = PurchasesResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Load a purchases file already staged in S3',
+    description = _S3_NOTE
+)
+async def ingest_purchases_from_s3_endpoint(
+    request: Request,
+    payload: IngestFromS3CompanionRequest,
+    dataset_id: str = _DATASET_ID,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> PurchasesResponse:
+    '''
+        Endpoint to load a purchases file from S3.
+    '''
+    message = (f'User: {current_user}. Loading purchases "{payload.file_key}" '
+               f'({payload.mode.value}) into dataset {dataset_id}.')
+    logger.info(message)
+    return await ingest_purchases_from_s3_controller(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
         payload = payload,

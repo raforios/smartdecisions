@@ -28,6 +28,7 @@ class AIError(str, Enum):
     EMPTY_PAYLOAD = 'EMPTY_PAYLOAD'
     PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE'
     ROLE_NOT_CONFIGURED = 'ROLE_NOT_CONFIGURED'
+    ROLE_NOT_FOUND = 'ROLE_NOT_FOUND'
     MODEL_UNAVAILABLE = 'MODEL_UNAVAILABLE'
     MODEL_REFUSED = 'MODEL_REFUSED'
 
@@ -129,3 +130,11 @@ class RoleListResponse(BaseModel):
     '''The roles currently configured, so they can be reviewed without a deploy.'''
     count: int = Field(..., ge = 0)
     roles: list[RoleSummary] = Field(default_factory = list)
+
+
+class RoleActiveRequest(BaseModel):
+    '''
+        Turns one version of a role on or off. Turning one on retires the
+        other versions of the same view: a view is explained by one role.
+    '''
+    active: bool

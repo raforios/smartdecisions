@@ -7,13 +7,15 @@ from fastapi import APIRouter, Depends, Header, Path, Request, status
 
 from controllers.daily_stock import (
     get_daily_stock_controller,
+    get_day_statistics_controller,
     load_daily_stock_controller,
     load_daily_stock_from_ingest_controller
 )
 from schemas.daily_stock import (
     DailyStockFromIngestSchema,
     DailyStockLoadSchema,
-    DailyStockResponseSchema
+    DailyStockResponseSchema,
+    DayStatisticsSchema
 )
 from schemas.localization import FIELD_ROLES, MANAGEMENT_ROLES
 from services.db_connection import GET_DB_DEPENDENCY
@@ -103,6 +105,34 @@ async def get_daily_stock_endpoint(
     message = f'User: {current_user}. Reading stock of {day}.'
     logger.info(message)
     return await get_daily_stock_controller(
+        dynamodb_resource = dynamodb_resource,
+        day = day,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/statistics/day/{day}',
+    response_model = DayStatisticsSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'What the field did on one day',
+    description = 'Sellers still on route, routes started and closed, the share of the '
+                  'planned stops that were visited and the kilometres covered along the '
+                  'reported points. For the main dashboard.'
+)
+async def get_day_statistics_endpoint(
+    request: Request,
+    day: str = _DAY,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    current_user: str = Depends(require_roles(*MANAGEMENT_ROLES))
+) -> DayStatisticsSchema:
+    '''
+        Endpoint to read the field figures of a day.
+    '''
+    message = f'User: {current_user}. Reading field statistics of {day}.'
+    logger.info(message)
+    return await get_day_statistics_controller(
         dynamodb_resource = dynamodb_resource,
         day = day,
         current_user = current_user,

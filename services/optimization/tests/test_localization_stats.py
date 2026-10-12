@@ -17,6 +17,7 @@ from schemas.localization import (
     VisitOutcome
 )
 from services import localization, localization_executed as executed, localization_stats as stats
+from services.day_statistics import day_statistics, route_km
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.utils import get_current_time_gmt
 from tests.dynamo_helpers import build_resource
@@ -248,3 +249,39 @@ def test_a_stop_the_plan_does_not_know_is_never_fenced(
     '''
     route = _run_route(dynamodb, plan, [(-16.4000, -68.0000, 'PDV-NUEVO')])
     assert len(route['points']) == 1
+
+
+def test_the_day_counts_who_is_out_and_how_much_of_the_plan_was_visited(
+    dynamodb,
+    plan
+):
+    '''One open route that visited 2 of the 4 planned stops: one seller out, 50 %.'''
+    _run_route(dynamodb, plan, [(STOPS[0][1], STOPS[0][2], 'PDV-1'),
+                                (STOPS[1][1], STOPS[1][2], 'PDV-2')])
+    today = get_current_time_gmt().date().isoformat()
+
+    day = day_statistics(dynamodb, OWNER, today)
+
+    assert (day.sellers_on_route, day.routes_started, day.routes_closed) == (1, 1, 0)
+    assert (day.planned_stops, day.visited_stops) == (4, 2)
+    assert day.visit_compliance == 50.0
+    assert day.distance_km > 0
+
+
+def test_a_day_without_routes_has_nothing_to_measure(dynamodb):
+    '''No route run: zeros, and no compliance rather than a made-up 0 %.'''
+    day = day_statistics(dynamodb, OWNER, '2026-01-02')
+
+    assert day.routes_started == 0
+    assert day.visit_compliance is None
+    assert day.distance_km == 0.0
+
+
+def test_the_kilometres_follow_the_points_in_the_order_reported():
+    '''Two readings 0.01 degrees of latitude apart are about 1.11 km.'''
+    route = {'points': [
+        {'latitude': -16.51, 'longitude': -68.1, 'timestamp': '2026-10-12T10:00:00'},
+        {'latitude': -16.50, 'longitude': -68.1, 'timestamp': '2026-10-12T09:00:00'},
+    ]}
+
+    assert route_km(route) == 1.11

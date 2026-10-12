@@ -332,6 +332,12 @@ def test_comparison_and_statistics_endpoints(client):
     assert visited.json()['total_points_visited'] == 1
     assert visited.json()['points_details'][0]['outcome'] == 'VENTA'
 
+    today = _now_iso(9)[:10]
+    day = client.get(f'/v1/optimization/statistics/day/{today}')
+    assert day.status_code == 200, day.text
+    assert day.json()['sellers_on_route'] == 1
+    assert day.json()['visit_compliance'] == 50.0
+
 
 def test_infer_planned_route_from_a_day_without_plan(client):
     '''A free day becomes a plan and its route gets linked; an empty day is refused.'''
@@ -368,8 +374,8 @@ def test_daily_stock_load_sale_on_visit_and_remaining(client):
     today = get_current_time_gmt().date().isoformat()
     loaded = client.put('/v1/optimization/stock/day', json = {
         'date': today,
-        'items': [{'sku': 'A', 'quantity': 3, 'product_name': 'Agua 2L'},
-                  {'sku': 'B', 'quantity': 1}]
+        'items': [{'sku': 'A', 'quantity': 3, 'product_name': 'Agua 2L', 'unit_price': 7.5},
+                  {'sku': 'B', 'quantity': 1, 'unit_price': 4.0}]
     })
     assert loaded.status_code == 200, loaded.text
     assert loaded.json()['skus_loaded'] == 2 and loaded.json()['skus_out_of_stock'] == 0
@@ -428,13 +434,17 @@ def test_the_day_opens_from_the_stock_file_loaded_in_ingest(
         **kwargs
     ) -> Mock:
         asked.append((url, kwargs['params']['date'], kwargs['headers']['Authorization']))
+        if kwargs['params']['date'] == '2026-10-03':
+            return _ingest_answer(200, {'dataset_id': 'ds-12345678', 'date': '2026-10-03',
+                                        'items': [{'product_id': 'Pan', 'on_hand': 3,
+                                                   'committed': 0, 'available': 3}]})
         if kwargs['params']['date'] != '2026-10-01':
             return _ingest_answer(404, {'detail': 'NO_STOCK_FOR_DAY'})
         return _ingest_answer(200, {'dataset_id': 'ds-12345678', 'date': '2026-10-01', 'items': [
             {'product_id': 'Agua 2L', 'product_name': 'Agua 2L', 'on_hand': 10,
-             'committed': 4, 'available': 6},
+             'committed': 4, 'available': 6, 'unit_price': 7.5},
             {'product_id': 'Pan', 'product_name': 'Pan', 'on_hand': 3,
-             'committed': 0, 'available': 3}
+             'committed': 0, 'available': 3, 'unit_price': 1.0}
         ]})
 
     monkeypatch.setattr(ingest_directory.requests, 'get', _ingest)
@@ -453,6 +463,15 @@ def test_the_day_opens_from_the_stock_file_loaded_in_ingest(
                           headers = {'Authorization': 'Bearer t'})
     assert missing.status_code == 404
     assert missing.json()['detail'] == 'NO_STOCK_FOR_DAY'
+
+    # A photo loaded before the price was required cannot open a day.
+    unpriced = client.post('/v1/optimization/stock/day/from-ingest',
+                           json = {'dataset_id': 'ds-12345678', 'date': '2026-10-03'},
+                           headers = {'Authorization': 'Bearer t'})
+    assert unpriced.status_code == 400
+    assert unpriced.json()['detail'] == 'MISSING_PRICE'
+    assert {row['sku']: row['unit_price'] for row in opened.json()['items']} == {
+        'Agua 2L': 7.5, 'Pan': 1.0}
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +505,8 @@ def test_seller_is_kept_to_field_work(client):
     for refused in (
         client.post(BASE, json = ROUTE_BODY),
         client.put('/v1/optimization/stock/day',
-                   json = {'date': '2026-09-21', 'items': [{'sku': 'A', 'quantity': 1}]}),
+                   json = {'date': '2026-09-21',
+                           'items': [{'sku': 'A', 'quantity': 1, 'unit_price': 7.5}]}),
         client.get(f'{EXECUTED}/last-location', params = {'sellers': ['ana@acme.com']})
     ):
         assert refused.status_code == 403, refused.text

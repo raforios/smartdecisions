@@ -236,7 +236,7 @@ def _loss_rate_of(
     return float(policy.loss_rates[-1]) if policy.loss_rates else 0.0
 
 
-def _invoice_frame(sales: pd.DataFrame) -> pd.DataFrame | None:
+def invoice_frame(sales: pd.DataFrame) -> pd.DataFrame | None:
     '''
         Collapses the sales rows into one row per invoice.
 
@@ -719,7 +719,7 @@ def build_receivables(
                                  ReceivablesUnavailable.NO_CREDIT_COLUMNS)
 
     policy = resolve_policy(stored_policy)
-    invoices = _invoice_frame(sales)
+    invoices = invoice_frame(sales)
     if invoices is None or invoices.empty:
         return unavailable_block(ReceivablesBlock, 'Receivables',
                                  ReceivablesUnavailable.NO_CREDIT_COLUMNS)

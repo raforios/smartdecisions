@@ -9,7 +9,8 @@ from fastapi import Request
 from schemas.daily_stock import (
     DailyStockFromIngestSchema,
     DailyStockLoadSchema,
-    DailyStockResponseSchema
+    DailyStockResponseSchema,
+    DayStatisticsSchema
 )
 from services.daily_stock import (
     fetch_stock_from_ingest,
@@ -17,6 +18,7 @@ from services.daily_stock import (
     load_daily_stock,
     to_daily_stock_response
 )
+from services.day_statistics import day_statistics
 from services.utils import audit_event, handle_service_errors
 
 
@@ -77,3 +79,20 @@ async def get_daily_stock_controller(
         day = day
     )
     return to_daily_stock_response(day, rows)
+
+
+@handle_service_errors('OPTIMIZATION')
+async def get_day_statistics_controller(
+    dynamodb_resource: ServiceResource,
+    day: str,
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> DayStatisticsSchema:
+    '''
+        The field figures of one day: sellers out, plan compliance, kilometres.
+    '''
+    return day_statistics(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = current_user,
+        day = day
+    )

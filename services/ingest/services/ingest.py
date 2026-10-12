@@ -19,6 +19,7 @@ import pandas as pd
 from schemas.ingest import (
     COLLECTION_COLUMNS,
     SALES_COLUMNS,
+    PURCHASE_COLUMNS,
     STOCK_COLUMNS,
     VISIT_COLUMNS,
     IngestSummary,
@@ -185,6 +186,7 @@ def _coerce_dates(values: pd.Series) -> pd.Series:
 _DATE_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
     column.canonical
     for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS
+    + PURCHASE_COLUMNS
     if column.dtype.startswith('datetime64')
 ))
 
@@ -194,6 +196,7 @@ _DATE_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
 _OPTION_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
     column.canonical
     for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS
+    + PURCHASE_COLUMNS
     if column.rules.allowed is not None
 ))
 

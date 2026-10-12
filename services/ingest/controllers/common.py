@@ -9,6 +9,7 @@
     from drifting apart, which is exactly what happened when the S3 upload path
     forgot two of them.
 '''
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
@@ -25,6 +26,7 @@ from schemas.ingest import (
     IngestSummary,
     ValidationIssue
 )
+from schemas.channels import LoadMode
 from schemas.clients import ClientSource
 from services.clients import CLIENT_FRAME_COLUMNS, sync_master
 from services.environment import load_and_validate_env_vars
@@ -265,6 +267,72 @@ class CompanionSpec:
     # its own copy of the call, and the `from-s3` door simply forgot, so the
     # same file loaded through a different endpoint gave a different master.
     names_clients: bool = False
+    # Whether every load lands on top of what is stored instead of replacing
+    # it, by the merge keys. The stock does: each photo is kept with its date,
+    # so the inventory has a history and the latest date is still today's.
+    keeps_history: bool = False
+
+
+@dataclass(frozen = True)
+class LoadContext:
+    '''
+        What a merge needs to know, grouped so the signature stays readable.
+    '''
+    dataset: dict
+    spec: CompanionSpec
+    mode: LoadMode
+    sales: Any
+    validate_rows: Callable[..., Any]
+    origin: str
+    auth_token: str
+
+
+def merge_if_appending(
+    context: LoadContext,
+    result: Any
+) -> Any:
+    '''
+        Lands a load on top of what the dataset already holds.
+
+        The summary ends up describing EVERYTHING stored, because that is what
+        the analysis reads; the issues keep describing only this load, because
+        those are the rows the caller can still fix. Reporting this load's own
+        count as the total would say five payments when the dataset holds five
+        hundred.
+
+        Args:
+            context (LoadContext): Dataset, spec, mode and how to re-validate.
+            result (Any): Outcome of validating what just arrived.
+
+        Returns:
+            Any: The same result, or the merged one with this load's issues.
+    '''
+    # A companion that keeps its history never loses a day, whatever the mode.
+    if context.mode is not LoadMode.APPEND and not context.spec.keeps_history:
+        return result
+    previous = stored_companion_frame(context.dataset, context.spec,
+                                      context.auth_token)
+    if previous is None:
+        return result
+
+    # The stored rows come back from CSV as text, so they are put through the
+    # very same contract before being compared: a date that is a Timestamp on
+    # one side and a string on the other is never equal, and the merge key
+    # would silently stop deduplicating. That bug was caught by the retry test.
+    aligned = context.validate_rows(previous, context.sales, context.origin).accepted
+    merged = pd.concat([aligned, result.accepted], ignore_index = True)
+    keys = [key for key in context.spec.merge_keys if key in merged.columns]
+    if keys:
+        merged = merged.drop_duplicates(subset = keys, keep = 'last')
+    merged = merged.reset_index(drop = True)
+
+    message = (f'{context.spec.name.capitalize()} merge: {len(aligned)} stored + '
+               f'{len(result.accepted)} new = {len(merged)} row(s).')
+    logger.info(message)
+    if len(merged) == len(result.accepted):
+        return result
+    whole = context.validate_rows(merged, context.sales, context.origin)
+    return replace(whole, issues = result.issues)
 
 
 async def store_companion(

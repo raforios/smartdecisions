@@ -21,13 +21,12 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from schemas.ingest import StockDayItem, StockSummary, ValidationIssue, ValidationRule
+from schemas.ingest import StockDayItem, StockSummary, ValidationIssue
 from services.ingest import fill_product_ids, normalize_frame
 from services.ingest_contract import (
     STOCK_HEADER_LOOKUP,
     STOCK_SCHEMA,
-    unknown_value_issues,
-    validate
+    validate_by_catalogue
 )
 from services.ingest_files import read_file
 from services.ingest_contract import AMOUNT_DECIMALS
@@ -38,6 +37,8 @@ _ON_HAND = 'on_hand'
 _SNAPSHOT_DATE = 'snapshot_date'
 _COMMITTED = 'committed'
 _PRODUCT_NAME = 'product_name'
+_UNIT_COST = 'unit_cost'
+_UNIT_PRICE = 'unit_price'
 
 
 @dataclass(frozen = True)
@@ -161,19 +162,9 @@ def validate_rows(
             StockResult: Accepted rows, issues and summary.
     '''
     filename = origin
-    validation = validate(mapped, STOCK_SCHEMA)
-    issues = list(validation.issues)
-    accepted = validation.frame if validation.is_valid else mapped.iloc[0:0]
-
-    catalogue = set(
-        sales[_PRODUCT].dropna().astype(str)
-    ) if _PRODUCT in sales.columns else set()
-
-    if not accepted.empty and catalogue:
-        issues.extend(unknown_value_issues(accepted, _PRODUCT, catalogue,
-                                           ValidationRule.UNKNOWN_PRODUCT))
-
-    summary = _summarize(accepted, catalogue, error_rows = len(validation.issues))
+    accepted, issues, catalogue, error_rows = validate_by_catalogue(
+        mapped, STOCK_SCHEMA, sales)
+    summary = _summarize(accepted, catalogue, error_rows = error_rows)
     message = (f'Stock pipeline processed "{filename}": {summary.valid_rows} row(s) over '
                f'{summary.products} product(s), {summary.unknown_products} unknown, '
                f'{len(issues)} issue(s).')
@@ -229,7 +220,8 @@ def stock_of_day(
     if stored.empty or _SNAPSHOT_DATE not in stored.columns:
         return []
 
-    columns = [_SNAPSHOT_DATE, _PRODUCT, _PRODUCT_NAME, _ON_HAND, _COMMITTED]
+    columns = [_SNAPSHOT_DATE, _PRODUCT, _PRODUCT_NAME, _ON_HAND, _COMMITTED,
+               _UNIT_COST, _UNIT_PRICE]
     frame = stored.reindex(columns = columns)
     frame = frame[pd.to_datetime(frame[_SNAPSHOT_DATE], errors = 'coerce')
                   .dt.strftime('%Y-%m-%d') == day]
@@ -238,11 +230,15 @@ def stock_of_day(
 
     grouped = frame.assign(
         on_hand = pd.to_numeric(frame[_ON_HAND], errors = 'coerce').fillna(0.0),
-        committed = pd.to_numeric(frame[_COMMITTED], errors = 'coerce').fillna(0.0)
+        committed = pd.to_numeric(frame[_COMMITTED], errors = 'coerce').fillna(0.0),
+        unit_cost = pd.to_numeric(frame[_UNIT_COST], errors = 'coerce'),
+        unit_price = pd.to_numeric(frame[_UNIT_PRICE], errors = 'coerce')
     ).groupby(_PRODUCT, sort = True).agg(
         product_name = (_PRODUCT_NAME, 'first'),
         on_hand = (_ON_HAND, 'sum'),
-        committed = (_COMMITTED, 'sum')
+        committed = (_COMMITTED, 'sum'),
+        unit_cost = (_UNIT_COST, 'mean'),
+        unit_price = (_UNIT_PRICE, 'mean')
     )
     return [
         StockDayItem(
@@ -251,7 +247,11 @@ def stock_of_day(
             on_hand = round(float(row.on_hand), AMOUNT_DECIMALS),
             committed = round(float(row.committed), AMOUNT_DECIMALS),
             available = round(max(float(row.on_hand) - float(row.committed), 0.0),
-                              AMOUNT_DECIMALS)
+                              AMOUNT_DECIMALS),
+            unit_cost = None if pd.isna(row.unit_cost) else round(float(row.unit_cost),
+                                                                  AMOUNT_DECIMALS),
+            unit_price = None if pd.isna(row.unit_price) else round(float(row.unit_price),
+                                                                    AMOUNT_DECIMALS)
         )
         for product_id, row in grouped.iterrows()
     ]

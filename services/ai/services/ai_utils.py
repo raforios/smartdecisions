@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError
 from models.ai import (
     CACHE_PARTITION_KEY,
     PROMPTS_PARTITION_KEY,
+    PROMPTS_SORT_KEY,
     ExplanationItem,
     PromptItem
 )
@@ -144,6 +145,35 @@ def list_prompts() -> list[PromptItem]:
         (PromptItem.from_item(item) for item in items),
         key = lambda prompt: (prompt.view, prompt.version)
     )
+
+
+def get_prompt(
+    view: str,
+    version: int
+) -> PromptItem | None:
+    '''
+        Returns one version of a role, active or not.
+
+        Args:
+            view (str): View the role explains.
+            version (int): Version to read.
+
+        Returns:
+            PromptItem | None: The role, or None when that version does not exist.
+
+        Raises:
+            ServiceUnavailableError: If the table cannot be read.
+    '''
+    try:
+        response = _table(PROMPTS_TABLE).get_item(
+            Key = {PROMPTS_PARTITION_KEY: view, PROMPTS_SORT_KEY: version}
+        )
+    except ClientError as error:
+        error_msg = f'Failed to read role {view} v{version}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(detail = AIError.ROLE_NOT_CONFIGURED.value) from error
+    item = response.get('Item')
+    return PromptItem.from_item(item) if item else None
 
 
 def put_prompt(prompt: PromptItem) -> None:

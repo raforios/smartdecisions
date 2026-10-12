@@ -12,7 +12,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from schemas.analytics import Amount, PeriodInfo, ReferenceRates
+from schemas.analytics import Amount, Money, PeriodInfo, ReferenceRates
 
 
 class StockStatus(str, Enum):
@@ -113,3 +113,31 @@ class StockResponse(BaseModel):
     at_risk: list[StockRow] = []
     excess: list[StockRow] = []
     products: list[StockRow] = []
+
+
+class StockPhoto(BaseModel):
+    '''
+        One stored photo of the warehouse. A photo is history: its dollars are
+        those of its own day, and next to them the same bolivianos today.
+    '''
+    date: str
+    products: int = 0
+    units_on_hand: float = 0.0
+    out_of_stock: int = 0
+    value_at_cost: Money | None = None
+    value_at_price: Money | None = None
+    value_at_price_today: Money | None = None
+
+
+class StockHistoryResponse(BaseModel):
+    '''
+        The inventory over time, for GET /v1/analytics/stock-history/{dataset_id}:
+        one row per stored photo, oldest first. The last one's price list, in
+        dollars of its day against today, says whether the prices need an
+        adjustment.
+    '''
+    dataset_id: str
+    available: bool = False
+    reason_code: str | None = None
+    rates: ReferenceRates | None = None
+    photos: list[StockPhoto] = []

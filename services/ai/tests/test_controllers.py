@@ -10,7 +10,15 @@
 import asyncio
 from unittest.mock import patch
 
-from schemas.ai import ExplainRequest, ExplainResponse, RoleListResponse, ViewName
+from schemas.ai import (
+    ExplainRequest,
+    ExplainResponse,
+    RoleActiveRequest,
+    RoleDefinition,
+    RoleListResponse,
+    RoleSummary,
+    ViewName
+)
 from controllers import ai as controllers
 
 
@@ -64,3 +72,59 @@ def test_roles_controller_returns_its_model():
     assert isinstance(response, RoleListResponse)
     assert response.count == 1
     assert response.roles[0].view is ViewName.SALE_SCENARIO
+
+
+def test_get_role_controller_returns_its_model():
+    '''One version of a role answers a fully built RoleDefinition.'''
+    async def _role(
+        view,
+        version
+    ):
+        return {'view': view, 'version': version, 'role': 'Asesor.',
+                'instructions': 'Explica.', 'rules': ['No inventes.'], 'max_tokens': 400,
+                'model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0', 'active': False}
+
+    with patch.object(controllers, 'get_role_service', _role):
+        response = asyncio.run(controllers.get_role_controller(
+            view = ViewName.SALE_SCENARIO, version = 2, current_user = 'tester', request = None
+        ))
+
+    assert isinstance(response, RoleDefinition)
+    assert response.rules == ['No inventes.']
+
+
+def test_set_role_active_controller_returns_its_model():
+    '''Switching a version answers a fully built RoleSummary.'''
+    async def _switch(
+        view,
+        version,
+        active
+    ):
+        return {'view': view, 'version': version, 'role': 'Asesor.',
+                'model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0', 'active': active}
+
+    with patch.object(controllers, 'set_role_active_service', _switch):
+        response = asyncio.run(controllers.set_role_active_controller(
+            view = ViewName.SALE_SCENARIO, version = 2,
+            change = RoleActiveRequest(active = False), current_user = 'tester', request = None
+        ))
+
+    assert isinstance(response, RoleSummary)
+    assert response.active is False
+
+
+def test_save_role_controller_returns_its_model():
+    '''Storing a version answers a fully built RoleSummary.'''
+    async def _save(definition):
+        return {key: definition[key] for key in ('view', 'version', 'role', 'model_id', 'active')}
+
+    definition = RoleDefinition(view = ViewName.SALE_SCENARIO, version = 3, role = 'Asesor.',
+                                instructions = 'Explica.', max_tokens = 400,
+                                model_id = 'us.anthropic.claude-haiku-4-5-20251001-v1:0')
+    with patch.object(controllers, 'save_role_service', _save):
+        response = asyncio.run(controllers.save_role_controller(
+            definition = definition, current_user = 'tester', request = None
+        ))
+
+    assert isinstance(response, RoleSummary)
+    assert response.version == 3

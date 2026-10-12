@@ -26,6 +26,7 @@ from schemas.ingest import (
     OBJECTIVE_COLUMNS,
     OPTIONAL_COLUMNS,
     REQUIRED_COLUMNS,
+    PURCHASE_COLUMNS,
     SALES_COLUMNS,
     STOCK_COLUMNS,
     VISIT_COLUMNS,
@@ -38,6 +39,8 @@ from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
 _ENV_VARS = load_and_validate_env_vars({'AMOUNT_DECIMALS': int})
+# What a stock photo or a purchase is married to the sales catalogue by.
+_CATALOGUE_KEY = 'product_id'
 # Decimals a published amount carries. A decision —a distributor in bolivianos
 # and one in dollars do not round the same— so it is not a literal in the code.
 AMOUNT_DECIMALS: Final[int] = _ENV_VARS['AMOUNT_DECIMALS']
@@ -89,6 +92,7 @@ def _build_header_lookup(columns: tuple[SalesColumn, ...]) -> dict[str, str]:
 SALES_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(SALES_COLUMNS)
 COLLECTION_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(COLLECTION_COLUMNS)
 STOCK_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(STOCK_COLUMNS)
+PURCHASE_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(PURCHASE_COLUMNS)
 VISIT_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(VISIT_COLUMNS)
 CLIENT_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(CLIENT_COLUMNS)
 OBJECTIVE_HEADER_LOOKUP: Final[dict[str, str]] = _build_header_lookup(OBJECTIVE_COLUMNS)
@@ -206,6 +210,12 @@ STOCK_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
     STOCK_COLUMNS,
     f'SmartDecisions stock contract {TEMPLATE_VERSION}. Required: '
     f'{", ".join(column.canonical for column in STOCK_COLUMNS if column.required)}.'
+)
+
+PURCHASES_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
+    PURCHASE_COLUMNS,
+    f'SmartDecisions purchases contract {TEMPLATE_VERSION}. Required: '
+    f'{", ".join(column.canonical for column in PURCHASE_COLUMNS if column.required)}.'
 )
 
 VISITS_SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
@@ -373,3 +383,34 @@ def unknown_value_issues(
         )
         for position, row in unknown.iterrows()
     ]
+
+
+def validate_by_catalogue(
+    mapped: pd.DataFrame,
+    schema: pa.DataFrameSchema,
+    sales: pd.DataFrame
+) -> tuple[pd.DataFrame, list[ValidationIssue], set, int]:
+    '''
+        Validates a companion that names products and marries it to the
+        product catalogue of the sales dataset: the stock and the purchases.
+
+        Args:
+            mapped (pd.DataFrame): Canonical rows.
+            schema (pa.DataFrameSchema): The companion's contract.
+            sales (pd.DataFrame): Normalized sales frame holding the catalogue.
+
+        Returns:
+            tuple: The accepted rows, every issue (contract and unknown
+                products), the catalogue and how many rows failed the
+                contract, for the summary.
+    '''
+    validation = validate(mapped, schema)
+    issues = list(validation.issues)
+    accepted = validation.frame if validation.is_valid else mapped.iloc[0:0]
+    catalogue = set(
+        sales[_CATALOGUE_KEY].dropna().astype(str)
+    ) if _CATALOGUE_KEY in sales.columns else set()
+    if not accepted.empty and catalogue:
+        issues.extend(unknown_value_issues(accepted, _CATALOGUE_KEY, catalogue,
+                                           ValidationRule.UNKNOWN_PRODUCT))
+    return accepted, issues, catalogue, len(validation.issues)

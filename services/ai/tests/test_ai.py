@@ -8,6 +8,7 @@
     provider. They show up as a confident explanation of the wrong thing.
 '''
 import asyncio
+from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
@@ -380,3 +381,49 @@ def test_every_view_the_portal_explains_is_known(view):
         the model and the portal printed the error list as "[object Object]".
     '''
     assert ViewName(view).value == view
+
+
+def test_a_role_is_read_whole_to_be_edited():
+    '''The editor needs the instructions and every rule, not the summary.'''
+    with patch.object(ai, 'get_prompt', lambda view, version: _prompt(version)):
+        role = _run(ai.get_role_service(ViewName.RATE_FORECAST.value, 3))
+
+    assert role['version'] == 3
+    assert role['instructions'] == 'Explica la serie.'
+    assert role['rules'] == ['No inventes cifras.']
+
+
+def test_a_version_that_does_not_exist_answers_not_found():
+    '''Reading or switching a missing version is a 404 with its code.'''
+    with patch.object(ai, 'get_prompt', lambda view, version: None):
+        with pytest.raises(HTTPException) as raised:
+            _run(ai.get_role_service(ViewName.RATE_FORECAST.value, 9))
+
+    assert raised.value.status_code == 404
+    assert raised.value.detail == AIError.ROLE_NOT_FOUND.value
+
+
+def test_turning_a_version_on_retires_the_one_in_force():
+    '''Rolling back is turning the old version on: the newer one goes off.'''
+    stored = {}
+    old, new = replace(_prompt(1), active = False), _prompt(2)
+    with patch.object(ai, 'get_prompt', lambda view, version: {1: old, 2: new}[version]), \
+         patch.object(ai, 'put_prompt',
+                      lambda prompt: stored.__setitem__(prompt.version, prompt.active)), \
+         patch.object(ai, 'list_prompts', lambda: [old, new]):
+        result = _run(ai.set_role_active_service(ViewName.RATE_FORECAST.value, 1, True))
+
+    assert result['active'] is True
+    assert stored == {1: True, 2: False}
+
+
+def test_turning_a_version_off_touches_nothing_else():
+    '''Deactivating leaves the view without a role; nothing else changes.'''
+    stored = {}
+    with patch.object(ai, 'get_prompt', lambda view, version: _prompt(version)), \
+         patch.object(ai, 'put_prompt',
+                      lambda prompt: stored.__setitem__(prompt.version, prompt.active)), \
+         patch.object(ai, 'list_prompts', lambda: [_prompt(1)]):
+        _run(ai.set_role_active_service(ViewName.RATE_FORECAST.value, 2, False))
+
+    assert stored == {2: False}

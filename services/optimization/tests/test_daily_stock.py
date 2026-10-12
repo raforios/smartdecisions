@@ -36,7 +36,8 @@ def _load(
         A load of `day` with one item per keyword: sku = units.
     '''
     return DailyStockLoadSchema(date = day, items = [
-        StockItemLoadSchema(sku = sku, quantity = units, product_name = f'Producto {sku}')
+        StockItemLoadSchema(sku = sku, quantity = units, product_name = f'Producto {sku}',
+                            unit_price = 10.0)
         for sku, units in quantities.items()
     ])
 
@@ -64,7 +65,8 @@ def test_load_daily_stock_stores_rows_and_refuses_repeated_skus(dynamodb):
     assert daily_stock.get_daily_stock(dynamodb, OTHER, day) == []
 
     twice = DailyStockLoadSchema(date = day, items = [
-        StockItemLoadSchema(sku = 'A', quantity = 1), StockItemLoadSchema(sku = 'A', quantity = 2)
+        StockItemLoadSchema(sku = 'A', quantity = 1, unit_price = 10.0),
+        StockItemLoadSchema(sku = 'A', quantity = 2, unit_price = 10.0)
     ])
     with pytest.raises(InvalidInputError) as failure:
         daily_stock.load_daily_stock(dynamodb, OWNER, twice)

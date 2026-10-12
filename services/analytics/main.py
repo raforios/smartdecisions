@@ -16,6 +16,7 @@ from mangum import Mangum
 import uvicorn
 
 from routes.analytics import router as analytics_router
+from routes.areas import router as areas_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
@@ -156,6 +157,7 @@ async def custom_swagger_ui() -> HTMLResponse:
 
 
 app.include_router(analytics_router)
+app.include_router(areas_router)
 
 
 def run_local() -> None:

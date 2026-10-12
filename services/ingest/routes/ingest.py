@@ -10,6 +10,7 @@ from boto3.resources.base import ServiceResource
 
 from controllers.collections import ingest_collections_controller
 from controllers.objectives import ingest_objectives_controller
+from controllers.purchases import ingest_purchases_controller
 from controllers.ingest import (
     download_rejected_controller,
     download_template_controller,
@@ -23,6 +24,7 @@ from controllers.stock import get_stock_day_controller, ingest_stock_controller
 from controllers.visits import ingest_visits_controller
 from schemas.ingest import (
     CollectionsResponse,
+    PurchasesResponse,
     ObjectivesResponse,
     TemplateName,
     IngestError,
@@ -507,4 +509,47 @@ async def get_dataset_endpoint(
         dataset_id = dataset_id,
         request = request,
         current_user = current_user
+    )
+
+
+@router.post(
+    '/{dataset_id}/purchases',
+    response_model = PurchasesResponse,
+    status_code = status.HTTP_201_CREATED,
+    summary = 'Upload the purchases of a sales dataset',
+    description = (
+        'Accepts a .xlsx or .csv with the purchases contract —date, supplier, '
+        'product, quantity, unit cost put in the warehouse and the currency it was '
+        'paid in— and marries it to the product catalogue. Every load adds to the '
+        'purchases already stored; the same row loaded twice counts once.'
+    )
+)
+async def ingest_purchases_endpoint(
+    request: Request,
+    dataset_id: str = PathParam(..., min_length = 8, max_length = 64),
+    file: UploadFile = File(...),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> PurchasesResponse:
+    '''
+        Endpoint to ingest the purchases of a sales dataset.
+    '''
+    filename = file.filename or ''
+    if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+        raise InvalidInputError(detail = IngestError.UNSUPPORTED_FILE_FORMAT.value)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise InvalidInputError(detail = IngestError.EMPTY_UPLOAD.value)
+    message = (f'Ingesting purchases "{filename}" ({len(file_bytes)} bytes) for '
+               f'dataset {dataset_id} from {current_user}.')
+    logger.info(message)
+    return await ingest_purchases_controller(
+        dynamodb_resource = dynamodb_resource,
+        dataset_id = dataset_id,
+        file_bytes = file_bytes,
+        filename = filename,
+        current_user = current_user,
+        auth_token = authorization,
+        request = request
     )

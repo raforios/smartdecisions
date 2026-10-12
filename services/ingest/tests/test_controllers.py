@@ -529,7 +529,10 @@ def test_a_dataset_with_nothing_rejected_answers_a_code_and_not_a_sentence():
     ('ingest_collections_controller', 'cobros.csv',
      'Nro Factura,Fecha Cobro,Monto Cobrado\nF-0000,2026-01-20,25.5\n', 1),
     ('ingest_stock_controller', 'stock.csv',
-     'Fecha,Producto,Existencia\n2026-01-20,Producto 0,40\n', 1),
+     'Fecha,Producto,Existencia,Precio de Venta\n2026-01-20,Producto 0,40,8.5\n', 1),
+    ('ingest_purchases_controller', 'compras.csv',
+     'Fecha,Proveedor,Producto,Cantidad,Costo Unitario,Moneda\n'
+     '2026-01-20,Plastiforte,Producto 0,10,6.2,USD\n', 1),
     ('ingest_visits_controller', 'visitas.csv',
      'Fecha,Vendedor,Cliente,Hora\n2026-01-20,Ana,Tienda 0,09:30\n', 1),
 ])

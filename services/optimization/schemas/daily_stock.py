@@ -20,6 +20,7 @@ class StockError(str, Enum):
     INSUFFICIENT_STOCK = 'INSUFFICIENT_STOCK'
     NO_STOCK_FOR_DAY = 'NO_STOCK_FOR_DAY'
     STOCK_SOURCE_UNAVAILABLE = 'STOCK_SOURCE_UNAVAILABLE'
+    MISSING_PRICE = 'MISSING_PRICE'
 
 
 class StockItemLoadSchema(BaseModel):
@@ -29,6 +30,8 @@ class StockItemLoadSchema(BaseModel):
     sku: str = Field(..., min_length = 1, max_length = 64)
     product_name: str | None = Field(None, max_length = 150)
     quantity: float = Field(..., ge = 0, description = 'Units available when the day starts.')
+    unit_price: float = Field(..., ge = 0, description = 'What one unit sells for today.')
+    unit_cost: float | None = Field(None, ge = 0)
 
 
 class DailyStockLoadSchema(BaseModel):
@@ -68,6 +71,8 @@ class StockItemResponseSchema(BaseModel):
     opening_quantity: float
     sold_quantity: float
     available_quantity: float
+    unit_price: float | None = None
+    unit_cost: float | None = None
     updated_at: str
 
 
@@ -79,3 +84,19 @@ class DailyStockResponseSchema(BaseModel):
     items: list[StockItemResponseSchema]
     skus_loaded: int
     skus_out_of_stock: int
+
+
+class DayStatisticsSchema(BaseModel):
+    '''
+        What the field did on one day, for the main dashboard: who is out,
+        how much of what was planned was visited, and how far they drove.
+    '''
+    date: str
+    sellers_on_route: int = Field(..., ge = 0, description = 'Routes started and still open.')
+    routes_started: int = Field(..., ge = 0)
+    routes_closed: int = Field(..., ge = 0)
+    planned_stops: int = Field(..., ge = 0, description = 'Stops of the plans run that day.')
+    visited_stops: int = Field(..., ge = 0)
+    visit_compliance: float | None = Field(
+        None, description = 'Visited over planned, percent; None with no plan run.')
+    distance_km: float = Field(..., ge = 0, description = 'Along the reported points.')

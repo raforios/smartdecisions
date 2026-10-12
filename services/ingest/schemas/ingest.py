@@ -164,10 +164,39 @@ STOCK_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(max_length = 64)),
     SalesColumn('unit_cost', 'Costo Unitario', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
+    # Required (Rafael, 07-oct): the stock is valued at what it sells for, and
+    # the price of each photo is what says when the list has to be adjusted.
+    SalesColumn('unit_price', 'Precio de Venta', True, 'float64',
+                rules = ValueRules(minimum = 0.0), template_required = True),
 )
 
 STOCK_HEADERS: tuple[str, ...] = tuple(
     column.header for column in STOCK_COLUMNS if not column.filled_by_service
+)
+
+# A purchase is what came into the warehouse and at what cost (plan phase 6):
+# the minimum to see what the last purchase cost against the previous ones.
+# The cost is per unit put in the warehouse, in the currency it was paid in;
+# the analysis brings it to bolivianos at the rate of the purchase day.
+PURCHASE_CURRENCIES: tuple[str, ...] = ('BOB', 'USD', 'USDT')
+PURCHASE_COLUMNS: tuple[SalesColumn, ...] = (
+    SalesColumn('purchase_date', 'Fecha', True, 'datetime64[ns]',
+                template_required = True),
+    SalesColumn('supplier', 'Proveedor', True, 'object',
+                rules = ValueRules(max_length = 128), template_required = True),
+    SalesColumn('product_id', 'Producto ID', True, 'object',
+                rules = ValueRules(max_length = 64), filled_by_service = True),
+    SalesColumn('product_name', 'Producto', False, 'object', template_required = True),
+    SalesColumn('quantity', 'Cantidad', True, 'float64',
+                rules = ValueRules(exclusive_minimum = 0.0), template_required = True),
+    SalesColumn('unit_cost', 'Costo Unitario', True, 'float64',
+                rules = ValueRules(minimum = 0.0), template_required = True),
+    SalesColumn('currency', 'Moneda', True, 'object',
+                rules = ValueRules(allowed = PURCHASE_CURRENCIES), template_required = True),
+)
+
+PURCHASE_HEADERS: tuple[str, ...] = tuple(
+    column.header for column in PURCHASE_COLUMNS if not column.filled_by_service
 )
 
 # A visit is what the seller's system registered on the street: who was
@@ -274,6 +303,7 @@ STOCK_TEMPLATE: str = 'stock'
 VISITS_TEMPLATE: str = 'visitas'
 CLIENTS_TEMPLATE: str = 'clientes'
 OBJECTIVES_TEMPLATE: str = 'objetivos'
+PURCHASES_TEMPLATE: str = 'compras'
 
 
 class TemplateName(str, Enum):
@@ -285,6 +315,7 @@ class TemplateName(str, Enum):
     STOCK = STOCK_TEMPLATE
     VISITS = VISITS_TEMPLATE
     OBJECTIVES = OBJECTIVES_TEMPLATE
+    PURCHASES = PURCHASES_TEMPLATE
 
 TEMPLATE_VERSION: str = 'v4'
 
@@ -433,6 +464,21 @@ class StockSummary(BaseModel):
     snapshot_end: str | None = Field(None, description = 'ISO date, if any.')
 
 
+class PurchasesSummary(BaseModel):
+    '''
+        What a purchases load contains. `unknown_products` says whether the
+        file belongs to this catalogue, as in the stock.
+    '''
+    total_rows: int = Field(0, ge = 0)
+    valid_rows: int = Field(0, ge = 0)
+    error_rows: int = Field(0, ge = 0)
+    products: int = Field(0, ge = 0)
+    suppliers: int = Field(0, ge = 0)
+    unknown_products: int = Field(0, ge = 0)
+    date_start: str | None = Field(None, description = 'ISO date, if any.')
+    date_end: str | None = Field(None, description = 'ISO date, if any.')
+
+
 class VisitsSummary(BaseModel):
     '''
         What a visits load contains.
@@ -480,6 +526,19 @@ class StockResponse(BaseModel):
     issues: list[ValidationIssue] = Field(default_factory = list)
 
 
+class PurchasesResponse(BaseModel):
+    '''
+        Answer of a purchases load: what got in, what did not, and why.
+    '''
+    dataset_id: str = Field(..., description = 'Sales dataset the purchases belong to.')
+    status: str = Field(..., description = "'validated' or 'failed'.")
+    purchases_s3_key: str | None = Field(
+        None, description = 'Object key of the stored purchases file.'
+    )
+    summary: PurchasesSummary = PurchasesSummary()
+    issues: list[ValidationIssue] = Field(default_factory = list)
+
+
 class StockDayItem(BaseModel):
     '''
         One product of the snapshot of a single day.
@@ -492,6 +551,8 @@ class StockDayItem(BaseModel):
     on_hand: float = Field(..., ge = 0)
     committed: float = Field(0.0, ge = 0)
     available: float = Field(..., ge = 0)
+    unit_cost: float | None = Field(None, ge = 0)
+    unit_price: float | None = Field(None, ge = 0, description = 'What one unit sells for.')
 
 
 class StockDayResponse(BaseModel):

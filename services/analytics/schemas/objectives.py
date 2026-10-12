@@ -172,3 +172,7 @@ class CommercialPolicyResponse(CommercialPolicySchema):
         which cuts are really in force before a semaphore is drawn.
     """
     owner_email: str
+    source_code: str = Field(
+        'DEFAULT', description = 'CLIENT when the account stored its own policy, '
+                                 'DEFAULT when every field is the service default.'
+    )

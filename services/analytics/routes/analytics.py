@@ -6,13 +6,9 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.analytics import (
-    get_credit_policy_controller,
     fx_effect_controller,
     objectives_controller,
-    get_commercial_policy_controller,
-    save_commercial_policy_controller,
     receivables_controller,
-    save_credit_policy_controller,
     stock_controller,
     commercial_summary_controller,
     forecast_controller,
@@ -22,6 +18,12 @@ from controllers.analytics import (
     portfolio_controller,
     run_analytics_controller,
     segmentation_controller
+)
+from controllers.policies import (
+    get_commercial_policy_controller,
+    get_credit_policy_controller,
+    save_commercial_policy_controller,
+    save_credit_policy_controller
 )
 from schemas.fx_effect import FxEffectResponse
 from schemas.objectives import (

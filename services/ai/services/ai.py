@@ -30,6 +30,7 @@ from services.ai_utils import (
     build_cache_key,
     get_active_prompt,
     get_cached,
+    get_prompt,
     list_prompts,
     put_cached,
     put_prompt
@@ -335,3 +336,108 @@ async def save_role_service(definition: dict[str, Any]) -> dict[str, Any]:
         'model_id': prompt.model_id,
         'active': prompt.active,
     }
+
+
+def _summary(prompt: PromptItem) -> dict[str, Any]:
+    '''
+        One role as RoleSummary shape.
+
+        Args:
+            prompt (PromptItem): Stored role.
+
+        Returns:
+            dict[str, Any]: View, version, role, model and whether it is in force.
+    '''
+    return {
+        'view': prompt.view,
+        'version': prompt.version,
+        'role': prompt.role,
+        'model_id': prompt.model_id,
+        'active': prompt.active,
+    }
+
+
+def _stored(
+    view: str,
+    version: int
+) -> PromptItem:
+    '''
+        One stored version of a role, or the not-found answer.
+
+        Args:
+            view (str): View the role explains.
+            version (int): Version to read.
+
+        Returns:
+            PromptItem: The role.
+
+        Raises:
+            RegisterNotFoundError: If that version does not exist.
+    '''
+    prompt = get_prompt(view, version)
+    if prompt is None:
+        error_msg = f'Role {view} v{version} does not exist.'
+        logger.warning(error_msg)
+        raise RegisterNotFoundError(detail = AIError.ROLE_NOT_FOUND.value)
+    return prompt
+
+
+@handle_service_errors('AI')
+async def get_role_service(
+    view: str,
+    version: int
+) -> dict[str, Any]:
+    '''
+        Returns one version of a role in full, so it can be edited: an edit is
+        stored as the next version, never over this one.
+
+        Args:
+            view (str): View the role explains.
+            version (int): Version to read.
+
+        Returns:
+            dict[str, Any]: Payload matching RoleDefinition shape.
+    '''
+    prompt = _stored(view, version)
+    return {
+        'view': prompt.view,
+        'version': prompt.version,
+        'role': prompt.role,
+        'instructions': prompt.instructions,
+        'rules': list(prompt.rules),
+        'max_tokens': prompt.max_tokens,
+        'model_id': prompt.model_id,
+        'active': prompt.active,
+    }
+
+
+@handle_service_errors('AI')
+async def set_role_active_service(
+    view: str,
+    version: int,
+    active: bool
+) -> dict[str, Any]:
+    '''
+        Turns one version of a role on or off.
+
+        Turning a version on retires the others of the same view, because a
+        view is explained by one role; turning it off leaves the view without
+        a role until another is turned on, and the explanation says so.
+
+        Args:
+            view (str): View the role explains.
+            version (int): Version to change.
+            active (bool): Whether it is in force.
+
+        Returns:
+            dict[str, Any]: The changed role, as RoleSummary shape.
+    '''
+    prompt = replace(_stored(view, version), active = active)
+    put_prompt(prompt)
+    if active:
+        for stored in list_prompts():
+            if stored.view == view and stored.version != version and stored.active:
+                put_prompt(replace(stored, active = False))
+    message = f'Role {view} v{version} set to active={active}.'
+    logger.info(message)
+    return _summary(prompt)

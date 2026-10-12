@@ -8,14 +8,17 @@ from fastapi import Request
 
 from controllers.common import (
     CompanionSpec,
+    LoadContext,
     load_sales_frame,
+    merge_if_appending,
     store_companion,
     stored_companion_frame
 )
+from schemas.channels import LoadMode
 from schemas.ingest import IngestError, StockDayResponse, StockResponse
 from services.exceptions import ResourceNotFoundError
 from services.ingest_utils import get_owned_dataset
-from services.stock import parse_and_validate, stock_of_day
+from services.stock import parse_and_validate, stock_of_day, validate_rows
 from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
@@ -24,12 +27,14 @@ from services.utils import audit_event, handle_service_errors
 # spec, and folding them into one would hide which process each route runs.
 # pylint: disable=too-many-arguments, too-many-positional-arguments, duplicate-code
 
-# The snapshot is per product and day, so pushing today replaces today and
-# leaves every other day where it was.
+# The snapshot is per product and day, so loading today replaces today and
+# leaves every other day where it was: by file or by API, every photo is kept
+# with its date and the inventory has a history.
 SPEC = CompanionSpec(
     name = 'stock',
     response_model = StockResponse,
-    merge_keys = ('snapshot_date', 'product_id')
+    merge_keys = ('snapshot_date', 'product_id'),
+    keeps_history = True
 )
 
 
@@ -52,8 +57,9 @@ async def ingest_stock_controller(
             3. Store the accepted rows and attach them to the dataset.
 
         Its own endpoint because of cadence: the sales file is loaded once and
-        the stock changes every day. A new load REPLACES the previous snapshot,
-        so what is reported is always the latest photo.
+        the stock changes every day. A new load is added to the stored photos
+        by date —the same day is replaced— so the latest photo is what the
+        stock view reads and the earlier ones are its history.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
@@ -71,7 +77,11 @@ async def ingest_stock_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    result = parse_and_validate(file_bytes, filename, load_sales_frame(dataset, auth_token))
+    sales = load_sales_frame(dataset, auth_token)
+    result = merge_if_appending(
+        LoadContext(dataset, SPEC, LoadMode.REPLACE, sales, validate_rows, filename, auth_token),
+        parse_and_validate(file_bytes, filename, sales)
+    )
     return await store_companion(dynamodb_resource, dataset, result, SPEC,
                                  (filename, auth_token))
 
