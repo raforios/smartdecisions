@@ -208,8 +208,41 @@ def _sample_stock(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             'En Transito': round(quantity * 5, 0),
             'Almacen': 'Central',
             'Costo Unitario': row['Costo Unitario'],
+            'Precio de Venta': row['Precio Unitario'],
         }
     return list(seen.values())
+
+
+def _sample_purchases(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    '''
+        Builds the sample purchases: two purchases per product a month apart,
+        one in bolivianos and one in dollars, so the template shows that the
+        cost goes in the currency it was paid in.
+
+        Args:
+            rows (list[dict[str, Any]]): Rows of the sales sheet.
+
+        Returns:
+            list[dict[str, Any]]: Rows of the purchases sheet.
+    '''
+    first_day = min(row['Fecha'] for row in rows)
+    seen: dict[str, dict[str, Any]] = {}
+    purchases = []
+    for row in rows:
+        product = row['Producto']
+        if product in seen:
+            continue
+        seen[product] = row
+        quantity = round(float(row['Cantidad']) * 30, 0)
+        purchases.append({'Fecha': first_day, 'Proveedor': 'Distribuidora Andina',
+                          'Producto': product, 'Cantidad': quantity,
+                          'Costo Unitario': row['Costo Unitario'], 'Moneda': 'BOB'})
+        purchases.append({'Fecha': first_day + timedelta(days = 30),
+                          'Proveedor': 'Importadora del Sur', 'Producto': product,
+                          'Cantidad': quantity,
+                          'Costo Unitario': round(float(row['Costo Unitario']) / 6.96, 2),
+                          'Moneda': 'USD'})
+    return purchases
 
 
 def _sample_visits(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -261,6 +294,9 @@ def _contracts() -> list[tuple[str, Any, Any, Any]]:
         OBJECTIVE_COLUMNS,
         OBJECTIVE_HEADERS,
         OBJECTIVES_TEMPLATE,
+        PURCHASE_COLUMNS,
+        PURCHASE_HEADERS,
+        PURCHASES_TEMPLATE,
         SALES_TEMPLATE,
         STOCK_COLUMNS,
         STOCK_HEADERS,
@@ -277,6 +313,7 @@ def _contracts() -> list[tuple[str, Any, Any, Any]]:
         (STOCK_TEMPLATE, STOCK_COLUMNS, STOCK_HEADERS, _sample_stock),
         (VISITS_TEMPLATE, VISIT_COLUMNS, VISIT_HEADERS, _sample_visits),
         (OBJECTIVES_TEMPLATE, OBJECTIVE_COLUMNS, OBJECTIVE_HEADERS, _sample_objectives),
+        (PURCHASES_TEMPLATE, PURCHASE_COLUMNS, PURCHASE_HEADERS, _sample_purchases),
     ]
 
 
