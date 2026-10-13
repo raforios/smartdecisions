@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cargar datos de ventas — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="../styles/shell.css?v=b68d88c3be">
+    <link rel="stylesheet" href="../styles/analyses.css?v=2f2ce3040a">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=6f400ec0de" defer></script>
+    <script src="../js/shell.js?v=edbd415df1" defer></script>
+    <script src="../js/api.js?v=0f299d8422" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/analyses/format.js?v=7835219735" defer></script>
+    <script src="../js/analyses/labels.js?v=4475306c45" defer></script>
+    <script src="../js/analyses/store.js?v=2b38412e70" defer></script>
+    <script src="../js/analyses/core.js?v=52739464f7" defer></script>
+    <script src="../js/analyses/upload.js?v=d151465d80" defer></script>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <div class="sd-page-head"><div><h1>Cargar datos de ventas</h1>
+            <p>Ventas crea el conjunto de datos; objetivos y visitas se enganchan a él.</p></div></div>
+
+        <section id="stepUpload" class="step-grid">
+            <article class="card">
+                <span class="step-pill">1</span>
+                <h3 id="templateTitle">Plantilla</h3>
+                <p>Un archivo por tema. Empieza por <strong>Ventas</strong>: es el que crea el conjunto de datos. Objetivos y visitas se enganchan a él.</p>
+                <label class="field">
+                    <span>¿Qué vas a cargar?</span>
+                    <select id="contractSelect">
+                        <option value="ventas" selected>Ventas</option>
+                        <option value="objetivos">Objetivos</option>
+                        <option value="visitas">Visitas</option>
+                    </select>
+                </label>
+                <button id="downloadTemplateButton" class="btn btn-ghost">
+                    Descargar plantilla
+                </button>
+                <p class="form-note" id="templateNote" aria-live="polite"></p>
+            </article>
+
+            <article class="card">
+                <span class="step-pill">2</span>
+                <h3>Subir tu archivo</h3>
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" id="fileInput" accept=".xlsx,.csv" hidden>
+                    <p class="upload-hint">
+                        Arrastra tu <code>.xlsx</code> o <code>.csv</code> aquí
+                        <br>o <a href="#" id="chooseFileLink">elige un archivo</a>.
+                    </p>
+                    <p id="fileChip" class="file-chip" hidden></p>
+                </div>
+                <button id="uploadButton" class="btn btn-primary" disabled>
+                    Subir y validar
+                </button>
+                <p class="form-note" id="uploadNote" aria-live="polite"></p>
+            </article>
+        </section>
+
+        <!-- ===================== Step 3: Validation result ===================== -->
+        <section id="stepValidation" class="step-section" hidden>
+            <h2 class="section-title">Resultado de la validación</h2>
+            <div class="metric-grid" id="ingestSummary"></div>
+
+            <div id="errorsBlock" hidden>
+                <h3 class="block-title">Errores detectados</h3>
+                <p class="page-subtitle">
+                    El archivo no pasó la validación. Corrige las filas indicadas y
+                    vuelve a subir.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="errorsTable">
+                        <thead>
+                            <tr>
+                                <th>Fila</th>
+                                <th>Columna</th>
+                                <th>Valor</th>
+                                <th>Mensaje</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="validatedBlock" hidden>
+                <h3 class="block-title">Archivo validado ✓</h3>
+                <a class="btn btn-primary btn-small" href="index.html">Ver el resumen de Ventas</a>
+                <div id="rejectedNotice" class="rejected-notice" hidden></div>
+            </div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

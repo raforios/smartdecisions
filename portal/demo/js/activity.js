@@ -124,13 +124,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     ['Productos', number(lastDataset.unique_products)],
                     ['Período', period]
                 ],
-                '<a class="tile-action" href="ventas/index.html">Ver el análisis →</a>'
+                '<a class="tile-action" href="/ventas/index.html">Ver el análisis →</a>'
             ));
         } else {
             tiles.push(emptyTile(
                 'Tu última carga',
                 'Todavía no subiste un archivo de ventas.',
-                '<a class="tile-action" href="ventas/index.html">Subir el primero →</a>'
+                '<a class="tile-action" href="/ventas/cargar.html">Subir el primero →</a>'
             ));
         }
 
@@ -145,13 +145,13 @@ document.addEventListener('DOMContentLoaded', () => {
                      number(lastRun.total_pos_with_opportunities)],
                     ['Valor esperado', expectedValue(lastRun.total_expected_value)]
                 ],
-                '<a class="tile-action" href="ventas/index.html">Abrir oportunidades →</a>'
+                '<a class="tile-action" href="/ventas/oportunidades.html">Abrir oportunidades →</a>'
             ));
         } else {
             tiles.push(emptyTile(
                 'Tu último análisis',
                 'Sube un archivo y el análisis comercial se corre sobre él.',
-                '<a class="tile-action" href="ventas/index.html">Ir al módulo →</a>'
+                '<a class="tile-action" href="/ventas/index.html">Ir al módulo →</a>'
             ));
         }
 

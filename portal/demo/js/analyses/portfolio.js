@@ -55,7 +55,7 @@
             // range turned a 9-client change into a visual cliff, which reads as
             // a collapse the data does not support.
             options: {
-                ...chartOptions('int'),
+                ...A.chartOptions('int'),
                 scales: { y: { beginAtZero: true } }
             }
         });

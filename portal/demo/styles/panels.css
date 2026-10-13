@@ -1,0 +1,282 @@
+/* The pieces of the summaries (Principal and each area): the highlighted
+ * figure, the figures beside it, the chart panels and the short lists.
+ * Colours come from the tokens of demo.css and shell.css. */
+
+.sd-page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+    margin-bottom: 1.75rem;
+}
+.sd-page-head h1 { margin: 0; font-size: 1.75rem; letter-spacing: -0.02em; color: var(--text-strong); }
+.sd-page-head p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.95rem; }
+
+/* Today's rates, as a quiet strip beside the title. */
+.sd-rates {
+    display: flex;
+    gap: 1.25rem;
+    padding: 0.55rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+.sd-rates:hover { border-color: var(--accent); color: var(--muted); }
+.sd-rates b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+
+.sd-grid { display: grid; gap: 1.25rem; margin-bottom: 1.25rem; }
+/* The display of these blocks beat the hidden attribute and showed empty boxes. */
+.sd-grid[hidden], .sd-ring[hidden], .sd-rates[hidden] { display: none; }
+.sd-grid-top { grid-template-columns: 1.6fr repeat(3, 1fr); }
+.sd-grid-wide { grid-template-columns: 2fr 1fr; }
+.sd-grid-half { grid-template-columns: 1fr 1fr; }
+
+/* ---------- The one highlighted figure ---------- */
+.sd-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 1.5rem;
+    overflow: hidden;
+    border-radius: 20px;
+    background: var(--sidebar-bg);
+    color: #ffffff;
+}
+.sd-hero:hover { color: #ffffff; }
+.sd-hero::after {
+    content: '';
+    position: absolute;
+    right: -60px;
+    top: -60px;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(18, 121, 111, 0.45), transparent 70%);
+    pointer-events: none;
+}
+.sd-hero-label { margin: 0; color: #aeb9cf; font-size: 0.88rem; font-weight: 500; }
+.sd-hero-value {
+    margin: 0;
+    font-size: clamp(1.9rem, 3vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+.sd-hero-other {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+    gap: 0.75rem 2rem;
+    color: #d6deec;
+    font-size: 0.82rem;
+}
+.sd-hero-other span { white-space: nowrap; }
+.sd-hero-other b { display: block; color: #ffffff; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.sd-hero-foot { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; }
+
+/* A change against something: up is teal, down is red. */
+.sd-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.08);
+    color: #d6deec;
+}
+.sd-change.is-up { background: rgba(18, 121, 111, 0.22); color: #7fd6cb; }
+.sd-change.is-down { background: rgba(180, 55, 58, 0.22); color: #f2a7a9; }
+
+/* ---------- The figures beside it ---------- */
+.sd-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--panel);
+    color: var(--text);
+}
+.sd-stat:hover { border-color: var(--accent); color: var(--text); }
+.sd-stat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0.4rem;
+    border-radius: 12px;
+    background: var(--bg-alt);
+    color: var(--accent);
+}
+.sd-stat-label { margin: 0; color: var(--muted); font-size: 0.85rem; font-weight: 500; }
+.sd-stat-value {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+}
+.sd-stat-other { margin: 0; color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.sd-stat-note { margin: auto 0 0; padding-top: 0.5rem; font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.sd-stat-note.is-bad { color: var(--danger); }
+.sd-stat-note.is-good { color: var(--accent-2); }
+
+/* ---------- Panels: a chart or a short list with its title ---------- */
+.sd-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 1.4rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--panel);
+}
+.sd-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.sd-panel-head h2 { margin: 0; font-size: 1.05rem; color: var(--text-strong); }
+.sd-panel-link { font-size: 0.85rem; font-weight: 600; }
+.sd-chart { position: relative; height: 280px; }
+.sd-chart-small { position: relative; height: 200px; }
+.sd-empty { margin: auto 0; color: var(--muted); font-size: 0.9rem; }
+
+/* Segmented choice (6M | 1A | Todo) and the chart's currency. */
+.sd-tools { display: flex; align-items: center; gap: 0.5rem; }
+.sd-segmented { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--bg-alt); }
+.sd-segmented button {
+    padding: 0.3rem 0.7rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.sd-segmented button.is-active { background: var(--panel); color: var(--accent); box-shadow: var(--shadow-sm); }
+.sd-select {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8rem;
+}
+
+/* Doughnut with its total in the middle and the legend under it. */
+.sd-ring { position: relative; height: 190px; }
+.sd-ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+.sd-ring-center b { color: var(--text-strong); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.sd-ring-center span { color: var(--muted); font-size: 0.75rem; }
+.sd-legend { display: grid; gap: 0.45rem; margin-top: 1rem; }
+.sd-legend-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.sd-legend-row span:nth-child(2) { flex: 1; color: var(--muted); }
+.sd-legend-row b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.sd-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* A short list of figures: label on the left, value on the right. */
+.sd-list { display: grid; }
+.sd-list-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--bg-alt);
+    font-size: 0.9rem;
+}
+.sd-list-row:last-child { border-bottom: 0; }
+.sd-list-row span { color: var(--muted); }
+.sd-list-row b { color: var(--text-strong); font-variant-numeric: tabular-nums; text-align: right; }
+.sd-list-row b.is-bad { color: var(--danger); }
+
+/* ---------- An area's options: one block each ---------- */
+.sd-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+.sd-tiles[hidden] { display: none; }
+.sd-tile-wide { grid-column: span 2; }
+.sd-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-height: 180px;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--panel);
+    color: var(--text);
+}
+.sd-tile:hover { border-color: var(--accent); color: var(--text); }
+.sd-tile-title { margin: 0 0 0.35rem; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.sd-tile-value {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+}
+.sd-tile-line { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.45; }
+.sd-tile-visual { margin-top: auto; padding-top: 0.9rem; }
+
+/* A bar split in shares, with its legend. */
+.sd-bar { display: flex; height: 8px; overflow: hidden; border-radius: 999px; background: var(--bg-alt); }
+.sd-bar span { height: 100%; }
+.sd-bar-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--muted); }
+.sd-bar-legend i { display: inline-block; width: 8px; height: 8px; margin-right: 0.3rem; border-radius: 50%; }
+
+.sd-progress { height: 8px; overflow: hidden; border-radius: 999px; background: var(--bg-alt); }
+.sd-progress span { display: block; height: 100%; border-radius: 999px; background: var(--accent-2); }
+
+/* The trend line inside the dark block. */
+.sd-spark { position: relative; height: 70px; margin-top: auto; }
+
+@media (max-width: 1200px) {
+    .sd-tiles { grid-template-columns: repeat(2, 1fr); }
+    .sd-grid-top { grid-template-columns: repeat(3, 1fr); }
+    .sd-grid-top .sd-hero { grid-column: 1 / -1; }
+}
+@media (max-width: 800px) {
+    .sd-tiles { grid-template-columns: 1fr; }
+    .sd-tile-wide { grid-column: auto; }
+    .sd-grid-top, .sd-grid-wide, .sd-grid-half { grid-template-columns: 1fr; }
+}
+
+/* While the answers travel: grey bars where the figures will be. */
+.sd-skeleton {
+    display: block;
+    height: 0.9rem;
+    margin: 0.35rem 0;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--bg-alt), var(--border), var(--bg-alt));
+    background-size: 200% 100%;
+    animation: sd-shimmer 1.4s ease infinite;
+}
+.sd-hero .sd-skeleton { background: rgba(255, 255, 255, 0.1); }
+.sd-skeleton.is-big { height: 1.8rem; width: 70%; }
+.sd-skeleton.is-short { width: 45%; }
+@keyframes sd-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .sd-skeleton { animation: none; } }

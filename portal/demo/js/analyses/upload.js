@@ -175,7 +175,8 @@
         const isValid = response.status === 'validated';
         qs('#validatedBlock').hidden = !isValid;
         qs('#errorsBlock').hidden = isValid;
-        qs('#analysisArea').hidden = !isValid;
+        // Ventas uploads on its own page, which has no analysis area.
+        if (qs('#analysisArea')) qs('#analysisArea').hidden = !isValid;
 
         const rejected = (response.summary && response.summary.error_rows) || 0;
         if (isValid) {

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pronóstico de demanda — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="../styles/shell.css?v=b68d88c3be">
+    <link rel="stylesheet" href="../styles/analyses.css?v=2f2ce3040a">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=6f400ec0de" defer></script>
+    <script src="../js/shell.js?v=edbd415df1" defer></script>
+    <script src="../js/api.js?v=0f299d8422" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/analyses/format.js?v=7835219735" defer></script>
+    <script src="../js/analyses/labels.js?v=4475306c45" defer></script>
+    <script src="../js/analyses/store.js?v=2b38412e70" defer></script>
+    <script src="../js/analyses/core.js?v=52739464f7" defer></script>
+    <script src="../js/analyses/forecast.js?v=2cf4fc7e07" defer></script>
+</head>
+<body data-analysis="forecast">
+
+<main>
+    <div class="container sd-option">
+        <!-- Reporting window: applies to the analysis below. -->
+        <div class="period-bar" id="periodBar" hidden>
+            <span class="period-label">Período analizado</span>
+            <label class="period-field">
+                <span>Desde</span>
+                <input type="date" id="periodFrom">
+            </label>
+            <label class="period-field">
+                <span>Hasta</span>
+                <input type="date" id="periodTo">
+            </label>
+            <button type="button" class="btn btn-secondary btn-small" id="periodApply">
+                Aplicar
+            </button>
+            <button type="button" class="btn btn-ghost btn-small" id="periodReset">
+                Todo el período
+            </button>
+            <a class="btn btn-ghost btn-small" href="/parametros/factores.html">
+                Ver el tipo de cambio
+            </a>
+            <span class="period-note" id="periodNote"></span>
+            <p class="rates-legend" id="ratesLegend"></p>
+        </div>
+        <p class="form-note" id="runNote" aria-live="polite"></p>
+
+        <!-- ===================== Demand forecast ===================== -->
+        <section id="stepForecast" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Pronóstico de Demanda</h2>
+            </div>
+            <div class="insight-panel">
+                <p class="insight-objective">
+                    <strong>¿Cómo leer el gráfico?</strong> La línea <strong>sólida azul</strong> es
+                    la venta real de cada mes (historial); la línea <strong>punteada</strong> es la
+                    proyección hacia adelante. <br>
+                    <strong>Tendencia lineal:</strong> continúa la dirección del historial (si venía
+                    subiendo, sigue subiendo). <strong>Media móvil:</strong> proyecta el promedio de
+                    los últimos meses (más estable, sin tendencia). Prueba ambos para comparar un
+                    escenario optimista/pesimista con uno conservador.
+                </p>
+            </div>
+            <p class="page-subtitle">
+                Cambia el método, el horizonte y el detalle para comparar escenarios.
+            </p>
+            <div class="forecast-controls">
+                <label class="filter-label">
+                    <span>Método</span>
+                    <select id="forecastMethod">
+                        <option value="linear">Tendencia lineal</option>
+                        <option value="moving_average">Media móvil</option>
+                    </select>
+                </label>
+                <label class="filter-label">
+                    <span>Meses a proyectar</span>
+                    <select id="forecastMonths">
+                        <option value="3">3 meses</option>
+                        <option value="6">6 meses</option>
+                        <option value="12">12 meses</option>
+                    </select>
+                </label>
+                <label class="filter-label">
+                    <span>Detalle</span>
+                    <select id="forecastGroup">
+                        <option value="">Total</option>
+                        <option value="categoria">Por categoría</option>
+                    </select>
+                </label>
+                <button type="button" class="btn btn-primary btn-small" id="forecastRun">
+                    Actualizar
+                </button>
+                <label class="chart-currency" data-chart-currency></label>
+            </div>
+            <p class="forecast-note" id="forecastNote"></p>
+            <div class="chart-grid" id="forecastCharts"></div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

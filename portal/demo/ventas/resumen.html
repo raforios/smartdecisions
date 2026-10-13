@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumen comercial — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="../styles/shell.css?v=b68d88c3be">
+    <link rel="stylesheet" href="../styles/analyses.css?v=2f2ce3040a">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=6f400ec0de" defer></script>
+    <script src="../js/shell.js?v=edbd415df1" defer></script>
+    <script src="../js/api.js?v=0f299d8422" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/analyses/format.js?v=7835219735" defer></script>
+    <script src="../js/analyses/labels.js?v=4475306c45" defer></script>
+    <script src="../js/analyses/store.js?v=2b38412e70" defer></script>
+    <script src="../js/analyses/core.js?v=52739464f7" defer></script>
+    <script src="../js/analyses/summary.js?v=881a4aec76" defer></script>
+</head>
+<body data-analysis="summary">
+
+<main>
+    <div class="container sd-option">
+        <!-- Reporting window: applies to the analysis below. -->
+        <div class="period-bar" id="periodBar" hidden>
+            <span class="period-label">Período analizado</span>
+            <label class="period-field">
+                <span>Desde</span>
+                <input type="date" id="periodFrom">
+            </label>
+            <label class="period-field">
+                <span>Hasta</span>
+                <input type="date" id="periodTo">
+            </label>
+            <button type="button" class="btn btn-secondary btn-small" id="periodApply">
+                Aplicar
+            </button>
+            <button type="button" class="btn btn-ghost btn-small" id="periodReset">
+                Todo el período
+            </button>
+            <a class="btn btn-ghost btn-small" href="/parametros/factores.html">
+                Ver el tipo de cambio
+            </a>
+            <span class="period-note" id="periodNote"></span>
+            <p class="rates-legend" id="ratesLegend"></p>
+        </div>
+        <p class="form-note" id="runNote" aria-live="polite"></p>
+
+        <!-- ===================== Resumen Comercial (dashboard) ===================== -->
+        <section id="stepDashboard" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Resumen Comercial</h2>
+                <span class="cache-stamp" id="stampSummary"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="summary">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle">
+                Panorama de ventas del periodo cargado. Pasa el cursor sobre los gráficos
+                para ver los valores exactos.
+                Montos en bolivianos; en USD y USDT, los totales al tipo de cambio de
+                hoy y cada mes al tipo de cambio de su último día.
+            </p>
+            <div class="metric-grid" id="dashboardKpis"></div>
+
+            <!-- Only when the period is one month: that month against today. -->
+            <div class="card" id="chosenMonthCard" hidden>
+                <h3 class="chart-title" id="chosenMonthTitle"></h3>
+                <p class="chart-hint" id="chosenMonthRates"></p>
+                <p class="chart-hint">
+                    El mes se lee al tipo de cambio de su último día; al lado, lo mismo al
+                    tipo de hoy. Los bolivianos no cambian.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="chosenMonthTotals">
+                        <thead><tr>
+                            <th>Venta del mes</th>
+                            <th class="num" data-money>Monto</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <h3 class="chart-title">Día por día</h3>
+                <p class="chart-hint">Cada día al tipo de cambio de ese mismo día.</p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="chosenMonthDays">
+                        <thead><tr>
+                            <th>Fecha</th>
+                            <th class="num" data-money>Venta</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p class="chart-hint" id="chosenMonthDaysTotal"></p>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Venta por mes</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
+                    <canvas id="chartTrend"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Venta por categoría</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
+                    <canvas id="chartCategoria"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Top 10 productos más vendidos</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
+                    <canvas id="chartTopProductos"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Top 10 mejores clientes</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
+                    <canvas id="chartTopClientes"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Venta por vendedor</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
+                    <canvas id="chartVendedor"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Productos menos vendidos</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
+                    <canvas id="chartBottomProductos"></canvas>
+                </div>
+            </div>
+
+            <!-- ---------- Profitability (only if the file carries Costo Unitario) ---------- -->
+            <div class="analysis-block" id="marginBlock" hidden>
+                <h3 class="block-title">Rentabilidad</h3>
+                <p class="block-subtitle">
+                    Vender más no siempre es ganar más. Esto compara lo que facturas
+                    contra lo que te costó la mercadería.
+                </p>
+                <div class="metric-grid" id="marginKpis"></div>
+                <div class="split-layout">
+                    <div class="chart-card">
+                        <div class="chart-head">
+                            <h3 class="chart-title">Margen por categoría</h3>
+                            <label class="chart-currency" data-chart-currency></label>
+                        </div>
+                        <canvas id="chartMargenCategoria"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Dónde está la ganancia</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="marginCategoryTable">
+                                <thead><tr>
+                                    <th>Categoría</th>
+                                    <th class="numeric" data-money>Venta</th>
+                                    <th class="numeric" data-money>Margen</th>
+                                    <th class="numeric">%</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert-panel" id="marginAlerts" hidden>
+                    <h4 class="alert-title">⚠ Productos que no dejan margen</h4>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="marginAlertTable">
+                            <thead><tr>
+                                <th>Producto</th>
+                                <th class="numeric" data-money>Venta</th>
+                                <th class="numeric" data-money>Margen</th>
+                                <th>Motivo</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Crecimiento ---------- -->
+            <div class="analysis-block" id="growthBlock" hidden>
+                <h3 class="block-title">Crecimiento</h3>
+                <p class="block-subtitle">
+                    Cómo se mueve la venta mes a mes y contra el mismo mes del año pasado.
+                </p>
+                <div class="metric-grid" id="growthKpis"></div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Variación mes a mes</h3>
+                        <canvas id="chartGrowth"></canvas>
+                    </div>
+                    <div class="chart-card" id="seasonalityCard">
+                        <h3 class="chart-title">Estacionalidad</h3>
+                        <p class="chart-hint">
+                            100 es un mes promedio. 130 significa que ese mes vende un 30%
+                            por encima del promedio.
+                        </p>
+                        <canvas id="chartSeasonality"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Concentración ---------- -->
+            <div class="analysis-block" id="concentrationBlock" hidden>
+                <h3 class="block-title">Concentración y riesgo</h3>
+                <p class="block-subtitle">
+                    De cuántos clientes depende realmente el negocio. Qué productos son
+                    su núcleo se responde en Fuente de volumen.
+                </p>
+                <div class="metric-grid" id="concentrationKpis"></div>
+                <p class="insight-line" id="hhiReading"></p>
+            </div>
+
+            <!-- ---------- Eficiencia ---------- -->
+            <div class="analysis-block" id="efficiencyBlock" hidden>
+                <h3 class="block-title">Eficiencia comercial</h3>
+                <p class="block-subtitle">
+                    Tamaño de pedido, productividad de la fuerza de venta y cómo se movió
+                    el precio realmente cobrado.
+                </p>
+                <div class="metric-grid" id="efficiencyKpis"></div>
+                <!-- One full-width card each: two tables of different length side
+                     by side never line up. -->
+                <div class="card-stack">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Productividad por vendedor</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="sellerTable">
+                                <thead><tr>
+                                    <th>Vendedor</th>
+                                    <th class="numeric" data-money>Venta</th>
+                                    <th class="numeric">Pedidos</th>
+                                    <th class="numeric">Clientes</th>
+                                    <th class="numeric" data-money>Ticket</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card" id="priceCard">
+                        <h3 class="chart-title">Deriva del precio realizado</h3>
+                        <p class="chart-hint">
+                            Precio efectivo (monto ÷ unidades) de la mitad reciente del
+                            período contra la anterior. Detecta descuentos que nunca
+                            tocaron la lista de precios.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="priceTable">
+                                <thead><tr>
+                                    <th>Producto</th>
+                                    <th class="numeric" data-money>Antes</th>
+                                    <th class="numeric" data-money>Ahora</th>
+                                    <th class="numeric">Cambio</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

@@ -21,7 +21,8 @@
             window.SD_AUTH.clearSession();
             // Keep the intended destination so re-login lands back on the module
             // the user was working on instead of dropping them at the home page.
-            const next = encodeURIComponent(window.location.pathname);
+            const next = encodeURIComponent(
+                window.location.pathname + window.location.search + window.location.hash);
             window.location.href = `${window.SD_CONFIG.LOGIN_PATH}?next=${next}`;
             throw new Error('Sesión expirada. Vuelve a iniciar sesión.');
         }

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efecto del tipo de cambio — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="../styles/shell.css?v=b68d88c3be">
+    <link rel="stylesheet" href="../styles/analyses.css?v=2f2ce3040a">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=6f400ec0de" defer></script>
+    <script src="../js/shell.js?v=edbd415df1" defer></script>
+    <script src="../js/api.js?v=0f299d8422" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/analyses/format.js?v=7835219735" defer></script>
+    <script src="../js/analyses/labels.js?v=4475306c45" defer></script>
+    <script src="../js/analyses/store.js?v=2b38412e70" defer></script>
+    <script src="../js/analyses/core.js?v=52739464f7" defer></script>
+    <script src="../js/analyses/fx.js?v=1a86b5eb59" defer></script>
+</head>
+<body data-analysis="fx">
+
+<main>
+    <div class="container sd-option">
+        <!-- Reporting window: applies to the analysis below. -->
+        <div class="period-bar" id="periodBar" hidden>
+            <span class="period-label">Período analizado</span>
+            <label class="period-field">
+                <span>Desde</span>
+                <input type="date" id="periodFrom">
+            </label>
+            <label class="period-field">
+                <span>Hasta</span>
+                <input type="date" id="periodTo">
+            </label>
+            <button type="button" class="btn btn-secondary btn-small" id="periodApply">
+                Aplicar
+            </button>
+            <button type="button" class="btn btn-ghost btn-small" id="periodReset">
+                Todo el período
+            </button>
+            <a class="btn btn-ghost btn-small" href="/parametros/factores.html">
+                Ver el tipo de cambio
+            </a>
+            <span class="period-note" id="periodNote"></span>
+            <p class="rates-legend" id="ratesLegend"></p>
+        </div>
+        <p class="form-note" id="runNote" aria-live="polite"></p>
+
+        <!-- ===================== Salud de Cartera ===================== -->
+        <section id="stepFx" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Efecto del tipo de cambio</h2>
+                <span class="cache-stamp" id="stampFx"></span>
+                <button type="button" class="btn btn-ghost btn-small" data-recalc="fx">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <div class="insight-panel">
+                <p class="insight-objective">
+                    <strong>Objetivo:</strong> la distribuidora compra en dólares y vende en
+                    bolivianos. Esta vista muestra qué le hace el tipo de cambio a la venta, al
+                    margen y a la capacidad de reponer mercadería.
+                </p>
+                <p class="insight-what">
+                    <strong>Qué mira:</strong> la venta de cada mes en bolivianos y en dólares;
+                    el margen al costo con que se compró contra el margen al <em>costo de
+                    reposición</em> (el costo en dólares al tipo de hoy); y lo vendido convertido
+                    a dólares al tipo de cada día contra el tipo de hoy.
+                </p>
+                <p class="insight-note">
+                    El archivo no trae la fecha de compra: se toma el tipo del día de la venta
+                    como el de la compra. La parte del costo que se compra en dólares es la de
+                    la política comercial (100 % si no se cambió).
+                </p>
+            </div>
+            <div class="field-row fx-controls">
+                <label><span>Dólar</span>
+                    <select id="fxSource">
+                        <option value="USD">Oficial (BCB)</option>
+                        <option value="USDT">USDT (Binance P2P, paralelo)</option>
+                    </select></label>
+                <label><span>Simular tipo de cambio (opcional)</span>
+                    <input type="number" id="fxRate" min="0.01" step="0.01" placeholder="Hoy"></label>
+                <button type="button" class="btn btn-secondary btn-small" id="fxApply">Aplicar</button>
+            </div>
+            <p class="form-note" id="fxNote"></p>
+            <div class="metric-grid" id="fxKpis"></div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3 class="chart-title">Venta por mes: bolivianos y dólares</h3>
+                    <canvas id="chartFx"></canvas>
+                </div>
+            </div>
+            <div class="card" id="fxCategoryCard">
+                <h3 class="chart-title">Cuánto margen se come el tipo de cambio, por categoría</h3>
+                <p class="chart-hint">
+                    <strong>Ganaste</strong>: lo vendido menos lo que pagaste por esa
+                    mercadería. <strong>Ganarías hoy</strong>: lo mismo, pero si tuvieras
+                    que volver a comprarla con el dólar de hoy. <strong>Se pierde</strong>:
+                    la diferencia, lo que la devaluación se lleva del margen. Montos al
+                    tipo de cambio de hoy.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="fxCategoryTable">
+                        <thead><tr>
+                            <th>Categoría</th>
+                            <th class="numeric" data-money>Venta</th>
+                            <th class="numeric">Costo comprado en dólares</th>
+                            <th class="numeric" data-money>Ganaste</th>
+                            <th class="numeric" data-money>Ganarías hoy</th>
+                            <th class="numeric" data-money>Se pierde</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card" id="fxUncoveredCard">
+                <h3 class="chart-title">Productos cuyo precio no cubre la reposición</h3>
+                <p class="legend-hint" id="fxUncoveredHint"></p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="fxUncoveredTable">
+                        <thead><tr>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th class="num">Último precio</th>
+                            <th class="num">Costo de compra</th>
+                            <th class="num">Costo de reposición</th>
+                            <th class="num">Diferencia</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

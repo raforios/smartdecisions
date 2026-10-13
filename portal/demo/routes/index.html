@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rutas — SmartDecisions</title>
     <link rel="stylesheet" href="/styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="/styles/shell.css?v=b68d88c3be">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="">
@@ -13,8 +14,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="/js/config.js?v=0b4736ed6f"></script>
-    <script src="/js/auth.js?v=16147b32b2" defer></script>
-    <script src="/js/api.js?v=5440fa776b" defer></script>
+    <script src="/js/auth.js?v=c153b5ce24" defer></script>
+    <script src="/js/icons.js?v=6f400ec0de" defer></script>
+    <script src="/js/shell.js?v=edbd415df1" defer></script>
+    <script src="/js/api.js?v=0f299d8422" defer></script>
     <script src="/js/ui.js?v=bd318da6b9" defer></script>
     <script src="/js/session.js?v=91bb432af9" defer></script>
     <script src="/js/ai.js?v=ee4edb4da5" defer></script>
@@ -30,21 +33,6 @@
 </head>
 <body>
 
-<header class="demo-header">
-    <div class="container demo-nav">
-        <a href="/home.html" class="brand">
-            <img src="/assets/bear-face.jpg?v=e028b9fcd7" alt="" aria-hidden="true">
-            <span class="brand-text">Smart<span class="accent">Decisions</span></span>
-        </a>
-        <div class="demo-nav-actions">
-            <a href="/home.html" class="btn btn-ghost btn-small">← Tablero</a>
-            <a href="/routes/vendedor.html" class="btn btn-ghost btn-small" title="La pantalla del vendedor en el teléfono">Mi ruta</a>
-            <span class="session-chip" id="sessionChip" hidden></span>
-            <span class="user-chip" id="userChip">…</span>
-            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
-        </div>
-    </div>
-</header>
 
 <main>
     <div class="container">
@@ -88,7 +76,7 @@
                 nada que planificar hasta que cargues uno. También necesita las
                 columnas <code>Latitud</code> y <code>Longitud</code>.
             </p>
-            <a class="btn btn-primary" href="../ventas/index.html">Ir a cargar el archivo</a>
+            <a class="btn btn-primary" href="../ventas/cargar.html">Ir a cargar el archivo</a>
         </section>
 
         <section class="routes-layout" id="plannerLayout" hidden>

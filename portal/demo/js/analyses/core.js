@@ -12,37 +12,24 @@
 
     const { qs, qsAll, toast, setButtonBusy } = window.SD_UI;
 
-    qs('#userChip').textContent = window.SD_AUTH.getEmail() || 'usuario';
-    qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
-
     const INGEST_URL = window.SD_CONFIG.INGEST_URL;
     const ANALYTICS_URL = window.SD_CONFIG.ANALYTICS_URL;
 
     // The dataset id is persisted so a page reload / session refresh never forces
     // re-uploading the file: the data already lives in S3 + DynamoDB.
-    const DATASET_KEY = 'sd_excel_dataset_id';
+    const { DATASET_KEY, CACHE_KEY, VIEW_KEY, PERIOD_KEY } = A.STORE_KEYS;
     // One file per contract. Sales creates the dataset; these three attach to it.
     const COMPANION_PATHS = { cobros: 'collections', stock: 'stock',
                               visitas: 'visits', objetivos: 'objectives', compras: 'purchases' };
     const CONTRACT_LABELS = { ventas: 'Ventas', cobros: 'Cobros', stock: 'Stock',
                               visitas: 'Visitas', objetivos: 'Objetivos', compras: 'Compras' };
-    const CACHE_KEY = 'sd_excel_results';
-    const VIEW_KEY = 'sd_excel_view';
-    const PERIOD_KEY = 'sd_excel_period';
     const MAX_ISSUES_SHOWN = 200;
-
-    function readStoredPeriod() {
-        try {
-            return JSON.parse(sessionStorage.getItem(PERIOD_KEY) || 'null') || {};
-        } catch (parseError) {
-            return {};
-        }
-    }
+    const { cacheResult, cachedResult } = A;
 
     const state = {
         selectedFile: null,
         datasetId: sessionStorage.getItem(DATASET_KEY) || null,
-        period: readStoredPeriod(),
+        period: A.readStoredPeriod(),
         available: {},
         opportunities: [],
         sortKey: 'score',
@@ -72,44 +59,7 @@
     }
 
     /** Builds the ?date_from=&date_to= suffix every analysis endpoint accepts. */
-    function analysisQuery() {
-        const params = new URLSearchParams();
-        if (state.period.from) params.set('date_from', state.period.from);
-        if (state.period.to) params.set('date_to', state.period.to);
-        const query = params.toString();
-        return query ? `?${query}` : '';
-    }
-
-    // ---------- Result cache ----------
-    // Analyses are expensive (the affinity engine takes ~30 s) and the session
-    // can expire mid-review. Keeping the computed payloads in sessionStorage
-    // means a reload — or a re-login in the same tab — restores exactly the
-    // screen the user was reading, instead of forcing a re-run.
-    function readCache() {
-        try {
-            const cache = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
-            if (cache && cache.datasetId === state.datasetId) return cache;
-        } catch (parseError) {
-            // A corrupt cache is not an error: it just means "nothing cached".
-        }
-        return { datasetId: state.datasetId, results: {} };
-    }
-
-    function cacheResult(kind, payload) {
-        const cache = readCache();
-        cache.datasetId = state.datasetId;
-        cache.results[kind] = { payload, at: Date.now() };
-        try {
-            sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-        } catch (quotaError) {
-            // The cache is a convenience; running out of quota must never break
-            // the analysis the user just asked for.
-        }
-    }
-
-    function cachedResult(kind) {
-        return readCache().results[kind] || null;
-    }
+    const analysisQuery = () => A.periodQuery(state.period);
 
     // One analysis can feed more than one view: the summary and the volume
     // source come from the same response, and both have to show when it was
@@ -149,7 +99,8 @@
         });
         sessionStorage.setItem(VIEW_KEY, sectionId);
         resizeChartsIn(sectionId);
-        if (scroll) {
+        // An option page shows only its view, already at the top.
+        if (scroll && !document.body.dataset.analysis) {
             qs('#' + sectionId).scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
@@ -221,7 +172,15 @@
         opportunities: {
             busy: 'Analizando…', running: 'Ejecutando el motor de oportunidades…',
             ready: 'Oportunidades listas.', failed: 'El motor falló.',
-            fetch: () => window.SD_API.post(analysisUrl('run')),
+            // The engine takes ~30 s: opening the page reads the last stored run
+            // of the dataset, and only a recalculation, a chosen period or a
+            // dataset never analysed runs it again.
+            fetch: (force) => {
+                const run = () => window.SD_API.post(analysisUrl('run'));
+                if (force || state.period.from || state.period.to) return run();
+                return window.SD_API.get(`${ANALYTICS_URL}/v1/analytics/results/` +
+                    `${encodeURIComponent(state.datasetId)}`).catch(run);
+            },
             render: (...args) => A.renderOpportunities(...args)
         },
         segmentation: {
@@ -320,9 +279,10 @@
         const note = qs('#runNote');
         note.className = 'form-note';
         note.textContent = analysis.running;
-        const done = setButtonBusy(trigger, analysis.busy);
+        // An option page opens its analysis on load, with no button to busy.
+        const done = trigger ? setButtonBusy(trigger, analysis.busy) : () => {};
         try {
-            const payload = await analysis.fetch();
+            const payload = await analysis.fetch(force);
             cacheResult(kind, payload);
             analysis.render(payload, view);
             markStamp(kind, Date.now());
@@ -337,14 +297,22 @@
         }
     }
 
-    qs('#analysisMenu').addEventListener('click', (event) => {
-        const card = event.target.closest('.analysis-card');
-        if (!card || card.disabled) return;
-        const kind = card.dataset.analysis;
-        if (kind === 'forecast') A.openForecast(card);
-        else if (kind === 'volume') openAnalysis('summary', card, false, 'stepVolume');
-        else openAnalysis(kind, card);
-    });
+    /** Opens an analysis by the name its card or its page carries. */
+    function openByName(kind, trigger) {
+        if (kind === 'forecast') A.openForecast(trigger);
+        else if (kind === 'volume') openAnalysis('summary', trigger, false, 'stepVolume');
+        else openAnalysis(kind, trigger);
+    }
+
+    // The area pages that still list their analyses as cards.
+    const menu = qs('#analysisMenu');
+    if (menu) {
+        menu.addEventListener('click', (event) => {
+            const card = event.target.closest('.analysis-card');
+            if (!card || card.disabled) return;
+            openByName(card.dataset.analysis, card);
+        });
+    }
 
     // "↻ Recalcular" inside each result section: same analysis, fresh numbers.
     qsAll('[data-recalc]').forEach((button) => {
@@ -461,7 +429,8 @@
     }
     mountChartCurrency();
 
-    qs('#periodApply').addEventListener('click', () => {
+    // The upload page has no reporting window.
+    if (qs('#periodBar')) qs('#periodApply').addEventListener('click', () => {
         const from = qs('#periodFrom').value;
         const to = qs('#periodTo').value;
         if (from && to && from > to) {
@@ -472,7 +441,7 @@
         reopenCurrentAnalysis();
     });
 
-    qs('#periodReset').addEventListener('click', () => {
+    if (qs('#periodBar')) qs('#periodReset').addEventListener('click', () => {
         qs('#periodFrom').value = '';
         qs('#periodTo').value = '';
         setPeriod({});
@@ -527,8 +496,11 @@
                     A.renderIssues(status.issues || []);
                 }
             }
-            qs('#analysisArea').hidden = !isValid;
-            restoreLastView();
+            if (qs('#analysisArea')) qs('#analysisArea').hidden = !isValid;
+            // An option page names its analysis; the others return to the last view.
+            const own = document.body.dataset.analysis;
+            if (own && isValid) openByName(own, null);
+            else restoreLastView();
         } catch (error) {
             // The dataset is gone, or belongs to somebody else: forget it and
             // let the user start from the upload step instead of failing.

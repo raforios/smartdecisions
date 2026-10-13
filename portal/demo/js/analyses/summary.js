@@ -14,24 +14,24 @@
      * either one and the file is read only once.
      */
     function renderCommercialSummary(data, view) {
-        // A chosen month reads at its close; its cards add the same at today.
-        A.monthTodayRates = data.chosen_month ? data.chosen_month.today_rates : null;
-        // KPIs
-        A.fillKpis('dashboardKpis', data.kpis, (card) =>
-            card.metric_code === 'TOTAL_SALES' ? 'success' : '');
-
-        renderSummaryCharts(data);
-
         A.showPeriodBar(data.period);
-        renderMargin(data.margin);
-        renderGrowth(data.growth);
-        renderVolumeSource(data.volume_source);
-        renderConcentration(data.concentration);
-        renderEfficiency(data.efficiency);
-        renderChosenMonth(data.chosen_month);
-        A.monthTodayRates = null;
+        // Each option has its own page: a page draws only the view it carries.
+        if (qs('#stepDashboard')) {
+            // A chosen month reads at its close; its cards add the same at today.
+            A.monthTodayRates = data.chosen_month ? data.chosen_month.today_rates : null;
+            A.fillKpis('dashboardKpis', data.kpis, (card) =>
+                card.metric_code === 'TOTAL_SALES' ? 'success' : '');
+            renderSummaryCharts(data);
+            renderMargin(data.margin);
+            renderGrowth(data.growth);
+            renderConcentration(data.concentration);
+            renderEfficiency(data.efficiency);
+            renderChosenMonth(data.chosen_month);
+            A.monthTodayRates = null;
+        }
+        if (qs('#stepVolume')) renderVolumeSource(data.volume_source);
 
-        A.showAnalysisView(view || 'stepDashboard');
+        A.showAnalysisView(view || (qs('#stepDashboard') ? 'stepDashboard' : 'stepVolume'));
     }
 
     /**
@@ -69,6 +69,7 @@
 
     /** Every chart of the summary that draws money, in the chart currency. */
     function renderSummaryCharts(data) {
+        if (!qs('#stepDashboard')) return;
         const trend = data.monthly_trend || [];
         A.makeChart('chartTrend', {
             type: 'line',

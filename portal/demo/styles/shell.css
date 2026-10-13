@@ -1,0 +1,242 @@
+/* The frame shared by every module page: side menu, top bar and breadcrumb.
+ * Built by js/shell.js; the colours are the tokens of demo.css. */
+
+:root {
+    --sidebar-width: 256px;
+    --topbar-height: 64px;
+    --sidebar-bg:    #0d1a31;
+    --sidebar-text:  #aeb9cf;
+    --sidebar-line:  rgba(255, 255, 255, 0.08);
+}
+
+.sd-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
+body.sd-app { padding-left: var(--sidebar-width); transition: padding-left 0.25s ease; }
+body.sd-app main { min-height: calc(100vh - var(--topbar-height)); padding: 2rem 0 2.5rem; }
+body.sd-app .container { max-width: 1280px; padding: 0 2rem; }
+
+/* ---------- Side menu ---------- */
+.sd-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 60;
+    width: var(--sidebar-width);
+    display: flex;
+    flex-direction: column;
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    transition: transform 0.25s ease;
+}
+/* Folded on a wide screen: the page takes the whole width. */
+body.sd-app.sd-collapsed { padding-left: 0; }
+.sd-collapsed .sd-sidebar { transform: translateX(-100%); }
+.sd-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    height: var(--topbar-height);
+    padding: 0 1.25rem;
+    border-bottom: 1px solid var(--sidebar-line);
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.sd-brand:hover { color: #ffffff; }
+.sd-brand img { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; }
+.sd-brand b { color: #5fc4b8; font-weight: 700; }
+
+.sd-nav { flex: 1; overflow-y: auto; padding: 1rem 0.75rem; }
+.sd-section + .sd-section { margin-top: 1.1rem; }
+.sd-group {
+    margin: 0 0 0.4rem;
+    padding: 0 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6f7d99;
+}
+.sd-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    color: var(--sidebar-text);
+    font-size: 0.92rem;
+    font-weight: 500;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.sd-item:hover { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+.sd-item.is-open { color: #ffffff; }
+.sd-item.is-active { background: rgba(47, 111, 181, 0.28); color: #ffffff; }
+/* The areas inside Comercial: a step smaller than the top of the menu. */
+.sd-depth-1 > .sd-item { padding: 0.45rem 0.6rem; font-size: 0.88rem; }
+.sd-depth-1 > .sd-item .sd-icon { width: 18px; height: 18px; }
+.sd-item span { flex: 1; }
+.sd-caret { width: 16px; height: 16px; opacity: 0.6; }
+
+/* The options of the open area hang from a thin line under it. */
+.sd-subitems {
+    display: grid;
+    margin: 0.25rem 0 0.5rem 1.1rem;
+    padding-left: 0.85rem;
+    border-left: 1px solid var(--sidebar-line);
+}
+.sd-subitem {
+    padding: 0.38rem 0.6rem;
+    border-radius: 8px;
+    color: #8d9ab4;
+    font-size: 0.86rem;
+    font-weight: 500;
+}
+.sd-subitem:hover { color: #ffffff; }
+.sd-subitem.is-active { color: #ffffff; background: rgba(255, 255, 255, 0.06); }
+
+/* ---------- Top bar ---------- */
+.sd-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    height: var(--topbar-height);
+    padding: 0 2rem;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--border);
+}
+.sd-crumbs { display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0; font-size: 0.9rem; }
+.sd-crumb { color: var(--muted); font-weight: 500; white-space: nowrap; }
+.sd-crumb:hover { color: var(--accent); }
+.sd-crumb.is-current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-strong);
+    font-weight: 600;
+}
+.sd-crumb-sep { width: 14px; height: 14px; color: var(--border-strong); }
+.sd-top-actions { display: flex; align-items: center; gap: 0.75rem; }
+
+/* ---------- The account, on the right of the top bar ---------- */
+.sd-account { position: relative; }
+.sd-account-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.sd-account-button:hover { border-color: var(--accent); }
+.sd-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--sidebar-bg);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.sd-account-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    z-index: 70;
+    width: 260px;
+    padding: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: var(--shadow-lg);
+}
+.sd-account-menu[hidden] { display: none; }
+.sd-account-email {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-strong);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+.sd-account-meta { margin: 0 0 0.6rem; color: var(--muted); font-size: 0.8rem; }
+/* Inside the menu the countdown is a plain line, not a pill. */
+.sd-account-menu .session-chip {
+    display: flex;
+    padding: 0.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--bg-alt);
+    border-radius: 0;
+}
+.sd-account-menu .session-chip[hidden] { display: none; }
+.sd-account-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    margin-top: 0.25rem;
+    padding: 0.55rem 0.5rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+.sd-account-item:hover { background: var(--bg-alt); color: var(--danger); }
+.sd-account-item .sd-icon { width: 18px; height: 18px; }
+
+/* ---------- Footer: BearSoft's mark ---------- */
+.sd-footer { display: flex; justify-content: center; padding: 1.5rem 0; }
+.sd-footer img { height: 26px; width: auto; opacity: 0.55; transition: opacity 0.15s ease; }
+.sd-footer a:hover img { opacity: 0.9; }
+
+.sd-menu-toggle {
+    display: inline-flex;
+    margin-left: -0.4rem;
+    border-radius: 8px;
+    padding: 0.4rem;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+.sd-menu-toggle:hover { background: var(--bg-alt); }
+.sd-overlay { display: none; }
+
+
+/* What only the roles that edit may use. */
+body[data-role="REQUESTER"] [data-manage] { display: none !important; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Narrow screens: the menu slides in over the page ---------- */
+@media (max-width: 1000px) {
+    body.sd-app { padding-left: 0; }
+    body.sd-app .container { padding: 0 1rem; }
+    .sd-topbar { padding: 0 1rem; }
+    .sd-account-role { display: none; }
+    .sd-sidebar { transform: translateX(-100%); }
+    .sd-menu-open .sd-sidebar { transform: none; }
+    .sd-menu-open .sd-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        background: rgba(13, 26, 49, 0.45);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.sd-app, .sd-sidebar, .sd-item { transition: none; }
+}

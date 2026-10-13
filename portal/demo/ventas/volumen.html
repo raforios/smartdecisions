@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuente de volumen — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=92e8abf645">
+    <link rel="stylesheet" href="../styles/shell.css?v=b68d88c3be">
+    <link rel="stylesheet" href="../styles/analyses.css?v=2f2ce3040a">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=6f400ec0de" defer></script>
+    <script src="../js/shell.js?v=edbd415df1" defer></script>
+    <script src="../js/api.js?v=0f299d8422" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=ee4edb4da5" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/analyses/format.js?v=7835219735" defer></script>
+    <script src="../js/analyses/labels.js?v=4475306c45" defer></script>
+    <script src="../js/analyses/store.js?v=2b38412e70" defer></script>
+    <script src="../js/analyses/core.js?v=52739464f7" defer></script>
+    <script src="../js/analyses/summary.js?v=881a4aec76" defer></script>
+</head>
+<body data-analysis="volume">
+
+<main>
+    <div class="container sd-option">
+        <!-- Reporting window: applies to the analysis below. -->
+        <div class="period-bar" id="periodBar" hidden>
+            <span class="period-label">Período analizado</span>
+            <label class="period-field">
+                <span>Desde</span>
+                <input type="date" id="periodFrom">
+            </label>
+            <label class="period-field">
+                <span>Hasta</span>
+                <input type="date" id="periodTo">
+            </label>
+            <button type="button" class="btn btn-secondary btn-small" id="periodApply">
+                Aplicar
+            </button>
+            <button type="button" class="btn btn-ghost btn-small" id="periodReset">
+                Todo el período
+            </button>
+            <a class="btn btn-ghost btn-small" href="/parametros/factores.html">
+                Ver el tipo de cambio
+            </a>
+            <span class="period-note" id="periodNote"></span>
+            <p class="rates-legend" id="ratesLegend"></p>
+        </div>
+        <p class="form-note" id="runNote" aria-live="polite"></p>
+
+        <section id="stepVolume" class="step-section" hidden>
+            <div class="section-head">
+                <h2 class="section-title">Fuente de volumen</h2>
+                <span class="cache-stamp" id="stampVolume"></span>
+                <button type="button" class="btn btn-ghost btn-small"
+                        data-recalc="summary" data-recalc-view="stepVolume">
+                    ↻ Recalcular
+                </button>
+            </div>
+            <p class="page-subtitle">
+                De qué productos y de qué clientes sale la venta, qué producto
+                sostiene a cada cliente, y de dónde vino el movimiento del último mes.
+                Montos en bolivianos; en USD y USDT, los totales al tipo de cambio de
+                hoy y cada mes al tipo de cambio de su último día.
+            </p>
+            <!-- The empty note exists so the view is never blank: a screen with
+                 nothing is exactly what broke a demo. -->
+            <p class="form-note" id="volumeEmpty" hidden>
+                Este archivo no tiene columnas de producto y monto suficientes para
+                responder de dónde sale el volumen.
+            </p>
+            <div id="volumeContent">
+            <div class="metric-grid" id="volumeKpis"></div>
+            <p class="insight-line" id="volumeHhiReading"></p>
+
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3 class="chart-title">Curva de Pareto de productos</h3>
+                    <p class="chart-hint">
+                        Cada barra es la participación del producto en la venta; la
+                        línea es el acumulado. Donde la línea llega al 80% están los
+                        productos que sostienen el negocio.
+                    </p>
+                    <canvas id="chartVolumePareto"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-head">
+                        <h3 class="chart-title">Clases ABC del catálogo</h3>
+                        <label class="chart-currency" data-chart-currency></label>
+                    </div>
+                    <p class="chart-hint">
+                        A es el primer 80% de la venta, B el siguiente 15%, C la cola.
+                    </p>
+                    <canvas id="chartVolumeAbc"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <h3 class="chart-title">Productos que hacen el volumen</h3>
+                <p class="chart-hint">
+                    La columna «Clientes» es a cuántos les llega el producto: dos
+                    productos con la misma participación y distinto alcance no son
+                    el mismo negocio.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="volumeProductsTable">
+                        <thead><tr>
+                            <th>Producto</th>
+                            <th class="numeric" data-money>Venta</th>
+                            <th class="numeric">% venta</th>
+                            <th class="numeric">Acumulado</th>
+                            <th>Clase</th>
+                            <th class="numeric">Clientes</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- One full-width card each: two tables of different length side
+                 by side never line up. -->
+            <div class="card-stack">
+                <div class="chart-card">
+                    <h3 class="chart-title">Clientes y el producto que los sostiene</h3>
+                    <p class="chart-hint">
+                        «% del cliente» es cuánto pesa ese producto dentro de su
+                        propia compra. Un 90% es una relación con un producto, no
+                        con la empresa.
+                    </p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="volumeClientsTable">
+                            <thead><tr>
+                                <th>Cliente</th>
+                                <th class="numeric" data-money>Venta</th>
+                                <th class="numeric">% venta</th>
+                                <th>Producto ancla</th>
+                                <th class="numeric">% del cliente</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="chart-card" id="volumeMixCard">
+                    <h3 class="chart-title">Qué categorías ganan y pierden peso</h3>
+                    <p class="chart-hint">Último mes contra el anterior, en puntos porcentuales.</p>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="volumeMixTable">
+                            <thead><tr>
+                                <th>Categoría</th>
+                                <th class="numeric">Participación</th>
+                                <th class="numeric">Cambio</th>
+                                <th class="numeric" data-money>Venta</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card" id="volumeMatrixCard">
+                <h3 class="chart-title">Cruce cliente × producto</h3>
+                <p class="chart-hint">
+                    Cada cruce leído de los dos lados: cuánto pesa el producto dentro
+                    del cliente, y cuánto pesa ese cliente dentro del producto.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="volumeMatrixTable">
+                        <thead><tr>
+                            <th>Cliente</th>
+                            <th>Producto</th>
+                            <th class="numeric" data-money>Venta</th>
+                            <th class="numeric">% del cliente</th>
+                            <th class="numeric">% del producto</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="analysis-block" id="volumeDecompositionBlock" hidden>
+                <h3 class="block-title">De dónde vino el movimiento</h3>
+                <p class="block-subtitle" id="volumeDecompositionNote"></p>
+                <div class="split-layout split-even">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Por producto</h3>
+                        <p class="chart-hint">
+                            Vender más porque subieron los precios y vender más porque
+                            los clientes compraron más son el mismo número y dos cosas
+                            distintas.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="volumeProductEffects">
+                                <thead><tr>
+                                    <th>Efecto</th>
+                                    <th class="numeric" data-money>Monto</th>
+                                    <th class="numeric">% del cambio</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">Por cliente</h3>
+                        <p class="chart-hint">
+                            El mismo cambio, explicado por quién compró: cuentas nuevas,
+                            perdidas y las que se mantuvieron.
+                        </p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="volumeClientEffects">
+                                <thead><tr>
+                                    <th>Efecto</th>
+                                    <th class="numeric" data-money>Monto</th>
+                                    <th class="numeric">% del cambio</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>
