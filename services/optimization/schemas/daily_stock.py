@@ -86,6 +86,19 @@ class DailyStockResponseSchema(BaseModel):
     skus_out_of_stock: int
 
 
+class SellerDaySchema(BaseModel):
+    '''
+        One seller's day: visits, what was sold at the day's stock price and
+        how far the routes went.
+    '''
+    seller: str
+    on_route: bool
+    visits: int = Field(..., ge = 0)
+    units_sold: float = Field(..., ge = 0)
+    sales_amount: float = Field(..., ge = 0, description = 'Bolivianos, at the day\'s price.')
+    distance_km: float = Field(..., ge = 0)
+
+
 class DayStatisticsSchema(BaseModel):
     '''
         What the field did on one day, for the main dashboard: who is out,
@@ -100,3 +113,9 @@ class DayStatisticsSchema(BaseModel):
     visit_compliance: float | None = Field(
         None, description = 'Visited over planned, percent; None with no plan run.')
     distance_km: float = Field(..., ge = 0, description = 'Along the reported points.')
+    sales_amount: float = Field(0.0, ge = 0, description = 'Bolivianos sold on visits, '
+                                                           'at the day\'s stock price.')
+    stock_available_value: float | None = Field(
+        None, description = 'Bolivianos still on hand at the day\'s price; None '
+                            'when the day\'s stock was not loaded.')
+    sellers: list[SellerDaySchema] = []

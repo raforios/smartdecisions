@@ -52,8 +52,13 @@ class ViewName(str, Enum):
     SEGMENTATION = 'segmentation'
     SALES_FORECAST = 'sales_forecast'
     PORTFOLIO = 'portfolio'
+    FX_EFFECT = 'fx_effect'
     # Route optimization
     ROUTE_PLAN = 'route_plan'
+    ROUTE_PLANS = 'route_plans'
+    ROUTE_LIVE = 'route_live'
+    ROUTE_OPTIMIZE = 'route_optimize'
+    ROUTE_COMPARE = 'route_compare'
     # Quotes and projections
     MINERALS_FORECAST = 'minerals_forecast'
     RATE_FORECAST = 'rate_forecast'

@@ -326,6 +326,7 @@ class ExecutedRouteResponseSchema(ExecutedRouteCreateSchema):
     end_longitude: float | None = None
     max_distance_end_point: float | None = None
     points_count: int = 0
+    distance_km: float | None = Field(None, description = 'Set when the route closes.')
 
 
 class ExecutedRouteUpdateSchema(BaseModel):

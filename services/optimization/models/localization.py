@@ -103,4 +103,5 @@ class ExecutedRouteItem(TypedDict, total = False):
     last_latitude: float | None
     last_longitude: float | None
     last_timestamp: str | None
+    distance_km: float | None
     points: list[ExecutedPointItem]

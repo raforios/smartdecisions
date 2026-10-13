@@ -124,6 +124,28 @@ def _day_bounds(
     return bounds or None
 
 
+_METRES_PER_KM = 1000.0
+
+
+def route_km(route: ExecutedRouteItem) -> float:
+    '''
+        The distance a route covered, point to point in the order reported.
+
+        Args:
+            route (ExecutedRouteItem): The executed route with its points.
+
+        Returns:
+            float: Kilometres, rounded to two decimals.
+    '''
+    points = sorted(route.get('points', []), key = lambda point: point.get('timestamp') or '')
+    metres = sum(
+        calculate_distance(first['latitude'], first['longitude'],
+                           second['latitude'], second['longitude'])
+        for first, second in zip(points, points[1:])
+    )
+    return round(metres / _METRES_PER_KM, 2)
+
+
 def to_executed_response(route: ExecutedRouteItem) -> ExecutedRouteResponseSchema:
     '''
         Executed route item -> header DTO.
@@ -532,6 +554,8 @@ def close_executed_route(
             )
     route.update(update_data.model_dump())
     route['end_time'] = parse_timestamp(update_data.end_time).isoformat()
+    # The kilometres are fixed when the route closes: what the seller drove.
+    route['distance_km'] = route_km(route)
     _save_executed_route(dynamodb_resource, route)
     message = f'Executed route {executed_route_id} closed at {route["end_time"]}.'
     logger.info(message)

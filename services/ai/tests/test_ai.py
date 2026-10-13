@@ -373,7 +373,8 @@ def test_a_long_list_is_trimmed_at_any_depth(
     assert 'stops' in sent and 'Cliente 0' in sent
 
 
-@pytest.mark.parametrize('view', ['objectives', 'stock'])
+@pytest.mark.parametrize('view', ['objectives', 'stock', 'fx_effect', 'route_plans',
+                                  'route_live', 'route_optimize', 'route_compare'])
 def test_every_view_the_portal_explains_is_known(view):
     '''
         The portal mounts an explain button on Cumplimiento and on Stock. Both

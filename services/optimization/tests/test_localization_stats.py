@@ -6,16 +6,19 @@
 import pytest
 from moto import mock_aws
 
+from schemas.daily_stock import DailyStockLoadSchema, SaleItemSchema, StockItemLoadSchema
 from schemas.localization import (
     ExecutedPointCreateSchema,
     LocalizationError,
     ExecutedRouteCreateSchema,
     ExecutedRouteFilterSchema,
+    ExecutedRouteUpdateSchema,
     PlannedPointSchema,
     PlannedRouteCreateSchema,
     PlannedRouteStatusEnum,
     VisitOutcome
 )
+from services import daily_stock
 from services import localization, localization_executed as executed, localization_stats as stats
 from services.day_statistics import day_statistics, route_km
 from services.exceptions import InvalidInputError, RegisterNotFoundError
@@ -49,7 +52,8 @@ def dynamodb_fixture():
     with mock_aws():
         yield build_resource([
             (localization.PLANNED_ROUTES_TABLE, 'owner_email', 'id'),
-            (executed.EXECUTED_ROUTES_TABLE, 'owner_email', 'id')
+            (executed.EXECUTED_ROUTES_TABLE, 'owner_email', 'id'),
+            (daily_stock.DAILY_STOCK_TABLE, 'owner_email', 'stock_key')
         ])
 
 
@@ -285,3 +289,43 @@ def test_the_kilometres_follow_the_points_in_the_order_reported():
     ]}
 
     assert route_km(route) == 1.11
+
+
+
+def test_the_day_sells_at_the_price_of_its_stock(
+    dynamodb,
+    plan
+):
+    '''Ana sold 3 units of A at 7.50 on a visit: 22.50 Bs, and 7 units remain at 52.50.'''
+    today = get_current_time_gmt().date().isoformat()
+    daily_stock.load_daily_stock(dynamodb, OWNER, DailyStockLoadSchema(date = today, items = [
+        StockItemLoadSchema(sku = 'A', quantity = 10, unit_price = 7.5)]))
+    route = executed.create_executed_route(dynamodb, OWNER, ExecutedRouteCreateSchema(
+        seller = 'Ana', start_time = _at(8), planned_route_id = plan['id'],
+        start_latitude = STOPS[0][1], start_longitude = STOPS[0][2],
+        max_distance_start_point = 100))
+    executed.register_executed_point(dynamodb, OWNER, ExecutedPointCreateSchema(
+        executed_route_id = route['id'], timestamp = _at(9), latitude = STOPS[0][1],
+        longitude = STOPS[0][2], client_id = 'PDV-1', outcome = VisitOutcome.SALE,
+        items = [SaleItemSchema(sku = 'A', quantity = 3)]))
+
+    day = day_statistics(dynamodb, OWNER, today)
+
+    assert day.sales_amount == 22.5
+    assert day.stock_available_value == 52.5
+    assert [(row.seller, row.visits, row.units_sold) for row in day.sellers] == [('Ana', 1, 3.0)]
+
+
+def test_closing_a_route_fixes_its_kilometres(
+    dynamodb,
+    plan
+):
+    '''The route keeps what it covered from the moment it closes.'''
+    route = _run_route(dynamodb, plan, [(STOPS[0][1], STOPS[0][2], 'PDV-1'),
+                                        (STOPS[1][1], STOPS[1][2], 'PDV-2')])
+    closed = executed.close_executed_route(dynamodb, OWNER, route['id'], ExecutedRouteUpdateSchema(
+        end_time = _at(18), end_latitude = STOPS[1][1], end_longitude = STOPS[1][2],
+        max_distance_end_point = _NO_FENCE_M))
+
+    assert closed['distance_km'] == route_km(closed) > 0
+    assert executed.to_executed_response(closed).distance_km == closed['distance_km']
