@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const compareMap = T.createMap('compareMap');
     const state = { plans: [], full: null, scores: [] };
 
+    // The interpretation layer reads what this section shows, as the service returned it.
+    if (window.SD_AI) {
+        window.SD_AI.registerView('route_compare', () => (state.scores.length ? { scores: state.scores } : null));
+        const head = document.querySelector('.routes-section[data-section="compare"] .card-head');
+        if (head) window.SD_AI.mountExplain(head, 'route_compare', head);
+    }
+
     qs('#compareFrom').value = T.todayIso(-30);
     qs('#compareTo').value = T.todayIso();
 

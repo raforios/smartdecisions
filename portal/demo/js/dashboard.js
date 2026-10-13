@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function field() {
+    async function field(rates) {
         const day = (offset) => window.SD_API.get(
             `${OPTIMIZATION_URL}/v1/optimization/statistics/day/${isoDay(offset)}`)
             .catch(() => null);
@@ -108,19 +108,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? 'sin plan' : `${number(yesterday.visit_compliance, 1)} %`],
             ['Km recorridos hoy', number(today && today.distance_km, 1)],
             ['Venta de hoy en la calle', today && today.sales_amount != null
-                ? M.inline(today.sales_amount) : '—']
+                ? (rates ? M.inline(M.atRates(today.sales_amount, rates))
+                    : `Bs ${number(today.sales_amount, 0)}`) : '—']
         ]);
     }
 
     async function load() {
         const datasetId = await window.SD_API.ensureDataset();
+        let rates = null;
         if (datasetId) {
-            window.SD_API.get(`${ANALYTICS_URL}/v1/analytics/dashboard/` +
-                `${encodeURIComponent(datasetId)}`).then(paint).catch(() => {
-                // The cards keep their description: the areas are still reachable.
-            });
+            // The field card converts today's sale at the rates the dashboard brings.
+            const data = await window.SD_API.get(`${ANALYTICS_URL}/v1/analytics/dashboard/` +
+                `${encodeURIComponent(datasetId)}`).catch(() => null);
+            if (data) {
+                paint(data);
+                rates = data.rates;
+            }
         }
-        field();
+        field(rates);
     }
 
     load();

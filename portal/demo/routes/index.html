@@ -21,12 +21,12 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin="" defer></script>
-    <script src="/routes/routes_tracking.js?v=7001b59ad7" defer></script>
+    <script src="/routes/routes_tracking.js?v=32cbe28d7c" defer></script>
     <script src="/routes/routes.js?v=62c7480dc5" defer></script>
-    <script src="/routes/routes_plans.js?v=98d6f9a4d2" defer></script>
-    <script src="/routes/routes_live.js?v=6dd5389b43" defer></script>
-    <script src="/routes/routes_optimize.js?v=663b3cac3c" defer></script>
-    <script src="/routes/routes_compare.js?v=ec9c69d1bc" defer></script>
+    <script src="/routes/routes_plans.js?v=fdc93d7ea6" defer></script>
+    <script src="/routes/routes_live.js?v=2f892dd229" defer></script>
+    <script src="/routes/routes_optimize.js?v=9c57da30be" defer></script>
+    <script src="/routes/routes_compare.js?v=c2ea741eec" defer></script>
 </head>
 <body>
 
@@ -320,6 +320,19 @@
                         <div class="table-wrapper">
                             <table class="data-table" id="liveTable">
                                 <thead><tr><th>Vendedor</th><th>Hace</th><th>Ruta</th><th class="numeric">Lat</th><th class="numeric">Lon</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Today's sale by seller, at the day's stock price, and the km driven. -->
+                    <div class="card stops-card">
+                        <div class="card-head"><h3>Venta de hoy por vendedor</h3></div>
+                        <p class="legend-hint" id="liveDaySummary"></p>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="liveSalesTable">
+                                <thead><tr><th>Vendedor</th><th>En la calle</th>
+                                    <th class="numeric">Visitas</th><th class="numeric">Unidades</th>
+                                    <th class="numeric">Venta (Bs)</th><th class="numeric">Km</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>

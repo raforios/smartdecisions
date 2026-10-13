@@ -11,6 +11,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const T = window.SD_TRACK;
 
     const state = { plans: [], selected: null };
+
+    // The interpretation layer reads what this section shows, as the service returned it.
+    if (window.SD_AI) {
+        window.SD_AI.registerView('route_plans', () => (state.plans.length ? { plans: state.plans } : null));
+        const head = document.querySelector('.routes-section[data-section="plans"] .card-head');
+        if (head) window.SD_AI.mountExplain(head, 'route_plans', head);
+    }
     const planMap = T.createMap('planMap');
 
     // ---------- list ----------

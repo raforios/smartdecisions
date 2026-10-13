@@ -136,7 +136,8 @@
         ),
         pointsVisited: (seller, filters) => API.get(
             `${BASE}/statistics/sellers/${encodeURIComponent(seller)}/points-visited`, filters || {}
-        )
+        ),
+        day: (day) => API.get(`${BASE}/statistics/day/${encodeURIComponent(day)}`)
     };
 
     // ---------- formatters ----------

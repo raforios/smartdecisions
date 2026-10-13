@@ -12,7 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const REFRESH_MS = 30000;
     const liveMap = T.createMap('liveMap');
-    const state = { timer: null, visible: false, routes: [], tracks: [] };
+    const state = { timer: null, visible: false, routes: [], tracks: [], locations: [], day: null };
+
+    // The interpretation layer reads what this section shows, as the service returned it.
+    if (window.SD_AI) {
+        window.SD_AI.registerView('route_live', () => (state.routes.length || state.day ? { routes: state.routes, locations: state.locations, day: state.day } : null));
+        const head = document.querySelector('.routes-section[data-section="live"] .card-head');
+        if (head) window.SD_AI.mountExplain(head, 'route_live', head);
+    }
 
     /** Sellers come from the active plans and today's routes; the box stays editable. */
     function knownSellers() {
@@ -43,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.routes.map((route) => T.executed.get(route.id).catch(() => null))
             );
             paintRoutes();
+            state.day = await T.stats.day(today).catch(() => null);
+            paintDay(state.day);
             const sellers = knownSellers();
             if (!sellers.length) {
                 paintLocations([]);
@@ -50,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const result = await T.executed.lastLocations(sellers);
+            state.locations = result.locations;
             paintLocations(result.locations);
             const missing = sellers.filter((seller) => !result.locations.some((loc) => loc.seller === seller));
             note(missing.length ? `Sin posición reciente: ${missing.join(', ')}.` : '', missing.length ? '' : 'success');
@@ -123,6 +133,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         liveMap.refresh();
         liveMap.fit(points);
+    }
+
+    /** Today's sale by seller, at the price of the day's stock, and the km. */
+    function paintDay(day) {
+        const rows = (day && day.sellers) || [];
+        qs('#liveSalesTable tbody').innerHTML = rows.map((row) =>
+            `<tr><td>${T.escapeHtml(row.seller)}</td><td>${row.on_route ? 'Sí' : 'Cerró'}</td>` +
+            `<td class="numeric">${T.formatQuantity(row.visits)}</td>` +
+            `<td class="numeric">${T.formatQuantity(row.units_sold)}</td>` +
+            `<td class="numeric">${T.formatMoney(row.sales_amount)}</td>` +
+            `<td class="numeric">${T.formatDecimal(row.distance_km, 1)}</td></tr>`).join('') ||
+            '<tr class="empty-row"><td colspan="6">Todavía no hay rutas hoy.</td></tr>';
+        qs('#liveDaySummary').textContent = day
+            ? `Vendido hoy: Bs ${T.formatMoney(day.sales_amount)}` +
+              (day.stock_available_value == null ? ''
+                  : ` · queda en stock: Bs ${T.formatMoney(day.stock_available_value)}`) +
+              ` · ${T.formatDecimal(day.distance_km, 1)} km recorridos.`
+            : '';
     }
 
     function schedule() {

@@ -21,6 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const optimizedMap = T.createMap('optimizedMap');
     const state = { plans: [], study: null, page: 0 };
 
+    // The interpretation layer reads what this section shows, as the service returned it.
+    if (window.SD_AI) {
+        window.SD_AI.registerView('route_optimize', () => state.study);
+        const head = document.querySelector('.routes-section[data-section="optimize"] .card-head');
+        if (head) window.SD_AI.mountExplain(head, 'route_optimize', head);
+    }
+
     (function defaultRepeatDate() {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);

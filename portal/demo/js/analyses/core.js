@@ -584,7 +584,8 @@
             stepOpportunities: ['opportunities', 'opportunities'],
             stepSegmentation: ['segmentation', 'segmentation'],
             stepForecast: ['sales_forecast', 'forecast'],
-            stepPortfolio: ['portfolio', 'portfolio']
+            stepPortfolio: ['portfolio', 'portfolio'],
+        stepFx: ['fx_effect', 'fx']
         };
 
         if (window.SD_AI) {
