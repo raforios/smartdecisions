@@ -2,7 +2,7 @@
     Quotes Microservice Main Handler
 '''
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Coroutine
 import socket
 from datetime import date, datetime
 from typing import Any
@@ -208,6 +208,30 @@ def _is_scheduled_sync(event: dict[str, Any]) -> bool:
             or event.get('task') == _SYNC_TASK)
 
 
+def _run_on_current_loop(
+    coroutine: Coroutine[Any, Any, Any]
+) -> Any:
+    '''
+        Runs a coroutine on the thread's event loop and leaves that loop in
+        place. `asyncio.run` closes its loop and leaves the thread without one;
+        on Python 3.14 Mangum's `asyncio.get_event_loop()` then raises, so every
+        HTTP request the same warm container served after the scheduled sync
+        answered 500.
+
+        Args:
+            coroutine (Coroutine[Any, Any, Any]): The work to run.
+
+        Returns:
+            Any: What the coroutine returns.
+    '''
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coroutine)
+
+
 def handler(
     event: dict[str, Any],
     context: Any
@@ -229,7 +253,7 @@ def handler(
     '''
     if _is_scheduled_sync(event):
         try:
-            result = asyncio.run(scheduled_sync_service())
+            result = _run_on_current_loop(scheduled_sync_service())
         except HTTPException as error:
             error_msg = f'Scheduled rate sync failed: {error.detail}'
             logger.error(error_msg)

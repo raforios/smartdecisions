@@ -119,3 +119,23 @@ def test_a_failed_scheduled_sync_fails_the_invocation():
             main.handler(SCHEDULED_EVENT, None)
 
     assert QuotesError.SOURCE_UNAVAILABLE.value in str(failure.value)
+
+
+def test_the_api_still_answers_after_a_scheduled_sync():
+    '''
+        The sync and the API share a warm container. On 13-oct the sync ran at
+        09:00 and every request after it failed with "There is no current event
+        loop": the sync must leave a loop for Mangum, which asks for it.
+    '''
+    async def _sync():
+        return _sync_payload()
+
+    with patch.object(main, 'scheduled_sync_service', _sync):
+        main.handler(SCHEDULED_EVENT, None)
+    health = {**HTTP_EVENT, 'rawPath': '/', 'rawQueryString': '', 'headers': {},
+              'requestContext': {'http': {'method': 'GET', 'path': '/', 'sourceIp': '127.0.0.1'}},
+              'isBase64Encoded': False}
+
+    response = main.handler(health, None)
+
+    assert response['statusCode'] == 200
