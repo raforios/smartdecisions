@@ -60,5 +60,24 @@
         };
     }
 
-    window.SD_UI = { qs, qsAll, toast, setButtonBusy };
+    /**
+     * The eye beside a password field: shows or hides what was typed, and the
+     * button says which way it goes. Used by the login and by Mi cuenta.
+     */
+    function revealToggle(input, button) {
+        const paint = () => {
+            const shown = input.type === 'text';
+            button.innerHTML = window.SD_ICONS.svg(shown ? 'eyeOff' : 'eye');
+            button.setAttribute('aria-pressed', String(shown));
+            button.setAttribute('aria-label', shown ? 'Ocultar la contraseña' : 'Mostrar la contraseña');
+        };
+        button.addEventListener('click', () => {
+            input.type = input.type === 'password' ? 'text' : 'password';
+            paint();
+        });
+        paint();
+        return () => { input.type = 'password'; paint(); };
+    }
+
+    window.SD_UI = { qs, qsAll, toast, setButtonBusy, revealToggle };
 })();

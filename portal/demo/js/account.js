@@ -7,7 +7,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated()) return;
     const { AUTH_URL } = window.SD_CONFIG;
-    const { qs, toast, setButtonBusy } = window.SD_UI;
+    const { qs, qsAll, toast, setButtonBusy, revealToggle } = window.SD_UI;
 
     const ROLES = { MANAGER: 'Gerente', REQUESTER: 'Consulta', ADMIN: 'Administrador', SELLER: 'Vendedor' };
     const ERRORS = {
@@ -37,6 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
             `<b>${escape(value)}</b></div>`).join('');
     }
 
+    // An eye on each field, to check what was typed before changing it.
+    const hideAll = qsAll('#passwordForm [data-reveal]').map((button) =>
+        revealToggle(button.previousElementSibling, button));
+
     function say(text, kind) {
         const note = qs('#passwordNote');
         note.className = `form-note${kind ? ` ${kind}` : ''}`;
@@ -60,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await window.SD_API.post(`${AUTH_URL}/v1/users/me/password`,
                 { current_password: current, new_password: fresh });
             qs('#passwordForm').reset();
+            hideAll.forEach((hide) => hide());
             say('Contraseña cambiada. La usarás desde tu próxima sesión.', 'success');
             toast('Contraseña cambiada.', 'success');
         } catch (error) {

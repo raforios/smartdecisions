@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar sesión — SmartDecisions</title>
-    <link rel="stylesheet" href="/styles/demo.css?v=b4b5fb27fa">
-    <link rel="stylesheet" href="/styles/login.css?v=76c656c1af">
+    <link rel="stylesheet" href="/styles/demo.css?v=be05674b37">
+    <link rel="stylesheet" href="/styles/login.css?v=932c545eaf">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="/js/config.js?v=0b4736ed6f"></script>
     <script src="/js/auth.js?v=c153b5ce24" defer></script>
-    <script src="/js/ui.js?v=bd318da6b9" defer></script>
+    <script src="/js/ui.js?v=412b9cdd72" defer></script>
     <script src="/js/icons.js?v=1b71096105" defer></script>
 </head>
 <body class="sd-login">
@@ -23,9 +23,9 @@
             <span>Smart<b>Decisions</b></span>
         </div>
         <div class="login-message">
-            <h2>Las cifras de tu empresa, claras para decidir.</h2>
-            <p>Ventas, cobranza, inventario y compras en bolivianos, dólares y USDT, con el tipo de
-               cambio de cada día.</p>
+            <h2 id="brandTitle">Tu negocio, tus decisiones.</h2>
+            <p id="brandLine">Con los ingresos, egresos y gastos que ya tienes, en pocos pasos ves
+               cómo está tu negocio y qué conviene hacer.</p>
         </div>
         <div class="login-maker">
             <span>Un producto de</span>
@@ -45,12 +45,16 @@
             </label>
             <label class="login-field">
                 <span>Contraseña</span>
-                <span class="login-input has-toggle">
+                <span class="login-input has-toggle sd-reveal">
                     <input type="password" name="password" id="loginPassword" required
                            autocomplete="current-password">
-                    <button type="button" class="login-toggle" id="passwordToggle"
+                    <button type="button" class="sd-reveal-toggle" id="passwordToggle"
                             aria-label="Mostrar la contraseña" aria-pressed="false"></button>
                 </span>
+            </label>
+            <!-- Only the e-mail is kept, never the password nor the session. -->
+            <label class="login-remember">
+                <input type="checkbox" id="rememberEmail"><span>Recordar mi correo</span>
             </label>
             <button type="submit" class="btn btn-primary login-submit" id="loginButton">Entrar</button>
             <p class="form-note" id="loginNote" aria-live="polite"></p>
@@ -89,20 +93,38 @@
             return '/home.html';
         }
 
-        // The password can be read before sending it; the button says which way it goes.
-        const password = qs('#loginPassword');
-        const toggle = qs('#passwordToggle');
-        const paintToggle = () => {
-            const shown = password.type === 'text';
-            toggle.innerHTML = window.SD_ICONS.svg(shown ? 'eyeOff' : 'eye');
-            toggle.setAttribute('aria-pressed', String(shown));
-            toggle.setAttribute('aria-label', shown ? 'Ocultar la contraseña' : 'Mostrar la contraseña');
+        // The brand message changes from one visit to the next (Rafael, 14-oct:
+        // A and B, without marrying one line). The first one is in the markup.
+        const MESSAGES = [
+            ['Tu negocio, tus decisiones.',
+             'Con los ingresos, egresos y gastos que ya tienes, en pocos pasos ves cómo está tu negocio y qué conviene hacer.'],
+            ['Tu negocio en la palma de tu mano.',
+             'Pocos datos, los que cualquier gerente tiene, y decisiones acertadas en pocos pasos.']
+        ];
+        const [title, line] = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+        qs('#brandTitle').textContent = title;
+        qs('#brandLine').textContent = line;
+
+        // The password can be read before sending it.
+        window.SD_UI.revealToggle(qs('#loginPassword'), qs('#passwordToggle'));
+
+        // "Recordar mi correo": the e-mail only, in this browser. The session
+        // itself still lives in the tab and lasts what AUTH says.
+        const REMEMBER_KEY = 'sd_login_email';
+        const remember = qs('#rememberEmail');
+        const store = (value) => {
+            try {
+                if (value) localStorage.setItem(REMEMBER_KEY, value);
+                else localStorage.removeItem(REMEMBER_KEY);
+            } catch (error) { /* storage blocked: nothing is remembered */ }
         };
-        toggle.addEventListener('click', () => {
-            password.type = password.type === 'password' ? 'text' : 'password';
-            paintToggle();
-        });
-        paintToggle();
+        let remembered = '';
+        try { remembered = localStorage.getItem(REMEMBER_KEY) || ''; } catch (error) { /* same */ }
+        if (remembered) {
+            form.elements.email.value = remembered;
+            remember.checked = true;
+            qs('#loginPassword').focus();
+        }
 
         // If already authenticated, jump straight to the home (or ?next=...).
         if (window.SD_AUTH.isAuthenticated()) {
@@ -128,6 +150,7 @@
             const done = setButtonBusy(button, 'Entrando…');
             try {
                 await window.SD_AUTH.login(email, password);
+                store(remember.checked ? email : '');
                 toast('Bienvenido a SmartDecisions Demo.', 'success');
                 location.replace(destination());
             } catch (error) {
