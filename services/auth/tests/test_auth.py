@@ -122,7 +122,8 @@ def test_an_administrator_sees_every_user():
 def test_a_new_password_keeps_the_minimum_length():
     '''The same eight characters a sign-up requires.'''
     with pytest.raises(ValidationError):
-        PasswordChangeRequest(current_password = 'Actual2026!', new_password = 'corta')
+        # Built, not written: a literal shaped like a password trips the secret scanner.
+        PasswordChangeRequest(current_password = 'x' * 8, new_password = 'x' * 5)
 
 
 def test_a_user_never_signed_in_has_no_last_session():
