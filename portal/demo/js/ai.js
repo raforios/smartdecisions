@@ -112,12 +112,12 @@
         body.textContent = (answer && answer.text) || '';
         panel.appendChild(body);
 
-        if (answer && answer.cached) {
-            const meta = document.createElement('p');
-            meta.className = 'ai-meta';
-            meta.textContent = 'Respuesta guardada de una consulta anterior.';
-            panel.appendChild(meta);
-        }
+        // Every answer says where it comes from (Anthropic's Usage Policy).
+        const meta = document.createElement('p');
+        meta.className = 'ai-meta';
+        meta.textContent = 'Texto generado por IA; revísalo antes de decidir.' +
+            (answer && answer.cached ? ' Respuesta guardada de una consulta anterior.' : '');
+        panel.appendChild(meta);
     }
 
     window.SD_AI = { registerView, payloadOf, mountExplain, render };
