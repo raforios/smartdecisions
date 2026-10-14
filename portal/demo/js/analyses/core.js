@@ -286,8 +286,9 @@
             cacheResult(kind, payload);
             analysis.render(payload, view);
             markStamp(kind, Date.now());
+            // Opened by its page on load, the result on screen says it is ready.
             note.classList.add('success');
-            note.textContent = analysis.ready;
+            note.textContent = trigger ? analysis.ready : '';
         } catch (error) {
             note.classList.add('error');
             note.textContent = error.message || analysis.failed;

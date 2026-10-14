@@ -14,9 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const { qs, toast, setButtonBusy } = window.SD_UI;
     const { escapeHtml, formatMoney, formatDecimal, todayIso, note } = window.SD_TRACK;
 
-    qs('#userChip').textContent = window.SD_AUTH.getEmail() || 'usuario';
-    qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
-
     if (window.SD_AI) {
         // The button lives in the card's own header and the answer opens right
         // under it. Appending the button to the card put it below the table and
@@ -102,6 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function refreshMapSize() {
         setTimeout(() => { if (map) map.invalidateSize(); }, 0);
     }
+    // Histórico can start hidden behind the area's summary, like every section.
+    window.SD_TRACK.onShow('planner', refreshMapSize);
 
     function numberedIcon(stop) {
         const color = TIER_COLOR[stop.segment] || TIER_COLOR.LOW;

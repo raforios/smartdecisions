@@ -251,6 +251,49 @@
 .sd-progress { height: 8px; overflow: hidden; border-radius: 999px; background: var(--bg-alt); }
 .sd-progress span { display: block; height: 100%; border-radius: 999px; background: var(--accent-2); }
 
+/* ---------- Principal ---------- */
+.sd-today { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.sd-stack { display: grid; gap: 1.25rem; align-content: start; }
+.sd-panel-note { color: var(--muted); font-size: 0.85rem; }
+
+/* What a role may open: each top entry with what hangs from it. */
+.sd-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem 1.5rem; }
+.sd-map-head { display: flex; align-items: center; gap: 0.6rem; color: var(--text-strong); font-weight: 700; }
+.sd-map-head .sd-icon { color: var(--accent); }
+.sd-map-children {
+    display: grid;
+    gap: 0.15rem;
+    margin: 0.5rem 0 0 0.6rem;
+    padding-left: 1.2rem;
+    border-left: 1px solid var(--border);
+}
+.sd-map-children a { padding: 0.15rem 0; color: var(--muted); font-size: 0.88rem; font-weight: 500; }
+.sd-map-children a:hover { color: var(--accent); }
+
+/* Settings links: icon, title and one line. */
+.sd-links { display: grid; gap: 0.25rem; }
+.sd-link {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.65rem 0.5rem;
+    border-radius: 12px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+.sd-link:hover { background: var(--bg-alt); color: var(--muted); }
+.sd-link .sd-icon { margin-top: 0.1rem; color: var(--accent); }
+.sd-link b { display: block; color: var(--text-strong); font-size: 0.92rem; }
+
+.sd-status { padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+.sd-status.is-on { background: rgba(18, 121, 111, 0.12); color: var(--accent-2); }
+.sd-status.is-off { background: var(--bg-alt); color: var(--muted); }
+.sd-panel[hidden] { display: none; }
+
+/* The way to an option page's upload, above its analysis. */
+.sd-option-actions { display: flex; justify-content: flex-end; margin-bottom: 0.75rem; }
+
 /* The trend line inside the dark block. */
 .sd-spark { position: relative; height: 70px; margin-top: auto; }
 

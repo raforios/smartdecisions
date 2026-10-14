@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartera de clientes — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=b4b5fb27fa">
+    <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="../styles/panels.css?v=13f1255dcf">
+    <link rel="stylesheet" href="../routes/routes.css?v=1592d3bb63">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=0b4736ed6f"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=1b71096105" defer></script>
+    <script src="../js/shell.js?v=a69422fb21" defer></script>
+    <script src="../js/api.js?v=0f299d8422" defer></script>
+    <script src="../js/ui.js?v=bd318da6b9" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/area.js?v=a942ec36d4" defer></script>
+    <script src="../routes/routes_tracking.js?v=32cbe28d7c" defer></script>
+    <script src="../routes/routes_clients.js?v=01be849540" defer></script>
+</head>
+<body>
+
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Cartera de clientes</h1>
+        <p class="page-subtitle">Tu cartera de clientes, con los nuevos que los vendedores dieron de alta en la calle. Toca un cliente para ver su ficha.</p>
+        <p><a class="btn btn-primary btn-small" href="ficha.html">Abrir la ficha de un cliente</a></p>
+
+        <div class="routes-section" data-section="clients" data-autoshow>
+            <div class="day-summary" id="clientsSummary"></div>
+            <div class="card stops-card">
+                <div class="card-head">
+                    <h3>Clientes</h3>
+                    <div class="form-actions">
+                        <select id="clientsSource">
+                            <option value="">Todos</option>
+                            <option value="FIELD">Nuevos, dados de alta en la calle</option>
+                            <option value="FILE">Del archivo</option>
+                            <option value="API">Del sistema (API)</option>
+                        </select>
+                        <button type="button" class="btn btn-ghost btn-small" id="clientsRefresh">Actualizar</button>
+                    </div>
+                </div>
+                <p class="legend-hint">
+                    Los más recientes primero. Un cliente nuevo de la calle trae las
+                    coordenadas que tomó el teléfono del vendedor parado en la puerta.
+                </p>
+                <div class="table-wrapper">
+                    <table class="data-table" id="clientsTable">
+                        <thead><tr>
+                            <th>Cliente</th><th>Origen</th><th>Vendedor</th><th>Zona</th>
+                            <th>Dirección</th><th>Ubicación</th><th>Alta</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="pager" id="clientsPager" hidden>
+                    <span class="pager-count" id="clientsCount"></span>
+                    <div class="pager-controls">
+                        <button type="button" class="btn btn-ghost btn-small" id="clientsPrev">← Anterior</button>
+                        <span class="pager-page" id="clientsPage"></span>
+                        <button type="button" class="btn btn-ghost btn-small" id="clientsNext">Siguiente →</button>
+                    </div>
+                </div>
+                <p class="form-note" id="clientsNote" aria-live="polite"></p>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer class="demo-footer">
+    <div class="container">
+        Una iniciativa de <strong>BearSoft</strong> · SmartDecisions
+    </div>
+</footer>
+
+</body>
+</html>

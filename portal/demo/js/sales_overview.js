@@ -2,18 +2,17 @@
 
 /**
  * Comercial › Ventas — one block per option with the figure that says the
- * most about it. Each answer is kept in the same cache the option pages read,
- * so opening an option from here shows it at once instead of computing it
- * again. Blocks paint as their answers arrive: the slowest analyses take
- * several seconds and must not hold the others.
+ * most about it. Blocks paint as their answers arrive: the slowest analyses
+ * take several seconds and must not hold the others.
  */
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated()) return;
     const A = window.SD_ANALYSIS;
     const M = window.SD_MONEY;
+    const O = window.SD_OVERVIEW;
+    const { number, signed, kpi, token } = O;
     const BASE = `${window.SD_CONFIG.ANALYTICS_URL}/v1/analytics`;
     const qs = (selector) => document.querySelector(selector);
-    const tile = (name) => qs(`[data-tile="${name}"]`);
 
     const TITLES = {
         summary: 'Resumen comercial', volume: 'Fuente de volumen', opportunities: 'Oportunidades',
@@ -21,58 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
         portfolio: 'Salud de cartera', objectives: 'Cumplimiento de objetivos',
         fx: 'Efecto del tipo de cambio'
     };
-    const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
-        'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const paint = (name, ...rest) => O.paint(name, TITLES[name], ...rest);
+    const failed = (name) => paint(name, '—', 'No se pudo calcular. Entra para volver a intentar.');
 
-    const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    const number = (value, decimals = 0) => (value == null ? '—'
-        : Number(value).toLocaleString('es-BO', {
-            minimumFractionDigits: decimals, maximumFractionDigits: decimals }));
-    const signed = (value) => `${value > 0 ? '+' : ''}${number(value, 1)} %`;
-    const day = (iso) => {
-        const [year, month, date] = String(iso || '').split('-');
-        return MONTHS[Number(month) - 1] ? `${Number(date)} de ${MONTHS[Number(month) - 1]} de ${year}` : '';
-    };
-    const kpi = (kpis, code) => ((kpis || []).find((card) => card.metric_code === code) || {}).value;
-
-    /** Title, figure, one line and an optional small visual. */
-    function paint(name, value, line, visual = '') {
-        tile(name).innerHTML = `<p class="sd-tile-title">${TITLES[name]}</p>` +
-            `<p class="sd-tile-value">${value}</p><p class="sd-tile-line">${line}</p>` +
-            (visual ? `<div class="sd-tile-visual">${visual}</div>` : '');
-    }
-
-    /** A bar split in shares, with its legend under it. */
-    function shares(parts) {
-        return `<div class="sd-bar">${parts.map(([, share, color]) =>
-            `<span style="width:${Math.max(share, 0)}%;background:${color}"></span>`).join('')}</div>` +
-            `<div class="sd-bar-legend">${parts.map(([label, share, color]) =>
-                `<span><i style="background:${color}"></i>${label} ${number(share, 1)} %</span>`).join('')}</div>`;
-    }
-
-    function progress(percent) {
-        return `<div class="sd-progress"><span style="width:${Math.min(Math.max(percent, 0), 100)}%"></span></div>`;
-    }
-
-    function loading() {
-        document.querySelectorAll('[data-tile]').forEach((node) => {
-            node.innerHTML = `<p class="sd-tile-title">${TITLES[node.dataset.tile]}</p>` +
-                '<span class="sd-skeleton is-big"></span><span class="sd-skeleton"></span>';
-        });
-    }
-
-    function failed(name) {
-        paint(name, '—', 'No se pudo calcular. Entra para volver a intentar.');
-    }
-
-    // ---------- each option ----------
     function summary(data) {
         const total = kpi(data.kpis, 'TOTAL_SALES');
         const period = data.period || {};
         const from = period.filtered ? period.from_date : period.available_from;
         const to = period.filtered ? period.to_date : period.available_to;
-        if (from && to) qs('#salesWhen').textContent = `Del ${day(from)} al ${day(to)}.`;
-        tile('summary').innerHTML =
+        if (from && to) qs('#salesWhen').textContent = `Del ${O.day(from)} al ${O.day(to)}.`;
+        O.tile('summary').innerHTML =
             `<p class="sd-hero-label">${TITLES.summary}: venta del período</p>` +
             `<p class="sd-hero-value">Bs ${number(M.bob(total))}</p>` +
             `<div class="sd-hero-other"><span>USD<b>${number(total && total.usd)}</b></span>` +
@@ -84,14 +41,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const volume = data.volume_source || {};
         const classA = (volume.abc_summary || []).find((row) => row.abc_class === 'A');
-        const headline = volume.headline || {};
         if (!classA) {
             paint('volume', '—', 'Sin productos para clasificar.');
             return;
         }
         paint('volume', `${number(classA.products)} productos`,
-            `hacen el ${number(classA.percentage, 1)} % de la venta, de ${number(headline.total_products)}.`,
-            shares((volume.abc_summary || []).map((row, index) => [`Clase ${row.abc_class}`,
+            `hacen el ${number(classA.percentage, 1)} % de la venta, de ` +
+            `${number((volume.headline || {}).total_products)}.`,
+            O.shares((volume.abc_summary || []).map((row, index) => [`Clase ${row.abc_class}`,
                 row.percentage, [token('--accent-2'), token('--accent'), token('--border-strong')][index]])));
     }
 
@@ -119,12 +76,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const labels = { HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo' };
         paint('segmentation', `${number(high.clients)} clientes`,
             `de valor alto hacen el ${number(high.percentage, 1)} % de la venta.`,
-            shares(tiers.map((tier) => [labels[tier.tier] || tier.tier, tier.percentage, colors[tier.tier]])));
+            O.shares(tiers.map((tier) => [labels[tier.tier] || tier.tier, tier.percentage, colors[tier.tier]])));
     }
 
     function portfolio(data) {
-        const atRisk = kpi(data.kpis, 'CLIENTS_AT_RISK');
-        paint('portfolio', `${number(atRisk)} en riesgo`,
+        paint('portfolio', `${number(kpi(data.kpis, 'CLIENTS_AT_RISK'))} en riesgo`,
             `${number(kpi(data.kpis, 'CLIENTS_LOST'))} perdidos. ` +
             `Compraron ${number(kpi(data.kpis, 'ACTIVE_LAST_MONTH'))} de ` +
             `${number(kpi(data.kpis, 'PORTFOLIO_CLIENTS'))} el último mes.`);
@@ -139,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const invoiced = 100 * totals.invoiced_ratio;
         paint('objectives', `${number(invoiced, 1)} %`,
             `facturado del objetivo; cobrado ${number(100 * totals.collected_ratio, 1)} %.`,
-            progress(invoiced));
+            O.progress(invoiced));
     }
 
     function fx(data) {
@@ -162,21 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `valor esperado Bs ${number(M.bob(run.total_expected_value))}.`);
     }
 
-    /** One analysis: the cached answer, or a fresh one that is then cached. */
-    function analysis(kind, path, render) {
-        const cached = A.cachedResult(kind);
-        if (cached) {
-            render(cached.payload);
-            return;
-        }
-        window.SD_API.get(path).then((payload) => {
-            A.cacheResult(kind, payload);
-            render(payload);
-        }).catch(() => (kind === 'summary' ? ['summary', 'volume'] : [kind]).forEach(failed));
-    }
-
     async function load() {
-        loading();
+        O.loading(TITLES);
         const datasetId = await window.SD_API.ensureDataset();
         if (!datasetId) {
             qs('#salesTiles').hidden = true;
@@ -188,11 +131,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // The exchange-rate view reads the official dollar unless told otherwise,
         // the same default its own page starts with.
         const fxQuery = query ? `${query}&source=USD` : '?source=USD';
-        analysis('summary', `${BASE}/summary/${id}${query}`, summary);
-        analysis('segmentation', `${BASE}/segmentation/${id}${query}`, segmentation);
-        analysis('portfolio', `${BASE}/portfolio/${id}${query}`, portfolio);
-        analysis('objectives', `${BASE}/objectives/${id}${query}`, objectives);
-        analysis('fx', `${BASE}/fx-effect/${id}${fxQuery}`, fx);
+        O.analysis('summary', `${BASE}/summary/${id}${query}`, summary,
+            () => { failed('summary'); failed('volume'); });
+        O.analysis('segmentation', `${BASE}/segmentation/${id}${query}`, segmentation,
+            () => failed('segmentation'));
+        O.analysis('portfolio', `${BASE}/portfolio/${id}${query}`, portfolio, () => failed('portfolio'));
+        O.analysis('objectives', `${BASE}/objectives/${id}${query}`, objectives, () => failed('objectives'));
+        O.analysis('fx', `${BASE}/fx-effect/${id}${fxQuery}`, fx, () => failed('fx'));
         window.SD_API.get(`${BASE}/runs`, { limit: 5 })
             .then((runs) => opportunities(runs, datasetId))
             .catch(() => failed('opportunities'));

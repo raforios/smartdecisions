@@ -193,7 +193,8 @@ body.sd-app.sd-collapsed { padding-left: 0; }
     font-size: 0.88rem;
     cursor: pointer;
 }
-.sd-account-item:hover { background: var(--bg-alt); color: var(--danger); }
+.sd-account-item:hover { background: var(--bg-alt); color: var(--accent); }
+#logoutButton:hover { color: var(--danger); }
 .sd-account-item .sd-icon { width: 18px; height: 18px; }
 
 /* ---------- Footer: BearSoft's mark ---------- */

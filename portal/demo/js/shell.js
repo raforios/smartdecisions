@@ -35,21 +35,29 @@
     ].map(([label, page]) => ({ label, page: `ventas/${page}.html` }));
     const MENU = [
         { group: '', items: [
+            // The application's welcome; the financial part will follow it.
+            { label: 'Principal', icon: 'home', page: 'home.html' },
             { label: 'Comercial', icon: 'commerce', page: 'comercial/index.html', children: [
                 { label: 'Ventas', icon: 'sales', page: 'ventas/index.html', children: [
                     ...VENTAS,
                     { label: 'Cargar datos', page: 'ventas/cargar.html', roles: EDITORS }
                 ] },
                 { label: 'Clientes', icon: 'clients', page: 'clientes/index.html', children: [
-                    { label: 'Cartera', page: 'clientes/index.html' },
+                    { label: 'Cartera', page: 'clientes/cartera.html' },
                     { label: 'Ficha del cliente', page: 'clientes/ficha.html' }
                 ] },
                 { label: 'Inventario', icon: 'stock', page: 'inventario/index.html', children: [
-                    { label: 'Stock del día', view: 'stock' },
-                    { label: 'Evolución', view: 'stockHistory' }
+                    { label: 'Stock del día', page: 'inventario/stock.html' },
+                    { label: 'Evolución', page: 'inventario/evolucion.html' },
+                    { label: 'Stock en ruta', page: 'inventario/ruta.html' },
+                    { label: 'Cargar datos', page: 'inventario/cargar.html', roles: EDITORS }
                 ] },
-                { label: 'Compras', icon: 'purchases', page: 'compras/index.html' },
-                { label: 'Cobranza', icon: 'receivables', page: 'cobranza/index.html' },
+                { label: 'Compras', icon: 'purchases', page: 'compras/index.html', children: [
+                    { label: 'Cargar datos', page: 'compras/cargar.html', roles: EDITORS }
+                ] },
+                { label: 'Cobranza', icon: 'receivables', page: 'cobranza/index.html', children: [
+                    { label: 'Cargar datos', page: 'cobranza/cargar.html', roles: EDITORS }
+                ] },
                 { label: 'Rutas', icon: 'routes', page: 'routes/index.html', children: [
                     { label: 'Histórico', view: 'planner' },
                     { label: 'Planes', view: 'plans' },
@@ -101,14 +109,15 @@
     function nodeMarkup(node, depth, chain) {
         const open = chain.includes(node);
         const current = chain[chain.length - 1] === node;
-        const kids = open && node.children ? `<div class="sd-subitems sd-depth-${depth + 1}">${
-            node.children.filter(allowed).map((child) => nodeMarkup(child, depth + 1, chain)).join('')
-        }</div>` : '';
-        const cls = depth < 2 ? 'sd-item' : 'sd-subitem';
+        const children = (node.children || []).filter(allowed);
+        const kids = open && children.length ? `<div class="sd-subitems sd-depth-${depth + 1}">${
+            children.map((child) => nodeMarkup(child, depth + 1, chain)).join('')}</div>` : '';
+        // An area carries an icon; an option is a plain line under it.
+        const cls = node.icon ? 'sd-item' : 'sd-subitem';
         return `<a class="${cls}${open ? ' is-open' : ''}${current ? ' is-active' : ''}" ` +
             `href="${href(node.page, node.view)}"${current ? ' aria-current="page"' : ''}>` +
-            `${depth < 2 && node.icon ? icon(node.icon) : ''}<span>${escape(node.label)}</span>` +
-            `${node.children ? icon(open ? 'chevronDown' : 'chevronRight', 'sd-caret') : ''}</a>${kids}`;
+            `${node.icon ? icon(node.icon) : ''}<span>${escape(node.label)}</span>` +
+            `${children.length ? icon(open ? 'chevronDown' : 'chevronRight', 'sd-caret') : ''}</a>${kids}`;
     }
 
     function menuMarkup(chain) {
@@ -120,6 +129,11 @@
     }
 
     function crumbsMarkup(chain) {
+        // A page outside the menu (Mi cuenta) is named by its own title.
+        if (!chain.length) {
+            const title = document.querySelector('main h1');
+            return title ? `<span class="sd-crumb is-current">${escape(title.textContent)}</span>` : '';
+        }
         return chain.map((node, index) => (index === chain.length - 1
             ? `<span class="sd-crumb is-current" aria-current="page">${escape(node.label)}</span>`
             : `<a class="sd-crumb" href="${href(node.page, node.view)}">${escape(node.label)}</a>`))
@@ -137,7 +151,7 @@
     sidebar.className = 'sd-sidebar';
     sidebar.id = 'sdSidebar';
     sidebar.innerHTML =
-        `<a class="sd-brand" href="${href('comercial/index.html')}">` +
+        `<a class="sd-brand" href="${href('home.html')}">` +
         `<img src="${new URL('assets/bear-face.jpg', ROOT).pathname}" alt="">` +
         '<span>Smart<b>Decisions</b></span></a>' +
         `<nav class="sd-nav" id="sdNav" aria-label="Menú principal">${
@@ -159,6 +173,9 @@
         `<p class="sd-account-email" id="userChip">${escape(email)}</p>` +
         `<p class="sd-account-meta">${ROLE_LABELS[role] || ''}</p>` +
         '<span class="session-chip" id="sessionChip" hidden></span>' +
+        `<a class="sd-account-item" href="${href('cuenta.html')}">${icon('user')}<span>Mi cuenta</span></a>` +
+        (EDITORS.includes(role) ? `<a class="sd-account-item" href="${href('parametros/index.html')}">` +
+            `${icon('settings')}<span>Configuración</span></a>` : '') +
         `<button type="button" class="sd-account-item" id="logoutButton">${icon('logout')}` +
         '<span>Salir</span></button></div></div></div>';
 
@@ -168,6 +185,11 @@
     document.body.classList.add('sd-app');
     document.body.dataset.role = role;
     document.body.prepend(sidebar, overlay, topbar);
+
+    // Static markup names its icons (data-icon); they are drawn here, once.
+    document.querySelectorAll('[data-icon]').forEach((node) => {
+        node.innerHTML = icon(node.dataset.icon);
+    });
 
     // Pages that never wired the button (Minerales, Factores) still sign out.
     topbar.querySelector('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
@@ -267,4 +289,16 @@
         toggle(false);
     });
     document.addEventListener('DOMContentLoaded', () => setTimeout(openFromHash, 0));
+
+    // What this role may open, for the welcome page's map: the same tree the
+    // menu shows, so the map never offers what the menu hides.
+    const visibleTree = (nodes) => nodes.filter(allowed).map((node) => ({
+        label: node.label, icon: node.icon, href: href(node.page, node.view),
+        children: visibleTree(node.children || [])
+    }));
+    window.SD_SHELL = {
+        role, roleLabel: ROLE_LABELS[role] || '', isEditor: EDITORS.includes(role),
+        menu: () => MENU.filter(allowed).map((section) => ({
+            group: section.group, items: visibleTree(section.items) }))
+    };
 })();

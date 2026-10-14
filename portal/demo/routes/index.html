@@ -4,19 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rutas — SmartDecisions</title>
-    <link rel="stylesheet" href="/styles/demo.css?v=92e8abf645">
-    <link rel="stylesheet" href="/styles/shell.css?v=b68d88c3be">
+    <link rel="stylesheet" href="/styles/demo.css?v=b4b5fb27fa">
+    <link rel="stylesheet" href="/styles/shell.css?v=ebea324912">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="">
+    <link rel="stylesheet" href="/styles/panels.css?v=13f1255dcf">
     <link rel="stylesheet" href="/routes/routes.css?v=1592d3bb63">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="/js/config.js?v=0b4736ed6f"></script>
     <script src="/js/auth.js?v=c153b5ce24" defer></script>
-    <script src="/js/icons.js?v=6f400ec0de" defer></script>
-    <script src="/js/shell.js?v=edbd415df1" defer></script>
+    <script src="/js/icons.js?v=1b71096105" defer></script>
+    <script src="/js/shell.js?v=a69422fb21" defer></script>
     <script src="/js/api.js?v=0f299d8422" defer></script>
     <script src="/js/ui.js?v=bd318da6b9" defer></script>
     <script src="/js/session.js?v=91bb432af9" defer></script>
@@ -25,10 +26,12 @@
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin="" defer></script>
     <script src="/routes/routes_tracking.js?v=32cbe28d7c" defer></script>
-    <script src="/routes/routes.js?v=62c7480dc5" defer></script>
+    <script src="/routes/routes.js?v=21ebb90b5f" defer></script>
     <script src="/routes/routes_plans.js?v=fdc93d7ea6" defer></script>
     <script src="/routes/routes_live.js?v=2f892dd229" defer></script>
     <script src="/routes/routes_optimize.js?v=9c57da30be" defer></script>
+    <script src="/js/overview.js?v=100b889f22" defer></script>
+    <script src="/routes/routes_overview.js?v=c1f5e63858" defer></script>
     <script src="/routes/routes_compare.js?v=c2ea741eec" defer></script>
 </head>
 <body>
@@ -37,31 +40,42 @@
 <main>
     <div class="container">
         <h1 class="page-title">Rutas</h1>
-        <p class="page-subtitle">Mira lo que ya se hizo, arma lo que viene, sigue a los vendedores en el día y compara el plan con lo que pasó.</p>
+        <p class="page-subtitle" id="routesIntro">Mira lo que ya se hizo, arma lo que viene, sigue a los vendedores en el día y compara el plan con lo que pasó.</p>
 
-        <div class="analysis-menu" id="sectionMenu">
+        <!-- The area's summary: one block per option. The options open from the
+             side menu (#view); the cards below stay only as the switch the
+             section scripts listen to, never on screen. -->
+        <section class="sd-tiles" id="routesTiles" hidden>
+            <a class="sd-hero sd-tile-wide" href="#live" data-tile="live"></a>
+            <a class="sd-tile" href="#compare" data-tile="compare"></a>
+            <a class="sd-tile" href="#planner" data-tile="planner"></a>
+            <a class="sd-tile" href="#plans" data-tile="plans"></a>
+            <a class="sd-tile" href="#optimize" data-tile="optimize"></a>
+        </section>
+
+        <div class="analysis-menu" id="sectionMenu" hidden>
             <button type="button" class="analysis-card is-active" data-section="planner">
-                <span class="analysis-icon">🗺️</span>
+                <span class="analysis-icon" data-icon="clock"></span>
                 <span class="analysis-title">Histórico</span>
                 <span class="analysis-desc">Lo que ya se hizo y cuándo, sobre el mapa. Desde acá se repite una ruta.</span>
             </button>
             <button type="button" class="analysis-card" data-section="plans">
-                <span class="analysis-icon">📋</span>
+                <span class="analysis-icon" data-icon="calendar"></span>
                 <span class="analysis-title">Planes</span>
                 <span class="analysis-desc">Lo que viene: de hoy en adelante. Impórtalos, infiérelos, asígnalos y actívalos.</span>
             </button>
             <button type="button" class="analysis-card" data-section="live">
-                <span class="analysis-icon">📍</span>
+                <span class="analysis-icon" data-icon="pin"></span>
                 <span class="analysis-title">En vivo</span>
                 <span class="analysis-desc">Dónde está cada vendedor ahora y qué reportó hoy.</span>
             </button>
             <button type="button" class="analysis-card" data-section="optimize">
-                <span class="analysis-icon">⚡</span>
+                <span class="analysis-icon" data-icon="bolt"></span>
                 <span class="analysis-title">Optimizar</span>
                 <span class="analysis-desc">La ruta que ya tienes contra el orden que la acorta, con los dos mapas y el ahorro.</span>
             </button>
             <button type="button" class="analysis-card" data-section="compare">
-                <span class="analysis-icon">🎯</span>
+                <span class="analysis-icon" data-icon="compare"></span>
                 <span class="analysis-title">Comparación</span>
                 <span class="analysis-desc">Plan contra ejecución: paradas cumplidas, visitas y ventas.</span>
             </button>

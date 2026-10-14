@@ -3,13 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartDecisions</title>
-    <!-- The entry after login. Until the financial part exists, the portal
-         opens on Comercial; this page will hold the financial summary. -->
-    <meta http-equiv="refresh" content="0; url=/comercial/index.html">
-    <script>location.replace('/comercial/index.html');</script>
+    <title>Principal — SmartDecisions</title>
+    <link rel="stylesheet" href="styles/demo.css?v=b4b5fb27fa">
+    <link rel="stylesheet" href="styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="styles/panels.css?v=13f1255dcf">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="js/config.js?v=0b4736ed6f"></script>
+    <script src="js/auth.js?v=c153b5ce24" defer></script>
+    <script src="js/icons.js?v=1b71096105" defer></script>
+    <script src="js/shell.js?v=a69422fb21" defer></script>
+    <script src="js/api.js?v=0f299d8422" defer></script>
+    <script src="js/ui.js?v=bd318da6b9" defer></script>
+    <script src="js/session.js?v=91bb432af9" defer></script>
+    <script src="js/home.js?v=b73f86adc5" defer></script>
 </head>
 <body>
-    <p><a href="/comercial/index.html">Ir a Comercial</a></p>
+
+<main>
+    <div class="container">
+        <div class="sd-page-head">
+            <div>
+                <h1 id="homeHello">Bienvenido</h1>
+                <p id="homeLast">SmartDecisions, de BearSoft.</p>
+            </div>
+            <p class="sd-today" id="homeToday"></p>
+        </div>
+
+        <section class="sd-grid sd-grid-wide">
+            <!-- What this role may open: the same tree as the menu. -->
+            <article class="sd-panel">
+                <div class="sd-panel-head"><h2>Lo que puedes abrir</h2></div>
+                <div class="sd-map" id="homeMap"></div>
+            </article>
+
+            <div class="sd-stack">
+                <a class="sd-hero" href="parametros/factores.html" id="homeRates">
+                    <p class="sd-hero-label">Cotizaciones del día</p>
+                    <span class="sd-skeleton is-big"></span><span class="sd-skeleton"></span>
+                </a>
+                <article class="sd-panel">
+                    <div class="sd-panel-head"><h2>Configuración</h2></div>
+                    <div class="sd-links" id="homeSettings"></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- Who uses the account and when they last came in (MANAGER, ADMIN). -->
+        <section class="sd-panel" id="homeUsers" hidden>
+            <div class="sd-panel-head">
+                <h2>Usuarios de tu empresa</h2>
+                <span class="sd-panel-note" id="homeUsersNote"></span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="homeUsersTable">
+                    <thead><tr>
+                        <th>Nombre</th><th>Correo</th><th>Rol</th><th>Última sesión</th>
+                        <th class="numeric">Sesiones</th><th>Estado</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
+
+<footer class="demo-footer"></footer>
+
 </body>
 </html>
