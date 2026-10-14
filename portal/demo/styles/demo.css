@@ -38,6 +38,10 @@
     --fs-text:         0.875rem;
     --fs-table:        0.8125rem;
     --fs-label:        0.75rem;
+
+    /* One gap between blocks (cards, panels, charts), across and down
+       (Rafael, 14-oct: the same separation everywhere). */
+    --gap-block:       1.25rem;
 }
 
 * { box-sizing: border-box; }
@@ -196,19 +200,29 @@ main p, main li { font-size: var(--fs-text); }
     box-shadow: var(--shadow-sm);
 }
 .card-elevated { background: var(--panel-elevated); box-shadow: var(--shadow-lg); }
-/* Parámetros stacks cards one under the other: they used to touch, and the
-   row of seller figures sat against the card below it (Rafael, 14-oct). The
-   same gap as the dashboards' blocks (.sd-grid); no other page changes. */
-.sd-blocks > :is(.card, section, .routes-section) + :is(.card, section, .routes-section),
-.sd-blocks .routes-section,
-.sd-blocks .day-summary + .card { margin-top: 1.25rem; }
+/* Cards stacked one under the other keep the same gap as everything else:
+   they used to touch (Parámetros, among others). */
+.container > :is(.card, .routes-section) + :is(.card, .routes-section),
+.routes-section > .day-summary + .card { margin-top: var(--gap-block); }
+/* A section that only holds a chart has no title to set apart: it sits at
+   the block gap, not at the 2.5rem of a titled section. */
+.step-section:has(> .chart-card:first-child) { margin-top: var(--gap-block); }
+/* The same between the blocks an analysis stacks inside its section: a chart
+   right after a grid of charts or a stack of cards used to touch it. Not
+   inside a container that already spaces its children with a gap, so that
+   gap is never doubled. */
+:not(.card-stack, .chart-grid, .split-layout, .segment-layout, .metric-grid, .metric-row,
+     .sd-grid, .sd-stack, .sd-tiles, .step-grid, .card-grid, .routes-layout, .routes-main,
+     .routes-sidebar, .day-summary) >
+    :is(.chart-grid, .card-stack, .split-layout, .segment-layout, .chart-card, .metric-grid, .table-wrapper, .card, div:not([class])) +
+    :is(.chart-grid, .card-stack, .split-layout, .segment-layout, .chart-card, .table-wrapper, .card) { margin-top: var(--gap-block); }
 .card h3 { margin: 0 0 0.5rem; font-size: 1.15rem; color: var(--text); }
 .card p { margin: 0; color: var(--muted); font-size: var(--fs-text); }
 
 .card-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1.2rem;
+    gap: var(--gap-block);
 }
 @media (max-width: 1000px) {
     .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -422,7 +436,7 @@ main p, main li { font-size: var(--fs-text); }
 .activity-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-    gap: 1rem;
+    gap: var(--gap-block);
 }
 
 .activity-tile {
@@ -537,7 +551,7 @@ main p, main li { font-size: var(--fs-text); }
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 1rem;
+    gap: var(--gap-block);
     margin: 1rem 0;
 }
 /* Fixed basis and no grow: every card measures the same, so the shorter last

@@ -5,16 +5,16 @@
 .routes-layout {
     display: grid;
     grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-    gap: 1.25rem;
+    gap: var(--gap-block);
     align-items: start;
-    margin-top: 1.5rem;
+    margin-top: var(--gap-block);
 }
 @media (max-width: 900px) {
     .routes-layout { grid-template-columns: 1fr; }
 }
 
-.routes-sidebar { display: grid; gap: 1rem; }
-.routes-main { display: grid; gap: 1rem; }
+.routes-sidebar { display: grid; gap: var(--gap-block); }
+.routes-main { display: grid; gap: var(--gap-block); }
 
 .form-stack { display: grid; gap: 0.9rem; }
 .form-stack label { display: grid; gap: 0.3rem; font-size: var(--fs-text); color: var(--muted); }
@@ -38,6 +38,8 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.6rem;
 }
+/* Two maps side by side are blocks, not fields: the block gap. */
+.grid-2:has(> div > .routes-map-wrapper) { gap: var(--gap-block); }
 
 /* --- Empty state when no sales file has been uploaded --- */
 .empty-state { text-align: center; padding: 2.5rem 1.5rem; }
@@ -70,7 +72,7 @@
 .day-summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 1rem;
+    gap: var(--gap-block);
 }
 .day-summary .metric {
     background: var(--panel);
@@ -225,7 +227,7 @@
 .card-head + .ai-answer { margin-bottom: 1.4rem; }
 
 /* --- Sections (Plan, Plans, Today's stock, Live, Comparison) --- */
-.routes-section { margin-top: 1.5rem; }
+.routes-section { margin-top: var(--gap-block); }
 .card-head .form-actions { margin: 0 0 0 auto; display: flex; gap: 0.5rem; align-items: center; }
 .card-head select, .card-head input[type="date"] { padding: 0.35rem 0.5rem; }
 #saveDayActions { align-items: center; gap: 0.8rem; margin-bottom: 0.8rem; }
