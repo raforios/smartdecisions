@@ -29,7 +29,11 @@
             renderChosenMonth(data.chosen_month);
             A.monthTodayRates = null;
         }
-        if (qs('#stepVolume')) renderVolumeSource(data.volume_source);
+        if (qs('#stepVolume')) {
+            renderVolumeSource(data.volume_source);
+            // Its chart lives on the volume page, not with the summary's.
+            renderAbcChart((data.volume_source && data.volume_source.abc_summary) || []);
+        }
 
         A.showAnalysisView(view || (qs('#stepDashboard') ? 'stepDashboard' : 'stepVolume'));
     }
@@ -104,7 +108,6 @@
         if (data.margin && data.margin.available) {
             renderMarginChart(data.margin.by_category || []);
         }
-        renderAbcChart((data.volume_source && data.volume_source.abc_summary) || []);
     }
 
     function renderMarginChart(categories) {

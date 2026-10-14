@@ -21,7 +21,7 @@
     background: var(--accent);
     color: #fff;
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
     margin-bottom: 0.6rem;
 }
 
@@ -59,7 +59,7 @@
     border-radius: 999px;
     padding: 0.3rem 0.9rem;
     color: var(--text);
-    font-size: 0.88rem;
+    font-size: var(--fs-text);
 }
 
 /* ============ Sections after upload ============ */
@@ -104,7 +104,7 @@
 }
 .metric-label {
     color: var(--muted);
-    font-size: 0.78rem;
+    font-size: var(--fs-label);
     text-transform: uppercase;
     letter-spacing: 0.12em;
     margin: 0 0 0.4rem;
@@ -121,7 +121,7 @@
 .metric-value.accent { color: var(--accent); }
 .metric-value.success { color: var(--success); }
 .metric-value.warning { color: var(--warning); }
-.metric-hint { color: var(--muted); font-size: 0.8rem; margin: 0.25rem 0 0; }
+.metric-hint { color: var(--muted); font-size: var(--fs-text); margin: 0.25rem 0 0; }
 
 /* --- Orientation / insight panel (makes the result self-explanatory) --- */
 .insight-panel {
@@ -132,11 +132,13 @@
     padding: 1rem 1.25rem;
     margin-bottom: 1.25rem;
 }
-.insight-objective { color: var(--text); margin: 0; font-size: 0.92rem; line-height: 1.5; }
+.insight-objective { color: var(--text); margin: 0; font-size: var(--fs-text); line-height: 1.5; }
 .insight-headline { margin-top: 0.85rem; }
+/* The lead stands out by weight, not by size. */
 .insight-lead {
     color: var(--text-strong);
-    font-size: 1.12rem;
+    font-size: var(--fs-text);
+    font-weight: 700;
     line-height: 1.5;
     margin: 0 0 0.5rem;
 }
@@ -152,7 +154,7 @@
     align-items: center;
     gap: 0.5rem;
 }
-.insight-topcats-label { color: var(--muted); font-size: 0.85rem; margin-right: 0.25rem; }
+.insight-topcats-label { color: var(--muted); font-size: var(--fs-text); margin-right: 0.25rem; }
 .insight-chip {
     display: inline-flex;
     align-items: center;
@@ -161,7 +163,7 @@
     border: 1px solid var(--border-strong);
     border-radius: 999px;
     padding: 0.3rem 0.7rem;
-    font-size: 0.85rem;
+    font-size: var(--fs-text);
     color: var(--text);
 }
 .insight-chip .chip-rank {
@@ -172,7 +174,7 @@
     border-radius: 50%;
     background: var(--accent);
     color: #fff;
-    font-size: 0.72rem;
+    font-size: var(--fs-label);
     font-weight: 700;
 }
 /* Hero cell: the money column stands out over the technical metrics. */
@@ -201,7 +203,7 @@
 .filter-label {
     display: grid;
     gap: 0.3rem;
-    font-size: 0.85rem;
+    font-size: var(--fs-text);
     color: var(--muted);
     min-width: 280px;
 }
@@ -212,50 +214,16 @@
     padding: 0.55rem 0.8rem;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.95rem;
+    font-size: var(--fs-text);
 }
 .filter-label input:focus { outline: none; border-color: var(--accent); }
-.filter-count { color: var(--muted); font-size: 0.85rem; }
+.filter-count { color: var(--muted); font-size: var(--fs-text); }
 
-/* ============ Tables ============ */
-.table-wrapper {
-    overflow-x: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--panel);
-}
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.78rem;
-}
-.data-table thead th {
-    text-align: left;
-    padding: 0.7rem 0.9rem;
-    background: var(--panel-elevated);
-    color: var(--text-strong);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-}
-.data-table tbody td {
-    padding: 0.65rem 0.9rem;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-}
-.data-table tbody tr:last-child td { border-bottom: 0; }
-.data-table tbody tr:hover { background: rgba(90, 214, 194, 0.04); }
-.data-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
-.data-table.sortable thead th[data-sort] { cursor: pointer; user-select: none; }
-.data-table.sortable thead th[data-sort]:hover { color: var(--text); }
-.data-table.sortable thead th[data-sort].asc::after  { content: ' ▲'; color: var(--accent); }
-.data-table.sortable thead th[data-sort].desc::after { content: ' ▼'; color: var(--accent); }
+/* Tables: defined once in demo.css. */
 
 .based-on {
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: var(--fs-text);
 }
 .empty-row td {
     text-align: center;
@@ -309,9 +277,9 @@
     align-items: center;
     gap: 0.4rem;
     color: var(--muted);
-    font-size: 0.78rem;
+    font-size: var(--fs-label);
 }
-.chart-currency select { font-size: 0.82rem; }
+.chart-currency select { font-size: var(--fs-text); }
 
 /* --- Forecast controls --- */
 .forecast-controls {
@@ -329,18 +297,18 @@
     padding: 0.55rem 0.8rem;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.95rem;
+    font-size: var(--fs-text);
 }
-.forecast-note { color: var(--muted); font-size: 0.9rem; margin: 0.3rem 0 0.5rem; }
+.forecast-note { color: var(--muted); font-size: var(--fs-text); margin: 0.3rem 0 0.5rem; }
 .forecast-note.error { color: var(--danger); }
-.chart-sub { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+.chart-sub { color: var(--muted); font-weight: 400; font-size: var(--fs-text); }
 
 /* --- Segmentation tier badges --- */
 .tier-badge {
     display: inline-block;
     padding: 0.12rem 0.55rem;
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: var(--fs-label);
     font-weight: 700;
     color: #fff;
 }
@@ -351,7 +319,7 @@
 /* --- Opportunity product drill-down --- */
 .expand-btn {
     background: none; border: none; cursor: pointer;
-    color: var(--accent); font-size: 0.9rem; font-weight: 700;
+    color: var(--accent); font-size: var(--fs-text); font-weight: 700;
     margin-right: 0.4rem; padding: 0;
 }
 .product-row td { vertical-align: middle; }
@@ -376,7 +344,7 @@
 .section-head .section-title { margin: 0; flex: 0 0 auto; }
 .section-head .cache-stamp {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--fs-text);
     flex: 1 1 auto;
 }
 .section-head .btn { flex: 0 0 auto; }
@@ -404,7 +372,7 @@
     padding: 0.55rem 0.8rem;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.95rem;
+    font-size: var(--fs-text);
 }
 /* Roomier rows for the long client list — it fills the width now, so the
    vertical rhythm is what keeps it readable. */
@@ -442,11 +410,12 @@
     align-items: center;
 }
 .period-label {
+    font-size: var(--fs-text);
     font-weight: 600;
     color: var(--text-strong);
 }
 .period-field { display: flex; flex-direction: column; gap: 0.25rem; }
-.period-field span { font-size: 0.78rem; color: var(--muted); }
+.period-field span { font-size: var(--fs-label); color: var(--muted); }
 .period-field input {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -454,11 +423,11 @@
     padding: 0.45rem 0.6rem;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
 }
 .period-note {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--fs-text);
     flex: 1 1 220px;
 }
 /* Says on every view which rate the dollars are at: today's, or the close
@@ -467,7 +436,7 @@
     flex: 1 1 100%;
     margin: 0;
     color: var(--text);
-    font-size: 0.85rem;
+    font-size: var(--fs-text);
 }
 .rates-legend:empty { display: none; }
 @media (max-width: 700px) {
@@ -484,11 +453,10 @@
 .block-subtitle {
     color: var(--muted);
     margin: 0.15rem 0 1.1rem;
-    max-width: 70ch;
 }
 .chart-hint {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: var(--fs-text);
     margin: -0.2rem 0 0.7rem;
 }
 .insight-line {
@@ -528,7 +496,7 @@
     text-align: center;
     padding: 0.15rem 0.5rem;
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: var(--fs-label);
     font-weight: 600;
     color: #fff;
 }
@@ -554,15 +522,12 @@
     padding: 0.45rem 0.7rem;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
     margin-left: auto;
     min-width: 200px;
 }
-.pager-info { color: var(--muted); font-size: 0.85rem; }
+.pager-info { color: var(--muted); font-size: var(--fs-text); }
 
-/* Money never wraps: "Bs 278.288,75" split across two lines reads as two
-   different figures, and the column stops being scannable. */
-.data-table .numeric { white-space: nowrap; }
 
 /* A chart next to a table must not share the width evenly: the chart stays
    readable when narrow, the table does not. */
@@ -610,15 +575,17 @@
 [hidden] { display: none !important; }
 
 /* ============ Money in three currencies (Bs · USD · USDT) ============ */
+/* In a narrow card the three amounts drop to a second row instead of running
+   into each other. */
 .money3 {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
     gap: 0.4rem;
 }
 .money3-col { display: flex; flex-direction: column; min-width: 0; }
 .money3-label {
     color: var(--muted);
-    font-size: 0.68rem;
+    font-size: var(--fs-label);
     letter-spacing: 0.08em;
 }
 .money3-value {
@@ -630,7 +597,7 @@
 .money3-col:first-child .money3-value { color: var(--text-strong); }
 .money3-today {
     margin-top: 4px;
-    font-size: 0.78rem;
+    font-size: var(--fs-label);
     color: var(--muted);
 }
 .data-table thead th.money-group { text-align: center; }

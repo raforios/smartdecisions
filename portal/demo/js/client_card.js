@@ -32,6 +32,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<div class="metric-row" style="--columns: ${cards.length}">${cards.join('')}</div>`;
     }
 
+    /**
+     * Cards with three amounts in a row of their own and the plain ones in
+     * another, as in the analysis views: five in one row left the amounts
+     * too narrow and they ran into each other.
+     */
+    function rows(cards) {
+        const money = cards.filter((card) => card.includes('money3'));
+        const plain = cards.filter((card) => !card.includes('money3'));
+        return [money, plain].filter((group) => group.length).map(row).join('');
+    }
+
     function paintChart() {
         const card = state.card;
         if (!window.Chart || !card) return;
@@ -53,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#clientName').textContent = card.name || card.client_id;
         qs('#clientIdentity').textContent = [card.seller && `Vendedor: ${card.seller}`,
             card.zone, card.city, card.channel].filter(Boolean).join(' · ');
-        qs('#clientFigures').innerHTML = row([
+        qs('#clientFigures').innerHTML = rows([
             figure('Compró en total (hoy)', M.card(card.total)),
             figure('Compras', number(card.purchases)),
             figure('Ticket promedio (hoy)', M.card(card.average_ticket)),
@@ -61,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
             figure('Días sin comprar', number(card.days_since_last))
         ]);
         const owed = card.receivable || {};
-        qs('#clientReceivable').innerHTML = owed.available ? row([
+        qs('#clientReceivable').innerHTML = owed.available ? rows([
             figure('Te debe (hoy)', M.card(owed.balance)),
             figure('Vencido (hoy)', M.card(owed.overdue)),
             figure('Facturas abiertas', number(owed.open_invoices)),

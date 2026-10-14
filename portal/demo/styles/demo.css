@@ -31,6 +31,13 @@
     --font:            'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     --shadow-lg:       0 10px 40px rgba(13, 30, 76, 0.12);
     --shadow-sm:       0 2px 8px rgba(13, 30, 76, 0.06);
+
+    /* Three sizes for everything that is not a title or a figure (Rafael,
+       14-oct: text the same size everywhere; what matters goes bold, not
+       bigger). Running text and controls; table cells; small labels. */
+    --fs-text:         0.875rem;
+    --fs-table:        0.8125rem;
+    --fs-label:        0.75rem;
 }
 
 * { box-sizing: border-box; }
@@ -99,7 +106,7 @@ code {
     display: flex;
     align-items: center;
     gap: 0.9rem;
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
     color: var(--muted);
 }
 .demo-nav-actions .user-chip {
@@ -176,7 +183,10 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     letter-spacing: -0.015em;
     color: var(--text);
 }
-.page-subtitle { color: var(--muted); margin: 0 0 2rem; max-width: 720px; }
+.page-subtitle { color: var(--muted); margin: 0 0 2rem; }
+/* Plain paragraphs and list items in the content read at the text size;
+   any class that sets its own size still wins. */
+main p, main li { font-size: var(--fs-text); }
 
 .card {
     background: var(--panel);
@@ -186,8 +196,14 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     box-shadow: var(--shadow-sm);
 }
 .card-elevated { background: var(--panel-elevated); box-shadow: var(--shadow-lg); }
+/* Parámetros stacks cards one under the other: they used to touch, and the
+   row of seller figures sat against the card below it (Rafael, 14-oct). The
+   same gap as the dashboards' blocks (.sd-grid); no other page changes. */
+.sd-blocks > :is(.card, section, .routes-section) + :is(.card, section, .routes-section),
+.sd-blocks .routes-section,
+.sd-blocks .day-summary + .card { margin-top: 1.25rem; }
 .card h3 { margin: 0 0 0.5rem; font-size: 1.15rem; color: var(--text); }
-.card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.card p { margin: 0; color: var(--muted); font-size: var(--fs-text); }
 
 .card-grid {
     display: grid;
@@ -222,11 +238,11 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 }
 .module-icon { font-size: 2rem; }
 .module-card h3 { margin: 0; color: var(--text); }
-.module-card p { color: var(--muted); margin: 0; font-size: 0.95rem; }
+.module-card p { color: var(--muted); margin: 0; font-size: var(--fs-text); }
 .module-tag {
     margin-top: auto;
     padding-top: 0.4rem;
-    font-size: 0.72rem;
+    font-size: var(--fs-label);
     text-transform: uppercase;
     letter-spacing: 0.14em;
     color: var(--accent-2);
@@ -247,7 +263,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 .form-stack label {
     display: grid;
     gap: 0.35rem;
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
     color: var(--muted);
     font-weight: 600;
 }
@@ -260,7 +276,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     padding: 0.7rem 0.9rem;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.95rem;
+    font-size: var(--fs-text);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .form-stack input:focus,
@@ -289,7 +305,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 }
 .sd-reveal-toggle:hover { color: var(--accent); }
 .sd-reveal-toggle .sd-icon { width: 20px; height: 20px; }
-.form-note { font-size: 0.85rem; color: var(--muted); min-height: 1.2em; margin: 0; }
+.form-note { font-size: var(--fs-text); color: var(--muted); min-height: 1.2em; margin: 0; }
 .form-note.error { color: var(--danger); font-weight: 600; }
 .form-note.success { color: var(--success); font-weight: 600; }
 
@@ -308,7 +324,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     border-color: var(--accent);
     background: #f1ecd9;
 }
-.upload-hint { color: var(--muted); margin: 0; font-size: 0.9rem; }
+.upload-hint { color: var(--muted); margin: 0; font-size: var(--fs-text); }
 .upload-hint a { font-weight: 700; }
 .file-chip {
     margin: 0.7rem auto 0;
@@ -318,7 +334,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     border-radius: 999px;
     padding: 0.3rem 0.85rem;
     color: var(--text);
-    font-size: 0.82rem;
+    font-size: var(--fs-text);
     font-weight: 600;
 }
 
@@ -359,7 +375,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     border-top: 1px solid var(--border);
     padding: 1.4rem 0;
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: var(--fs-text);
     text-align: center;
     background: var(--bg);
 }
@@ -379,7 +395,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 0.2rem 0.7rem;
-    font-size: 0.8rem;
+    font-size: var(--fs-label);
     color: var(--muted);
     white-space: nowrap;
 }
@@ -401,7 +417,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 
 .activity-head h2 { margin: 0; font-size: 1.15rem; }
 
-.activity-meta { font-size: .85rem; color: #5e6580; }
+.activity-meta { font-size: var(--fs-text); color: #5e6580; }
 
 .activity-grid {
     display: grid;
@@ -427,7 +443,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 .tile-head h3 { margin: 0; font-size: .95rem; }
 
 .tile-when {
-    font-size: .78rem;
+    font-size: var(--fs-label);
     color: #5e6580;
     white-space: nowrap;
 }
@@ -438,7 +454,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     gap: 1rem;
     padding: .28rem 0;
     border-bottom: 1px solid #eef1f7;
-    font-size: .88rem;
+    font-size: var(--fs-text);
 }
 
 .tile-row:last-of-type { border-bottom: 0; }
@@ -450,7 +466,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 .tile-action {
     display: inline-block;
     margin-top: .75rem;
-    font-size: .85rem;
+    font-size: var(--fs-text);
     font-weight: 600;
     text-decoration: none;
     color: #0d1e4c;
@@ -460,7 +476,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 
 .activity-tile-empty { background: #fff; }
 
-.tile-empty-text { margin: 0; font-size: .88rem; color: #5e6580; }
+.tile-empty-text { margin: 0; font-size: var(--fs-text); color: #5e6580; }
 
 
 /* --- Interpretación (capa de IA) ------------------------------------------ */
@@ -489,7 +505,7 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 
 .ai-answer .ai-text {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: var(--fs-text);
     line-height: 1.65;
     font-weight: 400;
     color: #152441;
@@ -502,14 +518,14 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     margin: 1.75rem 0 0;
     padding-top: 0.7rem;
     border-top: 1px solid #dbe4f0;
-    font-size: 0.68rem;
+    font-size: var(--fs-label);
     line-height: 1.4;
     font-weight: 400;
     color: #8a93a8;
 }
 
 .ai-answer .ai-loading {
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
     color: #5e6580;
 }
 
@@ -573,17 +589,94 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
 }
 .analysis-card.is-active .analysis-icon { background: var(--accent); color: #ffffff; }
 .analysis-title { font-weight: 700; color: var(--text-strong); }
-.analysis-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.35; }
+.analysis-desc { font-size: var(--fs-text); color: var(--muted); line-height: 1.35; }
 .analysis-soon {
     position: absolute; top: 0.6rem; right: 0.6rem;
-    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
     color: var(--accent-2); background: var(--bg-alt);
     padding: 0.15rem 0.45rem; border-radius: 999px;
 }
 
+/* ============ Tables (the only definition; every page loads demo.css) ============ */
+.table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-table);
+}
+.data-table thead th {
+    text-align: left;
+    padding: 0.7rem 0.9rem;
+    background: var(--panel-elevated);
+    color: var(--text-strong);
+    font-size: var(--fs-label);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+.data-table tbody td {
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tbody tr:hover { background: rgba(90, 214, 194, 0.04); }
+/* Money never wraps: "Bs 278.288,75" split across two lines reads as two
+   different figures, and the column stops being scannable. */
+.data-table .numeric { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.data-table.sortable thead th[data-sort] { cursor: pointer; user-select: none; }
+.data-table.sortable thead th[data-sort]:hover { color: var(--text); }
+.data-table.sortable thead th[data-sort].asc::after  { content: ' ▲'; color: var(--accent); }
+.data-table.sortable thead th[data-sort].desc::after { content: ' ▼'; color: var(--accent); }
+
+/* ============ Controls outside a styled form ============ */
+/* A text box anywhere in the content looks like the others, not like the
+   browser's default. :where() keeps it at zero specificity: any rule of a
+   component (login, form-stack, period bar…) still wins. */
+:where(main) :where(input:not([type]), input[type=text], input[type=search],
+        input[type=number], input[type=email], input[type=date], select, textarea) {
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-text);
+    line-height: 1.4;
+}
+:where(main) :where(input, select, textarea):focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(47, 111, 181, 0.15);
+}
+/* A label over its control. */
+.field { display: grid; gap: 0.35rem; color: var(--muted); font-size: var(--fs-text); font-weight: 600; }
+.field input { width: 22rem; max-width: 100%; }
+/* A row of controls and buttons: aligned at the bottom, with air between
+   them and above, so a button never sits against a table or a text box. */
+.form-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
+.form-actions:first-child { margin-top: 0; }
+.table-wrapper + .btn, .table-wrapper + button { margin-top: 1.25rem; }
+/* Controls side by side, like the exchange-rate simulator: same air between
+   them as in a button row. */
+.field-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; }
+.field-row label { display: grid; gap: 0.35rem; color: var(--muted); font-size: var(--fs-text); font-weight: 600; }
+/* A button under a field, or a form under a button row. */
+.field + .btn, .field + button { margin-top: 1rem; }
+.form-actions + :is(form, .form-stack) { margin-top: 1.25rem; }
+/* And the next block of the same card does not start right under the buttons. */
+.form-actions + :is(.card-head, h2, h3, h4) { margin-top: 2.25rem; }
+
 /* Parámetros: a policy edited in place, and where its values come from. */
 .form-table input { width: 100%; }
-.policy-source { font-size: 0.8rem; padding: 2px 8px; border-radius: var(--radius-sm); }
+.policy-source { font-size: var(--fs-label); padding: 2px 8px; border-radius: var(--radius-sm); }
 .policy-source.is-set { color: var(--success); }
 .policy-source.is-default { color: var(--warning); }
 .row-actions { white-space: nowrap; }
@@ -595,12 +688,12 @@ main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg);
     border-left: 3px solid var(--warning);
     background: var(--panel);
     border-radius: var(--radius-sm);
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
 }
 
 /* Tablero: the salient figures of an area, on the area's own card. */
 .area-figures { margin-top: 10px; display: grid; gap: 4px; }
-.figure-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.85rem; }
+.figure-row { display: flex; justify-content: space-between; gap: 12px; font-size: var(--fs-text); }
 .figure-label { color: var(--muted); }
 .figure-value { color: var(--text-strong); text-align: right; font-variant-numeric: tabular-nums; }
 

@@ -17,7 +17,7 @@
 .routes-main { display: grid; gap: 1rem; }
 
 .form-stack { display: grid; gap: 0.9rem; }
-.form-stack label { display: grid; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+.form-stack label { display: grid; gap: 0.3rem; font-size: var(--fs-text); color: var(--muted); }
 .form-stack select,
 .form-stack input {
     background: var(--bg);
@@ -26,7 +26,7 @@
     padding: 0.55rem 0.7rem;
     border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.95rem;
+    font-size: var(--fs-text);
     /* Without these a select's intrinsic width plus its padding pushes past the
        sidebar column and the control gets clipped by the map. */
     width: 100%;
@@ -38,7 +38,6 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.6rem;
 }
-.form-actions { display: flex; gap: 0.6rem; }
 
 /* --- Empty state when no sales file has been uploaded --- */
 .empty-state { text-align: center; padding: 2.5rem 1.5rem; }
@@ -65,7 +64,7 @@
     background: var(--panel-elevated);
 }
 .day-chip-title { font-weight: 600; color: var(--text-strong); }
-.day-chip-meta { font-size: 0.8rem; color: var(--muted); }
+.day-chip-meta { font-size: var(--fs-label); color: var(--muted); }
 
 /* --- Day summary strip --- */
 .day-summary {
@@ -81,7 +80,7 @@
 }
 .day-summary .metric-label {
     color: var(--muted);
-    font-size: 0.74rem;
+    font-size: var(--fs-label);
     text-transform: uppercase;
     letter-spacing: 0.11em;
     margin: 0 0 0.3rem;
@@ -128,19 +127,19 @@
     height: 26px;
     border-radius: 50%;
     color: #fff;
-    font-size: 0.74rem;
+    font-size: var(--fs-label);
     font-weight: 700;
     border: 2px solid #fff;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 /* --- Legend --- */
-.legend-hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 0.7rem; }
+.legend-hint { color: var(--muted); font-size: var(--fs-text); margin: 0 0 0.7rem; }
 .legend-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.9rem;
+    font-size: var(--fs-text);
     padding: 0.15rem 0;
 }
 .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
@@ -152,7 +151,7 @@
     display: inline-block;
     padding: 0.12rem 0.55rem;
     border-radius: 999px;
-    font-size: 0.76rem;
+    font-size: var(--fs-label);
     font-weight: 600;
     color: #fff;
 }
@@ -162,31 +161,7 @@
 
 /* --- Stops table --- */
 .stops-card h3 { margin-top: 0; }
-.table-wrapper {
-    overflow-x: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--panel);
-}
-.data-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 560px; }
-.data-table thead th {
-    text-align: left;
-    padding: 0.7rem 0.9rem;
-    background: var(--panel-elevated);
-    color: var(--muted);
-    font-size: 0.76rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-}
-.data-table tbody td {
-    padding: 0.6rem 0.9rem;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-}
-.data-table tbody tr:last-child td { border-bottom: 0; }
-.data-table .numeric { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* .table-wrapper and .data-table: defined once in styles/demo.css. */
 
 /* The `hidden` attribute is only a default of display:none, and any rule that
    sets `display` on the same element silently overrides it — the map overlay
@@ -207,7 +182,7 @@
     border-top: 1px solid #eceff5;
 }
 
-.pager-count { font-size: .85rem; color: #5e6580; }
+.pager-count { font-size: var(--fs-text); color: #5e6580; }
 
 .pager-controls {
     margin-left: auto;
@@ -217,7 +192,7 @@
 }
 
 .pager-page {
-    font-size: .85rem;
+    font-size: var(--fs-text);
     color: #5e6580;
     font-variant-numeric: tabular-nums;
     min-width: 3.5rem;
@@ -251,7 +226,7 @@
 
 /* --- Sections (Plan, Plans, Today's stock, Live, Comparison) --- */
 .routes-section { margin-top: 1.5rem; }
-.card-head .form-actions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; }
+.card-head .form-actions { margin: 0 0 0 auto; display: flex; gap: 0.5rem; align-items: center; }
 .card-head select, .card-head input[type="date"] { padding: 0.35rem 0.5rem; }
 #saveDayActions { align-items: center; gap: 0.8rem; margin-bottom: 0.8rem; }
 #saveDayActions .form-note { margin: 0; }
@@ -279,7 +254,7 @@
 .seller-stop.is-done { opacity: 0.75; }
 .seller-stop .stop-pin { position: static; flex: 0 0 26px; }
 .seller-stop-name { flex: 1; display: flex; flex-direction: column; font-weight: 600; }
-.seller-stop-name small { font-weight: 400; color: var(--muted); font-size: 0.8rem; }
+.seller-stop-name small { font-weight: 400; color: var(--muted); font-size: var(--fs-label); }
 .seller-items { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.4rem 0; }
 .seller-item-row { display: grid; grid-template-columns: 1fr 5.5rem auto; gap: 0.4rem; align-items: center; }
 .seller-item-row input, .seller-item-row select { width: 100%; padding: 0.45rem 0.5rem; font: inherit; }
@@ -297,7 +272,7 @@
    it. The caption is what makes the pair readable at a glance. */
 .map-caption {
     margin: 0 0 .4rem;
-    font-size: .82rem;
+    font-size: var(--fs-text);
     font-weight: 600;
     letter-spacing: .02em;
     text-transform: uppercase;
