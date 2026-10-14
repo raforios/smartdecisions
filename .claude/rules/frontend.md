@@ -42,6 +42,20 @@ se muestra un código crudo al usuario.
 - **Cuidado con la especificidad.** `.card p` (0,1,1) le gana a `.ai-text`
   (0,1,0), y sólo dentro de tarjetas: eso hizo que un panel se viera bien en un
   módulo y mal en otro.
+- **Tres tamaños de letra** para todo lo que no es título ni cifra
+  (Rafael, 14-oct): `--fs-text` (texto y controles), `--fs-table` (celdas) y
+  `--fs-label` (rótulos chicos), en `styles/demo.css`. Lo que importa va en
+  negrita, nunca más grande. Ningún `font-size` suelto en rem para texto.
+- **La tabla (`.table-wrapper`, `.data-table`) se define en
+  `styles/demo.css`.** `routes.css` la redefinía y sus tablas salían más
+  grandes que las demás; ya no. `minerales.css` conserva su variante de
+  Minerales y Factores, pero con los mismos tamaños (`--fs-table`).
+- **Una sola separación entre bloques** (tarjetas, paneles, gráficos, mapas),
+  en horizontal y en vertical: `--gap-block` en `styles/demo.css` (Rafael,
+  14-oct). Ninguna grilla de tarjetas con su propio `gap` en rem.
+- **Los controles respiran:** botones, cajas y tablas nunca pegados
+  (`.form-actions`, `.field`, `.field-row`); una caja de texto suelta toma el
+  estilo común por `:where(main)`.
 - Los tokens de color viven en `styles/demo.css` y son los mismos que los de
   `bearsoft.com.bo`. Azules fríos, verde-azulado de acento, sin dorados.
 
