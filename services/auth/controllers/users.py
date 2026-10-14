@@ -15,19 +15,23 @@ from services.dynamodb import (
     scan_all_users
 )
 from services.security import hash_password, verify_password
+from services.sessions import company_members, login_update
 from services.jwt_token import decode_access_token
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
     UnauthorizedError,
     InvalidInputError,
     ForbiddenError,
-    RegisterAlreadyExistsError
+    RegisterAlreadyExistsError,
+    ServiceUnavailableError
 )
+from schemas.auth import AuthError
 from schemas.users import (
     UserRequest,
     UserUpdateRequest,
     UserResponse,
-    InternalUser
+    InternalUser,
+    PasswordChangeRequest
 )
 from schemas.role import Role
 
@@ -247,3 +251,63 @@ async def delete_user(email: str) -> bool:
         Delete user
     '''
     return delete_user_item(email)
+
+
+async def get_current_manager_user(
+    current_user: UserResponse = Depends(get_current_active_user)
+) -> UserResponse:
+    '''
+        Ensures the authenticated active user runs an account (MANAGER) or the
+        platform (ADMIN): the people who may see who else uses it.
+    '''
+    if current_user.role not in (Role.MANAGER, Role.ADMIN):
+        error_msg = (f'Forbidden: {current_user.email} ({current_user.role}) '
+                     'asked for the account users.')
+        logger.warning(error_msg)
+        raise ForbiddenError(detail = AuthError.MANAGER_REQUIRED.value)
+    return current_user
+
+def record_login(user: InternalUser) -> None:
+    '''
+        Records a sign-in on the user: last and previous sign-in and the count.
+        A failure is logged and does not stop the sign-in: the record serves
+        the welcome page, the access does not depend on it.
+    '''
+    stored = {'last_login': user.last_login.isoformat() if user.last_login else None}
+    expression, values = login_update(stored, get_current_time_gmt())
+    try:
+        update_user_item(user.email, expression, values)
+    except ServiceUnavailableError as error:
+        error_msg = f'Could not record the sign-in of {user.email}: {error.detail}'
+        logger.error(error_msg)
+
+async def read_company_users(viewer: UserResponse) -> list[UserResponse]:
+    '''
+        The users of the viewer's account; every user for an administrator.
+    '''
+    visible = company_members(scan_all_users(), viewer.email, viewer.client,
+                              viewer.role == Role.ADMIN)
+    message = f'{viewer.email} listed {len(visible)} account user(s).'
+    logger.info(message)
+    return [UserResponse(**item) for item in visible]
+
+async def change_password(
+    user: UserResponse,
+    request: PasswordChangeRequest
+) -> None:
+    '''
+        Changes a user's own password once the current one is proven.
+    '''
+    stored = get_user_by_email(user.email)
+    if not stored or not verify_password(request.current_password, stored['hashed_password']):
+        error_msg = f'Password change refused for {user.email}: wrong current password.'
+        logger.warning(error_msg)
+        # 400, not 401: the session is valid, only the proof failed.
+        raise InvalidInputError(detail = AuthError.WRONG_PASSWORD.value)
+    if request.new_password == request.current_password:
+        error_msg = f'Password change refused for {user.email}: same password.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = AuthError.SAME_PASSWORD.value)
+    await update_user(user.email, UserUpdateRequest(password = request.new_password))
+    message = f'User {user.email} changed their password.'
+    logger.info(message)

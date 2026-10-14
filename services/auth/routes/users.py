@@ -5,12 +5,16 @@ from fastapi import APIRouter, Depends, status
 from controllers.users import (
     read_users,
     get_current_admin_user,
+    get_current_active_user,
+    get_current_manager_user,
+    read_company_users,
+    change_password,
     read_user_by_email,
     update_user,
     delete_user
 )
 from schemas.auth import SignupResponse
-from schemas.users import UserUpdateRequest, UserResponse
+from schemas.users import UserUpdateRequest, UserResponse, PasswordChangeRequest
 from services.logger_config import custom_logger as logger
 from services.exceptions import RegisterNotFoundError
 
@@ -29,6 +33,50 @@ async def read_all_users() -> list[UserResponse]:
     users = await read_users()
     logger.info('Accessed all users list.')
     return users
+
+@router.get(
+    '/me',
+    response_model = UserResponse,
+    status_code = status.HTTP_200_OK
+)
+async def read_me(
+    current_user: UserResponse = Depends(get_current_active_user)
+) -> UserResponse:
+    '''
+        The signed-in user, with their last and previous sign-in.
+    '''
+    message = f'{current_user.email} read their own profile.'
+    logger.info(message)
+    return current_user
+
+
+@router.get(
+    '/company',
+    response_model = list[UserResponse],
+    status_code = status.HTTP_200_OK
+)
+async def read_company(
+    current_user: UserResponse = Depends(get_current_manager_user)
+) -> list[UserResponse]:
+    '''
+        The users of the caller's account. Restricted to MANAGER and ADMIN.
+    '''
+    return await read_company_users(current_user)
+
+
+@router.post(
+    '/me/password',
+    status_code = status.HTTP_204_NO_CONTENT
+)
+async def post_my_password(
+    request: PasswordChangeRequest,
+    current_user: UserResponse = Depends(get_current_active_user)
+) -> None:
+    '''
+        Changes the caller's own password; the current one is required.
+    '''
+    await change_password(current_user, request)
+
 
 @router.get(
     '/{email}',

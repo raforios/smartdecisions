@@ -4,7 +4,7 @@
 from fastapi import APIRouter, status
 from schemas.auth import LoginRequest, SignupResponse, Token
 from schemas.users import UserRequest
-from controllers.users import authenticate_user, create_user
+from controllers.users import authenticate_user, create_user, record_login
 from services.logger_config import custom_logger as logger
 from services.jwt_token import create_access_token
 from services.exceptions import (
@@ -36,6 +36,7 @@ async def login(request: LoginRequest) -> Token:
     access_token = create_access_token(
         {'email': user.email, 'role': user.role, 'client': user.client}
     )
+    record_login(user)
     message = f'User {user.email} logged in successfully.'
     logger.info(message)
     return Token(access_token = access_token, token_type = 'bearer')

@@ -49,6 +49,10 @@ class UserResponse(BaseModel):
                             description = 'Date and time of user registration.')
     date_update: datetime = Field(...,
                             description = 'Date and time of last user update.')
+    last_login: datetime | None = Field(None, description = 'When the user last signed in.')
+    previous_login: datetime | None = Field(
+        None, description = 'The sign-in before the last one: "your last session" next time.')
+    login_count: int = Field(0, description = 'How many times the user has signed in.')
 
     class Config: # pylint: disable=too-few-public-methods
         '''
@@ -61,3 +65,13 @@ class InternalUser(UserResponse): # pylint: disable=too-few-public-methods
         Internal User Schema with hashed password
     '''
     hashed_password: str
+
+
+class PasswordChangeRequest(BaseModel):
+    '''
+        A user changing their own password: the current one proves it is them.
+    '''
+    current_password: str = Field(min_length = 8, max_length = 100,
+                            description = 'The password in use.')
+    new_password: str = Field(min_length = 8, max_length = 100,
+                            description = 'The password to use from now on.')

@@ -8,8 +8,12 @@
 '''
 from datetime import datetime, timezone
 
+import pytest
+from pydantic import ValidationError
+
 from schemas.role import Role
-from schemas.users import InternalUser, UserResponse
+from schemas.users import InternalUser, PasswordChangeRequest, UserResponse
+from services.sessions import company_members, login_update
 
 
 def test_smartdecisions_roles_exist():
@@ -47,7 +51,6 @@ def test_a_duplicate_caught_by_dynamodb_answers_already_registered(monkeypatch):
     # pylint: disable=import-outside-toplevel
     import importlib
 
-    import pytest
     from botocore.exceptions import ClientError
 
     monkeypatch.setenv('TABLE_NAME', 'auth-users-test')
@@ -71,3 +74,60 @@ def test_a_duplicate_caught_by_dynamodb_answers_already_registered(monkeypatch):
 
     with pytest.raises(exceptions.RegisterAlreadyExistsError):
         dynamodb.create_user_item({'email': 'dup@bearsoft.com.bo'})
+
+
+def test_a_first_sign_in_starts_the_count_without_a_previous_one():
+    '''The first sign-in has nothing before it: no previous session is written.'''
+    now = datetime(2026, 10, 13, 9, 0, tzinfo = timezone.utc)
+    expression, values = login_update({}, now)
+    assert 'previous_login' not in expression
+    assert values[':now'] == now.isoformat()
+    assert values[':one'] == 1
+
+
+def test_the_last_sign_in_becomes_the_previous_one():
+    '''"Your last session" on the next visit is the sign-in before this one.'''
+    now = datetime(2026, 10, 13, 9, 0, tzinfo = timezone.utc)
+    expression, values = login_update({'last_login': '2026-10-12T18:30:00+00:00'}, now)
+    assert 'previous_login = :previous' in expression
+    assert values[':previous'] == '2026-10-12T18:30:00+00:00'
+
+
+USERS = [
+    {'email': 'gerente@andina.bo', 'client': 'andina'},
+    {'email': 'vendedor@andina.bo', 'client': 'andina'},
+    {'email': 'gerente@illimani.bo', 'client': 'illimani'},
+    {'email': 'suelto@mail.com'},
+    {'email': 'otro@mail.com'},
+]
+
+
+def test_a_manager_sees_only_the_users_of_their_account():
+    '''Another account's users answer as if they did not exist.'''
+    visible = company_members(USERS, 'gerente@andina.bo', 'andina', False)
+    assert [user['email'] for user in visible] == ['gerente@andina.bo', 'vendedor@andina.bo']
+
+
+def test_somebody_without_a_client_sees_only_themselves():
+    '''Matching "no client" would show every unrelated user who has none.'''
+    visible = company_members(USERS, 'suelto@mail.com', None, False)
+    assert [user['email'] for user in visible] == ['suelto@mail.com']
+
+
+def test_an_administrator_sees_every_user():
+    '''The platform administrator has no client and manages them all.'''
+    assert len(company_members(USERS, 'admin@bearsoft.com.bo', None, True)) == len(USERS)
+
+
+def test_a_new_password_keeps_the_minimum_length():
+    '''The same eight characters a sign-up requires.'''
+    with pytest.raises(ValidationError):
+        PasswordChangeRequest(current_password = 'Actual2026!', new_password = 'corta')
+
+
+def test_a_user_never_signed_in_has_no_last_session():
+    '''Users created before sign-ins were recorded read as never signed in.'''
+    now = datetime.now(timezone.utc)
+    user = UserResponse(email = 'yo@mi.com', first_name = 'Rafael', last_name = 'Rios',
+                        role = Role.MANAGER, status = True, date_register = now, date_update = now)
+    assert user.last_login is None and user.previous_login is None and user.login_count == 0

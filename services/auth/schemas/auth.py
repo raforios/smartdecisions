@@ -1,7 +1,19 @@
 '''
     Auth Schema
 '''
+from enum import Enum
+
 from pydantic import BaseModel, Field, EmailStr
+
+
+class AuthError(str, Enum):
+    '''
+        Why an account request was refused: a code, the wording belongs to the
+        portal.
+    '''
+    WRONG_PASSWORD = 'WRONG_PASSWORD'
+    SAME_PASSWORD = 'SAME_PASSWORD'
+    MANAGER_REQUIRED = 'MANAGER_REQUIRED'
 
 class LoginRequest(BaseModel):
     '''
