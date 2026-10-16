@@ -189,10 +189,12 @@ propio. Única excepción, y se dice en voz alta: cuando ese rodeo perjudique el
 tiempo o la calidad del servicio que llama.
 
 Se agrega **sólo al servicio que lo necesita**, no a todos por simetría.
-**El modelo vive en `services/ingest/services/utils.py`** —lectura, escritura,
-borrado y carga masiva contra FILES, reenviando el token del que llama— y es la
-versión DynamoDB de lo que `trade/services/utils.py` es para MySQL: mismos
-nombres y mismo flujo de dos pasos, sin `Session` que confirmar.
+**El bloque estándar vive al final de `services/finance/services/utils.py`**
+(aprobado por Rafael el 16-oct-2026), con sus códigos en
+`schemas/files.py`: leer, guardar y borrar un archivo a través de FILES,
+reenviando el token del que llama. Se copia tal cual al final del `utils.py`
+del servicio que carga archivos. **No acopla nada:** habla sólo con FILES, y
+la validación de las filas es del servicio, nunca del bloque.
 
 Las plantillas que el cliente descarga son **archivos estáticos** en S3, no se
 generan en runtime. Se derivan del contrato (`tools/build_sales_template.py`)

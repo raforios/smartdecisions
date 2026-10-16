@@ -62,6 +62,12 @@ cp quotes/Dockerfile quotes/.dockerignore quotes/.gitignore $1/
 **El boilerplate se copia idéntico y no se modifica.** Si hace falta una
 adición, se consulta primero y va al final del archivo.
 
+**Si el servicio carga archivos**, copia además el bloque de FILES del final
+de `finance/services/utils.py` (con sus tres imports) y `finance/schemas/files.py`,
+y agrega al `.env` `BUCKET_NAME`, `BUCKET_PATH` y `FILES_TIMEOUT_SECONDS`.
+Habla sólo con FILES: el servicio nuevo no lee tablas, buckets ni código de
+otro (`CLAUDE.md` §4).
+
 ```bash
 for f in api_exceptions.py crud.py environment.py exceptions.py \
          logger_config.py security.py utils.py; do
@@ -105,6 +111,11 @@ imágenes hacen falta 1024 MB; para un servicio de sólo datos, 256 alcanzan.
 `build_and_deploy.sh` no sabe crear claves compuestas ni admite dos tablas por
 servicio. Las tablas se crean con `services/ci/api/create_dynamodb_tables.sh`,
 que sí las soporta.
+
+Antes del primer despliegue, el servicio se registra en `services/ci/api`
+(`start.sh`, `setup_api_domain.sh`, `update_service_urls.sh`): sin eso
+`./start.sh --redeploy <servicio>` no hace nada y termina sin error. Los pasos
+están en «Si el microservicio es nuevo» de `services/ci/api/README.md`.
 
 ## Al terminar
 
