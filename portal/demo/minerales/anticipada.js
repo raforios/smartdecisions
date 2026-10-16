@@ -9,9 +9,10 @@
  * LBMA fix for silver, LME cash for the base metals. When a fortnight closes,
  * that mean *is* the official price for the next one.
  *
- * Two fortnights are shown (Rafael, 16-oct). The one just closed is the price
- * in force right now, even while the Ministry's report is late; the one in
- * progress is the price that comes next. With only the running one, the table
+ * Two fortnights are shown (Rafael, 16-oct). The one just closed estimates the
+ * price in force right now, and the one in progress the price that comes next.
+ * Both are estimates: the Ministry adjusts what no free source shows, so the
+ * official figure is always the one in its report. With only the running one, the table
  * woke up empty on the 1st and the 16th — the two days it matters most.
  *
  * Antimony, wolfram and bismuth have no free daily feed (Asian Metal is paid),
@@ -248,8 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = closed.value;
             qs(TABLES.closed.note).textContent =
                 `Promedio del ${shortDate(data.period_start)} al ${shortDate(data.period_end)}: ` +
-                `rige del ${data.valid_from} al ${data.valid_to}, aunque el informe del ` +
-                'Ministerio todavía no haya llegado.';
+                `estima la cotización que rige del ${data.valid_from} al ${data.valid_to}. ` +
+                'La cifra oficial es la del informe del Ministerio.';
         }
         if (running.status === 'fulfilled') {
             const data = running.value;
