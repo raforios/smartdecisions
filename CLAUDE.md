@@ -107,6 +107,12 @@ misma disposición, mismas soluciones para los mismos problemas.
 
 **No pertenecen al API:** TRADE, FORMS y LOCALIZATION son del cliente Binaria.
 
+**Microservicios sin acoplamiento** (Rafael, 14-oct-2026). Un servicio no lee
+tablas ni buckets de otro: lo ajeno se pide por HTTP al dueño, y los archivos
+pasan por FILES. INGEST, ANALYTICS y OPTIMIZATION hoy comparten
+`ingest_datasets` y leen S3 por su cuenta: es la deuda del módulo comercial,
+no el modelo a copiar.
+
 ---
 
 ## 5. Configuración
