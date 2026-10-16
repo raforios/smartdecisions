@@ -1,83 +1,45 @@
-# Supplies — Frontend
+# SmartBilling — Frontend
 
-UI estática que consume el microservicio Supplies (`/v1/supplies/*`) y
-reusa el AUTH del ecosistema SmartDecisions. Sin frameworks: HTML5 + Vanilla
-JS (módulos ES) + CSS3, responsive con drawer hamburguesa.
+Static UI over the BILLING service (`/v1/billing/*`), signing in against AUTH.
+No framework: HTML5, Vanilla JS (ES modules) and CSS3, responsive.
 
 ## Layout
 
 ```
-portal/supplies/
-├── index.html            shell (sidebar + topbar + page host + modal + toasts)
-├── login.html            login → AUTH
-├── css/supplies.css      design system A (sidebar + cards + tablas + badges)
+portal/billing/
+├── index.html            shell: sidebar, topbar, page host, modal, toasts
+├── login.html            sign-in against AUTH
+├── css/base.css          copy of the SmartDecisions sheet
+├── css/billing.css       what is BILLING's own
 └── js/
-    ├── app.js                  entry de index.html (router + role gate)
-    ├── login.js                entry de login.html
-    ├── router.js               router por hash con guardas de rol
-    ├── auth.js                 helpers de JWT (email, role, hasRole)
-    ├── ui.js                   toast, modal, formateadores, statusBadge
+    ├── app.js                  entry of index.html: sections and role gate
+    ├── login.js                entry of login.html
+    ├── auth.js                 JWT helpers (email, role)
+    ├── config.js               service URLs and storage keys
+    ├── ui.js                   toast, modal, formatters
     ├── services/
-    │   ├── apiClient.js        transporte con fallback local↔remote
-    │   ├── AuthService.js      POST /v1/auth/login + storage
-    │   └── SuppliesService.js  todos los endpoints /v1/supplies/*
+    │   ├── apiClient.js        transport, local or remote base
+    │   ├── AuthService.js      POST /v1/auth/login and storage
+    │   └── BillingService.js   every /v1/billing/* endpoint
     └── pages/
-        ├── DashboardPage.js    KPIs + actividad reciente
-        ├── CatalogPage.js      tabs: ítems, categorías, unidades, parámetros
-        ├── RequestsPage.js     creación + flujo de estados
-        ├── ReplenishmentsPage.js  sugerencias + listado + recepciones
-        ├── KardexPage.js       movimientos por ítem + ajuste manual
-        └── ReportsPage.js      stock bajo + reposiciones + solicitudes
+        ├── CounterPage.js      the counter: search or scan, sell, print
+        ├── CashPage.js         the user's till of the day
+        ├── CashSessionsPage.js every till, closed by the manager
+        ├── SalesPage.js        issued notes and their cancellation
+        ├── CatalogPage.js      products and their lots
+        ├── PurchasesPage.js    receiving stock
+        ├── DashboardPage.js    sales, expiring lots, low stock
+        ├── SettingsPage.js     the shop's settings
+        └── TicketPrinter.js    58/80 mm thermal ticket
 ```
 
-## URLs configurables
+## URLs
 
-Definidas en `demo/data/config.json → api`:
-
-- `suppliesBaseUrl` / `suppliesBaseUrlFallback`
-- `authBaseUrl` / `authBaseUrlFallback`
-
-`apiClient.resolveBases` aplica auto-detect: si el hostname es
-`localhost`/`127.0.0.1`/`0.0.0.0` usa la URL local como primaria y la
-remota como fallback, sino al revés.
-
-## Setup local
-
-Microservicios arriba:
-
-| Servicio | Puerto |
-|---|---|
-| AUTH | 3000 |
-| Supplies | 3004 |
-
-Servir `demo/` con Live Server en `5500` y abrir:
-
-- Login: `http://127.0.0.1:5500/supplies/login.html`
-- Panel: `http://127.0.0.1:5500/supplies/index.html` (redirige a login si no hay JWT)
+Constants in `js/config.js`. The `*_LOCAL` URLs only apply when the page is
+served from localhost.
 
 ## Roles
 
-El frontend lee el claim `role` del JWT para mostrar/ocultar secciones.
-Acciones que requieren rol específico:
-
-| Acción | Roles |
-|---|---|
-| Crear/editar/desactivar ítems, categorías, unidades, parámetros | ADMIN |
-| Editar `min_stock` y `default_replenishment_qty` de un ítem | ADMIN, WAREHOUSE_MANAGER |
-| Generar y recepcionar reposiciones | ADMIN, WAREHOUSE_MANAGER |
-| Ajustar kárdex manualmente | ADMIN, WAREHOUSE_MANAGER |
-| Procesar, entregar, rechazar, anular solicitudes | ADMIN, WAREHOUSE_MANAGER |
-| Crear solicitudes y confirmar conformidad | ADMIN, WAREHOUSE_MANAGER, REQUESTER |
-
-Las rutas con `data-roles` en `index.html` se ocultan automáticamente del
-sidebar cuando el usuario no tiene el rol; igualmente el router rechaza
-acceso si se intenta entrar por hash.
-
-## Cómo extender
-
-- **Nuevo endpoint**: agregar método en `services/SuppliesService.js`.
-- **Nueva página**: crear `pages/Foo.js` exportando `mountFoo({ host, actions, api, router })`,
-  registrar en `app.js` y agregar el botón al `<nav id="sup-nav">`.
-- **Nuevo estado de solicitud / reposición**: extender `STATUS_CLASS` y `STATUS_LABEL`
-  en `ui.js` y, si hay nuevas transiciones, ajustar `_buildTransitionButtons` en
-  `RequestsPage.js`.
+The menu reads the `role` claim of the JWT. Receiving stock, the tills of
+everyone and the settings are for `ADMIN` and `MANAGER`; the router hides the
+rest of what a role cannot use.
