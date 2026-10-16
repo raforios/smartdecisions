@@ -115,6 +115,11 @@ TABLES=(
     # se calcula con la tasa vigente en ese mes.
     "finance_accounts:account_code:S"
     "finance_law_parameters:parameter_code:S:valid_from:S"
+    # Lo que carga cada cliente: el cliente es la partición. La carga empieza
+    # con su fecha y hora, así el historial sale en orden sin índice; el monto
+    # se ordena por "periodicidad#fecha#cuenta", así un período es un prefijo.
+    "finance_loads:client:S:load_id:S"
+    "finance_entries:client:S:entry_key:S"
 
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"
@@ -164,6 +169,34 @@ for table_config in "${TABLES[@]}"; do
     echo "Esperando a que la tabla '$TABLE_NAME' esté activa..."
     aws dynamodb wait table-exists --table-name "$TABLE_NAME" --region "$REGION" --profile "$PROFILE"
     echo "Tabla '$TABLE_NAME' creada y activa."
+done
+
+# --- Índices secundarios ---
+# Sintaxis: "tabla:indice:atributo:tipo" (proyección KEYS_ONLY). Idempotente:
+# un índice que ya existe se salta.
+INDEXES=(
+    # Si alguna cuenta del catálogo tiene montos de cualquier cliente, antes
+    # de que el ADMIN la borre (ACCOUNT_IN_USE).
+    "finance_entries:account_code-index:account_code:S"
+)
+
+for index_config in "${INDEXES[@]}"; do
+    IFS=':' read -r TABLE_NAME INDEX_NAME ATTRIBUTE ATTRIBUTE_TYPE <<< "$index_config"
+    EXISTING=$(aws dynamodb describe-table --table-name "$TABLE_NAME" --region "$REGION" \
+        --profile "$PROFILE" --query "Table.GlobalSecondaryIndexes[?IndexName=='$INDEX_NAME'].IndexName" \
+        --output text)
+    if [ -n "$EXISTING" ]; then
+        echo "Índice '$INDEX_NAME' de '$TABLE_NAME' ya existe. Saltando."
+        continue
+    fi
+    echo "Creando índice '$INDEX_NAME' en '$TABLE_NAME'..."
+    aws dynamodb update-table \
+        --table-name "$TABLE_NAME" \
+        --attribute-definitions "AttributeName=$ATTRIBUTE,AttributeType=$ATTRIBUTE_TYPE" \
+        --global-secondary-index-updates \
+        "[{\"Create\":{\"IndexName\":\"$INDEX_NAME\",\"KeySchema\":[{\"AttributeName\":\"$ATTRIBUTE\",\"KeyType\":\"HASH\"}],\"Projection\":{\"ProjectionType\":\"KEYS_ONLY\"}}}]" \
+        --region "$REGION" --profile "$PROFILE" > /dev/null
+    echo "Índice '$INDEX_NAME' pedido; DynamoDB lo construye en segundo plano."
 done
 
 echo "Proceso de creación de tablas finalizado con éxito. ✅"
