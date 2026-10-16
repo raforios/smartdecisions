@@ -16,12 +16,12 @@ class FinanceError(str, Enum):
     '''
         Why a request on the catalog or the law parameters was refused.
 
-        The codes of the loads and of the calculation (ACCOUNT_IN_USE,
-        NO_RATE_FOR_DATE, ...) join when their phase does; the contract
-        lists them all.
+        The codes of the loads live in `schemas/entries.py`; those of the
+        calculation join when their phase does. The contract lists them all.
     '''
     ACCOUNT_NOT_FOUND = 'ACCOUNT_NOT_FOUND'
     DUPLICATE_ACCOUNT_CODE = 'DUPLICATE_ACCOUNT_CODE'
+    ACCOUNT_IN_USE = 'ACCOUNT_IN_USE'
     GROUP_NOT_FOUND = 'GROUP_NOT_FOUND'
     GROUP_TYPE_MISMATCH = 'GROUP_TYPE_MISMATCH'
     GROUP_HAS_ACCOUNTS = 'GROUP_HAS_ACCOUNTS'

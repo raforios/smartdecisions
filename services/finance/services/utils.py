@@ -24,6 +24,7 @@ import decimal
 import enum
 import inspect
 import json
+import mimetypes
 import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -35,11 +36,13 @@ from fastapi import HTTPException, Request
 from pydantic import BaseModel, ValidationError
 from botocore.exceptions import ClientError as AWSClientError
 
+from schemas.files import FilesError
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError,
-    RegisterNotFoundError
+    RegisterNotFoundError,
+    ServiceUnavailableError
 )
 from services.environment import load_and_validate_env_vars
 
@@ -442,3 +445,214 @@ def _caller_authorization(request: Request | None) -> str | None:
             str | None: The header, or None for calls with no request.
     '''
     return request.headers.get('authorization') if request is not None else None
+
+
+# ---------------------------------------------------------------------------
+# FILES: the standard addition for a service that loads files
+# ---------------------------------------------------------------------------
+#
+# Approved by Rafael on 16-oct-2026 as the boilerplate block for file loads,
+# taken from INGEST, where it was the one part that depended on nobody. It
+# talks to FILES and to nothing else: no other service's tables, buckets or
+# code. The client uploads the file to S3 through FILES first, and the
+# business endpoint receives only its NAME.
+#
+# The rule it exists to keep (`CLAUDE.md` §9): **FILES is who touches the
+# bucket.** A service never holds its own `boto3.client('s3')`.
+#
+# The caller's token is forwarded on every call so FILES authorizes the real
+# user and not the service. What the rows mean —the validator— belongs to the
+# service, never to this block.
+
+# A file upload is not a JSON notification, so it gets its own budget — and
+# that budget is a decision, not a number the code picks: it lives in the
+# `.env` like every other one.
+FILES_ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'FILES_TIMEOUT_SECONDS': int
+    },
+    optional_env_vars = {
+        'FILES_SERVICE_URL': str,
+        'BUCKET_NAME': str,
+        'BUCKET_PATH': str
+    }
+)
+FILES_SERVICE_URL = (FILES_ENV_VARS.get('FILES_SERVICE_URL') or '').rstrip('/')
+BUCKET_NAME = FILES_ENV_VARS.get('BUCKET_NAME') or ''
+DEFAULT_BUCKET_PATH = (FILES_ENV_VARS.get('BUCKET_PATH') or '').strip('/')
+FILES_TIMEOUT_SECONDS = FILES_ENV_VARS['FILES_TIMEOUT_SECONDS']
+
+
+def _guess_content_type(file_key: str) -> str:
+    '''
+        The MIME type of an object, from its name.
+
+        Args:
+            file_key (str): Object key or filename.
+
+        Returns:
+            str: A type FILES accepts, or the generic one.
+    '''
+    guessed, _ = mimetypes.guess_type(file_key)
+    return guessed or 'application/octet-stream'
+
+
+def _require_files_service() -> None:
+    '''
+        Refuses early when the service was not configured to reach FILES.
+
+        Raises:
+            ServiceUnavailableError: FILES_SERVICE_URL or BUCKET_NAME missing.
+    '''
+    if not FILES_SERVICE_URL or not BUCKET_NAME:
+        error_msg = 'FILES_SERVICE_URL or BUCKET_NAME are not set.'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.NOT_CONFIGURED.value)
+
+
+def _handle_files_service(
+    action: str,
+    auth_token: str,
+    **kwargs: Any
+) -> Any:
+    '''
+        Every conversation with FILES goes through here.
+
+        Actions and what each one expects:
+            - read:   file_key, delimiter   -> the parsed rows
+            - create: file_key, data, content_type -> the stored object key
+            - delete: file_key              -> None
+
+        Args:
+            action (str): One of read, create, delete.
+            auth_token (str): The caller's Authorization header, as received.
+            **kwargs (Any): The arguments of the action.
+
+        Returns:
+            Any: What the action yields.
+
+        Raises:
+            ServiceUnavailableError: FILES unreachable, refusing, or the
+                action is unknown.
+    '''
+    _require_files_service()
+    headers = {'Authorization': auth_token}
+    file_key = kwargs.get('file_key', '')
+
+    try:
+        if action == 'read':
+            response = req.get(
+                f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_key}',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS,
+                params = {'delimiter': kwargs.get('delimiter') or ','}
+            )
+        elif action == 'create':
+            folder, _, name = file_key.rpartition('/')
+            response = req.post(
+                f'{FILES_SERVICE_URL}/v1/s3/upload',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS,
+                files = {'file': (name, kwargs['data'], kwargs['content_type'])},
+                data = {'bucket_name': BUCKET_NAME,
+                        'file_path': folder or DEFAULT_BUCKET_PATH}
+            )
+        elif action == 'delete':
+            response = req.delete(
+                f'{FILES_SERVICE_URL}/v1/s3/delete',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS,
+                json = {'bucket_name': BUCKET_NAME, 'file_path': '',
+                        'file_name': file_key}
+            )
+        else:
+            raise ValueError(f'Unsupported FILES action: {action}')
+    except req.exceptions.RequestException as error:
+        error_msg = f'Network error calling FILES to {action} {file_key}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(detail = FilesError.UNREACHABLE.value) from error
+
+    if not response.ok:
+        error_msg = (f'FILES refused to {action} {file_key}: '
+                     f'status={response.status_code} body={response.text[:300]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.REJECTED.value)
+
+    if action == 'read':
+        return (response.json() or {}).get('data') or []
+    if action == 'create':
+        payload = response.json() if response.content else {}
+        return payload.get('file_key') or file_key
+    return None
+
+
+def read_file_rows(
+    file_key: str,
+    auth_token: str,
+    delimiter: str = ','
+) -> list:
+    '''
+        The rows of a stored file, read through FILES.
+
+        One file holds one contract, so what comes back is one flat table —
+        which is exactly what FILES answers with.
+
+        Args:
+            file_key (str): Object key inside the bucket.
+            auth_token (str): The caller's Authorization header.
+            delimiter (str): Field separator, for a CSV.
+
+        Returns:
+            list: One dictionary per row.
+    '''
+    rows = _handle_files_service(
+        'read', auth_token, file_key = file_key, delimiter = delimiter
+    )
+    message = f'Read {len(rows)} row(s) from {file_key} through FILES.'
+    logger.info(message)
+    return rows
+
+
+def store_file(
+    file_key: str,
+    data: bytes,
+    auth_token: str,
+    content_type: str | None = None
+) -> str:
+    '''
+        Stores bytes in the bucket through FILES.
+
+        Args:
+            file_key (str): Destination object key.
+            data (bytes): Content to store.
+            auth_token (str): The caller's Authorization header.
+            content_type (str | None): MIME type; guessed from the name
+                when not given, so no service keeps its own table.
+
+        Returns:
+            str: The stored object key, as FILES reports it.
+    '''
+    stored = _handle_files_service(
+        'create', auth_token,
+        file_key = file_key, data = data,
+        content_type = content_type or _guess_content_type(file_key)
+    )
+    message = f'Stored {stored} through FILES.'
+    logger.info(message)
+    return stored
+
+
+def delete_stored_file(
+    file_key: str,
+    auth_token: str
+) -> None:
+    '''
+        Removes a consumed object from the bucket, through FILES.
+
+        A staged upload is temporary: once its rows are in, leaving it behind
+        turns the bucket into a graveyard nobody dares clean.
+
+        Args:
+            file_key (str): Object key to remove.
+            auth_token (str): The caller's Authorization header.
+    '''
+    _handle_files_service('delete', auth_token, file_key = file_key)
+    message = f'Deleted {file_key} through FILES.'
+    logger.info(message)

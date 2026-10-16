@@ -13,6 +13,7 @@
 from datetime import date as date_type
 from typing import Any
 
+from boto3.dynamodb.conditions import Key
 from boto3.resources.base import ServiceResource
 
 from models.finance import AccountItem, LawParameterItem
@@ -40,9 +41,13 @@ from services.utils import get_current_time_gmt
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_FINANCE_ACCOUNTS': str,
     'DYNAMODB_TABLE_NAME_FINANCE_LAW_PARAMETERS': str,
+    'DYNAMODB_TABLE_NAME_FINANCE_ENTRIES': str,
 })
 ACCOUNTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_FINANCE_ACCOUNTS']
 LAW_PARAMETERS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_FINANCE_LAW_PARAMETERS']
+ENTRIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_FINANCE_ENTRIES']
+# The index of the amounts by account: whether any client used one.
+ACCOUNT_INDEX = 'account_code-index'
 
 
 def _code_key(code: str) -> list[int | str]:
@@ -188,6 +193,42 @@ def list_accounts(dynamodb_resource: ServiceResource) -> AccountListResponseSche
     return AccountListResponseSchema(accounts = accounts, total = len(accounts))
 
 
+def catalog_by_code(dynamodb_resource: ServiceResource) -> dict[str, dict[str, Any]]:
+    '''
+        The catalog as a lookup by code, for the validator of the loads.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+
+        Returns:
+            dict[str, dict[str, Any]]: Every group and account, by code.
+    '''
+    return {item['account_code']: item for item in scan_all(dynamodb_resource, ACCOUNTS_TABLE)}
+
+
+def account_in_use(
+    dynamodb_resource: ServiceResource,
+    account_code: str
+) -> bool:
+    '''
+        Whether any client filed an amount under the account. Asks the index
+        for one key, whoever owns it: it answers with what is really stored.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            account_code (str): Account code.
+
+        Returns:
+            bool: True when at least one amount uses it.
+    '''
+    response = dynamodb_resource.Table(ENTRIES_TABLE).query(
+        IndexName = ACCOUNT_INDEX,
+        KeyConditionExpression = Key('account_code').eq(account_code),
+        Limit = 1
+    )
+    return bool(response.get('Items'))
+
+
 def rename_account(
     dynamodb_resource: ServiceResource,
     account_code: str,
@@ -225,10 +266,8 @@ def delete_account(
     account_code: str
 ) -> AccountResponseSchema:
     '''
-        Removes an account, or a group with no accounts left in it.
-
-        No client has loaded figures yet: the loads arrive in the next phase,
-        and with them the check that refuses ACCOUNT_IN_USE.
+        Removes an account no client used, or a group with no accounts left
+        in it: a figure filed under a removed account would mean nothing.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
@@ -239,7 +278,7 @@ def delete_account(
 
         Raises:
             ResourceNotFoundError: ACCOUNT_NOT_FOUND.
-            InvalidInputError: GROUP_HAS_ACCOUNTS.
+            InvalidInputError: GROUP_HAS_ACCOUNTS or ACCOUNT_IN_USE.
     '''
     stored = _find_account(dynamodb_resource, account_code)
     if not stored:
@@ -255,6 +294,10 @@ def delete_account(
             error_msg = f'Group {account_code} still has {len(members)} account(s).'
             logger.warning(error_msg)
             raise InvalidInputError(detail = FinanceError.GROUP_HAS_ACCOUNTS.value)
+    elif account_in_use(dynamodb_resource, account_code):
+        error_msg = f'Account {account_code} has amounts loaded; it cannot be removed.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = FinanceError.ACCOUNT_IN_USE.value)
     dynamodb_resource.Table(ACCOUNTS_TABLE).delete_item(Key = {'account_code': account_code})
     message = f'Account {account_code} removed from the catalog.'
     logger.info(message)

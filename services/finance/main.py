@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
+from routes.entries import router as entries_router
 from routes.finance import router as finance_router
 
 from services.api_exceptions import setup_exception_handlers
@@ -155,6 +156,7 @@ async def custom_swagger_ui() -> HTMLResponse:
 
 
 app.include_router(finance_router)
+app.include_router(entries_router)
 
 
 def run_local() -> None:

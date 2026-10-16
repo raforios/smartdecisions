@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 from main import app
+from routes import entries as entry_routes
 from routes import finance as routes
 from schemas.finance import (
     AccountListResponseSchema,
@@ -21,7 +22,20 @@ from schemas.finance import (
     LawParameterResponseSchema,
     LawParameterSchema
 )
-from services import security
+from schemas.entries import (
+    EntryFileLoadSchema,
+    EntryListResponseSchema,
+    EntryLoadSchema,
+    EntryRowSchema,
+    EntrySchema,
+    EntryUpdateSchema,
+    LoadFlow,
+    LoadListResponseSchema,
+    LoadResultSchema,
+    PeriodDeleteResultSchema,
+    Periodicity
+)
+from services import entries, security
 
 
 def _bearer(**claims) -> str:
@@ -108,3 +122,60 @@ def test_a_manager_cannot_change_what_is_global():
         })
         assert response.status_code == 403
         assert response.json()['detail'] == 'ROLE_NOT_ALLOWED'
+
+
+def test_every_entry_route_answers_its_model(
+    catalog,
+    monkeypatch
+):
+    '''Load by API and by file, list, correct and delete, called as the API calls them.'''
+    who = {'dynamodb_resource': catalog, 'client': 'acme', 'current_user': 'ana@acme.com'}
+    rent = {'date': '2026-03', 'periodicity': 'MONTHLY', 'account_code': '6.1.03', 'amount': 3500}
+    loaded = _run(entry_routes.load_entries_endpoint(
+        request = None, load = EntryLoadSchema(flow = LoadFlow.PROCESSED,
+                                               rows = [EntryRowSchema(**rent)]), **who
+    ))
+    assert isinstance(loaded, LoadResultSchema)
+
+    monkeypatch.setattr(entries, 'read_file_rows', lambda key, token: [
+        {'Fecha': '2026-02', 'Periodicidad': 'Mensual', 'Código de cuenta': '6.1.03', 'Monto': 1}
+    ])
+    monkeypatch.setattr(entries, 'delete_stored_file', lambda key, token: None)
+    from_file = _run(entry_routes.load_entries_file_endpoint(
+        request = None, load = EntryFileLoadSchema(flow = LoadFlow.BASE, file_key = 'f.xlsx'),
+        authorization = 'Bearer x', **who
+    ))
+    assert from_file.accepted == 1
+
+    assert isinstance(_run(entry_routes.list_loads_endpoint(request = None, **who)),
+                      LoadListResponseSchema)
+    listed = _run(entry_routes.list_entries_endpoint(
+        request = None, periodicity = Periodicity.MONTHLY, date = '2026', **who
+    ))
+    assert isinstance(listed, EntryListResponseSchema)
+    assert listed.total == 2
+
+    fixed = _run(entry_routes.update_entry_endpoint(
+        request = None, update = EntryUpdateSchema(amount = 3600),
+        periodicity = Periodicity.MONTHLY, date = '2026-03', account_code = '6.1.03', **who
+    ))
+    assert isinstance(fixed, EntrySchema)
+    removed = _run(entry_routes.delete_entry_endpoint(
+        request = None, periodicity = Periodicity.MONTHLY, date = '2026-03',
+        account_code = '6.1.03', **who
+    ))
+    assert isinstance(removed, EntrySchema)
+    emptied = _run(entry_routes.delete_period_endpoint(
+        request = None, periodicity = Periodicity.MONTHLY, date = '2026-02', **who
+    ))
+    assert isinstance(emptied, PeriodDeleteResultSchema)
+    assert emptied.deleted == 1
+
+
+def test_a_seller_cannot_see_the_finances():
+    '''«Sólo la plana mayor»: a SELLER is refused before reaching the tables.'''
+    response = TestClient(app).get('/v1/finance/entries', headers = {
+        'Authorization': _bearer(email = 'vendedor@acme.com', role = 'SELLER', client = 'acme')
+    })
+    assert response.status_code == 403
+    assert response.json()['detail'] == 'ROLE_NOT_ALLOWED'
