@@ -42,8 +42,8 @@ Las tablas se crean con `services/ci/api/create_dynamodb_tables.sh`. El
 catálogo y las tasas se siembran desde el contrato aprobado:
 
 ```bash
-python -m tools.seed_finance          # simulación
-python -m tools.seed_finance --yes
+python -m tools.seeds.seed_finance          # simulación
+python -m tools.seeds.seed_finance --yes
 ```
 
 ## Local

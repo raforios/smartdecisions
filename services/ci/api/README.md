@@ -173,7 +173,7 @@ Sigue la [sección 6](#6-cómo-comprobar-que-un-despliegue-salió-bien).
 Desde la raíz del repositorio (`app/`), para cada servicio que vas a desplegar:
 
 ```bash
-python tools/verify_service.py services/<servicio>
+python tools/verification/verify_service.py services/<servicio>
 ```
 
 Debe terminar en **`ALL PASS`**. Si dice `FAILED`, **no despliegues**: corrige primero.

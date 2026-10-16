@@ -1,8 +1,8 @@
 '''
     Public daily sources of the quotations the Ministry averages.
 
-    Cross-checked against 115 official daily values per mineral (April to
-    September 2026, `tools/mining_analysis/cross_check_sources.py`):
+    Cross-checked once against 115 official daily values per mineral (April
+    to September 2026):
 
       - Gold: the LBMA AM fix, exact on 111 of 115 days (the other four are
         typing errors in the official spreadsheet).

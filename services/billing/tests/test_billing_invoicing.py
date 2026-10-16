@@ -495,6 +495,6 @@ def test_the_dry_run_produces_a_valid_document():
     # first, which is also why Pylint cannot resolve it statically: `tools`
     # becomes importable only after the insert above.
     # pylint: disable=import-outside-toplevel, import-error
-    from tools.billing.dry_run_invoice import main
+    from tools.testing.dry_run_invoice import main
 
     assert main(['--lines', '3']) == 0

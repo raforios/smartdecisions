@@ -175,7 +175,7 @@ vencimientos—.
 ## Pruebas
 
 ```bash
-python tools/verify_service.py services/billing
+python tools/verification/verify_service.py services/billing
 ```
 
 ---

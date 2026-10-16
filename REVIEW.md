@@ -37,5 +37,5 @@ Como máximo cinco por revisión; el resto se resume como un número.
 ## No reportar
 
 - Los `deploy.config`: son de despliegue, no código.
-- Lo que ya caza `tools/verify_service.py` (Pylint, firmas, type hints,
+- Lo que ya caza `tools/verification/verify_service.py` (Pylint, firmas, type hints,
   tamaño, `except` mudo, comas en el `.env`).
