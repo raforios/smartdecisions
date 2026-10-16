@@ -1,0 +1,17 @@
+# cache folder
+cache
+
+# __pycache__ folder
+__pycache__
+
+# ignore .git & .cache forlders
+.git
+*.pyc
+*.pyo
+*.pyd
+.git
+.venv
+.DS_Store
+
+# do not bake local .env into the image; configure via Lambda env vars
+.env
