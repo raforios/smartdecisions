@@ -5,8 +5,9 @@
     contrato.md`) and not from a list written here: the contract is the single
     definition Rafael reviews, and a copy in code would drift from it the day
     an account is added. A bold row of a catalog table is a group; the rest
-    are its accounts. The type is the first digit of the code, and an account
-    named «(Menos) …» subtracts within its group.
+    are its accounts. The type is the first digit of the code, an account
+    named «(Menos) …» subtracts within its group, and the «Factura» column
+    says whether a sale carries an invoice.
 
     It goes through FINANCE's own functions, so every account passes the same
     rules as one added by an ADMIN from the API: an existing group of its own
@@ -43,8 +44,13 @@ from services.finance import create_account, set_law_parameter  # noqa: E402
 PROFILE = 'deploy_ml'
 REGION = 'us-east-1'
 
-# A catalog row of the contract: «| 6.1.07 | Name |», the code in bold for a group.
-_ACCOUNT_ROW = re.compile(r'^\|\s*(\*\*)?(\d+(?:\.\d+)+)(\*\*)?\s*\|\s*(.+?)\s*\|\s*$')
+# A catalog row of the contract: «| 6.1.07 | Name |», the code in bold for a
+# group; the results table adds «| Sí |» or «| No |» for a sale with or
+# without invoice.
+_ACCOUNT_ROW = re.compile(
+    r'^\|\s*(\*\*)?(\d+(?:\.\d+)+)(\*\*)?\s*\|\s*(.+?)\s*\|(?:\s*(Sí|No)?\s*\|)?\s*$'
+)
+_INVOICED = {'Sí': True, 'No': False}
 # A law parameter row: «| IVA | Name | 13 | 1986-07-01 |».
 _LAW_ROW = re.compile(
     r'^\|\s*([A-Z]{2,})\s*\|\s*(.+?)\s*\|\s*([\d.]+)\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*$'
@@ -80,7 +86,8 @@ def read_accounts(text: str) -> list[AccountSchema]:
             name = name,
             account_type = AccountType(code[0]),
             group_code = None if is_group else group,
-            subtracts = name.startswith(_SUBTRACTS_PREFIX)
+            subtracts = name.startswith(_SUBTRACTS_PREFIX),
+            invoiced = _INVOICED.get(match.group(5))
         ))
     return accounts
 

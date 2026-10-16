@@ -44,28 +44,25 @@ _GUIDE: dict[str, tuple[str, str, str]] = {
     'amount': ('Sí', 'Número en bolivianos, con punto decimal',
                'Siempre positivo: la aplicación sabe qué cuentas restan'),
     'note': ('No', 'Texto', 'Lo que quieras recordar de esa cifra'),
-    'invoiced': ('Sólo en ingresos (4.x)', 'Lista', 'Sí / No'),
-    'taxes_included': ('Sólo en ingresos (4.x)', 'Lista', 'Sí (venta bruta) / No (líquida)'),
+    'taxes_included': ('Sólo en ventas con factura', 'Lista',
+                       'Sí (venta bruta) / No (líquida). La cuenta dice si lleva factura'),
 }
 
 # Plausible rows, so the format is understood at a glance: one month of a
 # small shop and a past year loaded whole.
 _SAMPLE_ROWS: list[dict[str, object]] = [
     {'date': '2026-01', 'periodicity': 'Mensual', 'account_code': '4.1.01',
-     'amount': 85000, 'note': 'Ventas con factura', 'invoiced': 'Sí', 'taxes_included': 'Sí'},
-    {'date': '2026-01', 'periodicity': 'Mensual', 'account_code': '4.1.03',
-     'amount': 12000, 'note': 'Servicios sin factura', 'invoiced': 'No',
-     'taxes_included': 'No'},
+     'amount': 85000, 'note': 'Ventas con factura', 'taxes_included': 'Sí'},
+    {'date': '2026-01', 'periodicity': 'Mensual', 'account_code': '4.1.05',
+     'amount': 12000, 'note': 'Ventas sin factura'},
     {'date': '2026-01', 'periodicity': 'Mensual', 'account_code': '6.1.03',
      'amount': 3500, 'note': 'Alquiler del local'},
     {'date': '2025', 'periodicity': 'Anual', 'account_code': '4.1.01',
-     'amount': 940000, 'note': 'Año anterior completo', 'invoiced': 'Sí',
-     'taxes_included': 'Sí'},
+     'amount': 940000, 'note': 'Año anterior completo', 'taxes_included': 'Sí'},
 ]
 
 _LISTS: dict[str, str] = {
     'periodicity': '"Diaria,Mensual,Anual"',
-    'invoiced': '"Sí,No"',
     'taxes_included': '"Sí,No"',
 }
 
