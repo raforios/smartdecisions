@@ -43,6 +43,7 @@ from verify_checks import (
     check_env_shorthand,
     check_events,
     check_except_pass,
+    check_foreign_tables,
     check_getenv,
     check_imports,
     check_log_vars,
@@ -75,6 +76,7 @@ CHECKS = (
     ('comment-language', check_comment_language),
     ('cross-duplicates', check_cross_service_duplicates),
     ('direct-s3', check_direct_s3),
+    ('foreign-tables', check_foreign_tables),
     ('events', check_events),
 )
 

@@ -331,6 +331,64 @@ def check_direct_s3(service: Path) -> tuple[bool, str]:
     return not hits, (', '.join(hits) + ' — se pide a FILES') if hits else 'none'
 
 
+# A table belongs to the service its name starts with (`ingest_datasets` is
+# INGEST's). Anyone else reading it is coupled to it: the data is asked of its
+# owner over HTTP (`CLAUDE.md` §4, Rafael, 14-10-2026).
+_TABLE_VARIABLE = re.compile(r'^(DYNAMODB_TABLE_NAME_[A-Z0-9_]+)=(.*)$')
+_FOREIGN_TABLES_ALLOWED: dict[str, tuple[str, ...]] = {
+    # Pending, the debt of the commercial module: they read the dataset INGEST
+    # produced and are uncoupled when that module is worked on.
+    'analytics': ('ingest_datasets',),
+    'optimization': ('ingest_datasets',),
+}
+
+
+def _env_tables(service: Path) -> dict[str, str]:
+    '''
+        The DynamoDB tables a service is configured with, by table name.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            dict[str, str]: Table name to the variable that names it.
+    '''
+    env = service / '.env'
+    if not env.exists():
+        return {}
+    tables = {}
+    for line in env.read_text().splitlines():
+        match = _TABLE_VARIABLE.match(line.strip())
+        if match:
+            tables[match.group(2).strip().strip('\'"')] = match.group(1)
+    return tables
+
+
+def check_foreign_tables(service: Path) -> tuple[bool, str]:
+    '''
+        A service reads only its own tables.
+
+        A table configured in more than one service is coupling unless this
+        service is its owner, the one its name starts with. Without a `.env`
+        (the CI) there is nothing to compare, and the check says so.
+    '''
+    mine = _env_tables(service)
+    if not (service / '.env').exists():
+        return True, 'sin .env'
+    allowed = _FOREIGN_TABLES_ALLOWED.get(service.name, ())
+    hits = []
+    for other in (ROOT / 'services').iterdir():
+        if other.name == service.name or not other.is_dir():
+            continue
+        for table, variable in mine.items():
+            shared = table in _env_tables(other)
+            owned = table.startswith(f'{service.name}_')
+            if shared and not owned and table not in allowed:
+                hits.append(f'{variable} ({table}, compartida con {other.name})')
+    return not hits, (', '.join(sorted(set(hits)))
+                      + ' — se pide al dueño por HTTP') if hits else 'none'
+
+
 def check_except_pass(service: Path) -> tuple[bool, str]:
     '''No silent except.'''
     hits = []

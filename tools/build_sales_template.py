@@ -287,33 +287,21 @@ def _contracts() -> list[tuple[str, Any, Any, Any]]:
             list[tuple[str, Any, Any, Any]]: Name, columns, headers and the
                 function that builds sample rows from the sales sample.
     """
-    from schemas.ingest import ( # pylint: disable=import-outside-toplevel
-        COLLECTION_COLUMNS,
-        COLLECTION_HEADERS,
-        COLLECTIONS_TEMPLATE,
-        OBJECTIVE_COLUMNS,
-        OBJECTIVE_HEADERS,
-        OBJECTIVES_TEMPLATE,
-        PURCHASE_COLUMNS,
-        PURCHASE_HEADERS,
-        PURCHASES_TEMPLATE,
-        SALES_TEMPLATE,
-        STOCK_COLUMNS,
-        STOCK_HEADERS,
-        STOCK_TEMPLATE,
-        TEMPLATE_COLUMNS,
-        TEMPLATE_HEADERS,
-        VISIT_COLUMNS,
-        VISIT_HEADERS,
-        VISITS_TEMPLATE
-    )
+    # The module, not its eighteen names: each imported name counted as a local.
+    import schemas.ingest as contract # pylint: disable=import-outside-toplevel
     return [
-        (SALES_TEMPLATE, TEMPLATE_COLUMNS, TEMPLATE_HEADERS, lambda sample: sample),
-        (COLLECTIONS_TEMPLATE, COLLECTION_COLUMNS, COLLECTION_HEADERS, _sample_collections),
-        (STOCK_TEMPLATE, STOCK_COLUMNS, STOCK_HEADERS, _sample_stock),
-        (VISITS_TEMPLATE, VISIT_COLUMNS, VISIT_HEADERS, _sample_visits),
-        (OBJECTIVES_TEMPLATE, OBJECTIVE_COLUMNS, OBJECTIVE_HEADERS, _sample_objectives),
-        (PURCHASES_TEMPLATE, PURCHASE_COLUMNS, PURCHASE_HEADERS, _sample_purchases),
+        (contract.SALES_TEMPLATE, contract.TEMPLATE_COLUMNS, contract.TEMPLATE_HEADERS,
+         lambda sample: sample),
+        (contract.COLLECTIONS_TEMPLATE, contract.COLLECTION_COLUMNS,
+         contract.COLLECTION_HEADERS, _sample_collections),
+        (contract.STOCK_TEMPLATE, contract.STOCK_COLUMNS, contract.STOCK_HEADERS,
+         _sample_stock),
+        (contract.VISITS_TEMPLATE, contract.VISIT_COLUMNS, contract.VISIT_HEADERS,
+         _sample_visits),
+        (contract.OBJECTIVES_TEMPLATE, contract.OBJECTIVE_COLUMNS,
+         contract.OBJECTIVE_HEADERS, _sample_objectives),
+        (contract.PURCHASES_TEMPLATE, contract.PURCHASE_COLUMNS,
+         contract.PURCHASE_HEADERS, _sample_purchases),
     ]
 
 
