@@ -109,6 +109,13 @@ TABLES=(
     "billing_cash_sessions:owner:S:session_id:S"
     "billing_cash_movements:owner:S:movement_key:S"
 
+    # --- Análisis Financiero (FINANCE) ---
+    # El catálogo de cuentas es uno solo, de BearSoft: clave simple, se lee
+    # entero. Las tasas de ley guardan la fecha desde la que rigen, así un mes
+    # se calcula con la tasa vigente en ese mes.
+    "finance_accounts:account_code:S"
+    "finance_law_parameters:parameter_code:S:valid_from:S"
+
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"
     "mining_summit_registration:ci:S"

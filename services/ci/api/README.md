@@ -193,7 +193,25 @@ Vuelve a `services/ci/api` y escribe los nombres de las carpetas de los servicio
 - **No importa en qué orden los escribas**: el script los despliega siempre en el orden correcto (base primero, después los dueños de datos, después el resto).
 - Al terminar, el script revisa el dominio y agrega al gateway las rutas de un servicio nuevo.
 
-Los nombres válidos son los de las carpetas: `auth`, `events`, `files`, `ml_functions`, `ingest`, `quotes`, `analytics`, `optimization`, `mining_analysis`, `ai`, `billing`.
+Los nombres válidos son los de las carpetas: `auth`, `events`, `files`, `ml_functions`, `ingest`, `quotes`, `analytics`, `optimization`, `mining_analysis`, `ai`, `finance`, `billing`.
+
+### Si el microservicio es nuevo
+
+`./start.sh --redeploy <servicio>` sólo despliega los servicios que están en su lista `ORDER`: con un nombre que no está ahí **no hace nada y termina sin error**. Antes del primer despliegue, en `services/ci/api`:
+
+1. **`start.sh`**: agrega el servicio a `ORDER`, en el lugar que le toca (después de los servicios a los que llama), con `--skip-table-creation` si sus tablas las crea `create_dynamodb_tables.sh`. Si su `.env` llama a otros servicios, agrégalo también a `URL_CONSUMERS`.
+2. **`update_service_urls.sh`**: el mismo servicio en `SERVICES`, si lo agregaste a `URL_CONSUMERS`.
+3. **`setup_api_domain.sh`**: su prefijo en `ROUTES` (`"v1/<prefijo>:<FUNCTION_NAME>"`), o `api.bearsoft.com.bo` no lo encuentra.
+4. **`create_dynamodb_tables.sh`**: sus tablas en `TABLES` (ver el paso 3), creadas antes del despliegue.
+5. **Su `deploy.config`**: `CORS_ALLOW_METHODS` si expone PATCH o DELETE.
+
+Después, el despliegue es el mismo que el de cualquier servicio:
+
+```bash
+./start.sh --redeploy finance
+```
+
+El Lambda, su rol y su API los crea `build_and_deploy.sh` la primera vez; al terminar, `start.sh` agrega la ruta al gateway.
 
 ### Paso 3. Si agregaste una tabla DynamoDB nueva
 

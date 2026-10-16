@@ -20,7 +20,8 @@
 #   3. INGEST y QUOTES. Son los dueños de los datos que otros piden por HTTP:
 #      OPTIMIZATION le pide stock y vendedores a INGEST, ANALYTICS le pide el
 #      tipo de cambio a QUOTES.
-#   4. ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, AI.
+#   4. ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, AI y FINANCE (el Análisis
+#      Financiero, que le pide a QUOTES el tipo de cambio y los factores).
 #   5. BILLING (SmartBilling).
 #   6. Tareas programadas (create_schedules.sh): necesitan los Lambdas.
 #   7. Dominio api.bearsoft.com.bo y su puerta de entrada bearsoft-gateway
@@ -50,11 +51,13 @@ ORDER=(
     "optimization:"
     "mining_analysis:"
     "ai:"
+    # Dos tablas, una de clave compuesta: las crea create_dynamodb_tables.sh.
+    "finance:--skip-table-creation"
     "billing:"
 )
 
 # Servicios cuyos .env llaman a otros servicios (ver update_service_urls.sh).
-URL_CONSUMERS=(ai analytics billing ingest mining_analysis optimization quotes)
+URL_CONSUMERS=(ai analytics billing finance ingest mining_analysis optimization quotes)
 
 deploy_service() {
     local SERVICE="$1"

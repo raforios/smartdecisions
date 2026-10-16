@@ -65,6 +65,7 @@ ROUTES=(
     "v1/quotes:quotes-handler-service"
     "v1/ai:ai-handler-service"
     "v1/mining-analysis:mining-handler-service"
+    "v1/finance:finance-handler-service"
     # --- SmartBilling ---
     "v1/billing:billing-handler-service"
 )

@@ -22,7 +22,7 @@ SERVICES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # Servicios propios cuyos .env llaman a otros servicios. Los de clientes
 # (TRADE, FORMS, LOCALIZATION, CMS, MINING_SUMMIT) no se tocan.
-SERVICES=(ai analytics billing ingest mining_analysis optimization quotes)
+SERVICES=(ai analytics billing finance ingest mining_analysis optimization quotes)
 VARIABLES=(EVENTS_SERVICE_URL FILES_SERVICE_URL INGEST_SERVICE_URL QUOTES_SERVICE_URL)
 
 WRITE=false
