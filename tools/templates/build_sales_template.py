@@ -12,9 +12,9 @@
     published file is static and served from S3.
 
     Usage:
-        python -m tools.build_sales_template            # reports what it would do
-        python -m tools.build_sales_template --yes      # builds and uploads
-        python -m tools.build_sales_template --yes --rows 5
+        python -m tools.templates.build_sales_template            # reports what it would do
+        python -m tools.templates.build_sales_template --yes      # builds and uploads
+        python -m tools.templates.build_sales_template --yes --rows 5
 '''
 import argparse
 import sys
@@ -28,7 +28,7 @@ import pandas as pd
 
 # The microservice declares the contract; this script imports it instead of
 # repeating it.
-INGEST_PATH = Path(__file__).resolve().parent.parent / 'services' / 'ingest'
+INGEST_PATH = Path(__file__).resolve().parents[2] / 'services' / 'ingest'
 sys.path.insert(0, str(INGEST_PATH))
 
 BUCKET = 'ml-data-file-handler'

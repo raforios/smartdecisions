@@ -16,12 +16,12 @@
 
     Run it the morning of the demo, with that date:
 
-        python -m tools.seed_demo_routes                 # simulation, today
-        python -m tools.seed_demo_routes --date 2026-10-07 --yes
+        python -m tools.demo.seed_demo_routes                 # simulation, today
+        python -m tools.demo.seed_demo_routes --date 2026-10-07 --yes
 
     Re-running a date skips the plans that already exist.
 
-    It also writes `tools/samples/stock_<company>.xlsx`, the stock template
+    It also writes `tools/demo/samples/stock_<company>.xlsx`, the stock template
     filled with each company's SKUs, to try the stock upload in Rutas.
 '''
 import argparse
@@ -41,7 +41,7 @@ from boto3.dynamodb.conditions import Key
 from boto3.resources.base import ServiceResource
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 OPTIMIZATION_PATH = ROOT / 'services' / 'optimization'
 sys.path.insert(0, str(OPTIMIZATION_PATH))
 # The service validates its environment on import, so it is loaded first.

@@ -19,8 +19,8 @@
        that forgets that is a demo that lies.
 
     Usage:
-        python -m tools.convert_sales_export "base 2025.xlsx"
-        python -m tools.convert_sales_export "base 2025.xlsx" --out /tmp/ventas.xlsx
+        python -m tools.templates.convert_sales_export "base 2025.xlsx"
+        python -m tools.templates.convert_sales_export "base 2025.xlsx" --out /tmp/ventas.xlsx
 '''
 import argparse
 import hashlib
@@ -32,7 +32,7 @@ import pandas as pd
 
 # The microservice declares the contract; this script imports it instead of
 # repeating it.
-INGEST_PATH = Path(__file__).resolve().parent.parent / 'services' / 'ingest'
+INGEST_PATH = Path(__file__).resolve().parents[2] / 'services' / 'ingest'
 sys.path.insert(0, str(INGEST_PATH))
 
 # pylint: disable=wrong-import-position

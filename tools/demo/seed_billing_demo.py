@@ -11,9 +11,9 @@
     window, the rest far away. That is what makes FEFO and the dashboard show.
 
     Usage:
-        python tools/billing/seed_demo.py --token <jwt>
-        python tools/billing/seed_demo.py --token <jwt> --base http://localhost:3004
-        python tools/billing/seed_demo.py --token <jwt> --skip-existing
+        python tools/demo/seed_billing_demo.py --token <jwt>
+        python tools/demo/seed_billing_demo.py --token <jwt> --base http://localhost:3004
+        python tools/demo/seed_billing_demo.py --token <jwt> --skip-existing
 '''
 import argparse
 import json

@@ -6,7 +6,7 @@
     Checks:
         tests        pytest, all green
         pylint       10.00/10 over services/ controllers/ routes/ schemas/ tests/
-        signatures   one parameter per line (tools/check_signatures.py)
+        signatures   one parameter per line (tools/verification/check_signatures.py)
         type-hints   every parameter and return annotated (tests exempt)
         size         no own file at or above the split threshold (800 lines)
         duplicates   no two functions with the same body inside the service
@@ -24,9 +24,9 @@
     with the repository root and the service it imports on the path.
 
     Usage:
-        python tools/verify_service.py services/ingest [services/analytics ...]
-        python tools/verify_service.py --all
-        python tools/verify_service.py --tools
+        python tools/verification/verify_service.py services/ingest [services/analytics ...]
+        python tools/verification/verify_service.py --all
+        python tools/verification/verify_service.py --tools
 '''
 import os
 import re
@@ -108,8 +108,6 @@ def _tool_pythonpath(path: Path) -> str:
     source = path.read_text()
     match = TOOL_SERVICE.search(source)
     service = next((group for group in match.groups() if group), None) if match else None
-    if service is None and 'tools.ingest_env' in source:
-        service = 'ingest'
     parts = [str(ROOT), str(path.parent)]
     parts += [str(ROOT / 'services' / service)] if service else []
     return os.pathsep.join(parts)

@@ -9,9 +9,9 @@
     one keeps its cache.
 
     Usage:
-        python -m tools.deploy_demo_portal                  # informa qué haría
-        python -m tools.deploy_demo_portal --yes            # estampa, sube, invalida
-        python -m tools.deploy_demo_portal --yes --only minerales
+        python -m tools.deploy.deploy_demo_portal                  # informa qué haría
+        python -m tools.deploy.deploy_demo_portal --yes            # estampa, sube, invalida
+        python -m tools.deploy.deploy_demo_portal --yes --only minerales
 '''
 import argparse
 import hashlib
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 
-PORTAL_ROOT = Path(__file__).resolve().parent.parent / 'portal' / 'demo'
+PORTAL_ROOT = Path(__file__).resolve().parents[2] / 'portal' / 'demo'
 BUCKET = 'bearsoft-smartdecisions-landing'
 DISTRIBUTION_ID = 'EXP60FDO0MJVI'
 PROFILE = 'deploy_ml'

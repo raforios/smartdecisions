@@ -7,7 +7,7 @@
     connection of that service is `db_connection`.
 
     Usage:
-        python tools/seed_locations.py <ruta-al-excel>
+        python tools/seeds/seed_locations.py <ruta-al-excel>
 '''
 import sys
 import zipfile
@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-MINING_PATH = Path(__file__).resolve().parent.parent / 'services' / 'mining_analysis'
+MINING_PATH = Path(__file__).resolve().parents[2] / 'services' / 'mining_analysis'
 sys.path.insert(0, str(MINING_PATH))
 # The service validates its environment at import time, so its .env goes first.
 load_dotenv(MINING_PATH / '.env')

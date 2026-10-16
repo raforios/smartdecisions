@@ -10,7 +10,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 # The eleven services BearSoft owns, in the four groups of SMARTDECISIONS.md.
 # AUTH, EVENTS, FILES and ML_FUNCTIONS were missing until 27-09-2026, so they
 # accumulated findings nobody ever saw: a sweep that skips a service is a
@@ -187,7 +187,8 @@ def check_pylint(service: Path) -> tuple[bool, str]:
 
 def check_signatures(service: Path) -> tuple[bool, str]:
     '''One parameter per line in every multi-line signature.'''
-    code, output = run_command(ROOT, sys.executable, 'tools/check_signatures.py', str(service))
+    code, output = run_command(ROOT, sys.executable,
+                               'tools/verification/check_signatures.py', str(service))
     return code == 0, output.strip().splitlines()[-1] if output.strip() else 'ok'
 
 

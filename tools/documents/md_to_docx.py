@@ -10,7 +10,7 @@
     GitHub-flavoured tables, fenced code blocks and horizontal rules.
 
     Usage:
-        python tools/md_to_docx.py <input.md> [output.docx]
+        python tools/documents/md_to_docx.py <input.md> [output.docx]
 '''
 import argparse
 import os

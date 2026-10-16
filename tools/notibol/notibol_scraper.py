@@ -9,9 +9,9 @@
     scraper follows the 'next page' links until there are no more.
 
     Usage (run from the app root):
-        python tools/notibol_scraper.py --fecha 2026-08-04
-        python tools/notibol_scraper.py --fecha 2026-08-04 --out /ruta/noticias.xlsx
-        python tools/notibol_scraper.py --fecha 2026-08-04 \
+        python tools/notibol/notibol_scraper.py --fecha 2026-08-04
+        python tools/notibol/notibol_scraper.py --fecha 2026-08-04 --out /ruta/noticias.xlsx
+        python tools/notibol/notibol_scraper.py --fecha 2026-08-04 \
             --base https://notibol.com/bolivia/economia
 
     Requires: requests, beautifulsoup4, openpyxl.

@@ -16,8 +16,8 @@
     same rule; only third-party code is skipped.
 
     Usage:
-        python tools/check_signatures.py services/ingest            # report
-        python tools/check_signatures.py services/ingest --fix      # rewrite
+        python tools/verification/check_signatures.py services/ingest            # report
+        python tools/verification/check_signatures.py services/ingest --fix      # rewrite
 '''
 import ast
 import sys

@@ -12,8 +12,8 @@
     rules as one added by an ADMIN from the API: an existing group of its own
     type, a code never repeated.
 
-        python -m tools.seed_finance            # simulation
-        python -m tools.seed_finance --yes
+        python -m tools.seeds.seed_finance            # simulation
+        python -m tools.seeds.seed_finance --yes
 
     Re-running is safe: an account already in the catalog is left as it is,
     and a law value on the same date is corrected, not duplicated.
@@ -27,7 +27,7 @@ from pathlib import Path
 import boto3
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 FINANCE_PATH = ROOT / 'services' / 'finance'
 CONTRACT = ROOT / 'docs' / 'cambios' / 'smartdecisions' / 'contrato.md'
 sys.path.insert(0, str(FINANCE_PATH))

@@ -25,9 +25,9 @@
     not as if it were the visitor's location.
 
     Usage:
-        python -m tools.traffic_report                  # last 7 days
-        python -m tools.traffic_report --days 30
-        python -m tools.traffic_report --site smartdecisions
+        python -m tools.reports.traffic_report                  # last 7 days
+        python -m tools.reports.traffic_report --days 30
+        python -m tools.reports.traffic_report --site smartdecisions
 '''
 import argparse
 import gzip

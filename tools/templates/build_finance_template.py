@@ -12,8 +12,8 @@
     words, and the date column is text, so Excel never turns «2026-03» into a
     day it invented.
 
-        python -m tools.build_finance_template
-        python -m tools.build_finance_template --out /ruta/plantilla.xlsx
+        python -m tools.templates.build_finance_template
+        python -m tools.templates.build_finance_template --out /ruta/plantilla.xlsx
 '''
 import argparse
 import sys
@@ -22,7 +22,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.worksheet.datavalidation import DataValidation
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 FINANCE_PATH = ROOT / 'services' / 'finance'
 sys.path.insert(0, str(FINANCE_PATH))
 

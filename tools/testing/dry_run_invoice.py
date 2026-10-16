@@ -17,8 +17,8 @@
     They come from the tax office and nothing can derive them.
 
     Usage:
-        python -m tools.billing.dry_run_invoice
-        python -m tools.billing.dry_run_invoice --lines 3 --save /tmp/factura.xml
+        python -m tools.testing.dry_run_invoice
+        python -m tools.testing.dry_run_invoice --lines 3 --save /tmp/factura.xml
 '''
 import argparse
 import sys

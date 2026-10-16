@@ -13,9 +13,9 @@
     so the table of contents is visible without scrolling the whole document.
 
     Usage:
-        python tools/pdf_to_markdown.py RND11.pdf
-        python tools/pdf_to_markdown.py RND11.pdf --output docs/rnd11.md
-        python tools/pdf_to_markdown.py RND11.pdf --pages 1-40
+        python tools/documents/pdf_to_markdown.py RND11.pdf
+        python tools/documents/pdf_to_markdown.py RND11.pdf --output docs/rnd11.md
+        python tools/documents/pdf_to_markdown.py RND11.pdf --pages 1-40
 
     Then read what you need instead of the whole file:
         grep -n 'Código de Control' rnd11.md
