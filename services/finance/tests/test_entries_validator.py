@@ -25,6 +25,8 @@ CATALOG = {
     '4.1.05': {'account_code': '4.1.05', 'account_type': '4', 'group_code': '4.1',
                'invoiced': False},
     '6.1.03': {'account_code': '6.1.03', 'account_type': '6', 'group_code': '6.1'},
+    '5.1.02': {'account_code': '5.1.02', 'account_type': '5', 'group_code': '5.1',
+               'invoiced': True},
 }
 RENT = {'date': '2026-03', 'periodicity': 'Mensual', 'account_code': '6.1.03', 'amount': 3500}
 SALES = {'date': '2026-03', 'periodicity': 'MONTHLY', 'account_code': '4.1.01',
@@ -117,3 +119,11 @@ def test_one_period_never_mixes_periodicities():
     _, rejected = validate_rows([EntryRowSchema(**RENT)], CATALOG, TODAY,
                                 lambda prefix: prefix == 'ANNUAL#2026#', 1)
     assert rejected[0].code is LoadError.PERIODICITY_CONFLICT
+
+
+def test_a_purchase_with_invoice_needs_its_taxes_flag_too():
+    '''The IVA credit comes from invoiced purchases: their flag is mandatory as well.'''
+    purchase = {**RENT, 'account_code': '5.1.02'}
+    assert _code(**purchase) is LoadError.MISSING_TAXES_INCLUDED
+    entry = validate_row(EntryRowSchema(**{**purchase, 'taxes_included': 'Sí'}), CATALOG, TODAY)
+    assert entry.taxes_included is True

@@ -36,9 +36,13 @@ def test_an_account_joins_an_existing_group(expenses_group):
     assert account.account_type == AccountType.EXPENSE
 
 
-def test_only_a_sale_carries_the_invoice_mark():
-    '''With or without invoice is a property of a sale, never of an expense.'''
-    with pytest.raises(ValueError, match = 'INVOICE_ONLY_ON_INCOME'):
+def test_only_sales_and_purchases_carry_the_invoice_mark():
+    '''A purchase can have an invoice; an expense account never carries the mark.'''
+    purchases = AccountSchema(account_code = '5.1.02', name = 'Compras con factura',
+                              account_type = AccountType.COST, group_code = '5.1',
+                              invoiced = True)
+    assert purchases.invoiced is True
+    with pytest.raises(ValueError, match = 'INVOICE_ONLY_ON_SALES_AND_PURCHASES'):
         AccountSchema(**{**TAXES.model_dump(), 'invoiced': True})
 
 

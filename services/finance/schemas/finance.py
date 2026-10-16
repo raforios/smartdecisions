@@ -43,6 +43,10 @@ class AccountType(str, Enum):
     EXPENSE = '6'
 
 
+# The types whose accounts can carry the invoice mark: sales and purchases.
+INVOICEABLE_TYPES = (AccountType.INCOME, AccountType.COST)
+
+
 class AccountSchema(BaseModel):
     '''
         An account of the catalog, or a group of accounts.
@@ -64,24 +68,25 @@ class AccountSchema(BaseModel):
     )
     invoiced: bool | None = Field(
         None,
-        description = 'Income accounts only: true for a sale with invoice, false without. '
+        description = 'Sales and purchases only: true with invoice, false without. '
                       'The account says it, so a row never has to.'
     )
 
     @model_validator(mode = 'after')
-    def invoiced_only_on_income(self) -> 'AccountSchema':
+    def invoiced_only_on_sales_and_purchases(self) -> 'AccountSchema':
         '''
-            Only a sale is with or without invoice: the mark means nothing
-            on a cost, an expense or a balance.
+            Only a sale (income) or a purchase (cost) is with or without
+            invoice: the IVA debit and credit come from them. The mark means
+            nothing on an expense or a balance.
 
             Returns:
                 AccountSchema: The account, unchanged.
 
             Raises:
-                ValueError: The mark on an account that is not income.
+                ValueError: The mark on an account that is neither.
         '''
-        if self.invoiced is not None and self.account_type is not AccountType.INCOME:
-            raise ValueError('INVOICE_ONLY_ON_INCOME')
+        if self.invoiced is not None and self.account_type not in INVOICEABLE_TYPES:
+            raise ValueError('INVOICE_ONLY_ON_SALES_AND_PURCHASES')
         return self
 
 
