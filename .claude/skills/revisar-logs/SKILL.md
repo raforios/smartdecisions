@@ -87,7 +87,7 @@ print(raw / (1024*1024) if raw > 10**7 else raw / 1024, 'MB')  # macOS informa b
 | `on-demand throughput isn't supported` | Falta el prefijo `us.` del perfil de inferencia de Bedrock |
 | `AccessDenied ... us-east-2` | El perfil de inferencia enruta entre regiones; la política IAM debe llevar comodín |
 | `Can't connect to MySQL server on 'localhost'` | Camino de lectura que no pasa por `prices_store` y asume el relacional |
-| `NoSuchKey` en la plantilla | Se borró del bucket; se regenera con `tools/build_sales_template.py` |
+| `NoSuchKey` en la plantilla | Se borró del bucket; se regenera con `tools/templates/build_sales_template.py` |
 
 ## Al terminar
 

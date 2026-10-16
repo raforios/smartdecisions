@@ -15,7 +15,7 @@ vuelve a correr; si no se puede arreglar, dilo explícitamente.
 ## 1. Lo mecánico — un comando
 
 ```bash
-python3 tools/verify_service.py services/$1      # o --all
+python3 tools/verification/verify_service.py services/$1      # o --all
 ```
 
 Imprime PASS/FAIL por chequeo y termina con `ALL PASS` o `FAILED: ...`. En `tools/`
@@ -28,7 +28,7 @@ cubre, y cómo se corrige cada cosa:
 |---|---|---|
 | `tests` | suite en verde | arreglar el código, no el test |
 | `pylint` | 10.00 sobre las cinco capas y tests | un `disable` sólo con comentario del porqué |
-| `signatures` | más de un parámetro → uno por línea | `python3 tools/check_signatures.py services/$1 --fix` |
+| `signatures` | más de un parámetro → uno por línea | `python3 tools/verification/check_signatures.py services/$1 --fix` |
 | `type-hints` | todo parámetro y todo retorno anotados (tests exentos; `self`/`cls` y `__init__` también) | anotar a mano; el retorno de un endpoint es su `response_model` |
 | `size` | ningún archivo propio ≥ 800 líneas | partir por funcionalidad (`ingest_contract.py`, `ingest_files.py`) o, en `controllers/`, por proceso |
 | `duplicates` | ningún cuerpo de función repetido | una función parametrizada (`store_companion(spec)`, `read_sheet(name)`) |

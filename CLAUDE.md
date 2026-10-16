@@ -73,7 +73,7 @@ que optimización prematura.
 
 **En cada capa el archivo principal se llama como el microservicio.**
 `services/` puede tener varios archivos, pero uno principal con ese nombre.
-**Ningún archivo llega a 800 líneas** (`tools/verify_service.py` falla ahí); si crece, se parte en complementos
+**Ningún archivo llega a 800 líneas** (`tools/verification/verify_service.py` falla ahí); si crece, se parte en complementos
 nombrados por funcionalidad.
 
 ### Reglas de estructura — no negociables
@@ -197,7 +197,7 @@ del servicio que carga archivos. **No acopla nada:** habla sólo con FILES, y
 la validación de las filas es del servicio, nunca del bloque.
 
 Las plantillas que el cliente descarga son **archivos estáticos** en S3, no se
-generan en runtime. Se derivan del contrato (`tools/build_sales_template.py`)
+generan en runtime. Se derivan del contrato (`tools/templates/build_sales_template.py`)
 para que no diverjan del validador.
 
 ---

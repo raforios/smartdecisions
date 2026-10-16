@@ -2,7 +2,7 @@
 name: desplegar-frontend
 description: Publica el portal demo o la página de BearSoft en S3+CloudFront, estampando cada asset con el hash de su contenido y verificando que lo publicado coincide con lo local. Los deploys de frontend los hace Claude; los de backend, Rafael.
 argument-hint: [demo|page|billing] [modulo-opcional]
-allowed-tools: Bash(python3 -m tools.deploy_demo_portal *), Bash(aws s3 *), Bash(aws cloudfront *), Bash(curl *), Bash(python3 *), Read
+allowed-tools: Bash(python3 -m tools.deploy.deploy_demo_portal *), Bash(aws s3 *), Bash(aws cloudfront *), Bash(curl *), Bash(python3 *), Read
 ---
 
 Despliega el frontend indicado en `$1` (`demo`, `page` o `billing`). Si no se indica, pregunta.
@@ -15,9 +15,9 @@ Despliega el frontend indicado en `$1` (`demo`, `page` o `billing`). Si no se in
 ## Portal demo — `smartdecisions.bearsoft.com.bo`
 
 ```bash
-python3 -m tools.deploy_demo_portal            # informa qué cambiaría
-python3 -m tools.deploy_demo_portal --yes      # estampa, sube e invalida
-python3 -m tools.deploy_demo_portal --yes --only $2
+python3 -m tools.deploy.deploy_demo_portal            # informa qué cambiaría
+python3 -m tools.deploy.deploy_demo_portal --yes      # estampa, sube e invalida
+python3 -m tools.deploy.deploy_demo_portal --yes --only $2
 ```
 
 La herramienta estampa cada `.js` y `.css` con el **hash de su contenido** antes

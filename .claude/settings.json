@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in */services/*.py) cd /Users/rafael/Work/projects/back/SmartBear/app && python3 tools/check_signatures.py \"$f\" | grep -v '^0 signature' || true;; esac; }",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in */services/*.py) cd /Users/rafael/Work/projects/back/SmartBear/app && python3 tools/verification/check_signatures.py \"$f\" | grep -v '^0 signature' || true;; esac; }",
             "timeout": 20,
             "statusMessage": "Revisando firmas..."
           }

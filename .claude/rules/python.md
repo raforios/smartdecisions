@@ -38,7 +38,7 @@ Se cargan solos al tocar cualquier `.py` del proyecto.
   ) -> BaseModel:
   ```
 
-  Se comprueba y se corrige con `python tools/check_signatures.py <servicio> [--fix]`.
+  Se comprueba y se corrige con `python tools/verification/check_signatures.py <servicio> [--fix]`.
 - Sin nombres de un solo carácter, salvo `i`, `j` en iteradores simples.
 - **Pylint 10.00** antes de dar algo por terminado. Un `disable` sólo con un
   comentario que diga por qué la regla no aplica ahí.

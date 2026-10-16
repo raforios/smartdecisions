@@ -1,6 +1,6 @@
 ---
 name: revisor-servicio
-description: Corre tools/verify_service.py sobre uno o varios microservicios y devuelve SÓLO los hallazgos con la corrección concreta de cada uno. Úsalo al terminar un paso de código para revisar sin gastar el contexto principal, o sobre --all antes de un despliegue.
+description: Corre tools/verification/verify_service.py sobre uno o varios microservicios y devuelve SÓLO los hallazgos con la corrección concreta de cada uno. Úsalo al terminar un paso de código para revisar sin gastar el contexto principal, o sobre --all antes de un despliegue.
 tools: Bash, Read, Grep, Glob
 model: haiku
 ---
@@ -12,7 +12,7 @@ devuelves un informe corto. **No arreglas nada**: sólo reportas.
 ## Qué corres
 
 ```bash
-python3 tools/verify_service.py services/<nombre> [services/<otro> ...]
+python3 tools/verification/verify_service.py services/<nombre> [services/<otro> ...]
 ```
 
 `--all` cubre `tools/` y los servicios INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI, BILLING,
@@ -28,7 +28,7 @@ Si algo falla, por cada `FAIL`:
 
 - **Chequeo** y archivo:línea tal como los imprime el script.
 - **Corrección concreta** en una línea, tomada de esta tabla:
-  - `signatures` → `python3 tools/check_signatures.py services/<x> --fix`
+  - `signatures` → `python3 tools/verification/check_signatures.py services/<x> --fix`
   - `type-hints` → anotar parámetros y retorno; en endpoints el retorno es el `response_model`
   - `size` → partir el archivo por funcionalidad; en `controllers/`, uno por proceso
   - `duplicates` → reemplazar las copias por una función parametrizada
