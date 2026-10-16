@@ -109,9 +109,19 @@ def test_fetch_lbma_reads_the_usd_value_and_refuses_bad_answers():
     assert failure.value.detail == MarketError.SOURCE_UNREADABLE.value
 
 
+def test_fetch_westmetall_gold_keeps_usd_per_troy_ounce():
+    '''The gold fixing is already USD/ozt: no tonne-to-pound conversion.'''
+    with patch.object(market_sources, '_get', lambda url: WESTMETALL_HTML):
+        series = market_sources.fetch_westmetall_gold()
+    assert series[date(2026, 9, 15)] == 14045.0
+
+
 def test_source_for_follows_the_published_catalogue():
-    '''Gold -> LBMA AM, silver -> LBMA silver, LME metals -> Westmetall, Asian Metal -> none.'''
-    assert market_sources.source_for('Oro')[0] is MarketSource.LBMA_GOLD_AM
+    '''
+        Gold -> LBMA AM via Westmetall, silver -> LBMA, LME metals -> Westmetall,
+        Asian Metal -> none.
+    '''
+    assert market_sources.source_for('Oro')[0] is MarketSource.LBMA_GOLD_AM_WESTMETALL
     assert market_sources.source_for('Plata')[0] is MarketSource.LBMA_SILVER
     assert market_sources.source_for('Cobre')[0] is MarketSource.LME_CASH_WESTMETALL
     assert market_sources.source_for('estano')[0] is MarketSource.LME_CASH_WESTMETALL
@@ -227,7 +237,7 @@ def test_estimate_row_averages_the_fortnight_and_applies_the_scale(dynamodb):
         antimony = official_estimate.estimate_row(dynamodb, '5', 'Antimonio', date(2026, 9, 21))
         copper = official_estimate.estimate_row(dynamodb, '4', 'Cobre', date(2026, 9, 21))
 
-    assert gold.source is MarketSource.LBMA_GOLD_AM
+    assert gold.source is MarketSource.LBMA_GOLD_AM_WESTMETALL
     assert (gold.days_quoted, gold.calendar_days_elapsed) == (4, 6)
     assert gold.running_average == 4300.0 and gold.previous_official == 4368.79
     assert gold.change_percent == -1.57

@@ -25,8 +25,15 @@ class MarketSource(str, Enum):
         Where a daily market price came from. The Ministry's own series:
         the LBMA AM fix for gold, the LBMA fix for silver, the LME cash price
         (settlement as published by Westmetall) for the base metals.
+
+        The LBMA closed its JSON to everyone behind Cloudflare at the end of
+        September 2026; since then gold is read from Westmetall's republished
+        "Gold London Fixing", which matched the stored LBMA AM fix on every
+        day both had. LBMA_GOLD_AM stays: it is the source of the days read
+        before the change.
     '''
     LBMA_GOLD_AM = 'LBMA_GOLD_AM'
+    LBMA_GOLD_AM_WESTMETALL = 'LBMA_GOLD_AM_WESTMETALL'
     LBMA_SILVER = 'LBMA_SILVER'
     LME_CASH_WESTMETALL = 'LME_CASH_WESTMETALL'
 

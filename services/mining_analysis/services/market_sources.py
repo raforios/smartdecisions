@@ -35,12 +35,14 @@ from services.utils import get_current_time_gmt
 ENV_VARS = load_and_validate_env_vars({
     'LBMA_PRICES_URL': str,
     'WESTMETALL_TABLE_URL': str,
+    'WESTMETALL_GOLD_URL': str,
     'MARKET_SOURCE_TIMEOUT_SECONDS': int,
     'MARKET_SYNC_DAYS': int,
     'PRICE_DECIMALS': int
 })
 LBMA_PRICES_URL = ENV_VARS['LBMA_PRICES_URL']
 WESTMETALL_TABLE_URL = ENV_VARS['WESTMETALL_TABLE_URL']
+WESTMETALL_GOLD_URL = ENV_VARS['WESTMETALL_GOLD_URL']
 SOURCE_TIMEOUT = ENV_VARS['MARKET_SOURCE_TIMEOUT_SECONDS']
 MARKET_SYNC_DAYS = ENV_VARS['MARKET_SYNC_DAYS']
 PRICE_DECIMALS = ENV_VARS['PRICE_DECIMALS']
@@ -150,6 +152,19 @@ def fetch_westmetall(symbol: str) -> Series:
             for day, value in per_tonne.items()}
 
 
+def fetch_westmetall_gold() -> Series:
+    '''
+        The LBMA gold AM fix as Westmetall republishes it, in USD per troy
+        ounce: the same figure the Ministry averages, read from a page that is
+        still open since the LBMA closed its own.
+
+        Returns:
+            Series: {date: usd_per_troy_ounce} rounded to PRICE_DECIMALS.
+    '''
+    return {day: round(value, PRICE_DECIMALS)
+            for day, value in parse_westmetall_table(_get(WESTMETALL_GOLD_URL)).items()}
+
+
 # ---------------------------------------------------------------------------
 # Which source quotes which mineral
 # ---------------------------------------------------------------------------
@@ -173,7 +188,7 @@ def source_for(name: str) -> tuple[MarketSource, Fetcher, str, str] | None:
         return None
     symbol, unit, market = entry['chemical_symbol'], entry['unit'], entry['quoted_in']
     if market == 'LFIX' and symbol == 'Au':
-        return MarketSource.LBMA_GOLD_AM, lambda: fetch_lbma('gold_am'), symbol, unit
+        return MarketSource.LBMA_GOLD_AM_WESTMETALL, fetch_westmetall_gold, symbol, unit
     if market == 'LFIX' and symbol == 'Ag':
         return MarketSource.LBMA_SILVER, lambda: fetch_lbma('silver'), symbol, unit
     if market == 'LME':
