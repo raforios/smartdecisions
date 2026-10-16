@@ -106,13 +106,14 @@
             </div>
             <p class="control-hint rule-note">
                 No es una proyección: es el <strong>promedio de lo que el mercado
-                ya cotizó</strong> en la quincena en curso, con las mismas fuentes
-                diarias que usa el Ministerio —fixing AM de la LBMA para el oro,
-                fixing para la plata y cash de la LME para los metales base—. Al
-                cerrar la quincena ese promedio <em>es</em> la cotización oficial
-                de la siguiente, así que la liquidación se conoce dos semanas
-                antes. Antimonio, wólfram y bismuto no tienen fuente diaria
-                gratuita: se quedan con la cotización vigente del informe.
+                ya cotizó</strong>, con las mismas fuentes diarias que usa el
+                Ministerio —fixing AM de la LBMA para el oro, fixing para la plata
+                y cash de la LME para los metales base—. Se ven dos quincenas: la
+                <strong>recién cerrada</strong>, cuyo promedio <em>es</em> la
+                cotización que rige ahora aunque el informe todavía no llegue, y la
+                <strong>en curso</strong>, que regirá la quincena siguiente.
+                Antimonio, wólfram y bismuto no tienen fuente diaria gratuita: se
+                quedan con la cotización vigente del informe.
             </p>
             <p class="control-hint estimate-contrast">
                 <strong>Por qué no coincide con la tabla de arriba.</strong> Esa
@@ -122,6 +123,27 @@
                 mercado ya cotizó. Cuando las dos cifras se separan, la de abajo
                 es la que tiene datos detrás.
             </p>
+            <h3 class="block-subtitle" id="estimateClosedTitle">Quincena cerrada · rige ahora</h3>
+            <div class="table-scroll">
+                <table class="data-table" id="estimateClosedTable">
+                    <thead>
+                        <tr>
+                            <th>Mineral</th>
+                            <th class="num">Oficial que regía</th>
+                            <th class="num">Promedio de la quincena</th>
+                            <th class="num">Diferencia</th>
+                            <th class="num">Regalía exportación</th>
+                            <th class="num">Regalía interna</th>
+                            <th class="num">Días cotizados</th>
+                            <th>Confianza</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="control-hint" id="estimateClosedNote"></p>
+
+            <h3 class="block-subtitle" id="estimateTitle">Quincena en curso · regirá después</h3>
             <div class="table-scroll">
                 <table class="data-table" id="estimateTable">
                     <thead>
