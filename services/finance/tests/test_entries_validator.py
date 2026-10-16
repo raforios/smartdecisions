@@ -20,12 +20,15 @@ from services.entries_validator import (
 TODAY = date(2026, 10, 16)
 CATALOG = {
     '4.1': {'account_code': '4.1', 'account_type': '4', 'group_code': None},
-    '4.1.01': {'account_code': '4.1.01', 'account_type': '4', 'group_code': '4.1'},
+    '4.1.01': {'account_code': '4.1.01', 'account_type': '4', 'group_code': '4.1',
+               'invoiced': True},
+    '4.1.05': {'account_code': '4.1.05', 'account_type': '4', 'group_code': '4.1',
+               'invoiced': False},
     '6.1.03': {'account_code': '6.1.03', 'account_type': '6', 'group_code': '6.1'},
 }
 RENT = {'date': '2026-03', 'periodicity': 'Mensual', 'account_code': '6.1.03', 'amount': 3500}
 SALES = {'date': '2026-03', 'periodicity': 'MONTHLY', 'account_code': '4.1.01',
-         'amount': 98000.5, 'invoiced': 'Sí', 'taxes_included': 'No'}
+         'amount': 98000.5, 'taxes_included': 'No'}
 
 
 def _code(**fields) -> LoadError:
@@ -44,7 +47,7 @@ def test_a_good_row_is_normalized():
     '''The Spanish word and the API value mean the same periodicity.'''
     entry = validate_row(EntryRowSchema(**SALES), CATALOG, TODAY)
     assert (entry.periodicity, entry.key) == (Periodicity.MONTHLY, 'MONTHLY#2026-03#4.1.01')
-    assert (entry.invoiced, entry.taxes_included) == (True, False)
+    assert entry.taxes_included is False
     assert validate_row(EntryRowSchema(**RENT), CATALOG, TODAY).periodicity is Periodicity.MONTHLY
 
 
@@ -69,18 +72,18 @@ def test_each_rule_has_its_code(
     assert _code(**{**RENT, **change}) is code
 
 
-@pytest.mark.parametrize('flags', [
-    {'invoiced': None}, {'taxes_included': ''}, {'invoiced': 'Tal vez'}
-])
-def test_income_rows_need_both_invoice_flags(flags):
+@pytest.mark.parametrize('value', [None, '', 'Tal vez'])
+def test_a_sale_with_invoice_needs_its_taxes_flag(value):
     '''«No podemos inferir»: an empty or unknown flag is refused, not assumed.'''
-    assert _code(**{**SALES, **flags}) is LoadError.MISSING_INVOICE_FLAGS
+    assert _code(**{**SALES, 'taxes_included': value}) is LoadError.MISSING_TAXES_INCLUDED
 
 
-def test_the_flags_are_ignored_outside_income():
-    '''On an expense they mean nothing and are not stored.'''
-    entry = validate_row(EntryRowSchema(**{**RENT, 'invoiced': 'Sí'}), CATALOG, TODAY)
-    assert entry.invoiced is None
+def test_the_flag_is_ignored_where_there_is_no_invoice():
+    '''A sale without invoice is always net, and an expense has no taxes flag.'''
+    without = validate_row(EntryRowSchema(**{**SALES, 'account_code': '4.1.05',
+                                             'taxes_included': None}), CATALOG, TODAY)
+    expense = validate_row(EntryRowSchema(**{**RENT, 'taxes_included': 'Sí'}), CATALOG, TODAY)
+    assert (without.taxes_included, expense.taxes_included) == (None, None)
 
 
 def test_spreadsheet_shapes_are_read_as_written():

@@ -30,7 +30,7 @@ class LoadError(str, Enum):
     NEGATIVE_AMOUNT = 'NEGATIVE_AMOUNT'
     FUTURE_PERIOD = 'FUTURE_PERIOD'
     DUPLICATE_ROW = 'DUPLICATE_ROW'
-    MISSING_INVOICE_FLAGS = 'MISSING_INVOICE_FLAGS'
+    MISSING_TAXES_INCLUDED = 'MISSING_TAXES_INCLUDED'
     ENTRY_NOT_FOUND = 'ENTRY_NOT_FOUND'
 
 
@@ -79,7 +79,6 @@ ENTRY_COLUMNS: tuple[EntryColumn, ...] = (
     EntryColumn('account_code', 'Código de cuenta'),
     EntryColumn('amount', 'Monto'),
     EntryColumn('note', 'Nota'),
-    EntryColumn('invoiced', 'Con factura'),
     EntryColumn('taxes_included', 'Impuestos incluidos'),
 )
 HEADER_TO_FIELD: dict[str, str] = {column.header: column.field for column in ENTRY_COLUMNS}
@@ -103,8 +102,9 @@ class EntryRowSchema(BaseModel):
     account_code: str | None = Field(None, description = 'An account of the catalog.')
     amount: float | str | None = Field(None, description = 'In bolivianos, never negative.')
     note: str | None = Field(None, max_length = 500)
-    invoiced: bool | str | None = Field(None, description = 'Mandatory on income rows.')
-    taxes_included: bool | str | None = Field(None, description = 'Mandatory on income rows.')
+    taxes_included: bool | str | None = Field(
+        None, description = 'Mandatory on the accounts of sales with invoice.'
+    )
 
 
 class EntryLoadSchema(BaseModel):
@@ -174,7 +174,6 @@ class EntrySchema(BaseModel):
     account_code: str
     amount: float
     note: str | None = None
-    invoiced: bool | None = None
     taxes_included: bool | None = None
     flow: LoadFlow
     load_id: str
@@ -199,7 +198,6 @@ class EntryUpdateSchema(BaseModel):
     date: str | None = Field(None, description = 'The right date, same periodicity.')
     amount: float | None = Field(None, ge = 0)
     note: str | None = Field(None, max_length = 500)
-    invoiced: bool | None = None
     taxes_included: bool | None = None
 
 

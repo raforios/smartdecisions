@@ -9,7 +9,7 @@
 '''
 from datetime import date
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class FinanceError(str, Enum):
@@ -62,6 +62,27 @@ class AccountSchema(BaseModel):
         False,
         description = 'True for the "(Menos)" accounts, which subtract within their group.'
     )
+    invoiced: bool | None = Field(
+        None,
+        description = 'Income accounts only: true for a sale with invoice, false without. '
+                      'The account says it, so a row never has to.'
+    )
+
+    @model_validator(mode = 'after')
+    def invoiced_only_on_income(self) -> 'AccountSchema':
+        '''
+            Only a sale is with or without invoice: the mark means nothing
+            on a cost, an expense or a balance.
+
+            Returns:
+                AccountSchema: The account, unchanged.
+
+            Raises:
+                ValueError: The mark on an account that is not income.
+        '''
+        if self.invoiced is not None and self.account_type is not AccountType.INCOME:
+            raise ValueError('INVOICE_ONLY_ON_INCOME')
+        return self
 
 
 class AccountUpdateSchema(BaseModel):

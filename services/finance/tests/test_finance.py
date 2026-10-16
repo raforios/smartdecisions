@@ -36,6 +36,12 @@ def test_an_account_joins_an_existing_group(expenses_group):
     assert account.account_type == AccountType.EXPENSE
 
 
+def test_only_a_sale_carries_the_invoice_mark():
+    '''With or without invoice is a property of a sale, never of an expense.'''
+    with pytest.raises(ValueError, match = 'INVOICE_ONLY_ON_INCOME'):
+        AccountSchema(**{**TAXES.model_dump(), 'invoiced': True})
+
+
 def test_a_code_is_never_repeated(expenses_group):
     '''The second account with the same code is refused with its code.'''
     finance.create_account(expenses_group, TAXES)

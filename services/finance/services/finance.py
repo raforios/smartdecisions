@@ -79,6 +79,7 @@ def to_account_response(item: AccountItem | dict[str, Any]) -> AccountResponseSc
         account_type = item['account_type'],
         group_code = item.get('group_code'),
         subtracts = bool(item.get('subtracts', False)),
+        invoiced = item.get('invoiced'),
         updated_at = item['updated_at']
     )
 

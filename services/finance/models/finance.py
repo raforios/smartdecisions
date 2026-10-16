@@ -23,6 +23,7 @@ class AccountItem(TypedDict, total = False):
     account_type: str
     group_code: str | None
     subtracts: bool
+    invoiced: bool | None
     created_at: str
     updated_at: str
 
@@ -85,7 +86,6 @@ class EntryItem(TypedDict, total = False):
     account_code: str
     amount: float
     note: str | None
-    invoiced: bool | None
     taxes_included: bool | None
     flow: str
     load_id: str

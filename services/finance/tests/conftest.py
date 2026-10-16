@@ -88,8 +88,8 @@ def catalog_fixture(finance_store):
     '''
     for account in (
         AccountSchema(account_code = '4.1', name = 'Ventas', account_type = AccountType.INCOME),
-        AccountSchema(account_code = '4.1.01', name = 'Ventas de mercaderías',
-                      account_type = AccountType.INCOME, group_code = '4.1'),
+        AccountSchema(account_code = '4.1.01', name = 'Ventas de mercaderías con factura',
+                      account_type = AccountType.INCOME, group_code = '4.1', invoiced = True),
         AccountSchema(account_code = '6.1', name = 'Gastos de administración',
                       account_type = AccountType.EXPENSE),
         AccountSchema(account_code = '6.1.03', name = 'Alquileres pagados',

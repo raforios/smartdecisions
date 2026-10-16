@@ -24,7 +24,6 @@ from schemas.entries import (
     Periodicity,
     RejectedRowSchema
 )
-from schemas.finance import AccountType
 
 # The date each periodicity carries, as the contract writes it.
 _DATE_PATTERNS: dict[Periodicity, re.Pattern] = {
@@ -43,7 +42,6 @@ class ValidEntry:
     date: str
     account_code: str
     amount: float
-    invoiced: bool | None
     taxes_included: bool | None
     note: str | None
 
@@ -260,8 +258,8 @@ def parse_amount(value: object) -> float:
 
 def parse_flag(value: object) -> bool:
     '''
-        A Yes/No cell of an income row. Mandatory: an empty one is refused,
-        never assumed.
+        The «Impuestos incluidos» cell of a sale with invoice. Mandatory: an
+        empty one is refused, never assumed.
 
         Args:
             value (object): True/False, or Sí/No as the template writes it.
@@ -270,12 +268,12 @@ def parse_flag(value: object) -> bool:
             bool: The flag.
 
         Raises:
-            RowRejected: MISSING_INVOICE_FLAGS.
+            RowRejected: MISSING_TAXES_INCLUDED.
     '''
     if isinstance(value, bool):
         return value
     if _blank(value) or _text(value).upper() not in YES_NO_LABELS:
-        raise RowRejected(LoadError.MISSING_INVOICE_FLAGS, value)
+        raise RowRejected(LoadError.MISSING_TAXES_INCLUDED, value)
     return YES_NO_LABELS[_text(value).upper()]
 
 
@@ -307,15 +305,14 @@ def validate_row(
     periodicity = parse_periodicity(row.periodicity)
     day = parse_date(row.date, periodicity, today)
     amount = parse_amount(row.amount)
-    invoiced = taxes_included = None
-    # The invoice flags only mean something on income; elsewhere they are ignored.
-    if account['account_type'] == AccountType.INCOME.value:
-        invoiced = parse_flag(row.invoiced)
+    taxes_included = None
+    # The account says whether the sale carries an invoice; only then does it
+    # matter whether the amount came with its taxes. Elsewhere it is ignored.
+    if account.get('invoiced') is True:
         taxes_included = parse_flag(row.taxes_included)
     note = None if _blank(row.note) else _text(row.note)
     return ValidEntry(periodicity = periodicity, date = day, account_code = code,
-                      amount = amount, invoiced = invoiced,
-                      taxes_included = taxes_included, note = note)
+                      amount = amount, taxes_included = taxes_included, note = note)
 
 
 def validate_rows(

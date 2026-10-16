@@ -21,7 +21,7 @@ from services.exceptions import InvalidInputError, ResourceNotFoundError
 ACME, OTHER, ANA = 'acme', 'otra', 'ana@acme.com'
 RENT = {'date': '2026-03', 'periodicity': 'MONTHLY', 'account_code': '6.1.03', 'amount': 3500}
 SALES = {'date': '2026-03', 'periodicity': 'MONTHLY', 'account_code': '4.1.01',
-         'amount': 98000, 'invoiced': True, 'taxes_included': False}
+         'amount': 98000, 'taxes_included': False}
 
 
 def _load(
@@ -126,14 +126,14 @@ def test_a_file_is_read_by_its_headers_and_removed(
         {'Fecha': '2026-03', 'Periodicidad': 'Mensual', 'Código de cuenta': '6.1.03',
          'Monto': 3500, 'Nota': float('nan'), 'Columna extra': 'x'},
         {'Fecha': '2026-03', 'Periodicidad': 'Mensual', 'Código de cuenta': '4.1.01',
-         'Monto': 1000, 'Con factura': 'Sí', 'Impuestos incluidos': float('nan')},
+         'Monto': 1000, 'Impuestos incluidos': float('nan')},
     ])
     monkeypatch.setattr(entries, 'delete_stored_file', lambda key, token: removed.append(key))
     result = entries.load_entries_from_file(catalog, ACME, ANA,
                                             (LoadFlow.BASE, 'finance/marzo.xlsx'), 'Bearer x')
     assert result.accepted == 1
     assert [(item.row, item.code) for item in result.rejected] == [
-        (3, LoadError.MISSING_INVOICE_FLAGS)]
+        (3, LoadError.MISSING_TAXES_INCLUDED)]
     assert removed == ['finance/marzo.xlsx']
 
 

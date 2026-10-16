@@ -156,7 +156,6 @@ def _to_item(
         'account_code': entry.account_code,
         'amount': entry.amount,
         'note': entry.note,
-        'invoiced': entry.invoiced,
         'taxes_included': entry.taxes_included,
         **stamp
     }
@@ -178,7 +177,6 @@ def to_entry_response(item: EntryItem | dict) -> EntrySchema:
         account_code = item['account_code'],
         amount = float(item['amount']),
         note = item.get('note'),
-        invoiced = item.get('invoiced'),
         taxes_included = item.get('taxes_included'),
         flow = item['flow'],
         load_id = item['load_id'],
