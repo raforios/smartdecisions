@@ -4,11 +4,15 @@
  * Cotización anticipada — what the official quotation of the next fortnight is
  * heading to, from the days the market has already quoted.
  *
- * This is not a projection: it is the running mean of the fortnight in
- * progress, built from the daily fixes the Ministry itself uses — LBMA AM for
- * gold, the LBMA fix for silver, LME cash for the base metals. When the
- * fortnight closes, that mean *is* the official price for the next one, so the
- * screen answers "¿a cuánto voy a liquidar?" two weeks before the resolution.
+ * This is not a projection: it is the mean of what the market already quoted,
+ * built from the daily fixes the Ministry itself uses — LBMA AM for gold, the
+ * LBMA fix for silver, LME cash for the base metals. When a fortnight closes,
+ * that mean *is* the official price for the next one.
+ *
+ * Two fortnights are shown (Rafael, 16-oct). The one just closed is the price
+ * in force right now, even while the Ministry's report is late; the one in
+ * progress is the price that comes next. With only the running one, the table
+ * woke up empty on the 1st and the 16th — the two days it matters most.
  *
  * Antimony, wolfram and bismuth have no free daily feed (Asian Metal is paid),
  * so they show their quotation in force and nothing else: an invented number
@@ -28,7 +32,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // showing a button that would answer 403.
     const SYNC_ROLES = ['ADMIN', 'MANAGER'];
 
-    const state = { estimate: null, rules: null, series: {} };
+    const state = { rules: null, series: {} };
+
+    // The two tables of the panel: the fortnight just closed and the one in progress.
+    const TABLES = {
+        closed: { table: '#estimateClosedTable', note: '#estimateClosedNote' },
+        running: { table: '#estimateTable', note: '#estimateNote' },
+    };
+
+    /**
+     * The last day of the fortnight before the one `asOf` falls in: the 15th
+     * for a date after it, the last day of the previous month otherwise.
+     */
+    function closedAsOf(asOf) {
+        const [year, month, day] = asOf.split('-').map(Number);
+        if (day > 15) return `${asOf.slice(0, 8)}15`;
+        const last = new Date(Date.UTC(year, month - 1, 0));
+        return last.toISOString().slice(0, 10);
+    }
+
+    /** Today in La Paz, as the service counts days. */
+    function today() {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/La_Paz' }).format(new Date());
+    }
 
     /**
      * The Art. 227 scale of one mineral, read once and kept: nine rows that
@@ -114,17 +140,17 @@ document.addEventListener('DOMContentLoaded', () => {
      * that turned it into a rate. Both answer the same question — "¿de dónde
      * sale este número?" — which is the first thing anyone asks of an estimate.
      */
-    async function detailFor(row, holder) {
-        const period = state.estimate;
+    async function detailFor(row, period, holder) {
         const rules = await rulesByMineral();
         const rule = rules[row.mineral_id];
 
-        let series = state.series[row.mineral_id];
+        const key = `${period.period_start}:${row.mineral_id}`;
+        let series = state.series[key];
         if (!series) {
             series = await market.series(row.mineral_id, {
                 date_from: period.period_start, date_to: period.as_of
             });
-            state.series[row.mineral_id] = series;
+            state.series[key] = series;
         }
 
         const prices = series.items.map((item) => item.price);
@@ -167,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`;
     }
 
-    function wireToggle(tr, row, body) {
+    function wireToggle(tr, row, period, body) {
         const detail = document.createElement('tr');
         detail.className = 'history-row';
         detail.hidden = true;
@@ -182,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             detail.hidden = open;
             if (!open && !detail.dataset.loaded) {
                 try {
-                    await detailFor(row, detail.querySelector('td'));
+                    await detailFor(row, period, detail.querySelector('td'));
                     detail.dataset.loaded = '1';
                 } catch (error) {
                     detail.querySelector('td').innerHTML =
@@ -193,37 +219,49 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function render(data) {
-        state.estimate = data;
-        state.series = {};
-        const body = qs('#estimateTable tbody');
+    function render(data, target) {
+        const body = qs(`${target.table} tbody`);
         body.innerHTML = '';
         data.rows.forEach((row) => {
             const tr = estimateRow(row);
             body.appendChild(tr);
-            if (row.source) wireToggle(tr, row, body);
+            if (row.source) wireToggle(tr, row, data, body);
         });
-
-        const quoted = data.rows.filter((row) => row.source).length;
-        qs('#estimateMeta').textContent =
-            `${quoted} de ${data.rows.length} minerales con fuente diaria · ` +
-            `quincena del ${shortDate(data.period_start)} al ${shortDate(data.period_end)}`;
-        qs('#estimateNote').textContent =
-            `Lo que promedie esta quincena regirá del ${data.valid_from} al ${data.valid_to}. ` +
-            `Datos al ${data.as_of}.`;
-        qs('#estimatePanel').hidden = false;
     }
 
     async function load() {
-        const asOf = qs('#estimateDate').value;
-        try {
-            render(await market.estimate(asOf || null));
-        } catch (error) {
-            qs('#estimateMeta').textContent = '';
-            qs('#estimateNote').textContent =
-                errorText(error, 'No se pudo calcular la cotización anticipada.');
-            qs('#estimatePanel').hidden = false;
+        const asOf = qs('#estimateDate').value || today();
+        state.series = {};
+        const [closed, running] = await Promise.allSettled([
+            market.estimate(closedAsOf(asOf)), market.estimate(asOf)
+        ]);
+        [[closed, TABLES.closed], [running, TABLES.running]].forEach(([result, target]) => {
+            if (result.status === 'fulfilled') {
+                render(result.value, target);
+            } else {
+                qs(`${target.table} tbody`).innerHTML = '';
+                qs(target.note).textContent =
+                    errorText(result.reason, 'No se pudo calcular la cotización anticipada.');
+            }
+        });
+        if (closed.status === 'fulfilled') {
+            const data = closed.value;
+            qs(TABLES.closed.note).textContent =
+                `Promedio del ${shortDate(data.period_start)} al ${shortDate(data.period_end)}: ` +
+                `rige del ${data.valid_from} al ${data.valid_to}, aunque el informe del ` +
+                'Ministerio todavía no haya llegado.';
         }
+        if (running.status === 'fulfilled') {
+            const data = running.value;
+            const quoted = data.rows.filter((row) => row.source).length;
+            qs('#estimateMeta').textContent = `${quoted} de ${data.rows.length} minerales ` +
+                'con fuente diaria';
+            qs(TABLES.running.note).textContent =
+                `Lo que promedie esta quincena (del ${shortDate(data.period_start)} al ` +
+                `${shortDate(data.period_end)}) regirá del ${data.valid_from} al ${data.valid_to}. ` +
+                `Datos al ${data.as_of}.`;
+        }
+        qs('#estimatePanel').hidden = false;
     }
 
     async function sync() {

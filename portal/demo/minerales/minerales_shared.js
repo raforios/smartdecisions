@@ -33,6 +33,7 @@
     // because whoever reads this screen negotiates with them.
     const SOURCE_LABELS = {
         LBMA_GOLD_AM: 'LBMA · fixing AM',
+        LBMA_GOLD_AM_WESTMETALL: 'LBMA · fixing AM (Westmetall)',
         LBMA_SILVER: 'LBMA · fixing',
         LME_CASH_WESTMETALL: 'LME cash'
     };

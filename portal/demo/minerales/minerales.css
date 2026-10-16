@@ -478,3 +478,7 @@
              font-size: var(--fs-label); color: var(--muted); text-align: right; }
 .pair-dates { display: flex; justify-content: space-between; font-size: var(--fs-label);
               color: var(--muted); margin-left: 3rem; }
+
+/* The estimate panel shows two fortnights, one table each: the closed one (in
+   force now) and the one in progress. Each title keeps the block distance. */
+#estimatePanel h3 { margin-top: var(--gap-block); font-size: var(--fs-text); }
