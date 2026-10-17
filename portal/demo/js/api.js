@@ -154,13 +154,17 @@
      * exports exceed the ~10 MB API Gateway limit, so only the key travels
      * through the APIs afterwards. Shared because every screen that takes a
      * template —Análisis Comercial and Rutas— uploads it the same way.
+     *
+     * `folder` is where it lands. A file that is read once and removed goes
+     * to the bucket root (Análisis Financiero), as in BINARIA's bulk loads:
+     * FILES reads it by its bare name.
      */
-    async function uploadToBucket(file, onProgress) {
+    async function uploadToBucket(file, onProgress, folder = 'ingest/raw') {
         const contentType = contentTypeFor(file.name);
         const safeName = file.name.replace(/[^\w.\-]+/g, '_');
         const presign = await post(`${window.SD_CONFIG.FILES_URL}/v1/s3/upload-presigned`, {
             bucket_name: window.SD_CONFIG.INGEST_BUCKET,
-            file_path: 'ingest/raw',
+            file_path: folder,
             file_name: `${Date.now()}_${safeName}`,
             validation: false,
             content_type: contentType

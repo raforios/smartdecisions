@@ -24,6 +24,7 @@
             '<path d="M4 12h4"/><path d="M12 12h8"/><circle cx="10" cy="12" r="2"/>' +
             '<path d="M4 18h12"/><circle cx="18" cy="18" r="2"/>',
         minerals: '<path d="M3 9l3-5h12l3 5-9 11z"/><path d="M3 9h18"/><path d="M9 9l3 11 3-11-3-5z"/>',
+        finance: '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
         logout: '<path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 16l-4-4 4-4"/>' +
             '<path d="M6 12h10"/>',
         menu: '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',

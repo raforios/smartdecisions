@@ -22,11 +22,14 @@
 
     const ROLE_LABELS = { MANAGER: 'Gerente', REQUESTER: 'Consulta', ADMIN: 'Administrador' };
     const EDITORS = ['MANAGER', 'ADMIN'];
+    // The financial analysis is for the people who run the business (Rafael:
+    // «sólo la plana mayor»); FINANCE answers ROLE_NOT_ALLOWED to anyone else.
+    const FINANCE_ROLES = ['MANAGER'];
 
     // A tree: Comercial holds its areas, an area holds its options. An option
     // is its own page (`page`) or a view of its area page opened by its card
     // (`view`, the card's data-analysis or data-section, as `page#view`).
-    // The financial part, the heart of the product, will sit above Comercial.
+    // The financial part, the heart of the product, sits above Comercial.
     const VENTAS = [
         ['Resumen comercial', 'resumen'], ['Fuente de volumen', 'volumen'],
         ['Oportunidades', 'oportunidades'], ['Pronóstico', 'pronostico'],
@@ -35,8 +38,16 @@
     ].map(([label, page]) => ({ label, page: `ventas/${page}.html` }));
     const MENU = [
         { group: '', items: [
-            // The application's welcome; the financial part will follow it.
+            // The application's welcome; the financial part follows it.
             { label: 'Principal', icon: 'home', page: 'home.html' },
+            { label: 'Análisis Financiero', icon: 'finance', page: 'financiero/index.html',
+              roles: FINANCE_ROLES, children: [
+                { label: 'Resumen', page: 'financiero/index.html' },
+                { label: 'Estado de Resultados', page: 'financiero/resultados.html' },
+                { label: 'Balance General', page: 'financiero/balance.html' },
+                { label: 'Impuestos', page: 'financiero/impuestos.html' },
+                { label: 'Cargar datos', page: 'financiero/cargar.html' }
+            ] },
             { label: 'Comercial', icon: 'commerce', page: 'comercial/index.html', children: [
                 { label: 'Ventas', icon: 'sales', page: 'ventas/index.html', children: [
                     ...VENTAS,

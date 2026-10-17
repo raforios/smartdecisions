@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="../styles/analyses.css?v=4978003d78">
+    <link rel="stylesheet" href="financiero.css?v=101cf5ec79">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=936de2e74b"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=7d327bd034" defer></script>
+    <script src="../js/shell.js?v=53a2beaced" defer></script>
+    <script src="../js/api.js?v=21b59b7fe7" defer></script>
+    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="finance.js?v=75726d767b" defer></script>
+    <script src="impuestos.js?v=d953a495fc" defer></script>
+    <title>Impuestos — SmartDecisions</title>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <div class="sd-page-head"><div><h1>Impuestos</h1>
+            <p>Lo que se paga cada mes —IVA e IT— y lo que conviene reservar para el IUE.</p></div></div>
+
+        <section class="card">
+            <div class="period-bar">
+                <label class="field">
+                    <span>Período</span>
+                    <select id="periodSelect"></select>
+                </label>
+                <p class="chart-hint" id="ratesLine"></p>
+            </div>
+            <ul class="notice-list" id="notices"></ul>
+        </section>
+
+        <section class="card">
+            <div class="table-wrapper">
+                <table class="data-table statement-table" id="taxesTable">
+                    <thead><tr><th>Impuesto</th><th class="numeric">Bs</th><th class="numeric">USD</th><th class="numeric">USDT</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="chart-hint">La provisión del IUE no es un gasto: es lo que conviene ir guardando
+                cada mes para pagar, si hay utilidad, el 25 % hasta 120 días después del cierre del
+                31 de diciembre.</p>
+        </section>
+
+        <section class="card">
+            <h3>Tu provisión del IUE</h3>
+            <p class="legend-hint" id="provisionHint"></p>
+            <form class="form-stack" id="provisionForm" autocomplete="off">
+                <label class="field"><span>Porcentaje de lo facturado cada mes</span>
+                    <input type="number" id="provisionValue" min="0" max="100" step="0.1" required></label>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary btn-small" id="provisionSave">Guardar</button>
+                </div>
+                <p class="form-note" id="provisionNote" aria-live="polite"></p>
+            </form>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

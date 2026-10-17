@@ -24,6 +24,7 @@ window.SD_CONFIG = {
     ANALYTICS_URL:     'https://api.bearsoft.com.bo',
     MINING_URL:        'https://api.bearsoft.com.bo',
     QUOTES_URL:        'https://api.bearsoft.com.bo',
+    FINANCE_URL:       'https://api.bearsoft.com.bo',
 
     // Interpretation layer. Defining it is what makes the
     // "¿Qué significa esto?" button appear on each view: without it the portal

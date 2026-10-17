@@ -1,0 +1,39 @@
+/* Análisis Financiero: only what demo.css and analyses.css do not already
+   define. Sizes and gaps come from the tokens of demo.css (three font sizes,
+   one block gap); nothing here sets its own. */
+
+/* A total line of a statement reads in bold, never bigger. */
+.statement-table tr.total td { font-weight: 700; }
+.statement-table td.line-label { white-space: nowrap; }
+
+/* Where a figure comes from: loaded by the client or calculated here. */
+.origin-tag {
+    display: inline-block;
+    font-size: var(--fs-label);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0 0.5rem;
+}
+
+/* What the report says it could not do, in words. */
+.notice-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: var(--fs-text);
+    color: var(--text);
+}
+.notice-list:empty { display: none; }
+
+.period-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+.period-bar select { min-width: 14rem; }
+
+.metric-value.positive { color: var(--success); }
+.metric-value.negative { color: var(--danger); }
+
+.chart-box { position: relative; height: 18rem; }

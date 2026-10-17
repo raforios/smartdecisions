@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="../styles/analyses.css?v=4978003d78">
+    <link rel="stylesheet" href="financiero.css?v=101cf5ec79">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=936de2e74b"></script>
+    <script src="../js/auth.js?v=c153b5ce24" defer></script>
+    <script src="../js/icons.js?v=7d327bd034" defer></script>
+    <script src="../js/shell.js?v=53a2beaced" defer></script>
+    <script src="../js/api.js?v=21b59b7fe7" defer></script>
+    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="finance.js?v=75726d767b" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="resumen.js?v=aa2358a78f" defer></script>
+    <title>Análisis Financiero — SmartDecisions</title>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <div class="sd-page-head"><div><h1>Análisis Financiero</h1>
+            <p>Cómo está tu negocio, con las cifras que cargaste: lo que gana, lo que debe y hasta cuándo llega.</p></div></div>
+
+        <section class="card">
+            <div class="period-bar">
+                <label class="field">
+                    <span>Período</span>
+                    <select id="periodSelect"></select>
+                </label>
+                <p class="chart-hint" id="ratesLine"></p>
+            </div>
+            <ul class="notice-list" id="notices"></ul>
+        </section>
+
+        <div class="metric-grid" id="answers"></div>
+
+        <section class="card">
+            <h3 class="chart-title">Ventas netas, egresos y utilidad por mes</h3>
+            <p class="chart-hint">En bolivianos. Los egresos son el costo de ventas, los gastos de operación y el resultado financiero negativo.</p>
+            <div class="chart-box"><canvas id="trendChart"></canvas></div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>
