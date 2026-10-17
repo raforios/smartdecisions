@@ -21,10 +21,10 @@ from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
 ENV_VARS = load_and_validate_env_vars({
-    'QUOTES_SERVICE_URL': str,
+    'API_URL': str,
     'REQUEST_TIMEOUT_SECONDS': int,
 })
-QUOTES_SERVICE_URL = ENV_VARS['QUOTES_SERVICE_URL'].rstrip('/')
+API_URL = ENV_VARS['API_URL'].rstrip('/')
 REQUEST_TIMEOUT_SECONDS = ENV_VARS['REQUEST_TIMEOUT_SECONDS']
 
 # The currencies QUOTES serves, by the code it answers to.
@@ -83,7 +83,7 @@ def _get(
             RatesUnavailable: QUOTES unreachable.
     '''
     try:
-        return requests.get(f'{QUOTES_SERVICE_URL}/v1/quotes/{path}', params = params,
+        return requests.get(f'{API_URL}/v1/quotes/{path}', params = params,
                             headers = {'Authorization': auth_token or ''},
                             timeout = REQUEST_TIMEOUT_SECONDS)
     except requests.exceptions.RequestException as error:

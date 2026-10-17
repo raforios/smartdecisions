@@ -7,7 +7,11 @@
     that does not exist. Every load also records which user made it.
 
     A load only replaces what it brings (Rafael, 16-oct): the same account and
-    period overwrite, everything else stays. A wrong amount or date is
+    period overwrite, everything else stays.
+
+    Every read here is a consistent one. DynamoDB reads are eventually
+    consistent by default, so a list asked right after a delete showed the
+    amount that was just removed (17-oct, tested from the screen). A wrong amount or date is
     corrected one by one, and a period is emptied before it is loaded again
     with another periodicity.
 '''
@@ -98,7 +102,7 @@ def _has_prefix(
     '''
     response = dynamodb_resource.Table(ENTRIES_TABLE).query(
         KeyConditionExpression = Key('client').eq(client) & Key('entry_key').begins_with(prefix),
-        Limit = 1
+        Limit = 1, ConsistentRead = True
     )
     return bool(response.get('Items'))
 
@@ -123,10 +127,10 @@ def _query_prefix(
     condition = Key('client').eq(client)
     if prefix:
         condition = condition & Key('entry_key').begins_with(prefix)
-    response = table.query(KeyConditionExpression = condition)
+    response = table.query(KeyConditionExpression = condition, ConsistentRead = True)
     items = response.get('Items', [])
     while 'LastEvaluatedKey' in response:
-        response = table.query(KeyConditionExpression = condition,
+        response = table.query(KeyConditionExpression = condition, ConsistentRead = True,
                                ExclusiveStartKey = response['LastEvaluatedKey'])
         items.extend(response.get('Items', []))
     return items
@@ -357,7 +361,7 @@ def list_loads(
     '''
     response = dynamodb_resource.Table(LOADS_TABLE).query(
         KeyConditionExpression = Key('client').eq(client),
-        ScanIndexForward = False
+        ScanIndexForward = False, ConsistentRead = True
     )
     loads = [
         LoadSchema(load_id = item['load_id'], user = item['user'], flow = item['flow'],
@@ -414,7 +418,7 @@ def _stored_entry(
             ResourceNotFoundError: ENTRY_NOT_FOUND, also for another client's.
     '''
     item = dynamodb_resource.Table(ENTRIES_TABLE).get_item(
-        Key = {'client': client, 'entry_key': key}
+        Key = {'client': client, 'entry_key': key}, ConsistentRead = True
     ).get('Item')
     if not item:
         error_msg = f'Entry {key} not found for {client}.'

@@ -146,3 +146,28 @@ def test_an_empty_file_is_refused(
     with pytest.raises(InvalidInputError) as failure:
         entries.load_entries_from_file(catalog, ACME, ANA, (LoadFlow.BASE, 'x.xlsx'), 'Bearer x')
     assert failure.value.detail == LoadError.EMPTY_LOAD.value
+
+
+def test_reads_after_a_change_are_consistent(
+    catalog,
+    monkeypatch
+):
+    '''A list asked right after a delete must not show what was removed:
+    every read of the amounts and the loads asks DynamoDB for consistency.'''
+    table_of = catalog.Table
+    seen = []
+
+    def spying_table(name):
+        table = table_of(name)
+        original = table.query
+
+        def query(**kwargs):
+            seen.append(kwargs.get('ConsistentRead'))
+            return original(**kwargs)
+        table.query = query
+        return table
+    monkeypatch.setattr(catalog, 'Table', spying_table)
+    _load(catalog, RENT)
+    entries.list_entries(catalog, ACME)
+    entries.list_loads(catalog, ACME)
+    assert seen and all(seen)

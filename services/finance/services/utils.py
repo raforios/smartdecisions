@@ -54,14 +54,16 @@ ENV_VARS = load_and_validate_env_vars(
         'REQUEST_TIMEOUT_SECONDS': int
     },
     optional_env_vars = {
-        'EVENTS_SERVICE_URL': str
+        'API_URL': str
     }
 )
 
 TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
-EVENTS_SERVICE_URL = ENV_VARS.get('EVENTS_SERVICE_URL') or None
-EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL else None
-EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
+# One address for every service: the gateway api.bearsoft.com.bo routes each
+# /v1/<service> to its own Lambda, so the path names the service, not the URL.
+API_URL = (ENV_VARS.get('API_URL') or '').rstrip('/') or None
+EVENTS_AUDIT_URL = f'{API_URL}/v1/events/audit' if API_URL else None
+EVENTS_LOG_URL = f'{API_URL}/v1/events/usage-log' if API_URL else None
 
 REQUEST_TIMEOUT_SECONDS = ENV_VARS['REQUEST_TIMEOUT_SECONDS']
 
@@ -159,7 +161,7 @@ async def send_audit_event(
         Asynchronous function to send an audit event to the EVENTS microservice.
     '''
     if not EVENTS_AUDIT_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send audit event.')
+        logger.warning('API_URL is not set. Cannot send audit event.')
         return
 
     response = await _perform_request(
@@ -185,7 +187,7 @@ async def send_usage_log(
         Asynchronous function to send a usage log to the EVENTS microservice.
     '''
     if not EVENTS_LOG_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send usage log.')
+        logger.warning('API_URL is not set. Cannot send usage log.')
         return
 
     response = await _perform_request(
@@ -473,12 +475,10 @@ FILES_ENV_VARS = load_and_validate_env_vars(
         'FILES_TIMEOUT_SECONDS': int
     },
     optional_env_vars = {
-        'FILES_SERVICE_URL': str,
         'BUCKET_NAME': str,
         'BUCKET_PATH': str
     }
 )
-FILES_SERVICE_URL = (FILES_ENV_VARS.get('FILES_SERVICE_URL') or '').rstrip('/')
 BUCKET_NAME = FILES_ENV_VARS.get('BUCKET_NAME') or ''
 DEFAULT_BUCKET_PATH = (FILES_ENV_VARS.get('BUCKET_PATH') or '').strip('/')
 FILES_TIMEOUT_SECONDS = FILES_ENV_VARS['FILES_TIMEOUT_SECONDS']
@@ -503,10 +503,10 @@ def _require_files_service() -> None:
         Refuses early when the service was not configured to reach FILES.
 
         Raises:
-            ServiceUnavailableError: FILES_SERVICE_URL or BUCKET_NAME missing.
+            ServiceUnavailableError: API_URL or BUCKET_NAME missing.
     '''
-    if not FILES_SERVICE_URL or not BUCKET_NAME:
-        error_msg = 'FILES_SERVICE_URL or BUCKET_NAME are not set.'
+    if not API_URL or not BUCKET_NAME:
+        error_msg = 'API_URL or BUCKET_NAME are not set.'
         logger.error(error_msg)
         raise ServiceUnavailableError(detail = FilesError.NOT_CONFIGURED.value)
 
@@ -543,14 +543,14 @@ def _handle_files_service(
     try:
         if action == 'read':
             response = req.get(
-                f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_key}',
+                f'{API_URL}/v1/s3/read/{BUCKET_NAME}/{file_key}',
                 headers = headers, timeout = FILES_TIMEOUT_SECONDS,
                 params = {'delimiter': kwargs.get('delimiter') or ','}
             )
         elif action == 'create':
             folder, _, name = file_key.rpartition('/')
             response = req.post(
-                f'{FILES_SERVICE_URL}/v1/s3/upload',
+                f'{API_URL}/v1/s3/upload',
                 headers = headers, timeout = FILES_TIMEOUT_SECONDS,
                 files = {'file': (name, kwargs['data'], kwargs['content_type'])},
                 data = {'bucket_name': BUCKET_NAME,
@@ -558,7 +558,7 @@ def _handle_files_service(
             )
         elif action == 'delete':
             response = req.delete(
-                f'{FILES_SERVICE_URL}/v1/s3/delete',
+                f'{API_URL}/v1/s3/delete',
                 headers = headers, timeout = FILES_TIMEOUT_SECONDS,
                 json = {'bucket_name': BUCKET_NAME, 'file_path': '',
                         'file_name': file_key}
@@ -672,11 +672,9 @@ def delete_stored_file(
 
 PARAMETERS_ENV_VARS = load_and_validate_env_vars(
     env_vars = {
-        'PARAMETERS_SERVICE_URL': str,
         'PARAMETERS_CACHE_SECONDS': int
     }
 )
-PARAMETERS_SERVICE_URL = PARAMETERS_ENV_VARS['PARAMETERS_SERVICE_URL'].rstrip('/')
 PARAMETERS_CACHE_SECONDS = PARAMETERS_ENV_VARS['PARAMETERS_CACHE_SECONDS']
 
 # {scope: (moment it expires, {code: value})}, per warm container.
@@ -705,7 +703,7 @@ def read_parameters(
     if cached and cached[0] > time.monotonic():
         return cached[1]
     try:
-        response = req.get(f'{PARAMETERS_SERVICE_URL}/v1/parameters/{scope}',
+        response = req.get(f'{API_URL}/v1/parameters/{scope}',
                            headers = {'Authorization': auth_token or ''},
                            timeout = REQUEST_TIMEOUT_SECONDS)
     except req.exceptions.RequestException as error:
