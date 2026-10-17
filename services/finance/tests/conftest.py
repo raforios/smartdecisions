@@ -11,7 +11,7 @@ import pytest
 from moto import mock_aws
 
 from schemas.finance import AccountSchema, AccountType
-from services import entries, finance
+from services import entries, finance, parameters
 
 
 @pytest.fixture(name = 'finance_store')
@@ -36,6 +36,20 @@ def finance_store_fixture():
                          {'AttributeName': 'valid_from', 'KeyType': 'RANGE'}],
             AttributeDefinitions = [{'AttributeName': 'parameter_code', 'AttributeType': 'S'},
                                     {'AttributeName': 'valid_from', 'AttributeType': 'S'}],
+            BillingMode = 'PAY_PER_REQUEST'
+        )
+        resource.create_table(
+            TableName = parameters.SUGGESTED_TABLE,
+            KeySchema = [{'AttributeName': 'parameter_code', 'KeyType': 'HASH'}],
+            AttributeDefinitions = [{'AttributeName': 'parameter_code', 'AttributeType': 'S'}],
+            BillingMode = 'PAY_PER_REQUEST'
+        )
+        resource.create_table(
+            TableName = parameters.CLIENT_TABLE,
+            KeySchema = [{'AttributeName': 'client', 'KeyType': 'HASH'},
+                         {'AttributeName': 'parameter_code', 'KeyType': 'RANGE'}],
+            AttributeDefinitions = [{'AttributeName': 'client', 'AttributeType': 'S'},
+                                    {'AttributeName': 'parameter_code', 'AttributeType': 'S'}],
             BillingMode = 'PAY_PER_REQUEST'
         )
         for table in (entries.LOADS_TABLE, entries.ENTRIES_TABLE):

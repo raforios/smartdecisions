@@ -91,3 +91,31 @@ class EntryItem(TypedDict, total = False):
     load_id: str
     user: str
     updated_at: str
+
+
+class SuggestedParameterItem(TypedDict, total = False):
+    '''
+        A value BearSoft suggests to every client (the IUE provision, 2 %).
+
+        Table: finance_suggested_parameters
+        Partition Key: parameter_code (String).
+    '''
+    parameter_code: str
+    name: str
+    value: float
+    updated_at: str
+
+
+class ClientParameterItem(TypedDict, total = False):
+    '''
+        The value one client chose for a parameter.
+
+        Table: finance_client_parameters
+        Partition Key: client (String).
+        Sort Key: parameter_code (String).
+    '''
+    client: str
+    parameter_code: str
+    value: float
+    user: str
+    updated_at: str

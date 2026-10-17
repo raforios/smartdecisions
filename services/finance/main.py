@@ -17,6 +17,7 @@ import uvicorn
 
 from routes.entries import router as entries_router
 from routes.finance import router as finance_router
+from routes.report import router as report_router
 
 from services.api_exceptions import setup_exception_handlers
 from services.environment import load_and_validate_env_vars
@@ -157,6 +158,7 @@ async def custom_swagger_ui() -> HTMLResponse:
 
 app.include_router(finance_router)
 app.include_router(entries_router)
+app.include_router(report_router)
 
 
 def run_local() -> None:

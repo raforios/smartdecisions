@@ -12,6 +12,7 @@ from jose import jwt
 from main import app
 from routes import entries as entry_routes
 from routes import finance as routes
+from routes import report as report_routes
 from schemas.finance import (
     AccountListResponseSchema,
     AccountResponseSchema,
@@ -34,6 +35,14 @@ from schemas.entries import (
     LoadResultSchema,
     PeriodDeleteResultSchema,
     Periodicity
+)
+from schemas.report import (
+    ClientParameterListResponseSchema,
+    ClientParameterResponseSchema,
+    ClientParameterSchema,
+    FinanceReportSchema,
+    SuggestedParameterListResponseSchema,
+    SuggestedParameterSchema
 )
 from services import entries, security
 
@@ -179,3 +188,38 @@ def test_a_seller_cannot_see_the_finances():
     })
     assert response.status_code == 403
     assert response.json()['detail'] == 'ROLE_NOT_ALLOWED'
+
+
+def test_every_report_route_answers_its_model(catalog):
+    '''The report, the client's parameters and the suggestions, called as the API calls them.'''
+    for code, rate in (('IVA', 13.0), ('IT', 3.0), ('IUE', 25.0)):
+        _run(routes.set_law_parameter_endpoint(
+            request = None, parameter = LawParameterSchema(
+                parameter_code = code, name = code, rate = rate, valid_from = date(1995, 1, 1)),
+            dynamodb_resource = catalog, current_user = 'admin'))
+    who = {'dynamodb_resource': catalog, 'client': 'acme', 'current_user': 'ana@acme.com'}
+    _run(entry_routes.load_entries_endpoint(
+        request = None, load = EntryLoadSchema(flow = LoadFlow.BASE, rows = [EntryRowSchema(
+            date = '2026-03', periodicity = 'MONTHLY', account_code = '4.1.01', amount = 1000,
+            taxes_included = True)]), **who))
+
+    suggested = _run(report_routes.set_suggested_parameter_endpoint(
+        request = None, parameter = SuggestedParameterSchema(
+            parameter_code = 'IUE_PROVISION', name = 'Provisión', value = 2),
+        dynamodb_resource = catalog, current_user = 'admin'))
+    assert isinstance(suggested, SuggestedParameterSchema)
+    assert isinstance(_run(report_routes.list_suggested_parameters_endpoint(
+        request = None, dynamodb_resource = catalog, current_user = 'acme')),
+        SuggestedParameterListResponseSchema)
+    assert isinstance(_run(report_routes.list_client_parameters_endpoint(request = None, **who)),
+                      ClientParameterListResponseSchema)
+    chosen = _run(report_routes.set_client_parameter_endpoint(
+        request = None, parameter = ClientParameterSchema(value = 2),
+        parameter_code = 'IUE_PROVISION', **who))
+    assert isinstance(chosen, ClientParameterResponseSchema)
+
+    report = _run(report_routes.finance_report_endpoint(request = None, **who))
+    assert isinstance(report, FinanceReportSchema)
+    month = report.months[0]
+    assert (month.income_statement.sales_vat.amount, month.taxes.income_tax_provision.amount) == (
+        130, 20)
