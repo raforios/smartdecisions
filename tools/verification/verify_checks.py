@@ -22,9 +22,7 @@ PRODUCT_SERVICES = (
     # SmartBilling
     'billing',
     # Genéricos y obligatorios
-    'auth', 'events', 'files', 'parameters',
-    # Capacitación
-    'ml_functions',
+    'auth', 'events', 'files', 'ml_functions', 'parameters',
 )
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
