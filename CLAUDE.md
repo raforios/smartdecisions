@@ -93,7 +93,8 @@ nombrados por funcionalidad.
 ## 4. Servicios
 
 **Base**, compartidos por todos los productos: **AUTH** (JWT, DynamoDB),
-**EVENTS** (auditoría, DynamoDB), **FILES** (S3).
+**EVENTS** (auditoría, DynamoDB), **FILES** (S3) y **PARAMETERS** (valores de
+negocio que cambian sin redesplegar, DynamoDB; desde el 17-oct-2026, §5.3).
 
 **SmartDecisions:** INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI.
 
@@ -122,9 +123,21 @@ no el modelo a copiar.
 2. **Las variables son requeridas, no opcionales.** `ENV_VARS['X'] or 30` sigue
    siendo un número elegido por el código: si falta configuración, el servicio
    debe fallar al arrancar, no correr callado sobre un valor que nadie eligió.
-3. **Toda decisión de negocio va al `.env`.** Plazos, decimales, umbrales,
-   parámetros de modelos, tamaños de página. Se quedan en el código sólo las
-   constantes físicas y las conversiones de unidad.
+3. **El `.env` es sólo configuración de entorno** (Rafael, 17-oct-2026): URLs
+   de servicios, nombres de tablas y buckets, credenciales, región, timeouts de
+   red. Así lo usan AUTH, EVENTS, FILES, ML_FUNCTIONS y AI (BEDROCK). **Los
+   valores de negocio no van al `.env`**: plazos, decimales, umbrales, cuentas,
+   parámetros de modelos, tamaños de página. En el `.env` obligan a redesplegar
+   para cambiar un número.
+   - Lo general, que sirve a más de un servicio (decimales, medidas,
+     unidades), y lo que hoy está en el `.env` de cada servicio, va al servicio
+     base **PARAMETERS**, que cada servicio consulta por HTTP.
+   - Lo propio del dominio de un servicio se queda en sus tablas (en FINANCE,
+     las tasas de ley y los parámetros de cada cliente).
+   - En el código se quedan sólo las constantes físicas y las conversiones de
+     unidad.
+   - Los servicios que todavía tienen valores de negocio en el `.env` se pasan
+     a PARAMETERS uno por uno, después del Análisis Financiero.
 4. **Ningún valor del `.env` puede llevar coma ni llave.** El despliegue lo pasa
    entero a `--environment Variables={...}`: la coma separa variables y la llave
    abre una estructura anidada. Una plantilla de URL va con `%s`, nunca con

@@ -1,15 +1,19 @@
 ---
 name: sin-hardcode
-description: Barre un servicio buscando decisiones de negocio escritas en el código y las mueve al .env como variables requeridas. Es la corrección que más se ha repetido en este proyecto.
+description: Barre un servicio buscando decisiones de negocio escritas en el código y las mueve a PARAMETERS (o a las tablas del propio servicio); al .env sólo va el entorno. Es la corrección que más se ha repetido en este proyecto.
 argument-hint: [servicio]
 allowed-tools: Bash(cd *), Bash(grep *), Bash(python3 *), Read, Edit
 ---
 
-Barre `$1` buscando valores de negocio incrustados y muévelos a `.env`.
+Barre `$1` buscando valores de negocio incrustados y muévelos fuera del código.
 
 ## El criterio
 
-**Si es una decisión, va al entorno. Si es aritmética, se queda.**
+**Si es una decisión de negocio, va a PARAMETERS** (o a las tablas del propio
+servicio si es de su dominio). **Si es entorno** —URL, tabla, credencial,
+región, timeout de red— **va al `.env`. Si es aritmética, se queda.**
+(CLAUDE.md §5.3: el `.env` con valores de negocio obliga a redesplegar para
+cambiar un número.)
 
 Y una segunda regla que costó dos rondas aprender: **las variables son
 requeridas, no opcionales**. El patrón
@@ -75,14 +79,14 @@ grep -rnE "^_[A-Z_]+: (int|float) = [0-9]" services/*.py
 
 ## Cómo dejarlo
 
-Cada variable nueva va al `.env` **con un comentario que diga qué gobierna y por
-qué ese valor**, no qué es:
+Un valor de negocio se da de alta en PARAMETERS con su descripción. Una
+variable de entorno nueva va al `.env` **con un comentario que diga qué
+gobierna y por qué ese valor**, no qué es:
 
 ```bash
-# Días que cubre cada corrida programada. Más de uno a propósito: el BCB no
-# publica fines de semana ni feriados, y una corrida que falló ayer debe
-# repararla la siguiente.
-SCHEDULED_SYNC_DAYS=7
+# Segundos que espera una subida o lectura en FILES. No es una notificación
+# JSON: un archivo pesa, así que tiene su propio presupuesto.
+FILES_TIMEOUT_SECONDS=60
 ```
 
 ## Trampa del despliegue
