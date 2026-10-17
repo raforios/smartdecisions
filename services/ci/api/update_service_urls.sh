@@ -23,7 +23,9 @@ SERVICES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 # Servicios propios cuyos .env llaman a otros servicios. Los de clientes
 # (TRADE, FORMS, LOCALIZATION, CMS, MINING_SUMMIT) no se tocan.
 SERVICES=(ai analytics billing finance ingest mining_analysis optimization parameters quotes)
-VARIABLES=(EVENTS_SERVICE_URL FILES_SERVICE_URL INGEST_SERVICE_URL QUOTES_SERVICE_URL)
+# API_URL es la única de los servicios ya unificados (FINANCE, PARAMETERS); las
+# otras cuatro siguen en los demás hasta que se unifiquen.
+VARIABLES=(API_URL EVENTS_SERVICE_URL FILES_SERVICE_URL INGEST_SERVICE_URL QUOTES_SERVICE_URL)
 
 WRITE=false
 [ "$1" == "--yes" ] && WRITE=true
