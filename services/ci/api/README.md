@@ -193,7 +193,7 @@ Vuelve a `services/ci/api` y escribe los nombres de las carpetas de los servicio
 - **No importa en qué orden los escribas**: el script los despliega siempre en el orden correcto (base primero, después los dueños de datos, después el resto).
 - Al terminar, el script revisa el dominio y agrega al gateway las rutas de un servicio nuevo.
 
-Los nombres válidos son los de las carpetas: `auth`, `events`, `files`, `ml_functions`, `ingest`, `quotes`, `analytics`, `optimization`, `mining_analysis`, `ai`, `finance`, `billing`.
+Los nombres válidos son los de las carpetas: `auth`, `events`, `parameters`, `files`, `ml_functions`, `ingest`, `quotes`, `analytics`, `optimization`, `mining_analysis`, `ai`, `finance`, `billing`.
 
 ### Si el microservicio es nuevo
 

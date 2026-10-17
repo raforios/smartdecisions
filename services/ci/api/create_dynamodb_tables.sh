@@ -29,6 +29,12 @@ TABLES=(
     "audit_records:id:S"
     "usage_logs:id:S"
 
+    # --- Base: parámetros (PARAMETERS) ---
+    # Los valores de negocio que se cambian sin redesplegar. El alcance
+    # (`global` o el servicio que lo lee) es la partición: cada servicio lee
+    # los suyos con una sola Query.
+    "parameters_values:scope:S:code:S"
+
     # --- SmartDecisions ---
     "ingest_datasets:id:S"
     # Maestro de clientes: quién compra, dicho una vez y no repetido en cada

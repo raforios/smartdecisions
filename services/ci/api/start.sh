@@ -15,8 +15,9 @@
 #   1. Tablas DynamoDB (create_dynamodb_tables.sh). Antes que los servicios: un
 #      Lambda que arranca contra una tabla que no existe falla en la primera
 #      petición, no en el despliegue.
-#   2. Servicios BASE: AUTH, EVENTS, FILES, ML_FUNCTIONS. Todos los demás
-#      validan el token contra AUTH, auditan en EVENTS y guardan en FILES.
+#   2. Servicios BASE: AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS. Todos
+#      los demás validan el token contra AUTH, auditan en EVENTS, leen sus
+#      valores de negocio de PARAMETERS y guardan en FILES.
 #   3. INGEST y QUOTES. Son los dueños de los datos que otros piden por HTTP:
 #      OPTIMIZATION le pide stock y vendedores a INGEST, ANALYTICS le pide el
 #      tipo de cambio a QUOTES.
@@ -43,6 +44,8 @@ SERVICES_DIR="$(cd ../.. && pwd)"
 ORDER=(
     "auth:"
     "events:"
+    # Clave compuesta (scope + code): la tabla la crea create_dynamodb_tables.sh.
+    "parameters:--skip-table-creation"
     "files:--skip-table-creation"
     "ml_functions:--skip-table-creation"
     "ingest:"
@@ -57,7 +60,7 @@ ORDER=(
 )
 
 # Servicios cuyos .env llaman a otros servicios (ver update_service_urls.sh).
-URL_CONSUMERS=(ai analytics billing finance ingest mining_analysis optimization quotes)
+URL_CONSUMERS=(ai analytics billing finance ingest mining_analysis optimization parameters quotes)
 
 deploy_service() {
     local SERVICE="$1"

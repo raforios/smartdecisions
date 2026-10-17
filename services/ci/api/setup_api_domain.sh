@@ -55,6 +55,7 @@ ROUTES=(
     "v1/users:auth-handler-service"
     "v1/events:events-handler-service"
     "v1/s3:file-handler-service"
+    "v1/parameters:parameters-handler-service"
     "v1/classification:ml-functions-handler-service"
     "v1/common:ml-functions-handler-service"
     "v1/prediction:ml-functions-handler-service"
