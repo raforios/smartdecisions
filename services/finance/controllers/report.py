@@ -7,6 +7,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from schemas.projection import ProjectionSchema
 from schemas.report import (
     ClientParameterListResponseSchema,
     ClientParameterResponseSchema,
@@ -15,6 +16,7 @@ from schemas.report import (
     SuggestedParameterListResponseSchema,
     SuggestedParameterSchema
 )
+from services.projection import ProjectionRequest, finance_projection
 from services.parameters import (
     list_client_parameters,
     list_suggested_parameters,
@@ -145,3 +147,29 @@ async def set_suggested_parameter_controller(
             SuggestedParameterSchema: The stored suggestion.
     '''
     return set_suggested_parameter(dynamodb_resource, parameter)
+
+
+@handle_service_errors('FINANCE')
+async def finance_projection_controller(
+    dynamodb_resource: ServiceResource,
+    client: str,
+    asked: tuple[str | None, ProjectionRequest],
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> ProjectionSchema:
+    '''
+        The projection of the client, with what the manager typed.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            client (str): The owner of the data, from the token.
+            asked (tuple[str | None, ProjectionRequest]): The caller's
+                Authorization header and what the screen sent.
+            current_user (str): The user, read by the decorators.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            ProjectionSchema: The three scenarios.
+    '''
+    auth_token, wanted = asked
+    return finance_projection(dynamodb_resource, client, auth_token, wanted)

@@ -17,15 +17,8 @@ from datetime import date as date_type
 import requests
 
 from schemas.report import ExchangeSchema, ReportError
-from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
-
-ENV_VARS = load_and_validate_env_vars({
-    'API_URL': str,
-    'REQUEST_TIMEOUT_SECONDS': int,
-})
-API_URL = ENV_VARS['API_URL'].rstrip('/')
-REQUEST_TIMEOUT_SECONDS = ENV_VARS['REQUEST_TIMEOUT_SECONDS']
+from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
 # The currencies QUOTES serves, by the code it answers to.
 OFFICIAL_DOLLAR = 'USD'

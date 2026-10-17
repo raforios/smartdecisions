@@ -36,6 +36,7 @@ from schemas.entries import (
     PeriodDeleteResultSchema,
     Periodicity
 )
+from schemas.projection import ProjectionError, ProjectionSchema
 from schemas.report import (
     ClientParameterListResponseSchema,
     ClientParameterResponseSchema,
@@ -46,7 +47,9 @@ from schemas.report import (
     SuggestedParameterSchema
 )
 from services import entries, security
+from services import projection as projection_service
 from services import report as report_service
+from tests.test_projection import PROJECTION_VALUES
 from tests.test_report import FINANCE_VALUES, GLOBAL_VALUES
 
 
@@ -236,3 +239,32 @@ def test_every_report_route_answers_its_model(
     assert (month.income_statement.sales_vat.amount, month.taxes.income_tax_provision.amount) == (
         130, 20)
     assert month.exchange.usd == 6.96
+
+
+def test_the_projection_route_answers_its_model(
+    catalog,
+    monkeypatch
+):
+    '''With one month loaded there is nothing to project, and the route says why.'''
+    for code, rate in (('IVA', 13.0), ('IT', 3.0), ('IUE', 25.0)):
+        _run(routes.set_law_parameter_endpoint(
+            request = None, parameter = LawParameterSchema(
+                parameter_code = code, name = code, rate = rate, valid_from = date(1995, 1, 1)),
+            dynamodb_resource = catalog, current_user = 'admin'))
+    def values(
+        scope: str,
+        token: str | None  # pylint: disable=unused-argument
+    ) -> dict:
+        return PROJECTION_VALUES if scope == 'finance' else GLOBAL_VALUES
+    monkeypatch.setattr(projection_service, 'read_parameters', values)
+    monkeypatch.setattr(report_service, 'read_parameters', values)
+    who = {'dynamodb_resource': catalog, 'client': 'acme', 'current_user': 'ana@acme.com'}
+    _run(entry_routes.load_entries_endpoint(
+        request = None, load = EntryLoadSchema(flow = LoadFlow.PROCESSED, rows = [EntryRowSchema(
+            date = '2026-03', periodicity = 'MONTHLY', account_code = '6.1.03', amount = 10)]),
+        **who))
+    projection = _run(report_routes.finance_projection_endpoint(
+        request = None, horizon = None, worst_sales = None, worst_outflow = None,
+        best_sales = -5, best_outflow = None, authorization = 'Bearer x', **who))
+    assert isinstance(projection, ProjectionSchema)
+    assert projection.notices == [ProjectionError.NOT_ENOUGH_HISTORY_FOR_PROJECTION]

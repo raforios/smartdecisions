@@ -6,9 +6,10 @@
     only its ADMIN changes them.
 '''
 from boto3.resources.base import ServiceResource
-from fastapi import APIRouter, Depends, Header, Path as PathParam, Request, status
+from fastapi import APIRouter, Depends, Header, Path as PathParam, Query, Request, status
 
 from controllers.report import (
+    finance_projection_controller,
     finance_report_controller,
     list_client_parameters_controller,
     list_suggested_parameters_controller,
@@ -25,7 +26,9 @@ from schemas.report import (
     SuggestedParameterListResponseSchema,
     SuggestedParameterSchema
 )
+from schemas.projection import ProjectionSchema, ScenarioInputSchema
 from services.db_connection import GET_DB_DEPENDENCY
+from services.projection import ProjectionRequest
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner, get_current_user, require_roles
 
@@ -165,6 +168,64 @@ async def set_suggested_parameter_endpoint(
     return await set_suggested_parameter_controller(
         dynamodb_resource = dynamodb_resource,
         parameter = parameter,
+        current_user = current_user,
+        request = request
+    )
+
+
+def _change(
+    sales: float | None,
+    outflow: float | None
+) -> ScenarioInputSchema | None:
+    '''
+        A scenario the manager typed, or None to keep the default.
+
+        Args:
+            sales (float | None): % change of the sales.
+            outflow (float | None): % change of the outflow.
+
+        Returns:
+            ScenarioInputSchema | None: The scenario.
+    '''
+    if sales is None and outflow is None:
+        return None
+    return ScenarioInputSchema(sales_change = sales or 0.0, outflow_change = outflow or 0.0)
+
+
+@router.get(
+    '/projection',
+    response_model = ProjectionSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'How the next months may go, in three scenarios',
+    description = (
+        'The realistic scenario is a damped trend over the loaded months; the '
+        'worst and the best move it by the percentages given here, or by the '
+        'defaults in PARAMETERS. Each scenario says when its cash runs out.'
+    )
+)
+async def finance_projection_endpoint(
+    request: Request,
+    horizon: int | None = Query(None, description = 'Months ahead; the default when empty.'),
+    worst_sales: float | None = Query(None, description = 'Worst: % change of the sales.'),
+    worst_outflow: float | None = Query(None, description = 'Worst: % change of the outflow.'),
+    best_sales: float | None = Query(None, description = 'Best: % change of the sales.'),
+    best_outflow: float | None = Query(None, description = 'Best: % change of the outflow.'),
+    authorization: str | None = Header(None),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    client: str = Depends(require_roles(*FINANCE_ROLES)),
+    current_user: str = Depends(get_current_user)
+) -> ProjectionSchema:
+    '''
+        Endpoint returning the projection.
+    '''
+    message = f'User: {current_user} ({client}). Projecting {horizon} month(s).'
+    logger.info(message)
+    return await finance_projection_controller(
+        dynamodb_resource = dynamodb_resource,
+        client = client,
+        asked = (authorization, ProjectionRequest(
+            horizon = horizon, worst = _change(worst_sales, worst_outflow),
+            best = _change(best_sales, best_outflow))),
         current_user = current_user,
         request = request
     )
