@@ -12,6 +12,7 @@
     report says why with a code.
 '''
 from collections.abc import Callable
+from typing import Any
 from dataclasses import dataclass, field
 from datetime import date as date_type
 
@@ -31,45 +32,80 @@ from schemas.report import (
     ReportError
 )
 from services.entries import list_entries
-from services.environment import load_and_validate_env_vars
 from services.finance import catalog_by_code
 from services.parameters import client_value, law_rates, rate_on
+from services.utils import read_parameters, required_parameters
 
-ENV_VARS = load_and_validate_env_vars({
-    'REPORT_SALES_GROUP': str,
-    'REPORT_FINANCIAL_EXPENSE_GROUP': str,
-    'REPORT_IT_ACCOUNT': str,
-    'REPORT_CASH_ACCOUNTS': str,
-    'REPORT_CURRENT_ASSETS_GROUP': str,
-    'REPORT_CURRENT_LIABILITIES_GROUP': str,
-    'LAW_VAT_CODE': str,
-    'LAW_TRANSACTIONS_TAX_CODE': str,
-    'LAW_INCOME_TAX_CODE': str,
-    'INCOME_TAX_PROVISION_CODE': str,
-    'COVERAGE_MONTHS': int,
-    'MIN_MONTHS_FOR_TRENDS': int,
-    'MIN_MONTHS_FOR_PROJECTION': int,
-    'REPORT_AMOUNT_DECIMALS': int,
-    'REPORT_RATIO_DECIMALS': int,
-    'BALANCE_TOLERANCE': float,
-})
-SALES_GROUP = ENV_VARS['REPORT_SALES_GROUP']
-FINANCIAL_EXPENSE_GROUP = ENV_VARS['REPORT_FINANCIAL_EXPENSE_GROUP']
-IT_ACCOUNT = ENV_VARS['REPORT_IT_ACCOUNT']
-# A list in the .env is joined with hyphens: a comma would break the deploy.
-CASH_ACCOUNTS = tuple(ENV_VARS['REPORT_CASH_ACCOUNTS'].split('-'))
-CURRENT_ASSETS_GROUP = ENV_VARS['REPORT_CURRENT_ASSETS_GROUP']
-CURRENT_LIABILITIES_GROUP = ENV_VARS['REPORT_CURRENT_LIABILITIES_GROUP']
-VAT_CODE = ENV_VARS['LAW_VAT_CODE']
-IT_CODE = ENV_VARS['LAW_TRANSACTIONS_TAX_CODE']
-IUE_CODE = ENV_VARS['LAW_INCOME_TAX_CODE']
-IUE_PROVISION_CODE = ENV_VARS['INCOME_TAX_PROVISION_CODE']
-COVERAGE_MONTHS = ENV_VARS['COVERAGE_MONTHS']
-MIN_MONTHS_FOR_TRENDS = ENV_VARS['MIN_MONTHS_FOR_TRENDS']
-MIN_MONTHS_FOR_PROJECTION = ENV_VARS['MIN_MONTHS_FOR_PROJECTION']
-AMOUNT_DECIMALS = ENV_VARS['REPORT_AMOUNT_DECIMALS']
-RATIO_DECIMALS = ENV_VARS['REPORT_RATIO_DECIMALS']
-BALANCE_TOLERANCE = ENV_VARS['BALANCE_TOLERANCE']
+# The business values the report reads, by their code in PARAMETERS: the
+# `finance` scope and the `global` one. They are read on every request (kept a
+# few minutes by the PARAMETERS block), never from the .env (CLAUDE.md §5.3).
+FINANCE_SCOPE = 'finance'
+GLOBAL_SCOPE = 'global'
+FINANCE_CODES = (
+    'SALES_GROUP', 'FINANCIAL_EXPENSE_GROUP', 'IT_ACCOUNT', 'CASH_ACCOUNTS',
+    'CURRENT_ASSETS_GROUP', 'CURRENT_LIABILITIES_GROUP', 'VAT_CODE', 'TRANSACTIONS_TAX_CODE',
+    'INCOME_TAX_CODE', 'INCOME_TAX_PROVISION_CODE', 'COVERAGE_MONTHS', 'MIN_MONTHS_FOR_TRENDS',
+    'MIN_MONTHS_FOR_PROJECTION', 'BALANCE_TOLERANCE',
+)
+GLOBAL_CODES = ('AMOUNT_DECIMALS', 'RATIO_DECIMALS')
+
+
+@dataclass(frozen = True)
+class ReportSettings:  # pylint: disable=too-many-instance-attributes
+    '''
+        The business values of the report, as PARAMETERS holds them. Sixteen
+        values the ADMIN can change without a release; grouped here so every
+        function receives one argument instead of sixteen.
+    '''
+    sales_group: str
+    financial_expense_group: str
+    it_account: str
+    cash_accounts: tuple[str, ...]
+    current_assets_group: str
+    current_liabilities_group: str
+    vat_code: str
+    it_code: str
+    iue_code: str
+    iue_provision_code: str
+    coverage_months: int
+    min_months_for_trends: int
+    min_months_for_projection: int
+    balance_tolerance: float
+    amount_decimals: int
+    ratio_decimals: int
+
+
+def settings_from(
+    finance: dict[str, Any],
+    general: dict[str, Any]
+) -> ReportSettings:
+    '''
+        The report's values from what PARAMETERS answered for both scopes.
+
+        Args:
+            finance (dict[str, Any]): The `finance` scope.
+            general (dict[str, Any]): The `global` scope.
+
+        Returns:
+            ReportSettings: The values.
+    '''
+    return ReportSettings(
+        sales_group = finance['SALES_GROUP'],
+        financial_expense_group = finance['FINANCIAL_EXPENSE_GROUP'],
+        it_account = finance['IT_ACCOUNT'], cash_accounts = tuple(finance['CASH_ACCOUNTS']),
+        current_assets_group = finance['CURRENT_ASSETS_GROUP'],
+        current_liabilities_group = finance['CURRENT_LIABILITIES_GROUP'],
+        vat_code = finance['VAT_CODE'], it_code = finance['TRANSACTIONS_TAX_CODE'],
+        iue_code = finance['INCOME_TAX_CODE'],
+        iue_provision_code = finance['INCOME_TAX_PROVISION_CODE'],
+        coverage_months = int(finance['COVERAGE_MONTHS']),
+        min_months_for_trends = int(finance['MIN_MONTHS_FOR_TRENDS']),
+        min_months_for_projection = int(finance['MIN_MONTHS_FOR_PROJECTION']),
+        balance_tolerance = float(finance['BALANCE_TOLERANCE']),
+        amount_decimals = int(general['AMOUNT_DECIMALS']),
+        ratio_decimals = int(general['RATIO_DECIMALS'])
+    )
+
 
 # Account types that are a picture at a date, and those that move in a period.
 _BALANCE_TYPES = (AccountType.ASSET.value, AccountType.LIABILITY.value, AccountType.EQUITY.value)
@@ -96,6 +132,7 @@ class Context:
     catalog: dict[str, dict]
     rates: dict[str, list[tuple[str, float]]]
     provision_rate: float | None
+    settings: ReportSettings
 
 
 def _in_group(
@@ -117,7 +154,7 @@ def _in_group(
 
 def _round(
     value: float | None,
-    decimals: int = AMOUNT_DECIMALS
+    decimals: int
 ) -> float | None:
     '''
         A published figure, rounded; None stays None.
@@ -146,7 +183,7 @@ def _line(
         Returns:
             LineSchema: The line.
     '''
-    return LineSchema(amount = _round(value), origin = origin)
+    return LineSchema(amount = value, origin = origin)
 
 
 def _start_of(period: str) -> date_type:
@@ -266,7 +303,8 @@ def _is_balance(entry: EntrySchema) -> bool:
 def _transactions_tax(
     period: Period,
     sums: _Sums,
-    rate: float
+    rate: float,
+    settings: ReportSettings
 ) -> tuple[float | None, FigureOrigin, list[ReportError]]:
     '''
         The IT of the period, paid every month: the one loaded in its account
@@ -276,14 +314,16 @@ def _transactions_tax(
             period (Period): The period.
             sums (_Sums): Its amounts.
             rate (float): The IT rate in force.
+            settings (ReportSettings): The business values of the report.
 
         Returns:
             tuple: The amount, its origin and the notices it raises.
     '''
-    if any(e.account_code == IT_ACCOUNT for e in period.flows):
-        return sums.total(lambda e, a: e.account_code == IT_ACCOUNT), FigureOrigin.LOADED, []
+    if any(e.account_code == settings.it_account for e in period.flows):
+        return (sums.total(lambda e, a: e.account_code == settings.it_account),
+                FigureOrigin.LOADED, [])
     gross_invoiced = sums.total(
-        lambda e, a: a.get('invoiced') is True and _in_group(e.account_code, SALES_GROUP)
+        lambda e, a: a.get('invoiced') is True and _in_group(e.account_code, settings.sales_group)
         and e.taxes_included is True)
     if any(e.flow is LoadFlow.BASE for e in period.flows):
         return gross_invoiced * rate, FigureOrigin.CALCULATED, []
@@ -328,7 +368,8 @@ def _is_type(
 
 def _vat(
     sums: _Sums,
-    rate: float
+    rate: float,
+    sales_group: str
 ) -> tuple[float, float]:
     '''
         The IVA of a period: the debit inside the invoiced gross sales and
@@ -337,11 +378,12 @@ def _vat(
         Args:
             sums (_Sums): The amounts of the period.
             rate (float): The IVA rate in force.
+            sales_group (str): The group the report takes as sales.
 
         Returns:
             tuple[float, float]: Debit and credit.
     '''
-    debit = sums.total(lambda e, a: _in_group(e.account_code, SALES_GROUP) and _taxed(a, e))
+    debit = sums.total(lambda e, a: _in_group(e.account_code, sales_group) and _taxed(a, e))
     credit = sums.total(lambda e, a: _is_type(e, AccountType.COST) and _taxed(a, e))
     return debit * rate, credit * rate
 
@@ -349,7 +391,8 @@ def _vat(
 def _statement(
     sums: _Sums,
     vat: tuple[float, float],
-    transactions_tax: tuple[float | None, FigureOrigin]
+    transactions_tax: tuple[float | None, FigureOrigin],
+    settings: ReportSettings
 ) -> IncomeStatementSchema:
     '''
         The income statement of a period, as Rafael approved it on 16-oct.
@@ -358,21 +401,23 @@ def _statement(
             sums (_Sums): The amounts of the period.
             vat (tuple[float, float]): IVA debit and credit.
             transactions_tax (tuple[float | None, FigureOrigin]): The IT and its origin.
+            settings (ReportSettings): The business values of the report.
 
         Returns:
             IncomeStatementSchema: The statement.
     '''
     vat_debit, vat_credit = vat
     it_amount, it_origin = transactions_tax
-    sales = sums.total(lambda e, a: _in_group(e.account_code, SALES_GROUP))
+    sales_group, financial_group = settings.sales_group, settings.financial_expense_group
+    sales = sums.total(lambda e, a: _in_group(e.account_code, sales_group))
     net_sales = sales - vat_debit - (it_amount or 0)
     gross = net_sales - (sums.total(lambda e, a: _is_type(e, AccountType.COST)) - vat_credit)
     operating = sums.total(lambda e, a: _is_type(e, AccountType.EXPENSE)
-                           and not _in_group(e.account_code, FINANCIAL_EXPENSE_GROUP)
-                           and e.account_code != IT_ACCOUNT)
+                           and not _in_group(e.account_code, financial_group)
+                           and e.account_code != settings.it_account)
     financial = (sums.total(lambda e, a: _is_type(e, AccountType.INCOME)
-                            and not _in_group(e.account_code, SALES_GROUP))
-                 - sums.total(lambda e, a: _in_group(e.account_code, FINANCIAL_EXPENSE_GROUP)))
+                            and not _in_group(e.account_code, sales_group))
+                 - sums.total(lambda e, a: _in_group(e.account_code, financial_group)))
     return IncomeStatementSchema(
         sales = _line(sales, FigureOrigin.LOADED), sales_vat = _line(vat_debit),
         transactions_tax = _line(it_amount, it_origin), net_sales = _line(net_sales),
@@ -385,7 +430,8 @@ def _statement(
 
 def _provision(
     sums: _Sums,
-    rate: float | None
+    rate: float | None,
+    sales_group: str
 ) -> float | None:
     '''
         The IUE provision: the share of everything invoiced the client chose
@@ -395,6 +441,7 @@ def _provision(
         Args:
             sums (_Sums): The amounts of the period.
             rate (float | None): The client's percentage.
+            sales_group (str): The group the report takes as sales.
 
         Returns:
             float | None: The reserve.
@@ -402,8 +449,26 @@ def _provision(
     if rate is None:
         return None
     invoiced = sums.total(lambda e, a: a.get('invoiced') is True
-                          and _in_group(e.account_code, SALES_GROUP))
+                          and _in_group(e.account_code, sales_group))
     return invoiced * rate / 100
+
+
+def _estimate_income_tax(
+    statement: IncomeStatementSchema,
+    rate: float
+) -> None:
+    '''
+        Adds the estimated IUE and net profit to an annual statement: 25 % of
+        the profit, and nothing on a loss.
+
+        Args:
+            statement (IncomeStatementSchema): The annual statement, completed in place.
+            rate (float): The IUE rate in force.
+    '''
+    before_tax = statement.profit_before_income_tax.amount
+    estimated = max(before_tax, 0) * rate
+    statement.income_tax_estimated = _line(estimated)
+    statement.net_profit_estimated = _line(before_tax - estimated)
 
 
 def income_statement(
@@ -423,18 +488,17 @@ def income_statement(
     '''
     sums = _Sums(period.flows, context.catalog)
     day = _start_of(period.key)
-    vat_debit, vat_credit = _vat(sums, rate_on(context.rates, VAT_CODE, day))
+    settings = context.settings
+    vat_debit, vat_credit = _vat(sums, rate_on(context.rates, settings.vat_code, day),
+                                 settings.sales_group)
     it_amount, it_origin, notices = _transactions_tax(
-        period, sums, rate_on(context.rates, IT_CODE, day))
-    statement = _statement(sums, (vat_debit, vat_credit), (it_amount, it_origin))
+        period, sums, rate_on(context.rates, settings.it_code, day), settings)
+    statement = _statement(sums, (vat_debit, vat_credit), (it_amount, it_origin), settings)
     if len(period.key) == 4:
         # The IUE is paid on the year: only an annual report estimates it.
-        before_tax = statement.profit_before_income_tax.amount
-        estimated = max(before_tax, 0) * rate_on(context.rates, IUE_CODE, day)
-        statement.income_tax_estimated = _line(estimated)
-        statement.net_profit_estimated = _line(before_tax - estimated)
+        _estimate_income_tax(statement, rate_on(context.rates, settings.iue_code, day))
 
-    provision = _provision(sums, context.provision_rate)
+    provision = _provision(sums, context.provision_rate, settings.sales_group)
     if provision is None:
         notices.append(ReportError.IUE_PROVISION_NOT_SET)
     taxes = PeriodTaxesSchema(
@@ -450,7 +514,8 @@ def income_statement(
 
 def balance_sheet(
     period: Period,
-    catalog: dict[str, dict]
+    catalog: dict[str, dict],
+    settings: ReportSettings
 ) -> tuple[BalanceSheetSchema, list[ReportError]]:
     '''
         The balances at the end of the period, with what the client loaded.
@@ -458,6 +523,7 @@ def balance_sheet(
         Args:
             period (Period): The period.
             catalog (dict[str, dict]): The accounts, by code.
+            settings (ReportSettings): The business values of the report.
 
         Returns:
             tuple[BalanceSheetSchema, list[ReportError]]: The balance and its notices.
@@ -475,17 +541,18 @@ def balance_sheet(
                                    of_type(AccountType.EQUITY))
     difference = assets - liabilities - equity
     sheet = BalanceSheetSchema(
-        assets = _round(assets),
-        current_assets = _round(sums.total(lambda e, a: _in_group(e.account_code,
-                                                                  CURRENT_ASSETS_GROUP))),
-        cash = _round(sums.total(lambda e, a: e.account_code in CASH_ACCOUNTS)),
-        liabilities = _round(liabilities),
-        current_liabilities = _round(sums.total(lambda e, a: _in_group(
-            e.account_code, CURRENT_LIABILITIES_GROUP))),
-        equity = _round(equity), difference = _round(difference)
+        assets = assets,
+        current_assets = sums.total(lambda e, a: _in_group(e.account_code,
+                                                           settings.current_assets_group)),
+        cash = sums.total(lambda e, a: e.account_code in settings.cash_accounts),
+        liabilities = liabilities,
+        current_liabilities = sums.total(lambda e, a: _in_group(
+            e.account_code, settings.current_liabilities_group)),
+        equity = equity, difference = difference
     )
     # A balance that does not square is said, never corrected (Rafael, 15-oct).
-    return sheet, [ReportError.BALANCE_MISMATCH] if abs(difference) > BALANCE_TOLERANCE else []
+    mismatch = abs(difference) > settings.balance_tolerance
+    return sheet, [ReportError.BALANCE_MISMATCH] if mismatch else []
 
 
 def _ratio(
@@ -500,11 +567,11 @@ def _ratio(
             denominator (float | None): Bottom.
 
         Returns:
-            float | None: The ratio, rounded.
+            float | None: The ratio, unrounded: the report rounds at the end.
     '''
     if numerator is None or not denominator:
         return None
-    return round(numerator / denominator, RATIO_DECIMALS)
+    return numerator / denominator
 
 
 def indicators(
@@ -547,7 +614,7 @@ def _period_report(
             PeriodReportSchema: The report.
     '''
     statement, taxes, outflow, notices = income_statement(period, context)
-    sheet, sheet_notices = balance_sheet(period, context.catalog)
+    sheet, sheet_notices = balance_sheet(period, context.catalog, context.settings)
     return PeriodReportSchema(
         period = period.key, origin = period.origin.value, income_statement = statement,
         taxes = taxes, balance = sheet, indicators = indicators(sheet, monthly_outflow(outflow)),
@@ -579,7 +646,7 @@ def build_report(
             key: str = key
         ) -> float:
             outflows[key] = outflow
-            recent = [outflows[k] for k in sorted(outflows)[-COVERAGE_MONTHS:]]
+            recent = [outflows[k] for k in sorted(outflows)[-context.settings.coverage_months:]]
             return sum(recent) / len(recent)
         month_reports.append(_period_report(months[key], context, recent_average))
     year_reports = [
@@ -589,17 +656,63 @@ def build_report(
     ]
     history = len(months)
     report_notices = []
-    if history < MIN_MONTHS_FOR_TRENDS:
+    if history < context.settings.min_months_for_trends:
         report_notices.append(ReportError.NOT_ENOUGH_HISTORY_FOR_TRENDS)
-    if history < MIN_MONTHS_FOR_PROJECTION:
+    if history < context.settings.min_months_for_projection:
         report_notices.append(ReportError.NOT_ENOUGH_HISTORY_FOR_PROJECTION)
-    return FinanceReportSchema(months = month_reports, years = year_reports,
-                               notices = report_notices)
+    return _rounded(FinanceReportSchema(months = month_reports, years = year_reports,
+                                        notices = report_notices), context.settings)
+
+
+def _rounded(
+    report: FinanceReportSchema,
+    settings: ReportSettings
+) -> FinanceReportSchema:
+    '''
+        The report as it is published: amounts and ratios rounded once, at
+        the end, with the decimals PARAMETERS holds. The calculation itself
+        never rounds, so no error piles up from one line to the next.
+
+        Args:
+            report (FinanceReportSchema): The report, unrounded.
+            settings (ReportSettings): The decimals to publish with.
+
+        Returns:
+            FinanceReportSchema: The same report, rounded.
+    '''
+    for period in report.months + report.years:
+        lines = [line for _, line in period.income_statement if line is not None]
+        lines += [line for _, line in period.taxes]
+        for line in lines:
+            line.amount = _round(line.amount, settings.amount_decimals)
+        for name, value in period.balance:
+            setattr(period.balance, name, _round(value, settings.amount_decimals))
+        for name, value in period.indicators:
+            setattr(period.indicators, name, _round(value, settings.ratio_decimals))
+    return report
+
+
+def report_settings(auth_token: str | None) -> ReportSettings:
+    '''
+        The report's business values, read from PARAMETERS with the caller's
+        token. A missing one stops the report: there is no default in the code.
+
+        Args:
+            auth_token (str | None): The caller's Authorization header.
+
+        Returns:
+            ReportSettings: The values.
+    '''
+    return settings_from(
+        required_parameters(read_parameters(FINANCE_SCOPE, auth_token), FINANCE_CODES),
+        required_parameters(read_parameters(GLOBAL_SCOPE, auth_token), GLOBAL_CODES)
+    )
 
 
 def finance_report(
     dynamodb_resource: ServiceResource,
-    client: str
+    client: str,
+    auth_token: str | None
 ) -> FinanceReportSchema:
     '''
         The report of a client, read from its amounts and the parameters.
@@ -607,13 +720,16 @@ def finance_report(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             client (str): The owner.
+            auth_token (str | None): The caller's Authorization header, for PARAMETERS.
 
         Returns:
             FinanceReportSchema: The report.
     '''
+    settings = report_settings(auth_token)
     context = Context(
         catalog = catalog_by_code(dynamodb_resource),
         rates = law_rates(dynamodb_resource),
-        provision_rate = client_value(dynamodb_resource, client, IUE_PROVISION_CODE)
+        provision_rate = client_value(dynamodb_resource, client, settings.iue_provision_code),
+        settings = settings
     )
     return build_report(list_entries(dynamodb_resource, client).entries, context)

@@ -10,7 +10,19 @@ import pytest
 
 from schemas.entries import EntrySchema, LoadFlow, Periodicity
 from schemas.report import FigureOrigin, ReportError
-from services.report import Context, build_report
+from services.report import Context, build_report, settings_from
+
+# The values docs/parametros.md seeds into PARAMETERS.
+FINANCE_VALUES = {
+    'SALES_GROUP': '4.1', 'FINANCIAL_EXPENSE_GROUP': '6.3', 'IT_ACCOUNT': '6.1.10',
+    'CASH_ACCOUNTS': ['1.1.01', '1.1.02', '1.1.03', '1.1.04', '1.1.05'],
+    'CURRENT_ASSETS_GROUP': '1.1', 'CURRENT_LIABILITIES_GROUP': '2.1', 'VAT_CODE': 'IVA',
+    'TRANSACTIONS_TAX_CODE': 'IT', 'INCOME_TAX_CODE': 'IUE',
+    'INCOME_TAX_PROVISION_CODE': 'IUE_PROVISION', 'COVERAGE_MONTHS': 3.0,
+    'MIN_MONTHS_FOR_TRENDS': 3.0, 'MIN_MONTHS_FOR_PROJECTION': 12.0, 'BALANCE_TOLERANCE': 1.0,
+}
+GLOBAL_VALUES = {'AMOUNT_DECIMALS': 2.0, 'RATIO_DECIMALS': 2.0}
+SETTINGS = settings_from(FINANCE_VALUES, GLOBAL_VALUES)
 
 CATALOG = {code: {'account_code': code, 'account_type': code[0], 'group_code': code[:3],
                   **extra}
@@ -83,7 +95,7 @@ def _report(
         Returns:
             FinanceReportSchema: The report.
     '''
-    return build_report(entries, Context(CATALOG, RATES, provision))
+    return build_report(entries, Context(CATALOG, RATES, provision, SETTINGS))
 
 
 def test_the_income_statement_follows_the_approved_layout():
@@ -193,3 +205,13 @@ def test_the_minimum_history_is_said(
     '''3 months for trends, 12 to project (approved by Rafael).'''
     entries = [_entry('6.1.03', 1, date = f'2025-{m:02d}') for m in range(1, months + 1)]
     assert set(_report(entries).notices) == notices
+
+
+def test_a_value_changed_in_parameters_changes_the_report():
+    '''The tolerance the ADMIN sets is the one the balance uses: no release.'''
+    entries = [e for e in _month() if e.account_code != '1.1.01'] + [_entry('1.1.01', 105)]
+    strict = _report(entries).months[0]
+    lenient = build_report(entries, Context(CATALOG, RATES, 2.0, settings_from(
+        {**FINANCE_VALUES, 'BALANCE_TOLERANCE': 10.0}, GLOBAL_VALUES))).months[0]
+    assert ReportError.BALANCE_MISMATCH in strict.notices
+    assert ReportError.BALANCE_MISMATCH not in lenient.notices

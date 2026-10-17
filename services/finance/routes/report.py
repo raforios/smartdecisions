@@ -6,7 +6,7 @@
     only its ADMIN changes them.
 '''
 from boto3.resources.base import ServiceResource
-from fastapi import APIRouter, Depends, Path as PathParam, Request, status
+from fastapi import APIRouter, Depends, Header, Path as PathParam, Request, status
 
 from controllers.report import (
     finance_report_controller,
@@ -49,6 +49,7 @@ router = APIRouter(prefix = '/v1/finance', tags = ['Financial analysis — repor
 )
 async def finance_report_endpoint(
     request: Request,
+    authorization: str | None = Header(None),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     client: str = Depends(require_roles(*FINANCE_ROLES)),
     current_user: str = Depends(get_current_user)
@@ -61,6 +62,7 @@ async def finance_report_endpoint(
     return await finance_report_controller(
         dynamodb_resource = dynamodb_resource,
         client = client,
+        auth_token = authorization,
         current_user = current_user,
         request = request
     )

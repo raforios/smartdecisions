@@ -47,6 +47,13 @@ directorio.
 | GET · PUT | `/v1/finance/parameters` | `MANAGER` (sus parámetros, junto a la sugerencia) |
 | GET · PUT | `/v1/finance/suggested-parameters` | Cualquiera lee; `ADMIN` cambia |
 
+## Valores de negocio
+
+Las cuentas que cumplen cada papel en el informe, los códigos de las tasas,
+la historia mínima, la tolerancia del balance y los decimales se leen de
+**PARAMETERS** (alcances `finance` y `global`), no del `.env`: el `ADMIN` los
+cambia sin redesplegar. Están definidos en `docs/parametros.md`.
+
 ## Tablas y siembra
 
 Las tablas se crean con `services/ci/api/create_dynamodb_tables.sh`. El

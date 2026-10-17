@@ -37,6 +37,7 @@ from pydantic import BaseModel, ValidationError
 from botocore.exceptions import ClientError as AWSClientError
 
 from schemas.files import FilesError
+from schemas.parameters import ParametersError
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
     InvalidInputError,
@@ -656,3 +657,94 @@ def delete_stored_file(
     _handle_files_service('delete', auth_token, file_key = file_key)
     message = f'Deleted {file_key} through FILES.'
     logger.info(message)
+
+
+# ---------------------------------------------------------------------------
+# PARAMETERS: the standard addition for a service that reads business values
+# ---------------------------------------------------------------------------
+#
+# Approved by Rafael on 17-oct-2026 (CLAUDE.md §5.3): the `.env` is only the
+# environment; decimals, accounts, thresholds live in PARAMETERS and change
+# without a release. A service reads its own scope and `global` by HTTP,
+# forwarding its caller's token, and keeps what it read for a few minutes so
+# PARAMETERS is not asked on every request. It talks to PARAMETERS and to
+# nothing else: no other service's tables.
+
+PARAMETERS_ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'PARAMETERS_SERVICE_URL': str,
+        'PARAMETERS_CACHE_SECONDS': int
+    }
+)
+PARAMETERS_SERVICE_URL = PARAMETERS_ENV_VARS['PARAMETERS_SERVICE_URL'].rstrip('/')
+PARAMETERS_CACHE_SECONDS = PARAMETERS_ENV_VARS['PARAMETERS_CACHE_SECONDS']
+
+# {scope: (moment it expires, {code: value})}, per warm container.
+_PARAMETERS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def read_parameters(
+    scope: str,
+    auth_token: str | None
+) -> dict[str, Any]:
+    '''
+        The business values of one scope, read through PARAMETERS and kept
+        for PARAMETERS_CACHE_SECONDS.
+
+        Args:
+            scope (str): `global` or this service's name.
+            auth_token (str | None): The caller's Authorization header.
+
+        Returns:
+            dict[str, Any]: {code: value}; a NUMBER as float, a LIST as a list.
+
+        Raises:
+            ServiceUnavailableError: PARAMETERS unreachable or refusing.
+    '''
+    cached = _PARAMETERS_CACHE.get(scope)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+    try:
+        response = req.get(f'{PARAMETERS_SERVICE_URL}/v1/parameters/{scope}',
+                           headers = {'Authorization': auth_token or ''},
+                           timeout = REQUEST_TIMEOUT_SECONDS)
+    except req.exceptions.RequestException as error:
+        error_msg = f'Network error reading the {scope} parameters: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(detail = ParametersError.UNREACHABLE.value) from error
+    if not response.ok:
+        error_msg = (f'PARAMETERS refused the {scope} parameters: '
+                     f'status={response.status_code} body={response.text[:300]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = ParametersError.REJECTED.value)
+    values = {item['code']: item['value'] for item in response.json().get('parameters', [])}
+    _PARAMETERS_CACHE[scope] = (time.monotonic() + PARAMETERS_CACHE_SECONDS, values)
+    message = f'Read {len(values)} {scope} parameter(s) from PARAMETERS.'
+    logger.info(message)
+    return values
+
+
+def required_parameters(
+    values: dict[str, Any],
+    codes: tuple[str, ...]
+) -> dict[str, Any]:
+    '''
+        The values a calculation needs, all of them or none: a missing one
+        stops it instead of running on a number nobody chose.
+
+        Args:
+            values (dict[str, Any]): What PARAMETERS answered.
+            codes (tuple[str, ...]): The codes the calculation reads.
+
+        Returns:
+            dict[str, Any]: The same values.
+
+        Raises:
+            ServiceUnavailableError: PARAMETER_MISSING.
+    '''
+    missing = [code for code in codes if code not in values]
+    if missing:
+        error_msg = f'Parameters missing in PARAMETERS: {missing}.'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = ParametersError.MISSING.value)
+    return values

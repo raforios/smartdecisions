@@ -34,6 +34,7 @@ from services.utils import audit_event, handle_service_errors
 async def finance_report_controller(
     dynamodb_resource: ServiceResource,
     client: str,
+    auth_token: str | None,
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
 ) -> FinanceReportSchema:
@@ -43,13 +44,14 @@ async def finance_report_controller(
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             client (str): The owner of the data, from the token.
+            auth_token (str | None): The caller's Authorization header, for PARAMETERS.
             current_user (str): The user, read by the decorators.
             request (Request): Incoming request, used by the decorators.
 
         Returns:
             FinanceReportSchema: Every month and every year.
     '''
-    return finance_report(dynamodb_resource, client)
+    return finance_report(dynamodb_resource, client, auth_token)
 
 
 @handle_service_errors('FINANCE')

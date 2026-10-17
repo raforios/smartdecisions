@@ -45,6 +45,8 @@ from schemas.report import (
     SuggestedParameterSchema
 )
 from services import entries, security
+from services import report as report_service
+from tests.test_report import FINANCE_VALUES, GLOBAL_VALUES
 
 
 def _bearer(**claims) -> str:
@@ -190,7 +192,10 @@ def test_a_seller_cannot_see_the_finances():
     assert response.json()['detail'] == 'ROLE_NOT_ALLOWED'
 
 
-def test_every_report_route_answers_its_model(catalog):
+def test_every_report_route_answers_its_model(
+    catalog,
+    monkeypatch
+):
     '''The report, the client's parameters and the suggestions, called as the API calls them.'''
     for code, rate in (('IVA', 13.0), ('IT', 3.0), ('IUE', 25.0)):
         _run(routes.set_law_parameter_endpoint(
@@ -218,7 +223,10 @@ def test_every_report_route_answers_its_model(catalog):
         parameter_code = 'IUE_PROVISION', **who))
     assert isinstance(chosen, ClientParameterResponseSchema)
 
-    report = _run(report_routes.finance_report_endpoint(request = None, **who))
+    monkeypatch.setattr(report_service, 'read_parameters', lambda scope, token: (
+        FINANCE_VALUES if scope == 'finance' else GLOBAL_VALUES))
+    report = _run(report_routes.finance_report_endpoint(request = None, authorization = 'Bearer x',
+                                                        **who))
     assert isinstance(report, FinanceReportSchema)
     month = report.months[0]
     assert (month.income_statement.sales_vat.amount, month.taxes.income_tax_provision.amount) == (
