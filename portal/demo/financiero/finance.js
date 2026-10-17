@@ -43,7 +43,8 @@
             'Revisa los saldos cargados.',
         NOT_ENOUGH_HISTORY_FOR_TRENDS: 'Con menos de 3 meses cargados no se pueden ver tendencias.',
         NOT_ENOUGH_HISTORY_FOR_PROJECTION: 'Con menos de 12 meses cargados todavía no se puede proyectar.',
-        RATES_UNAVAILABLE: 'No se pudo leer el tipo de cambio: los montos se ven sólo en bolivianos.'
+        RATES_UNAVAILABLE: 'No se pudo leer el tipo de cambio: los montos se ven sólo en bolivianos.',
+        NO_CASH_LOADED: 'El último mes no tiene saldos de caja ni bancos: la proyección parte de cero.'
     };
 
     const ERRORS = {
@@ -63,7 +64,9 @@
         ENTRY_NOT_FOUND: 'Ese monto ya no existe.',
         PARAMETER_NOT_FOUND: 'Ese parámetro no existe.',
         PARAMETERS_SERVICE_REJECTED: 'No se pudieron leer los parámetros del cálculo.',
-        PARAMETER_MISSING: 'Falta un parámetro del cálculo; avisa al administrador.'
+        PARAMETER_MISSING: 'Falta un parámetro del cálculo; avisa al administrador.',
+        HORIZON_OUT_OF_RANGE: 'Los meses a proyectar están fuera del rango permitido.',
+        CHANGE_OUT_OF_RANGE: 'Un porcentaje de escenario está fuera del rango permitido.'
     };
 
     const PERIODICITY_LABELS = { DAILY: 'Diaria', MONTHLY: 'Mensual', ANNUAL: 'Anual' };

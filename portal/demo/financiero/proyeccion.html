@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="../styles/analyses.css?v=4978003d78">
+    <link rel="stylesheet" href="financiero.css?v=101cf5ec79">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=4a13bfbaea"></script>
+    <script src="../js/auth.js?v=e0c72ecc39" defer></script>
+    <script src="../js/icons.js?v=7d327bd034" defer></script>
+    <script src="../js/shell.js?v=53a2beaced" defer></script>
+    <script src="../js/api.js?v=7206932d80" defer></script>
+    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/money.js?v=b4de0251ff" defer></script>
+    <script src="finance.js?v=8816c2b9ab" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="proyeccion.js" defer></script>
+    <title>Proyección — SmartDecisions</title>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <div class="sd-page-head"><div><h1>Proyección</h1>
+            <p>Cómo pueden ir los próximos meses en tres escenarios, y hasta cuándo te alcanza el efectivo en cada uno.</p></div></div>
+
+        <section class="card">
+            <form class="form-stack" id="scenarioForm" autocomplete="off">
+                <div class="field-row">
+                    <label class="field"><span>Meses a proyectar</span>
+                        <input type="number" id="horizon" min="1" step="1"></label>
+                </div>
+                <div class="field-row">
+                    <label class="field"><span>Peor: ventas (%)</span>
+                        <input type="number" id="worstSales" step="0.1"></label>
+                    <label class="field"><span>Peor: egresos (%)</span>
+                        <input type="number" id="worstOutflow" step="0.1"></label>
+                    <label class="field"><span>Mejor: ventas (%)</span>
+                        <input type="number" id="bestSales" step="0.1"></label>
+                    <label class="field"><span>Mejor: egresos (%)</span>
+                        <input type="number" id="bestOutflow" step="0.1"></label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-ghost btn-small" id="scenarioReset">Volver a los valores sugeridos</button>
+                    <button type="submit" class="btn btn-primary btn-small" id="scenarioRun">Recalcular</button>
+                </div>
+            </form>
+            <p class="chart-hint" id="modelLine"></p>
+            <ul class="notice-list" id="notices"></ul>
+        </section>
+
+        <div class="metric-grid" id="scenarioCards"></div>
+
+        <section class="card">
+            <h3 class="chart-title">Efectivo disponible por escenario</h3>
+            <p class="chart-hint">En bolivianos. Sin lo reservado para el IUE: esa plata ya tiene destino.</p>
+            <div class="chart-box"><canvas id="cashChart"></canvas></div>
+        </section>
+
+        <section class="card">
+            <div class="period-bar">
+                <label class="field"><span>Escenario</span>
+                    <select id="scenarioSelect">
+                        <option value="REALISTIC">Realista</option>
+                        <option value="WORST">Peor</option>
+                        <option value="BEST">Mejor</option>
+                    </select></label>
+                <p class="chart-hint" id="ratesLine"></p>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="monthsTable">
+                    <thead><tr><th>Mes</th><th class="numeric">Ventas netas</th><th class="numeric">Egresos</th>
+                        <th class="numeric">Utilidad</th><th class="numeric">IUE pagado</th>
+                        <th class="numeric">Reserva IUE</th><th class="numeric">Efectivo Bs</th>
+                        <th class="numeric">USD</th><th class="numeric">USDT</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

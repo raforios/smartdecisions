@@ -46,6 +46,7 @@
                 { label: 'Estado de Resultados', page: 'financiero/resultados.html' },
                 { label: 'Balance General', page: 'financiero/balance.html' },
                 { label: 'Impuestos', page: 'financiero/impuestos.html' },
+                { label: 'Proyección', page: 'financiero/proyeccion.html' },
                 { label: 'Cargar datos', page: 'financiero/cargar.html' }
             ] },
             { label: 'Comercial', icon: 'commerce', page: 'comercial/index.html', children: [
