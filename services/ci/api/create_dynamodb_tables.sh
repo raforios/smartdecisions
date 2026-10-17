@@ -120,6 +120,10 @@ TABLES=(
     # se ordena por "periodicidad#fecha#cuenta", así un período es un prefijo.
     "finance_loads:client:S:load_id:S"
     "finance_entries:client:S:entry_key:S"
+    # Lo que BearSoft sugiere a todos (ADMIN) y lo que cada cliente eligió: la
+    # provisión del IUE se sugiere y el cliente la define (Rafael, 16-oct).
+    "finance_suggested_parameters:parameter_code:S"
+    "finance_client_parameters:client:S:parameter_code:S"
 
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"
