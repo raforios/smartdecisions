@@ -93,8 +93,16 @@ nombrados por funcionalidad.
 ## 4. Servicios
 
 **Base**, compartidos por todos los productos: **AUTH** (JWT, DynamoDB),
-**EVENTS** (auditoría, DynamoDB), **FILES** (S3) y **PARAMETERS** (valores de
-negocio que cambian sin redesplegar, DynamoDB; desde el 17-oct-2026, §5.3).
+**EVENTS** (auditoría, DynamoDB), **FILES** (S3), **ML_FUNCTIONS** (el centro
+de cálculos y fórmulas: predicciones, proyecciones, clasificaciones) y
+**PARAMETERS** (valores de negocio que cambian sin redesplegar, DynamoDB).
+ML_FUNCTIONS y PARAMETERS son base desde el 17-oct-2026 (Rafael).
+
+**Un cálculo común vive una sola vez.** Proyectar una serie, clasificar,
+ajustar un modelo: lo pide cada servicio por HTTP a ML_FUNCTIONS, como pide
+autenticación a AUTH, en vez de guardar su propia copia de la fórmula. FINANCE
+ya lo hace (`/v1/prediction/forecast`); ANALYTICS, MINING_ANALYSIS y QUOTES
+tienen todavía su copia y se pasan después del Análisis Financiero.
 
 **SmartDecisions:** INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI.
 
