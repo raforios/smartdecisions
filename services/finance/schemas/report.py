@@ -23,6 +23,7 @@ class ReportError(str, Enum):
     BALANCE_MISMATCH = 'BALANCE_MISMATCH'
     NOT_ENOUGH_HISTORY_FOR_TRENDS = 'NOT_ENOUGH_HISTORY_FOR_TRENDS'
     NOT_ENOUGH_HISTORY_FOR_PROJECTION = 'NOT_ENOUGH_HISTORY_FOR_PROJECTION'
+    RATES_UNAVAILABLE = 'RATES_UNAVAILABLE'
 
 
 class FigureOrigin(str, Enum):
@@ -100,6 +101,17 @@ class IndicatorsSchema(BaseModel):
     )
 
 
+class ExchangeSchema(BaseModel):
+    '''
+        The rates a period's bolivianos are read at: those in force on its
+        closing day (today, while it is open). Bs per dollar; None where no
+        rate exists — USDT before its series began.
+    '''
+    date: str
+    usd: float | None
+    usdt: float | None
+
+
 class PeriodReportSchema(BaseModel):
     '''
         The report of one month or one year.
@@ -110,6 +122,10 @@ class PeriodReportSchema(BaseModel):
     taxes: PeriodTaxesSchema
     balance: BalanceSheetSchema
     indicators: IndicatorsSchema
+    exchange: ExchangeSchema | None = Field(
+        None, description = 'Rates of the period, from QUOTES, to show every amount '
+                            'in Bs, USD and USDT.'
+    )
     notices: list[ReportError] = Field(default_factory = list)
 
 

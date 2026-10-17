@@ -40,6 +40,7 @@ from schemas.report import (
     ClientParameterListResponseSchema,
     ClientParameterResponseSchema,
     ClientParameterSchema,
+    ExchangeSchema,
     FinanceReportSchema,
     SuggestedParameterListResponseSchema,
     SuggestedParameterSchema
@@ -225,9 +226,13 @@ def test_every_report_route_answers_its_model(
 
     monkeypatch.setattr(report_service, 'read_parameters', lambda scope, token: (
         FINANCE_VALUES if scope == 'finance' else GLOBAL_VALUES))
+    monkeypatch.setattr(report_service, 'period_rates', lambda periods, today, token: (
+        {period: ExchangeSchema(date = '2026-03-31', usd = 6.96, usdt = None)
+         for period in periods}, []))
     report = _run(report_routes.finance_report_endpoint(request = None, authorization = 'Bearer x',
                                                         **who))
     assert isinstance(report, FinanceReportSchema)
     month = report.months[0]
     assert (month.income_statement.sales_vat.amount, month.taxes.income_tax_provision.amount) == (
         130, 20)
+    assert month.exchange.usd == 6.96

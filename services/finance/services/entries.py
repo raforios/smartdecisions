@@ -70,7 +70,7 @@ _FILE_FIRST_ROW = 2
 _API_FIRST_ROW = 1
 
 
-def _today() -> datetime:
+def local_now() -> datetime:
     '''
         Now, in the client's timezone: "a date after today" is a local idea.
 
@@ -214,7 +214,7 @@ def _validate_load(
 
     first_row = _FILE_FIRST_ROW if channel is LoadChannel.FILE else _API_FIRST_ROW
     return validate_rows(rows, catalog_by_code(dynamodb_resource),
-                         _today().date(), stored_has, first_row)
+                         local_now().date(), stored_has, first_row)
 
 
 def _store_entries(
@@ -473,7 +473,7 @@ def _corrected_entry(
                             'amount': float(stored['amount']),
                             **update.model_dump(exclude_unset = True)})
     try:
-        entry = validate_row(row, catalog_by_code(dynamodb_resource), _today().date())
+        entry = validate_row(row, catalog_by_code(dynamodb_resource), local_now().date())
         if entry.key != stored['entry_key']:
             _check_new_place(dynamodb_resource, client, entry)
     except RowRejected as refusal:

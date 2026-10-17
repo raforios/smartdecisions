@@ -31,9 +31,10 @@ from schemas.report import (
     PeriodTaxesSchema,
     ReportError
 )
-from services.entries import list_entries
+from services.entries import list_entries, local_now
 from services.finance import catalog_by_code
 from services.parameters import client_value, law_rates, rate_on
+from services.rates import period_rates
 from services.utils import read_parameters, required_parameters
 
 # The business values the report reads, by their code in PARAMETERS: the
@@ -732,4 +733,10 @@ def finance_report(
         provision_rate = client_value(dynamodb_resource, client, settings.iue_provision_code),
         settings = settings
     )
-    return build_report(list_entries(dynamodb_resource, client).entries, context)
+    report = build_report(list_entries(dynamodb_resource, client).entries, context)
+    rates, notices = period_rates([p.period for p in report.months + report.years],
+                                  local_now().date(), auth_token)
+    for period in report.months + report.years:
+        period.exchange = rates.get(period.period)
+    report.notices += notices
+    return report
