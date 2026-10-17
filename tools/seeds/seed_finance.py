@@ -37,8 +37,10 @@ load_dotenv(FINANCE_PATH / '.env')
 
 # pylint: disable=wrong-import-position
 from schemas.finance import AccountSchema, AccountType, LawParameterSchema  # noqa: E402
+from schemas.report import SuggestedParameterSchema  # noqa: E402
 from services.exceptions import RegisterAlreadyExistsError  # noqa: E402
 from services.finance import create_account, set_law_parameter  # noqa: E402
+from services.parameters import set_suggested_parameter  # noqa: E402
 # pylint: enable=wrong-import-position
 
 PROFILE = 'deploy_ml'
@@ -57,6 +59,8 @@ _LAW_ROW = re.compile(
 )
 _BOLD = re.compile(r'^\*\*(.+?)\*\*')
 _SUBTRACTS_PREFIX = '(Menos)'
+# A suggestion row: «| IUE_PROVISION | Name | 2 |».
+_SUGGESTION_ROW = re.compile(r'^\s*\|\s*([A-Z][A-Z_]+)\s*\|\s*(.+?)\s*\|\s*([\d.]+)\s*\|\s*$')
 
 
 def read_accounts(text: str) -> list[AccountSchema]:
@@ -110,6 +114,23 @@ def read_law_parameters(text: str) -> list[LawParameterSchema]:
     ]
 
 
+def read_suggestions(text: str) -> list[SuggestedParameterSchema]:
+    '''
+        The values BearSoft suggests to every client, from the contract.
+
+        Args:
+            text (str): The contract.
+
+        Returns:
+            list[SuggestedParameterSchema]: The suggestions.
+    '''
+    return [
+        SuggestedParameterSchema(parameter_code = match.group(1), name = match.group(2),
+                                 value = float(match.group(3)))
+        for match in map(_SUGGESTION_ROW.match, text.splitlines()) if match
+    ]
+
+
 def main() -> int:
     '''
         Entry point.
@@ -124,12 +145,15 @@ def main() -> int:
     text = CONTRACT.read_text(encoding = 'utf-8')
     accounts = read_accounts(text)
     parameters = read_law_parameters(text)
+    suggestions = read_suggestions(text)
     groups = sum(1 for account in accounts if account.group_code is None)
     subtracting = [account.account_code for account in accounts if account.subtracts]
     print(f'Catálogo: {groups} grupos y {len(accounts) - groups} cuentas; '
           f'restan: {", ".join(subtracting)}.')
     for parameter in parameters:
         print(f'Ley: {parameter.parameter_code} {parameter.rate} % desde {parameter.valid_from}')
+    for suggestion in suggestions:
+        print(f'Sugerencia: {suggestion.parameter_code} {suggestion.value} %')
     if not args.yes:
         print('Simulación: no se escribió nada. Repite con --yes.')
         return 0
@@ -144,8 +168,10 @@ def main() -> int:
             continue
     for parameter in parameters:
         set_law_parameter(resource, parameter)
+    for suggestion in suggestions:
+        set_suggested_parameter(resource, suggestion)
     print(f'{created} cuentas nuevas ({len(accounts) - created} ya estaban); '
-          f'{len(parameters)} valores de ley.')
+          f'{len(parameters)} valores de ley; {len(suggestions)} sugerencia(s).')
     return 0
 
 
