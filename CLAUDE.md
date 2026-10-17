@@ -138,11 +138,17 @@ no el modelo a copiar.
      unidad.
    - Los servicios que todavía tienen valores de negocio en el `.env` se pasan
      a PARAMETERS uno por uno, después del Análisis Financiero.
-4. **Ningún valor del `.env` puede llevar coma ni llave.** El despliegue lo pasa
+4. **Una sola dirección para los servicios: `API_URL`** (Rafael, 17-oct-2026).
+   El gateway `api.bearsoft.com.bo` envía cada `/v1/<servicio>` a su Lambda,
+   así que la ruta nombra al servicio y cada llamada arma
+   `{API_URL}/v1/<servicio>/...`. Ya unificados: FINANCE, PARAMETERS y el
+   portal; los demás servicios propios conservan sus `*_SERVICE_URL` hasta
+   que se unifiquen. Los de BINARIA apuntan a su propio gateway y no se tocan.
+5. **Ningún valor del `.env` puede llevar coma ni llave.** El despliegue lo pasa
    entero a `--environment Variables={...}`: la coma separa variables y la llave
    abre una estructura anidada. Una plantilla de URL va con `%s`, nunca con
    `{nombre}`.
-5. **Nunca** credenciales, tokens ni ARNs en el código fuente.
+6. **Nunca** credenciales, tokens ni ARNs en el código fuente.
 
 ---
 

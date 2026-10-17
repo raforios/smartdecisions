@@ -65,6 +65,8 @@ adición, se consulta primero y va al final del archivo.
 **Si el servicio carga archivos**, copia además el bloque de FILES del final
 de `finance/services/utils.py` (con sus tres imports) y `finance/schemas/files.py`,
 y agrega al `.env` `BUCKET_NAME`, `BUCKET_PATH` y `FILES_TIMEOUT_SECONDS`.
+Las llamadas a otros servicios usan una sola variable, `API_URL`, y arman la
+ruta `/v1/<servicio>` (CLAUDE.md §5.4); nunca una `*_SERVICE_URL` por servicio.
 Habla sólo con FILES: el servicio nuevo no lee tablas, buckets ni código de
 otro (`CLAUDE.md` §4).
 
