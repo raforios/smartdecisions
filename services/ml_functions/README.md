@@ -139,3 +139,12 @@ ml_functions/
 [raforios@gmail.com](mailto:raforios@gmail.com)
 
 -----
+
+## Proyección de series (servicio base de cálculo, desde el 17-oct-2026)
+
+`POST /v1/prediction/forecast`: proyecta una serie con tendencia amortiguada
+(Holt) y mide el modelo sobre la propia serie, junto al error de «el próximo
+valor igual al último». Los parámetros (`alpha`, `beta`, `phi`) los manda
+quien llama: son sus valores de negocio, en PARAMETERS. Es el cálculo común
+que piden los servicios en vez de guardar su copia; FINANCE es el primero.
+

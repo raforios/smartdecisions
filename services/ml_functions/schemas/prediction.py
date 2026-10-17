@@ -1,6 +1,8 @@
 '''
     Prediction Schemas (Request/Response)
 '''
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 from schemas.base import NumPyValidatorBase
@@ -226,3 +228,46 @@ class PredictLinearResponse(BaseModel):
         ...,
         description = 'List of predicted numerical values for new inputs.'
     )
+
+
+class ForecastModel(str, Enum):
+    '''
+        The projection models the service offers.
+    '''
+    DAMPED_TREND = 'DAMPED_TREND'
+
+
+class SmoothingSchema(BaseModel):
+    '''
+        The parameters of the damped trend. The caller sends them: they are
+        its business values (in FINANCE, from PARAMETERS).
+    '''
+    alpha: float = Field(..., gt = 0, le = 1,
+                         description = 'Weight of the last value on the level.')
+    beta: float = Field(..., gt = 0, le = 1, description = 'How fast the trend changes.')
+    phi: float = Field(..., gt = 0, le = 1, description = 'Damping per step; 1 turns it off.')
+
+
+class ForecastRequest(BaseModel):
+    '''
+        A series to project.
+    '''
+    values: list[float] = Field(..., min_length = 2, max_length = 1000,
+                                description = 'The history, oldest first.')
+    horizon: int = Field(..., ge = 1, le = 120, description = 'Steps ahead.')
+    model: ForecastModel
+    smoothing: SmoothingSchema
+    backtest_points: int = Field(..., ge = 1, le = 120,
+                                 description = 'Last points the error is measured on.')
+
+
+class ForecastResponse(BaseModel):
+    '''
+        The projection, and how good the model has been on the series itself.
+    '''
+    model: ForecastModel
+    forecast: list[float]
+    error_percent: float | None = Field(
+        None, description = 'Mean absolute % error on the last points; None without data.')
+    naive_error_percent: float | None = Field(
+        None, description = 'The same error for "the next value is the same as the last".')

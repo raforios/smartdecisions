@@ -8,7 +8,8 @@ from controllers.prediction import (
     compute_cost_linear_regression,
     compute_gradient_linear_regression,
     train_linear_regression,
-    predict_linear_regression
+    predict_linear_regression,
+    forecast_series
 )
 from schemas.prediction import (
     ComputeCostLinearRequest,
@@ -18,7 +19,9 @@ from schemas.prediction import (
     TrainLinearRegressionRequest,
     TrainLinearRegressionResponse,
     PredictLinearRequest,
-    PredictLinearResponse
+    PredictLinearResponse,
+    ForecastRequest,
+    ForecastResponse
 )
 
 router = APIRouter(prefix = '/v1/prediction', tags = ['ML Prediction'])
@@ -167,3 +170,31 @@ async def predict_linear_regression_route(
     message = f'User: {current_user} requested linear regression prediction for new data.'
     logger.info(message)
     return await predict_linear_regression(request)
+
+
+@router.post(
+    '/forecast',
+    response_model = ForecastResponse,
+    summary = 'Project a series',
+    description = '''Projects a series with a damped trend and measures the
+        model on the series itself, next to the naive guess. The shared
+        projection every service asks for (FINANCE first).'''
+)
+async def forecast_series_route(
+    request: ForecastRequest,
+    current_user: str = Depends(get_current_user)
+) -> ForecastResponse:
+    '''
+        Projects a series and returns its error next to the naive one.
+
+        Args:
+            request (ForecastRequest): The history, the horizon, the model and its parameters.
+            current_user (str): The authenticated user's identifier (dependency-injected).
+
+        Returns:
+            ForecastResponse: The projection and its errors.
+    '''
+    message = (f'User: {current_user} requested a {request.horizon}-step forecast '
+               f'of {len(request.values)} values.')
+    logger.info(message)
+    return await forecast_series(request)
