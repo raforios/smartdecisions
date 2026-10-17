@@ -11,17 +11,18 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-# The eleven services BearSoft owns, in the four groups of SMARTDECISIONS.md.
+# The services BearSoft owns, in the four groups of SMARTDECISIONS.md: FINANCE
+# joined on 15-10-2026 and PARAMETERS on 17-10-2026.
 # AUTH, EVENTS, FILES and ML_FUNCTIONS were missing until 27-09-2026, so they
 # accumulated findings nobody ever saw: a sweep that skips a service is a
 # sweep that certifies it by omission.
 PRODUCT_SERVICES = (
     # SmartDecisions
-    'ingest', 'analytics', 'optimization', 'mining_analysis', 'quotes', 'ai',
+    'ingest', 'analytics', 'optimization', 'mining_analysis', 'quotes', 'ai', 'finance',
     # SmartBilling
     'billing',
     # Genéricos y obligatorios
-    'auth', 'events', 'files',
+    'auth', 'events', 'files', 'parameters',
     # Capacitación
     'ml_functions',
 )
