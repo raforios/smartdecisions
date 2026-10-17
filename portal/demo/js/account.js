@@ -6,7 +6,7 @@
  */
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated()) return;
-    const { AUTH_URL } = window.SD_CONFIG;
+    const { API_URL } = window.SD_CONFIG;
     const { qs, qsAll, toast, setButtonBusy, revealToggle } = window.SD_UI;
 
     const ROLES = { MANAGER: 'Gerente', REQUESTER: 'Consulta', ADMIN: 'Administrador', SELLER: 'Vendedor' };
@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { dateStyle: 'long', timeStyle: 'short' }) : 'Sin registro aún');
 
     async function load() {
-        const profile = await window.SD_API.get(`${AUTH_URL}/v1/users/me`).catch(() => null);
+        const profile = await window.SD_API.get(`${API_URL}/v1/users/me`).catch(() => null);
         if (!profile) {
             qs('#accountData').innerHTML = '<p class="sd-empty">No se pudieron leer tus datos.</p>';
             return;
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const done = setButtonBusy(qs('#passwordSave'), 'Cambiando…');
         try {
-            await window.SD_API.post(`${AUTH_URL}/v1/users/me/password`,
+            await window.SD_API.post(`${API_URL}/v1/users/me/password`,
                 { current_password: current, new_password: fresh });
             qs('#passwordForm').reset();
             hideAll.forEach((hide) => hide());

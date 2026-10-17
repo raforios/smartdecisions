@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
     if (window.SD_SESSION) window.SD_SESSION.mountChip('sessionChip', false);
 
-    const QUOTES_URL = window.SD_CONFIG.QUOTES_URL;
+    const QUOTES_URL = window.SD_CONFIG.API_URL;
     const {
         CONFIDENCE_LABELS, METHOD_LABELS, errorText,
         money, percent, changeClass, shortDate, fullDate, sparkline

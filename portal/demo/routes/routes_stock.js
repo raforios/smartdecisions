@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             note('#stockFileNote', 'Validando el archivo…');
             const ingested = await window.SD_API.post(
-                `${window.SD_CONFIG.INGEST_URL}/v1/ingest/${encodeURIComponent(datasetId)}` +
+                `${window.SD_CONFIG.API_URL}/v1/ingest/${encodeURIComponent(datasetId)}` +
                 '/stock/from-s3',
                 { file_key: fileKey, file_name: file.name }
             );

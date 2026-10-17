@@ -13,26 +13,11 @@
  */
 window.SD_CONFIG = {
     // --- Base services (shared by every BearSoft product) ---
-    AUTH_URL:          'https://api.bearsoft.com.bo',
-    EVENTS_URL:        'https://api.bearsoft.com.bo',
-    FILES_URL:         'https://api.bearsoft.com.bo',
-    ML_FUNCTIONS_URL:  'https://api.bearsoft.com.bo',
+    // One address for every service (Rafael, 17-oct-2026): the gateway
+    // api.bearsoft.com.bo sends each /v1/<service> to its Lambda, so the path
+    // names the service. The AI button shows only while this is set.
+    API_URL:           'https://api.bearsoft.com.bo',
 
-    // --- SmartDecisions services ---
-    INGEST_URL:        'https://api.bearsoft.com.bo',
-    OPTIMIZATION_URL:  'https://api.bearsoft.com.bo',
-    ANALYTICS_URL:     'https://api.bearsoft.com.bo',
-    MINING_URL:        'https://api.bearsoft.com.bo',
-    QUOTES_URL:        'https://api.bearsoft.com.bo',
-    FINANCE_URL:       'https://api.bearsoft.com.bo',
-
-    // Interpretation layer. Defining it is what makes the
-    // "¿Qué significa esto?" button appear on each view: without it the portal
-    // works the same, only without explanations.
-    AI_URL:            'https://api.bearsoft.com.bo',
-
-    // S3 bucket where large sales files are staged (direct-to-S3 upload via
-    // pre-signed URL, bypassing the ~10 MB API Gateway limit).
     INGEST_BUCKET:     'ml-data-file-handler',
 
     // Storage keys used by sessionStorage (kept here so module pages

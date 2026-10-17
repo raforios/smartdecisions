@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
         paint('planner', 'Lo que ya se hizo', 'Las rutas recorridas sobre el mapa. Desde aquí se repite una ruta.');
         paint('plans', 'Lo que viene', 'De hoy en adelante: impórtalos, infiérelos, asígnalos y actívalos.');
         paint('optimize', 'El orden más corto', 'La ruta que ya tienes contra el orden que la acorta, con el ahorro.');
-        const day = (offset) => window.SD_API.get(`${window.SD_CONFIG.OPTIMIZATION_URL}` +
+        const day = (offset) => window.SD_API.get(`${window.SD_CONFIG.API_URL}` +
             `/v1/optimization/statistics/day/${isoDay(offset)}`).catch(() => null);
         const [today, yesterday] = await Promise.all([day(0), day(-1)]);
         O.tile('live').innerHTML =

@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const { qs, toast, setButtonBusy } = window.SD_UI;
     const { errorText, money, shortDate, escapeHtml } = window.SD_MIN;
     const API = window.SD_API;
-    const BASE = `${window.SD_CONFIG.QUOTES_URL}/v1/quotes/factors`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/quotes/factors`;
     const ROWS_PER_PAGE = 10;
     const STATUS_LABELS = { ACTIVE: 'Activo', INACTIVE: 'Apagado' };
 

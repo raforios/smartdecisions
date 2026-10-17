@@ -53,7 +53,7 @@
     };
 
     // ---------- FILES client ----------
-    const FILES_URL = window.SD_CONFIG.FILES_URL.replace(/\/$/, '');
+    const FILES_URL = window.SD_CONFIG.API_URL.replace(/\/$/, '');
     const BUCKET = 'ml-data-file-handler';
 
     function _bearer() {

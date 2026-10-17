@@ -8,7 +8,7 @@
  * answer — the layer never has to scrape the DOM to find out what the user is
  * looking at, which is what makes this hook worth building before the service.
  *
- * The button only appears when SD_CONFIG.AI_URL is configured, so nothing dead
+ * The button only appears when SD_CONFIG.API_URL is configured, so nothing dead
  * ships to the demo in the meantime.
  */
 (function () {
@@ -38,7 +38,7 @@
      *
      * The button goes wherever the section already keeps its controls; the
      * answer renders in its own panel below, because a paragraph inside a flex
-     * header would fight the layout. Nothing is mounted when SD_CONFIG.AI_URL
+     * header would fight the layout. Nothing is mounted when SD_CONFIG.API_URL
      * is missing — the portal works the same, only without explanations.
      *
      * @param {Element|string} host  Element (or its id) that holds the button.
@@ -47,7 +47,7 @@
      */
     function mountExplain(host, viewId, panelHost) {
         const holder = typeof host === 'string' ? document.getElementById(host) : host;
-        if (!holder || !window.SD_CONFIG.AI_URL) return;
+        if (!holder || !window.SD_CONFIG.API_URL) return;
 
         const button = document.createElement('button');
         button.type = 'button';
@@ -80,7 +80,7 @@
             panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             try {
                 const answer = await window.SD_API.post(
-                    `${window.SD_CONFIG.AI_URL}/v1/ai/explain`,
+                    `${window.SD_CONFIG.API_URL}/v1/ai/explain`,
                     { view: viewId, data: payload }
                 );
                 render(panel, answer);

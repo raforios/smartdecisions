@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const { qs, qsAll, toast, setButtonBusy } = window.SD_UI;
     const STATE = window.SD_PLAYGROUND_STATE;
     const PARSER = window.SD_PLAYGROUND_PARSER;
-    const ML_URL = window.SD_CONFIG.ML_FUNCTIONS_URL.replace(/\/$/, '');
+    const ML_URL = window.SD_CONFIG.API_URL.replace(/\/$/, '');
 
     const empty = qs('#predictionEmpty');
     const content = qs('#predictionContent');

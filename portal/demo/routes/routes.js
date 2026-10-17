@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         paintStops();
     });
 
-    const OPTIMIZATION_URL = window.SD_CONFIG.OPTIMIZATION_URL;
+    const OPTIMIZATION_URL = window.SD_CONFIG.API_URL;
     // Shared with the Excel module on purpose: one upload feeds every analysis.
     const DATASET_KEY = 'sd_excel_dataset_id';
 

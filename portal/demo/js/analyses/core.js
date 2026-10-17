@@ -12,8 +12,8 @@
 
     const { qs, qsAll, toast, setButtonBusy } = window.SD_UI;
 
-    const INGEST_URL = window.SD_CONFIG.INGEST_URL;
-    const ANALYTICS_URL = window.SD_CONFIG.ANALYTICS_URL;
+    const INGEST_URL = window.SD_CONFIG.API_URL;
+    const ANALYTICS_URL = window.SD_CONFIG.API_URL;
 
     // The dataset id is persisted so a page reload / session refresh never forces
     // re-uploading the file: the data already lives in S3 + DynamoDB.
@@ -333,7 +333,7 @@
         const iso = (day) => day.toISOString().slice(0, 10);
         const latest = async (currency) => {
             const answer = await window.SD_API.get(
-                `${window.SD_CONFIG.QUOTES_URL}/v1/quotes/exchange-rates`,
+                `${window.SD_CONFIG.API_URL}/v1/quotes/exchange-rates`,
                 { currency, start: iso(start), end: iso(today) });
             const rates = (answer && answer.rates) || [];
             return rates.length ? rates[rates.length - 1].rate : null;
@@ -482,7 +482,7 @@
     async function restoreDataset() {
         try {
             const status = await window.SD_API.get(
-                `${window.SD_CONFIG.INGEST_URL}/v1/ingest/${state.datasetId}`
+                `${window.SD_CONFIG.API_URL}/v1/ingest/${state.datasetId}`
             );
             const isValid = status.status === 'validated';
             // Only Ventas shows the validation of the file that created the set.
@@ -547,7 +547,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         // The interpretation layer reads exactly what each analysis returned: the
         // cached payload is the backend's own response, so nothing is re-shaped for
-        // it. The button only appears where SD_CONFIG.AI_URL is configured.
+        // it. The button only appears where SD_CONFIG.API_URL is configured.
         const AI_VIEWS = {
             stepDashboard: ['commercial_summary', 'summary'],
             stepVolume: ['volume_source', 'summary'],

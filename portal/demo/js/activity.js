@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = qs('#activityCard');
     if (!card) return;
 
-    const INGEST_URL = window.SD_CONFIG.INGEST_URL;
-    const ANALYTICS_URL = window.SD_CONFIG.ANALYTICS_URL;
+    const INGEST_URL = window.SD_CONFIG.API_URL;
+    const ANALYTICS_URL = window.SD_CONFIG.API_URL;
     const DATASET_KEY = 'sd_excel_dataset_id';
 
     const STATUS_LABELS = {

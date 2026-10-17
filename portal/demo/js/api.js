@@ -162,7 +162,7 @@
     async function uploadToBucket(file, onProgress, folder = 'ingest/raw') {
         const contentType = contentTypeFor(file.name);
         const safeName = file.name.replace(/[^\w.\-]+/g, '_');
-        const presign = await post(`${window.SD_CONFIG.FILES_URL}/v1/s3/upload-presigned`, {
+        const presign = await post(`${window.SD_CONFIG.API_URL}/v1/s3/upload-presigned`, {
             bucket_name: window.SD_CONFIG.INGEST_BUCKET,
             file_path: folder,
             file_name: `${Date.now()}_${safeName}`,
@@ -183,7 +183,7 @@
         const stored = sessionStorage.getItem(DATASET_KEY);
         if (stored) return stored;
         try {
-            const list = await get(`${window.SD_CONFIG.INGEST_URL}/v1/ingest/datasets`);
+            const list = await get(`${window.SD_CONFIG.API_URL}/v1/ingest/datasets`);
             const latest = (list.datasets || []).find((item) => item.status === 'validated');
             if (!latest) return null;
             sessionStorage.setItem(DATASET_KEY, latest.dataset_id);

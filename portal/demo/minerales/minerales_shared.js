@@ -10,7 +10,7 @@
  * so the reader never sees the same figure written two different ways.
  */
 (function () {
-    const MINING_BASE = `${window.SD_CONFIG.MINING_URL}/v1/mining-analysis`;
+    const MINING_BASE = `${window.SD_CONFIG.API_URL}/v1/mining-analysis`;
     const API = window.SD_API;
 
     // Confidence and method travel as codes; the wording is ours.

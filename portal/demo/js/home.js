@@ -7,7 +7,7 @@
  */
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated() || !window.SD_SHELL) return;
-    const { AUTH_URL, QUOTES_URL } = window.SD_CONFIG;
+    const { API_URL } = window.SD_CONFIG;
     const shell = window.SD_SHELL;
     const icon = window.SD_ICONS.svg;
     const qs = (selector) => document.querySelector(selector);
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function me() {
-        const profile = await window.SD_API.get(`${AUTH_URL}/v1/users/me`).catch(() => null);
+        const profile = await window.SD_API.get(`${API_URL}/v1/users/me`).catch(() => null);
         if (!profile) return;
         qs('#homeHello').textContent = `Hola, ${profile.first_name}`;
         const last = when(profile.previous_login);
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const end = new Date();
         const start = new Date(end.getTime() - 14 * 86400000);
         const iso = (day) => day.toISOString().slice(0, 10);
-        const answer = await window.SD_API.get(`${QUOTES_URL}/v1/quotes/exchange-rates`,
+        const answer = await window.SD_API.get(`${API_URL}/v1/quotes/exchange-rates`,
             { currency, start: iso(start), end: iso(end) });
         const rates = (answer && answer.rates) || [];
         return rates.slice(-2);
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function users() {
         if (!shell.isEditor) return;
-        const list = await window.SD_API.get(`${AUTH_URL}/v1/users/company`).catch(() => null);
+        const list = await window.SD_API.get(`${API_URL}/v1/users/company`).catch(() => null);
         if (!list) return;
         qs('#homeUsers').hidden = false;
         const inToday = list.filter((user) => isToday(user.last_login)).length;

@@ -145,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await F.del(`/periods?${new URLSearchParams({ periodicity, date })}`);
             qs('#periodClearConfirm').hidden = true;
             toast(`Se borraron ${result.deleted} monto(s).`, 'success');
+            // loadEntries writes the count back into the note, replacing the question.
             await loadEntries();
         } catch (error) {
             toast(F.errorText(error, 'No se pudo vaciar el período.'), 'error');

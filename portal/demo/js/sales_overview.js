@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const M = window.SD_MONEY;
     const O = window.SD_OVERVIEW;
     const { number, signed, kpi, token } = O;
-    const BASE = `${window.SD_CONFIG.ANALYTICS_URL}/v1/analytics`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/analytics`;
     const qs = (selector) => document.querySelector(selector);
 
     const TITLES = {

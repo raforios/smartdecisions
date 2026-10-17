@@ -11,7 +11,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated()) return;
     const { qs, toast, setButtonBusy } = window.SD_UI;
-    const BASE = `${window.SD_CONFIG.ANALYTICS_URL}/v1/analytics`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/analytics`;
 
     const SOURCE_LABELS = {
         CLIENT: 'Configurada por tu empresa',

@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
     if (window.SD_SESSION) window.SD_SESSION.mountChip('sessionChip', false);
 
-    const QUOTES_URL = window.SD_CONFIG.QUOTES_URL;
+    const QUOTES_URL = window.SD_CONFIG.API_URL;
 
     // Formatters, code wording and the sparkline live in `minerales_shared.js`,
     // shared with the anticipated-quotation panel: the same figure has to read

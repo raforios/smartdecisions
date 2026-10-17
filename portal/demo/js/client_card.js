@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated()) return;
     const { qs, toast } = window.SD_UI;
     const M = window.SD_MONEY;
-    const BASE = `${window.SD_CONFIG.ANALYTICS_URL}/v1/analytics`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/analytics`;
     const TERMS = { CREDITO: 'Crédito', CONTADO: 'Contado' };
     const ERRORS = { CLIENT_NOT_FOUND: 'Ese cliente no está en tus datos de ventas.' };
     const state = { datasetId: null, card: null, currency: 'BOB', chart: null };

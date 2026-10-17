@@ -13,7 +13,7 @@
 (function () {
 
     const api = window.SD_API;
-    const base = () => `${window.SD_CONFIG.FINANCE_URL}/v1/finance`;
+    const base = () => `${window.SD_CONFIG.API_URL}/v1/finance`;
 
     const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
         'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

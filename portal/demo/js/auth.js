@@ -71,7 +71,7 @@
      * Throws an Error with a user-friendly message on failure.
      */
     async function login(email, password) {
-        const url = `${window.SD_CONFIG.AUTH_URL}/v1/auth/login`;
+        const url = `${window.SD_CONFIG.API_URL}/v1/auth/login`;
         let response;
         try {
             response = await fetch(url, {

@@ -8,9 +8,9 @@
  * so this screen has no delete either.
  */
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.SD_AUTH.isAuthenticated() || !window.SD_CONFIG.AI_URL) return;
+    if (!window.SD_AUTH.isAuthenticated() || !window.SD_CONFIG.API_URL) return;
     const { qs, toast, setButtonBusy } = window.SD_UI;
-    const BASE = `${window.SD_CONFIG.AI_URL}/v1/ai/roles`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/ai/roles`;
 
     // The service names each view with a code; the screen with its name.
     const VIEW_LABELS = {
