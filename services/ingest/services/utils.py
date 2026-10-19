@@ -221,7 +221,9 @@ async def _process_and_send_usage_log(
         log_data_json = json.dumps(
             log_data.model_dump(by_alias = True), cls = CustomJSONEncoder
         )
-        asyncio.create_task(send_usage_log(json.loads(log_data_json), authorization))
+        # Awaited, not scheduled (Rafael, 19-oct-2026): Lambda freezes as soon
+        # as the response leaves, and a background task could die unsent.
+        await send_usage_log(json.loads(log_data_json), authorization)
     except TypeError as e:
         error_msg = f'Error serializing log data: {e}'
         logger.error(error_msg, exc_info = True)
@@ -373,16 +375,15 @@ def _resolve_audit_entity(result: Any) -> tuple[str, Any | None]:
     return '0', None
 
 
-def _schedule_audit(
+def _audit_payload(
     result: Any,
     kwargs: dict[str, Any],
     microservice_name: str,
     entity_name: str,
     action: str
-) -> None:
+) -> dict[str, Any]:
     '''
-        Builds the audit payload and schedules `send_audit_event` without
-        blocking the caller.
+        Builds the audit record of a call: who changed which entity, and how.
     '''
     user_id = kwargs.get('current_user') or kwargs.get('user_id') or 'usr_test'
     entity_id, new_values = _resolve_audit_entity(result)
@@ -398,7 +399,7 @@ def _schedule_audit(
         'old_values': None,
         'new_values': formatted_new
     }
-    _safe_schedule(send_audit_event(audit_payload, _caller_authorization(kwargs.get('request'))))
+    return audit_payload
 
 
 def audit_event(
@@ -419,7 +420,10 @@ def audit_event(
             **kwargs
         ):
             result = func(*args, **kwargs)
-            _schedule_audit(result, kwargs, microservice_name, entity_name, action)
+            _safe_schedule(send_audit_event(
+                _audit_payload(result, kwargs, microservice_name, entity_name, action),
+                _caller_authorization(kwargs.get('request'))
+            ))
             return result
 
         @wraps(func)
@@ -428,7 +432,12 @@ def audit_event(
             **kwargs
         ):
             result = await func(*args, **kwargs)
-            _schedule_audit(result, kwargs, microservice_name, entity_name, action)
+            # Awaited before answering: in Lambda a scheduled task can be
+            # frozen with the function and the audit record lost (19-oct-2026).
+            await send_audit_event(
+                _audit_payload(result, kwargs, microservice_name, entity_name, action),
+                _caller_authorization(kwargs.get('request'))
+            )
             return result
 
         return async_wrapper if is_coroutine else sync_wrapper

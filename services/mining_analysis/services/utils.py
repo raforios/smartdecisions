@@ -223,7 +223,9 @@ async def _process_and_send_usage_log(
 
         log_data_json = json.dumps(log_data.model_dump(by_alias = True),
                                    cls = CustomJSONEncoder)
-        asyncio.create_task(send_usage_log(json.loads(log_data_json), authorization))
+        # Awaited, not scheduled (Rafael, 19-oct-2026): Lambda freezes as soon
+        # as the response leaves, and a background task could die unsent.
+        await send_usage_log(json.loads(log_data_json), authorization)
     except (TypeError) as e:
         error_msg = f'Error serializing log data: {e}'
         logger.error(error_msg, exc_info = True)
@@ -541,9 +543,10 @@ def audit_event(
             }
             try:
                 data_to_send = json.loads(json.dumps(audit_event_data, cls = CustomJSONEncoder))
-                asyncio.create_task(send_audit_event(
+                # Awaited before answering, for the same reason as the usage log.
+                await send_audit_event(
                     data_to_send, _caller_authorization(kwargs.get('request'))
-                ))
+                )
             except (TypeError, AttributeError) as e:
                 error_msg = f'Error serializing audit data: {e}'
                 logger.error(error_msg, exc_info = True)
@@ -566,7 +569,17 @@ async def send_audit_event(
     url = EVENTS_AUDIT_URL
     response = await _perform_request('POST', url, headers = _events_headers(authorization),
                                       payload = audit_data)
-    response.raise_for_status()
+    # Never raise: the send is awaited now, and EVENTS refusing a record must
+    # not break the answer the user is waiting for.
+    if response is None:
+        logger.warning('Failed to send audit event due to connection timeout or network error.')
+        return
+    if response.status_code >= 400:
+        error_msg = (
+            f'Audit event rejected with status {response.status_code}: {response.text[:200]}'
+        )
+        logger.warning(error_msg)
+        return
     message = f'Audit event sent successfully. Status: {response.status_code}'
     logger.info(message)
 
@@ -590,13 +603,16 @@ async def send_usage_log(
     response = await _perform_request('POST', url, headers = _events_headers(authorization),
                                       payload = log_data)
 
-    # Check the response exists before calling anything on it.
-    if response is not None:
-        response.raise_for_status()
-        message = f'Usage log sent successfully. Status: {response.status_code}'
-        logger.info(message)
-    else:
+    # Never raise, as in send_audit_event: the send is awaited now.
+    if response is None:
         logger.warning('Failed to send usage log due to connection timeout or network error.')
+        return
+    if response.status_code >= 400:
+        error_msg = f'Usage log rejected with status {response.status_code}: {response.text[:200]}'
+        logger.warning(error_msg)
+        return
+    message = f'Usage log sent successfully. Status: {response.status_code}'
+    logger.info(message)
 
 # --- Helper functions for file actions ---
 
@@ -819,14 +835,14 @@ def generic_bulk_processor(
 
     return processed_data
 
-def _trigger_bulk_audit(
+async def _trigger_bulk_audit(
     microservice: str,
     entity: str,
     user: str,
     result: dict,
     authorization: str | None = None
 ):
-    ''' Helper to trigger async audit for bulk ops '''
+    ''' Sends the audit record of a bulk operation, awaited like every audit. '''
     audit_data = {
         'microservice': microservice,
         'entity_name': entity,
@@ -836,7 +852,7 @@ def _trigger_bulk_audit(
         'old_values': None,
         'new_values': json.dumps(result)
     }
-    asyncio.create_task(send_audit_event(audit_data, authorization))
+    await send_audit_event(audit_data, authorization)
 
 async def _execute_bulk_logic( # pylint: disable=too-many-arguments
     service_func: Callable,
@@ -885,8 +901,8 @@ async def generic_bulk_controller_wrapper(
 
     # 2. Audit (only on success)
     if status_code < 400:
-        _trigger_bulk_audit(microservice_name, entity_name, current_user, result,
-                            _caller_authorization(request))
+        await _trigger_bulk_audit(microservice_name, entity_name, current_user, result,
+                                  _caller_authorization(request))
 
     # 3. Usage Log
     await _finalize_and_log(

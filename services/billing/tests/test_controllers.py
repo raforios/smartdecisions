@@ -36,7 +36,7 @@ SELLER = 'vendedor@farmacia.bo'
 @pytest.fixture(name = 'audited')
 def _audited():
     '''
-        Records every audit the controllers schedule.
+        Records every audit the controllers send, without reaching EVENTS.
 
         Returns:
             list: (entity, action) pairs, in order.
@@ -51,8 +51,16 @@ def _audited():
         action
     ):
         calls.append((entity_name, action))
+        return {}
 
-    with patch.object(utils, '_schedule_audit', _record):
+    async def _no_send(
+        audit_data, # pylint: disable=unused-argument
+        authorization # pylint: disable=unused-argument
+    ):
+        return None
+
+    with patch.object(utils, '_audit_payload', _record), \
+            patch.object(utils, 'send_audit_event', _no_send):
         yield calls
 
 
