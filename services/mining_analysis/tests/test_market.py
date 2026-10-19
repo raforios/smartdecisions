@@ -281,7 +281,7 @@ def test_audit_resolver_survives_a_result_without_id():
     '''
         A summary result must not blow up the audit decorator.
 
-        `MarketSyncResult` names no row, and `_resolve_audit_data` used to read
+        `MarketSyncResult` names no row, and the audit resolver used to read
         `.id` on any Pydantic model: the sync ran, wrote its days and then
         answered 500 from the decorator. The endpoint was unusable while the
         scheduled run — which never crosses the controller — worked fine.
@@ -291,9 +291,11 @@ def test_audit_resolver_survives_a_result_without_id():
         stored = 42, already_present = 0, without_publication = 18
     )
 
-    entity_id, new_values = utils._resolve_audit_data(summary, None) # pylint: disable=protected-access
+    entity_id, new_values = utils._resolve_audit_entity(summary) # pylint: disable=protected-access
 
-    assert entity_id is None
+    # The shared boilerplate stores '0' when a result names no row (EVENTS
+    # needs a string entity_id).
+    assert entity_id == '0'
     assert new_values['stored'] == 42
 
 
@@ -304,6 +306,6 @@ def test_audit_resolver_prefers_the_identifier_when_there_is_one():
         max_rate = 5.0, internal_factor = 0.6, legal_basis = 'Ley 535 Art. 227'
     )
 
-    entity_id, _ = utils._resolve_audit_data({'id': rule.mineral_id}, None) # pylint: disable=protected-access
+    entity_id, _ = utils._resolve_audit_entity({'id': rule.mineral_id}) # pylint: disable=protected-access
 
     assert entity_id == '4'
