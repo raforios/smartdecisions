@@ -15,6 +15,20 @@
 
     const views = new Map();
 
+    // The AI service answers with stable codes; the user reads these instead.
+    const ERRORS = {
+        EMPTY_PAYLOAD: 'Todavía no hay resultados en esta vista.',
+        PAYLOAD_TOO_LARGE: 'Hay demasiados datos en pantalla para interpretarlos de una vez.',
+        ROLE_NOT_CONFIGURED: 'La interpretación de esta pantalla todavía no está habilitada.',
+        ROLE_NOT_FOUND: 'La interpretación de esta pantalla todavía no está habilitada.',
+        MODEL_UNAVAILABLE: 'El servicio de interpretación no responde ahora. Intenta en unos minutos.',
+        MODEL_REFUSED: 'No se pudo interpretar esta vista.',
+        PARAMETER_MISSING: 'Falta configurar el servicio de interpretación.',
+        PARAMETERS_SERVICE_NOT_CONFIGURED: 'Falta configurar el servicio de interpretación.',
+        PARAMETERS_SERVICE_UNREACHABLE: 'El servicio de interpretación no responde ahora. Intenta en unos minutos.',
+        PARAMETERS_SERVICE_REJECTED: 'El servicio de interpretación no responde ahora. Intenta en unos minutos.'
+    };
+
     /**
      * Registers a view and how to read its current data.
      *
@@ -85,7 +99,7 @@
                 );
                 render(panel, answer);
             } catch (error) {
-                panel.textContent = error.message
+                panel.textContent = ERRORS[error && error.code]
                     || 'No se pudo obtener la interpretación.';
             } finally {
                 done();
