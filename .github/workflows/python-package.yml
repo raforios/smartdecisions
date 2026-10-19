@@ -19,6 +19,7 @@ jobs:
           - "services/events"
           - "services/files"
           - "services/ml_functions"
+          - "services/parameters"
 
     steps:
     - name: Checkout repository
@@ -41,7 +42,7 @@ jobs:
       run: |
         # La regla del proyecto es 10.00 (CLAUDE.md §11). Sin --rcfile: el
         # .pylintrc de la raíz está en .gitignore y sólo silencia lxml, que
-        # ninguno de estos cuatro servicios usa.
+        # ninguno de estos cinco servicios usa.
         pylint --fail-under=10.0 .
 
     - name: Test with Pytest for ${{ matrix.service-directory }}
