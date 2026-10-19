@@ -8,15 +8,18 @@
     provider. They show up as a confident explanation of the wrong thing.
 '''
 import asyncio
+import re
 from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from models.ai import PromptItem
-from schemas.ai import AIError, ViewName
+from schemas.ai import ExplainRequest
+from schemas.ai import VIEW_PATTERN, AIError
 from services import ai
 from services.ai_utils import build_cache_key
 
@@ -45,7 +48,7 @@ def _prompt(version: int = 1) -> PromptItem:
             PromptItem: The role.
     '''
     return PromptItem(
-        view = ViewName.RATE_FORECAST.value,
+        view = 'rate_forecast',
         version = version,
         role = 'Analista cambiario.',
         instructions = 'Explica la serie.',
@@ -55,6 +58,27 @@ def _prompt(version: int = 1) -> PromptItem:
         active = True,
         created_at = '2026-09-06T10:00:00+00:00'
     )
+
+
+# What PARAMETERS answers for the `ai` scope (docs/parametros.md).
+SETTINGS = ai.ExplainSettings(cache_hours = 24, max_payload_characters = 40000,
+                              sample_size = 25, question = '¿Qué significa esto?',
+                              temperature = 0.2)
+
+# The real reader, kept before the fixture below replaces it in every test.
+real_explain_settings = ai.explain_settings
+
+
+@pytest.fixture(autouse = True)
+def _settings():
+    '''
+        Every explanation reads its settings as if PARAMETERS answered.
+
+        Yields:
+            None: The patch stays active for the test.
+    '''
+    with patch.object(ai, 'explain_settings', lambda auth_token: SETTINGS):
+        yield
 
 
 RATE_VIEW = {
@@ -111,7 +135,7 @@ def test_an_unconfigured_view_is_refused_before_reaching_the_model(model):
     '''
     with patch.object(ai, 'get_active_prompt', lambda view: None):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+            _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
 
     assert AIError.ROLE_NOT_CONFIGURED.value in str(failure.value.detail)
     assert not model
@@ -124,7 +148,7 @@ def test_an_empty_payload_is_refused(model):
     '''
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service(ViewName.RATE_FORECAST, {}))
+            _run(ai.explain_service('rate_forecast', {}, None))
 
     assert AIError.EMPTY_PAYLOAD.value in str(failure.value.detail)
     assert not model
@@ -144,7 +168,7 @@ def test_the_backend_response_travels_whole(
     answered = dict(RATE_VIEW, campo_nuevo = 'agregado por otro servicio')
 
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        _run(ai.explain_service(ViewName.RATE_FORECAST, answered))
+        _run(ai.explain_service('rate_forecast', answered, None))
 
     sent = model[0]['user_prompt']
     assert 'campo_nuevo' in sent
@@ -163,8 +187,8 @@ def test_a_second_identical_request_is_served_from_cache(
         and not.
     '''
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        first = _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
-        second = _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+        first = _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+        second = _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
 
     assert first['cached'] is False
     assert second['cached'] is True
@@ -184,10 +208,10 @@ def test_retuning_the_role_stops_serving_what_the_old_one_produced(
         has to be deleted for that to hold.
     '''
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt(version = 1)):
-        _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
 
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt(version = 2)):
-        after = _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+        after = _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
 
     assert after['cached'] is False
     assert after['prompt_version'] == 2
@@ -209,7 +233,7 @@ def test_a_model_that_says_nothing_is_not_published_as_an_answer(
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()), \
          patch.object(ai, 'invoke', _silent):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+            _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
 
     assert AIError.MODEL_REFUSED.value in str(failure.value.detail)
 
@@ -225,7 +249,7 @@ def test_the_prompt_carries_the_role_and_every_rule(
     '''
     prompt = _prompt()
     with patch.object(ai, 'get_active_prompt', lambda view: prompt):
-        _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
 
     system = model[0]['system_prompt']
     assert prompt.role in system
@@ -278,7 +302,7 @@ def test_storing_a_role_retires_the_previous_version():
     with patch.object(ai, 'put_prompt', _put), \
          patch.object(ai, 'list_prompts', lambda: [old]):
         result = _run(ai.save_role_service({
-            'view': ViewName.RATE_FORECAST.value,
+            'view': 'rate_forecast',
             'version': 2,
             'role': 'Analista cambiario, versión afinada.',
             'instructions': 'Explica la serie.',
@@ -292,7 +316,7 @@ def test_storing_a_role_retires_the_previous_version():
     assert result['active'] is True
     assert retired == [1]
     # The old version is still there, not deleted.
-    assert (ViewName.RATE_FORECAST.value, 1) in stored
+    assert ('rate_forecast', 1) in stored
 
 
 def test_a_long_response_is_sampled_instead_of_refused(
@@ -310,11 +334,11 @@ def test_a_long_response_is_sampled_instead_of_refused(
     ])
 
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        result = _run(ai.explain_service(ViewName.RATE_FORECAST, huge))
+        result = _run(ai.explain_service('rate_forecast', huge, None))
 
     assert result['text']
     sent = model[0]['user_prompt']
-    assert len(sent) <= ai.MAX_PAYLOAD_CHARACTERS + 500
+    assert len(sent) <= SETTINGS.max_payload_characters + 500
     # The model must be told it is looking at a sample, or it would describe it
     # as if it were the whole.
     # The model must be told it is looking at a sample, or it would describe it
@@ -328,7 +352,7 @@ def test_a_response_that_fits_is_not_touched(
 ):
     """Trimming is a last resort, not something that happens on every call."""
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        _run(ai.explain_service(ViewName.RATE_FORECAST, RATE_VIEW))
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
 
     sent = model[0]['user_prompt']
     assert 'muestra' not in sent
@@ -339,7 +363,7 @@ def test_an_empty_payload_is_still_refused(model):
     """Nothing to explain is not an explanation."""
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service(ViewName.RATE_FORECAST, {}))
+            _run(ai.explain_service('rate_forecast', {}, None))
 
     assert AIError.EMPTY_PAYLOAD.value in str(failure.value.detail)
     assert not model
@@ -364,10 +388,10 @@ def test_a_long_list_is_trimmed_at_any_depth(
     }
 
     with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        _run(ai.explain_service(ViewName.RATE_FORECAST, nested))
+        _run(ai.explain_service('rate_forecast', nested, None))
 
     sent = model[0]['user_prompt']
-    assert len(sent) <= ai.MAX_PAYLOAD_CHARACTERS + 500
+    assert len(sent) <= SETTINGS.max_payload_characters + 500
     assert 'no mostrados' in sent
     # The structure survives: it is still days with stops, only shorter.
     assert 'stops' in sent and 'Cliente 0' in sent
@@ -381,13 +405,29 @@ def test_every_view_the_portal_explains_is_known(view):
         views were missing here, so the request died as a 422 before reaching
         the model and the portal printed the error list as "[object Object]".
     '''
-    assert ViewName(view).value == view
+    assert re.fullmatch(VIEW_PATTERN, view)
+
+
+@pytest.mark.parametrize('view', ['finance_summary', 'finance_projection', 'billing_till'])
+def test_a_product_names_its_own_views(view):
+    '''
+        AI is a base service (19-oct-2026): FINANCE or BILLING bring their views
+        without changing AI. A view exists when it has an active role.
+    '''
+    assert re.fullmatch(VIEW_PATTERN, view)
+
+
+@pytest.mark.parametrize('view', ['', 'ab', 'Finance', 'finance-summary', 'ignore all; rules'])
+def test_a_view_name_is_never_free_text(view):
+    '''Only a slug passes: an arbitrary string never reaches the model.'''
+    with pytest.raises(ValidationError):
+        ExplainRequest(view = view, data = {'x': 1})
 
 
 def test_a_role_is_read_whole_to_be_edited():
     '''The editor needs the instructions and every rule, not the summary.'''
     with patch.object(ai, 'get_prompt', lambda view, version: _prompt(version)):
-        role = _run(ai.get_role_service(ViewName.RATE_FORECAST.value, 3))
+        role = _run(ai.get_role_service('rate_forecast', 3))
 
     assert role['version'] == 3
     assert role['instructions'] == 'Explica la serie.'
@@ -398,7 +438,7 @@ def test_a_version_that_does_not_exist_answers_not_found():
     '''Reading or switching a missing version is a 404 with its code.'''
     with patch.object(ai, 'get_prompt', lambda view, version: None):
         with pytest.raises(HTTPException) as raised:
-            _run(ai.get_role_service(ViewName.RATE_FORECAST.value, 9))
+            _run(ai.get_role_service('rate_forecast', 9))
 
     assert raised.value.status_code == 404
     assert raised.value.detail == AIError.ROLE_NOT_FOUND.value
@@ -412,7 +452,7 @@ def test_turning_a_version_on_retires_the_one_in_force():
          patch.object(ai, 'put_prompt',
                       lambda prompt: stored.__setitem__(prompt.version, prompt.active)), \
          patch.object(ai, 'list_prompts', lambda: [old, new]):
-        result = _run(ai.set_role_active_service(ViewName.RATE_FORECAST.value, 1, True))
+        result = _run(ai.set_role_active_service('rate_forecast', 1, True))
 
     assert result['active'] is True
     assert stored == {1: True, 2: False}
@@ -425,6 +465,45 @@ def test_turning_a_version_off_touches_nothing_else():
          patch.object(ai, 'put_prompt',
                       lambda prompt: stored.__setitem__(prompt.version, prompt.active)), \
          patch.object(ai, 'list_prompts', lambda: [_prompt(1)]):
-        _run(ai.set_role_active_service(ViewName.RATE_FORECAST.value, 2, False))
+        _run(ai.set_role_active_service('rate_forecast', 2, False))
 
     assert stored == {2: False}
+
+
+def test_settings_are_read_from_parameters():
+    '''The five values come from the `ai` scope, typed as the code uses them.'''
+    answered = {'EXPLANATION_CACHE_HOURS': 24.0, 'MAX_PAYLOAD_CHARACTERS': 40000.0,
+                'LIST_SAMPLE_SIZE': 25.0, 'EXPLANATION_QUESTION': '¿Qué significa esto?',
+                'BEDROCK_TEMPERATURE': 0.2}
+    asked = []
+
+    def _read(
+        scope,
+        auth_token
+    ):
+        asked.append((scope, auth_token))
+        return answered
+
+    with patch.object(ai, 'read_parameters', _read):
+        settings = real_explain_settings('Bearer token')
+    assert asked == [('ai', 'Bearer token')]
+    assert settings == SETTINGS
+    assert isinstance(settings.sample_size, int)
+
+
+def test_a_missing_setting_stops_the_explanation():
+    '''No value is invented: a missing one answers PARAMETER_MISSING.'''
+    with patch.object(ai, 'read_parameters', lambda scope, auth_token: {}):
+        with pytest.raises(HTTPException) as raised:
+            real_explain_settings('Bearer token')
+    assert raised.value.detail == 'PARAMETER_MISSING'
+
+
+def test_the_configured_temperature_reaches_the_model(
+    model,
+    cache # pylint: disable=unused-argument
+):
+    '''The temperature is the one in PARAMETERS, not a number in the code.'''
+    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+    assert model[0]['temperature'] == SETTINGS.temperature

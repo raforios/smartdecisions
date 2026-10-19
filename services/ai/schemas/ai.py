@@ -24,7 +24,6 @@ class AIError(str, Enum):
 
         Travels as the error `detail`, same contract as the rest of the API.
     '''
-    UNKNOWN_VIEW = 'UNKNOWN_VIEW'
     EMPTY_PAYLOAD = 'EMPTY_PAYLOAD'
     PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE'
     ROLE_NOT_CONFIGURED = 'ROLE_NOT_CONFIGURED'
@@ -33,36 +32,11 @@ class AIError(str, Enum):
     MODEL_REFUSED = 'MODEL_REFUSED'
 
 
-class ViewName(str, Enum):
-    '''
-        The views this service knows how to read.
-
-        A closed list on purpose: an unknown view is answered with
-        UNKNOWN_VIEW rather than passed to the model as unstructured text.
-        Adding a module tomorrow means adding a member here and a role in the
-        prompts table — not touching the engine.
-    '''
-    # Análisis Comercial
-    COMMERCIAL_SUMMARY = 'commercial_summary'
-    VOLUME_SOURCE = 'volume_source'
-    OBJECTIVES = 'objectives'
-    RECEIVABLES = 'receivables'
-    STOCK = 'stock'
-    OPPORTUNITIES = 'opportunities'
-    SEGMENTATION = 'segmentation'
-    SALES_FORECAST = 'sales_forecast'
-    PORTFOLIO = 'portfolio'
-    FX_EFFECT = 'fx_effect'
-    # Route optimization
-    ROUTE_PLAN = 'route_plan'
-    ROUTE_PLANS = 'route_plans'
-    ROUTE_LIVE = 'route_live'
-    ROUTE_OPTIMIZE = 'route_optimize'
-    ROUTE_COMPARE = 'route_compare'
-    # Quotes and projections
-    MINERALS_FORECAST = 'minerals_forecast'
-    RATE_FORECAST = 'rate_forecast'
-    SALE_SCENARIO = 'sale_scenario'
+# A view is named by the product that shows it, and it exists when it has an
+# active role in the prompts table (Rafael, 19-oct-2026: AI is a base service,
+# so FINANCE or BILLING add their views without changing AI). The pattern keeps
+# the name a slug: an arbitrary string never reaches the model as text.
+VIEW_PATTERN = r'^[a-z][a-z0-9_]{2,59}$'
 
 
 class ExplainRequest(BaseModel):
@@ -74,7 +48,7 @@ class ExplainRequest(BaseModel):
         Pydantic model on the other side, and declaring its shape a second time
         would create two contracts for one thing.
     '''
-    view: ViewName
+    view: str = Field(..., pattern = VIEW_PATTERN)
     data: dict[str, Any] = Field(
         ...,
         description = 'The response of the service that produced the view, as it '
@@ -90,7 +64,7 @@ class ExplainResponse(BaseModel):
         the difference between a fresh answer and a stored one is the difference
         between paying for it and not.
     '''
-    view: ViewName
+    view: str = Field(..., pattern = VIEW_PATTERN)
     text: str
     role: str = Field(..., description = 'Expert role the answer was written from.')
     model: str
@@ -108,7 +82,7 @@ class RoleDefinition(BaseModel):
         the answers specific: a mining quotations analyst and a commercial
         analyst read the same kind of numbers with different eyes.
     '''
-    view: ViewName
+    view: str = Field(..., pattern = VIEW_PATTERN)
     version: int = Field(..., ge = 1)
     role: str = Field(..., description = 'Who the model is, in one line.')
     instructions: str = Field(..., description = 'How to read this view.')
@@ -124,7 +98,7 @@ class RoleDefinition(BaseModel):
 
 class RoleSummary(BaseModel):
     '''One row of the configured roles, without the full prompt text.'''
-    view: ViewName
+    view: str = Field(..., pattern = VIEW_PATTERN)
     version: int
     role: str
     model_id: str

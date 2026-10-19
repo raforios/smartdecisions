@@ -9,8 +9,7 @@ from schemas.ai import (
     RoleActiveRequest,
     RoleDefinition,
     RoleListResponse,
-    RoleSummary,
-    ViewName
+    RoleSummary
 )
 from services.ai import (
     explain_service,
@@ -27,7 +26,8 @@ from services.utils import audit_event, handle_service_errors
 async def explain_controller(
     payload: ExplainRequest,
     current_user: str, # pylint: disable=unused-argument
-    request: Request # pylint: disable=unused-argument
+    request: Request, # pylint: disable=unused-argument
+    auth_token: str | None
 ) -> ExplainResponse:
     '''
         Explains what a view is showing.
@@ -36,11 +36,14 @@ async def explain_controller(
             payload (ExplainRequest): View and the data it displays.
             current_user (str): Authenticated caller.
             request (Request): Incoming request, used by the audit decorator.
+            auth_token (str | None): The caller's Authorization header, to read
+                the explanation settings from PARAMETERS.
 
         Returns:
             ExplainResponse: The interpretation and what produced it.
     '''
-    result = await explain_service(view = payload.view, data = payload.data)
+    result = await explain_service(view = payload.view, data = payload.data,
+                                   auth_token = auth_token)
     return ExplainResponse(**result)
 
 
@@ -87,7 +90,7 @@ async def save_role_controller(
 
 @handle_service_errors('AI')
 async def get_role_controller(
-    view: ViewName,
+    view: str,
     version: int,
     current_user: str, # pylint: disable=unused-argument
     request: Request # pylint: disable=unused-argument
@@ -96,7 +99,7 @@ async def get_role_controller(
         Returns one version of a role in full, to edit it.
 
         Args:
-            view (ViewName): View the role explains.
+            view (str): View the role explains.
             version (int): Version to read.
             current_user (str): Authenticated caller.
             request (Request): Incoming request.
@@ -104,14 +107,14 @@ async def get_role_controller(
         Returns:
             RoleDefinition: The role with its instructions and rules.
     '''
-    result = await get_role_service(view = view.value, version = version)
+    result = await get_role_service(view = view, version = version)
     return RoleDefinition(**result)
 
 
 @handle_service_errors('AI')
 @audit_event('AI', 'Role', 'UPDATE')
 async def set_role_active_controller(
-    view: ViewName,
+    view: str,
     version: int,
     change: RoleActiveRequest,
     current_user: str, # pylint: disable=unused-argument
@@ -121,7 +124,7 @@ async def set_role_active_controller(
         Turns one version of a role on or off.
 
         Args:
-            view (ViewName): View the role explains.
+            view (str): View the role explains.
             version (int): Version to change.
             change (RoleActiveRequest): Whether it is in force.
             current_user (str): Authenticated caller.
@@ -130,6 +133,6 @@ async def set_role_active_controller(
         Returns:
             RoleSummary: The changed role.
     '''
-    result = await set_role_active_service(view = view.value, version = version,
+    result = await set_role_active_service(view = view, version = version,
                                            active = change.active)
     return RoleSummary(**result)

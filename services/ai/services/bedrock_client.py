@@ -29,7 +29,6 @@ from services.logger_config import custom_logger as logger
 ENV_VARS = load_and_validate_env_vars({
     'BEDROCK_REGION': str,
     'BEDROCK_ANTHROPIC_VERSION': str,
-    'BEDROCK_TEMPERATURE': float,
 })
 
 BEDROCK_REGION = ENV_VARS['BEDROCK_REGION']
@@ -38,10 +37,6 @@ BEDROCK_REGION = ENV_VARS['BEDROCK_REGION']
 # version and it is not ours to guess, so it is configured.
 ANTHROPIC_VERSION = ENV_VARS['BEDROCK_ANTHROPIC_VERSION']
 
-# Low by default: this service explains figures that are already computed, and
-# the same screen explained twice should not read differently.
-TEMPERATURE = ENV_VARS['BEDROCK_TEMPERATURE']
-
 _client = boto3.client('bedrock-runtime', region_name = BEDROCK_REGION)
 
 
@@ -49,7 +44,8 @@ def invoke(
     model_id: str,
     system_prompt: str,
     user_prompt: str,
-    max_tokens: int
+    max_tokens: int,
+    temperature: float
 ) -> dict[str, Any]:
     '''
         Asks the model for one answer and returns it with what it cost.
@@ -59,6 +55,8 @@ def invoke(
             system_prompt (str): The role and its rules.
             user_prompt (str): The view payload and the question.
             max_tokens (int): Ceiling on the answer.
+            temperature (float): How freely the model words it; a business
+                value read from PARAMETERS (BEDROCK_TEMPERATURE).
 
         Returns:
             dict[str, Any]: `text`, `input_tokens` and `output_tokens`.
@@ -69,7 +67,7 @@ def invoke(
     body = json.dumps({
         'anthropic_version': ANTHROPIC_VERSION,
         'max_tokens': max_tokens,
-        'temperature': TEMPERATURE,
+        'temperature': temperature,
         'system': system_prompt,
         'messages': [{'role': 'user', 'content': user_prompt}],
     })

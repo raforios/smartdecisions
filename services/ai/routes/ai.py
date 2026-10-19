@@ -1,7 +1,9 @@
 '''
     AI: routes handler
 '''
-from fastapi import APIRouter, Depends, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Header, Path, Request, status
 
 from controllers.ai import (
     explain_controller,
@@ -17,7 +19,7 @@ from schemas.ai import (
     RoleDefinition,
     RoleListResponse,
     RoleSummary,
-    ViewName
+    VIEW_PATTERN
 )
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner
@@ -40,16 +42,18 @@ router = APIRouter(prefix = '/v1/ai', tags = ['AI'])
 async def explain_endpoint(
     request: Request,
     payload: ExplainRequest,
+    authorization: str | None = Header(None),
     current_user: str = Depends(get_current_owner)
 ) -> ExplainResponse:
     ''' Endpoint returning the interpretation of a view. '''
-    message = f'User: {current_user}. Requested an explanation of {payload.view.value}.'
+    message = f'User: {current_user}. Requested an explanation of {payload.view}.'
     logger.info(message)
 
     return await explain_controller(
         payload = payload,
         current_user = current_user,
-        request = request
+        request = request,
+        auth_token = authorization
     )
 
 
@@ -95,7 +99,7 @@ async def save_role_endpoint(
     current_user: str = Depends(get_current_owner)
 ) -> RoleSummary:
     ''' Endpoint storing a version of an expert role. '''
-    message = (f'User: {current_user}. Stored role {definition.view.value} '
+    message = (f'User: {current_user}. Stored role {definition.view} '
                f'v{definition.version}.')
     logger.info(message)
 
@@ -117,12 +121,12 @@ async def save_role_endpoint(
 )
 async def get_role_endpoint(
     request: Request,
-    view: ViewName,
+    view: Annotated[str, Path(pattern = VIEW_PATTERN)],
     version: int,
     current_user: str = Depends(get_current_owner)
 ) -> RoleDefinition:
     ''' Endpoint returning one version of an expert role. '''
-    message = f'User: {current_user}. Requested role {view.value} v{version}.'
+    message = f'User: {current_user}. Requested role {view} v{version}.'
     logger.info(message)
 
     return await get_role_controller(
@@ -144,13 +148,13 @@ async def get_role_endpoint(
 )
 async def set_role_active_endpoint(
     request: Request,
-    view: ViewName,
+    view: Annotated[str, Path(pattern = VIEW_PATTERN)],
     version: int,
     change: RoleActiveRequest,
     current_user: str = Depends(get_current_owner)
 ) -> RoleSummary:
     ''' Endpoint turning a version of an expert role on or off. '''
-    message = (f'User: {current_user}. Set role {view.value} v{version} '
+    message = (f'User: {current_user}. Set role {view} v{version} '
                f'active={change.active}.')
     logger.info(message)
 

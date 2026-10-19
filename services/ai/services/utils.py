@@ -2,7 +2,7 @@
     Utils service.
 
     Event emission, usage logging and centralized error handling for the
-    ANALYTICS microservice.
+    AI microservice.
 
     This module is the DynamoDB-backed derivation of the canonical MySQL
     boilerplate `services/localization/services/utils.py`. The function names,
@@ -35,11 +35,13 @@ from fastapi import HTTPException, Request
 from pydantic import BaseModel, ValidationError
 from botocore.exceptions import ClientError as AWSClientError
 
+from schemas.parameters import ParametersError
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError,
-    RegisterNotFoundError
+    RegisterNotFoundError,
+    ServiceUnavailableError
 )
 from services.environment import load_and_validate_env_vars
 
@@ -50,14 +52,16 @@ ENV_VARS = load_and_validate_env_vars(
         'REQUEST_TIMEOUT_SECONDS': int
     },
     optional_env_vars = {
-        'EVENTS_SERVICE_URL': str
+        'API_URL': str
     }
 )
 
 TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
-EVENTS_SERVICE_URL = ENV_VARS.get('EVENTS_SERVICE_URL') or None
-EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL else None
-EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
+# One address for every service: the gateway api.bearsoft.com.bo routes each
+# /v1/<service> to its own Lambda, so the path names the service, not the URL.
+API_URL = (ENV_VARS.get('API_URL') or '').rstrip('/') or None
+EVENTS_AUDIT_URL = f'{API_URL}/v1/events/audit' if API_URL else None
+EVENTS_LOG_URL = f'{API_URL}/v1/events/usage-log' if API_URL else None
 
 REQUEST_TIMEOUT_SECONDS = ENV_VARS['REQUEST_TIMEOUT_SECONDS']
 
@@ -155,7 +159,7 @@ async def send_audit_event(
         Asynchronous function to send an audit event to the EVENTS microservice.
     '''
     if not EVENTS_AUDIT_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send audit event.')
+        logger.warning('API_URL is not set. Cannot send audit event.')
         return
 
     response = await _perform_request(
@@ -181,7 +185,7 @@ async def send_usage_log(
         Asynchronous function to send a usage log to the EVENTS microservice.
     '''
     if not EVENTS_LOG_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send usage log.')
+        logger.warning('API_URL is not set. Cannot send usage log.')
         return
 
     response = await _perform_request(
@@ -451,3 +455,81 @@ def _caller_authorization(request: Request | None) -> str | None:
             str | None: The header, or None for calls with no request.
     '''
     return request.headers.get('authorization') if request is not None else None
+
+
+PARAMETERS_ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'PARAMETERS_CACHE_SECONDS': int
+    }
+)
+PARAMETERS_CACHE_SECONDS = PARAMETERS_ENV_VARS['PARAMETERS_CACHE_SECONDS']
+
+# {scope: (moment it expires, {code: value})}, per warm container.
+_PARAMETERS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def read_parameters(
+    scope: str,
+    auth_token: str | None
+) -> dict[str, Any]:
+    '''
+        The business values of one scope, read through PARAMETERS and kept
+        for PARAMETERS_CACHE_SECONDS.
+
+        Args:
+            scope (str): `global` or this service's name.
+            auth_token (str | None): The caller's Authorization header.
+
+        Returns:
+            dict[str, Any]: {code: value}; a NUMBER as float, a LIST as a list.
+
+        Raises:
+            ServiceUnavailableError: PARAMETERS unreachable or refusing.
+    '''
+    cached = _PARAMETERS_CACHE.get(scope)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+    try:
+        response = req.get(f'{API_URL}/v1/parameters/{scope}',
+                           headers = {'Authorization': auth_token or ''},
+                           timeout = REQUEST_TIMEOUT_SECONDS)
+    except req.exceptions.RequestException as error:
+        error_msg = f'Network error reading the {scope} parameters: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(detail = ParametersError.UNREACHABLE.value) from error
+    if not response.ok:
+        error_msg = (f'PARAMETERS refused the {scope} parameters: '
+                     f'status={response.status_code} body={response.text[:300]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = ParametersError.REJECTED.value)
+    values = {item['code']: item['value'] for item in response.json().get('parameters', [])}
+    _PARAMETERS_CACHE[scope] = (time.monotonic() + PARAMETERS_CACHE_SECONDS, values)
+    message = f'Read {len(values)} {scope} parameter(s) from PARAMETERS.'
+    logger.info(message)
+    return values
+
+
+def required_parameters(
+    values: dict[str, Any],
+    codes: tuple[str, ...]
+) -> dict[str, Any]:
+    '''
+        The values a calculation needs, all of them or none: a missing one
+        stops it instead of running on a number nobody chose.
+
+        Args:
+            values (dict[str, Any]): What PARAMETERS answered.
+            codes (tuple[str, ...]): The codes the calculation reads.
+
+        Returns:
+            dict[str, Any]: The same values.
+
+        Raises:
+            ServiceUnavailableError: PARAMETER_MISSING.
+    '''
+    missing = [code for code in codes if code not in values]
+    if missing:
+        error_msg = f'Parameters missing in PARAMETERS: {missing}.'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = ParametersError.MISSING.value)
+    return values

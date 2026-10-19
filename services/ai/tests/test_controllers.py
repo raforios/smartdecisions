@@ -16,8 +16,7 @@ from schemas.ai import (
     RoleActiveRequest,
     RoleDefinition,
     RoleListResponse,
-    RoleSummary,
-    ViewName
+    RoleSummary
 )
 from controllers import ai as controllers
 
@@ -26,10 +25,11 @@ def test_explain_controller_returns_its_model():
     '''The explain endpoint answers a fully built ExplainResponse.'''
     async def _explain(
         view, # pylint: disable=unused-argument
-        data # pylint: disable=unused-argument
+        data, # pylint: disable=unused-argument
+        auth_token # pylint: disable=unused-argument
     ):
         return {
-            'view': ViewName.RATE_FORECAST,
+            'view': 'rate_forecast',
             'text': 'Una explicación.',
             'role': 'Analista cambiario.',
             'model': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
@@ -40,9 +40,10 @@ def test_explain_controller_returns_its_model():
 
     with patch.object(controllers, 'explain_service', _explain):
         response = asyncio.run(controllers.explain_controller(
-            payload = ExplainRequest(view = ViewName.RATE_FORECAST, data = {'currency': 'USD'}),
+            payload = ExplainRequest(view = 'rate_forecast', data = {'currency': 'USD'}),
             current_user = 'tester',
-            request = None
+            request = None,
+            auth_token = None
         ))
 
     assert isinstance(response, ExplainResponse)
@@ -56,7 +57,7 @@ def test_roles_controller_returns_its_model():
         return {
             'count': 1,
             'roles': [{
-                'view': ViewName.SALE_SCENARIO,
+                'view': 'sale_scenario',
                 'version': 2,
                 'role': 'Asesor comercial.',
                 'model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
@@ -71,7 +72,7 @@ def test_roles_controller_returns_its_model():
 
     assert isinstance(response, RoleListResponse)
     assert response.count == 1
-    assert response.roles[0].view is ViewName.SALE_SCENARIO
+    assert response.roles[0].view == 'sale_scenario'
 
 
 def test_get_role_controller_returns_its_model():
@@ -86,7 +87,7 @@ def test_get_role_controller_returns_its_model():
 
     with patch.object(controllers, 'get_role_service', _role):
         response = asyncio.run(controllers.get_role_controller(
-            view = ViewName.SALE_SCENARIO, version = 2, current_user = 'tester', request = None
+            view = 'sale_scenario', version = 2, current_user = 'tester', request = None
         ))
 
     assert isinstance(response, RoleDefinition)
@@ -105,7 +106,7 @@ def test_set_role_active_controller_returns_its_model():
 
     with patch.object(controllers, 'set_role_active_service', _switch):
         response = asyncio.run(controllers.set_role_active_controller(
-            view = ViewName.SALE_SCENARIO, version = 2,
+            view = 'sale_scenario', version = 2,
             change = RoleActiveRequest(active = False), current_user = 'tester', request = None
         ))
 
@@ -118,7 +119,7 @@ def test_save_role_controller_returns_its_model():
     async def _save(definition):
         return {key: definition[key] for key in ('view', 'version', 'role', 'model_id', 'active')}
 
-    definition = RoleDefinition(view = ViewName.SALE_SCENARIO, version = 3, role = 'Asesor.',
+    definition = RoleDefinition(view = 'sale_scenario', version = 3, role = 'Asesor.',
                                 instructions = 'Explica.', max_tokens = 400,
                                 model_id = 'us.anthropic.claude-haiku-4-5-20251001-v1:0')
     with patch.object(controllers, 'save_role_service', _save):

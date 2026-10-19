@@ -20,12 +20,12 @@
          most, and tuning it must not need a release.
 '''
 import json
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any
 
 from models.ai import ExplanationItem, PromptItem
-from schemas.ai import AIError, ViewName
+from schemas.ai import AIError
 from services.ai_utils import (
     build_cache_key,
     get_active_prompt,
@@ -36,40 +36,68 @@ from services.ai_utils import (
     put_prompt
 )
 from services.bedrock_client import invoke
-from services.environment import load_and_validate_env_vars
 from services.exceptions import (
     InvalidInputError,
     RegisterNotFoundError,
     ServiceUnavailableError
 )
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt, handle_service_errors
+from services.utils import (
+    get_current_time_gmt,
+    handle_service_errors,
+    read_parameters,
+    required_parameters
+)
 
 
-ENV_VARS = load_and_validate_env_vars({
-    'EXPLANATION_CACHE_HOURS': int,
-    'MAX_PAYLOAD_CHARACTERS': int,
-    'LIST_SAMPLE_SIZE': int,
-    'EXPLANATION_QUESTION': str,
-})
+# The business values of an explanation live in PARAMETERS (scope `ai`), not
+# in the .env (Rafael, 17-oct-2026): changing one must not need a release.
+AI_SCOPE = 'ai'
+SETTINGS_CODES = ('EXPLANATION_CACHE_HOURS', 'MAX_PAYLOAD_CHARACTERS', 'LIST_SAMPLE_SIZE',
+                  'EXPLANATION_QUESTION', 'BEDROCK_TEMPERATURE')
 
-# How long an answer stays valid. A day, because the figures underneath move by
-# fortnight for minerals and by day for the exchange rate.
-CACHE_HOURS = ENV_VARS['EXPLANATION_CACHE_HOURS']
 
-# Ceiling on what a view may send. A screen that grew unexpectedly must not
-# turn into an unexpectedly large bill, and it is also the crudest defence
-# against somebody pushing a large payload through the endpoint.
-MAX_PAYLOAD_CHARACTERS = ENV_VARS['MAX_PAYLOAD_CHARACTERS']
+@dataclass(frozen = True)
+class ExplainSettings:
+    '''
+        What shapes an explanation, as read from PARAMETERS.
 
-# How many elements of a long list survive the trim. Enough to see the shape
-# of the ranking, not so many that the reader drowns in it.
-SAMPLE_SIZE = ENV_VARS['LIST_SAMPLE_SIZE']
+        - cache_hours: how long an answer stays valid.
+        - max_payload_characters: ceiling on what a view may send; a screen
+          that grew unexpectedly must not turn into an unexpectedly large bill.
+        - sample_size: elements of a long list that survive the trim.
+        - question: what every explanation answers. Never accepted from the
+          caller: this endpoint explains a screen, it does not take orders.
+        - temperature: low, so the same screen explained twice reads the same.
+    '''
+    cache_hours: int
+    max_payload_characters: int
+    sample_size: int
+    question: str
+    temperature: float
 
-# The question every explanation answers. Never accepted from the caller — this
-# endpoint explains a screen, it does not take instructions — but it is how the
-# model is asked, so it is tuned in configuration like the rest of the prompt.
-_QUESTION = ENV_VARS['EXPLANATION_QUESTION']
+
+def explain_settings(auth_token: str | None) -> ExplainSettings:
+    '''
+        Reads the explanation settings from PARAMETERS, all of them or none.
+
+        Args:
+            auth_token (str | None): The caller's Authorization header.
+
+        Returns:
+            ExplainSettings: The values in force.
+
+        Raises:
+            ServiceUnavailableError: PARAMETERS unreachable, or a value missing.
+    '''
+    values = required_parameters(read_parameters(AI_SCOPE, auth_token), SETTINGS_CODES)
+    return ExplainSettings(
+        cache_hours = int(values['EXPLANATION_CACHE_HOURS']),
+        max_payload_characters = int(values['MAX_PAYLOAD_CHARACTERS']),
+        sample_size = int(values['LIST_SAMPLE_SIZE']),
+        question = str(values['EXPLANATION_QUESTION']),
+        temperature = float(values['BEDROCK_TEMPERATURE'])
+    )
 
 
 def _system_prompt(prompt: PromptItem) -> str:
@@ -93,7 +121,8 @@ def _system_prompt(prompt: PromptItem) -> str:
 
 def _trim(
     value: Any,
-    budget_hit: list[bool]
+    budget_hit: list[bool],
+    sample_size: int
 ) -> Any:
     '''
         Walks a structure and cuts every long list, at any depth.
@@ -107,28 +136,32 @@ def _trim(
             value (Any): Node of the response being walked.
             budget_hit (list[bool]): Single-element flag set when something was
                 actually cut, so the caller can log it once.
+            sample_size (int): Elements a long list keeps.
 
         Returns:
             Any: The same node, with long lists reduced to a sample.
     '''
     if isinstance(value, dict):
-        return {key: _trim(item, budget_hit) for key, item in value.items()}
+        return {key: _trim(item, budget_hit, sample_size) for key, item in value.items()}
 
     if isinstance(value, list):
-        if len(value) > SAMPLE_SIZE:
+        if len(value) > sample_size:
             budget_hit[0] = True
-            kept = [_trim(item, budget_hit) for item in value[:SAMPLE_SIZE]]
+            kept = [_trim(item, budget_hit, sample_size) for item in value[:sample_size]]
             kept.append(
-                f'… {len(value) - SAMPLE_SIZE} elemento(s) más, no mostrados: '
-                f'se envía una muestra de los primeros {SAMPLE_SIZE}.'
+                f'… {len(value) - sample_size} elemento(s) más, no mostrados: '
+                f'se envía una muestra de los primeros {sample_size}.'
             )
             return kept
-        return [_trim(item, budget_hit) for item in value]
+        return [_trim(item, budget_hit, sample_size) for item in value]
 
     return value
 
 
-def _fit_to_budget(payload: dict[str, Any]) -> dict[str, Any]:
+def _fit_to_budget(
+    payload: dict[str, Any],
+    settings: ExplainSettings
+) -> dict[str, Any]:
     '''
         Shrinks a response that does not fit the token budget, without
         re-declaring its shape.
@@ -146,15 +179,16 @@ def _fit_to_budget(payload: dict[str, Any]) -> dict[str, Any]:
 
         Args:
             payload (dict[str, Any]): The response as the service returned it.
+            settings (ExplainSettings): The ceiling and the sample size.
 
         Returns:
             dict[str, Any]: The same response, trimmed only if it had to be.
     '''
-    if len(json.dumps(payload, default = str)) <= MAX_PAYLOAD_CHARACTERS:
+    if len(json.dumps(payload, default = str)) <= settings.max_payload_characters:
         return payload
 
     budget_hit = [False]
-    trimmed = _trim(payload, budget_hit)
+    trimmed = _trim(payload, budget_hit, settings.sample_size)
 
     message = (
         f'Payload trimmed to fit the budget: '
@@ -167,15 +201,18 @@ def _fit_to_budget(payload: dict[str, Any]) -> dict[str, Any]:
 
 @handle_service_errors('AI')
 async def explain_service(
-    view: ViewName,
-    data: dict[str, Any]
+    view: str,
+    data: dict[str, Any],
+    auth_token: str | None
 ) -> dict[str, Any]:
     '''
     Explains what a view is showing, from the point of view of its expert.
 
     Args:
-        view (ViewName): View being explained.
+        view (str): View being explained; it exists if it has an active role.
         data (dict[str, Any]): The payload the view is displaying.
+        auth_token (str | None): The caller's Authorization header, forwarded
+            to PARAMETERS.
 
     Returns:
         dict[str, Any]: Payload matching ExplainResponse shape.
@@ -193,18 +230,19 @@ async def explain_service(
     # would be a second contract for one thing, and would drop fields the
     # expert could have used. The only thing done to it is fitting it to the
     # budget when a list is longer than anyone can read.
-    payload = _fit_to_budget(data)
+    settings = explain_settings(auth_token)
+    payload = _fit_to_budget(data, settings)
 
-    prompt = get_active_prompt(view.value)
+    prompt = get_active_prompt(view)
     if prompt is None:
-        error_msg = f'No active role is configured for {view.value}.'
+        error_msg = f'No active role is configured for {view}.'
         logger.warning(error_msg)
         raise RegisterNotFoundError(detail = AIError.ROLE_NOT_CONFIGURED.value)
 
-    cache_key = build_cache_key(view.value, payload, prompt.version)
+    cache_key = build_cache_key(view, payload, prompt.version)
     cached = get_cached(cache_key)
     if cached is not None:
-        message = f'Explanation of {view.value} served from cache.'
+        message = f'Explanation of {view} served from cache.'
         logger.info(message)
         return {
             'view': view,
@@ -219,32 +257,33 @@ async def explain_service(
     answer = invoke(
         model_id = prompt.model_id,
         system_prompt = _system_prompt(prompt),
-        user_prompt = (f'Vista {view.value}, respuesta del backend:\n'
+        user_prompt = (f'Vista {view}, respuesta del backend:\n'
                        f'{json.dumps(payload, ensure_ascii = False, default = str)}'
-                       f'\n\n{_QUESTION}'),
-        max_tokens = prompt.max_tokens
+                       f'\n\n{settings.question}'),
+        max_tokens = prompt.max_tokens,
+        temperature = settings.temperature
     )
     if not answer['text']:
-        error_msg = f'The model returned no text for {view.value}.'
+        error_msg = f'The model returned no text for {view}.'
         logger.error(error_msg)
         raise ServiceUnavailableError(detail = AIError.MODEL_REFUSED.value)
 
     now = get_current_time_gmt()
     message = (
-        f'Explained {view.value} with {prompt.model_id}: '
+        f'Explained {view} with {prompt.model_id}: '
         f'{answer["input_tokens"]} in, {answer["output_tokens"]} out.'
     )
     logger.info(message)
 
     put_cached(ExplanationItem(
         cache_key = cache_key,
-        view = view.value,
+        view = view,
         text = answer['text'],
         role = prompt.role,
         model_id = prompt.model_id,
         prompt_version = prompt.version,
         generated_at = now.isoformat(),
-        expires_at = int((now + timedelta(hours = CACHE_HOURS)).timestamp())
+        expires_at = int((now + timedelta(hours = settings.cache_hours)).timestamp())
     ))
 
     return {
