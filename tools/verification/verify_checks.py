@@ -674,6 +674,11 @@ def _controllers_by_verb(service: Path) -> dict[str, set[str]]:
     return found
 
 
+# Base services that never report to EVENTS, and the one that audits its writes only.
+EVENTS_EXEMPT = ('auth', 'files', 'ml_functions')
+READS_NOT_LOGGED = ('parameters',)
+
+
 def check_events(service: Path) -> tuple[bool, str]:
     '''
         Every controller reports to EVENTS, and every write is audited.
@@ -690,6 +695,10 @@ def check_events(service: Path) -> tuple[bool, str]:
     '''
     if service.name == 'events':
         return True, 'EVENTS no se audita a sí mismo'
+    # Rafael, 17-oct-2026: signing in, moving a file or making a calculation
+    # changes no business rule; auditing them is like auditing AUTH itself.
+    if service.name in EVENTS_EXEMPT:
+        return True, f'{service.name.upper()} es base técnica: no reporta a EVENTS'
     if not (service / 'controllers').is_dir():
         return True, 'no controllers/'
 
@@ -697,7 +706,9 @@ def check_events(service: Path) -> tuple[bool, str]:
     by_verb = _controllers_by_verb(service)
     every = {name for names in by_verb.values() for name in names}
 
-    missing_log = sorted(every - logged)
+    # PARAMETERS audits its changes but does not log its reads (Rafael, 17-oct):
+    # every service reads there, and a log per read says nothing.
+    missing_log = [] if service.name in READS_NOT_LOGGED else sorted(every - logged)
     writing = {name for verb in WRITING_VERBS for name in by_verb.get(verb, ())}
     writing = {name for name in writing if not name.startswith(QUERY_PREFIXES)}
     missing_audit = sorted(writing - audited)
