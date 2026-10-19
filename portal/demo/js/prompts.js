@@ -31,7 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
         route_compare: 'Rutas · Comparación',
         minerals_forecast: 'Minerales · proyección',
         rate_forecast: 'Tipo de cambio · proyección',
-        sale_scenario: 'Minerales · escenario de venta'
+        sale_scenario: 'Minerales · escenario de venta',
+        finance_summary: 'Análisis Financiero · Resumen',
+        finance_income: 'Análisis Financiero · Estado de Resultados',
+        finance_balance: 'Análisis Financiero · Balance General',
+        finance_taxes: 'Análisis Financiero · Impuestos',
+        finance_projection: 'Análisis Financiero · Proyección'
     };
     const viewLabel = (code) => VIEW_LABELS[code] || code;
     const escape = (text) => String(text == null ? '' : text)

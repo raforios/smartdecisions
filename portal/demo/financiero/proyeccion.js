@@ -135,5 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#scenarioReset').addEventListener('click', () => load());
     qs('#scenarioSelect').addEventListener('change', () => state.data && table());
 
+    // The AI reads the whole projection as the backend answered it: the three
+    // scenarios, the model's error and the notices.
+    F.explain('finance_projection', () => state.data, qs('#scenarioForm'));
     load();
 });

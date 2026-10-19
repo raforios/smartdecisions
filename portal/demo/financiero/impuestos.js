@@ -12,7 +12,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { qs, toast, setButtonBusy } = window.SD_UI;
     const PROVISION = 'IUE_PROVISION';
 
+    // What the AI reads: the chosen period and the report's notices, as the
+    // backend returned them.
+    let shown = null;
+
     function render(period, data) {
+        shown = { period, notices: data.notices };
         const taxes = period.taxes;
         qs('#taxesTable tbody').innerHTML = [
             F.moneyRow('IVA a pagar (débito menos crédito fiscal)', taxes.vat_payable, period.exchange),
@@ -52,6 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const data = await F.report();
         F.periodSelect(qs('#periodSelect'), data, (period) => render(period, data));
+        F.explain('finance_taxes', () => shown, qs('.period-bar'));
         await loadProvision();
     } catch (error) {
         toast(F.errorText(error, 'No se pudieron leer los impuestos.'), 'error');

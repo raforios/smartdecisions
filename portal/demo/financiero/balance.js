@@ -23,7 +23,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         ['coverage_months', 'Meses de cobertura', 'Efectivo frente a lo que sale en un mes, en promedio.']
     ];
 
+    // What the AI reads: the chosen period and the report's notices, as the
+    // backend returned them.
+    let shown = null;
+
     function render(period, data) {
+        shown = { period, notices: data.notices };
         const balance = period.balance;
         qs('#balanceTable tbody').innerHTML = LINES
             .map(([key, label, total]) => F.moneyRow(label, balance[key], period.exchange, total))
@@ -45,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const data = await F.report();
         F.periodSelect(qs('#periodSelect'), data, (period) => render(period, data));
+        F.explain('finance_balance', () => shown, qs('.period-bar'));
     } catch (error) {
         toast(F.errorText(error, 'No se pudo leer el Balance General.'), 'error');
     }

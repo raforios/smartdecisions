@@ -167,11 +167,22 @@
         }
     }
 
+    /**
+     * Puts the AI button on a finance screen. The model reads what the screen
+     * shows, as the backend returned it; `collect` gives it at click time, so
+     * a period chosen after loading is the one explained.
+     */
+    function explain(viewId, collect, panelHost) {
+        if (!window.SD_AI) return;
+        window.SD_AI.registerView(viewId, collect);
+        window.SD_AI.mountExplain('financeAi', viewId, panelHost);
+    }
+
     window.SD_FINANCE = {
         arrange,
         STATEMENT_LINES, PERIODICITY_LABELS, FLOW_LABELS, CHANNEL_LABELS,
         errorText, periodLabel, money, moneyRow, report, periodSelect, noticesHtml, ratesLine,
-        get,
+        get, explain,
         post: (path, body) => api.post(`${base()}${path}`, body),
         put: (path, body) => api.put(`${base()}${path}`, body),
         patch: (path, body) => api.patch(`${base()}${path}`, body),

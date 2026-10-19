@@ -26,7 +26,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return node;
     }
 
+    // What the AI reads: the chosen period, the months of the chart and the
+    // report's notices, as the backend returned them.
+    let shown = null;
+
     function render(period, data) {
+        shown = { period, months: data.months, notices: data.notices };
         const statement = period.income_statement;
         const at = (amount) => window.SD_MONEY.card(F.money(amount, period.exchange));
         const profit = statement.profit_before_income_tax.amount;
@@ -88,6 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         F.periodSelect(qs('#periodSelect'), data, (period) => render(period, data));
+        F.explain('finance_summary', () => shown, qs('.period-bar'));
         chart(data);
     } catch (error) {
         toast(F.errorText(error, 'No se pudo leer el análisis financiero.'), 'error');

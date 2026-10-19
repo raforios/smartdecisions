@@ -32,6 +32,8 @@
     gap: 0.75rem;
 }
 .period-bar select { min-width: 14rem; }
+/* The AI button sits at the end of the bar, like in the other modules. */
+.period-bar .ai-slot { margin-left: auto; }
 
 .metric-value.positive { color: var(--success); }
 .metric-value.negative { color: var(--danger); }

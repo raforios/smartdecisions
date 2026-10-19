@@ -7,7 +7,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const F = window.SD_FINANCE;
     const { qs, toast } = window.SD_UI;
 
+    // What the AI reads: the chosen period and the report's notices, as the
+    // backend returned them.
+    let shown = null;
+
     function render(period, data) {
+        shown = { period, notices: data.notices };
         const statement = period.income_statement;
         qs('#statementTable tbody').innerHTML = F.STATEMENT_LINES
             .filter(([key]) => statement[key])
@@ -20,6 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const data = await F.report();
         F.periodSelect(qs('#periodSelect'), data, (period) => render(period, data));
+        F.explain('finance_income', () => shown, qs('.period-bar'));
     } catch (error) {
         toast(F.errorText(error, 'No se pudo leer el Estado de Resultados.'), 'error');
     }
