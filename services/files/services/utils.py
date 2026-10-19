@@ -2,6 +2,7 @@
     Utility functions and decorators for the Files service.
 '''
 from collections.abc import Callable, Awaitable
+import inspect
 from typing import Any
 from functools import wraps
 from botocore.exceptions import ClientError
@@ -76,15 +77,17 @@ def handle_aws_operation(
             # Check for explicit context argument first
             context = kwargs.get('_context', {})
 
-            if not context and args:
-                # Fallback to the original logic if no _context is provided
-                request_body = args[0]
-                if hasattr(request_body, 'bucket_name'):
-                    context['bucket_name'] = request_body.bucket_name
-                if hasattr(request_body, 'file_key'):
-                    context['file_key'] = request_body.file_key
-                if hasattr(request_body, 'prefix'):
-                    context['prefix'] = request_body.prefix
+            if not context:
+                # The names come from the call itself: as plain arguments
+                # (read: bucket_name, file_key) or as fields of the request
+                # body. Reading only the body left a read's 404 saying
+                # "Bucket None or file None" (Rafael, 19-oct-2026).
+                bound = inspect.signature(func).bind_partial(*args, **kwargs).arguments
+                request_body = next(iter(bound.values()), None)
+                for name in ('bucket_name', 'file_key', 'prefix'):
+                    value = bound.get(name, getattr(request_body, name, None))
+                    if value:
+                        context[name] = value
 
             handle_aws_client_error(e, context)
         except HTTPException:

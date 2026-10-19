@@ -155,3 +155,26 @@ def test_unexpected_failure_is_still_unavailable(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(files, 's3_client', _BrokenS3())
     with pytest.raises(ServiceUnavailableError):
         asyncio.run(files.read_data_from_s3('bucket', 'carga.csv', 'acme'))
+
+
+class _MissingS3:  # pylint: disable=too-few-public-methods
+    '''
+        Stands in for an S3 client whose key does not exist.
+    '''
+    def get_object(
+        self,
+        **_: Any
+    ) -> dict[str, Any]:
+        '''
+            Fails as S3 does for a missing key.
+        '''
+        raise _client_error('NoSuchKey')
+
+
+def test_missing_file_names_bucket_and_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''The 404 says which file was missing, not "Bucket None or file None".'''
+    monkeypatch.setattr(files, 's3_client', _MissingS3())
+    with pytest.raises(ResourceNotFoundError) as raised:
+        asyncio.run(files.read_data_from_s3('ml-data-file-handler', 'carga.csv', 'acme'))
+    assert 'ml-data-file-handler' in raised.value.detail
+    assert 'carga.csv' in raised.value.detail
