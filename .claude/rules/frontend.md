@@ -67,5 +67,8 @@ invisible en la última página para que la tarjeta no salte de altura.
 ## Capa de IA
 
 `js/ai.js` expone `SD_AI.registerView(id, () => payload)`. Se registra **la
-respuesta del backend tal cual**, sin transformar. El botón sólo aparece si
-`SD_CONFIG.AI_URL` está definida.
+respuesta del backend tal cual**, sin transformar (en Análisis Financiero, el
+período elegido tal como vino). El botón sólo aparece si `SD_CONFIG.API_URL`
+está definida. Las pantallas de un producto nuevo no se agregan en AI: basta
+con que su vista tenga un texto activo en `ai_prompts` (AI es base desde el
+19-oct-2026).

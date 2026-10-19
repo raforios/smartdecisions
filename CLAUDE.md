@@ -85,6 +85,12 @@ nombrados por funcionalidad.
    `db_connection.py`, `environment.py`, `exceptions.py`, `logger_config.py`,
    `security.py` y `utils.py` no se modifican sin consulta; si se autoriza una
    adición, va al final del archivo.
+   - **Los ocho servicios propios que no son base** (INGEST, ANALYTICS,
+     OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI, BILLING y FINANCE) tienen el
+     **mismo boilerplate con las mismas funciones** (Rafael, 19-oct-2026).
+     Un cambio autorizado en uno se aplica a los ocho en el mismo paso; lo
+     propio de un servicio (el bloque FILES, el de PARAMETERS) va al final
+     del archivo, nunca en lugar de lo común.
 3. **No se inventan módulos de infraestructura** con nombres genéricos
    (`settings.py`, `config.py`, `text_catalog.py`). Lo común ya existe.
 
