@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from mangum import Mangum
 import uvicorn
@@ -107,6 +107,14 @@ app.add_middleware(
     allow_methods = ['*'],
     allow_headers = ['*'],
 )
+
+
+@app.get('/favicon.ico', include_in_schema = False)
+async def favicon() -> FileResponse:
+    '''
+        Serves the favicon.ico file to prevent 404 errors from browsers.
+    '''
+    return FileResponse('./favicon.ico')
 
 
 @app.get('/', tags = ['Home'])

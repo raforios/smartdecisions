@@ -1,123 +1,78 @@
-# 📁 File-Handler-Service ☁️
+# FILES — File-Handler-Service
 
-Bienvenido al microservicio de administración de archivos, un componente clave para la interacción con **Amazon S3** dentro de la arquitectura de tu API **SMARTBEAR**. Este servicio facilita la gestión de archivos para procesos de análisis de datos, permitiendo leer, subir y eliminar contenido en tus buckets S3.
+Servicio **base** de BearSoft (CLAUDE.md §4, §7 y §9).
 
------
+## Para qué sirve
 
-## 🎯 Propósito Principal
+Es el **único servicio que toca el bucket**: sube, baja, lista, borra y
+**lee los datos** de los archivos de S3 (CSV, Excel, TXT). Un servicio que
+necesita un archivo se lo pide a FILES por HTTP, reenviando el token de quien
+llama; nunca abre su propio `boto3.client('s3')`. El binario sube directo a S3
+con una URL pre-firmada, así no atraviesa API Gateway (límite de 10 MB).
 
-El **File-Handler-Service** está diseñado para ser la interfaz principal para todas las operaciones de archivos en tus buckets S3 de AWS. Sus funcionalidades clave incluyen:
+FILES no reporta a EVENTS: mover un archivo no dice nada del negocio
+(Rafael, 17-oct-2026).
 
-  * **Gestión de Archivos en S3:** Permite subir, leer, listar y eliminar archivos de forma programática.
-  * **Preparación para Análisis de Datos:** Facilita la extracción de información desde archivos almacenados para su posterior procesamiento y análisis.
-  * **Integración con la API SMARTBEAR:** Actúa como un puente seguro para que otros microservicios interactúen con S3.
-  * **Generación de URLs Pre-firmadas:** Permite crear enlaces seguros y temporales para que los clientes finales puedan subir archivos directamente a S3 sin exponer credenciales.
+## Endpoints y quién puede llamarlos
 
------
+Todos exigen un token válido de AUTH, de cualquier rol.
 
-## 🛠️ Tecnologías Utilizadas
+| Método | Ruta | Qué hace |
+|---|---|---|
+| GET | `/v1/s3/read/{bucket_name}/{file_key}` | Lee un archivo y devuelve sus filas |
+| POST | `/v1/s3/upload` | Sube un archivo a través del servicio |
+| DELETE | `/v1/s3/delete` | Borra un archivo |
+| POST | `/v1/s3/list-files` | Lista los archivos, con prefijo opcional |
+| POST | `/v1/s3/upload-presigned` | Devuelve una URL pre-firmada para subir directo a S3 |
 
-Este microservicio ha sido desarrollado con un enfoque en la eficiencia y la integración con la nube:
+`/read` no acepta `/` dentro de `file_key`: los archivos de una carga masiva
+van a la raíz del bucket (`BUCKET_PATH=''` en quien llama), igual que en las
+cargas de BINARIA.
 
-  * **Lenguaje:** Python 3.13 🐍 (Versión estable y soportada en AWS Lambda)
-  * **Framework Web:** FastAPI ✨
-  * **Servidor ASGI:** Uvicorn 🚀
-  * **Autenticación/Autorización:** JWT (JSON Web Tokens) 🔑 (Para asegurar el acceso al microservicio)
-  * **Contenedorización:** Docker 🐳 (para compilación de librerías, empaquetado y despliegue)
-  * **Plataforma Cloud:** AWS Lambda ☁️ (como servicio de ejecución sin servidor)
-  * **Almacenamiento de Objetos:** Amazon S3 🗄️ (Como sistema de almacenamiento principal para archivos)
-  * **Interacción con AWS:** Boto3 (SDK oficial de AWS para Python para interactuar con S3 y otros servicios)
+## Qué servicios lo llaman
 
------
+- **FINANCE, INGEST y MINING_ANALYSIS**, por el bloque FILES del final de su
+  `services/utils.py` (el estándar vive en `services/finance/services/utils.py`).
+- **Portal demo** (`portal/demo/js/api.js`, `uploadToBucket`): pide la URL
+  pre-firmada y sube el archivo.
 
-## 🚀 Endpoints de la API
+## Variables de entorno
 
-A continuación se listan los endpoints principales de la API, organizados por su funcionalidad.
+Sólo entorno (CLAUDE.md §5.3):
 
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/v1/s3/read/{bucket_name}/{file_key}` | Lee y procesa un archivo (CSV, Excel, TXT) desde un bucket S3. |
-| `POST` | `/v1/s3/upload` | Sube un archivo directamente al servicio para que este lo almacene en S3. |
-| `DELETE` | `/v1/s3/delete` | Elimina un archivo específico de un bucket S3. |
-| `POST` | `/v1/s3/list-files` | Lista los archivos en un bucket S3, con la opción de un prefijo. |
-| `POST` | `/v1/s3/upload-presigned` | Genera una URL pre-firmada para subir archivos directamente a S3 desde el cliente. |
+| Variable | Qué es |
+|---|---|
+| `HOST`, `PORT`, `APP_ENV` | Servidor local y entorno |
+| `SECRET_KEY`, `ALGORITHM` | Verificación del JWT de AUTH |
+| `ML_DATA_BUCKET_NAME` | Bucket del servicio (`ml-data-file-handler`) |
 
------
+## Tablas y buckets
 
-## 🗄️ Datos que guarda
+No tiene tablas. El bucket es `ml-data-file-handler`; lo que hay adentro lo
+decide cada servicio que lo usa. INGEST guarda bajo `ingest/` los CSV de cada
+contrato (estructura en `services/ingest/README.md`).
 
-No tiene tablas. Es el único servicio que toca el bucket (variable
-`ML_DATA_BUCKET_NAME`). Lo que hay adentro lo decide cada servicio que lo usa:
-INGEST guarda bajo `ingest/` los CSV de cada contrato (estructura en
-`services/ingest/README.md`) y las plantillas estáticas que descarga el cliente.
+## Cómo correrlo y probarlo
 
-## 📦 Dependencias
-
-Las siguientes librerías son esenciales para el funcionamiento del **File-Handler-Service** y se gestionan a través de `requirements.txt` y Docker:
-
-  * `fastapi`
-  * `uvicorn`
-  * `pydantic`
-  * `pydantic-core`
-  * `python-multipart`
-  * `boto3`
-  * `mangum`
-  * `pandas`
-  * `python-jose[cryptography]`
-  * `openpyxl`
-  * `python-dotenv`
-
------
-
-## 🚀 Despliegue manual en AWS
-
-```shell
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files 
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --destroy
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --skip-code-update
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/files --skip-table-creation 
+```bash
+cd services/files
+python main.py            # puerto del .env (PORT); usa el bucket real de S3
+python -m pytest -q
+pylint --fail-under=10.0 .
 ```
 
------
+Se despliega con `services/ci/api/start.sh --redeploy files` (lo despliega
+Rafael).
 
-## 🗂️ Estructura del Microservicio
+## Qué revisa el CI
 
-```text
-files/
-└── controllers/
-│   ├── __init__.py
-│   └── files.py
-├── routes/
-│   ├── __init__.py
-│   └── files.py
-├── schemas/
-│   ├── __init__.py
-│   └── files.py
-├── services/
-│   ├── __init__.py
-│   ├── api_exceptions.py
-│   ├── environment.py
-│   ├── exceptions.py
-│   ├── logger_config.py
-│   ├── security.py
-│   └── utils.py
-├── .dockerignore
-├── .env
-├── .gitignore
-├── deploy.config
-├── Dockerfile
-├── main.py
-├── README.md
-└── requirements.txt
-```
------
+`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
+instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
+`.pylintrc` del repositorio y `pytest` **sin `.env`**: un test que importe
+algo que lea configuración al importarse rompe el CI. `tests/test_files.py`
+prueba la lectura con S3 reemplazado (CSV con y sin separador, texto, binario
+en base64), la traducción de los errores de AWS y la clave del archivo.
 
-## 👤 Creado Por
+## Creado por
 
-**Rafael Ríos Bascón**
-[raforios@gmail.com](mailto:raforios@gmail.com)
-
------
+**Rafael Ríos Bascón** — [raforios@gmail.com](mailto:raforios@gmail.com)

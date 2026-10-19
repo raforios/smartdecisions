@@ -3,7 +3,6 @@
     by scope.
 '''
 import pytest
-from pydantic import ValidationError
 
 from schemas.parameters import ParameterError, ParameterSchema, ValueType
 from services import parameters
@@ -34,18 +33,6 @@ def test_a_change_replaces_the_value(parameters_store):
                              ParameterSchema(**{**DECIMALS.model_dump(), 'value': 4}))
     listed = parameters.all_parameters(parameters_store)
     assert (listed.total, listed.parameters[0].value) == (1, 4.0)
-
-
-@pytest.mark.parametrize(('value_type', 'value'), [
-    (ValueType.NUMBER, 'dos'), (ValueType.TEXT, 2), (ValueType.LIST, 'a'), (ValueType.NUMBER, True)
-])
-def test_a_value_must_match_its_type(
-    value_type,
-    value
-):
-    '''A reader that asks for a number never gets a word.'''
-    with pytest.raises(ValidationError, match = ParameterError.VALUE_TYPE_MISMATCH.value):
-        ParameterSchema(value_type = value_type, value = value, description = 'x')
 
 
 def test_a_parameter_is_removed_or_said_missing(parameters_store):

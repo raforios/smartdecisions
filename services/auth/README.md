@@ -1,152 +1,93 @@
-# 🐻 Auth-Handler-Service 🔒
+# AUTH — Auth-Handler-Service
 
-Bienvenido al microservicio de autenticación, una pieza fundamental para la seguridad de la API **SMARTBEAR**, un conjunto de microservicios diseñados para Machine Learning. Este servicio garantiza que solo los usuarios autorizados tengan acceso a las funcionalidades de la API.
+Servicio **base** de BearSoft (CLAUDE.md §4 y §7).
 
----
+## Para qué sirve
 
-## 🎯 Propósito Principal
+Es la puerta de entrada de toda la API: guarda los usuarios y emite el token
+JWT que los demás servicios exigen en cada llamada. El token lleva `email`,
+`role` y `client`; `client` es la empresa y es el **dueño de los datos** en
+todos los servicios (un MANAGER y sus vendedores ven lo mismo).
 
-El **Auth-Handler-Service** actúa como el punto de control de acceso central para toda la API SMARTBEAR. Su objetivo principal es:
+Los demás servicios **no llaman a AUTH** para validar el token: lo verifican
+ellos mismos con `security.py` y la misma `SECRET_KEY` / `ALGORITHM`. AUTH no
+reporta a EVENTS (no se audita el inicio de sesión, Rafael 17-oct-2026).
 
-* **Proveer seguridad robusta:** Asegurando que solo las solicitudes válidas y autenticadas accedan a los demás microservicios.
-* **Gestión de Usuarios por Compañía:** Permite registrar, activar e inactivar usuarios, administrándolos por cada compañía que utilice el servicio SMARTBEAR.
-* **Emisión de Tokens JWT:** Genera tokens JWT (JSON Web Tokens) que son esenciales para la autenticación y autorización en toda la API.
+## Endpoints y quién puede llamarlos
 
----
+| Método | Ruta | Quién |
+|---|---|---|
+| POST | `/v1/auth/login` | Sin token: recibe email y contraseña, devuelve el JWT |
+| POST | `/v1/auth/signup` | `ADMIN` (desde el 19-oct-2026): da de alta un usuario como `REQUESTER` y sin empresa; luego el `ADMIN` le pone rol y empresa con `PATCH /v1/users/{email}` |
+| GET | `/v1/users/me` | Cualquier usuario activo: sus propios datos |
+| POST | `/v1/users/me/password` | Cualquier usuario activo: cambia su contraseña |
+| GET | `/v1/users/company` | `MANAGER` o `ADMIN`: los usuarios de su empresa |
+| GET | `/v1/users/` | `ADMIN` |
+| GET | `/v1/users/{email}` | `ADMIN` |
+| PATCH | `/v1/users/{email}` | `ADMIN` |
+| DELETE | `/v1/users/{email}` | `ADMIN` |
 
-## 🛠️ Tecnologías Utilizadas
+Roles en `schemas/role.py`.
 
-Este microservicio ha sido desarrollado utilizando un stack moderno y eficiente para garantizar escalabilidad y rendimiento:
+**El primer administrador.** Como el alta exige un `ADMIN`, el primero (o uno
+nuevo si no quedara ninguno) se crea escribiendo el ítem directo en
+`auth-users`, con el hash de `services/security.py`. Desde ahí, cualquier
+`ADMIN` da de alta a otro y lo promueve con `PATCH` (`role: ADMIN`).
 
-* **Lenguaje:** Python 3.13 🐍 (Versión estable y soportada en AWS Lambda)
-* **Framework Web:** FastAPI ✨
-* **Servidor ASGI:** Uvicorn 🚀
-* **Autenticación/Autorización:** JWT (JSON Web Tokens) 🔑
-* **Contenedorización:** Docker 🐳 (para compilación de librerías, empaquetado y despliegue)
-* **Plataforma Cloud:** AWS Lambda ☁️ (como servicio de ejecución sin servidor)
-* **Gestión de Credenciales/Seguridad:** Passlib, Bcrypt, Python-jose[cryptography]
-* **Correo Electrónico:** Email-validator (para validación de formatos de email en el registro)
-* **Interacción con AWS:** Boto3 (SDK oficial de AWS para Python)
+## Qué servicios lo llaman
 
----
+- **Portal demo** (`portal/demo/js/auth.js`, `account.js`, `home.js`): login,
+  cambio de contraseña y usuarios de la empresa.
+- **Portal de BILLING** (`portal/billing/js/services/AuthService.js`).
+- Ningún microservicio lo llama por HTTP: todos verifican el token localmente.
 
-## 🗄️ Datos que guarda
+## Variables de entorno
 
-Una tabla, `auth-users` (variable `TABLE_NAME`), con partición `email`. Cada
-ítem es un usuario: `email`, `first_name`, `last_name`, `hashed_password`
-(nunca la contraseña), `client` (la empresa: es el dueño de los datos en todos
-los servicios), `role` (`schemas/role.py`: ADMIN, MANAGER, SELLER, REQUESTER, WAREHOUSE_MANAGER, REGISTRATION, REPORTS), `status` y
-`date_register`. Esquemas en `schemas/users.py`.
+Sólo entorno (CLAUDE.md §5.3):
 
-## 🗺️ API Endpoints
+| Variable | Qué es |
+|---|---|
+| `HOST`, `PORT`, `APP_ENV` | Servidor local y entorno |
+| `SECRET_KEY`, `ALGORITHM` | Firma del JWT; **la misma en todos los servicios** |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Vida del token |
+| `TABLE_NAME` | Tabla de usuarios (`auth-users`) |
 
-The **Auth-Handler-Service** exposes the following programmatic API endpoints for authentication and user management.
+## Tablas
 
-| Method | Path | Description | Authentication |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/v1/auth/login` | Authenticates a user and returns an access JWT token. | `None` |
-| `POST` | `/v1/auth/signup` | Registers a new user and returns their email and a confirmation message. | `None` |
-| `GET` | `/v1/users/` | Retrieves a list of all users. | `JWT Token` |
-| `GET` | `/v1/users/{email}` | Retrieves a single user's details by their email address. | `JWT Token` |
-| `PATCH` | `/v1/users/{email}` | Updates a user's information by their email address. | `JWT Token` |
-| `DELETE` | `/v1/users/{email}` | Deletes a user by their email address. | `JWT Token` |
+`auth-users`, partición `email`. Cada ítem es un usuario: `email`,
+`first_name`, `last_name`, `hashed_password` (nunca la contraseña), `client`,
+`role`, `status` y `date_register`. Esquemas en `schemas/users.py`.
 
----
+Las contraseñas se guardan con `bcrypt` directo (hash `$2b$`), sin `passlib`
+desde el 19-oct-2026: `passlib` ya no se mantiene y obligaba a fijar
+versiones. Los hashes anteriores siguen validando; `bcrypt` lee sólo los
+primeros 72 bytes, y el servicio los corta igual que lo hacía `passlib`.
 
-## 🚀 ¿Cómo se Usa?
+## Cómo correrlo y probarlo
 
-El **Auth-Handler-Service** no expone una interfaz pública directa para el usuario final. Su función es interna y programática:
-
-1.  **Administración Interna:** Se utiliza para la gestión de usuarios (registro, activación, inactivación) por parte de los administradores del sistema o a través de herramientas internas.
-2.  **Generación de Tokens:** Los microservicios clientes o las aplicaciones que necesitan interactuar con la API SMARTBEAR deben primero solicitar un TOKEN JWT a este microservicio de autenticación.
-3.  **Autorización de Invocaciones:** Una vez obtenido el TOKEN JWT, este debe ser incluido en las cabeceras de cada solicitud a cualquier otro microservicio de la API SMARTBEAR. El token es validado por los microservicios receptores para permitir o denegar el acceso.
-
-```python
-# Ejemplo conceptual de cómo un cliente obtendría y usaría el token (no es código ejecutable)
-
-# Paso 1: Obtener el token de autenticación
-# response = requests.post("URL_AUTH_SERVICE/login", json={"username": "...", "password": "..."})
-# auth_token = response.json()["access_token"]
-
-# Paso 2: Usar el token en las solicitudes a otros microservicios SMARTBEAR
-# headers = {"Authorization": f"Bearer {auth_token}"}
-# ml_response = requests.get("URL_ML_SERVICE/predict", headers=headers)
-
+```bash
+cd services/auth
+python main.py            # puerto del .env (PORT)
+python -m pytest -q
+pylint --fail-under=10.0 .
 ```
------
 
-## 📦 Dependencias
+Se despliega con `services/ci/api/start.sh --redeploy auth` (lo despliega
+Rafael).
 
-Las siguientes librerías son esenciales para el funcionamiento del **Auth-Handler-Service** y se gestionan a través de `requirements.txt` y Docker:
+## Qué revisa el CI
 
-  * `fastapi`
-  * `uvicorn`
-  * `pydantic`
-  * `pydantic-core`
-  * `python-multipart`
-  * `boto3`
-  * `mangum`
-  * `pandas`
-  * `passlib==1.7.4`
-  * `bcrypt==4.0.1`
-  * **`python-jose`**
-  * `email-validator`
-  * `python-dotenv`
+`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
+instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
+`.pylintrc` del repositorio y `pytest` **sin `.env`**.
 
------
+- `tests/test_auth.py` importa sólo esquemas y funciones puras
+  (`services/sessions.py`, `services/security.py`), así que corre en el CI:
+  sesiones, cambio de contraseña y el hash, incluido uno hecho por `passlib`.
+- `tests/test_routes.py` (el alta sólo para `ADMIN`) importa las rutas, que
+  leen configuración: `tests/conftest.py` lo deja fuera sin `.env` y corre en
+  local.
 
-## 🚀 Despliegue manual en AWS
+## Creado por
 
-```shell
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/auth 
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/auth --destroy
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/auth --skip-code-update
-
-./build_and_deploy.sh --path /Users/rafael/Work/projects/back/SmartDecisions/app/services/auth --skip-table-creation 
-```
------
-
-## 🗂️ Estructura del Microservicio
-
-```text
-auth/
-└── controllers/
-│   ├── __init__.py
-│   └── users.py
-├── routes/
-│   ├── __init__.py
-│   ├── auth.py
-│   └── users.py
-├── schemas/
-│   ├── __init__.py
-│   ├── auth.py
-│   ├── role.py
-│   └── users.py
-├── services/
-│   ├── __init__.py
-│   ├── api_exceptions.py
-│   ├── dynamodb.py
-│   ├── environment.py
-│   ├── exceptions.py
-│   ├── jwt_token.py
-│   ├── logger_config.py
-│   └── security.py
-├── .dockerignore
-├── .env
-├── .gitignore
-├── deploy.config
-├── Dockerfile
-├── main.py
-├── README.md
-└── requirements.txt
-```
------
-
-## 👤 Creado Por
-
-**Rafael Ríos Bascón**
-[raforios@gmail.com](mailto:raforios@gmail.com)
-
------
+**Rafael Ríos Bascón** — [raforios@gmail.com](mailto:raforios@gmail.com)

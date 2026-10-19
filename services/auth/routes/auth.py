@@ -1,10 +1,15 @@
 '''
     Auth: routes handler
 '''
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from schemas.auth import LoginRequest, SignupResponse, Token
 from schemas.users import UserRequest
-from controllers.users import authenticate_user, create_user, record_login
+from controllers.users import (
+    authenticate_user,
+    create_user,
+    get_current_admin_user,
+    record_login
+)
 from services.logger_config import custom_logger as logger
 from services.jwt_token import create_access_token
 from services.exceptions import (
@@ -44,7 +49,11 @@ async def login(request: LoginRequest) -> Token:
 @router.post(
     '/signup',
     response_model = SignupResponse,
-    status_code = status.HTTP_201_CREATED
+    status_code = status.HTTP_201_CREATED,
+    # Only an ADMIN signs users up (Rafael, 19-oct-2026): an open sign-up let
+    # anyone create an account. The new user starts as REQUESTER without a
+    # client; the ADMIN then sets role and client with PATCH /v1/users/{email}.
+    dependencies = [Depends(get_current_admin_user)]
 )
 async def signup(user_data: UserRequest) -> SignupResponse:
     '''

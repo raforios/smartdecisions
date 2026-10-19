@@ -12,3 +12,6 @@ __pycache__
 .git
 .venv
 .DS_Store
+
+# do not bake local .env into the image; configure via Lambda env vars
+.env

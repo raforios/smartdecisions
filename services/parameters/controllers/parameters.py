@@ -1,8 +1,10 @@
 '''
     Parameters — orchestration.
 
-    Every change is audited: a number of decimals or an account that moved a
-    report is a value somebody typed, and it has to be possible to say who.
+    Every change (PUT, POST, DELETE) is audited: a number of decimals or an
+    account that moved a report is a value somebody typed, and it has to be
+    possible to say who. A read is not logged (Rafael, 17-oct): every service
+    reads its values here, and logging each read says nothing about the business.
 '''
 from boto3.resources.base import ServiceResource
 from fastapi import Request
@@ -26,7 +28,6 @@ from services.utils import audit_event, handle_service_errors
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 
 
-@handle_service_errors('PARAMETERS')
 async def scope_parameters_controller(
     dynamodb_resource: ServiceResource,
     scope: str,
@@ -48,7 +49,6 @@ async def scope_parameters_controller(
     return scope_parameters(dynamodb_resource, scope)
 
 
-@handle_service_errors('PARAMETERS')
 async def all_parameters_controller(
     dynamodb_resource: ServiceResource,
     current_user: str, # pylint: disable=unused-argument

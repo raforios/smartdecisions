@@ -5,6 +5,7 @@ from collections.abc import Callable, Awaitable
 from typing import Any
 from functools import wraps
 from botocore.exceptions import ClientError
+from fastapi import HTTPException
 from services.exceptions import (
     ResourceNotFoundError,
     ForbiddenError,
@@ -86,6 +87,10 @@ def handle_aws_operation(
                     context['prefix'] = request_body.prefix
 
             handle_aws_client_error(e, context)
+        except HTTPException:
+            # Already an answer for the caller (an empty or unsupported file is
+            # a 400); wrapping it below would turn it into a 503 (Rafael, 19-oct-2026).
+            raise
         except Exception as e:
             error_msg = f'Internal server error while processing the operation: {e}'
             logger.error(error_msg, exc_info = True)

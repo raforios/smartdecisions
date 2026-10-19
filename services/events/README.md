@@ -1,130 +1,81 @@
-# 🔔 Events-Service 📊
+# EVENTS — Events-Service
 
-Bienvenido al microservicio de gestión de eventos, una pieza fundamental en la arquitectura de la API **SMARTBEAR**. Este servicio es el centro neurálgico para la recolección, el registro y el monitoreo de eventos críticos del sistema, proporcionando una fuente única de verdad para la auditoría y la trazabilidad del uso de la API.
+Servicio **base** de BearSoft (CLAUDE.md §4 y §7).
 
------
+## Para qué sirve
 
-## 🎯 Propósito Principal
+Registra **quién cambió qué** (auditoría) y **cada llamada** a los servicios
+(uso). Sin él, un servicio es invisible: nadie puede decir quién anuló una
+nota. Los servicios no escriben aquí a mano: lo hacen los decoradores del
+boilerplate, `@handle_service_errors` (uso) y `@audit_event` (auditoría).
 
-El **Events-Service** está diseñado para ser la columna vertebral de la observabilidad y la seguridad de la plataforma. Su propósito principal es capturar y centralizar información sobre cambios de datos y actividad de usuarios, lo que facilita la auditoría, la depuración y el análisis del rendimiento. Sus funcionalidades clave incluyen:
+EVENTS no se audita a sí mismo.
 
-  * **Auditoría de Datos:** Proporciona un registro inmutable de las modificaciones (creación, actualización y eliminación) en las tablas de la base de datos de otros microservicios.
-  * **Registro de Uso:** Captura detalles de cada llamada a la API, incluyendo el usuario, el microservicio accedido, la dirección IP, el tiempo de respuesta y el estado de la petición.
-  * **Análisis y Reportes:** Actúa como una fuente de datos centralizada que permite generar reportes detallados sobre el comportamiento del sistema y el uso de los usuarios.
+## Endpoints y quién puede llamarlos
 
------
+| Método | Ruta | Quién |
+|---|---|---|
+| POST | `/v1/events/audit` | Cualquier token válido: el servicio reenvía el de la petición que registra |
+| GET | `/v1/events/audit` | `ADMIN`: lista paginada con filtros |
+| POST | `/v1/events/usage-log` | Cualquier token válido, igual que la auditoría |
+| GET | `/v1/events/usage-log` | `ADMIN`: lista paginada con filtros |
 
-## 🛠️ Tecnologías Utilizadas
+Los roles de lectura están en `schemas/audit.py` (`READ_ROLES`).
 
-Este microservicio comparte el mismo enfoque en rendimiento y robustez que el resto de tu arquitectura, utilizando las siguientes tecnologías:
+## Qué servicios lo llaman
 
-  * **Lenguaje:** Python 3.13 🐍
-  * **Framework Web:** FastAPI ✨
-  * **Servidor ASGI:** Uvicorn 🚀
-  * **AWS SDK:** Boto3 (para la gestión de datos)
-  * **Base de Datos:** AWS DynamoDB
-  * **Validación de Datos:** Pydantic
-  * **Contenedorización:** Docker 🐳
-  * **Plataforma Cloud:** AWS Lambda y AWS CLI (para el despliegue a través de un script shell)
+INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI, FINANCE,
+BILLING y PARAMETERS (este último sólo por sus cambios: PUT y DELETE).
 
------
+No lo llaman AUTH, FILES ni ML_FUNCTIONS: son base técnica, y registrar un
+inicio de sesión, un archivo movido o un cálculo no dice nada del negocio
+(Rafael, 17-oct-2026). `tools/verification/verify_checks.py` (chequeo
+`events`) lo comprueba.
 
-## 🚀 Endpoints de la API
+## Variables de entorno
 
-A continuación se listan los endpoints principales de la API, agrupados por su funcionalidad para una mejor referencia.
+Sólo entorno (CLAUDE.md §5.3):
 
-### Gestión de Eventos
+| Variable | Qué es |
+|---|---|
+| `HOST`, `PORT`, `APP_ENV` | Servidor local y entorno |
+| `SECRET_KEY`, `ALGORITHM` | Verificación del JWT de AUTH |
+| `DYNAMODB_TABLE_NAME_AUDIT` | Tabla de auditoría (`audit_records`) |
+| `DYNAMODB_TABLE_NAME_USAGE` | Tabla de uso (`usage_logs`) |
 
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `POST` | `/v1/events/audit` | Registra un evento de auditoría sobre una modificación de datos. |
-| `GET` | `/v1/events/audit` | Obtiene una lista paginada de registros de auditoría con filtros opcionales. |
-| `POST` | `/v1/events/usage-log` | Registra un evento de uso de la API. |
-| `GET` | `/v1/events/usage-log` | Obtiene una lista paginada de registros de uso con filtros opcionales. |
-
------
-
-## 🗄️ Datos que guarda
+## Tablas
 
 | Tabla | Partición | Qué guarda |
 |---|---|---|
 | `audit_records` | `id` (UUID) | Quién cambió qué: `microservice`, `entity_name`, `entity_id`, `action`, `user_id`, `timestamp`, `old_values`, `new_values` (`models/audit.py`) |
 | `usage_logs` | `id` (UUID) | Cada llamada a un servicio: `user_app`, `microservice`, `endpoint`, `method`, `status_code`, `ip_address`, `request_body`, `response_body`, `response_time_ms`, `timestamp` (`models/usage_log.py`) |
 
-La lectura de las dos exige rol ADMIN; la escritura exige el token de la
-petición que se registra.
+## Cómo correrlo y probarlo
 
-## 🗂️ Estructura del Microservicio
+`boto3.resource('dynamodb')` no lleva endpoint: corre contra la DynamoDB de
+la cuenta y región del perfil AWS activo. Para trabajar en local,
+`dynamodb.sh` levanta DynamoDB en Docker (puerto 3100) con `audit_records` y
+`usage_logs`, y se exporta `AWS_ENDPOINT_URL_DYNAMODB=http://localhost:3100`:
 
-```txt
-events/
-├── controllers/
-│   ├── __init__.py
-│   ├── audit.py
-│   └── usage_log.py
-├── models/
-│   ├── __init__.py
-│   ├── audit.py
-│   └── usage_log.py
-├── routes/
-│   ├── __init__.py
-│   ├── audit.py
-│   └── usage_log.py
-├── schemas/
-│   ├── __init__.py
-│   ├── audit.py
-│   └── usage_log.py
-├── services/
-│   ├── __init__.py
-│   ├── api_exceptions.py
-│   ├── audit.py
-│   ├── crud.py
-│   ├── db_connection.py
-│   ├── environment.py
-│   ├── exceptions.py
-│   ├── logger_config.py
-│   ├── security.py
-│   ├── usage_log.py
-│   └── utils.py
-├── .dockerignore
-├── .env
-├── .gitignore
-├── deploy.config
-├── Dockerfile
-├── main.py
-├── README.md
-└── requirements.txt
+```bash
+cd services/events
+python main.py            # puerto del .env (PORT)
+python -m pytest -q
+pylint --fail-under=10.0 .
 ```
 
------
+Se despliega con `services/ci/api/start.sh --redeploy events` (lo despliega
+Rafael).
 
-## 📀 Ejecución Local
+## Qué revisa el CI
 
-Para ejecutar el microservicio localmente, sigue los siguientes pasos:
+`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
+instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
+`.pylintrc` del repositorio y `pytest` **sin `.env`**: un test que importe
+algo que lea configuración al importarse rompe el CI. `tests/test_events.py`
+prueba el recorte de los cuerpos (`services/payload_limits.py`) y los
+esquemas: campos de más ignorados, página de 1 a 100 y lectura sólo `ADMIN`.
 
-1.  **Instala las dependencias:**
+## Creado por
 
-```shell
-pip install -r requirements.txt
-```
-
-2.  **Configura la base de datos:** Asegúrate de que tienes una instancia de **DynamoDB local** en ejecución (por ejemplo, con **Docker**) y que las variables de conexión están correctamente configuradas en el archivo `.env`.
-
-3.  **Ejecuta el servidor de la API:**
-
-```shell
-python main.py
-```
-
-O si el entorno lo requiere:
-
-```shell
-python3 main.py
-```
-
------
-
-## 👤 Creado Por
-
-**Rafael Ríos Bascón**
-[raforios@gmail.com](mailto:raforios@gmail.com)
+**Rafael Ríos Bascón** — [raforios@gmail.com](mailto:raforios@gmail.com)

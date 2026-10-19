@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from schemas.role import Role
 from schemas.users import InternalUser, PasswordChangeRequest, UserResponse
+from services.security import hash_password, verify_password
 from services.sessions import company_members, login_update
 
 
@@ -132,3 +133,33 @@ def test_a_user_never_signed_in_has_no_last_session():
     user = UserResponse(email = 'yo@mi.com', first_name = 'Rafael', last_name = 'Rios',
                         role = Role.MANAGER, status = True, date_register = now, date_update = now)
     assert user.last_login is None and user.previous_login is None and user.login_count == 0
+
+
+# Made by passlib 1.7.4 + bcrypt 4.0.1, the pinned pair AUTH used until
+# 19-oct-2026, for the password 'clave-de-prueba': stored users must still sign in.
+PASSLIB_HASH = '$2b$12$LyB5FW4uHMqwmo2bCy.mMOvTot8M6bICFmTH6qi3cMXvj1WI/cm7e'
+
+
+def test_password_hashed_by_passlib_still_matches() -> None:
+    '''A hash stored before the change validates the same password, not another.'''
+    assert verify_password('clave-de-prueba', PASSLIB_HASH)
+    assert not verify_password('otra-clave', PASSLIB_HASH)
+
+
+def test_hash_round_trip_and_fresh_salt() -> None:
+    '''Each hash carries its own salt, and both validate the password.'''
+    first, second = hash_password('clave-de-prueba'), hash_password('clave-de-prueba')
+    assert first != second
+    assert verify_password('clave-de-prueba', first)
+    assert verify_password('clave-de-prueba', second)
+
+
+def test_password_longer_than_72_bytes_is_accepted() -> None:
+    '''bcrypt 5 rejects more than 72 bytes; the service cuts them as passlib did.'''
+    long_password = 'ñ' * 50
+    assert verify_password(long_password, hash_password(long_password))
+
+
+def test_malformed_hash_does_not_match() -> None:
+    '''A damaged stored hash refuses the sign-in instead of failing the request.'''
+    assert not verify_password('clave-de-prueba', 'not-a-hash')
