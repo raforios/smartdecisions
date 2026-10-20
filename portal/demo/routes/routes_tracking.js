@@ -267,8 +267,11 @@
     document.addEventListener('DOMContentLoaded', () => {
         // A page that carries sections of Rutas on their own (Inventario,
         // Clientes, Parámetros) opens all of them on load; deferred so every
-        // section script has registered its `onShow` first.
-        const standalone = document.querySelectorAll('.routes-section[data-autoshow]');
+        // section script has registered its `onShow` first. A client's own
+        // section stays closed for whoever has no client (the shell hid it).
+        const forClient = !window.SD_SHELL || window.SD_SHELL.forClient;
+        const standalone = [...document.querySelectorAll('.routes-section[data-autoshow]')]
+            .filter((panel) => forClient || !panel.hasAttribute('data-client-only'));
         setTimeout(() => standalone.forEach((panel) => {
             panel.hidden = false;
             (shown[panel.dataset.section] || []).forEach((callback) => callback());

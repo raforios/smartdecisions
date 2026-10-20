@@ -10,7 +10,7 @@
  * master; the loads add new sellers on their own, and this screen only links.
  */
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.SD_AUTH.isAuthenticated()) return;
+    if (!window.SD_AUTH.isAuthenticated() || !window.SD_SHELL.forClient) return;
     const { qs, toast } = window.SD_UI;
     const T = window.SD_TRACK;
 

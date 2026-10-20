@@ -9,7 +9,7 @@
  * are computed with.
  */
 document.addEventListener('DOMContentLoaded', () => {
-    if (!window.SD_AUTH.isAuthenticated()) return;
+    if (!window.SD_AUTH.isAuthenticated() || !window.SD_SHELL.forClient) return;
     const { qs, toast, setButtonBusy } = window.SD_UI;
     const BASE = `${window.SD_CONFIG.API_URL}/v1/analytics`;
 

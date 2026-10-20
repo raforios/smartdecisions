@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function noteSaved(updatedAt) {
         qs('#modelNote').textContent = updatedAt
-            ? `Guardado el ${new Date(updatedAt).toLocaleString('es-BO')}.`
+            ? `Guardado: ${new Date(updatedAt).toLocaleString('es-BO')}`
             : 'Todavía no lo guardaste: la IA lo necesita para compararlo con tus números.';
     }
 
@@ -82,12 +82,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         noteSaved(stored.updated_at);
         if (data.months.length) {
             // What the model is compared with, as FINANCE returned it: the year
-            // in course and the last complete one, each by its name —the
-            // model mistook one for the other in a plain list— and the newest
-            // twelve months, because the AI cuts a long list from its start.
+            // in course, the same months of the year before (what that
+            // unfinished year compares with) and the last complete one, each
+            // by its name —the model mistook one for the other in a plain
+            // list— and the newest twelve months, because the AI cuts a long
+            // list from its start.
             const years = data.years;
             figures = {
                 current_year: years[years.length - 1] || null,
+                year_to_date: data.year_to_date || null,
                 last_complete_year: years[years.length - 2] || null,
                 months: data.months.slice(-12),
                 notices: data.notices

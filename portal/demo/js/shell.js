@@ -25,6 +25,10 @@
     // The financial analysis is for the people who run the business (Rafael:
     // «sólo la plana mayor»); FINANCE answers ROLE_NOT_ALLOWED to anyone else.
     const FINANCE_ROLES = ['MANAGER'];
+    // The ADMIN runs the platform —parameters, users, the AI, the rates—, not
+    // a client's business: it has no client, so its finances and its
+    // commercial data would be empty (Rafael, 20-oct).
+    const COMMERCIAL_ROLES = ['MANAGER', 'REQUESTER', 'SELLER'];
 
     // A tree: Comercial holds its areas, an area holds its options. An option
     // is its own page (`page`) or a view of its area page opened by its card
@@ -50,7 +54,8 @@
                 { label: 'Modelo de negocio', page: 'financiero/modelo.html' },
                 { label: 'Cargar datos', page: 'financiero/cargar.html' }
             ] },
-            { label: 'Comercial', icon: 'commerce', page: 'comercial/index.html', children: [
+            { label: 'Comercial', icon: 'commerce', page: 'comercial/index.html',
+              roles: COMMERCIAL_ROLES, children: [
                 { label: 'Ventas', icon: 'sales', page: 'ventas/index.html', children: [
                     ...VENTAS,
                     { label: 'Cargar datos', page: 'ventas/cargar.html', roles: EDITORS }
@@ -309,8 +314,15 @@
         label: node.label, icon: node.icon, href: href(node.page, node.view),
         children: visibleTree(node.children || [])
     }));
+    // A block of a client's own configuration (its starting point, sellers,
+    // policies) is hidden from whoever has no client to configure.
+    const forClient = COMMERCIAL_ROLES.includes(role);
+    if (!forClient) {
+        document.querySelectorAll('[data-client-only]').forEach((node) => { node.hidden = true; });
+    }
+
     window.SD_SHELL = {
-        role, roleLabel: ROLE_LABELS[role] || '', isEditor: EDITORS.includes(role),
+        role, roleLabel: ROLE_LABELS[role] || '', isEditor: EDITORS.includes(role), forClient,
         menu: () => MENU.filter(allowed).map((section) => ({
             group: section.group, items: visibleTree(section.items) }))
     };
