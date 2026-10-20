@@ -60,5 +60,6 @@ class SellerUpdateSchema(BaseModel):
 
 
 # Who may link a seller to a user: it decides whose phone sees which route, so
-# it is a management act. The consultation role reads, it does not assign.
-LINKING_ROLES: tuple[str, ...] = ('ADMIN', 'MANAGER')
+# it is a management act of the client. The consultation role reads, it does
+# not assign; the ADMIN runs the platform, not a client (Rafael, 20-oct-2026).
+LINKING_ROLES: tuple[str, ...] = ('MANAGER',)

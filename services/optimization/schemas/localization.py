@@ -42,9 +42,10 @@ class LocalizationError(str, Enum):
 
 class TrackingRole(str, Enum):
     '''
-        Roles AUTH issues that matter here. ADMIN and MANAGER run the account;
-        REQUESTER is what every account signed up with before roles existed, so
-        it keeps full rights over its own data; SELLER works the street.
+        Roles AUTH issues. MANAGER runs the account; REQUESTER is what every
+        account signed up with before roles existed, so it keeps full rights
+        over its own data; SELLER works the street. ADMIN runs the platform and
+        has no client, so it has no routes here (Rafael, 20-oct-2026).
     '''
     ADMIN = 'ADMIN'
     MANAGER = 'MANAGER'
@@ -64,9 +65,7 @@ class CallerClaims(BaseModel):
 # Who may do what. Management builds plans, loads stock and reads everything;
 # the field additionally runs routes, reports visits and reads its plan and
 # the stock it can sell from.
-MANAGEMENT_ROLES: tuple[str, ...] = (
-    TrackingRole.ADMIN.value, TrackingRole.MANAGER.value, TrackingRole.REQUESTER.value
-)
+MANAGEMENT_ROLES: tuple[str, ...] = (TrackingRole.MANAGER.value, TrackingRole.REQUESTER.value)
 FIELD_ROLES: tuple[str, ...] = MANAGEMENT_ROLES + (TrackingRole.SELLER.value,)
 
 
