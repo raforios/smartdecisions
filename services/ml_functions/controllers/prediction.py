@@ -12,7 +12,7 @@ from services.machine_learning import (
     compute_gradient,
     gradient_descent
 )
-from services.forecast import backtest, damped_trend
+from services.forecast import choose_and_project
 from services.utils import handle_operation
 from schemas.prediction import (
     ComputeCostLinearRequest,
@@ -123,13 +123,14 @@ async def predict_linear_regression(
 @handle_operation(exc_type = (ValueError, TypeError))
 async def forecast_series(request_body: ForecastRequest) -> ForecastResponse:
     '''
-    Controller to project a series and measure the model on its own history.
+    Controller to project a series with the model that best follows it.
     '''
-    smoothing = (request_body.smoothing.alpha, request_body.smoothing.beta,
-                 request_body.smoothing.phi)
-    error, naive = backtest(request_body.values, smoothing, request_body.backtest_points)
+    projection = choose_and_project(request_body.values, request_body.horizon,
+                                    request_body.season_length, request_body.backtest_points)
     return ForecastResponse(
-        model = request_body.model,
-        forecast = damped_trend(request_body.values, request_body.horizon, smoothing),
-        error_percent = error, naive_error_percent = naive
+        model = projection.model,
+        forecast = projection.forecast,
+        error_percent = projection.error_percent,
+        naive_error_percent = projection.naive_error_percent,
+        tested_points = projection.tested_points
     )

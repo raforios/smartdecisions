@@ -232,42 +232,39 @@ class PredictLinearResponse(BaseModel):
 
 class ForecastModel(str, Enum):
     '''
-        The projection models the service offers.
+        The projection models the service chooses among.
     '''
+    NAIVE = 'NAIVE'
     DAMPED_TREND = 'DAMPED_TREND'
-
-
-class SmoothingSchema(BaseModel):
-    '''
-        The parameters of the damped trend. The caller sends them: they are
-        its business values (in FINANCE, from PARAMETERS).
-    '''
-    alpha: float = Field(..., gt = 0, le = 1,
-                         description = 'Weight of the last value on the level.')
-    beta: float = Field(..., gt = 0, le = 1, description = 'How fast the trend changes.')
-    phi: float = Field(..., gt = 0, le = 1, description = 'Damping per step; 1 turns it off.')
+    HOLT_WINTERS = 'HOLT_WINTERS'
 
 
 class ForecastRequest(BaseModel):
     '''
-        A series to project.
+        A series to project. The caller sends only the series and what it is:
+        the model and its parameters are chosen by the service, from the
+        series itself (Rafael, 19-oct-2026).
     '''
     values: list[float] = Field(..., min_length = 2, max_length = 1000,
                                 description = 'The history, oldest first.')
     horizon: int = Field(..., ge = 1, le = 120, description = 'Steps ahead.')
-    model: ForecastModel
-    smoothing: SmoothingSchema
+    season_length: int | None = Field(
+        None, ge = 2, le = 366,
+        description = 'Points per season (12 for months); None when the series has none.')
     backtest_points: int = Field(..., ge = 1, le = 120,
-                                 description = 'Last points the error is measured on.')
+                                 description = 'Last points the models are measured on.')
 
 
 class ForecastResponse(BaseModel):
     '''
-        The projection, and how good the model has been on the series itself.
+        The projection, the model it came from and how good that model has
+        been on the series itself, next to the naive guess.
     '''
     model: ForecastModel
     forecast: list[float]
     error_percent: float | None = Field(
-        None, description = 'Mean absolute % error on the last points; None without data.')
+        None, description = 'Mean absolute % error on the tested points; None without data.')
     naive_error_percent: float | None = Field(
         None, description = 'The same error for "the next value is the same as the last".')
+    tested_points: int = Field(
+        ..., ge = 0, description = 'How many points the models were measured on.')

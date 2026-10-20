@@ -176,9 +176,12 @@ async def predict_linear_regression_route(
     '/forecast',
     response_model = ForecastResponse,
     summary = 'Project a series',
-    description = '''Projects a series with a damped trend and measures the
-        model on the series itself, next to the naive guess. The shared
-        projection every service asks for (FINANCE first).'''
+    description = '''Projects a series with the model that best follows it:
+        the naive guess, a damped trend or, when the series has seasons, a
+        Holt-Winters. The parameters are fitted to the series and every model
+        is measured out of sample on the same last points; a model is used
+        only when it beats the naive guess. The shared projection every
+        service asks for (FINANCE first).'''
 )
 async def forecast_series_route(
     request: ForecastRequest,
@@ -188,7 +191,7 @@ async def forecast_series_route(
         Projects a series and returns its error next to the naive one.
 
         Args:
-            request (ForecastRequest): The history, the horizon, the model and its parameters.
+            request (ForecastRequest): The history, the horizon and the season length.
             current_user (str): The authenticated user's identifier (dependency-injected).
 
         Returns:
