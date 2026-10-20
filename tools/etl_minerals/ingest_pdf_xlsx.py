@@ -1,0 +1,291 @@
+'''
+    Biweekly ingest of Diario sheets extracted from scanned PDFs. Designed to
+    run every 15 days against the same consolidated xlsx that the operator
+    keeps appending new quincenas to.
+
+    Input file layout (produced manually from the scanned monthly PDFs):
+      - Sheet name pattern: `{Mes} Q{1|2} - Diario`
+      - Header row 2 holds the period title with the month/year, e.g.
+        `PRIMERA QUINCENA DE ABRIL 2026 (días 1 al 15)`.
+      - Row 3 holds column headers, with mineral names embedding the unit:
+        `ESTAÑO\\n(L.F.)`, `WÓLFRAM\\n(T.M.F.)`, etc.
+      - Subsequent rows hold the day number in column A and prices per mineral.
+      - A trailing `Promedio` row is ignored (we recompute it ourselves).
+
+    Mineral name matching is case-insensitive and accent-insensitive so the
+    sheet headers map correctly to the catalogue in `t_minerals`, which is
+    read from the database, never written here. Header columns whose mineral
+    is not in the catalogue are reported and skipped (e.g. HIERRO CONCENT,
+    PELLET).
+
+    Idempotency: re-ingesting the same period is a no-op because each
+    (mineral_id, date) pair is checked before insertion.
+
+    Usage:
+        # Uses the default source under <repo>/data/.
+        python -m tools.etl_minerals.ingest_pdf_xlsx --yes
+
+        # Override when the operator keeps the file elsewhere.
+        python -m tools.etl_minerals.ingest_pdf_xlsx --source /path/to/file.xlsx --yes
+'''
+import argparse
+import re
+from datetime import date
+from pathlib import Path
+from typing import Any
+
+import openpyxl
+from openpyxl.worksheet.worksheet import Worksheet
+from sqlalchemy.orm import Session
+
+from tools.etl_minerals.connection import database_session, now, report, source_is_missing
+from tools.etl_minerals.models import Mineral, MiningPrice, normalize_name
+
+
+SPANISH_MONTHS = {
+    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10,
+    'noviembre': 11, 'diciembre': 12,
+}
+
+
+# Default location of the consolidated biweekly xlsx, resolved relative to
+# this script so the operator can run `python -m tools.etl_minerals.ingest_pdf_xlsx --yes`
+# without recalling the path every fortnight.
+DEFAULT_SOURCE = (
+    Path(__file__).resolve().parents[3] / 'data' / 'cotizaciones_mineras_bolivia.xlsx'
+)
+
+
+def _parse_period_title(title: str) -> tuple[int, int] | None:
+    '''
+    Extracts (year, month) from titles like 'PRIMERA QUINCENA DE ABRIL 2026 (...)'.
+    Returns None when the title does not match the expected pattern.
+    '''
+    if not isinstance(title, str):
+        return None
+    match = re.search(r'\b(' + '|'.join(SPANISH_MONTHS) + r')\b\s+(\d{4})',
+                      title, flags = re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(2)), SPANISH_MONTHS[match.group(1).lower()]
+
+
+def _extract_mineral_columns(
+    header_row: tuple,
+    official: set[str]
+) -> tuple[dict[int, str], list[str]]:
+    '''
+    Splits header columns into matched/unmatched against the catalogue.
+
+    Args:
+        header_row (tuple): Raw row 3 of the Diario sheet (column headers).
+        official (set[str]): Normalized names of `t_minerals`.
+
+    Returns:
+        tuple[dict[int, str], list[str]]:
+            - {column_index: normalized_mineral_name} for catalog hits.
+            - Raw header labels that did not match the catalog (caller may
+              choose to warn). Column A (the day number) is always skipped.
+    '''
+    matched: dict[int, str] = {}
+    unmatched: list[str] = []
+    for idx, cell in enumerate(header_row):
+        if idx == 0 or cell is None:
+            continue
+        raw = str(cell).split('\n', maxsplit = 1)[0].strip()
+        if not raw:
+            continue
+        norm = normalize_name(raw)
+        if norm in official:
+            matched[idx] = norm
+        else:
+            unmatched.append(raw)
+    return matched, unmatched
+
+
+def _iter_daily_rows(
+    sheet: Worksheet,
+    sheet_name: str,
+    official: set[str]
+) -> list[tuple[date, dict[str, float]]]:
+    '''
+    Yields (price_date, {normalized_mineral: price}) for every numeric day row
+    in a Diario sheet. Returns [] if the sheet does not match the expected
+    layout (e.g. it is a Regalías sheet instead). Logs a warning when the
+    sheet exposes mineral columns that are not in the catalogue.
+    '''
+    rows = list(sheet.iter_rows(values_only = True))
+    if len(rows) < 4:
+        return []
+
+    period = _parse_period_title(rows[1][0] if rows[1] else None)
+    if period is None:
+        return []
+    year, month = period
+
+    mineral_cols, unmatched = _extract_mineral_columns(rows[2], official)
+    if not mineral_cols:
+        return []
+    if unmatched:
+        report(f'[{sheet_name}] {len(unmatched)} column(s) not in '
+               f't_minerals, ignored: {", ".join(unmatched)}.')
+
+    parsed: list[tuple[date, dict[str, float]]] = []
+    for row in rows[3:]:
+        price_date = _row_date(row, year, month)
+        if price_date is None:
+            continue
+        day_prices = _row_prices(row, mineral_cols)
+        if day_prices:
+            parsed.append((price_date, day_prices))
+    return parsed
+
+
+def _row_date(
+    row: tuple[Any, ...],
+    year: int,
+    month: int
+) -> date | None:
+    '''
+    Reads the day number in the first cell and builds the quotation date.
+
+    Args:
+        row (tuple): Row of the sheet, values only.
+        year (int): Year taken from the sheet title.
+        month (int): Month taken from the sheet title.
+
+    Returns:
+        date | None: The date, or None when the cell is not a day of that month
+            (header rows, totals, or a 31 in a 30-day month).
+    '''
+    day = row[0]
+    if not isinstance(day, int):
+        return None
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _row_prices(
+    row: tuple[Any, ...],
+    mineral_cols: dict[int, str]
+) -> dict[str, float]:
+    '''
+    Reads the quotations of one day row, skipping blanks and unparseable cells.
+
+    Args:
+        row (tuple): Row of the sheet, values only.
+        mineral_cols (dict[int, str]): Column index -> normalized mineral name.
+
+    Returns:
+        dict[str, float]: Price per mineral present in that row.
+    '''
+    prices: dict[str, float] = {}
+    for col_idx, mineral_norm in mineral_cols.items():
+        value = row[col_idx] if col_idx < len(row) else None
+        if value is None or value == '':
+            continue
+        try:
+            prices[mineral_norm] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return prices
+
+
+def _upsert_prices(
+    session: Session,
+    mineral_id_by_norm: dict[str, int],
+    parsed_rows: list[tuple[date, dict[str, float]]]
+) -> tuple[int, int]:
+    '''
+    Inserts new MiningPrice rows for each (date, mineral) pair. Existing rows
+    are left untouched so the operation is idempotent.
+
+    Returns (inserted, skipped).
+    '''
+    inserted, skipped = 0, 0
+    for price_date, prices in parsed_rows:
+        for mineral_norm, value in prices.items():
+            mineral_id = mineral_id_by_norm.get(mineral_norm)
+            if mineral_id is None:
+                skipped += 1
+                continue
+            exists = (
+                session.query(MiningPrice.id)
+                       .filter(MiningPrice.mineral_id == mineral_id,
+                               MiningPrice.date == price_date)
+                       .first()
+            )
+            if exists:
+                skipped += 1
+                continue
+            session.add(MiningPrice(
+                mineral_id = mineral_id,
+                date = price_date,
+                price_low = value,
+                price_high = value,
+                created_at = now(),
+            ))
+            inserted += 1
+    session.commit()
+    return inserted, skipped
+
+
+def main() -> int:
+    '''
+    CLI entry point.
+    '''
+    parser = argparse.ArgumentParser(
+        description = 'Ingest biweekly Diario sheets from a curated xlsx.'
+    )
+    parser.add_argument('--source', type = Path, default = DEFAULT_SOURCE,
+                        help = ('Path to cotizaciones_mineras_bolivia.xlsx '
+                                '(or similar layout). Defaults to '
+                                f'{DEFAULT_SOURCE}.'))
+    parser.add_argument('--yes', action = 'store_true',
+                        help = 'Apply the changes. Without this flag the '
+                               'script only prints a plan.')
+    args = parser.parse_args()
+
+    if source_is_missing(args.source):
+        return 2
+
+    # The catalogue is read first, in the dry run as well: what is matched is
+    # decided by the table, so the plan shows exactly what --yes would write.
+    with database_session() as session:
+        mineral_id_by_norm = {
+            normalize_name(r.name): r.id for r in session.query(Mineral).all()
+        }
+    official = set(mineral_id_by_norm)
+
+    workbook = openpyxl.load_workbook(args.source, data_only = True)
+    diary_sheets = [s for s in workbook.sheetnames if 'diario' in s.lower()]
+    if not diary_sheets:
+        print('No Diario sheets detected. Nothing to do.')
+        return 0
+
+    all_parsed: list[tuple[date, dict[str, float]]] = []
+    for sheet_name in diary_sheets:
+        rows = _iter_daily_rows(workbook[sheet_name], sheet_name, official)
+        print(f'[{sheet_name}] {len(rows)} day-rows with prices.')
+        all_parsed.extend(rows)
+
+    distinct_days = {d for d, _ in all_parsed}
+    print(f'TOTAL: {len(distinct_days)} distinct dates across '
+          f'{len(diary_sheets)} sheets.')
+
+    if not args.yes:
+        print('DRY-RUN: re-run with --yes to write to the database.')
+        return 0
+
+    with database_session() as session:
+        inserted, skipped = _upsert_prices(session, mineral_id_by_norm, all_parsed)
+        message = f'Ingest complete: inserted={inserted}, skipped={skipped}.'
+        report(message)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

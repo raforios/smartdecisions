@@ -18,7 +18,6 @@ simulación y sólo escriben con `--yes`.
 | | | `convert_sales_export.py` | Al recibir el export de ventas de un ERP nuevo, para llevarlo a la plantilla |
 | `seeds/` | Datos base que todo ambiente necesita | `seed_finance.py` | Catálogo de cuentas y tasas de ley de FINANCE, leídos del contrato aprobado |
 | | | `seed_parameters.py` | Valores de negocio de PARAMETERS, leídos de `docs/parametros.md` |
-| | | `seed_locations.py` | Departamentos y municipios de MINING_ANALYSIS |
 | `demo/` | Preparar una demostración | `seed_demo_routes.py` | La mañana de cada demo de Rutas: `--date AAAA-MM-DD --yes --reset` |
 | | | `seed_billing_demo.py` | La farmacia de demostración de BILLING |
 | | | `samples/` | Archivos de ejemplo para subir en una demo (ventas, stock) |

@@ -1,0 +1,5 @@
+openpyxl
+sqlalchemy
+pymysql
+boto3
+python-dotenv
