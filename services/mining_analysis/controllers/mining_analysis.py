@@ -2,20 +2,12 @@
     Mining Analysis Controllers
 '''
 from datetime import date
-from decimal import Decimal
-from typing import Any
 from fastapi import Request
 from boto3.resources.base import ServiceResource
-from sqlalchemy.orm import Session
-from services.utils import audit_event, handle_service_errors
-from services.environment import load_and_validate_env_vars
+from services.utils import handle_service_errors
 from services.logger_config import custom_logger as logger
 from services.price_forecast import get_price_forecast_service
-from services.royalties_etl import process_royalties_excel_service
 from services.mining_analysis import (
-    get_royalties_summary_service,
-    get_transactions_summary_service,
-    process_mining_etl_service,
     get_all_prices_service,
 )
 from services.official_reports import (
@@ -27,45 +19,10 @@ from schemas.mining_analysis import (
     ForecastMethod,
     PriceForecastResponse,
     MiningPriceResponseSchema,
-    BulkUploadMiningResponseSchema,
-    RoyaltySummaryResponse,
-    TransactionSummaryResponse,
     DailyReportResponse,
     BiweeklyReportResponse,
     BiweeklyHistoryResponse,
 )
-
-# Rate used to convert a royalties file that arrives in dollars. The caller may
-# override it per upload; what it falls back to is the official rate of the
-# period, which is a decision of the Ministry and moves with it.
-_SETTINGS = load_and_validate_env_vars({'ROYALTIES_DEFAULT_EXCHANGE_RATE': str})
-DEFAULT_EXCHANGE_RATE = Decimal(_SETTINGS['ROYALTIES_DEFAULT_EXCHANGE_RATE'])
-
-
-# pylint: disable=too-many-arguments, too-many-positional-arguments
-@handle_service_errors('MINING_ANALYSIS')
-@audit_event('MINING_ANALYSIS', 'MiningPrices', 'BULK_UPLOAD')
-async def bulk_upload_mining_controller(
-    db: Session,
-    file_content: bytes,
-    file_name: str,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    delimiter: str = ','
-) -> BulkUploadMiningResponseSchema:
-    '''
-        Controller to handle the bulk upload of mining prices via ETL.
-        Orchestrates service logic, audit events, and usage logging.
-    '''
-
-    result = await process_mining_etl_service(
-        db = db,
-        file_content = file_content,
-        file_name = file_name,
-        delimiter = delimiter
-    )
-
-    return BulkUploadMiningResponseSchema(**result)
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_mineral_prices_controller(
@@ -82,69 +39,6 @@ async def get_mineral_prices_controller(
     return [MiningPriceResponseSchema.model_validate(p) for p in prices]
 
 @handle_service_errors('MINING_ANALYSIS')
-async def get_royalties_summary_controller(
-    db: Session,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str,
-    year: int = None,
-    quarter: int = None
-) -> RoyaltySummaryResponse:
-    '''
-        Orchestrates the retrieval of royalty summaries with analytics.
-    '''
-    message = f'User: {current_user} requesting analytics for Year: {year}'
-    logger.info(message)
-
-    result = await get_royalties_summary_service(
-        db,
-        year = year,
-        quarter = quarter
-    )
-
-    return RoyaltySummaryResponse(**result)
-
-@handle_service_errors('MINING_ANALYSIS')
-@audit_event('MINING_ANALYSIS', 'Royalties', 'UPLOAD')
-async def upload_royalties_controller(
-    db: Session,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str, # pylint: disable=unused-argument
-    file_name: str,
-    file_content: bytes,
-    exchange_rate: Decimal = DEFAULT_EXCHANGE_RATE
-) -> dict[str, Any]:
-    '''
-        Controller to handle in-memory bulk upload of Royalties with currency conversion.
-    '''
-    message = f'Starting in-memory ETL for file: {file_name} with rate: {exchange_rate}'
-    logger.info(message)
-
-    # Processing with the exchange rate.
-    result = await process_royalties_excel_service(db, file_content, exchange_rate)
-
-    return result
-
-@handle_service_errors('MINING_ANALYSIS')
-async def get_transactions_summary_controller(
-    db: Session,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str,
-    year: int = None
-) -> TransactionSummaryResponse:
-    '''
-    Orchestrates the retrieval of transactions summary.
-    '''
-    message = f'User: {current_user} requesting transactions for Year: {year}'
-    logger.info(message)
-
-    result = await get_transactions_summary_service(
-        db,
-        year = year
-    )
-
-    return TransactionSummaryResponse(**result)
-
-@handle_service_errors('MINING_ANALYSIS')
 async def get_daily_report_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
@@ -159,6 +53,7 @@ async def get_daily_report_controller(
     result = await get_daily_report_service(dynamodb_resource, ref_date)
     return DailyReportResponse(**result)
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 @handle_service_errors('MINING_ANALYSIS')
 async def get_biweekly_report_controller(
     dynamodb_resource: ServiceResource,

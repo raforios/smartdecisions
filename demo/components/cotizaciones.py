@@ -7,7 +7,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from utils.api_client import (
-    upload_mining_prices,
     fetch_mineral_prices,
 )
 # IMPORTANTE: Importamos generate_ordered_pdf en lugar del legacy convert_df_to_pdf
@@ -233,21 +232,6 @@ def render_cotizaciones_tab():
         } for item in raw_prices]).sort_values('Fecha')
 
     _render_official_reports_section(prices_df)
-
-    with st.expander('📥 Carga de Datos (CSV Cotizaciones)'):
-        col_c1, col_c2 = st.columns([3, 1])
-        with col_c1:
-            file_cot = st.file_uploader('Subir archivo de cotización diario', type=['csv', 'xlsx', 'xls'], key='up_cot')
-        with col_c2:
-            delim = st.selectbox('Separador', [',', ';', '|'])
-            
-        if file_cot and st.button('🚀 Procesar Cotizaciones'):
-            with st.spinner('Procesando cotizaciones en memoria...'):
-                res_etl = upload_mining_prices(file_cot.name, file_cot.getvalue(), delim)
-                if res_etl and res_etl.status_code == 201:
-                    st.success('ETL Exitoso. Registros procesados.')
-                else:
-                    st.error('Error procesando archivo.')
 
     if not prices_df.empty:
         df_cot = prices_df

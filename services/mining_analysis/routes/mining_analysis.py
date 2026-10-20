@@ -2,38 +2,26 @@
     Mining Analysis: routes handler
 '''
 from datetime import date as date_type
-from typing import Any
 from fastapi import (
     APIRouter,
     Depends,
     Request,
-    UploadFile,
-    File,
     status,
     Query
 )
 from boto3.resources.base import ServiceResource
-from sqlalchemy.orm import Session
 from services.logger_config import custom_logger as logger
 from services.db_connection import GET_DB_DEPENDENCY
-from services.db_connection_sql import GET_SQL_DB_DEPENDENCY
 from services.environment import load_and_validate_env_vars
 from services.security import get_current_owner
 from controllers.mining_analysis import (
-    bulk_upload_mining_controller,
     get_mineral_prices_controller,
-    get_royalties_summary_controller,
-    get_transactions_summary_controller,
-    upload_royalties_controller,
     get_daily_report_controller,
     get_biweekly_report_controller,
     get_price_forecast_controller,
 )
 from schemas.mining_analysis import (
     MiningPriceResponseSchema,
-    BulkUploadMiningResponseSchema,
-    RoyaltySummaryResponse,
-    TransactionSummaryResponse,
     DailyReportResponse,
     BiweeklyReportResponse,
     ForecastMethod,
@@ -67,36 +55,6 @@ class BiweeklyPeriod: # pylint: disable=too-few-public-methods
         self.month = month
         self.half = half
 
-@router.post(
-    '/etl/upload',
-    response_model = BulkUploadMiningResponseSchema,
-    status_code = status.HTTP_201_CREATED
-)
-async def upload_mining_data_endpoint(
-    request: Request,
-    file: UploadFile = File(...),
-    delimiter: str = Query(',', description = 'Separador de campos del CSV'),
-    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> BulkUploadMiningResponseSchema:
-    '''
-        Endpoint to trigger the mining data ETL process from a CSV file.
-    '''
-    message = f'User: {current_user}. Uploaded file: {file.filename} with delimiter "{
-        delimiter}".'
-
-    logger.info(message)
-
-    content = await file.read()
-    return await bulk_upload_mining_controller(
-        db = db,
-        file_content = content,
-        file_name = file.filename,
-        request = request,
-        current_user = current_user,
-        delimiter = delimiter
-    )
-
 @router.get(
     '/prices',
     response_model = list[MiningPriceResponseSchema],
@@ -118,67 +76,6 @@ async def get_mining_prices_endpoint(
         dynamodb_resource = dynamodb_resource,
         request = request,
         current_user = current_user
-    )
-
-@router.post('/royalties/upload', status_code=status.HTTP_201_CREATED)
-async def upload_royalties_excel(
-    request: Request,
-    file: UploadFile = File(...),
-    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> dict[str, Any]:
-    ''' Endpoint to trigger the Excel ETL process directly in memory. '''
-    message = f'User: {current_user}. Uploading file: {file.filename}'
-    logger.info(message)
-
-    # The raw bytes are pulled in the routes layer.
-    content = await file.read()
-
-    return await upload_royalties_controller(
-        db = db,
-        request = request,
-        current_user = current_user,
-        file_name = file.filename,
-        file_content = content # Pasamos los bytes
-    )
-
-@router.get('/royalties/summary', response_model = RoyaltySummaryResponse)
-async def get_royalties_summary(
-    request: Request,
-    year: int | None = Query(None, description='Gestión fiscal a consultar'),
-    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> RoyaltySummaryResponse:
-    ''' Retrieves aggregated royalties data. '''
-    message = f'User: {current_user}. Requested royalties summary.'
-    logger.info(message)
-
-    return await get_royalties_summary_controller(
-        db = db,
-        request = request,
-        current_user = current_user,
-        year = year
-    )
-
-@router.get(
-    '/royalties/transactions',
-    response_model = TransactionSummaryResponse
-)
-async def get_royalties_transactions(
-    request: Request,
-    year: int | None = Query(None, description='Gestión fiscal a consultar'),
-    db: Session = Depends(GET_SQL_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> TransactionSummaryResponse:
-    ''' Retrieves aggregated transactions data by company. '''
-    message = f'User: {current_user}. Requested transactions summary.'
-    logger.info(message)
-
-    return await get_transactions_summary_controller(
-        db = db,
-        request = request,
-        current_user = current_user,
-        year = year
     )
 
 @router.get(

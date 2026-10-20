@@ -3,7 +3,6 @@
 '''
 from datetime import datetime, date
 from enum import Enum
-from typing import Any
 from pydantic import BaseModel, Field, ConfigDict
 
 class MiningStatus(str, Enum):
@@ -67,13 +66,6 @@ class MineralResponseSchema(MineralBase, MiningAnalysisBaseSchema):
     id: int | None = None
     created_at: datetime | None = None
 
-class MiningPriceCreateSchema(BaseModel):
-    ''' Schema for creating a price entry. '''
-    mineral_id: int
-    date: date
-    price_low: float | None = None
-    price_high: float | None = None
-
 class MiningPriceResponseSchema(MiningAnalysisBaseSchema):
     '''
         Response schema for mineral prices with nested mineral info.
@@ -86,72 +78,6 @@ class MiningPriceResponseSchema(MiningAnalysisBaseSchema):
     price_low: float
     price_high: float | None
     mineral: MineralResponseSchema
-
-class BulkUploadMiningResponseSchema(BaseModel):
-    ''' Response schema for the ETL process. '''
-    result: MiningResult = MiningResult.PRICES_ETL_COMPLETED
-    processed_records: int
-    status: MiningStatus = MiningStatus.SUCCESS
-    skipped_records: int = 0
-
-class RoyaltySummaryItem(BaseModel):
-    ''' Item schema for royalty summary extracting all BOB and USD metrics. '''
-    year: int
-    month: int
-    department: str
-    municipality: str
-
-    # Métricas BOB
-    total_recaudado_bob: float
-    comision_bob: float
-    subtotal_bob: float
-    distribucion_dept_bob: float
-    distribucion_muni_bob: float
-
-    # Métricas USD
-    total_recaudado_usd: float
-    comision_usd: float
-    subtotal_usd: float
-    distribucion_dept_usd: float
-    distribucion_muni_usd: float
-
-    # KPIs analíticos
-    variacion_monto_bob: float | None = 0.0
-    variacion_porcentaje: float | None = 0.0
-
-class MiningAnalyticsKPIs(BaseModel):
-    ''' Schema for summary strategic insights. '''
-    total_recaudado_periodo: float = 0.0
-    municipios_destacados: list[dict[str, Any]] = []
-    alerta_caida_critica: list[dict[str, Any]] = []
-
-class RoyaltySummaryData(BaseModel):
-    ''' Internal data structure for the response. '''
-    detailed_records: list[RoyaltySummaryItem]
-    summary_kpis: MiningAnalyticsKPIs
-
-class RoyaltySummaryResponse(BaseModel):
-    ''' Main response schema for ministerial reporting. '''
-    status: MiningStatus
-    result: MiningResult
-    data: RoyaltySummaryData
-
-class CompanyTransactionItem(BaseModel):
-    ''' Item schema for company transaction summary. '''
-    company_name: str
-    nit: str
-    amount_paid_bob: float
-    amount_paid_usd: float
-    month: int
-    year: int
-    municipality: str
-
-class TransactionSummaryResponse(BaseModel):
-    ''' Main response schema for transactions. '''
-    status: MiningStatus
-    result: MiningResult
-    data: list[CompanyTransactionItem]
-
 
 class DailyMineralPriceRow(BaseModel):
     '''
