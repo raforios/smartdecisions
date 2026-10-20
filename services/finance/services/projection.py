@@ -60,9 +60,11 @@ from services.utils import (
 
 PROJECTION_CODES = (
     'PROJECTION_HORIZON', 'PROJECTION_MAX_HORIZON', 'WORST_SALES_CHANGE', 'WORST_OUTFLOW_CHANGE',
-    'BEST_SALES_CHANGE', 'BEST_OUTFLOW_CHANGE', 'MAX_SCENARIO_CHANGE', 'TREND_ALPHA',
-    'TREND_BETA', 'TREND_PHI', 'BACKTEST_MONTHS', 'NON_CASH_ACCOUNTS', 'IUE_PAYMENT_MONTH',
+    'BEST_SALES_CHANGE', 'BEST_OUTFLOW_CHANGE', 'MAX_SCENARIO_CHANGE', 'BACKTEST_MONTHS',
+    'NON_CASH_ACCOUNTS', 'IUE_PAYMENT_MONTH',
 )
+# The series are monthly, so a season is a year: a unit, not a business value.
+MONTHS_PER_YEAR = 12
 
 
 @dataclass(frozen = True)
@@ -75,9 +77,6 @@ class ProjectionSettings:  # pylint: disable=too-many-instance-attributes
     worst: ScenarioInputSchema
     best: ScenarioInputSchema
     max_change: float
-    alpha: float
-    beta: float
-    phi: float
     backtest_months: int
     non_cash_accounts: tuple[str, ...]
     iue_payment_month: int
@@ -101,8 +100,7 @@ def projection_settings_from(finance: dict[str, Any]) -> ProjectionSettings:
         best = ScenarioInputSchema(sales_change = finance['BEST_SALES_CHANGE'],
                                    outflow_change = finance['BEST_OUTFLOW_CHANGE']),
         max_change = float(finance['MAX_SCENARIO_CHANGE']),
-        alpha = float(finance['TREND_ALPHA']), beta = float(finance['TREND_BETA']),
-        phi = float(finance['TREND_PHI']), backtest_months = int(finance['BACKTEST_MONTHS']),
+        backtest_months = int(finance['BACKTEST_MONTHS']),
         non_cash_accounts = tuple(finance['NON_CASH_ACCOUNTS']),
         iue_payment_month = int(finance['IUE_PAYMENT_MONTH'])
     )
@@ -126,8 +124,10 @@ class Forecasts:
     '''
     sales: list[float]
     outflow: list[float]
+    model: str
     error_percent: float | None
     naive_error_percent: float | None
+    tested_points: int
 
 
 @dataclass(frozen = True)
@@ -419,8 +419,9 @@ def build_projection(
             (ScenarioName.WORST, worst),
             (ScenarioName.REALISTIC, ScenarioInputSchema(sales_change = 0, outflow_change = 0)),
             (ScenarioName.BEST, best))],
-        model = ModelSchema(name = 'DAMPED_TREND', error_percent = forecasts.error_percent,
-                            naive_error_percent = forecasts.naive_error_percent),
+        model = ModelSchema(name = forecasts.model, error_percent = forecasts.error_percent,
+                            naive_error_percent = forecasts.naive_error_percent,
+                            tested_points = forecasts.tested_points),
         exchange = None, notices = notices
     )
 
@@ -437,7 +438,7 @@ def _forecast(
         Args:
             values (list[float]): The history, oldest first.
             horizon (int): Months ahead.
-            settings (ProjectionSettings): The model parameters, from PARAMETERS.
+            settings (ProjectionSettings): How many months to test the models on.
             auth_token (str | None): The caller's Authorization header.
 
         Returns:
@@ -446,8 +447,9 @@ def _forecast(
         Raises:
             ServiceUnavailableError: FORECAST_UNAVAILABLE.
     '''
-    body = {'values': values, 'horizon': horizon, 'model': 'DAMPED_TREND',
-            'smoothing': {'alpha': settings.alpha, 'beta': settings.beta, 'phi': settings.phi},
+    # ML_FUNCTIONS chooses the model and fits it to the series (19-oct-2026):
+    # FINANCE only says the series is monthly.
+    body = {'values': values, 'horizon': horizon, 'season_length': MONTHS_PER_YEAR,
             'backtest_points': settings.backtest_months}
     try:
         response = requests.post(f'{API_URL}/v1/prediction/forecast', json = body,
@@ -478,7 +480,7 @@ def forecasts_for(
         Args:
             history (History): The loaded months.
             horizon (int): Months ahead.
-            settings (ProjectionSettings): The model parameters.
+            settings (ProjectionSettings): How many months to test the models on.
             auth_token (str | None): The caller's Authorization header.
 
         Returns:
@@ -488,8 +490,10 @@ def forecasts_for(
     sales_answer = _forecast(sales, horizon, settings, auth_token)
     outflow_answer = _forecast(outflow, horizon, settings, auth_token)
     return Forecasts(sales = sales_answer['forecast'], outflow = outflow_answer['forecast'],
+                     model = sales_answer['model'],
                      error_percent = sales_answer.get('error_percent'),
-                     naive_error_percent = sales_answer.get('naive_error_percent'))
+                     naive_error_percent = sales_answer.get('naive_error_percent'),
+                     tested_points = sales_answer.get('tested_points', 0))
 
 
 def monthly_sums(

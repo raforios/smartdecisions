@@ -1,18 +1,20 @@
 '''
     The report and the parameters — HTTP layer.
 
-    The report and the client's own parameters are for the people who run the
-    business (MANAGER); the suggestions every client sees are BearSoft's, and
-    only its ADMIN changes them.
+    The report, the client's own parameters and its business model are for the
+    people who run the business (MANAGER); the suggestions every client sees
+    are BearSoft's, and only its ADMIN changes them.
 '''
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Header, Path as PathParam, Query, Request, status
 
 from controllers.report import (
+    get_business_model_controller,
     finance_projection_controller,
     finance_report_controller,
     list_client_parameters_controller,
     list_suggested_parameters_controller,
+    set_business_model_controller,
     set_client_parameter_controller,
     set_suggested_parameter_controller
 )
@@ -26,6 +28,7 @@ from schemas.report import (
     SuggestedParameterListResponseSchema,
     SuggestedParameterSchema
 )
+from schemas.business_model import BusinessModelResponseSchema, BusinessModelSchema
 from schemas.projection import ProjectionSchema, ScenarioInputSchema
 from services.db_connection import GET_DB_DEPENDENCY
 from services.projection import ProjectionRequest
@@ -226,6 +229,60 @@ async def finance_projection_endpoint(
         asked = (authorization, ProjectionRequest(
             horizon = horizon, worst = _change(worst_sales, worst_outflow),
             best = _change(best_sales, best_outflow))),
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.get(
+    '/business-model',
+    response_model = BusinessModelResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'The business model the client described'
+)
+async def get_business_model_endpoint(
+    request: Request,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    client: str = Depends(require_roles(*FINANCE_ROLES)),
+    current_user: str = Depends(get_current_user)
+) -> BusinessModelResponseSchema:
+    '''
+        Endpoint reading the business model.
+    '''
+    message = f'User: {current_user} ({client}). Reading the business model.'
+    logger.info(message)
+    return await get_business_model_controller(
+        dynamodb_resource = dynamodb_resource,
+        client = client,
+        current_user = current_user,
+        request = request
+    )
+
+
+@router.put(
+    '/business-model',
+    response_model = BusinessModelResponseSchema,
+    status_code = status.HTTP_200_OK,
+    summary = 'Save the business model the client described',
+    description = ('Replaces the whole form. The AI compares it with the figures; '
+                   'FINANCE only keeps it.')
+)
+async def set_business_model_endpoint(
+    request: Request,
+    business_model: BusinessModelSchema,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    client: str = Depends(require_roles(*FINANCE_ROLES)),
+    current_user: str = Depends(get_current_user)
+) -> BusinessModelResponseSchema:
+    '''
+        Endpoint saving the business model.
+    '''
+    message = f'User: {current_user} ({client}). Saving the business model.'
+    logger.info(message)
+    return await set_business_model_controller(
+        dynamodb_resource = dynamodb_resource,
+        business_model = business_model,
+        client = client,
         current_user = current_user,
         request = request
     )

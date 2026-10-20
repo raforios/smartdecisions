@@ -7,6 +7,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from schemas.business_model import BusinessModelResponseSchema, BusinessModelSchema
 from schemas.projection import ProjectionSchema
 from schemas.report import (
     ClientParameterListResponseSchema,
@@ -16,6 +17,7 @@ from schemas.report import (
     SuggestedParameterListResponseSchema,
     SuggestedParameterSchema
 )
+from services.business_model import get_business_model, set_business_model
 from services.projection import ProjectionRequest, finance_projection
 from services.parameters import (
     list_client_parameters,
@@ -173,3 +175,50 @@ async def finance_projection_controller(
     '''
     auth_token, wanted = asked
     return finance_projection(dynamodb_resource, client, auth_token, wanted)
+
+
+@handle_service_errors('FINANCE')
+async def get_business_model_controller(
+    dynamodb_resource: ServiceResource,
+    client: str,
+    current_user: str, # pylint: disable=unused-argument
+    request: Request # pylint: disable=unused-argument
+) -> BusinessModelResponseSchema:
+    '''
+        The business model the client stored.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            client (str): The owner of the data, from the token.
+            current_user (str): The user asking, read by the decorators.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            BusinessModelResponseSchema: The model, empty while there is none.
+    '''
+    return get_business_model(dynamodb_resource, client)
+
+
+@handle_service_errors('FINANCE')
+@audit_event('FINANCE', 'BusinessModel', 'UPDATE')
+async def set_business_model_controller(
+    dynamodb_resource: ServiceResource,
+    business_model: BusinessModelSchema,
+    client: str,
+    current_user: str,
+    request: Request # pylint: disable=unused-argument
+) -> BusinessModelResponseSchema:
+    '''
+        Stores the business model the client described.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            business_model (BusinessModelSchema): The form as filled.
+            client (str): The owner of the data, from the token.
+            current_user (str): The user saving it, recorded and audited.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            BusinessModelResponseSchema: The model after the change.
+    '''
+    return set_business_model(dynamodb_resource, (client, current_user), business_model)

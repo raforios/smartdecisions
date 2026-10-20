@@ -92,6 +92,10 @@ class IndicatorsSchema(BaseModel):
         The ratios that answer the owner's questions. None when the data that
         feeds one is missing: nothing is invented.
     '''
+    margin: float | None = Field(
+        None, description = 'Profit before the IUE / net sales: what the owner\'s margin goal '
+                            'is compared with.'
+    )
     liquidity: float | None = Field(None, description = 'Current assets / current liabilities.')
     debt_ratio: float | None = Field(None, description = 'Liabilities / assets.')
     solvency: float | None = Field(None, description = 'Assets / liabilities.')

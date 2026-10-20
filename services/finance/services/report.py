@@ -576,6 +576,7 @@ def _ratio(
 
 
 def indicators(
+    statement: IncomeStatementSchema,
     sheet: BalanceSheetSchema,
     monthly_outflow: float | None
 ) -> IndicatorsSchema:
@@ -583,13 +584,15 @@ def indicators(
         The ratios of a period.
 
         Args:
+            statement (IncomeStatementSchema): Its income statement.
             sheet (BalanceSheetSchema): Its balance.
             monthly_outflow (float | None): Average monthly outflow behind it.
 
         Returns:
-            IndicatorsSchema: Liquidity, debt, solvency and months of coverage.
+            IndicatorsSchema: Margin, liquidity, debt, solvency and months of coverage.
     '''
     return IndicatorsSchema(
+        margin = _ratio(statement.profit_before_income_tax.amount, statement.net_sales.amount),
         liquidity = _ratio(sheet.current_assets, sheet.current_liabilities),
         debt_ratio = _ratio(sheet.liabilities, sheet.assets),
         solvency = _ratio(sheet.assets, sheet.liabilities),
@@ -618,7 +621,8 @@ def _period_report(
     sheet, sheet_notices = balance_sheet(period, context.catalog, context.settings)
     return PeriodReportSchema(
         period = period.key, origin = period.origin.value, income_statement = statement,
-        taxes = taxes, balance = sheet, indicators = indicators(sheet, monthly_outflow(outflow)),
+        taxes = taxes, balance = sheet,
+        indicators = indicators(statement, sheet, monthly_outflow(outflow)),
         notices = notices + sheet_notices
     )
 

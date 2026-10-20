@@ -78,9 +78,11 @@ class ModelSchema(BaseModel):
         How good the realistic projection has been on the client's own history:
         its mean error next to that of "the next month is the same as this one".
     '''
-    name: str
+    name: str = Field(..., description = 'NAIVE, DAMPED_TREND or HOLT_WINTERS, '
+                                         'as ML_FUNCTIONS chose it for the net sales.')
     error_percent: float | None
     naive_error_percent: float | None
+    tested_points: int = Field(..., ge = 0, description = 'Months the errors were measured on.')
 
 
 class ExchangeTodaySchema(BaseModel):

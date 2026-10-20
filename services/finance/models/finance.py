@@ -119,3 +119,24 @@ class ClientParameterItem(TypedDict, total = False):
     value: float
     user: str
     updated_at: str
+
+
+class BusinessModelItem(TypedDict, total = False):
+    '''
+        The business model one client described: one per client, replaced
+        whole each time its MANAGER saves the form.
+
+        Table: finance_business_models
+        Partition Key: client (String).
+    '''
+    client: str
+    sells: str
+    customers: str
+    cash_sales_percent: float
+    credit_days: int
+    main_costs: str
+    sales_goal: float | None
+    margin_goal_percent: float | None
+    notes: str | None
+    user: str
+    updated_at: str

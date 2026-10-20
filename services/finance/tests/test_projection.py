@@ -20,8 +20,8 @@ from tests.test_report import CATALOG, FINANCE_VALUES, RATES, SETTINGS, _month
 PROJECTION_VALUES = {
     **FINANCE_VALUES, 'PROJECTION_HORIZON': 12.0, 'PROJECTION_MAX_HORIZON': 24.0,
     'WORST_SALES_CHANGE': -15.0, 'WORST_OUTFLOW_CHANGE': 5.0, 'BEST_SALES_CHANGE': 10.0,
-    'BEST_OUTFLOW_CHANGE': -5.0, 'MAX_SCENARIO_CHANGE': 90.0, 'TREND_ALPHA': 0.4,
-    'TREND_BETA': 0.1, 'TREND_PHI': 0.9, 'BACKTEST_MONTHS': 3.0,
+    'BEST_OUTFLOW_CHANGE': -5.0, 'MAX_SCENARIO_CHANGE': 90.0,
+    'BACKTEST_MONTHS': 12.0,
     'NON_CASH_ACCOUNTS': ['6.1.06', '6.2.04'], 'IUE_PAYMENT_MONTH': 4.0,
 }
 PSETTINGS = P.projection_settings_from(PROJECTION_VALUES)
@@ -46,7 +46,8 @@ def _projection(
     request = P.validated_request(asked, PSETTINGS)
     # What ML_FUNCTIONS answers for a flat history: the same month, again.
     flat = P.Forecasts(sales = [990.0] * request[0], outflow = [625.0] * request[0],
-                       error_percent = 0.0, naive_error_percent = 0.0)
+                       model = 'NAIVE', error_percent = 0.0, naive_error_percent = 0.0,
+                       tested_points = 12)
     return P.build_projection(P.History(report.months, {}, invoiced), PSETTINGS,
                               P.Taxes(RATES, 'IUE', provision), request, flat)
 
@@ -103,8 +104,9 @@ def test_the_worst_scenario_runs_out_first():
 
 
 def test_the_realistic_series_are_asked_to_ml_functions(monkeypatch):
-    '''Both series go to the shared forecast with the parameters of PARAMETERS;
-    if ML_FUNCTIONS cannot answer, the projection says so with a code.'''
+    '''Both series go to the shared forecast as monthly series, without model
+    parameters: ML_FUNCTIONS chooses and fits the model (19-oct-2026). If it
+    cannot answer, the projection says so with a code.'''
     entries = [entry for key in MONTHS for entry in _month(date = key)]
     report = build_report(entries, Context(CATALOG, RATES, None, SETTINGS))
     history = P.History(report.months, {}, {})
@@ -117,12 +119,15 @@ def test_the_realistic_series_are_asked_to_ml_functions(monkeypatch):
     ):
         sent.append((url, json))
         return Mock(ok = True, json = lambda: {'forecast': [json['values'][-1]] * json['horizon'],
+                                               'model': 'HOLT_WINTERS', 'tested_points': 7,
                                                'error_percent': 1.5, 'naive_error_percent': 2.0})
     monkeypatch.setattr(P.requests, 'post', answer)
     found = P.forecasts_for(history, 3, PSETTINGS, 'Bearer x')
     assert (found.sales, found.outflow) == ([990.0] * 3, [625.0] * 3)
     assert sent[0][0].endswith('/v1/prediction/forecast')
-    assert sent[0][1]['smoothing'] == {'alpha': 0.4, 'beta': 0.1, 'phi': 0.9}
+    assert sent[0][1] == {'values': sent[0][1]['values'], 'horizon': 3, 'season_length': 12,
+                          'backtest_points': 12}
+    assert (found.model, found.tested_points) == ('HOLT_WINTERS', 7)
 
     monkeypatch.setattr(P.requests, 'post', lambda *a, **k: Mock(ok = False, status_code = 503,
                                                                  text = 'down'))

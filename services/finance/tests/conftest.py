@@ -1,5 +1,5 @@
 '''
-    Shared test fixtures: both FINANCE tables, mocked, so the suite never
+    Shared test fixtures: the FINANCE tables, mocked, so the suite never
     touches the tables configured in .env.
 
     The domain tests and the route tests need the very same tables: a table
@@ -11,7 +11,7 @@ import pytest
 from moto import mock_aws
 
 from schemas.finance import AccountSchema, AccountType
-from services import entries, finance, parameters
+from services import business_model, entries, finance, parameters
 
 
 @pytest.fixture(name = 'finance_store')
@@ -50,6 +50,12 @@ def finance_store_fixture():
                          {'AttributeName': 'parameter_code', 'KeyType': 'RANGE'}],
             AttributeDefinitions = [{'AttributeName': 'client', 'AttributeType': 'S'},
                                     {'AttributeName': 'parameter_code', 'AttributeType': 'S'}],
+            BillingMode = 'PAY_PER_REQUEST'
+        )
+        resource.create_table(
+            TableName = business_model.BUSINESS_MODELS_TABLE,
+            KeySchema = [{'AttributeName': 'client', 'KeyType': 'HASH'}],
+            AttributeDefinitions = [{'AttributeName': 'client', 'AttributeType': 'S'}],
             BillingMode = 'PAY_PER_REQUEST'
         )
         for table in (entries.LOADS_TABLE, entries.ENTRIES_TABLE):

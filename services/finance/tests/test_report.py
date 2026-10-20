@@ -142,6 +142,8 @@ def test_the_balance_and_its_indicators():
     assert (month.indicators.liquidity, month.indicators.debt_ratio) == (2.0, 0.59)
     # Cash 100 against an outflow of 600 + 100 + 10 + 30 = 740 a month.
     assert month.indicators.coverage_months == 0.14
+    # The margin the owner's goal is compared with: 365 of profit on 990 of net sales.
+    assert month.indicators.margin == 0.37
 
 
 def test_a_balance_that_does_not_square_is_said_not_corrected():
