@@ -251,6 +251,11 @@ para que no diverjan del validador.
 8. **No tocar lo aprobado.** Si Rafael dijo que algo está bien, agregar no
    significa reemplazar.
 9. **Opinión ≠ instrucción.** Si pregunta “¿te parece?”, se responde y se para.
+10. **Una pregunta lleva su alcance** (Rafael, 19-oct-2026). Antes de pedir
+    que decida quitar o cambiar algo, se busca quién lo usa —rutas, pantallas
+    del portal, Streamlit, herramientas, otros servicios— y se dice en la
+    misma pregunta qué deja de funcionar con cada opción. **Lo que una
+    función aprobada usa no se quita**: si A usa a B, se quedan las dos.
 
 ### Reparto de despliegues
 
