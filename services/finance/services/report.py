@@ -13,7 +13,7 @@
 '''
 from collections.abc import Callable
 from typing import Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date as date_type
 
 from boto3.resources.base import ServiceResource
@@ -29,12 +29,14 @@ from schemas.report import (
     LineSchema,
     PeriodReportSchema,
     PeriodTaxesSchema,
-    ReportError
+    ReportError,
+    YearToDateSchema
 )
 from services.entries import list_entries, local_now
 from services.finance import catalog_by_code
 from services.parameters import client_value, law_rates, rate_on
 from services.rates import period_rates
+from services.report_periods import Period, add_month, split_periods
 from services.utils import read_parameters, required_parameters
 
 # The business values the report reads, by their code in PARAMETERS: the
@@ -108,21 +110,6 @@ def settings_from(
     )
 
 
-# Account types that are a picture at a date, and those that move in a period.
-_BALANCE_TYPES = (AccountType.ASSET.value, AccountType.LIABILITY.value, AccountType.EQUITY.value)
-
-
-@dataclass
-class Period:
-    '''
-        The amounts of one month or one year, split into what moved during
-        it and the balances at its end.
-    '''
-    key: str
-    origin: Periodicity
-    flows: list[EntrySchema] = field(default_factory = list)
-    balances: list[EntrySchema] = field(default_factory = list)
-    months: int = 1
 
 
 @dataclass(frozen = True)
@@ -247,58 +234,32 @@ class _Sums:
                    for e in self.entries if keep(e, self.account(e.account_code)))
 
 
-def _split_periods(entries: list[EntrySchema]) -> tuple[dict[str, Period], dict[str, Period]]:
+def _year_to_date(
+    months: dict[str, Period],
+    context: Context
+) -> YearToDateSchema | None:
     '''
-        The months and the years the client has. A month with days takes the
-        sum of its days for what moved and the last loaded day for its
-        balances; a year loaded as such is used whole, and any other year is
-        built from its months — never split into invented ones.
+        The year before, cut at the last loaded month, so the unfinished year
+        is compared with the same months and not with a whole year.
 
         Args:
-            entries (list[EntrySchema]): Every amount of the client.
+            months (dict[str, Period]): Every month the client has.
+            context (Context): Catalog, law rates and the client's provision.
 
         Returns:
-            tuple[dict[str, Period], dict[str, Period]]: Months and years.
+            YearToDateSchema | None: None without months.
     '''
-    months: dict[str, Period] = {}
-    years: dict[str, Period] = {}
-    last_day: dict[str, str] = {}
-    for entry in entries:
-        if entry.periodicity is Periodicity.ANNUAL:
-            target = years.setdefault(entry.date, Period(entry.date, Periodicity.ANNUAL,
-                                                         months = 12))
-        else:
-            key = entry.date[:7]
-            target = months.setdefault(key, Period(key, entry.periodicity))
-        (target.balances if _is_balance(entry) else target.flows).append(entry)
-        if entry.periodicity is Periodicity.DAILY and _is_balance(entry):
-            last_day[entry.date[:7]] = max(last_day.get(entry.date[:7], ''), entry.date)
-    for key, day in last_day.items():
-        months[key].balances = [e for e in months[key].balances if e.date == day]
-    for key in sorted(months):
-        year = years.get(key[:4])
-        if year is not None and year.origin is Periodicity.ANNUAL:
-            continue
-        if year is None:
-            year = years[key[:4]] = Period(key[:4], Periodicity.MONTHLY, months = 0)
-        year.flows += months[key].flows
-        year.months += 1
-        if months[key].balances:
-            year.balances = months[key].balances
-    return months, years
-
-
-def _is_balance(entry: EntrySchema) -> bool:
-    '''
-        Whether an amount is a balance (types 1 to 3): its code says it.
-
-        Args:
-            entry (EntrySchema): The amount.
-
-        Returns:
-            bool: True for assets, liabilities and equity.
-    '''
-    return entry.account_code[0] in _BALANCE_TYPES
+    if not months:
+        return None
+    through = max(months)
+    keys = [f'{int(through[:4]) - 1}-{month:02d}' for month in range(1, int(through[5:]) + 1)]
+    if not all(key in months for key in keys):
+        return YearToDateSchema(through = through)
+    previous = Period(keys[0][:4], Periodicity.MONTHLY, months = 0)
+    for key in keys:
+        add_month(previous, months[key])
+    return YearToDateSchema(through = through, previous = _period_report(
+        previous, context, lambda outflow: outflow / len(keys)))
 
 
 def _transactions_tax(
@@ -642,7 +603,7 @@ def build_report(
         Returns:
             FinanceReportSchema: Every month and every year, oldest first.
     '''
-    months, years = _split_periods(entries)
+    months, years = split_periods(entries)
     outflows: dict[str, float] = {}
     month_reports = []
     for key in sorted(months):
@@ -666,6 +627,7 @@ def build_report(
     if history < context.settings.min_months_for_projection:
         report_notices.append(ReportError.NOT_ENOUGH_HISTORY_FOR_PROJECTION)
     return _rounded(FinanceReportSchema(months = month_reports, years = year_reports,
+                                        year_to_date = _year_to_date(months, context),
                                         notices = report_notices), context.settings)
 
 
@@ -685,7 +647,7 @@ def _rounded(
         Returns:
             FinanceReportSchema: The same report, rounded.
     '''
-    for period in report.months + report.years:
+    for period in _published(report):
         lines = [line for _, line in period.income_statement if line is not None]
         lines += [line for _, line in period.taxes]
         for line in lines:
@@ -695,6 +657,21 @@ def _rounded(
         for name, value in period.indicators:
             setattr(period.indicators, name, _round(value, settings.ratio_decimals))
     return report
+
+
+def _published(report: FinanceReportSchema) -> list[PeriodReportSchema]:
+    '''
+        Every period the report carries: its months, its years and the
+        same months of the year before, when there are.
+
+        Args:
+            report (FinanceReportSchema): The report.
+
+        Returns:
+            list[PeriodReportSchema]: The periods.
+    '''
+    previous = report.year_to_date.previous if report.year_to_date else None
+    return report.months + report.years + ([previous] if previous else [])
 
 
 def report_settings(auth_token: str | None) -> ReportSettings:
@@ -742,5 +719,9 @@ def finance_report(
                                   local_now().date(), auth_token)
     for period in report.months + report.years:
         period.exchange = rates.get(period.period)
+    if report.year_to_date and report.year_to_date.previous:
+        # The same months of the year before close on their last month.
+        cut = f'{report.year_to_date.previous.period}-{report.year_to_date.through[5:]}'
+        report.year_to_date.previous.exchange = rates.get(cut)
     report.notices += notices
     return report

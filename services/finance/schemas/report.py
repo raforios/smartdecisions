@@ -133,12 +133,26 @@ class PeriodReportSchema(BaseModel):
     notices: list[ReportError] = Field(default_factory = list)
 
 
+class YearToDateSchema(BaseModel):
+    '''
+        The year in course runs until its last loaded month; the year before,
+        cut at that same month, is what it can be compared with. A whole year
+        next to an unfinished one reads as a fall that did not happen.
+    '''
+    through: str = Field(..., description = 'YYYY-MM: the last loaded month.')
+    previous: PeriodReportSchema | None = Field(
+        None, description = 'The same months of the year before, from January; None when '
+                            'any of them was not loaded month by month.'
+    )
+
+
 class FinanceReportSchema(BaseModel):
     '''
         Every month and every year the client has, oldest first.
     '''
     months: list[PeriodReportSchema]
     years: list[PeriodReportSchema]
+    year_to_date: YearToDateSchema | None = None
     notices: list[ReportError] = Field(default_factory = list)
 
 

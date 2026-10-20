@@ -217,3 +217,21 @@ def test_a_value_changed_in_parameters_changes_the_report():
         {**FINANCE_VALUES, 'BALANCE_TOLERANCE': 10.0}, GLOBAL_VALUES))).months[0]
     assert ReportError.BALANCE_MISMATCH in strict.notices
     assert ReportError.BALANCE_MISMATCH not in lenient.notices
+
+
+def test_the_unfinished_year_is_compared_with_the_same_months_before():
+    '''Two months of 2026 against January and February of 2025, not the whole of 2025.'''
+    months = ('2025-01', '2025-02', '2025-03', '2026-01', '2026-02')
+    report = _report([entry for month in months for entry in _month(date = month)])
+    cut = report.year_to_date
+    assert cut.through == '2026-02'
+    assert cut.previous.period == '2025'
+    assert cut.previous.income_statement.net_sales.amount == 2 * 990
+    assert report.years[0].income_statement.net_sales.amount == 3 * 990
+
+
+def test_without_every_month_before_there_is_nothing_to_compare_with():
+    '''February of 2025 was never loaded: the comparison is not made up.'''
+    months = ('2025-01', '2026-01', '2026-02')
+    cut = _report([entry for month in months for entry in _month(date = month)]).year_to_date
+    assert (cut.through, cut.previous) == ('2026-02', None)
