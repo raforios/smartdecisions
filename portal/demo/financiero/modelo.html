@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="../styles/analyses.css?v=4978003d78">
+    <link rel="stylesheet" href="financiero.css?v=d1ab26fc98">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=4a13bfbaea"></script>
+    <script src="../js/auth.js?v=e0c72ecc39" defer></script>
+    <script src="../js/icons.js?v=7d327bd034" defer></script>
+    <script src="../js/shell.js?v=79ff9b927b" defer></script>
+    <script src="../js/api.js?v=7206932d80" defer></script>
+    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=9817f449d8" defer></script>
+    <script src="finance.js?v=61c0f5ff75" defer></script>
+    <script src="modelo.js" defer></script>
+    <title>Modelo de negocio — SmartDecisions</title>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <div class="sd-page-head"><div><h1>Modelo de negocio</h1>
+            <p>Cuéntanos cómo funciona tu negocio y qué esperas de este año. La IA lo compara con tus números y te da su opinión.</p></div></div>
+
+        <section class="card">
+            <form class="form-stack" id="modelForm" autocomplete="off">
+                <label class="field"><span>¿Qué vendes?</span>
+                    <textarea id="sells" rows="2" maxlength="500" required
+                              placeholder="Por ejemplo: abarrotes y bebidas al por mayor"></textarea></label>
+                <label class="field"><span>¿A quién le vendes?</span>
+                    <textarea id="customers" rows="2" maxlength="500" required
+                              placeholder="Por ejemplo: tiendas de barrio y mercados de El Alto"></textarea></label>
+                <div class="field-row">
+                    <label class="field"><span>Ventas al contado (%)</span>
+                        <input type="number" id="cashSales" min="0" max="100" step="1" required></label>
+                    <label class="field"><span>Días que tardas en cobrar a crédito</span>
+                        <input type="number" id="creditDays" min="0" max="365" step="1" required></label>
+                </div>
+                <label class="field"><span>¿En qué gastas más?</span>
+                    <textarea id="mainCosts" rows="2" maxlength="500" required
+                              placeholder="Por ejemplo: mercadería, sueldos y transporte"></textarea></label>
+                <p class="legend-hint">Lo que esperas de este año: las ventas, el margen o los dos.</p>
+                <div class="field-row">
+                    <label class="field"><span>Ventas netas esperadas (Bs)</span>
+                        <input type="number" id="salesGoal" min="0" step="1"></label>
+                    <label class="field"><span>Margen esperado (% de utilidad sobre ventas netas)</span>
+                        <input type="number" id="marginGoal" min="-99" max="99" step="0.1"></label>
+                </div>
+                <label class="field"><span>Algo más que debamos saber (opcional)</span>
+                    <textarea id="notes" rows="4" maxlength="2000"
+                              placeholder="Planes, cambios, temporadas, lo que te preocupa"></textarea></label>
+                <div class="form-actions">
+                    <span class="ai-slot" id="financeAi"></span>
+                    <button type="submit" class="btn btn-primary btn-small" id="modelSave">Guardar</button>
+                </div>
+                <p class="form-note" id="modelNote" aria-live="polite"></p>
+            </form>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

@@ -15,6 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const css = getComputedStyle(document.documentElement);
     const color = (name) => css.getPropertyValue(name).trim();
     const NAMES = { WORST: 'Peor', REALISTIC: 'Realista', BEST: 'Mejor' };
+    // The model ML_FUNCTIONS chose for the net sales, in the owner's words.
+    const MODELS = {
+        NAIVE: 'el mes que viene igual que el último, porque ningún modelo lo hizo mejor',
+        DAMPED_TREND: 'tendencia amortiguada',
+        HOLT_WINTERS: 'tendencia amortiguada con la estacionalidad de tus meses'
+    };
     const COLORS = { WORST: '--danger', REALISTIC: '--accent', BEST: '--success' };
     const FIELDS = { horizon: 'horizon', worst_sales: 'worstSales', worst_outflow: 'worstOutflow',
                      best_sales: 'bestSales', best_outflow: 'bestOutflow' };
@@ -100,10 +106,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         fillInputs(data);
         const model = data.model;
-        qs('#modelLine').textContent = `Escenario realista: tendencia amortiguada sobre tus meses ` +
-            `cargados hasta ${F.periodLabel(data.last_period)}. En los últimos meses erró ` +
-            `±${fmt(model.error_percent)} %; «el mes que viene igual que este» habría errado ` +
-            `±${fmt(model.naive_error_percent)} %.`;
+        const measured = model.tested_points
+            ? ` Probado en tus últimos ${model.tested_points} meses: erró ` +
+              `±${fmt(model.error_percent)} %; «el mes que viene igual que este» habría errado ` +
+              `±${fmt(model.naive_error_percent)} %.`
+            : ' Todavía no hay meses suficientes para medir su error.';
+        qs('#modelLine').textContent = `Escenario realista: ${MODELS[model.name] || MODELS.NAIVE}, ` +
+            `sobre tus meses cargados hasta ${F.periodLabel(data.last_period)}.${measured}`;
         qs('#ratesLine').textContent = data.exchange
             ? `Los meses futuros se leen al tipo de cambio de hoy. ${F.ratesLine(data.exchange)}`
             : F.ratesLine(null);

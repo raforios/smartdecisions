@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * What the five pages of the Análisis Financiero share: the calls to FINANCE,
+ * What the pages of the Análisis Financiero share: the calls to FINANCE,
  * the wording of every line and every code (the backend sends codes, the
  * sentences live here), the period selector and the three currencies.
  *
