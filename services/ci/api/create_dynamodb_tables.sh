@@ -130,6 +130,9 @@ TABLES=(
     # provisión del IUE se sugiere y el cliente la define (Rafael, 16-oct).
     "finance_suggested_parameters:parameter_code:S"
     "finance_client_parameters:client:S:parameter_code:S"
+    # El modelo de negocio que describe cada cliente: uno por cliente, se
+    # reemplaza entero al guardar el formulario (fase 8, paso 3).
+    "finance_business_models:client:S"
 
     # --- Cumbre Minera (temporal) ---
     "mining_summit_participants:ci:S"
