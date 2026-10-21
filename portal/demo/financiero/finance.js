@@ -73,7 +73,9 @@
         GROUP_NOT_FOUND: 'El grupo elegido no existe.',
         GROUP_TYPE_MISMATCH: 'El grupo es de otro tipo que la cuenta.',
         GROUP_HAS_ACCOUNTS: 'El grupo todavía tiene cuentas: quítalas primero.',
-        INVOICE_ONLY_ON_SALES_AND_PURCHASES: 'La marca de factura es sólo para ingresos y costos.'
+        INVOICE_ONLY_ON_SALES_AND_PURCHASES: 'La marca de factura es sólo para ingresos y costos.',
+        INVALID_ACCOUNT_CODE: 'El código son números separados por puntos, por ejemplo 6.1.20.',
+        ACCOUNT_TYPE_MISMATCH: 'El primer número del código es el tipo: 6.1.20 es de Gastos.'
     };
 
     const PERIODICITY_LABELS = { DAILY: 'Diaria', MONTHLY: 'Mensual', ANNUAL: 'Anual' };

@@ -17,8 +17,8 @@
     <script src="../js/api.js?v=7206932d80" defer></script>
     <script src="../js/ui.js?v=406a08249f" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
-    <script src="finance.js?v=d846ce9d44" defer></script>
-    <script src="cuentas.js?v=65f499d38e" defer></script>
+    <script src="finance.js?v=a89dfe4e37" defer></script>
+    <script src="cuentas.js?v=60b802178c" defer></script>
     <title>Catálogo de cuentas — SmartDecisions</title>
 </head>
 <body>
@@ -37,11 +37,14 @@
                 <!-- Only the ADMIN changes the catalog (contract, 15-oct). -->
                 <button type="button" class="btn btn-primary btn-small" id="accountNew"
                         data-btn-icon="plus" hidden disabled>Nueva cuenta</button>
+                <!-- The catalog as it is now, for Excel: a CSV, no library (Rafael, 21-oct). -->
+                <button type="button" class="btn btn-ghost btn-small" id="accountsDownload"
+                        data-btn-icon="download" disabled>Descargar (CSV)</button>
             </div>
 
             <form class="form-stack" id="accountForm" hidden autocomplete="off">
                 <h4 id="accountFormTitle"></h4>
-                <label id="accountCodeField"><span>Código (por ejemplo, 6.1.20)</span>
+                <label id="accountCodeField"><span>Código (números con puntos, por ejemplo 6.1.20; el primero es el tipo)</span>
                     <input type="text" id="accountCode" maxlength="20"></label>
                 <label><span>Nombre</span>
                     <input type="text" id="accountName" maxlength="150"></label>

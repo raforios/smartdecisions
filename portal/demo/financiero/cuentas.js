@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const TYPES = { 1: 'Activo', 2: 'Pasivo', 3: 'Patrimonio', 4: 'Ingresos', 5: 'Costos', 6: 'Gastos' };
     // Only sales (4) and purchases (5) carry the invoice mark.
     const INVOICEABLE = ['4', '5'];
+    // Numbers joined by dots, the first one the type: what FINANCE accepts.
+    const CODE_PATTERN = /^[1-6](\.\d+)*$/;
 
     const state = { accounts: [], renaming: null };
     const note = (text, kind) => {
@@ -44,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             paint();
             note('');
             qs('#accountNew').disabled = false;
+            qs('#accountsDownload').disabled = false;
         } catch (error) {
             note(F.errorText(error, 'No se pudo leer el catálogo.'), 'error');
         }
@@ -124,7 +127,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 toast(`Cuenta ${state.renaming.account_code} renombrada.`, 'success');
             } else {
                 const code = qs('#accountCode').value.trim();
-                if (!code) { note('Escribe el código.', 'error'); return; }
+                if (!CODE_PATTERN.test(code)) {
+                    note(F.errorText({ code: 'INVALID_ACCOUNT_CODE' }), 'error');
+                    return;
+                }
                 const invoiced = qs('#accountInvoiced').value;
                 await F.post('/accounts', {
                     account_code: code,
@@ -167,10 +173,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * The whole catalog as a CSV Excel opens as it is: semicolons, which the
+     * Spanish Excel expects, and the UTF-8 mark so the accents survive.
+     */
+    function download() {
+        const cell = (value) => `"${String(value == null ? '' : value).replaceAll('"', '""')}"`;
+        const invoice = (account) => (account.invoiced === true ? 'Con factura'
+            : (account.invoiced === false ? 'Sin factura' : ''));
+        const lines = [['Código', 'Nombre', 'Tipo', 'Grupo', 'Resta', 'Factura']].concat(
+            state.accounts.map((account) => [account.account_code, account.name,
+                TYPES[account.account_type] || account.account_type, account.group_code || '',
+                account.subtracts ? 'Sí' : '', invoice(account)]));
+        const csv = '\ufeff' + lines.map((line) => line.map(cell).join(';')).join('\r\n');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        link.download = `catalogo_cuentas_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
     qs('#accountsType').innerHTML = '<option value="">Todos</option>' + Object.entries(TYPES)
         .map(([digit, label]) => `<option value="${digit}">${label}</option>`).join('');
     qs('#accountsSearch').addEventListener('input', paint);
     qs('#accountsType').addEventListener('change', paint);
+    qs('#accountsDownload').addEventListener('click', download);
 
     if (admin) {
         qs('#accountNew').hidden = false;
@@ -178,6 +205,14 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#accountTypeInput').innerHTML = Object.entries(TYPES)
             .map(([digit, label]) => `<option value="${digit}">${digit} · ${label}</option>`).join('');
         qs('#accountTypeInput').addEventListener('change', fillGroups);
+        // The first number of the code is the type: picked for the ADMIN.
+        qs('#accountCode').addEventListener('input', () => {
+            const digit = qs('#accountCode').value.trim().charAt(0);
+            if (TYPES[digit] && qs('#accountTypeInput').value !== digit) {
+                qs('#accountTypeInput').value = digit;
+                fillGroups();
+            }
+        });
         qs('#accountNew').addEventListener('click', () => { note(''); openForm(null); });
         qs('#accountCancel').addEventListener('click', closeForm);
         qs('#accountSave').addEventListener('click', (event) => save(event.currentTarget));
