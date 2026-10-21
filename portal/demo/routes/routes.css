@@ -165,11 +165,6 @@
 .stops-card h3 { margin-top: 0; }
 /* .table-wrapper and .data-table: defined once in styles/demo.css. */
 
-/* The `hidden` attribute is only a default of display:none, and any rule that
-   sets `display` on the same element silently overrides it — the map overlay
-   stayed on top of the map, and the period bar showed before it had dates.
-   This makes hiding work regardless of what the layout rules say. */
-[hidden] { display: none !important; }
 
 
 /* Card header: title on the left, its controls on the right. The AI button

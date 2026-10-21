@@ -562,11 +562,6 @@
    the chart measures the whole card and draws taller than the canvas shows. */
 .chart-card canvas { height: 300px !important; min-height: 300px; max-height: 300px; }
 
-/* The `hidden` attribute is only a default of display:none, and any rule that
-   sets `display` on the same element silently overrides it — the map overlay
-   stayed on top of the map, and the period bar showed before it had dates.
-   This makes hiding work regardless of what the layout rules say. */
-[hidden] { display: none !important; }
 
 /* ============ Money in three currencies (Bs · USD · USDT) ============ */
 /* In a narrow card the three amounts drop to a second row instead of running

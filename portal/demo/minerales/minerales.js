@@ -5,7 +5,7 @@
  *
  * MINING_ANALYSIS projects the minerals; the sale scenario asks QUOTES to net
  * the mineral's move against the dollar's. The dollar itself, with its series
- * and its bench of models, moved to «Factores externos y tipo de cambio»: it
+ * and its bench of models, moved to «Tipos de cambio»: it
  * belongs to the commercial side, and minerals is a different product.
  *
  * Every code the services return is translated to wording here. The backend

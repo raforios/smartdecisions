@@ -155,7 +155,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     qs('#promptSave').addEventListener('click', (event) => saveVersion(event.currentTarget));
-    qs('#promptCancel').addEventListener('click', () => { qs('#promptForm').hidden = true; });
+    // Cancel closes the form unsaved and takes the reader back to the list.
+    qs('#promptCancel').addEventListener('click', () => {
+        qs('#promptForm').hidden = true;
+        qs('#promptsTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     qs('#promptsSection').hidden = false;
     load();
 });

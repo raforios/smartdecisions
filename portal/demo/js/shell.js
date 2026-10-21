@@ -96,6 +96,7 @@
         // longer shown to the companies.
         { group: 'Administración', roles: ['ADMIN'], items: [
             { label: 'Usuarios', icon: 'user', page: 'admin/usuarios.html' },
+            { label: 'Salud', icon: 'pulse', page: 'admin/salud.html' },
             { label: 'Prompts de la IA', icon: 'settings', page: 'admin/prompts.html' },
             { label: 'Tipos de cambio', icon: 'rates', page: 'admin/tipo-cambio.html' },
             { label: 'Minerales', icon: 'minerals', page: 'minerales/index.html' }

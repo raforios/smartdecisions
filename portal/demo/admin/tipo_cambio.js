@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Factores externos y tipo de cambio — the dollar.
+ * Administración › Tipos de cambio — the dollar.
  *
  * The official rate (BCB) with its projection and the bench of models, moved
  * here from the minerals page: the exchange rate belongs to the commercial

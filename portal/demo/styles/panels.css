@@ -30,7 +30,6 @@
 
 .sd-grid { display: grid; gap: var(--gap-block); margin-bottom: var(--gap-block); }
 /* The display of these blocks beat the hidden attribute and showed empty boxes. */
-.sd-grid[hidden], .sd-ring[hidden], .sd-rates[hidden] { display: none; }
 .sd-grid-top { grid-template-columns: 1.6fr repeat(3, 1fr); }
 .sd-grid-wide { grid-template-columns: 2fr 1fr; }
 .sd-grid-half { grid-template-columns: 1fr 1fr; }
@@ -216,7 +215,6 @@
 
 /* ---------- An area's options: one block each ---------- */
 .sd-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap-block); }
-.sd-tiles[hidden] { display: none; }
 .sd-tile-wide { grid-column: span 2; }
 .sd-tile {
     display: flex;
@@ -258,7 +256,7 @@
 .sd-status { padding: 0.15rem 0.55rem; border-radius: 999px; font-size: var(--fs-label); font-weight: 600; }
 .sd-status.is-on { background: rgba(18, 121, 111, 0.12); color: var(--accent-2); }
 .sd-status.is-off { background: var(--bg-alt); color: var(--muted); }
-.sd-panel[hidden] { display: none; }
+.sd-status.is-bad { background: rgba(180, 55, 58, 0.12); color: var(--danger); }
 
 /* The way to an option page's upload, above its analysis. */
 .sd-option-actions { display: flex; justify-content: flex-end; margin-bottom: 0.75rem; }

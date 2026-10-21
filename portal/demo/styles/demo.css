@@ -45,6 +45,11 @@
     --gap-block:       1.25rem;
 }
 
+/* `hidden` hides, always. The attribute is only a default display:none and
+   any rule that sets `display` (.form-stack, .pager, a grid) silently beat
+   it: the prompt form never closed on Cancel. One rule for every page. */
+[hidden] { display: none !important; }
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
@@ -528,7 +533,6 @@ main p, main li { font-size: var(--fs-text); }
 }
 /* `display: block` above beats the `hidden` attribute, and the panel showed
    as an empty box before anyone asked. */
-.ai-answer[hidden] { display: none; }
 
 .ai-answer .ai-text {
     margin: 0;
@@ -601,7 +605,6 @@ main p, main li { font-size: var(--fs-text); }
     box-shadow: inset 0 0 0 1px var(--accent);
 }
 .analysis-card[disabled] { opacity: 0.55; cursor: not-allowed; }
-.analysis-menu[hidden] { display: none; }
 .analysis-icon {
     display: inline-flex;
     align-items: center;
@@ -715,7 +718,6 @@ main p, main li { font-size: var(--fs-text); }
 .pager { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.8rem; }
 .pager-info { color: var(--muted); font-size: var(--fs-text); font-variant-numeric: tabular-nums; }
 .is-paged-out { display: none; }
-.pager[hidden] { display: none; }
 
 /* An action shown as an icon, named by its tooltip (and aria-label for
    screen readers). One definition for every table that uses it. */

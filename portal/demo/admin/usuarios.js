@@ -154,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeForm() {
         state.editing = null;
         qs('#userForm').hidden = true;
+        qs('#usersTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     /** The fields AUTH's edit takes, and only those that say something. */

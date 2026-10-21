@@ -52,6 +52,7 @@
         power: '<path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1011.4 0"/>',
         chevronLeft: '<path d="M15 6l-6 6 6 6"/>',
         filter: '<path d="M4 5h16l-6 7v6l-4 2v-8z"/>',
+        pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
         calculator: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/>',
         lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>',
         login: '<path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/>',

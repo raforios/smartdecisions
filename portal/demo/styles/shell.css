@@ -159,7 +159,6 @@ body.sd-app.sd-collapsed { padding-left: 0; }
     background: var(--panel);
     box-shadow: var(--shadow-lg);
 }
-.sd-account-menu[hidden] { display: none; }
 .sd-account-email {
     margin: 0;
     overflow: hidden;
@@ -177,7 +176,6 @@ body.sd-app.sd-collapsed { padding-left: 0; }
     border-top: 1px solid var(--bg-alt);
     border-radius: 0;
 }
-.sd-account-menu .session-chip[hidden] { display: none; }
 .sd-account-item {
     display: flex;
     align-items: center;
