@@ -4,22 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Factores externos — SmartDecisions</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/demo.css?v=800cca1e22">
     <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
-    <link rel="stylesheet" href="../minerales/minerales.css?v=a5f485ec90">
+    <link rel="stylesheet" href="../minerales/minerales.css?v=c0a5c14e1d">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=4a13bfbaea"></script>
     <script src="../js/auth.js?v=e0c72ecc39" defer></script>
-    <script src="../js/icons.js?v=7d327bd034" defer></script>
-    <script src="../js/shell.js?v=99a27a836d" defer></script>
+    <script src="../js/icons.js?v=1375822fcf" defer></script>
+    <script src="../js/shell.js?v=59882786b0" defer></script>
     <script src="../js/api.js?v=7206932d80" defer></script>
-    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/ui.js?v=406a08249f" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
-    <script src="../js/ai.js?v=9817f449d8" defer></script>
+    <script src="../js/ai.js?v=b42ea9d11c" defer></script>
     <script src="../minerales/minerales_shared.js?v=e328560800" defer></script>
-    <script src="factors.js?v=2f132f04f5" defer></script>
+    <script src="factors.js?v=47d50a88bd" defer></script>
 </head>
 <body>
 
@@ -58,14 +58,6 @@
                     <tbody></tbody>
                 </table>
             </div>
-            <div class="pager" id="factorsPager" hidden>
-                <span class="pager-count" id="factorsCount"></span>
-                <div class="pager-controls">
-                    <button type="button" class="btn btn-ghost btn-small" id="factorsPrev">← Anterior</button>
-                    <span class="pager-page" id="factorsPage"></span>
-                    <button type="button" class="btn btn-ghost btn-small" id="factorsNext">Siguiente →</button>
-                </div>
-            </div>
             <p class="control-hint" id="factorsNote"></p>
 
             <h3>Nuevo factor</h3>
@@ -86,7 +78,7 @@
                     <label for="factorSource">Fuente (opcional)</label>
                     <input type="text" id="factorSource" maxlength="255" placeholder="ANH">
                 </div>
-                <button class="btn btn-primary" id="factorCreateButton">Crear</button>
+                <button class="btn btn-primary" id="factorCreateButton" data-btn-icon="plus">Crear</button>
             </div>
 
             <h3>Cargar un valor</h3>
@@ -103,7 +95,7 @@
                     <label for="factorValue">Valor</label>
                     <input type="number" id="factorValue" step="any">
                 </div>
-                <button class="btn btn-primary" id="factorValueButton">Guardar</button>
+                <button class="btn btn-save" id="factorValueButton" data-btn-icon="check">Guardar</button>
             </div>
             <p class="control-hint" id="factorFormNote"></p>
 
@@ -127,7 +119,7 @@
                     <label for="transportUnits">Unidades entregadas (opcional)</label>
                     <input type="number" id="transportUnits" min="0" step="any">
                 </div>
-                <button class="btn btn-primary" id="transportButton">Calcular</button>
+                <button class="btn btn-primary" id="transportButton" data-btn-icon="calculator">Calcular</button>
             </div>
             <div id="transportResult"></div>
         </section>

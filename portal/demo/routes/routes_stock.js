@@ -13,8 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     qs('#stockViewDate').value = T.todayIso();
 
     // The stock file attaches to the account's sales dataset (`ensureDataset`).
-    const ROWS_PER_PAGE = 10;
-    const state = { items: [], page: 0 };
+    const state = { items: [] };
 
     /**
      * The stock template goes in through INGEST —same file, same validator as
@@ -87,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function paintDay(day) {
         state.items = day.items;
-        paintPage(0);
+        paintPage();
         const sold = day.items.reduce((sum, item) => sum + Number(item.sold_quantity), 0);
         qs('#stockSummary').innerHTML =
             metric('Productos', String(day.skus_loaded)) +
@@ -97,17 +96,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!day.items.length) note('#stockViewNote', `No hay stock cargado para ${day.date}.`);
     }
 
-    // Ten rows per page, like every other table in the portal; a file brings
-    // dozens of products and the table must not push the page down.
-    function paintPage(page) {
+    // Draws every row; the common pager (js/ui.js) shows ten at a time.
+    function paintPage() {
         const items = state.items;
-        const pages = Math.max(1, Math.ceil(items.length / ROWS_PER_PAGE));
-        state.page = Math.min(Math.max(page, 0), pages - 1);
-        const shown = items.slice(state.page * ROWS_PER_PAGE, (state.page + 1) * ROWS_PER_PAGE);
 
         const tbody = qs('#stockTable tbody');
         tbody.innerHTML = '';
-        shown.forEach((item) => {
+        items.forEach((item) => {
             const row = document.createElement('tr');
             if (item.available_quantity <= 0) row.classList.add('is-out');
             row.innerHTML =
@@ -119,19 +114,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="numeric">${item.unit_price == null ? '—' : T.formatDecimal(item.unit_price, 2)}</td>`;
             tbody.appendChild(row);
         });
-        if (items.length > ROWS_PER_PAGE) {
-            tbody.innerHTML += '<tr class="row-filler"><td colspan="6">&nbsp;</td></tr>'
-                .repeat(ROWS_PER_PAGE - shown.length);
-        }
-        qs('#stockCount').textContent = items.length === 1 ? '1 producto' : `${items.length} productos`;
-        qs('#stockPage').textContent = `${state.page + 1} / ${pages}`;
-        qs('#stockPrev').disabled = state.page === 0;
-        qs('#stockNext').disabled = state.page >= pages - 1;
-        qs('#stockPager').hidden = items.length <= ROWS_PER_PAGE;
     }
 
-    qs('#stockPrev').addEventListener('click', () => paintPage(state.page - 1));
-    qs('#stockNext').addEventListener('click', () => paintPage(state.page + 1));
 
     function metric(label, value) {
         return `<div class="metric"><p class="metric-label">${T.escapeHtml(label)}</p>` +

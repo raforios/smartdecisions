@@ -16,10 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const { errorText, money, shortDate, escapeHtml } = window.SD_MIN;
     const API = window.SD_API;
     const BASE = `${window.SD_CONFIG.API_URL}/v1/quotes/factors`;
-    const ROWS_PER_PAGE = 10;
     const STATUS_LABELS = { ACTIVE: 'Activo', INACTIVE: 'Apagado' };
 
-    const state = { factors: [], page: 0 };
+    const state = { factors: [] };
     // The local day, not UTC: after 20:00 in Bolivia UTC is already tomorrow.
     const now = new Date();
     const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'),
@@ -41,23 +40,19 @@ document.addEventListener('DOMContentLoaded', () => {
             qs('#factorsMeta').textContent = `${data.total} factor(es)`;
             note('#factorsNote', state.factors.length ? ''
                 : 'Todavía no hay factores. Crea el primero abajo.');
-            paintPage(state.page);
+            paintPage();
             paintSelect();
         } catch (error) {
             note('#factorsNote', errorText(error, 'No se pudieron leer los factores.'), 'error');
         }
     }
 
-    // Ten rows per page and invisible filler on the last one, like every
-    // table of the portal, so the card does not change height.
-    function paintPage(page) {
+    // Draws every row; the common pager (js/ui.js) shows ten at a time.
+    function paintPage() {
         const factors = state.factors;
-        const pages = Math.max(1, Math.ceil(factors.length / ROWS_PER_PAGE));
-        state.page = Math.min(Math.max(page, 0), pages - 1);
-        const shown = factors.slice(state.page * ROWS_PER_PAGE, (state.page + 1) * ROWS_PER_PAGE);
 
         const tbody = qs('#factorsTable tbody');
-        tbody.innerHTML = shown.map((factor) => {
+        tbody.innerHTML = factors.map((factor) => {
             const next = factor.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
             return `<tr><td><code>${escapeHtml(factor.code)}</code></td>` +
                 `<td>${escapeHtml(factor.name)}</td>` +
@@ -65,19 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="num">${factor.latest_value == null ? '—' : money(factor.latest_value)}</td>` +
                 `<td>${factor.latest_date ? shortDate(factor.latest_date) : '—'}</td>` +
                 `<td>${STATUS_LABELS[factor.status] || factor.status}</td>` +
-                `<td><button type="button" class="btn btn-ghost btn-small" ` +
+                `<td><button type="button" class="btn-icon${next === 'ACTIVE' ? '' : ' is-on'}" ` +
+                `data-tip="${next === 'ACTIVE' ? 'Encender' : 'Apagar'}" ` +
+                `aria-label="${next === 'ACTIVE' ? 'Encender' : 'Apagar'}" ` +
                 `data-toggle="${escapeHtml(factor.code)}" data-next="${next}">` +
-                `${next === 'ACTIVE' ? 'Encender' : 'Apagar'}</button></td></tr>`;
+                `${window.SD_ICONS.svg('power')}</button></td></tr>`;
         }).join('');
-        if (factors.length > ROWS_PER_PAGE) {
-            tbody.innerHTML += '<tr class="row-filler"><td colspan="7">&nbsp;</td></tr>'
-                .repeat(ROWS_PER_PAGE - shown.length);
-        }
-        qs('#factorsCount').textContent = `${factors.length} factor(es)`;
-        qs('#factorsPage').textContent = `${state.page + 1} / ${pages}`;
-        qs('#factorsPrev').disabled = state.page === 0;
-        qs('#factorsNext').disabled = state.page >= pages - 1;
-        qs('#factorsPager').hidden = factors.length <= ROWS_PER_PAGE;
     }
 
     function paintSelect() {
@@ -206,8 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    qs('#factorsPrev').addEventListener('click', () => paintPage(state.page - 1));
-    qs('#factorsNext').addEventListener('click', () => paintPage(state.page + 1));
 
     loadFactors();
 });

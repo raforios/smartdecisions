@@ -2,14 +2,14 @@
 
 /**
  * Principal — the application's welcome: who you are and when you last came
- * in, what your role may open, today's rates, where to configure, and (for
- * whoever runs the account) who else uses it and when they last came in.
+ * in, today's rates and, for whoever runs the account, who else uses it and
+ * when they last came in. What a role may open is the menu's job (Rafael,
+ * 21-oct: repeating it here only took space).
  */
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated() || !window.SD_SHELL) return;
     const { API_URL } = window.SD_CONFIG;
     const shell = window.SD_SHELL;
-    const icon = window.SD_ICONS.svg;
     const qs = (selector) => document.querySelector(selector);
 
     const ROLES = { MANAGER: 'Gerente', REQUESTER: 'Consulta', ADMIN: 'Administrador', SELLER: 'Vendedor' };
@@ -43,33 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#homeLast').textContent = last
             ? `Tu última sesión fue el ${last}. Entras como ${ROLES[profile.role] || profile.role}.`
             : `Es tu primera sesión registrada. Entras como ${ROLES[profile.role] || profile.role}.`;
-    }
-
-    /** The menu as a map: each top entry with what hangs from it. */
-    function map() {
-        qs('#homeMap').innerHTML = shell.menu().map((section) => section.items
-            .filter((item) => item.href !== location.pathname)
-            .map((item) => `<div class="sd-map-node">` +
-                `<a class="sd-map-head" href="${item.href}">${icon(item.icon)}<span>${escape(item.label)}</span></a>` +
-                (item.children.length ? `<div class="sd-map-children">${item.children.map((child) =>
-                    `<a href="${child.href}">${escape(child.label)}</a>`).join('')}</div>` : '') +
-                '</div>').join('')).join('');
-    }
-
-    function settings() {
-        const account = ['cuenta.html', 'user', 'Mi cuenta', 'Tus datos y tu contraseña'];
-        // The ADMIN configures the platform; a manager, its own company.
-        const links = shell.role === 'ADMIN'
-            ? [['admin/prompts.html', 'settings', 'Prompts de la IA', 'El experto con que la IA explica cada pantalla'],
-               ['admin/tipo-cambio.html', 'rates', 'Tipos de cambio', 'Dólar oficial y USDT, con su proyección'],
-               account]
-            : shell.isEditor
-                ? [['parametros/index.html', 'settings', 'Configuración comercial', 'Punto de partida, vendedores y políticas'],
-                   ['parametros/factores.html', 'rates', 'Factores externos', 'Los factores que sigue tu empresa'],
-                   account]
-                : [account];
-        qs('#homeSettings').innerHTML = links.map(([target, name, title, line]) =>
-            `<a class="sd-link" href="${target}">${icon(name)}<span><b>${title}</b>${line}</span></a>`).join('');
     }
 
     /** The last published rate of a currency and the one before it. */
@@ -110,16 +83,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * The manager, the users of their company; the ADMIN, every registered
+     * user, latest sign-in first, with the way into the users screen.
+     */
     async function users() {
         if (!shell.isEditor) return;
-        const list = await window.SD_API.get(`${API_URL}/v1/users/company`).catch(() => null);
+        const admin = shell.role === 'ADMIN';
+        const url = admin ? `${API_URL}/v1/users/` : `${API_URL}/v1/users/company`;
+        const list = await window.SD_API.get(url).catch(() => null);
         if (!list) return;
+        if (admin) {
+            qs('#homeUsersTitle').textContent = 'Usuarios registrados';
+            qs('#homeUsersManage').hidden = false;
+            qs('#homeUsersCompany').hidden = false;
+            list.sort((left, right) => String(right.last_login || '').localeCompare(String(left.last_login || '')));
+        }
         qs('#homeUsers').hidden = false;
         const inToday = list.filter((user) => isToday(user.last_login)).length;
-        qs('#homeUsersNote').textContent =
-            `${number(list.length)} usuarios; ${number(inToday)} entraron hoy.`;
+        const companies = new Set(list.map((user) => user.client).filter(Boolean)).size;
+        qs('#homeUsersNote').textContent = admin
+            ? `${number(list.length)} usuarios de ${number(companies)} empresas; ${number(inToday)} entraron hoy.`
+            : `${number(list.length)} usuarios; ${number(inToday)} entraron hoy.`;
         qs('#homeUsersTable tbody').innerHTML = list.map((user) =>
-            `<tr><td>${escape(`${user.first_name} ${user.last_name}`)}</td><td>${escape(user.email)}</td>` +
+            (admin ? `<tr><td>${escape(user.client || 'Sin empresa')}</td>` : '<tr>') +
+            `<td>${escape(`${user.first_name} ${user.last_name}`)}</td><td>${escape(user.email)}</td>` +
             `<td>${ROLES[user.role] || escape(user.role)}</td>` +
             `<td>${when(user.last_login) || 'Sin registro aún'}</td>` +
             `<td class="numeric">${number(user.login_count)}</td>` +
@@ -128,8 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     today();
-    map();
-    settings();
     me();
     rates();
     users();

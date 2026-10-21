@@ -1,5 +1,5 @@
 /* SmartDecisions demo — light corporate theme aligned with BearSoft identity
- * (navy + brown paw + cream). Used across login, home, excel, playground and
+ * (navy + brown paw + cream). Used across login, home, excel and
  * routes pages. */
 
 :root {
@@ -24,6 +24,7 @@
     --success:         #24693c;
     --danger:          #b4373a;
     --warning:         #a06a12;
+    --caution:         #c8661a;   /* naranja: cancelar, volver atrás */
 
     --radius:          14px;
     --radius-sm:       8px;
@@ -178,6 +179,18 @@ code {
 }
 .btn-small { padding: 0.5rem 0.95rem; font-size: 0.88rem; }
 
+/* Buttons by function, the same in every page (Rafael, 21-oct): green saves,
+   orange cancels, red deletes; blue (.btn-primary) starts something new.
+   The icon goes before the label (data-btn-icon, see SD_UI.decorateButtons). */
+.btn[data-btn-icon] { display: inline-flex; align-items: center; gap: 0.45rem; }
+.btn .sd-icon { width: 1.05em; height: 1.05em; flex: none; }
+.btn-save { background: var(--success); color: #fff; border-color: var(--success); }
+.btn-save:hover:not(:disabled) { filter: brightness(0.9); transform: translateY(-1px); }
+.btn-cancel { background: transparent; color: var(--caution); border-color: var(--caution); }
+.btn-cancel:hover:not(:disabled) { background: rgba(200, 102, 26, 0.08); }
+.btn-delete { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-delete:hover:not(:disabled) { filter: brightness(0.9); }
+
 /* ============ Layout: page + cards ============ */
 main { min-height: calc(100vh - 64px); padding: 2.5rem 0; background: var(--bg); }
 
@@ -212,7 +225,7 @@ main p, main li { font-size: var(--fs-text); }
    inside a container that already spaces its children with a gap, so that
    gap is never doubled. */
 :not(.card-stack, .chart-grid, .split-layout, .segment-layout, .metric-grid, .metric-row,
-     .sd-grid, .sd-stack, .sd-tiles, .step-grid, .card-grid, .routes-layout, .routes-main,
+     .sd-grid, .sd-tiles, .step-grid, .card-grid, .routes-layout, .routes-main,
      .routes-sidebar, .day-summary) >
     :is(.chart-grid, .card-stack, .split-layout, .segment-layout, .chart-card, .metric-grid, .table-wrapper, .card, div:not([class])) +
     :is(.chart-grid, .card-stack, .split-layout, .segment-layout, .chart-card, .table-wrapper, .card) { margin-top: var(--gap-block); }
@@ -678,6 +691,8 @@ main p, main li { font-size: var(--fs-text); }
 .form-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
 .form-actions:first-child { margin-top: 0; }
 .table-wrapper + .btn, .table-wrapper + button { margin-top: 1.25rem; }
+/* And the table never starts right under a row of filters or buttons. */
+:is(.field-row, .form-actions, .form-stack) ~ .table-wrapper { margin-top: 1.25rem; }
 /* Controls side by side, like the exchange-rate simulator: same air between
    them as in a button row. */
 .field-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; }
@@ -694,6 +709,46 @@ main p, main li { font-size: var(--fs-text); }
 .policy-source.is-set { color: var(--success); }
 .policy-source.is-default { color: var(--warning); }
 .row-actions { white-space: nowrap; }
+
+/* The one table pager (SD_UI.paginate in js/ui.js): ten rows a page, under
+   every table, the same in every page. */
+.pager { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.8rem; }
+.pager-info { color: var(--muted); font-size: var(--fs-text); font-variant-numeric: tabular-nums; }
+.is-paged-out { display: none; }
+.pager[hidden] { display: none; }
+
+/* An action shown as an icon, named by its tooltip (and aria-label for
+   screen readers). One definition for every table that uses it. */
+.btn-icon {
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.1rem; height: 2.1rem; padding: 0;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent; background: transparent;
+    color: var(--muted); cursor: pointer;
+}
+.btn-icon .sd-icon { width: 1.1rem; height: 1.1rem; }
+.btn-icon:hover:not(:disabled), .btn-icon:focus-visible { color: var(--accent); background: var(--bg-alt); border-color: var(--border); }
+.btn-icon.is-delete:hover:not(:disabled) { color: var(--danger); }
+.btn-icon.is-save:hover:not(:disabled) { color: var(--success); }
+/* A switch drawn as an icon: on is green on a green tint, off is grey and
+   faint, so the two read apart at a glance (Rafael, 21-oct). */
+.btn-icon.is-on { color: var(--success); background: rgba(36, 105, 60, 0.14); border-color: rgba(36, 105, 60, 0.35); }
+.btn-icon.is-on:hover:not(:disabled) { color: var(--success); background: rgba(36, 105, 60, 0.22); }
+.btn-icon[data-toggle]:not(.is-on), .btn-icon[data-action="ACTIVE"] { opacity: 0.55; }
+.btn-icon[data-toggle]:not(.is-on):hover, .btn-icon[data-action="ACTIVE"]:hover { opacity: 1; }
+.btn-icon.is-danger, .btn-icon.is-danger:hover:not(:disabled) { color: #fff; background: var(--danger); border-color: transparent; }
+.btn-icon + .btn-icon { margin-left: 0.25rem; }
+.btn-icon[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); right: 0;
+    padding: 0.3rem 0.55rem; border-radius: var(--radius-sm);
+    background: var(--text); color: var(--panel);
+    font-size: var(--fs-label); font-weight: 600; white-space: nowrap;
+    opacity: 0; pointer-events: none; transform: translateY(2px);
+    transition: opacity 0.15s ease, transform 0.15s ease; z-index: 5;
+}
+.btn-icon[data-tip]:hover::after, .btn-icon[data-tip]:focus-visible::after { opacity: 1; transform: none; }
 
 /* An analysis computed with a parameter the account never set. */
 .param-notice {

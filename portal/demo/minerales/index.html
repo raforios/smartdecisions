@@ -4,20 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minerales — SmartDecisions</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/demo.css?v=800cca1e22">
     <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
-    <link rel="stylesheet" href="minerales.css?v=a5f485ec90">
+    <link rel="stylesheet" href="minerales.css?v=c0a5c14e1d">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=4a13bfbaea"></script>
     <script src="../js/auth.js?v=e0c72ecc39" defer></script>
-    <script src="../js/icons.js?v=7d327bd034" defer></script>
-    <script src="../js/shell.js?v=99a27a836d" defer></script>
+    <script src="../js/icons.js?v=1375822fcf" defer></script>
+    <script src="../js/shell.js?v=59882786b0" defer></script>
     <script src="../js/api.js?v=7206932d80" defer></script>
-    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/ui.js?v=406a08249f" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
-    <script src="../js/ai.js?v=9817f449d8" defer></script>
+    <script src="../js/ai.js?v=b42ea9d11c" defer></script>
     <script src="minerales_shared.js?v=e328560800" defer></script>
     <script src="minerales.js?v=7886962ddf" defer></script>
     <script src="anticipada.js?v=4006bf9728" defer></script>
@@ -46,7 +46,7 @@
                         <option value="MOVING_AVERAGE">Promedio móvil</option>
                     </select>
                 </div>
-                <button class="btn btn-primary" id="runButton">Proyectar</button>
+                <button class="btn btn-primary" id="runButton" data-btn-icon="rates">Proyectar</button>
             </div>
             <p class="control-hint">
                 Hasta 90 días. Más allá de un trimestre la proyección habla más de
@@ -99,7 +99,7 @@
                         Al día
                         <input type="date" id="estimateDate">
                     </label>
-                    <button class="btn btn-ghost btn-small" id="syncButton" hidden>
+                    <button class="btn btn-ghost btn-small" id="syncButton" hidden data-btn-icon="refresh">
                         Actualizar del mercado
                     </button>
                 </div>
@@ -184,7 +184,7 @@
                     <label for="priceInput">Precio unitario (USD)</label>
                     <input type="number" id="priceInput" min="0" step="any">
                 </div>
-                <button class="btn btn-primary" id="scenarioButton">Comparar</button>
+                <button class="btn btn-primary" id="scenarioButton" data-btn-icon="compare">Comparar</button>
             </div>
             <p class="control-hint" id="scenarioHint"></p>
             <div id="scenarioResult"></div>

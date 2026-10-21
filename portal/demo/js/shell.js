@@ -95,6 +95,7 @@
         // The platform, for the ADMIN only (Rafael, 21-oct): Minerales is no
         // longer shown to the companies.
         { group: 'Administración', roles: ['ADMIN'], items: [
+            { label: 'Usuarios', icon: 'user', page: 'admin/usuarios.html' },
             { label: 'Prompts de la IA', icon: 'settings', page: 'admin/prompts.html' },
             { label: 'Tipos de cambio', icon: 'rates', page: 'admin/tipo-cambio.html' },
             { label: 'Minerales', icon: 'minerals', page: 'minerales/index.html' }
@@ -315,12 +316,6 @@
     });
     document.addEventListener('DOMContentLoaded', () => setTimeout(openFromHash, 0));
 
-    // What this role may open, for the welcome page's map: the same tree the
-    // menu shows, so the map never offers what the menu hides.
-    const visibleTree = (nodes) => nodes.filter(allowed).map((node) => ({
-        label: node.label, icon: node.icon, href: href(node.page, node.view),
-        children: visibleTree(node.children || [])
-    }));
     // A block of a client's own configuration (its starting point, sellers,
     // policies) is hidden from whoever has no client to configure.
     const forClient = COMMERCIAL_ROLES.includes(role);
@@ -329,8 +324,6 @@
     }
 
     window.SD_SHELL = {
-        role, roleLabel: ROLE_LABELS[role] || '', isEditor: EDITORS.includes(role), forClient,
-        menu: () => MENU.filter(allowed).map((section) => ({
-            group: section.group, items: visibleTree(section.items) }))
+        role, roleLabel: ROLE_LABELS[role] || '', isEditor: EDITORS.includes(role), forClient
     };
 })();

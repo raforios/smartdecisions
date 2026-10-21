@@ -10,6 +10,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated() || !window.SD_CONFIG.API_URL) return;
     const { qs, toast, setButtonBusy } = window.SD_UI;
+    const icon = window.SD_ICONS.svg;
     const BASE = `${window.SD_CONFIG.API_URL}/v1/ai/roles`;
 
     // The service names each view with a code; the screen with its name.
@@ -36,7 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
         finance_income: 'Análisis Financiero · Estado de Resultados',
         finance_balance: 'Análisis Financiero · Balance General',
         finance_taxes: 'Análisis Financiero · Impuestos',
-        finance_projection: 'Análisis Financiero · Proyección'
+        finance_projection: 'Análisis Financiero · Proyección',
+        finance_business_model: 'Análisis Financiero · Modelo de negocio'
     };
     const viewLabel = (code) => VIEW_LABELS[code] || code;
     const escape = (text) => String(text == null ? '' : text)
@@ -71,11 +73,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${escape(role.role)}</td>
                 <td>${role.active ? 'En uso' : 'Inactivo'}</td>
                 <td class="row-actions">
-                    <button type="button" class="btn btn-ghost btn-small"
-                            data-edit="${role.view}" data-version="${role.version}">Editar</button>
-                    <button type="button" class="btn btn-ghost btn-small"
+                    <button type="button" class="btn-icon" data-tip="Editar" aria-label="Editar"
+                            data-edit="${role.view}" data-version="${role.version}">${icon('edit')}</button>
+                    <button type="button" class="btn-icon${role.active ? ' is-on' : ''}"
+                            data-tip="${role.active ? 'Desactivar' : 'Activar'}"
+                            aria-label="${role.active ? 'Desactivar' : 'Activar'}"
                             data-toggle="${role.view}" data-version="${role.version}"
-                            data-active="${role.active}">${role.active ? 'Desactivar' : 'Activar'}</button>
+                            data-active="${role.active}">${icon('power')}</button>
                 </td>
             </tr>`).join('');
     }

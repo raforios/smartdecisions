@@ -27,11 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // `modelPicked` tells the model the user chose from the one we chose
     // for them: until they choose, the one with the lowest measured error wins.
-    const state = { bench: null, model: null, modelPicked: false, ratePage: 0,
-                    parallel: [], parallelPage: 0 };
-
-    // Ten rows per page, like every table of the product.
-    const RATE_ROWS_PER_PAGE = 10;
+    const state = { bench: null, model: null, modelPicked: false, parallel: [] };
 
     // --- exchange rate ----------------------------------------------------
 
@@ -97,18 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </tr>`;
         });
 
-        // Newest first: the current rate is what a reader looks for.
-        const ordered = rows.reverse();
-        const pages = Math.max(1, Math.ceil(ordered.length / RATE_ROWS_PER_PAGE));
-        state.ratePage = Math.min(Math.max(state.ratePage, 0), pages - 1);
-        const from = state.ratePage * RATE_ROWS_PER_PAGE;
-        body.innerHTML = ordered.slice(from, from + RATE_ROWS_PER_PAGE).join('');
-
-        qs('#rateCount').textContent = `${ordered.length} cotizaciones`;
-        qs('#ratePage').textContent = `${state.ratePage + 1} / ${pages}`;
-        qs('#ratePrev').disabled = state.ratePage === 0;
-        qs('#rateNext').disabled = state.ratePage >= pages - 1;
-        qs('#ratePager').hidden = ordered.length <= RATE_ROWS_PER_PAGE;
+        // Newest first: the current rate is what a reader looks for. Every
+        // row is drawn; the common pager (js/ui.js) shows ten at a time.
+        body.innerHTML = rows.reverse().join('');
     }
 
     /**
@@ -429,20 +416,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderParallelTable() {
         const ordered = state.parallel.slice().reverse();
-        const pages = Math.max(1, Math.ceil(ordered.length / RATE_ROWS_PER_PAGE));
-        state.parallelPage = Math.min(Math.max(state.parallelPage, 0), pages - 1);
-        const from = state.parallelPage * RATE_ROWS_PER_PAGE;
-        qs('#parallelTable tbody').innerHTML = ordered.slice(from, from + RATE_ROWS_PER_PAGE)
+        qs('#parallelTable tbody').innerHTML = ordered
             .map((row) => `<tr><td>${fullDate(row.date)}</td>` +
                 `<td class="num">${row.official ? money(row.official) : '—'}</td>` +
                 `<td class="num">${money(row.usdt)}</td>` +
                 `<td class="num ${changeClass(row.gap)}">${row.gap === null ? '—' : percent(row.gap)}</td></tr>`)
             .join('');
-        qs('#parallelCount').textContent = `${ordered.length} días`;
-        qs('#parallelPage').textContent = `${state.parallelPage + 1} / ${pages}`;
-        qs('#parallelPrev').disabled = state.parallelPage === 0;
-        qs('#parallelNext').disabled = state.parallelPage >= pages - 1;
-        qs('#parallelPager').hidden = ordered.length <= RATE_ROWS_PER_PAGE;
     }
 
     /** The whole floating period of both series: the service starts it at 27/06/2026. */
@@ -453,7 +432,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.SD_API.get(url, { currency: 'USDT' })
         ]);
         state.parallel = pairRows(official.rates || [], usdt.rates || []);
-        state.parallelPage = 0;
         if (!state.parallel.length) {
             qs('#parallelFigures').innerHTML = '';
             qs('#parallelChart').innerHTML = '';
@@ -507,17 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
         holder.hidden = !holder.hidden;
         event.currentTarget.setAttribute('aria-expanded', String(!holder.hidden));
         event.currentTarget.textContent = holder.hidden ? 'Ver la tabla' : 'Ocultar la tabla';
+        // The new label replaced the icon: let SD_UI draw it again.
+        delete event.currentTarget.dataset.iconDone;
     });
     qs('#rateShowProjected').addEventListener('change', () => {
-        state.ratePage = 0;
-        if (state.bench) renderRateTable(state.bench, currentRun());
-    });
-    qs('#ratePrev').addEventListener('click', () => {
-        state.ratePage -= 1;
-        if (state.bench) renderRateTable(state.bench, currentRun());
-    });
-    qs('#rateNext').addEventListener('click', () => {
-        state.ratePage += 1;
         if (state.bench) renderRateTable(state.bench, currentRun());
     });
     qs('#rateModel').addEventListener('change', (event) => {
@@ -525,14 +496,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.modelPicked = true;
         renderModel();
         renderBenchTable(state.bench);
-    });
-    qs('#parallelPrev').addEventListener('click', () => {
-        state.parallelPage -= 1;
-        renderParallelTable();
-    });
-    qs('#parallelNext').addEventListener('click', () => {
-        state.parallelPage += 1;
-        renderParallelTable();
     });
     qs('#runButton').addEventListener('click', run);
 

@@ -14,9 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const { qs, toast } = window.SD_UI;
     const T = window.SD_TRACK;
 
-    const ROWS_PER_PAGE = 10;
     const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-    const state = { sellers: [], page: 0 };
+    const state = { sellers: [] };
 
     async function load() {
         T.note(qs('#sellersNote'), 'Consultando…');
@@ -27,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 metric('Vendedores', String(data.total)) +
                 metric('Con usuario', String(data.linked)) +
                 metric('Sin usuario', String(data.total - data.linked));
-            paintPage(state.page);
+            paintPage();
             T.note(qs('#sellersNote'), state.sellers.length ? ''
                 : 'Todavía no hay vendedores: aparecen al cargar un archivo de ventas con la ' +
                   'columna Vendedor.');
@@ -42,30 +41,18 @@ document.addEventListener('DOMContentLoaded', () => {
                `<p class="metric-value">${T.escapeHtml(value)}</p></div>`;
     }
 
-    // Ten rows per page with invisible filler, like every table of the portal.
-    function paintPage(page) {
+    // Draws every row; the common pager (js/ui.js) shows ten at a time.
+    function paintPage() {
         const rows = state.sellers;
-        const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
-        state.page = Math.min(Math.max(page, 0), pages - 1);
-        const slice = rows.slice(state.page * ROWS_PER_PAGE, (state.page + 1) * ROWS_PER_PAGE);
 
         const tbody = qs('#sellersTable tbody');
-        tbody.innerHTML = slice.map((seller) =>
+        tbody.innerHTML = rows.map((seller) =>
             `<tr data-id="${T.escapeHtml(seller.id)}">` +
             `<td>${T.escapeHtml(seller.name || seller.id)}</td>` +
             `<td><input type="email" class="seller-email" maxlength="100" ` +
             `value="${T.escapeHtml(seller.user_email || '')}" placeholder="correo@empresa.com"></td>` +
-            '<td><button type="button" class="btn btn-ghost btn-small" data-save>Guardar</button></td>' +
+            `<td><button type="button" class="btn-icon is-save" data-tip="Guardar" aria-label="Guardar" data-save>${window.SD_ICONS.svg('check')}</button></td>` +
             '</tr>').join('');
-        if (rows.length > ROWS_PER_PAGE) {
-            tbody.innerHTML += '<tr class="row-filler"><td colspan="3">&nbsp;</td></tr>'
-                .repeat(ROWS_PER_PAGE - slice.length);
-        }
-        qs('#sellersCount').textContent = rows.length === 1 ? '1 vendedor' : `${rows.length} vendedores`;
-        qs('#sellersPage').textContent = `${state.page + 1} / ${pages}`;
-        qs('#sellersPrev').disabled = state.page === 0;
-        qs('#sellersNext').disabled = state.page >= pages - 1;
-        qs('#sellersPager').hidden = rows.length <= ROWS_PER_PAGE;
     }
 
     qs('#sellersTable').addEventListener('click', async (event) => {
@@ -91,8 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     qs('#sellersRefresh').addEventListener('click', load);
-    qs('#sellersPrev').addEventListener('click', () => paintPage(state.page - 1));
-    qs('#sellersNext').addEventListener('click', () => paintPage(state.page + 1));
 
     let loaded = false;
     T.onShow('sellers', () => { if (!loaded) { loaded = true; load(); } });

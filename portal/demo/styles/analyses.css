@@ -327,11 +327,6 @@
 .detail-table { background: var(--panel); }
 .detail-table thead th { background: transparent; }
 
-/* --- Pager (segmentation etc.) --- */
-.pager {
-    display: flex; align-items: center; justify-content: center;
-    gap: 1rem; margin-top: 0.8rem;
-}
 
 /* --- Section header: title + "recalculate" action on the same line --- */
 .section-head {
@@ -526,7 +521,6 @@
     margin-left: auto;
     min-width: 200px;
 }
-.pager-info { color: var(--muted); font-size: var(--fs-text); }
 
 
 /* A chart next to a table must not share the width evenly: the chart stays

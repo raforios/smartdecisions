@@ -79,8 +79,10 @@ document.addEventListener('DOMContentLoaded', () => {
             `<tr><td>${entry.date}</td><td>${entry.account_code}</td>` +
             `<td class="numeric">${amount(entry.amount)}</td>` +
             `<td>${entry.taxes_included == null ? '' : (entry.taxes_included ? 'Sí' : 'No')}</td>` +
-            `<td><button type="button" class="btn btn-ghost btn-small" data-fix="${index}">Corregir</button> ` +
-            `<button type="button" class="btn btn-ghost btn-small" data-remove="${index}">Borrar</button></td></tr>`
+            `<td class="row-actions"><button type="button" class="btn-icon" data-tip="Corregir" aria-label="Corregir" ` +
+            `data-fix="${index}">${window.SD_ICONS.svg('edit')}</button>` +
+            `<button type="button" class="btn-icon is-delete" data-tip="Borrar" aria-label="Borrar" ` +
+            `data-remove="${index}">${window.SD_ICONS.svg('trash')}</button></td></tr>`
         ).join('');
     }
 

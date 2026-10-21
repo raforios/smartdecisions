@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     `<span class="seller-stop-name">${T.escapeHtml(stop.point_name)}` +
                     (visit ? `<small>${T.escapeHtml(T.OUTCOME_LABELS[visit.outcome] || 'visitado')} · ${T.escapeHtml(T.formatStamp(visit.timestamp))}</small>` : '') +
                     '</span>' +
-                    (visit ? '' : `<button type="button" class="btn btn-primary btn-small" data-client="${T.escapeHtml(stop.client_id || stop.point_name)}">Visitar</button>`);
+                    (visit ? '' : `<button type="button" class="btn btn-primary btn-small" data-btn-icon="pin" data-client="${T.escapeHtml(stop.client_id || stop.point_name)}">Visitar</button>`);
                 list.appendChild(row);
             });
         } else {
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `<select class="item-sku">${options}</select>`
             : '<input type="text" class="item-sku" placeholder="SKU" maxlength="64">';
         row.innerHTML += '<input type="number" class="item-qty" min="0.01" step="any" placeholder="Cant.">' +
-            '<button type="button" class="btn btn-ghost btn-small" data-remove>×</button>';
+            `<button type="button" class="btn-icon is-delete" data-tip="Quitar" aria-label="Quitar" data-remove>${window.SD_ICONS.svg('trash')}</button>`;
         qs('#itemRows').appendChild(row);
     }
     qs('#addItemButton').addEventListener('click', addItemRow);

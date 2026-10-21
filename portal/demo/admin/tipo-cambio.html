@@ -4,22 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tipos de cambio — SmartDecisions</title>
-    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/demo.css?v=800cca1e22">
     <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
-    <link rel="stylesheet" href="../minerales/minerales.css?v=a5f485ec90">
+    <link rel="stylesheet" href="../minerales/minerales.css?v=c0a5c14e1d">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=4a13bfbaea"></script>
     <script src="../js/auth.js?v=e0c72ecc39" defer></script>
-    <script src="../js/icons.js?v=7d327bd034" defer></script>
-    <script src="../js/shell.js?v=99a27a836d" defer></script>
+    <script src="../js/icons.js?v=1375822fcf" defer></script>
+    <script src="../js/shell.js?v=59882786b0" defer></script>
     <script src="../js/api.js?v=7206932d80" defer></script>
-    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/ui.js?v=406a08249f" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
-    <script src="../js/ai.js?v=9817f449d8" defer></script>
+    <script src="../js/ai.js?v=b42ea9d11c" defer></script>
     <script src="../minerales/minerales_shared.js?v=e328560800" defer></script>
-    <script src="tipo_cambio.js?v=2c89e00d07" defer></script>
+    <script src="tipo_cambio.js?v=2913c093e4" defer></script>
 </head>
 <body>
 
@@ -35,7 +35,7 @@
                     <label for="daysInput">Plazo de la proyección (días)</label>
                     <input type="number" id="daysInput" min="1" max="90" step="1" value="30">
                 </div>
-                <button class="btn btn-primary" id="runButton">Proyectar</button>
+                <button class="btn btn-primary" id="runButton" data-btn-icon="rates">Proyectar</button>
             </div>
         </section>
 
@@ -58,16 +58,6 @@
                     <thead><tr><th>Fecha</th><th class="num">Oficial (BCB)</th><th class="num">USDT</th><th class="num">Brecha</th></tr></thead>
                     <tbody></tbody>
                 </table>
-                <div class="pager" id="parallelPager" hidden>
-                    <span class="pager-count" id="parallelCount"></span>
-                    <div class="pager-controls">
-                        <button type="button" class="btn btn-ghost btn-small"
-                                id="parallelPrev">← Anterior</button>
-                        <span class="pager-page" id="parallelPage"></span>
-                        <button type="button" class="btn btn-ghost btn-small"
-                                id="parallelNext">Siguiente →</button>
-                    </div>
-                </div>
             </div>
         </section>
 
@@ -103,7 +93,7 @@
                         Incluir proyectadas
                     </label>
                     <button class="btn btn-ghost btn-small" id="rateToggle"
-                            aria-expanded="false">Ver la tabla</button>
+                            aria-expanded="false" data-btn-icon="eye">Ver la tabla</button>
                 </div>
             </div>
             <div class="table-scroll rate-table-scroll" id="rateTableHolder" hidden>
@@ -120,16 +110,6 @@
                     </thead>
                     <tbody></tbody>
                 </table>
-                <div class="pager" id="ratePager" hidden>
-                    <span class="pager-count" id="rateCount"></span>
-                    <div class="pager-controls">
-                        <button type="button" class="btn btn-ghost btn-small"
-                                id="ratePrev">← Anterior</button>
-                        <span class="pager-page" id="ratePage"></span>
-                        <button type="button" class="btn btn-ghost btn-small"
-                                id="rateNext">Siguiente →</button>
-                    </div>
-                </div>
             </div>
 
             <div class="bench">

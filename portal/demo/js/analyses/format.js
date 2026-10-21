@@ -64,63 +64,25 @@
         return Number(value) >= 0 ? 'delta-up' : 'delta-down';
     }
 
-    /** Fills a table body from rows, building each cell from `cells(row)`. */
-    // Every table shows ten rows and pages the rest. Ten fits on screen
-    // without scrolling, which is what lets rows be compared at a glance; a
-    // table that dumps sixty rows pushes the next section off the page and
-    // leaves a different amount of blank space under each block.
-    const TABLE_PAGE_SIZE = 10;
-
+    /**
+     * Fills a table body from rows, building each cell from `cells(row)`.
+     * Every row is drawn; the common pager (`SD_UI`, js/ui.js) shows ten.
+     */
     function fillTable(tableId, rows, cells, options = {}) {
         const all = rows || [];
-        const pages = Math.max(1, Math.ceil(all.length / TABLE_PAGE_SIZE));
-        const page = Math.min(Math.max(options.page || 0, 0), pages - 1);
-        const start = page * TABLE_PAGE_SIZE;
-        const pageRows = all.slice(start, start + TABLE_PAGE_SIZE);
-
         const table = qs(`#${tableId}`);
         const tbody = table.querySelector('tbody');
         tbody.innerHTML = '';
-        if (pageRows.length === 0 && options.emptyText) {
+        if (all.length === 0 && options.emptyText) {
             const columns = table.querySelectorAll('thead th').length || 1;
             tbody.innerHTML = `<tr class="empty-row"><td colspan="${columns}">` +
                 `${escapeHtml(options.emptyText)}</td></tr>`;
         }
-        pageRows.forEach((row, index) => {
+        tbody.append(...all.map((row, index) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = cells(row, start + index);
-            tbody.appendChild(tr);
-        });
-        renderPager(table, all.length, page, pages, (next) =>
-            fillTable(tableId, rows, cells, { ...options, page: next }));
-    }
-
-    // The pager lives right after the table's scroll wrapper and only exists
-    // while there is more than one page: a table of six rows shows no controls.
-    function renderPager(table, total, page, pages, goTo) {
-        const anchor = table.closest('.table-wrapper') || table;
-        let pager = anchor.nextElementSibling;
-        if (!pager || !pager.classList.contains('table-pager')) {
-            pager = document.createElement('div');
-            pager.className = 'pager table-pager';
-            anchor.insertAdjacentElement('afterend', pager);
-        }
-        pager.hidden = pages <= 1;
-        if (pages <= 1) {
-            pager.innerHTML = '';
-            return;
-        }
-        const first = page * TABLE_PAGE_SIZE + 1;
-        const last = Math.min(total, (page + 1) * TABLE_PAGE_SIZE);
-        pager.innerHTML =
-            `<button type="button" class="btn btn-ghost btn-small" data-pager="prev"` +
-            `${page === 0 ? ' disabled' : ''}>‹ Anterior</button>` +
-            `<span class="pager-info">${formatInt(first)}–${formatInt(last)} de ` +
-            `${formatInt(total)} · página ${page + 1} de ${pages}</span>` +
-            `<button type="button" class="btn btn-ghost btn-small" data-pager="next"` +
-            `${page >= pages - 1 ? ' disabled' : ''}>Siguiente ›</button>`;
-        pager.querySelector('[data-pager="prev"]').addEventListener('click', () => goTo(page - 1));
-        pager.querySelector('[data-pager="next"]').addEventListener('click', () => goTo(page + 1));
+            tr.innerHTML = cells(row, index);
+            return tr;
+        }));
     }
 
     /** A card whose amount came as {bob, usd, usdt}. */

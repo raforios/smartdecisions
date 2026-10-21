@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/demo.css?v=800cca1e22">
     <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
-    <link rel="stylesheet" href="../styles/analyses.css?v=4978003d78">
+    <link rel="stylesheet" href="../styles/analyses.css?v=7abd861240">
     <link rel="stylesheet" href="financiero.css?v=d1ab26fc98">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="../js/config.js?v=4a13bfbaea"></script>
     <script src="../js/auth.js?v=e0c72ecc39" defer></script>
-    <script src="../js/icons.js?v=7d327bd034" defer></script>
-    <script src="../js/shell.js?v=99a27a836d" defer></script>
+    <script src="../js/icons.js?v=1375822fcf" defer></script>
+    <script src="../js/shell.js?v=59882786b0" defer></script>
     <script src="../js/api.js?v=7206932d80" defer></script>
-    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/ui.js?v=406a08249f" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="../js/money.js?v=b4de0251ff" defer></script>
     <script src="finance.js?v=7e9fca626e" defer></script>
-    <script src="cargar.js?v=6241ccc57d" defer></script>
+    <script src="cargar.js?v=bff48ed210" defer></script>
     <title>Cargar datos — SmartDecisions</title>
 </head>
 <body>
@@ -52,7 +52,7 @@
                 <label class="field"><span>Archivo (.xlsx)</span>
                     <input type="file" id="fileInput" accept=".xlsx"></label>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-primary" id="uploadButton" disabled>Subir y cargar</button>
+                    <button type="button" class="btn btn-primary" id="uploadButton" disabled data-btn-icon="upload">Subir y cargar</button>
                 </div>
                 <p class="form-note" id="uploadNote" aria-live="polite"></p>
             </article>
@@ -93,9 +93,9 @@
                     <input type="text" id="entriesDate" maxlength="7" placeholder="2026-09"></label>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-ghost btn-small" id="entriesShow">Ver montos</button>
-                <button type="button" class="btn btn-ghost btn-small" id="periodClear">Vaciar este período</button>
-                <button type="button" class="btn btn-primary btn-small" id="periodClearConfirm" hidden>Sí, vaciarlo</button>
+                <button type="button" class="btn btn-ghost btn-small" id="entriesShow" data-btn-icon="eye">Ver montos</button>
+                <button type="button" class="btn btn-delete btn-small" id="periodClear" data-btn-icon="trash">Vaciar este período</button>
+                <button type="button" class="btn btn-delete btn-small" id="periodClearConfirm" hidden data-btn-icon="trash">Sí, vaciarlo</button>
             </div>
             <p class="form-note" id="entriesNote" aria-live="polite"></p>
             <div class="table-wrapper">
@@ -112,8 +112,8 @@
                     <label class="field"><span>Monto (Bs)</span><input type="number" id="fixAmount" min="0" step="0.01"></label>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-ghost btn-small" id="fixCancel">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-small" id="fixSave">Guardar corrección</button>
+                    <button type="button" class="btn btn-cancel btn-small" id="fixCancel" data-btn-icon="close">Cancelar</button>
+                    <button type="submit" class="btn btn-save btn-small" id="fixSave" data-btn-icon="check">Guardar corrección</button>
                 </div>
             </form>
         </section>

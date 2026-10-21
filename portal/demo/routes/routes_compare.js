@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<td class="numeric">${score.matched_points_count}</td>` +
                 `<td class="numeric">${score.points_visited_count}</td>` +
                 `<td class="numeric"><strong>${T.formatDecimal(score.match_percentage)}%</strong></td>` +
-                `<td class="numeric"><button class="btn btn-ghost btn-small" data-action="map">Ver</button></td>`;
+                `<td class="numeric"><button type="button" class="btn-icon" data-tip="Ver en el mapa" aria-label="Ver en el mapa" data-action="map">${window.SD_ICONS.svg('eye')}</button></td>`;
             tbody.appendChild(row);
         });
     }

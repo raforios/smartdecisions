@@ -46,14 +46,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function actionsFor(plan) {
         const buttons = [];
         if (plan.status === 'IN CREATION') {
-            buttons.push(`<button class="btn btn-primary btn-small" data-action="ACTIVE">Activar</button>`);
-            buttons.push(`<button class="btn btn-danger btn-small" data-action="delete">Borrar</button>`);
+            buttons.push(`<button type="button" class="btn-icon" data-tip="Activar" aria-label="Activar" data-action="ACTIVE">${window.SD_ICONS.svg('power')}</button>`);
+            buttons.push(`<button type="button" class="btn-icon is-delete" data-tip="Borrar" aria-label="Borrar" data-action="delete">${window.SD_ICONS.svg('trash')}</button>`);
         } else if (plan.status === 'ACTIVE') {
-            buttons.push(`<button class="btn btn-ghost btn-small" data-action="INACTIVE">Desactivar</button>`);
+            buttons.push(`<button type="button" class="btn-icon is-on" data-tip="Desactivar" aria-label="Desactivar" data-action="INACTIVE">${window.SD_ICONS.svg('power')}</button>`);
         } else {
-            buttons.push(`<button class="btn btn-primary btn-small" data-action="ACTIVE">Reactivar</button>`);
+            buttons.push(`<button type="button" class="btn-icon" data-tip="Reactivar" aria-label="Reactivar" data-action="ACTIVE">${window.SD_ICONS.svg('power')}</button>`);
         }
-        return buttons.join(' ');
+        return buttons.join('');
     }
 
     function paintPlans() {

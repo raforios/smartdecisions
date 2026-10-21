@@ -4,18 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi ruta — SmartDecisions</title>
-    <link rel="stylesheet" href="/styles/demo.css?v=b1274f62bf">
-    <link rel="stylesheet" href="/routes/routes.css?v=865d43a436">
+    <link rel="stylesheet" href="/styles/demo.css?v=800cca1e22">
+    <link rel="stylesheet" href="/routes/routes.css?v=f905706059">
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
     <script src="/js/config.js?v=4a13bfbaea"></script>
     <script src="/js/auth.js?v=e0c72ecc39" defer></script>
     <script src="/js/api.js?v=7206932d80" defer></script>
-    <script src="/js/ui.js?v=412b9cdd72" defer></script>
+    <script src="/js/icons.js?v=1375822fcf" defer></script>
+    <script src="/js/ui.js?v=406a08249f" defer></script>
     <script src="/js/session.js?v=91bb432af9" defer></script>
     <script src="/routes/routes_tracking.js?v=9740eeafda" defer></script>
-    <script src="/routes/vendedor.js?v=f63e424a2e" defer></script>
+    <script src="/routes/vendedor.js?v=3b2b97c207" defer></script>
 </head>
 <body class="seller-page">
 
@@ -28,7 +29,7 @@
         <div class="demo-nav-actions">
             <span class="session-chip" id="sessionChip" hidden></span>
             <span class="user-chip" id="userChip">…</span>
-            <button class="btn btn-ghost btn-small" id="logoutButton">Salir</button>
+            <button class="btn btn-ghost btn-small" id="logoutButton" data-btn-icon="logout">Salir</button>
         </div>
     </div>
 </header>
@@ -48,8 +49,8 @@
             </label>
             <p class="legend-hint" id="planHint"></p>
             <div class="form-actions">
-                <button type="button" class="btn btn-primary" id="startButton">Iniciar ruta</button>
-                <button type="button" class="btn btn-secondary" id="freeStartButton" hidden>Iniciar como ruta libre</button>
+                <button type="button" class="btn btn-primary" id="startButton" data-btn-icon="play">Iniciar ruta</button>
+                <button type="button" class="btn btn-secondary" id="freeStartButton" hidden data-btn-icon="play">Iniciar como ruta libre</button>
             </div>
             <p class="form-note" id="startNote" aria-live="polite"></p>
         </section>
@@ -62,12 +63,12 @@
                 <div class="card-head">
                     <h3 id="stopsTitle">Paradas</h3>
                     <div class="form-actions">
-                        <button type="button" class="btn btn-ghost btn-small" id="pingButton">Reportar posición</button>
+                        <button type="button" class="btn btn-ghost btn-small" id="pingButton" data-btn-icon="pin">Reportar posición</button>
                     </div>
                 </div>
                 <div class="seller-stops" id="stopList"></div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary btn-small" id="freeVisitButton">Visita fuera del plan</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="freeVisitButton" data-btn-icon="plus">Visita fuera del plan</button>
                 </div>
             </div>
 
@@ -87,7 +88,7 @@
                     <div id="itemsField">
                         <span class="field-label">Productos vendidos</span>
                         <div class="seller-items" id="itemRows"></div>
-                        <button type="button" class="btn btn-ghost btn-small" id="addItemButton">+ Producto</button>
+                        <button type="button" class="btn btn-ghost btn-small" id="addItemButton" data-btn-icon="plus">Producto</button>
                         <p class="legend-hint" id="stockHint"></p>
                     </div>
                     <div class="seller-new-client">
@@ -109,8 +110,8 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="button" class="btn btn-primary" id="visitSaveButton">Guardar visita</button>
-                        <button type="button" class="btn btn-ghost" id="visitCancelButton">Cancelar</button>
+                        <button type="button" class="btn btn-save" id="visitSaveButton" data-btn-icon="check">Guardar visita</button>
+                        <button type="button" class="btn btn-cancel" id="visitCancelButton" data-btn-icon="close">Cancelar</button>
                     </div>
                     <p class="form-note" id="visitNote" aria-live="polite"></p>
                 </form>
@@ -120,7 +121,7 @@
                 <h3>Terminar el día</h3>
                 <p class="legend-hint">Cierra la ruta cuando hayas hecho la última visita. Si te equivocas, puedes reabrirla hoy mismo.</p>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-danger" id="closeButton">Cerrar ruta</button>
+                    <button type="button" class="btn btn-danger" id="closeButton" data-btn-icon="flag">Cerrar ruta</button>
                 </div>
                 <p class="form-note" id="closeNote" aria-live="polite"></p>
             </div>
@@ -130,8 +131,8 @@
             <h3>Ruta cerrada</h3>
             <p id="closedLine"></p>
             <div class="form-actions">
-                <button type="button" class="btn btn-ghost" id="reopenButton">Reabrir</button>
-                <button type="button" class="btn btn-primary" id="newRouteButton">Empezar otra ruta</button>
+                <button type="button" class="btn btn-ghost" id="reopenButton" data-btn-icon="undo">Reabrir</button>
+                <button type="button" class="btn btn-primary" id="newRouteButton" data-btn-icon="play">Empezar otra ruta</button>
             </div>
             <p class="form-note" id="reopenNote" aria-live="polite"></p>
         </section>

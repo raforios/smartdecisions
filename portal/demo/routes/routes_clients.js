@@ -13,9 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const { qs } = window.SD_UI;
     const T = window.SD_TRACK;
 
-    const ROWS_PER_PAGE = 10;
     const SOURCE_LABELS = { FIELD: 'Alta en la calle', FILE: 'Archivo', API: 'Sistema (API)' };
-    const state = { clients: [], shown: [], page: 0 };
+    const state = { clients: [], shown: [] };
 
     async function load() {
         T.note(qs('#clientsNote'), 'Consultando…');
@@ -53,20 +52,17 @@ document.addEventListener('DOMContentLoaded', () => {
         state.shown = source
             ? state.clients.filter((client) => client.source === source)
             : state.clients;
-        paintPage(0);
+        paintPage();
     }
 
-    // Ten rows per page with invisible filler, like every table of the portal.
-    function paintPage(page) {
+    // Draws every row; the common pager (js/ui.js) shows ten at a time.
+    function paintPage() {
         const rows = state.shown;
-        const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
-        state.page = Math.min(Math.max(page, 0), pages - 1);
-        const slice = rows.slice(state.page * ROWS_PER_PAGE, (state.page + 1) * ROWS_PER_PAGE);
 
         const located = (client) => client.latitude != null && client.longitude != null
             && !(Number(client.latitude) === 0 && Number(client.longitude) === 0);
         const tbody = qs('#clientsTable tbody');
-        tbody.innerHTML = slice.map((client) =>
+        tbody.innerHTML = rows.map((client) =>
             `<tr><td><a href="ficha.html?client=${encodeURIComponent(client.id)}">` +
             `${T.escapeHtml(client.name || client.id)}</a></td>` +
             `<td>${SOURCE_LABELS[client.source] || T.escapeHtml(client.source)}</td>` +
@@ -79,21 +75,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   'target="_blank" rel="noopener">Ver en el mapa</a>'
                 : 'Sin ubicación'}</td>` +
             `<td>${T.formatStamp(client.created_at)}</td></tr>`).join('');
-        if (rows.length > ROWS_PER_PAGE) {
-            tbody.innerHTML += '<tr class="row-filler"><td colspan="7">&nbsp;</td></tr>'
-                .repeat(ROWS_PER_PAGE - slice.length);
-        }
-        qs('#clientsCount').textContent = rows.length === 1 ? '1 cliente' : `${rows.length} clientes`;
-        qs('#clientsPage').textContent = `${state.page + 1} / ${pages}`;
-        qs('#clientsPrev').disabled = state.page === 0;
-        qs('#clientsNext').disabled = state.page >= pages - 1;
-        qs('#clientsPager').hidden = rows.length <= ROWS_PER_PAGE;
     }
 
     qs('#clientsSource').addEventListener('change', applyFilter);
     qs('#clientsRefresh').addEventListener('click', load);
-    qs('#clientsPrev').addEventListener('click', () => paintPage(state.page - 1));
-    qs('#clientsNext').addEventListener('click', () => paintPage(state.page + 1));
 
     let loaded = false;
     T.onShow('clients', () => { if (!loaded) { loaded = true; load(); } });

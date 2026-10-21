@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuarios — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=800cca1e22">
+    <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="../styles/panels.css?v=13e0f60556">
+    <link rel="stylesheet" href="../styles/analyses.css?v=7abd861240">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=4a13bfbaea"></script>
+    <script src="../js/auth.js?v=e0c72ecc39" defer></script>
+    <script src="../js/icons.js?v=1375822fcf" defer></script>
+    <script src="../js/shell.js?v=59882786b0" defer></script>
+    <script src="../js/api.js?v=7206932d80" defer></script>
+    <script src="../js/ui.js?v=406a08249f" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="usuarios.js?v=c28df5ecff" defer></script>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Usuarios</h1>
+        <p class="page-subtitle">Los usuarios registrados en la plataforma, de todas las empresas.</p>
+
+        <section class="card">
+            <div class="field-row">
+                <label>Buscar
+                    <input type="search" id="usersSearch" placeholder="Nombre o correo"></label>
+                <label>Empresa
+                    <select id="usersCompany"><option value="">Todas</option></select></label>
+                <button type="button" class="btn btn-primary btn-small" id="userNew" data-btn-icon="plus" disabled>Nuevo usuario</button>
+            </div>
+
+            <!-- One form for both: creating asks for the email and the first password. -->
+            <form class="form-stack" id="userForm" hidden autocomplete="off">
+                <h4 id="userFormTitle"></h4>
+                <label id="userEmailField"><span>Correo</span>
+                    <input type="email" id="userEmail" maxlength="100"></label>
+                <label><span>Nombre</span>
+                    <input type="text" id="userFirstName" minlength="3" maxlength="30"></label>
+                <label><span>Apellido</span>
+                    <input type="text" id="userLastName" minlength="3" maxlength="30"></label>
+                <label><span>Rol</span>
+                    <select id="userRole"></select></label>
+                <label id="userCompanyField"><span>Empresa</span>
+                    <select id="userCompany"></select></label>
+                <label id="userNewCompanyField" hidden><span>Nombre de la empresa nueva</span>
+                    <input type="text" id="userNewCompany" minlength="3" maxlength="50"></label>
+                <label id="userPasswordField"><span id="userPasswordLabel">Contraseña inicial</span>
+                    <span class="sd-reveal"><input type="password" id="userPassword" minlength="8"
+                           maxlength="100" autocomplete="new-password">
+                    <button type="button" class="sd-reveal-toggle" id="userPasswordReveal"></button></span></label>
+                <label id="userStatusField"><span>Estado</span>
+                    <select id="userStatus">
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
+                    </select></label>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-cancel btn-small" id="userCancel" data-btn-icon="close">Cancelar</button>
+                    <button type="button" class="btn btn-save btn-small" id="userSave" data-btn-icon="check">Guardar</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table class="data-table" id="usersTable">
+                    <thead><tr>
+                        <th>Empresa</th><th>Usuario</th><th>Rol</th>
+                        <th>Última sesión</th><th>Estado</th><th></th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="legend-hint" id="usersCount"></p>
+            <p class="form-note" id="usersNote" aria-live="polite"></p>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

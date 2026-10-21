@@ -66,7 +66,8 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'btn btn-ghost btn-small ai-ask';
-        button.innerHTML = '<span aria-hidden="true">✨</span> ¿Qué significa esto?';
+        button.dataset.btnIcon = 'sparkle';
+        button.textContent = '¿Qué significa esto?';
 
         // The answer goes immediately after the block that holds the button.
         // Appending it to the end of the section pushed it below the whole

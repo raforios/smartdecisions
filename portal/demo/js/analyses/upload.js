@@ -207,7 +207,7 @@
             <p><strong>${A.formatInt(summary.valid_rows || 0)}</strong> filas se cargaron.
             <strong>${A.formatInt(rejected)}</strong> quedaron fuera por datos incompletos —
             descárgalas, complétalas y vuelve a subirlas.</p>
-            <button type="button" class="btn btn-ghost btn-small" id="downloadRejectedButton">
+            <button type="button" class="btn btn-ghost btn-small" id="downloadRejectedButton" data-btn-icon="download">
                 Descargar filas no cargadas (.csv)
             </button>`;
         qs('#downloadRejectedButton').addEventListener('click', () => downloadRejected(datasetId));
