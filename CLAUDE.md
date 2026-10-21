@@ -85,10 +85,11 @@ nombrados por funcionalidad.
    `db_connection.py`, `environment.py`, `exceptions.py`, `logger_config.py`,
    `security.py` y `utils.py` no se modifican sin consulta; si se autoriza una
    adición, va al final del archivo.
-   - **Los ocho servicios propios que no son base** (INGEST, ANALYTICS,
-     OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI, BILLING y FINANCE) tienen el
-     **mismo boilerplate con las mismas funciones** (Rafael, 19-oct-2026).
-     Un cambio autorizado en uno se aplica a los ocho en el mismo paso; lo
+   - **Los siete servicios propios que no son base** (INGEST, ANALYTICS,
+     OPTIMIZATION, MINING_ANALYSIS, QUOTES, BILLING y FINANCE) tienen el
+     **mismo boilerplate con las mismas funciones** (Rafael, 19-oct-2026;
+     eran ocho hasta que AI pasó a base al cerrar la fase 8, 21-oct-2026).
+     Un cambio autorizado en uno se aplica a los siete en el mismo paso; lo
      propio de un servicio (el bloque FILES, el de PARAMETERS) va al final
      del archivo, nunca en lugar de lo común.
 3. **No se inventan módulos de infraestructura** con nombres genéricos
@@ -101,8 +102,11 @@ nombrados por funcionalidad.
 **Base**, compartidos por todos los productos: **AUTH** (JWT, DynamoDB),
 **EVENTS** (auditoría, DynamoDB), **FILES** (S3), **ML_FUNCTIONS** (el centro
 de cálculos y fórmulas: predicciones, proyecciones, clasificaciones) y
-**PARAMETERS** (valores de negocio que cambian sin redesplegar, DynamoDB).
-ML_FUNCTIONS y PARAMETERS son base desde el 17-oct-2026 (Rafael).
+**PARAMETERS** (valores de negocio que cambian sin redesplegar, DynamoDB) y
+**AI** (explicaciones con Bedrock: cada producto registra sus vistas en
+`ai_prompts`, sin tocar el código de AI). ML_FUNCTIONS y PARAMETERS son base
+desde el 17-oct-2026, y AI desde el cierre de la fase 8, el 21-oct-2026
+(Rafael).
 
 **Un cálculo común vive una sola vez.** Proyectar una serie, clasificar,
 ajustar un modelo: lo pide cada servicio por HTTP a ML_FUNCTIONS, como pide
@@ -110,7 +114,8 @@ autenticación a AUTH, en vez de guardar su propia copia de la fórmula. FINANCE
 ya lo hace (`/v1/prediction/forecast`); ANALYTICS, MINING_ANALYSIS y QUOTES
 tienen todavía su copia y se pasan después del Análisis Financiero.
 
-**SmartDecisions:** INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI.
+**SmartDecisions:** INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES y
+FINANCE (Análisis Financiero).
 
 **BILLING** (antes SUPPLIES) es el otro producto propio: facturación de
 comercios sobre DynamoDB, con las farmacias como primer vertical. Se vende solo
@@ -155,9 +160,9 @@ no el modelo a copiar.
 4. **Una sola dirección para los servicios: `API_URL`** (Rafael, 17-oct-2026).
    El gateway `api.bearsoft.com.bo` envía cada `/v1/<servicio>` a su Lambda,
    así que la ruta nombra al servicio y cada llamada arma
-   `{API_URL}/v1/<servicio>/...`. Ya unificados: FINANCE, PARAMETERS y el
-   portal; los demás servicios propios conservan sus `*_SERVICE_URL` hasta
-   que se unifiquen. Los de BINARIA apuntan a su propio gateway y no se tocan.
+   `{API_URL}/v1/<servicio>/...`. Unificados todos los servicios propios y el
+   portal (los últimos seis el 21-oct-2026); ninguno conserva una
+   `*_SERVICE_URL`. Los de BINARIA apuntan a su propio gateway y no se tocan.
 5. **Ningún valor del `.env` puede llevar coma ni llave.** El despliegue lo pasa
    entero a `--environment Variables={...}`: la coma separa variables y la llave
    abre una estructura anidada. Una plantilla de URL va con `%s`, nunca con
