@@ -66,7 +66,14 @@
         PARAMETERS_SERVICE_REJECTED: 'No se pudieron leer los parámetros del cálculo.',
         PARAMETER_MISSING: 'Falta un parámetro del cálculo; avisa al administrador.',
         HORIZON_OUT_OF_RANGE: 'Los meses a proyectar están fuera del rango permitido.',
-        CHANGE_OUT_OF_RANGE: 'Un porcentaje de escenario está fuera del rango permitido.'
+        CHANGE_OUT_OF_RANGE: 'Un porcentaje de escenario está fuera del rango permitido.',
+        ACCOUNT_NOT_FOUND: 'Esa cuenta ya no está en el catálogo.',
+        DUPLICATE_ACCOUNT_CODE: 'Ya hay una cuenta con ese código.',
+        ACCOUNT_IN_USE: 'La cuenta tiene montos cargados: no se puede quitar.',
+        GROUP_NOT_FOUND: 'El grupo elegido no existe.',
+        GROUP_TYPE_MISMATCH: 'El grupo es de otro tipo que la cuenta.',
+        GROUP_HAS_ACCOUNTS: 'El grupo todavía tiene cuentas: quítalas primero.',
+        INVOICE_ONLY_ON_SALES_AND_PURCHASES: 'La marca de factura es sólo para ingresos y costos.'
     };
 
     const PERIODICITY_LABELS = { DAILY: 'Diaria', MONTHLY: 'Mensual', ANNUAL: 'Anual' };

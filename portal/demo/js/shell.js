@@ -52,6 +52,7 @@
                 { label: 'Impuestos', page: 'financiero/impuestos.html' },
                 { label: 'Proyección', page: 'financiero/proyeccion.html' },
                 { label: 'Modelo de negocio', page: 'financiero/modelo.html' },
+                { label: 'Catálogo de cuentas', page: 'financiero/cuentas.html' },
                 { label: 'Cargar datos', page: 'financiero/cargar.html' }
             ] },
             { label: 'Comercial', icon: 'commerce', page: 'comercial/index.html',
@@ -98,6 +99,7 @@
             { label: 'Usuarios', icon: 'user', page: 'admin/usuarios.html' },
             { label: 'Salud', icon: 'pulse', page: 'admin/salud.html' },
             { label: 'Prompts de la IA', icon: 'settings', page: 'admin/prompts.html' },
+            { label: 'Catálogo de cuentas', icon: 'finance', page: 'financiero/cuentas.html' },
             { label: 'Tipos de cambio', icon: 'rates', page: 'admin/tipo-cambio.html' },
             { label: 'Minerales', icon: 'minerals', page: 'minerales/index.html' }
         ] }

@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
             qs('#healthSummary').textContent =
                 `${totals.up} de ${totals.services} servicios responden. ` +
                 `${window.SD_HEALTH.tablesLine(totals)}` +
-                ` Revisado a las ${new Date().toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}.`;
+                ` Revisado a las ${new Date().toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`;
             qs('#servicesTable tbody').innerHTML = results.map((item) =>
                 `<tr><td><b>${item.label}</b>${item.base ? ' <span class="legend-hint">base</span>' : ''}</td>` +
                 `<td>${badge(item.up, item.up ? 'Responde' : 'No responde')}</td>` +

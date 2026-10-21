@@ -115,29 +115,31 @@ document.addEventListener('DOMContentLoaded', () => {
             `${user.status ? 'Activo' : 'Inactivo'}</span></td></tr>`).join('');
     }
 
-    /** The ADMIN's card: services up, tables active, and what is wrong first. */
+    /**
+     * The ADMIN's card: every service by name with its light and how long it
+     * took, base services first, so a glance says which one is down.
+     */
     async function health() {
         if (shell.role !== 'ADMIN' || !window.SD_HEALTH) return;
         qs('#homeTop').classList.add('sd-grid-half');
         qs('#homeHealth').hidden = false;
         const results = await window.SD_HEALTH.check();
         const totals = window.SD_HEALTH.summarize(results);
-        qs('#homeHealthValue').textContent = `${totals.up} de ${totals.services} servicios responden`;
+        const tableTrouble = (item) => Boolean(item.tables && !item.tables.healthy);
+        qs('#homeHealthValue').textContent = `${totals.up} de ${totals.services} responden`;
+        qs('#homeHealthGrid').innerHTML = results.map((item) => {
+            const state = !item.up ? 'is-down' : (tableTrouble(item) ? 'is-warn' : 'is-up');
+            const title = !item.up ? 'No responde'
+                : (tableTrouble(item) ? 'Una tabla no está activa' : 'Responde');
+            return `<span class="sd-health-chip ${state}" title="${title}">` +
+                `<i aria-hidden="true"></i><b>${escape(item.label)}</b>` +
+                `<small>${item.ms == null ? '—' : `${number(item.ms)} ms`}</small></span>`;
+        }).join('');
         qs('#homeHealthTables').textContent = window.SD_HEALTH.tablesLine(totals);
-        const problems = results.flatMap((item) => [
-            ...(item.up ? [] : [[item.label, 'No responde']]),
-            ...((item.tables && item.tables.tables) || []).filter((table) => table.status !== 'ACTIVE')
-                .map((table) => [item.label,
-                    `${table.name}: ${window.SD_HEALTH.stateLabel(table.status)}`])
-        ]);
-        qs('#homeHealthProblems').innerHTML = problems.slice(0, 4).map(([label, what]) =>
-            `<div class="sd-list-row"><span>${escape(label)}</span><b class="is-bad">${escape(what)}</b></div>`)
-            .join('');
+        const down = results.filter((item) => !item.up || tableTrouble(item)).length;
         const note = qs('#homeHealthNote');
-        note.className = `sd-stat-note ${problems.length ? 'is-bad' : 'is-good'}`;
-        note.textContent = problems.length
-            ? `${problems.length} problema(s): abre Salud para el detalle.`
-            : 'Todo responde.';
+        note.className = `sd-stat-note ${down ? 'is-bad' : 'is-good'}`;
+        note.textContent = down ? `${down} con problemas: abre Salud para el detalle.` : 'Todo responde.';
     }
 
     today();

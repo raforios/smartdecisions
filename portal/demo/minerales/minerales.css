@@ -265,15 +265,6 @@
     gap: 1rem;
 }
 
-.checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: .4rem;
-    font-size: var(--fs-text);
-    color: var(--muted, #5e6580);
-    cursor: pointer;
-}
-
 /* Bounded height so 100+ rows never push the rest of the page out of reach. */
 .rate-table-scroll {
     margin-top: .75rem;

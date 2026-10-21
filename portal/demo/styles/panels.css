@@ -258,6 +258,16 @@
 .sd-status.is-off { background: var(--bg-alt); color: var(--muted); }
 .sd-status.is-bad { background: rgba(180, 55, 58, 0.12); color: var(--danger); }
 
+/* Principal of the ADMIN: one chip per service, its light and its time. */
+.sd-health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.4rem; margin: 0.5rem 0; }
+.sd-health-chip { display: flex; align-items: center; gap: 0.45rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); font-size: var(--fs-label); }
+.sd-health-chip i { flex: none; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px rgba(36, 105, 60, 0.15); }
+.sd-health-chip b { color: var(--text-strong); font-weight: 600; }
+.sd-health-chip small { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sd-health-chip.is-warn i { background: var(--caution); box-shadow: 0 0 0 3px rgba(200, 102, 26, 0.18); }
+.sd-health-chip.is-down { border-color: rgba(180, 55, 58, 0.4); background: rgba(180, 55, 58, 0.06); }
+.sd-health-chip.is-down i { background: var(--danger); box-shadow: 0 0 0 3px rgba(180, 55, 58, 0.18); }
+
 /* The way to an option page's upload, above its analysis. */
 .sd-option-actions { display: flex; justify-content: flex-end; margin-bottom: 0.75rem; }
 

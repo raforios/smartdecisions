@@ -39,3 +39,7 @@
 .metric-value.negative { color: var(--danger); }
 
 .chart-box { position: relative; height: 18rem; }
+
+/* Catálogo de cuentas: the groups stand out, their accounts sit under them. */
+.account-group td { background: var(--bg-alt); }
+.account-row td:nth-child(2) { padding-left: 1.75rem; }

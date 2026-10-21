@@ -686,6 +686,9 @@ main p, main li { font-size: var(--fs-text); }
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(47, 111, 181, 0.15);
 }
+/* A checkbox with its label to the right, the same in every form. */
+.checkbox, .form-stack label.checkbox { display: inline-flex; align-items: center; gap: 0.4rem; font-size: var(--fs-text); color: var(--muted); font-weight: 500; cursor: pointer; }
+
 /* A label over its control. */
 .field { display: grid; gap: 0.35rem; color: var(--muted); font-size: var(--fs-text); font-weight: 600; }
 .field input { width: 22rem; max-width: 100%; }

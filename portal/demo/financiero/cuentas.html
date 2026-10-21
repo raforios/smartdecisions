@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../styles/demo.css?v=3cb07bf47f">
+    <link rel="stylesheet" href="../styles/shell.css?v=9c2d5f8ca5">
+    <link rel="stylesheet" href="../styles/analyses.css?v=afa137006c">
+    <link rel="stylesheet" href="financiero.css?v=5d067638a0">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=4a13bfbaea"></script>
+    <script src="../js/auth.js?v=e0c72ecc39" defer></script>
+    <script src="../js/icons.js?v=652a070f95" defer></script>
+    <script src="../js/shell.js?v=b364c064cc" defer></script>
+    <script src="../js/api.js?v=7206932d80" defer></script>
+    <script src="../js/ui.js?v=406a08249f" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="finance.js?v=d846ce9d44" defer></script>
+    <script src="cuentas.js?v=65f499d38e" defer></script>
+    <title>Catálogo de cuentas — SmartDecisions</title>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <div class="sd-page-head"><div><h1>Catálogo de cuentas</h1>
+            <p>Las cuentas con que se cargan los montos del análisis financiero. Es el mismo para todas las empresas.</p></div></div>
+
+        <section class="card">
+            <div class="field-row">
+                <label>Buscar
+                    <input type="search" id="accountsSearch" placeholder="Código o nombre"></label>
+                <label>Tipo
+                    <select id="accountsType"><option value="">Todos</option></select></label>
+                <!-- Only the ADMIN changes the catalog (contract, 15-oct). -->
+                <button type="button" class="btn btn-primary btn-small" id="accountNew"
+                        data-btn-icon="plus" hidden disabled>Nueva cuenta</button>
+            </div>
+
+            <form class="form-stack" id="accountForm" hidden autocomplete="off">
+                <h4 id="accountFormTitle"></h4>
+                <label id="accountCodeField"><span>Código (por ejemplo, 6.1.20)</span>
+                    <input type="text" id="accountCode" maxlength="20"></label>
+                <label><span>Nombre</span>
+                    <input type="text" id="accountName" maxlength="150"></label>
+                <div class="form-stack" id="accountNewFields">
+                    <label><span>Tipo</span><select id="accountTypeInput"></select></label>
+                    <label><span>Grupo</span><select id="accountGroup"></select></label>
+                    <label id="accountInvoicedField"><span>Factura</span>
+                        <select id="accountInvoiced">
+                            <option value="">No aplica</option>
+                            <option value="true">Con factura</option>
+                            <option value="false">Sin factura</option>
+                        </select></label>
+                    <label class="checkbox"><input type="checkbox" id="accountSubtracts">
+                        Resta dentro de su grupo («(Menos)»)</label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-cancel btn-small" id="accountCancel"
+                            data-btn-icon="close">Cancelar</button>
+                    <button type="button" class="btn btn-save btn-small" id="accountSave"
+                            data-btn-icon="check">Guardar</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table class="data-table" id="accountsTable">
+                    <thead><tr>
+                        <th>Código</th><th>Nombre</th><th>Tipo</th><th>Marcas</th><th id="accountsActions" hidden></th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="legend-hint" id="accountsCount"></p>
+            <p class="form-note" id="accountsNote" aria-live="polite"></p>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>
