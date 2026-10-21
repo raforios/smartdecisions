@@ -18,11 +18,11 @@ ROOT = Path(__file__).resolve().parents[2]
 # sweep that certifies it by omission.
 PRODUCT_SERVICES = (
     # SmartDecisions
-    'ingest', 'analytics', 'optimization', 'mining_analysis', 'quotes', 'ai', 'finance',
+    'ingest', 'analytics', 'optimization', 'mining_analysis', 'quotes', 'finance',
     # SmartBilling
     'billing',
     # Genéricos y obligatorios
-    'auth', 'events', 'files', 'ml_functions', 'parameters',
+    'auth', 'events', 'files', 'ml_functions', 'parameters', 'ai',
 )
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
