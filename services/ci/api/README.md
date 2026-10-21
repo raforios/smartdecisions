@@ -152,7 +152,7 @@ Cuando la prueba de humo del paso 3 da 401 en todo:
 ./start.sh --urls
 ```
 
-Esto cambia en los `.env` las direcciones con las que los servicios se llaman entre sí (`EVENTS_SERVICE_URL`, `FILES_SERVICE_URL`, `INGEST_SERVICE_URL`, `QUOTES_SERVICE_URL`) a `https://api.bearsoft.com.bo`, y vuelve a publicar **sólo la configuración** de esos servicios, sin reconstruirlos.
+Esto cambia en los `.env` las direcciones con las que los servicios se llaman entre sí (`API_URL`, la única desde el 21-oct-2026) a `https://api.bearsoft.com.bo`, y vuelve a publicar **sólo la configuración** de esos servicios, sin reconstruirlos.
 
 > El portal web (`portal/demo/js/config.js`) se actualiza aparte. Los despliegues de frontend no van en esta guía.
 

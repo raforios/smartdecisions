@@ -2,7 +2,7 @@
 
 # Apunta las llamadas entre servicios al dominio único (api.bearsoft.com.bo).
 #
-# Los servicios se llaman entre sí con *_SERVICE_URL + "/v1/<servicio>/...". Con
+# Los servicios se llaman entre sí con API_URL + "/v1/<servicio>/...". Con
 # el dominio, la base es la misma para todos: una URL que no cambia si un API
 # se recrea y su ID de execute-api cambia.
 #
@@ -23,9 +23,8 @@ SERVICES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 # Servicios propios cuyos .env llaman a otros servicios. Los de clientes
 # (TRADE, FORMS, LOCALIZATION, CMS, MINING_SUMMIT) no se tocan.
 SERVICES=(ai analytics billing finance ingest mining_analysis optimization parameters quotes)
-# API_URL es la única de los servicios ya unificados (FINANCE, PARAMETERS); las
-# otras cuatro siguen en los demás hasta que se unifiquen.
-VARIABLES=(API_URL EVENTS_SERVICE_URL FILES_SERVICE_URL INGEST_SERVICE_URL QUOTES_SERVICE_URL)
+# Desde el 21-oct-2026 todos los servicios propios usan sólo API_URL.
+VARIABLES=(API_URL)
 
 WRITE=false
 [ "$1" == "--yes" ] && WRITE=true
