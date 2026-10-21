@@ -16,7 +16,9 @@ import pytest
 # either, importing services.parameters stops the collection.
 CONFIGURED = ((Path(__file__).resolve().parents[1] / '.env').exists()
               or 'TARGET_TIMEZONE' in os.environ)
-collect_ignore = [] if CONFIGURED else ['test_parameters.py', 'test_controllers.py']
+collect_ignore = [] if CONFIGURED else [
+    'test_parameters.py', 'test_controllers.py', 'test_health_route.py', 'test_health.py'
+]
 
 
 @pytest.fixture(name = 'parameters_store')

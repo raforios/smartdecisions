@@ -2,10 +2,12 @@
     Auth handler Microservice
 '''
 import socket
-from datetime import datetime, date
+from datetime import date, datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -18,9 +20,10 @@ import uvicorn
 from routes.auth import router as auth_router
 from routes.users import router as users_router
 
+from controllers.users import get_current_admin_user
+from schemas.health import TableHealth, TablesHealthResponse, TableState
 from services.api_exceptions import setup_exception_handlers
 from services.logger_config import custom_logger as logger
-
 from services.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars(
@@ -127,6 +130,95 @@ def root() -> dict[str, Any]:
         'Owner': f'BearSoft {copyright_symbol} {today.year}'
     }
     return output
+
+# The health of the tables lives here, in the service shell, next to the
+# public health check: every service answers it the same way.
+def describe_table(
+    client: Any,
+    name: str
+) -> TableHealth:
+    '''
+        One table as DynamoDB describes it. A table that does not exist is
+        MISSING; one that cannot be read for any other reason, UNREACHABLE.
+
+        Args:
+            client (Any): A boto3 DynamoDB client.
+            name (str): Table name.
+
+        Returns:
+            TableHealth: The table's state and DynamoDB's approximate counts.
+    '''
+    try:
+        table = client.describe_table(TableName = name)['Table']
+    except ClientError as error:
+        code = error.response.get('Error', {}).get('Code')
+        if code == 'ResourceNotFoundException':
+            error_msg = f'Health check: table {name} does not exist.'
+            logger.error(error_msg)
+            return TableHealth(name = name, status = TableState.MISSING)
+        error_msg = f'Health check: table {name} could not be described ({code}).'
+        logger.error(error_msg)
+        return TableHealth(name = name, status = TableState.UNREACHABLE)
+    except BotoCoreError as error:
+        error_msg = f'Health check: table {name} could not be described: {error}'
+        logger.error(error_msg)
+        return TableHealth(name = name, status = TableState.UNREACHABLE)
+    return TableHealth(
+        name = name,
+        status = TableState(table['TableStatus']),
+        item_count = table.get('ItemCount'),
+        size_bytes = table.get('TableSizeBytes')
+    )
+
+
+def tables_health(
+    client: Any,
+    service: str,
+    names: list[str]
+) -> TablesHealthResponse:
+    '''
+        Every table the service uses, and whether all of them are active.
+
+        Args:
+            client (Any): A boto3 DynamoDB client.
+            service (str): Service code.
+            names (list[str]): The service's table names.
+
+        Returns:
+            TablesHealthResponse: One entry per table.
+    '''
+    tables = [describe_table(client, name) for name in names]
+    message = f'Health check of {service}: {len(tables)} tables read.'
+    logger.info(message)
+    return TablesHealthResponse(
+        service = service,
+        healthy = all(table.status == TableState.ACTIVE for table in tables),
+        checked_at = datetime.now(timezone.utc),
+        tables = tables
+    )
+
+
+# The tables this service reads and writes, by the variables that name them.
+HEALTH_TABLE_VARS = (
+    'TABLE_NAME',
+)
+
+
+@app.get(
+    f'{DOCS_BASE}/health/tables',
+    response_model = TablesHealthResponse,
+    tags = ['Home'],
+    dependencies = [Depends(get_current_admin_user)]
+)
+def tables_health_endpoint() -> TablesHealthResponse:
+    '''
+        The state of every table this service uses (ADMIN only): the table
+        names stay off the public health check (Rafael, 21-oct-2026).
+    '''
+    names = load_and_validate_env_vars(env_vars = dict.fromkeys(HEALTH_TABLE_VARS, str))
+    return tables_health(boto3.client('dynamodb'), 'auth',
+                         [names[variable] for variable in HEALTH_TABLE_VARS])
+
 
 @app.get('/openapi.json', include_in_schema = False)
 @app.get(OPENAPI_URL, include_in_schema = False)

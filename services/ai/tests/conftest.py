@@ -15,5 +15,6 @@ from pathlib import Path
 CONFIGURED = ((Path(__file__).resolve().parents[1] / '.env').exists()
               or 'TARGET_TIMEZONE' in os.environ)
 collect_ignore = [] if CONFIGURED else [
-    'test_ai.py', 'test_controllers.py', 'test_error_contract.py', 'test_security_roles.py'
+    'test_ai.py', 'test_controllers.py', 'test_error_contract.py', 'test_security_roles.py',
+    'test_health_route.py', 'test_health.py'
 ]
