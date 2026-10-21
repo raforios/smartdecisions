@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 
@@ -32,7 +33,9 @@ ENV_VARS = load_and_validate_env_vars(
     },
     optional_env_vars = {
         'APP_ENV': str,
-        'ROOT_PATH': str
+        'ROOT_PATH': str,
+        'CORS_ALLOWED_ORIGINS': str,
+        'CORS_ALLOWED_ORIGIN_REGEX': str
     }
 )
 
@@ -46,6 +49,24 @@ ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 # routes /v1/<service>/... to this Lambda, so /docs is unreachable through it.
 DOCS_BASE = '/v1/events'
 OPENAPI_URL = f'{DOCS_BASE}/openapi.json'
+
+# Until 21-oct-2026 only other services called EVENTS; now the portal reads it
+# too (Administración: the health of its tables, the recent events), so it
+# answers the browser's preflight like every other service.
+CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
+ORIGINS = [
+    origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',') if origin.strip()
+]
+
+# On top of the explicit list (ORIGINS), one pattern covers every frontend we
+# have —bearsoft.com.bo subdomains, *.cloudfront.net and localhost— without
+# listing them one by one. Overridable with the CORS_ALLOWED_ORIGIN_REGEX env var.
+DEFAULT_CORS_ORIGIN_REGEX = (
+    r'^https://([a-z0-9-]+\.)*bearsoft\.com\.bo$'
+    r'|^https://[a-z0-9-]+\.cloudfront\.net$'
+    r'|^http://(localhost|127\.0\.0\.1)(:\d+)?$'
+)
+CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT_CORS_ORIGIN_REGEX
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -91,6 +112,15 @@ APP_CONFIG = {
 app = FastAPI(**APP_CONFIG)
 
 setup_exception_handlers(app)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins = ORIGINS,
+    allow_origin_regex = CORS_ALLOWED_ORIGIN_REGEX,
+    allow_credentials = True,
+    allow_methods = ['*'],
+    allow_headers = ['*'],
+)
 
 @app.get('/favicon.ico', include_in_schema = False)
 async def favicon() -> FileResponse:

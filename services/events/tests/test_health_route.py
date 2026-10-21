@@ -38,3 +38,14 @@ def test_only_the_admin_reads_the_tables(monkeypatch):
     assert admin.status_code == 200
     assert admin.json()['healthy'] is True
     assert len(admin.json()['tables']) == len(main.HEALTH_TABLE_VARS)
+
+
+def test_the_portal_may_call_events_from_the_browser():
+    '''The browser's preflight from the portal is answered, not refused with 405.'''
+    response = TestClient(main.app).options(f'{main.DOCS_BASE}/health/tables', headers = {
+        'Origin': 'https://smartdecisions.bearsoft.com.bo',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization'})
+    assert response.status_code == 200
+    origin = response.headers['access-control-allow-origin']
+    assert origin == 'https://smartdecisions.bearsoft.com.bo'
