@@ -13,7 +13,8 @@ from boto3.resources.base import ServiceResource
 from services.logger_config import custom_logger as logger
 from services.db_connection import GET_DB_DEPENDENCY
 from services.environment import load_and_validate_env_vars
-from services.security import get_current_owner
+from services.security import require_roles
+from routes.market import MINERALS_ROLES
 from controllers.mining_analysis import (
     get_mineral_prices_controller,
     get_daily_report_controller,
@@ -65,7 +66,7 @@ class BiweeklyPeriod: # pylint: disable=too-few-public-methods
 async def get_mining_prices_endpoint(
     request: Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> list[MiningPriceResponseSchema]:
     ''' Endpoint to retrieve processed prices. '''
     message = f'User: {current_user}. Requested all mineral prices.'
@@ -91,7 +92,7 @@ async def get_daily_report_endpoint(
     ref_date: date_type = Query(..., alias = 'date',
                                 description = 'Reference date (YYYY-MM-DD).'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> DailyReportResponse:
     ''' Endpoint for the daily mineral report. '''
     message = f'User: {current_user}. Requested daily report for {ref_date}.'
@@ -116,7 +117,7 @@ async def get_biweekly_report_endpoint(
     request: Request,
     period: BiweeklyPeriod = Depends(),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> BiweeklyReportResponse:
     ''' Endpoint for the biweekly official mineral report. '''
     message = (f'User: {current_user}. Requested biweekly report for '
@@ -150,7 +151,7 @@ async def get_price_forecast_endpoint(
     method: ForecastMethod = Query(ForecastMethod.DAMPED_TREND,
                                    description = 'Projection method.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> PriceForecastResponse:
     ''' Endpoint for the mineral price projection. '''
     message = f'User: {current_user}. Requested a {days_ahead}-day price forecast.'

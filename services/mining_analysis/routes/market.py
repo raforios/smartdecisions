@@ -25,12 +25,14 @@ from schemas.market import (
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.market_sources import MARKET_SYNC_DAYS
-from services.security import get_current_owner, require_roles
+from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/mining-analysis', tags = ['Market quotations'])
 
-# Editing the legal scale is an administrator's act; reading is for everyone.
-RULE_EDITORS = ('ADMIN', 'MANAGER')
+# Minerales belongs to the platform's administrator (Rafael, 21-oct-2026): the
+# companies do not see it, and the Streamlit reports sign in as the ADMIN.
+MINERALS_ROLES = ('ADMIN',)
+RULE_EDITORS = MINERALS_ROLES
 
 
 def market_window(
@@ -93,7 +95,7 @@ async def estimate_endpoint(
     as_of: date_type | None = Query(None,
                                        description = 'Day of the estimate; today by default.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> EstimateResponse:
     '''
         Endpoint for the anticipated official quotation.
@@ -117,7 +119,7 @@ async def market_series_endpoint(
     mineral_id: str = Path(..., min_length = 1, max_length = 16),
     window: MarketWindow = Depends(market_window),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> MarketPricesResponse:
     '''
         Endpoint for the market series.
@@ -139,7 +141,7 @@ async def market_series_endpoint(
 async def list_rules_endpoint(
     request: Request,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> RoyaltyRulesResponse:
     '''
         Endpoint to read the royalty scales.

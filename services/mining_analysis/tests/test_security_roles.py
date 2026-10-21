@@ -47,3 +47,14 @@ def test_require_roles_lets_allowed_roles_through_under_the_owner_key():
     with pytest.raises(ForbiddenError) as failure:
         asyncio.run(checker({'email': 'ana@acme.com', 'role': 'SELLER', 'client': 'acme'}))
     assert failure.value.detail == 'ROLE_NOT_ALLOWED'
+
+
+def test_only_the_admin_opens_minerales():
+    '''Minerales belongs to the platform's administrator: a manager is refused.'''
+    # Imported here: main reads the configuration, which the CI does not have.
+    from fastapi.testclient import TestClient  # pylint: disable=import-outside-toplevel
+    from main import app  # pylint: disable=import-outside-toplevel
+    headers = {'Authorization': _bearer(email = 'gerente@acme.com', role = 'MANAGER',
+                                         client = 'acme')}
+    response = TestClient(app).get('/v1/mining-analysis/prices', headers = headers)
+    assert (response.status_code, response.json()['detail']) == (403, 'ROLE_NOT_ALLOWED')

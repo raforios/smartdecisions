@@ -24,10 +24,14 @@ from schemas.quotes import (
     SyncResult
 )
 from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
+from services.security import get_current_owner, require_roles
 
 
 router = APIRouter(prefix = '/v1/quotes', tags = ['Quotes'])
+
+# «Vender hoy o esperar» is a Minerales screen, and Minerales belongs to the
+# platform's administrator (Rafael, 21-oct-2026).
+MINERALS_ROLES = ('ADMIN',)
 
 
 @router.get(
@@ -143,7 +147,7 @@ async def sync_exchange_rates_endpoint(
 async def sale_scenario_endpoint(
     request: Request,
     scenario: SaleScenarioRequest,
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
 ) -> SaleScenario:
     ''' Endpoint comparing a sale settled today against one settled later. '''
     message = (f'User: {current_user}. Requested a sale scenario over '
