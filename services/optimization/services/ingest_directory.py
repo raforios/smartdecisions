@@ -13,12 +13,11 @@ import requests
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
+from services.utils import API_URL
 
 _SETTINGS = load_and_validate_env_vars({
-    'INGEST_SERVICE_URL': str,
     'INGEST_REQUEST_TIMEOUT_SECONDS': int
 })
-INGEST_SERVICE_URL = _SETTINGS['INGEST_SERVICE_URL'].rstrip('/')
 INGEST_REQUEST_TIMEOUT_SECONDS = _SETTINGS['INGEST_REQUEST_TIMEOUT_SECONDS']
 
 # Code answered when INGEST cannot tell who a seller is.
@@ -38,7 +37,7 @@ def ingest_get(
         not an outage—; a network error or a 5xx raises.
 
         Args:
-            path (str): Path under the INGEST base URL, starting with '/'.
+            path (str): Path under the gateway, starting with '/v1/ingest'.
             auth_token (str): The caller's Authorization header.
             params (dict[str, Any] | None): Query string.
             unavailable_code (str): Code to answer when INGEST cannot be used.
@@ -51,7 +50,7 @@ def ingest_get(
     '''
     try:
         response = requests.get(
-            f'{INGEST_SERVICE_URL}{path}',
+            f'{API_URL}{path}',
             headers = {'Authorization': auth_token},
             params = params,
             timeout = INGEST_REQUEST_TIMEOUT_SECONDS

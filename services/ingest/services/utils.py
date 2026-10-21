@@ -55,14 +55,16 @@ ENV_VARS = load_and_validate_env_vars(
         'REQUEST_TIMEOUT_SECONDS': int
     },
     optional_env_vars = {
-        'EVENTS_SERVICE_URL': str
+        'API_URL': str
     }
 )
 
 TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
-EVENTS_SERVICE_URL = ENV_VARS.get('EVENTS_SERVICE_URL') or None
-EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL else None
-EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
+# One address for every service: the gateway api.bearsoft.com.bo routes each
+# /v1/<service> to its own Lambda, so the path names the service, not the URL.
+API_URL = (ENV_VARS.get('API_URL') or '').rstrip('/') or None
+EVENTS_AUDIT_URL = f'{API_URL}/v1/events/audit' if API_URL else None
+EVENTS_LOG_URL = f'{API_URL}/v1/events/usage-log' if API_URL else None
 
 # Seconds a notification to EVENTS waits for. A decision, not a number the
 # code picks: it cuts before the API Gateway timeout so a slow EVENTS never
@@ -163,7 +165,7 @@ async def send_audit_event(
         Asynchronous function to send an audit event to the EVENTS microservice.
     '''
     if not EVENTS_AUDIT_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send audit event.')
+        logger.warning('API_URL is not set. Cannot send audit event.')
         return
 
     response = await _perform_request(
@@ -189,7 +191,7 @@ async def send_usage_log(
         Asynchronous function to send a usage log to the EVENTS microservice.
     '''
     if not EVENTS_LOG_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send usage log.')
+        logger.warning('API_URL is not set. Cannot send usage log.')
         return
 
     response = await _perform_request(
@@ -444,23 +446,39 @@ def audit_event(
     return decorator
 
 
+def _caller_authorization(request: Request | None) -> str | None:
+    '''
+        The Authorization header of the request being served, forwarded to
+        EVENTS so it can check that whoever writes a log is a real caller.
+
+        The token was already validated by this service; EVENTS validates it
+        again because its POST endpoints are reachable from the internet.
+
+        Args:
+            request (Request | None): The incoming request, when there is one.
+
+        Returns:
+            str | None: The header, or None for calls with no request.
+    '''
+    return request.headers.get('authorization') if request is not None else None
+
+
 # ---------------------------------------------------------------------------
-# FILES: the storage pattern for a DynamoDB microservice
+# FILES: the standard addition for a service that loads files
 # ---------------------------------------------------------------------------
 #
-# The counterpart of the block `trade/services/utils.py` carries for MySQL.
-# Same shape, same names, same two-step flow the client already follows —the
-# file goes to S3 through FILES first, and the business endpoint receives only
-# its NAME— so whoever knows one knows the other. What changes is what the
-# insert does: there is no `Session` and no `commit`.
+# Approved by Rafael on 16-oct-2026 as the boilerplate block for file loads,
+# taken from INGEST, where it was the one part that depended on nobody. It
+# talks to FILES and to nothing else: no other service's tables, buckets or
+# code. The client uploads the file to S3 through FILES first, and the
+# business endpoint receives only its NAME.
 #
 # The rule it exists to keep (`CLAUDE.md` §9): **FILES is who touches the
-# bucket.** A service holding its own `boto3.client('s3')` owns credentials it
-# has no business owning, and INGEST only had one because it used to read a
-# four-sheet workbook that a reader returning one flat table could not serve.
+# bucket.** A service never holds its own `boto3.client('s3')`.
 #
 # The caller's token is forwarded on every call so FILES authorizes the real
-# user and not the service.
+# user and not the service. What the rows mean —the validator— belongs to the
+# service, never to this block.
 
 # A file upload is not a JSON notification, so it gets its own budget — and
 # that budget is a decision, not a number the code picks: it lives in the
@@ -470,12 +488,10 @@ FILES_ENV_VARS = load_and_validate_env_vars(
         'FILES_TIMEOUT_SECONDS': int
     },
     optional_env_vars = {
-        'FILES_SERVICE_URL': str,
         'BUCKET_NAME': str,
         'BUCKET_PATH': str
     }
 )
-FILES_SERVICE_URL = (FILES_ENV_VARS.get('FILES_SERVICE_URL') or '').rstrip('/')
 BUCKET_NAME = FILES_ENV_VARS.get('BUCKET_NAME') or ''
 DEFAULT_BUCKET_PATH = (FILES_ENV_VARS.get('BUCKET_PATH') or '').strip('/')
 FILES_TIMEOUT_SECONDS = FILES_ENV_VARS['FILES_TIMEOUT_SECONDS']
@@ -500,10 +516,10 @@ def _require_files_service() -> None:
         Refuses early when the service was not configured to reach FILES.
 
         Raises:
-            ServiceUnavailableError: FILES_SERVICE_URL or BUCKET_NAME missing.
+            ServiceUnavailableError: API_URL or BUCKET_NAME missing.
     '''
-    if not FILES_SERVICE_URL or not BUCKET_NAME:
-        error_msg = 'FILES_SERVICE_URL or BUCKET_NAME are not set.'
+    if not API_URL or not BUCKET_NAME:
+        error_msg = 'API_URL or BUCKET_NAME are not set.'
         logger.error(error_msg)
         raise ServiceUnavailableError(detail = FilesError.NOT_CONFIGURED.value)
 
@@ -540,14 +556,14 @@ def _handle_files_service(
     try:
         if action == 'read':
             response = req.get(
-                f'{FILES_SERVICE_URL}/v1/s3/read/{BUCKET_NAME}/{file_key}',
+                f'{API_URL}/v1/s3/read/{BUCKET_NAME}/{file_key}',
                 headers = headers, timeout = FILES_TIMEOUT_SECONDS,
                 params = {'delimiter': kwargs.get('delimiter') or ','}
             )
         elif action == 'create':
             folder, _, name = file_key.rpartition('/')
             response = req.post(
-                f'{FILES_SERVICE_URL}/v1/s3/upload',
+                f'{API_URL}/v1/s3/upload',
                 headers = headers, timeout = FILES_TIMEOUT_SECONDS,
                 files = {'file': (name, kwargs['data'], kwargs['content_type'])},
                 data = {'bucket_name': BUCKET_NAME,
@@ -555,7 +571,7 @@ def _handle_files_service(
             )
         elif action == 'delete':
             response = req.delete(
-                f'{FILES_SERVICE_URL}/v1/s3/delete',
+                f'{API_URL}/v1/s3/delete',
                 headers = headers, timeout = FILES_TIMEOUT_SECONDS,
                 json = {'bucket_name': BUCKET_NAME, 'file_path': '',
                         'file_name': file_key}
@@ -654,20 +670,3 @@ def delete_stored_file(
     _handle_files_service('delete', auth_token, file_key = file_key)
     message = f'Deleted {file_key} through FILES.'
     logger.info(message)
-
-
-def _caller_authorization(request: Request | None) -> str | None:
-    '''
-        The Authorization header of the request being served, forwarded to
-        EVENTS so it can check that whoever writes a log is a real caller.
-
-        The token was already validated by this service; EVENTS validates it
-        again because its POST endpoints are reachable from the internet.
-
-        Args:
-            request (Request | None): The incoming request, when there is one.
-
-        Returns:
-            str | None: The header, or None for calls with no request.
-    '''
-    return request.headers.get('authorization') if request is not None else None

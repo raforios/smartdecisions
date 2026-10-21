@@ -50,14 +50,16 @@ ENV_VARS = load_and_validate_env_vars(
         'REQUEST_TIMEOUT_SECONDS': int
     },
     optional_env_vars = {
-        'EVENTS_SERVICE_URL': str
+        'API_URL': str
     }
 )
 
 TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
-EVENTS_SERVICE_URL = ENV_VARS.get('EVENTS_SERVICE_URL') or None
-EVENTS_AUDIT_URL = f'{EVENTS_SERVICE_URL}/v1/events/audit' if EVENTS_SERVICE_URL else None
-EVENTS_LOG_URL = f'{EVENTS_SERVICE_URL}/v1/events/usage-log' if EVENTS_SERVICE_URL else None
+# One address for every service: the gateway api.bearsoft.com.bo routes each
+# /v1/<service> to its own Lambda, so the path names the service, not the URL.
+API_URL = (ENV_VARS.get('API_URL') or '').rstrip('/') or None
+EVENTS_AUDIT_URL = f'{API_URL}/v1/events/audit' if API_URL else None
+EVENTS_LOG_URL = f'{API_URL}/v1/events/usage-log' if API_URL else None
 
 REQUEST_TIMEOUT_SECONDS = ENV_VARS['REQUEST_TIMEOUT_SECONDS']
 
@@ -155,7 +157,7 @@ async def send_audit_event(
         Asynchronous function to send an audit event to the EVENTS microservice.
     '''
     if not EVENTS_AUDIT_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send audit event.')
+        logger.warning('API_URL is not set. Cannot send audit event.')
         return
 
     response = await _perform_request(
@@ -181,7 +183,7 @@ async def send_usage_log(
         Asynchronous function to send a usage log to the EVENTS microservice.
     '''
     if not EVENTS_LOG_URL:
-        logger.warning('EVENTS_SERVICE_URL is not set. Cannot send usage log.')
+        logger.warning('API_URL is not set. Cannot send usage log.')
         return
 
     response = await _perform_request(

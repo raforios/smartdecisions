@@ -183,9 +183,7 @@ de verdad es `schemas/ingest.py`; estas tablas salen de ahí.
 | `TARGET_TIMEZONE` | sí | Por defecto `America/La_Paz`. |
 | `DYNAMODB_TABLE_NAME_INGEST_DATASETS` | sí | Tabla de metadatos. Default: `t_ingest_datasets`. |
 | `AWS_REGION` | sí | Región de DynamoDB. |
-| `FILES_SERVICE_URL` | sí | URL base del servicio FILES para subir el archivo a S3. |
-| `AUTH_SERVICE_URL` | no | Para validaciones cruzadas (no usado aún). |
-| `EVENTS_SERVICE_URL` | no | Para auditoría futura. |
+| `API_URL` | no | Gateway `api.bearsoft.com.bo`: FILES (subir y leer el archivo) y EVENTS (uso y auditoría). |
 | `CORS_ALLOWED_ORIGINS` | no | Lista CSV de orígenes exactos adicionales (terceros). Vacío por defecto. |
 | `MAX_ISSUES_ON_RESPONSE` | no | Cuántos errores viajan en la respuesta JSON. Default: `100`. |
 | `CSV_CONTENT_TYPE` | no | MIME de los CSV que escribe el servicio. Default: `text/csv`. |

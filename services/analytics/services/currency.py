@@ -26,14 +26,13 @@ from services.analytics_utils import AMOUNT_DECIMALS
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
+from services.utils import API_URL
 
 ENV_VARS = load_and_validate_env_vars({
-    'QUOTES_SERVICE_URL': str,
     'QUOTES_TIMEOUT_SECONDS': int,
     'PARALLEL_CURRENCY': str,
     'PARALLEL_FALLBACK_CURRENCY': str,
 })
-QUOTES_SERVICE_URL = ENV_VARS['QUOTES_SERVICE_URL'].rstrip('/')
 QUOTES_TIMEOUT_SECONDS = ENV_VARS['QUOTES_TIMEOUT_SECONDS']
 # The USDT series (Binance P2P, the parallel dollar) starts the day it was
 # connected; days before it read at the official rate, and the answer says so.
@@ -67,7 +66,7 @@ def _fetch_rates(
     start, end = window
     try:
         response = requests.get(
-            f'{QUOTES_SERVICE_URL}/v1/quotes/exchange-rates',
+            f'{API_URL}/v1/quotes/exchange-rates',
             headers = {'Authorization': auth_token},
             params = {'currency': currency, 'start': start, 'end': end},
             timeout = QUOTES_TIMEOUT_SECONDS
@@ -114,7 +113,7 @@ def _fixed_rate_before(
     '''
     try:
         response = requests.get(
-            f'{QUOTES_SERVICE_URL}/v1/quotes/exchange-rates/at',
+            f'{API_URL}/v1/quotes/exchange-rates/at',
             headers = {'Authorization': auth_token},
             params = {'currency': currency, 'date': day},
             timeout = QUOTES_TIMEOUT_SECONDS
