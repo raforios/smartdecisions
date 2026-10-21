@@ -8,6 +8,7 @@
     computed with the rate that was in force during that month.
 '''
 from datetime import date
+import re
 from enum import Enum
 from pydantic import BaseModel, Field, model_validator
 
@@ -25,6 +26,8 @@ class FinanceError(str, Enum):
     GROUP_NOT_FOUND = 'GROUP_NOT_FOUND'
     GROUP_TYPE_MISMATCH = 'GROUP_TYPE_MISMATCH'
     GROUP_HAS_ACCOUNTS = 'GROUP_HAS_ACCOUNTS'
+    INVALID_ACCOUNT_CODE = 'INVALID_ACCOUNT_CODE'
+    ACCOUNT_TYPE_MISMATCH = 'ACCOUNT_TYPE_MISMATCH'
 
 
 class AccountType(str, Enum):
@@ -45,6 +48,10 @@ class AccountType(str, Enum):
 
 # The types whose accounts can carry the invoice mark: sales and purchases.
 INVOICEABLE_TYPES = (AccountType.INCOME, AccountType.COST)
+
+
+# Numbers joined by dots: 6, 6.1, 6.1.07.
+_ACCOUNT_CODE_PATTERN = re.compile(r'\d+(\.\d+)*')
 
 
 class AccountSchema(BaseModel):
@@ -71,6 +78,28 @@ class AccountSchema(BaseModel):
         description = 'Sales and purchases only: true with invoice, false without. '
                       'The account says it, so a row never has to.'
     )
+
+    @model_validator(mode = 'after')
+    def code_follows_the_chart(self) -> 'AccountSchema':
+        '''
+            A code is numbers joined by dots (6.1.07) and its first number is
+            the type, as in the Bolivian chart. On 21-oct-2026 a code typed
+            with commas (6,6,6) was stored as an asset and the catalog could
+            no longer be listed.
+
+            Returns:
+                AccountSchema: The account, unchanged.
+
+            Raises:
+                ValueError: INVALID_ACCOUNT_CODE or ACCOUNT_TYPE_MISMATCH.
+        '''
+        # str(): Pylint reads the declared Field, not the validated value.
+        code = str(self.account_code)
+        if not _ACCOUNT_CODE_PATTERN.fullmatch(code):
+            raise ValueError(FinanceError.INVALID_ACCOUNT_CODE.value)
+        if code.split('.', maxsplit = 1)[0] != self.account_type.value:
+            raise ValueError(FinanceError.ACCOUNT_TYPE_MISMATCH.value)
+        return self
 
     @model_validator(mode = 'after')
     def invoiced_only_on_sales_and_purchases(self) -> 'AccountSchema':
@@ -102,6 +131,18 @@ class AccountResponseSchema(AccountSchema):
         An account as it is stored.
     '''
     updated_at: str
+
+    @model_validator(mode = 'after')
+    def code_follows_the_chart(self) -> 'AccountResponseSchema':
+        '''
+            What is stored is shown as stored: the code is checked when an
+            account is added, and a row saved before that check (6,6,6) must
+            still be listed so the ADMIN can see it and remove it.
+
+            Returns:
+                AccountResponseSchema: The account, unchanged.
+        '''
+        return self
 
 
 class AccountListResponseSchema(BaseModel):

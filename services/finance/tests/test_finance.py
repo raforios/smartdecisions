@@ -46,6 +46,25 @@ def test_only_sales_and_purchases_carry_the_invoice_mark():
         AccountSchema(**{**TAXES.model_dump(), 'invoiced': True})
 
 
+def test_a_code_is_numbers_and_dots_and_starts_with_its_type():
+    '''6,6,6 is refused; so is a 6.x code typed as an asset.'''
+    with pytest.raises(ValueError, match = 'INVALID_ACCOUNT_CODE'):
+        AccountSchema(account_code = '6,6,6', name = 'Prueba', account_type = AccountType.ASSET)
+    with pytest.raises(ValueError, match = 'ACCOUNT_TYPE_MISMATCH'):
+        AccountSchema(account_code = '6.6.6', name = 'Prueba', account_type = AccountType.ASSET)
+
+
+def test_a_malformed_stored_code_does_not_break_the_list(finance_store):
+    '''A code saved before the check (6,6,6) is listed last, not a 500.'''
+    table = finance_store.Table(finance.ACCOUNTS_TABLE)
+    for code in ('6,6,6', '6.1', '1.1'):
+        table.put_item(Item = {'account_code': code, 'name': code, 'account_type': code[0],
+                               'group_code': None, 'subtracts': False, 'invoiced': None,
+                               'updated_at': '2026-10-21T00:00:00'})
+    listed = finance.list_accounts(finance_store)
+    assert [account.account_code for account in listed.accounts] == ['1.1', '6.1', '6,6,6']
+
+
 def test_a_code_is_never_repeated(expenses_group):
     '''The second account with the same code is refused with its code.'''
     finance.create_account(expenses_group, TAXES)
@@ -65,7 +84,7 @@ def test_an_account_cannot_sit_in_a_group_of_another_type(expenses_group):
     '''An Ingresos account inside a Gastos group would land on the wrong line.'''
     with pytest.raises(InvalidInputError) as failure:
         finance.create_account(expenses_group, AccountSchema(
-            account_code = '6.1.99', name = 'Venta de cursos',
+            account_code = '4.1.99', name = 'Venta de cursos',
             account_type = AccountType.INCOME, group_code = '6.1'
         ))
     assert failure.value.detail == FinanceError.GROUP_TYPE_MISMATCH.value

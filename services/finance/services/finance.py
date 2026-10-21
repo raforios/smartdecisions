@@ -50,17 +50,20 @@ ENTRIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_FINANCE_ENTRIES']
 ACCOUNT_INDEX = 'account_code-index'
 
 
-def _code_key(code: str) -> list[int | str]:
+def _code_key(code: str) -> list[tuple[int, int | str]]:
     '''
-        Sort key that orders 6.1.10 after 6.1.9, as a reader expects.
+        Sort key that orders 6.1.10 after 6.1.9, as a reader expects. A
+        segment that is not a number sorts after the numbers instead of being
+        compared with them: one malformed code stored before the schema
+        checked them (6,6,6) made the whole list fail.
 
         Args:
             code (str): Account code, e.g. 6.1.07.
 
         Returns:
-            list[int | str]: The segments, numeric where they are numbers.
+            list[tuple[int, int | str]]: The segments, numbers first.
     '''
-    return [int(part) if part.isdigit() else part for part in code.split('.')]
+    return [(0, int(part)) if part.isdigit() else (1, part) for part in code.split('.')]
 
 
 def to_account_response(item: AccountItem | dict[str, Any]) -> AccountResponseSchema:
