@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tipos de cambio — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
+    <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
+    <link rel="stylesheet" href="../minerales/minerales.css?v=a5f485ec90">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=4a13bfbaea"></script>
+    <script src="../js/auth.js?v=e0c72ecc39" defer></script>
+    <script src="../js/icons.js?v=7d327bd034" defer></script>
+    <script src="../js/shell.js?v=99a27a836d" defer></script>
+    <script src="../js/api.js?v=7206932d80" defer></script>
+    <script src="../js/ui.js?v=412b9cdd72" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="../js/ai.js?v=9817f449d8" defer></script>
+    <script src="../minerales/minerales_shared.js?v=e328560800" defer></script>
+    <script src="tipo_cambio.js?v=2c89e00d07" defer></script>
+</head>
+<body>
+
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Tipos de cambio</h1>
+        <p class="page-subtitle">El dólar oficial y el paralelo (USDT): su historia, su brecha y su proyección. Son los tipos con que se leen los montos en dólares de todas las empresas.</p>
+
+        <section class="card controls-card">
+            <div class="controls-row">
+                <div class="control">
+                    <label for="daysInput">Plazo de la proyección (días)</label>
+                    <input type="number" id="daysInput" min="1" max="90" step="1" value="30">
+                </div>
+                <button class="btn btn-primary" id="runButton">Proyectar</button>
+            </div>
+        </section>
+
+        <section class="card panel" id="parallelPanel">
+            <div class="panel-head">
+                <h2>Dólar oficial y paralelo (USDT)</h2>
+                <span class="panel-meta" id="parallelMeta"></span>
+            </div>
+            <p class="control-hint">El USDT es el precio del dólar digital en el mercado P2P de Binance, la referencia del dólar paralelo. La serie empieza el 27/06/2026, cuando el tipo de cambio dejó de estar fijo: hasta el 05/10 viene del registro público de lecturas de Binance P2P (mauforonda/dolares, mediana del día) y desde el 06/10, de la lectura diaria propia.</p>
+
+            <div class="rate-figures" id="parallelFigures"></div>
+            <div class="chart-holder" id="parallelChart"></div>
+            <div class="chart-legend">
+                <span class="legend-item"><span class="legend-swatch swatch-official"></span>Oficial (BCB)</span>
+                <span class="legend-item"><span class="legend-swatch swatch-parallel"></span>USDT</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-table" id="parallelTable">
+                    <thead><tr><th>Fecha</th><th class="num">Oficial (BCB)</th><th class="num">USDT</th><th class="num">Brecha</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <div class="pager" id="parallelPager" hidden>
+                    <span class="pager-count" id="parallelCount"></span>
+                    <div class="pager-controls">
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="parallelPrev">← Anterior</button>
+                        <span class="pager-page" id="parallelPage"></span>
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="parallelNext">Siguiente →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card panel" id="ratePanel" hidden>
+            <div class="panel-head">
+                <h2>Dólar oficial</h2>
+                <span class="panel-meta" id="rateMeta"></span>
+                <span class="ai-slot" id="rateAi"></span>
+            </div>
+            <!-- The model governs everything below: figures, chart and table.
+                 There used to be a fixed table with one method and another
+                 that changed with the selector: the same question answered
+                 twice, with two different answers in view. -->
+            <div class="controls-row">
+                <div class="control">
+                    <label for="rateModel">Modelo de proyección</label>
+                    <select id="rateModel"></select>
+                </div>
+                <div class="control control-wide">
+                    <span class="model-note" id="rateModelNote"></span>
+                </div>
+            </div>
+            <p class="control-hint" id="rateDefaultNote"></p>
+
+            <div class="rate-figures" id="rateFigures"></div>
+            <div class="chart-holder" id="rateChart"></div>
+
+            <div class="rate-table-head">
+                <h3>Cotizaciones día por día</h3>
+                <div class="rate-table-actions">
+                    <label class="checkbox">
+                        <input type="checkbox" id="rateShowProjected" checked>
+                        Incluir proyectadas
+                    </label>
+                    <button class="btn btn-ghost btn-small" id="rateToggle"
+                            aria-expanded="false">Ver la tabla</button>
+                </div>
+            </div>
+            <div class="table-scroll rate-table-scroll" id="rateTableHolder" hidden>
+                <table class="data-table" id="rateTable">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Día</th>
+                            <th class="num">Bs por USD</th>
+                            <th class="num">Variación</th>
+                            <th class="num">Desde el inicio</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <div class="pager" id="ratePager" hidden>
+                    <span class="pager-count" id="rateCount"></span>
+                    <div class="pager-controls">
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="ratePrev">← Anterior</button>
+                        <span class="pager-page" id="ratePage"></span>
+                        <button type="button" class="btn btn-ghost btn-small"
+                                id="rateNext">Siguiente →</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bench">
+                <details class="bench-detail">
+                    <summary>Cómo se comparan los modelos</summary>
+                    <p class="control-hint">
+                        Cada modelo se mide re-corriendo la serie desde cada punto
+                        de partida posible y promediando lo que erró al proyectar
+                        <strong id="benchHorizon">30</strong> días. Es un promedio
+                        histórico, no el error de la cifra de arriba: un modelo
+                        puede acertar hoy y ser peor en promedio, o al revés.
+                    </p>
+                    <div class="table-scroll">
+                        <table class="data-table" id="benchTable">
+                            <thead>
+                                <tr>
+                                    <th>Modelo</th>
+                                    <th class="num">Proyecta</th>
+                                    <th class="num">Cambio</th>
+                                    <th class="num">Error medio</th>
+                                    <th>Sobre el horizonte</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+
+            <!-- The start date comes from the series itself, not written here:
+                 the service is the one that knows where the float begins. -->
+            <p class="control-hint" id="rateSeriesNote"></p>
+        </section>
+
+        <section class="card empty-state" id="errorState" hidden>
+            <h3>No se pudo cargar</h3>
+            <p id="errorText"></p>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

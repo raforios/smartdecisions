@@ -57,11 +57,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function settings() {
-        const links = shell.isEditor
-            ? [['parametros/index.html', 'settings', 'Parámetros', 'Políticas, vendedores, prompts de la IA'],
-               ['parametros/factores.html', 'rates', 'Factores externos', 'Tipo de cambio y factores que sigues'],
-               ['cuenta.html', 'user', 'Mi cuenta', 'Tus datos y tu contraseña']]
-            : [['cuenta.html', 'user', 'Mi cuenta', 'Tus datos y tu contraseña']];
+        const account = ['cuenta.html', 'user', 'Mi cuenta', 'Tus datos y tu contraseña'];
+        // The ADMIN configures the platform; a manager, its own company.
+        const links = shell.role === 'ADMIN'
+            ? [['admin/prompts.html', 'settings', 'Prompts de la IA', 'El experto con que la IA explica cada pantalla'],
+               ['admin/tipo-cambio.html', 'rates', 'Tipos de cambio', 'Dólar oficial y USDT, con su proyección'],
+               account]
+            : shell.isEditor
+                ? [['parametros/index.html', 'settings', 'Configuración comercial', 'Punto de partida, vendedores y políticas'],
+                   ['parametros/factores.html', 'rates', 'Factores externos', 'Los factores que sigue tu empresa'],
+                   account]
+                : [account];
         qs('#homeSettings').innerHTML = links.map(([target, name, title, line]) =>
             `<a class="sd-link" href="${target}">${icon(name)}<span><b>${title}</b>${line}</span></a>`).join('');
     }
@@ -79,6 +85,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function rates() {
         const card = qs('#homeRates');
+        // Only the ADMIN manages the rates; for the rest the card is a reading.
+        if (shell.role === 'ADMIN') card.setAttribute('href', 'admin/tipo-cambio.html');
+        else card.removeAttribute('href');
         try {
             const [usd, usdt] = await Promise.all([lastTwo('USD'), lastTwo('USDT')]);
             const line = (pair) => {

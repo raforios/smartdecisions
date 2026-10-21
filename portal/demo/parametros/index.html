@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parámetros — SmartDecisions</title>
+    <title>Configuración comercial — SmartDecisions</title>
     <link rel="stylesheet" href="../styles/demo.css?v=b1274f62bf">
     <link rel="stylesheet" href="../styles/shell.css?v=ebea324912">
     <link rel="stylesheet" href="../routes/routes.css?v=865d43a436">
@@ -13,7 +13,7 @@
     <script src="../js/config.js?v=4a13bfbaea"></script>
     <script src="../js/auth.js?v=e0c72ecc39" defer></script>
     <script src="../js/icons.js?v=7d327bd034" defer></script>
-    <script src="../js/shell.js?v=e07a39b816" defer></script>
+    <script src="../js/shell.js?v=99a27a836d" defer></script>
     <script src="../js/api.js?v=7206932d80" defer></script>
     <script src="../js/ui.js?v=412b9cdd72" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
@@ -22,15 +22,14 @@
     <script src="../routes/routes_settings.js?v=5c9b002971" defer></script>
     <script src="../routes/routes_sellers.js?v=304a5d4b8d" defer></script>
     <script src="../js/policies.js?v=7821b0309f" defer></script>
-    <script src="../js/prompts.js?v=bd777afa16" defer></script>
 </head>
 <body>
 
 
 <main>
     <div class="container">
-        <h1 class="page-title">Parámetros</h1>
-        <p class="page-subtitle">Lo que el sistema necesita saber de tu empresa para calcular: punto de partida, vendedores, políticas, factores externos y tipo de cambio.</p>
+        <h1 class="page-title">Configuración comercial</h1>
+        <p class="page-subtitle">Lo que el sistema necesita saber de tu empresa para sus análisis comerciales: punto de partida, vendedores y políticas.</p>
 
         <!-- ====== Clientes ====== -->
         <div class="routes-section" data-section="settings" data-autoshow data-client-only>
@@ -128,56 +127,6 @@
                 </button>
             </div>
             <p class="form-note" id="policiesNote" aria-live="polite"></p>
-        </section>
-
-        <!-- The expert each view is explained by: shown only where AI is configured. -->
-        <section class="card" id="promptsSection" hidden>
-            <h3>Prompts de la IA</h3>
-            <p class="legend-hint">
-                El experto con que la IA explica cada vista. Editar guarda una versión nueva
-                y deja la anterior inactiva; activar una versión vieja es volver atrás.
-                No se borra nada.
-            </p>
-            <div class="table-wrapper">
-                <table class="data-table" id="promptsTable">
-                    <thead><tr>
-                        <th>Vista</th><th class="numeric">Versión</th><th>Rol</th>
-                        <th>Estado</th><th></th>
-                    </tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <form class="form-stack" id="promptForm" hidden autocomplete="off">
-                <h4 id="promptView"></h4>
-                <label><span>Rol (quién es, en una línea)</span>
-                    <input type="text" id="promptRole"></label>
-                <label><span>Instrucciones (cómo leer la vista)</span>
-                    <textarea id="promptInstructions" rows="6"></textarea></label>
-                <label><span>Reglas (una por línea: lo que nunca debe hacer)</span>
-                    <textarea id="promptRules" rows="5"></textarea></label>
-                <label><span>Máximo de tokens de la respuesta</span>
-                    <input type="number" id="promptMaxTokens" min="1"></label>
-                <!-- Anthropic's Usage Policy: credit and personnel decisions need a person in the loop. -->
-                <p class="legend-hint">
-                    La IA explica las cifras; no la uses para decidir créditos, despidos ni
-                    evaluaciones de personal sin que una persona revise su respuesta.
-                </p>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-ghost btn-small" id="promptCancel">Cancelar</button>
-                    <button type="button" class="btn btn-primary btn-small" id="promptSave">
-                        Guardar como versión nueva
-                    </button>
-                </div>
-            </form>
-            <p class="form-note" id="promptsNote" aria-live="polite"></p>
-        </section>
-
-        <section class="card">
-            <h3>Factores externos y tipo de cambio</h3>
-            <p class="legend-hint">
-                El dólar oficial y el USDT, su proyección, y los factores que mueven tu costo.
-            </p>
-            <a class="btn btn-primary btn-small" href="factores.html">Abrir</a>
         </section>
     </div>
 </main>

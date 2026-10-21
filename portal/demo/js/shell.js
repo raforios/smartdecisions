@@ -83,14 +83,21 @@
                     { label: 'Optimizar', view: 'optimize' },
                     { label: 'Comparación', view: 'compare' }
                 ] }
-            ] },
-            { label: 'Minerales', icon: 'minerals', page: 'minerales/index.html' }
+            ] }
         ] },
-        { group: 'Configuración', roles: EDITORS, items: [
+        // A company's own configuration: its manager sets it (Rafael, 21-oct).
+        { group: 'Configuración', roles: ['MANAGER'], items: [
             { label: 'Parámetros', icon: 'settings', page: 'parametros/index.html', children: [
-                { label: 'Políticas y vendedores', page: 'parametros/index.html' },
+                { label: 'Configuración comercial', page: 'parametros/index.html' },
                 { label: 'Factores externos', page: 'parametros/factores.html' }
             ] }
+        ] },
+        // The platform, for the ADMIN only (Rafael, 21-oct): Minerales is no
+        // longer shown to the companies.
+        { group: 'Administración', roles: ['ADMIN'], items: [
+            { label: 'Prompts de la IA', icon: 'settings', page: 'admin/prompts.html' },
+            { label: 'Tipos de cambio', icon: 'rates', page: 'admin/tipo-cambio.html' },
+            { label: 'Minerales', icon: 'minerals', page: 'minerales/index.html' }
         ] }
     ];
 
@@ -192,7 +199,7 @@
         `<p class="sd-account-meta">${ROLE_LABELS[role] || ''}</p>` +
         '<span class="session-chip" id="sessionChip" hidden></span>' +
         `<a class="sd-account-item" href="${href('cuenta.html')}">${icon('user')}<span>Mi cuenta</span></a>` +
-        (EDITORS.includes(role) ? `<a class="sd-account-item" href="${href('parametros/index.html')}">` +
+        (role === 'MANAGER' ? `<a class="sd-account-item" href="${href('parametros/index.html')}">` +
             `${icon('settings')}<span>Configuración</span></a>` : '') +
         `<button type="button" class="sd-account-item" id="logoutButton">${icon('logout')}` +
         '<span>Salir</span></button></div></div></div>';
