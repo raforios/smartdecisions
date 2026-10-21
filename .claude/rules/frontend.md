@@ -19,7 +19,7 @@ navegador lanzaba `Unexpected token '<'`, con un bucle de recarga que impedía
 cerrar la pestaña.
 
 Las páginas de módulo (`home.html`, `excel/`, `routes/`, `minerales/`,
-`factores/`, `playground/`) sólo se sirven en su propia ruta, y usan rutas
+`factores/`) sólo se sirven en su propia ruta, y usan rutas
 relativas (`../js/config.js`, `minerales.js`). Así funcionan hoy.
 
 ## Los códigos se traducen aquí
@@ -56,13 +56,26 @@ se muestra un código crudo al usuario.
 - **Los controles respiran:** botones, cajas y tablas nunca pegados
   (`.form-actions`, `.field`, `.field-row`); una caja de texto suelta toma el
   estilo común por `:where(main)`.
+- **Controles universales** (Rafael, 21-oct): iguales en toda la aplicación y
+  para todos los roles. Botones por función con su ícono antes del texto
+  (`data-btn-icon`, lo dibuja `SD_UI.decorateButtons`): verde guarda
+  (`.btn-save`), naranja cancela (`.btn-cancel`), rojo borra (`.btn-delete`),
+  azul empieza algo nuevo (`.btn-primary`). Las acciones de una fila de
+  tabla son íconos con tooltip (`.btn-icon` + `data-tip` + `aria-label`).
+  Toda contraseña lleva el ojo (`SD_UI.revealToggle`). `data-icon` es de
+  `shell.js`, que reemplaza el contenido entero: no se usa en botones.
 - Los tokens de color viven en `styles/demo.css` y son los mismos que los de
   `bearsoft.com.bo`. Azules fríos, verde-azulado de acento, sin dorados.
 
 ## Tablas
 
-Tamaño fijo con paginación, no una tabla que crece con los datos. Con relleno
-invisible en la última página para que la tarjeta no salte de altura.
+Diez filas por página en **toda** tabla (Rafael, 21-oct). El paginador es uno
+solo, automático, en `js/ui.js` (`SD_UI.paginate`): el módulo dibuja todas
+las filas y el paginador oculta las que no están en la página, con la altura
+de la primera para que la tarjeta no salte. Ningún módulo escribe su propio
+paginador ni filas de relleno. Una fila `.detail-row` viaja con la de arriba.
+Quedan fuera los estados financieros (`.statement-table`), las tablas dentro
+de otra tabla y las que lleven `data-no-pager`.
 
 ## Capa de IA
 
