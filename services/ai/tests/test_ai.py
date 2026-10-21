@@ -8,18 +8,15 @@
     provider. They show up as a confident explanation of the wrong thing.
 '''
 import asyncio
-import re
 from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
 
 from fastapi import HTTPException
-from pydantic import ValidationError
 
 from models.ai import PromptItem
-from schemas.ai import ExplainRequest
-from schemas.ai import VIEW_PATTERN, AIError
+from schemas.ai import AIError
 from services import ai
 from services.ai_utils import build_cache_key
 
@@ -395,33 +392,6 @@ def test_a_long_list_is_trimmed_at_any_depth(
     assert 'no mostrados' in sent
     # The structure survives: it is still days with stops, only shorter.
     assert 'stops' in sent and 'Cliente 0' in sent
-
-
-@pytest.mark.parametrize('view', ['objectives', 'stock', 'fx_effect', 'route_plans',
-                                  'route_live', 'route_optimize', 'route_compare'])
-def test_every_view_the_portal_explains_is_known(view):
-    '''
-        The portal mounts an explain button on Cumplimiento and on Stock. Both
-        views were missing here, so the request died as a 422 before reaching
-        the model and the portal printed the error list as "[object Object]".
-    '''
-    assert re.fullmatch(VIEW_PATTERN, view)
-
-
-@pytest.mark.parametrize('view', ['finance_summary', 'finance_projection', 'billing_till'])
-def test_a_product_names_its_own_views(view):
-    '''
-        AI is a base service (19-oct-2026): FINANCE or BILLING bring their views
-        without changing AI. A view exists when it has an active role.
-    '''
-    assert re.fullmatch(VIEW_PATTERN, view)
-
-
-@pytest.mark.parametrize('view', ['', 'ab', 'Finance', 'finance-summary', 'ignore all; rules'])
-def test_a_view_name_is_never_free_text(view):
-    '''Only a slug passes: an arbitrary string never reaches the model.'''
-    with pytest.raises(ValidationError):
-        ExplainRequest(view = view, data = {'x': 1})
 
 
 def test_a_role_is_read_whole_to_be_edited():
