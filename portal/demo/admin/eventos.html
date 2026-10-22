@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eventos y alertas — SmartDecisions</title>
+    <link rel="stylesheet" href="../styles/demo.css?v=4e84f1ab15">
+    <link rel="stylesheet" href="../styles/shell.css?v=9c2d5f8ca5">
+    <link rel="stylesheet" href="../styles/panels.css?v=780a805f2f">
+    <link rel="stylesheet" href="../styles/analyses.css?v=afa137006c">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-bear-64.png?v=8459d009ad">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-bear-32.png?v=940fb57b06">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=a7edc08fd8">
+    <script src="../js/config.js?v=4a13bfbaea"></script>
+    <script src="../js/auth.js?v=e0c72ecc39" defer></script>
+    <script src="../js/icons.js?v=652a070f95" defer></script>
+    <script src="../js/shell.js?v=06a844ee12" defer></script>
+    <script src="../js/api.js?v=7206932d80" defer></script>
+    <script src="../js/ui.js?v=406a08249f" defer></script>
+    <script src="../js/session.js?v=91bb432af9" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="../js/platform_events.js?v=d6832e6bb6" defer></script>
+    <script src="eventos.js?v=266172b8c4" defer></script>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <h1 class="page-title">Eventos y alertas</h1>
+        <p class="page-subtitle">Lo que pasó en las últimas horas: las llamadas que respondieron, las que fallaron y los cambios que hizo cada usuario.</p>
+
+        <section class="card">
+            <div class="field-row">
+                <label>Período
+                    <select id="eventsHours">
+                        <option value="6">Últimas 6 horas</option>
+                        <option value="12" selected>Últimas 12 horas</option>
+                        <option value="24">Últimas 24 horas</option>
+                    </select></label>
+                <button type="button" class="btn btn-ghost btn-small" id="eventsRefresh"
+                        data-btn-icon="refresh">Actualizar</button>
+                <span class="legend-hint" id="eventsSummary"></span>
+            </div>
+            <div class="sd-chart"><canvas id="eventsChart"></canvas></div>
+        </section>
+
+        <section class="card">
+            <h3>Por servicio</h3>
+            <div class="table-wrapper">
+                <table class="data-table" id="eventsServices">
+                    <thead><tr>
+                        <th>Servicio</th><th class="numeric">Llamadas</th><th class="numeric">Respondidas</th>
+                        <th class="numeric">Errores 4xx</th><th class="numeric">Errores 5xx</th>
+                        <th class="numeric">Respuesta media</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Últimos errores</h3>
+            <p class="legend-hint">Un 4xx es un pedido que el servicio rechazó (datos, permisos); un 5xx es una falla del servicio y pide revisar sus logs.</p>
+            <div class="table-wrapper">
+                <table class="data-table" id="eventsErrors">
+                    <thead><tr>
+                        <th>Hora</th><th>Servicio</th><th>Pedido</th><th class="numeric">Código</th>
+                        <th>Usuario</th><th class="numeric">Tardó</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Últimos cambios</h3>
+            <div class="table-wrapper">
+                <table class="data-table" id="eventsChanges">
+                    <thead><tr>
+                        <th>Hora</th><th>Servicio</th><th>Acción</th><th>Sobre</th><th>Usuario</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="form-note" id="eventsNote" aria-live="polite"></p>
+        </section>
+    </div>
+</main>
+
+</body>
+</html>

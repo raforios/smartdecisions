@@ -142,9 +142,32 @@ document.addEventListener('DOMContentLoaded', () => {
         note.textContent = down ? `${down} con problemas: abre Salud para el detalle.` : 'Todo responde.';
     }
 
+    /** The ADMIN's last hours: the chart and the newest failures. */
+    async function events() {
+        if (shell.role !== 'ADMIN' || !window.SD_EVENTS || !window.Chart) return;
+        qs('#homeEvents').hidden = false;
+        try {
+            const activity = await window.SD_EVENTS.load(12);
+            const totals = window.SD_EVENTS.totals(activity);
+            const errors = totals.clientErrors + totals.serverErrors;
+            qs('#homeEventsNote').textContent = `${number(totals.calls)} llamadas; ` +
+                `${number(errors)} con error`;
+            window.SD_EVENTS.chart(qs('#homeEventsChart'), activity);
+            const latest = activity.latest_errors.slice(0, 5);
+            qs('#homeEventsErrors').innerHTML = latest.length
+                ? latest.map((call) => `<div class="sd-list-row"><span>${window.SD_EVENTS.when(call.timestamp)} · ` +
+                    `${escape(call.microservice)} <code>${escape(call.endpoint || '')}</code></span>` +
+                    `<b class="is-bad">${call.status_code}</b></div>`).join('')
+                : '<p class="sd-stat-note is-good">Sin errores en las últimas 12 horas.</p>';
+        } catch (error) {
+            qs('#homeEventsNote').textContent = 'No se pudieron leer los eventos.';
+        }
+    }
+
     today();
     me();
     rates();
     users();
     health();
+    events();
 });

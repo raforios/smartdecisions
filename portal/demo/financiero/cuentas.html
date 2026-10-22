@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="../styles/demo.css?v=3cb07bf47f">
+    <link rel="stylesheet" href="../styles/demo.css?v=4e84f1ab15">
     <link rel="stylesheet" href="../styles/shell.css?v=9c2d5f8ca5">
     <link rel="stylesheet" href="../styles/analyses.css?v=afa137006c">
     <link rel="stylesheet" href="financiero.css?v=5d067638a0">
@@ -13,12 +13,12 @@
     <script src="../js/config.js?v=4a13bfbaea"></script>
     <script src="../js/auth.js?v=e0c72ecc39" defer></script>
     <script src="../js/icons.js?v=652a070f95" defer></script>
-    <script src="../js/shell.js?v=b364c064cc" defer></script>
+    <script src="../js/shell.js?v=06a844ee12" defer></script>
     <script src="../js/api.js?v=7206932d80" defer></script>
     <script src="../js/ui.js?v=406a08249f" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
     <script src="finance.js?v=a89dfe4e37" defer></script>
-    <script src="cuentas.js?v=60b802178c" defer></script>
+    <script src="cuentas.js?v=9c3d917fec" defer></script>
     <title>Catálogo de cuentas — SmartDecisions</title>
 </head>
 <body>
@@ -45,7 +45,7 @@
             <form class="form-stack" id="accountForm" hidden autocomplete="off">
                 <h4 id="accountFormTitle"></h4>
                 <label id="accountCodeField"><span>Código (números con puntos, por ejemplo 6.1.20; el primero es el tipo)</span>
-                    <input type="text" id="accountCode" maxlength="20"></label>
+                    <input type="text" id="accountCode" maxlength="20" inputmode="decimal" pattern="[0-9.]+"></label>
                 <label><span>Nombre</span>
                     <input type="text" id="accountName" maxlength="150"></label>
                 <div class="form-stack" id="accountNewFields">

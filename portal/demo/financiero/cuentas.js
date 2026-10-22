@@ -207,7 +207,12 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#accountTypeInput').addEventListener('change', fillGroups);
         // The first number of the code is the type: picked for the ADMIN.
         qs('#accountCode').addEventListener('input', () => {
-            const digit = qs('#accountCode').value.trim().charAt(0);
+            // Only numbers and dots get in (Rafael, 21-oct: "6,6,6" must not
+            // be typeable); FINANCE refuses anything else anyway.
+            const input = qs('#accountCode');
+            const clean = input.value.replace(/[^0-9.]/g, '');
+            if (clean !== input.value) input.value = clean;
+            const digit = clean.charAt(0);
             if (TYPES[digit] && qs('#accountTypeInput').value !== digit) {
                 qs('#accountTypeInput').value = digit;
                 fillGroups();

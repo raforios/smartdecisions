@@ -98,6 +98,7 @@
         { group: 'Administración', roles: ['ADMIN'], items: [
             { label: 'Usuarios', icon: 'user', page: 'admin/usuarios.html' },
             { label: 'Salud', icon: 'pulse', page: 'admin/salud.html' },
+            { label: 'Eventos y alertas', icon: 'clock', page: 'admin/eventos.html' },
             { label: 'Prompts de la IA', icon: 'settings', page: 'admin/prompts.html' },
             { label: 'Catálogo de cuentas', icon: 'finance', page: 'financiero/cuentas.html' },
             { label: 'Tipos de cambio', icon: 'rates', page: 'admin/tipo-cambio.html' },
