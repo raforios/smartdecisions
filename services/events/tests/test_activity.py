@@ -45,12 +45,14 @@ def test_only_failures_are_listed_newest_first() -> None:
     '''The answered call is left out; the newest failure comes first.'''
     calls = [
         {'timestamp': '2026-10-21T13:00:00', 'microservice': 'AI', 'status_code': 502},
-        {'timestamp': '2026-10-21T14:00:00', 'microservice': 'FINANCE', 'status_code': 422},
+        {'timestamp': '2026-10-21T14:00:00', 'microservice': 'FINANCE', 'status_code': 422,
+         'user_app': 'ana@acme.com'},
         {'timestamp': '2026-10-21T14:05:00', 'microservice': 'FINANCE', 'status_code': 200}
     ]
     listed = latest_errors(calls, 10)
     assert [(call.microservice, call.status_code) for call in listed] == [
         ('FINANCE', 422), ('AI', 502)]
+    assert (listed[0].user_app, listed[0].user_id) == ('ana@acme.com', None)
 
 
 def test_changes_are_listed_newest_first_and_capped() -> None:

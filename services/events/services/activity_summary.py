@@ -90,6 +90,7 @@ def latest_errors(
         endpoint = call.get('endpoint'),
         status_code = int(call['status_code']),
         user_id = None if call.get('user_id') is None else str(call['user_id']),
+        user_app = None if call.get('user_app') is None else str(call['user_app']),
         response_time_ms = None if call.get('response_time_ms') is None
         else int(call['response_time_ms'])
     ) for call in failed[:limit]]

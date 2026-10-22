@@ -30,7 +30,7 @@ AUDIT_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_AUDIT']
 # The index both tables carry: partitioned by microservice, sorted by date.
 ACTIVITY_INDEX = 'microservice-timestamp-index'
 CALL_FIELDS = ('microservice', 'timestamp', 'method', 'endpoint', 'status_code',
-               'user_id', 'response_time_ms')
+               'user_id', 'user_app', 'response_time_ms')
 CHANGE_FIELDS = ('microservice', 'timestamp', 'entity_name', 'entity_id', 'action', 'user_id')
 # How many of each list the dashboard shows.
 LIST_SIZE = 20

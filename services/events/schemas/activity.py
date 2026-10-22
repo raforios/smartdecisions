@@ -46,7 +46,8 @@ class RecentCall(BaseModel):
     method: str | None = None
     endpoint: str | None = None
     status_code: int
-    user_id: str | None = None
+    user_id: str | None = Field(None, description = "The client's end user, when it sends one.")
+    user_app: str | None = Field(None, description = 'Who called: the authenticated user.')
     response_time_ms: int | None = None
 
 
