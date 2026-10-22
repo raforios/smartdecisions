@@ -1,10 +1,8 @@
 fastapi
 uvicorn
 pydantic
-pydantic-core
-python-multipart
 mangum
-boto3
 python-jose[cryptography]
 python-dotenv
+boto3
 requests

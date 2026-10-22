@@ -1,17 +1,24 @@
-# cache folder
-cache
-
-# __pycache__ folder
-__pycache__
-
-# ignore .git & .cache forlders
-.git
-*.pyc
-*.pyo
-*.pyd
-.git
-.venv
-.DS_Store
-
-# do not bake local .env into the image; configure via Lambda env vars
+# --- Common to every service (22-oct-2026): what never goes into an image ---
+# Secrets: a Lambda gets them as environment variables, a local container
+# with --env-file.
 .env
+# Tests and the tools that run them.
+tests/
+**/.pytest_cache/
+.pylintrc
+# Caches and system files.
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.DS_Store
+.venv/
+.git/
+.gitignore
+cache/
+# Build and deploy files, and documentation.
+Dockerfile*
+.dockerignore
+deploy.config
+dynamodb.sh
+README.md

@@ -52,6 +52,11 @@ async def read_data_from_s3(
         case '.csv' | '.xls' | '.xlsx':
             try:
                 file_content = response['Body'].read()
+                # Empty is said here, not left to pandas: from 3.1 an empty CSV
+                # no longer raises EmptyDataError but a delimiter error, and the
+                # caller's mistake came back as a 503 (GitHub Actions, 22-oct-2026).
+                if not file_content.strip():
+                    raise pd.errors.EmptyDataError(f'{file_key} has no content.')
                 df: pd.DataFrame
                 if file_extension == '.csv':
                     df = pd.read_csv(StringIO(file_content.decode('utf-8')), delimiter = delimiter)

@@ -1,12 +1,9 @@
 fastapi
 uvicorn
 pydantic
-pydantic-core
-python-multipart
-boto3
 mangum
-pandas
-bcrypt
 python-jose[cryptography]
-email-validator
 python-dotenv
+boto3
+bcrypt
+email-validator

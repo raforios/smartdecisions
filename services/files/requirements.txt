@@ -1,11 +1,11 @@
 fastapi
 uvicorn
 pydantic
-pydantic-core
-python-multipart
-boto3
 mangum
-pandas
 python-jose[cryptography]
-openpyxl
 python-dotenv
+boto3
+python-multipart
+pandas
+openpyxl
+xlrd
