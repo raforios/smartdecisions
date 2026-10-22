@@ -85,3 +85,19 @@ def test_audit_is_sent_before_answering() -> None:
     assert (record['microservice'], record['entity_name'], record['action'],
             record['user_id']) == ('FINANCE', 'Entry', 'UPDATE', 'acme')
     assert sent[0]['authorization'] == 'Bearer token'
+
+
+def test_audit_records_the_field_that_identifies_the_entity() -> None:
+    '''An account is identified by its code, not by the "0" placeholder.'''
+    sent: list[dict[str, Any]] = []
+
+    @utils.audit_event('FINANCE', 'Account', 'CREATE', id_field = 'account_code')
+    async def controller(
+        request: Request,  # pylint: disable=unused-argument
+        current_user: str  # pylint: disable=unused-argument
+    ) -> dict[str, str]:
+        return {'account_code': '6.1.99', 'name': 'Prueba'}
+
+    with patch.object(utils, 'send_audit_event', _recorder(sent)):
+        asyncio.run(controller(request = _request(), current_user = 'acme'))
+    assert sent[0]['data']['entity_id'] == '6.1.99'

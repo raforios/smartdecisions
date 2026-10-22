@@ -40,7 +40,6 @@ analytics/
 │   └── dataset_loader.py  # Lee metadata desde t_ingest_datasets + descarga de S3.
 ├── tests/              # Tests con pytest.
 ├── .env                # Variables de entorno (no commit).
-├── Dockerfile          # Build para Lambda.
 ├── deploy.config       # Variables de despliegue.
 ├── dynamodb.sh         # Provisión local de DynamoDB.
 ├── main.py             # Entrypoint FastAPI.

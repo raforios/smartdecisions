@@ -81,7 +81,7 @@ async def list_client_parameters_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'ClientParameter', 'UPDATE')
+@audit_event('FINANCE', 'ClientParameter', 'UPDATE', id_field = 'parameter_code')
 async def set_client_parameter_controller(
     dynamodb_resource: ServiceResource,
     parameter_code: str,
@@ -129,7 +129,8 @@ async def list_suggested_parameters_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'SuggestedParameter', 'UPDATE')
+@audit_event('FINANCE', 'SuggestedParameter', 'UPDATE',
+              id_field = 'parameter_code')
 async def set_suggested_parameter_controller(
     dynamodb_resource: ServiceResource,
     parameter: SuggestedParameterSchema,

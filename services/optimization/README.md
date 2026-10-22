@@ -40,7 +40,6 @@ optimization/
 │   └── route_data.py     # Acceso a t_optimization_routes en Dynamo.
 ├── tests/              # Tests con pytest.
 ├── .env.example        # Plantilla de variables de entorno.
-├── Dockerfile          # Build para Lambda (paquete liviano, sin geo-libs).
 ├── deploy.config       # Variables de despliegue.
 ├── dynamodb.sh         # Provisión local de DynamoDB.
 ├── main.py             # Entrypoint FastAPI.

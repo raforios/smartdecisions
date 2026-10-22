@@ -26,7 +26,6 @@ ingest/
 │                       # y los componentes del boilerplate.
 ├── tests/              # Tests con pytest.
 ├── .env.example        # Plantilla de variables de entorno.
-├── Dockerfile          # Build para Lambda.
 ├── deploy.config       # Variables de despliegue.
 ├── dynamodb.sh         # Provisión local de DynamoDB.
 ├── main.py             # Entrypoint FastAPI.

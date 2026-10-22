@@ -46,11 +46,9 @@ def _audited():
     def _record(
         result, # pylint: disable=unused-argument
         kwargs, # pylint: disable=unused-argument
-        microservice_name, # pylint: disable=unused-argument
-        entity_name,
-        action
+        spec
     ):
-        calls.append((entity_name, action))
+        calls.append((spec.entity_name, spec.action))
         return {}
 
     async def _no_send(

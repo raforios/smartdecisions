@@ -121,8 +121,6 @@ mining_analysis/
 ├── .env
 ├── .gitignore
 ├── deploy.config
-├── Dockerfile
-├── Dockerfile.api
 ├── main.py
 ├── README.md
 ├── requirements.txt

@@ -37,7 +37,7 @@ from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Load', 'CREATE')
+@audit_event('FINANCE', 'Load', 'CREATE', id_field = 'load_id')
 async def load_entries_controller(
     dynamodb_resource: ServiceResource,
     load: EntryLoadSchema,
@@ -62,7 +62,7 @@ async def load_entries_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Load', 'CREATE')
+@audit_event('FINANCE', 'Load', 'CREATE', id_field = 'load_id')
 async def load_entries_file_controller(
     dynamodb_resource: ServiceResource,
     load: EntryFileLoadSchema,
@@ -136,7 +136,7 @@ async def list_entries_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Entry', 'UPDATE')
+@audit_event('FINANCE', 'Entry', 'UPDATE', id_field = 'account_code')
 async def update_entry_controller(
     dynamodb_resource: ServiceResource,
     target: tuple[Periodicity, str, str],
@@ -163,7 +163,7 @@ async def update_entry_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Entry', 'DELETE')
+@audit_event('FINANCE', 'Entry', 'DELETE', id_field = 'account_code')
 async def delete_entry_controller(
     dynamodb_resource: ServiceResource,
     target: tuple[Periodicity, str, str],
@@ -188,7 +188,7 @@ async def delete_entry_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Period', 'DELETE')
+@audit_event('FINANCE', 'Period', 'DELETE', id_field = 'date')
 async def delete_period_controller(
     dynamodb_resource: ServiceResource,
     period: tuple[Periodicity, str],

@@ -29,7 +29,7 @@ from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Account', 'CREATE')
+@audit_event('FINANCE', 'Account', 'CREATE', id_field = 'account_code')
 async def create_account_controller(
     dynamodb_resource: ServiceResource,
     account: AccountSchema,
@@ -72,7 +72,7 @@ async def list_accounts_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Account', 'UPDATE')
+@audit_event('FINANCE', 'Account', 'UPDATE', id_field = 'account_code')
 async def rename_account_controller(
     dynamodb_resource: ServiceResource,
     account_code: str,
@@ -101,7 +101,7 @@ async def rename_account_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'Account', 'DELETE')
+@audit_event('FINANCE', 'Account', 'DELETE', id_field = 'account_code')
 async def delete_account_controller(
     dynamodb_resource: ServiceResource,
     account_code: str,
@@ -124,7 +124,7 @@ async def delete_account_controller(
 
 
 @handle_service_errors('FINANCE')
-@audit_event('FINANCE', 'LawParameter', 'UPDATE')
+@audit_event('FINANCE', 'LawParameter', 'UPDATE', id_field = 'parameter_code')
 async def set_law_parameter_controller(
     dynamodb_resource: ServiceResource,
     parameter: LawParameterSchema,
