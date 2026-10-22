@@ -17,6 +17,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from mangum import Mangum
 import uvicorn
 
+from routes.activity import router as activity_router
 from routes.audit import router as audit_router
 from routes.usage_log import router as usage_log_router
 
@@ -263,6 +264,7 @@ async def custom_swagger_ui() -> HTMLResponse:
         title = app.title + ' - Docs'
     )
 
+app.include_router(activity_router, tags = ['Events'])
 app.include_router(audit_router, tags = ['Events'])
 app.include_router(usage_log_router, tags = ['Events'])
 
