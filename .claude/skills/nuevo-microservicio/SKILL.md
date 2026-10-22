@@ -31,7 +31,7 @@ $1/
 │   └── <boilerplate>    api_exceptions, crud, db_connection, environment,
 │                        exceptions, logger_config, security, utils
 ├── tests/
-├── .env  .dockerignore  .gitignore  Dockerfile  deploy.config
+├── .env  .dockerignore  .gitignore  deploy.config
 ├── main.py  requirements.txt  README.md
 ```
 
@@ -56,7 +56,7 @@ done
 for d in controllers models routes schemas services tests; do
   cp quotes/$d/__init__.py $1/$d/__init__.py
 done
-cp quotes/Dockerfile quotes/.dockerignore quotes/.gitignore $1/
+cp quotes/.dockerignore quotes/.gitignore $1/
 ```
 
 **El boilerplate se copia idéntico y no se modifica.** Si hace falta una
@@ -77,20 +77,29 @@ for f in api_exceptions.py crud.py environment.py exceptions.py \
 done
 ```
 
-## `.dockerignore` — el que se olvida
+## `.dockerignore` — un bloque común y lo propio al final
 
-Debe excluir el `.env`, o las credenciales viajan dentro del zip del Lambda:
+El bloque «Common to every service» se copia idéntico (Rafael, 22-oct-2026):
+deja fuera el `.env` —o las credenciales viajan dentro del zip del Lambda—,
+los tests, las cachés, los `.DS_Store` y los archivos de despliegue. Los
+patrones de carpetas internas van con `**/` (`**/__pycache__/`): sin eso sólo
+valen en la raíz. Lo propio del servicio va debajo, en «Own to this service».
 
-```text
-# do not bake local .env into the image; configure via Lambda env vars
-.env
-```
+## `Dockerfile` — no se crea
 
-## `Dockerfile` — idéntico a los demás
+Todos los servicios se arman con `services/ci/api/Dockerfile.lambda`, y se
+corren en local con `services/ci/api/Dockerfile.local` (Rafael, 22-oct-2026).
+Un servicio sólo trae su propio `Dockerfile` si necesita algo realmente suyo;
+`build_and_deploy.sh` lo usa en ese caso.
 
-El de los cinco servicios excluye `__pycache__` del zip. Un Dockerfile
-divergente hizo que un paquete pasara los 250 MB de Lambda por 80 MB de bytecode
-que nunca se usa.
+## `requirements.txt` — ni más ni menos
+
+Sólo lo que el código del servicio importa, más lo que se usa sin importarse:
+`python-multipart` si recibe archivos o formularios, `email-validator` si usa
+`EmailStr`, `openpyxl` o `xlrd` si `pandas` lee Excel. Sin versiones. Las
+herramientas de prueba van en `services/requirements-dev.txt`, nunca en el
+Lambda. Todo debe venir como wheel para Linux y Python 3.14: el `Dockerfile`
+común no compila (`--only-binary`).
 
 ## `deploy.config`
 
