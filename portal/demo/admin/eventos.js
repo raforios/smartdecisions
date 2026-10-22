@@ -38,13 +38,15 @@ document.addEventListener('DOMContentLoaded', () => {
             `<tr><td>${E.when(call.timestamp)}</td><td>${escape(call.microservice)}</td>` +
             `<td><code>${escape(call.method || '')} ${escape(call.endpoint || '')}</code></td>` +
             `<td class="numeric"><span class="sd-status is-bad">${call.status_code}</span></td>` +
-            `<td>${escape(call.user_id || '—')}</td>` +
+            `<td>${escape(call.user_id || call.user_app || '—')}</td>` +
             `<td class="numeric">${call.response_time_ms == null ? '—' : `${number(call.response_time_ms)} ms`}</td></tr>`)
             .join('') || '<tr class="empty-row"><td colspan="6">Sin errores en el período.</td></tr>';
         qs('#eventsChanges tbody').innerHTML = activity.latest_changes.map((change) =>
             `<tr><td>${E.when(change.timestamp)}</td><td>${escape(change.microservice)}</td>` +
             `<td>${escape(E.actionLabel(change.action))}</td>` +
-            `<td>${escape(change.entity_name || '')} <code>${escape(change.entity_id || '')}</code></td>` +
+            // '0' is the audit's placeholder when it found no identifier.
+            `<td>${escape(change.entity_name || '')}${change.entity_id && change.entity_id !== '0'
+                ? ` <code>${escape(change.entity_id)}</code>` : ''}</td>` +
             `<td>${escape(change.user_id || '—')}</td></tr>`)
             .join('') || '<tr class="empty-row"><td colspan="5">Sin cambios en el período.</td></tr>';
     }
