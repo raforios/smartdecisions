@@ -21,6 +21,8 @@ POLICIES=(
 
 # Variables para almacenar el PATH y el modo destroy
 SERVICE_PATH=""
+# Where this script and the shared Dockerfile.lambda live.
+CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESTROY_MODE=false
 SKIP_TABLE_CREATION=false
 SKIP_CODE_UPDATE=false
@@ -242,14 +244,17 @@ fi
 build_lambda_package() {
     log_section "CONSTRUYENDO EL PAQUETE DEL SERVICIO LAMBDA CON DOCKER"
 
-    local DOCKERFILE_PATH="./Dockerfile"
-
-    if docker images -q "$DOCKER_IMAGE_NAME" | grep -q .; then
-        echo "La imagen '$DOCKER_IMAGE_NAME' ya existe."
-    else
-        echo "Construyendo la imagen Docker '$DOCKER_IMAGE_NAME' desde '$DOCKERFILE_PATH'..."
-        docker build --platform linux/amd64 -t "$DOCKER_IMAGE_NAME" . || { echo "Error: Falló la construcción de la imagen Docker '$DOCKER_IMAGE_NAME'."; exit 1; }
+    # The shared recipe, unless the service brings its own Dockerfile.
+    local DOCKERFILE_PATH="$CI_DIR/Dockerfile.lambda"
+    if [[ -f "./Dockerfile" ]]; then
+        DOCKERFILE_PATH="./Dockerfile"
     fi
+
+    # Always rebuilt: an image left from an earlier deploy used to be reused
+    # as it was, and the Lambda got the old code (22-oct-2026). Docker's layer
+    # cache keeps it fast when only the code changed.
+    echo "Construyendo la imagen Docker '$DOCKER_IMAGE_NAME' desde '$DOCKERFILE_PATH'..."
+    docker build --platform linux/amd64 -f "$DOCKERFILE_PATH" -t "$DOCKER_IMAGE_NAME" . || { echo "Error: Falló la construcción de la imagen Docker '$DOCKER_IMAGE_NAME'."; exit 1; }
     echo ""
 
     echo "Copiando el archivo ZIP del servicio Lambda desde el contenedor..."

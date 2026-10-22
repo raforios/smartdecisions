@@ -1,0 +1,24 @@
+# One recipe to run any service locally in a container, e.g. from a
+# docker-compose (Rafael, 22-oct-2026):
+#
+#   docker build -f services/ci/api/Dockerfile.local \
+#       --build-arg PORT=3160 -t finance-local services/finance
+#   docker run --env-file services/finance/.env -p 3160:3160 finance-local
+#
+# The .env stays out of the image (.dockerignore): it is passed when the
+# container runs. PORT is only documentation for EXPOSE; the service listens
+# on the PORT of its .env.
+ARG VARIANT=3.14
+FROM python:${VARIANT}-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+
+COPY . .
+
+ARG PORT=3000
+EXPOSE ${PORT}
+
+CMD ["python", "main.py"]

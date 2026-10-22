@@ -25,6 +25,8 @@ Esta carpeta despliega los microservicios de BearSoft (los servicios base, Smart
 |---|---|---|
 | `start.sh` | **El punto de entrada.** Despliega todo, o una parte, en el orden correcto. | **Sí, casi siempre este.** |
 | `build_and_deploy.sh` | Despliega **un** microservicio: construye el paquete en Docker, lo sube a S3, crea o actualiza el Lambda y su API Gateway. | Normalmente no: `start.sh` lo llama. |
+| `Dockerfile.lambda` | La receta única del paquete de **todos** los Lambda: instala el `requirements.txt` del servicio sin compilar nada y arma el ZIP. Un servicio sólo trae su propio `Dockerfile` si necesita algo suyo. | No: `build_and_deploy.sh` la usa. La imagen se reconstruye en cada despliegue. |
+| `Dockerfile.local` | La receta única para correr un servicio en un contenedor local (por ejemplo, desde un docker-compose). El modo de uso está en su encabezado. | Sólo para pruebas locales. |
 | `create_dynamodb_tables.sh` | Crea las tablas DynamoDB que faltan. No borra ni modifica las que existen. | Sólo si agregas una tabla nueva. |
 | `create_schedules.sh` | Crea las tareas programadas (por ejemplo, la sincronización diaria del tipo de cambio). | No: `start.sh` lo llama. |
 | `setup_api_domain.sh` | Configura `api.bearsoft.com.bo`: certificado, dominio y la puerta de entrada `bearsoft-gateway`, con una ruta por servicio. | Sólo la primera vez o si algo del dominio falla. |
@@ -337,6 +339,8 @@ curl -s -o /dev/null -w "%{http_code}\n" https://api.bearsoft.com.bo/v1/ingest/d
 | La prueba de humo del dominio da `000` | El registro `api` de Cloudflare todavía no existe o no se propagó | Revisa el registro (sección 3, paso 3b) y espera unos minutos. |
 | La prueba de humo da `404` | La ruta no existe en el servicio, o el dominio apunta a otro lado | Vuelve a ejecutar `./setup_api_domain.sh`: deja el dominio entero apuntando a `bearsoft-gateway`. |
 | Una ruta nueva responde `404` desde el dominio pero no desde su URL `execute-api` | El prefijo no está en el gateway | Agrega el prefijo a la lista `ROUTES` de `setup_api_domain.sh` y vuelve a ejecutarlo. |
+| El armado falla en `pip install` con `No matching distribution` | Una librería no tiene versión lista para Linux y Python 3.14 (`Dockerfile.lambda` no compila, a propósito) | Busca otra librería o, si no hay alternativa, dale a ese servicio su propio `Dockerfile`. |
+| El armado se corta descargando (`Timeout`, `Operation too slow`) | La red o el servidor de descargas | Vuelve a intentar; ya no se instalan paquetes del sistema, que eran la descarga más pesada (21-oct-2026). |
 | Error de `pydantic_core` al arrancar el Lambda | Paquete compilado para otra arquitectura | `build_and_deploy.sh` ya construye para `linux/amd64`. Si aparece, revisa que nadie haya cambiado esa línea. |
 
 Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch** (sección 6.2). Casi siempre dicen exactamente qué pasó.

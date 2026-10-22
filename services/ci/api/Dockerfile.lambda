@@ -1,0 +1,25 @@
+# One image recipe for every Lambda of the platform (Rafael, 22-oct-2026).
+# build_and_deploy.sh builds it from each service's folder; a service only
+# brings its own Dockerfile when it needs something truly its own.
+#
+# No system packages: every dependency of the thirteen services ships as a
+# ready-made wheel for Linux x86_64 and Python 3.14 (checked on 22-oct-2026),
+# so compilers were 150 MB downloaded on every build, and that download was
+# what failed on 21-oct. --only-binary makes a package without a wheel fail
+# here, loudly, instead of compiling silently.
+FROM public.ecr.aws/lambda/python:3.14
+
+WORKDIR /build
+COPY requirements.txt .
+# --no-compile: no __pycache__ in the package. Bytecode once took a Lambda
+# past its 250 MB limit (80 MB that is never used).
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --no-compile --only-binary=:all: --target /package -r requirements.txt
+
+# The service's code; its .dockerignore keeps tests, caches and secrets out.
+COPY . /package/
+
+# The ZIP the script copies out, made with Python itself: the base image has
+# no zip command and installing one is what this file no longer does.
+RUN mkdir -p /app && \
+    python -c "import shutil; shutil.make_archive('/app/lambda_function', 'zip', '/package')"
