@@ -206,13 +206,17 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(([digit, label]) => `<option value="${digit}">${digit} · ${label}</option>`).join('');
         qs('#accountTypeInput').addEventListener('change', fillGroups);
         // The first number of the code is the type: picked for the ADMIN.
+        // Only numbers and dots get in (Rafael, 22-oct): a comma or a letter
+        // is refused as it is typed or pasted, never dropped or merged
+        // ("6,6,8" must not become "668"). FINANCE refuses it anyway.
+        qs('#accountCode').addEventListener('beforeinput', (event) => {
+            if (event.data && /[^0-9.]/.test(event.data)) {
+                event.preventDefault();
+                note('El código sólo lleva números y puntos, por ejemplo 6.1.20.', 'error');
+            }
+        });
         qs('#accountCode').addEventListener('input', () => {
-            // Only numbers and dots get in (Rafael, 21-oct: "6,6,6" must not
-            // be typeable); FINANCE refuses anything else anyway.
-            const input = qs('#accountCode');
-            const clean = input.value.replace(/[^0-9.]/g, '');
-            if (clean !== input.value) input.value = clean;
-            const digit = clean.charAt(0);
+            const digit = qs('#accountCode').value.trim().charAt(0);
             if (TYPES[digit] && qs('#accountTypeInput').value !== digit) {
                 qs('#accountTypeInput').value = digit;
                 fillGroups();
