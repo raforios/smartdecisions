@@ -2,7 +2,7 @@
     Utils service.
 
     Event emission, usage logging and centralized error handling for the
-    ANALYTICS microservice.
+    PARAMETERS microservice.
 
     This module is the DynamoDB-backed derivation of the canonical MySQL
     boilerplate `services/localization/services/utils.py`. The function names,
@@ -18,6 +18,7 @@
           DynamoDB service layer is synchronous (boto3), unlike localization's
           async SQLAlchemy services.
 '''
+from dataclasses import dataclass
 import asyncio
 from collections.abc import Callable
 import decimal
@@ -346,14 +347,31 @@ def handle_service_errors(
     return decorator
 
 
-def _resolve_audit_entity(result: Any) -> tuple[str, Any | None]:
+@dataclass(frozen = True)
+class AuditSpec:
+    '''
+        What an audited call records: the service, the entity, the action and,
+        when the entity is not identified by `id`, the field that identifies it.
+    '''
+    microservice_name: str
+    entity_name: str
+    action: str
+    id_field: str | None = None
+
+
+def _resolve_audit_entity(
+    result: Any,
+    id_field: str | None = None
+) -> tuple[str, Any | None]:
     '''
         Extracts (entity_id, new_values) from the wrapped function result.
 
         The audit service requires a string entity_id, so '0' is used as a
-        neutral fallback for bulk / value-less results.
+        neutral fallback for bulk / value-less results. `id_field` names the
+        field that identifies the entity (an account's `account_code`); without
+        it, the usual names are tried, as before (Rafael, 22-oct-2026).
     '''
-    candidate_keys = ('id', 'run_id', 'dataset_id', 'client_id')
+    candidate_keys = ((id_field,) if id_field else ()) + ('id', 'run_id', 'dataset_id', 'client_id')
 
     def _pick_id(values: dict[str, Any]) -> str:
         for key in candidate_keys:
@@ -372,23 +390,21 @@ def _resolve_audit_entity(result: Any) -> tuple[str, Any | None]:
 def _audit_payload(
     result: Any,
     kwargs: dict[str, Any],
-    microservice_name: str,
-    entity_name: str,
-    action: str
+    spec: AuditSpec
 ) -> dict[str, Any]:
     '''
         Builds the audit record of a call: who changed which entity, and how.
     '''
     user_id = kwargs.get('current_user') or kwargs.get('user_id') or 'usr_test'
-    entity_id, new_values = _resolve_audit_entity(result)
+    entity_id, new_values = _resolve_audit_entity(result, spec.id_field)
     formatted_new = (
         json.dumps(new_values, cls = CustomJSONEncoder) if new_values is not None else None
     )
     audit_payload = {
-        'microservice': microservice_name,
-        'entity_name': entity_name,
+        'microservice': spec.microservice_name,
+        'entity_name': spec.entity_name,
         'entity_id': entity_id,
-        'action': action,
+        'action': spec.action,
         'user_id': str(user_id),
         'old_values': None,
         'new_values': formatted_new
@@ -399,12 +415,16 @@ def _audit_payload(
 def audit_event(
     microservice_name: str,
     entity_name: str,
-    action: str
+    action: str,
+    id_field: str | None = None
 ):
     '''
         Decorator factory to send an audit event after a service function call.
         Supports both synchronous and asynchronous wrapped callables.
+        `id_field` names the field of the result that identifies the entity.
     '''
+    spec = AuditSpec(microservice_name, entity_name, action, id_field)
+
     def decorator(func: Callable):
         is_coroutine = inspect.iscoroutinefunction(func)
 
@@ -415,7 +435,7 @@ def audit_event(
         ):
             result = func(*args, **kwargs)
             _safe_schedule(send_audit_event(
-                _audit_payload(result, kwargs, microservice_name, entity_name, action),
+                _audit_payload(result, kwargs, spec),
                 _caller_authorization(kwargs.get('request'))
             ))
             return result
@@ -429,7 +449,7 @@ def audit_event(
             # Awaited before answering: in Lambda a scheduled task can be
             # frozen with the function and the audit record lost (19-oct-2026).
             await send_audit_event(
-                _audit_payload(result, kwargs, microservice_name, entity_name, action),
+                _audit_payload(result, kwargs, spec),
                 _caller_authorization(kwargs.get('request'))
             )
             return result

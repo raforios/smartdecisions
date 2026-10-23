@@ -24,7 +24,7 @@ from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('AI')
-@audit_event('AI', 'Explanation', 'GENERATE')
+@audit_event('AI', 'Explanation', 'GENERATE', id_field = 'view')
 async def explain_controller(
     payload: ExplainRequest,
     current_user: str,
@@ -71,7 +71,7 @@ async def list_roles_controller(
 
 
 @handle_service_errors('AI')
-@audit_event('AI', 'Role', 'UPSERT')
+@audit_event('AI', 'Role', 'UPSERT', id_field = 'view')
 async def save_role_controller(
     definition: RoleDefinition,
     current_user: str, # pylint: disable=unused-argument
@@ -121,7 +121,7 @@ async def get_role_controller(
 
 
 @handle_service_errors('AI')
-@audit_event('AI', 'Role', 'UPDATE')
+@audit_event('AI', 'Role', 'UPDATE', id_field = 'view')
 async def set_role_active_controller(
     change: RoleSwitch,
     current_user: str, # pylint: disable=unused-argument
@@ -146,7 +146,7 @@ async def set_role_active_controller(
 
 
 @handle_service_errors('AI')
-@audit_event('AI', 'Role', 'DELETE')
+@audit_event('AI', 'Role', 'DELETE', id_field = 'view')
 async def delete_role_controller(
     view: str,
     version: int,

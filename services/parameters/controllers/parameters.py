@@ -69,7 +69,7 @@ async def all_parameters_controller(
 
 
 @handle_service_errors('PARAMETERS')
-@audit_event('PARAMETERS', 'Parameter', 'UPDATE')
+@audit_event('PARAMETERS', 'Parameter', 'UPDATE', id_field = 'code')
 async def set_parameter_controller(
     dynamodb_resource: ServiceResource,
     key: tuple[str, str],
@@ -94,7 +94,7 @@ async def set_parameter_controller(
 
 
 @handle_service_errors('PARAMETERS')
-@audit_event('PARAMETERS', 'Parameter', 'DELETE')
+@audit_event('PARAMETERS', 'Parameter', 'DELETE', id_field = 'code')
 async def delete_parameter_controller(
     dynamodb_resource: ServiceResource,
     key: tuple[str, str],
