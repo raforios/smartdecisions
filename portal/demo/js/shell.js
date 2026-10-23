@@ -105,6 +105,8 @@
             { label: 'Prompts de la IA', icon: 'settings', page: 'admin/prompts.html' },
             { label: 'Catálogo de cuentas', icon: 'finance', page: 'financiero/cuentas.html' },
             { label: 'Tipos de cambio', icon: 'rates', page: 'admin/tipo-cambio.html' },
+            // The general factors, for every company (Rafael, 21-oct).
+            { label: 'Factores externos', icon: 'settings', page: 'parametros/factores.html' },
             { label: 'Minerales', icon: 'minerals', page: 'minerales/index.html' }
         ] }
     ];

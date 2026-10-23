@@ -8,6 +8,11 @@
  * their date, and a calculation reads the state of ITS OWN day, so turning a
  * factor off today does not rewrite anything computed before. This screen only
  * declares, loads and reads: every rule lives in the service.
+ *
+ * General factors (Rafael, 21-oct): the ADMIN declares and loads them for every
+ * company; a company reads them and keeps its own, and one of its own with the
+ * same code takes the general one's place. QUOTES decides whose they are from
+ * the token: for the ADMIN this screen is the general factors.
  */
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated()) return;
@@ -17,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const API = window.SD_API;
     const BASE = `${window.SD_CONFIG.API_URL}/v1/quotes/factors`;
     const STATUS_LABELS = { ACTIVE: 'Activo', INACTIVE: 'Apagado' };
+    const admin = window.SD_SHELL && window.SD_SHELL.role === 'ADMIN';
+    // What a company may change: its own factors. The general ones are read only.
+    const ownFactors = () => state.factors.filter((factor) => admin || !factor.general);
 
     const state = { factors: [] };
     // The local day, not UTC: after 20:00 in Bolivia UTC is already tomorrow.
@@ -25,6 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
                    String(now.getDate()).padStart(2, '0')].join('-');
     qs('#factorValueDate').value = today;
     qs('#transportDate').value = today;
+    if (admin) {
+        qs('#factorsSubtitle').textContent = 'Los factores generales: valen para todas las ' +
+            'empresas, y cada una puede reemplazarlos con uno propio del mismo código.';
+    }
 
     function note(selector, text, kind) {
         const element = qs(selector);
@@ -54,24 +66,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = qs('#factorsTable tbody');
         tbody.innerHTML = factors.map((factor) => {
             const next = factor.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+            const general = factor.general && !admin
+                ? ' <span class="sd-status is-on" title="Lo define BearSoft para todas las empresas">General</span>' : '';
             return `<tr><td><code>${escapeHtml(factor.code)}</code></td>` +
-                `<td>${escapeHtml(factor.name)}</td>` +
+                `<td>${escapeHtml(factor.name)}${general}</td>` +
                 `<td>${escapeHtml(factor.unit)}</td>` +
                 `<td class="num">${factor.latest_value == null ? '—' : money(factor.latest_value)}</td>` +
                 `<td>${factor.latest_date ? shortDate(factor.latest_date) : '—'}</td>` +
                 `<td>${STATUS_LABELS[factor.status] || factor.status}</td>` +
-                `<td><button type="button" class="btn-icon${next === 'ACTIVE' ? '' : ' is-on'}" ` +
-                `data-tip="${next === 'ACTIVE' ? 'Encender' : 'Apagar'}" ` +
-                `aria-label="${next === 'ACTIVE' ? 'Encender' : 'Apagar'}" ` +
-                `data-toggle="${escapeHtml(factor.code)}" data-next="${next}">` +
-                `${window.SD_ICONS.svg('power')}</button></td></tr>`;
+                (factor.general && !admin ? '<td></td></tr>'
+                    : `<td><button type="button" class="btn-icon${next === 'ACTIVE' ? '' : ' is-on'}" ` +
+                    `data-tip="${next === 'ACTIVE' ? 'Encender' : 'Apagar'}" ` +
+                    `aria-label="${next === 'ACTIVE' ? 'Encender' : 'Apagar'}" ` +
+                    `data-toggle="${escapeHtml(factor.code)}" data-next="${next}">` +
+                    `${window.SD_ICONS.svg('power')}</button></td></tr>`);
         }).join('');
     }
 
     function paintSelect() {
         const select = qs('#factorValueCode');
         const chosen = select.value;
-        select.innerHTML = state.factors
+        select.innerHTML = ownFactors()
             .map((factor) => `<option value="${escapeHtml(factor.code)}">` +
                 `${escapeHtml(factor.code)} · ${escapeHtml(factor.name)}</option>`)
             .join('');

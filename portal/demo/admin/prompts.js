@@ -158,7 +158,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 active: true
             });
             form.hidden = true;
-            toast(`Guardado como versión ${saved.version}; la anterior quedó inactiva.`, 'success');
+            // A company's version retires only the company's earlier one: the
+            // general one stays in force for every other company.
+            toast(saved.client
+                ? `Guardado como versión ${saved.version} de tu empresa; desde ahora la IA usa ésta.`
+                : `Guardado como versión ${saved.version}; la anterior quedó inactiva.`, 'success');
             await load();
         } catch (error) {
             note((error && error.message) || 'No se pudo guardar el prompt.', 'error');
