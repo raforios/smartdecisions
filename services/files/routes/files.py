@@ -51,7 +51,7 @@ ALLOWED_CONTENT_TYPES = [
 ]
 
 @router.get(
-    '/read/{bucket_name}/{file_key}',
+    '/read/{bucket_name}/{file_key:path}',
     response_model = dict[str, Any]
 )
 async def read_s3_file_route(
