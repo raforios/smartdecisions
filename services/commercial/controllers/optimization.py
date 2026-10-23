@@ -13,6 +13,7 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 from pydantic import BaseModel
 
+from controllers.common import caller_token
 from schemas.optimization import (
     BulkUploadResponse,
     PlansBySellerResponse,
@@ -35,13 +36,12 @@ from services.optimization import (
     scope_to_period,
     tag_map_colors
 )
+from services.analytics_utils import get_dataset_metadata
 from services.optimization_utils import (
     bulk_upload_points,
-    get_dataset_metadata,
     get_route_points
 )
 from services.localization_sources import plans_by_seller
-from controllers.common import caller_token
 from services.utils import audit_event, handle_service_errors, read_file_rows
 
 

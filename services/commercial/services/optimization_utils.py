@@ -21,11 +21,9 @@ from services.logger_config import custom_logger as logger
 
 
 ENV_VARS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
     'DYNAMODB_TABLE_NAME_OPTIMIZATION_ROUTES': str,
 })
 ROUTES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_OPTIMIZATION_ROUTES']
-INGEST_DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 
 
 # ---------------------------------------------------------------------------
@@ -247,46 +245,3 @@ def bulk_upload_points(
 # ---------------------------------------------------------------------------
 # Dataset loading
 # ---------------------------------------------------------------------------
-
-
-def get_dataset_metadata(
-    dynamodb_resource: ServiceResource,
-    dataset_id: str,
-    owner_email: str | None = None
-) -> dict:
-    '''
-        Retrieves a dataset record from the ingest service's table.
-
-        Args:
-            dynamodb_resource (ServiceResource): The shared DynamoDB resource.
-            dataset_id (str): UUID issued by the ingest service.
-            owner_email (str | None): When given, a dataset of another owner
-                answers exactly like a missing one (`CLAUDE.md` §8).
-
-        Returns:
-            dict: The persisted ingest item.
-
-        Raises:
-            RegisterNotFoundError: If the dataset_id is unknown.
-            InvalidInputError: If the dataset exists but its status is not 'validated'.
-    '''
-    # The AWS table `ingest_datasets` uses `id` as its partition key (set
-    # to the same UUID value as the logical `dataset_id` attribute by the
-    # ingest service — see ingest/services/datasets.py:_build_dataset_item).
-    table = dynamodb_resource.Table(INGEST_DATASETS_TABLE)
-    response = table.get_item(Key = {'id': dataset_id})
-    item = response.get('Item')
-    if item and owner_email is not None and item.get('owner_email') != owner_email:
-        item = None
-    if not item:
-        error_msg = f'Dataset {dataset_id} not found in {INGEST_DATASETS_TABLE}.'
-        logger.warning(error_msg)
-        raise RegisterNotFoundError(detail = OptimizationError.DATASET_NOT_FOUND.value)
-    if item.get('status') != 'validated':
-        error_msg = (
-            f'Dataset {dataset_id} cannot be analyzed because its status is '
-            f'"{item.get("status")}". Re-upload a valid file via /v1/ingest/excel.'
-        )
-        logger.warning(error_msg)
-        raise InvalidInputError(detail = OptimizationError.DATASET_NOT_VALIDATED.value)
-    return item

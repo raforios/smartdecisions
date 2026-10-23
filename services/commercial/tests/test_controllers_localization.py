@@ -10,10 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 from moto import mock_aws
 
-from main import app
-from schemas.localization import LocalizationError, PlannedRouteStatusEnum
 from controllers import daily_stock as daily_stock_controllers
+from main import app
 from schemas.commercial import StockDayItem
+from schemas.localization import LocalizationError, PlannedRouteStatusEnum
 from services import daily_stock, localization
 from services.exceptions import ResourceNotFoundError
 from services import localization_executed as executed

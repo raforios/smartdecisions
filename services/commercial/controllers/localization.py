@@ -518,7 +518,7 @@ async def get_route_comparisons_controller(
     planned_route_id: str,
     filters: ExecutedRouteFilterSchema,
     current_user: str,
-    request: Request
+    request: Request # pylint: disable=unused-argument
 ) -> RouteComparisonsResponseSchema:
     '''
         Every execution of a plan, scored.
@@ -537,7 +537,7 @@ async def get_full_route_comparison_controller(
     planned_route_id: str,
     filters: ExecutedRouteFilterSchema,
     current_user: str,
-    request: Request
+    request: Request # pylint: disable=unused-argument
 ) -> RouteComparisonFullResponseSchema:
     '''
         Plan and executions with their points, for the map.

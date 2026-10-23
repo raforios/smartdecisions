@@ -22,7 +22,7 @@ from schemas.optimization import (
     RoutePlanResponse
 )
 from controllers import optimization as controllers
-from services import localization, optimization_utils
+from services import analytics_utils, localization
 from services import optimization as optimization_service
 from tests.dynamo_helpers import build_resource
 
@@ -151,9 +151,9 @@ def test_a_dataset_of_another_owner_answers_like_a_missing_one():
     resource = Mock(Table = Mock(return_value = table))
 
     with pytest.raises(HTTPException) as foreign:
-        optimization_utils.get_dataset_metadata(resource, 'ds-1', 'yo@empresa.com')
+        analytics_utils.get_dataset_metadata(resource, 'ds-1', 'yo@empresa.com')
     assert foreign.value.status_code == 404
-    assert optimization_utils.get_dataset_metadata(resource, 'ds-1')['id'] == 'ds-1'
+    assert analytics_utils.get_dataset_metadata(resource, 'ds-1')['id'] == 'ds-1'
 
     # And through the endpoint that plans from the file: the Histórico.
     with pytest.raises(HTTPException) as planned:

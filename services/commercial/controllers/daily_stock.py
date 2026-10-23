@@ -6,6 +6,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from controllers.stock import stock_items_of_day
 from schemas.daily_stock import (
     DailyStockFromIngestSchema,
     DailyStockLoadSchema,
@@ -13,13 +14,12 @@ from schemas.daily_stock import (
     DayStatisticsSchema
 )
 from services.daily_stock import (
-    opening_stock,
     get_daily_stock,
     load_daily_stock,
+    opening_stock,
     to_daily_stock_response
 )
 from services.day_statistics import day_statistics
-from controllers.stock import stock_items_of_day
 from services.utils import audit_event, handle_service_errors
 
 
