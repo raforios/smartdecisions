@@ -7,6 +7,8 @@
     detail must survive the decorator untouched.
 '''
 import asyncio
+from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException
@@ -16,6 +18,7 @@ from services.exceptions import (
     RegisterAlreadyExistsError,
     RegisterNotFoundError
 )
+from services import utils
 from services.utils import handle_service_errors
 
 
@@ -40,3 +43,29 @@ def test_handle_service_errors_keeps_status_and_code(
         asyncio.run(failing_controller(request = None, current_user = 'tester'))
     assert failure.value.status_code == status
     assert failure.value.detail == 'SOME_STABLE_CODE'
+
+
+def test_the_callers_token_travels_to_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''
+        EVENTS validates a token on every write, because its POST endpoints
+        are reachable from the internet. The token is the one this service
+        already validated for the request it is logging.
+    '''
+    sent: list = []
+
+    def _post(
+        url: str,
+        **kwargs: Any
+    ) -> Mock:
+        sent.append((url, kwargs.get('headers')))
+        return Mock(status_code = 201, text = '')
+
+    monkeypatch.setattr(utils.req, 'post', _post)
+    request = Mock(headers = {'authorization': 'Bearer del-usuario'})
+    asyncio.run(utils.send_audit_event({'action': 'TEST'}, utils._caller_authorization(request))) # pylint: disable=protected-access
+    asyncio.run(utils.send_usage_log({'endpoint': '/x'}, None))
+
+    assert sent[0][0].endswith('/v1/events/audit')
+    assert sent[0][1] == {'Authorization': 'Bearer del-usuario'}
+    # A call with no request has nothing to forward and sends no header.
+    assert sent[1][1] is None

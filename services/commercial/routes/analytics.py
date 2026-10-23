@@ -56,7 +56,7 @@ from services.forecast import MAX_MONTHS_AHEAD
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner
 
-router = APIRouter(prefix = '/v1/analytics', tags = ['Analytics'])
+router = APIRouter(prefix = '/v1/commercial', tags = ['Analytics'])
 
 _ISO_DATE = '^\\d{4}-\\d{2}-\\d{2}$'
 

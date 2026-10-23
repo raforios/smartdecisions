@@ -154,7 +154,7 @@ def test_sellers_from_frame_ignores_a_frame_without_the_column():
 
 def test_the_sellers_route_is_not_swallowed_by_the_dataset_route(resource):
     '''
-        `/v1/ingest/{dataset_id}` would take `/v1/ingest/sellers` and answer
+        `/v1/commercial/{dataset_id}` would take `/v1/commercial/sellers` and answer
         422, the same collision `/clients` and `/history` already had.
     '''
     _load(resource, ['Ana'])
@@ -163,7 +163,7 @@ def test_the_sellers_route_is_not_swallowed_by_the_dataset_route(resource):
         'email': OWNER, 'role': 'MANAGER', 'client': None
     }
     try:
-        response = TestClient(app).get('/v1/ingest/sellers')
+        response = TestClient(app).get('/v1/commercial/sellers')
     finally:
         app.dependency_overrides.clear()
 

@@ -24,15 +24,15 @@ from typing import Final
 
 import pandas as pd
 
-from schemas.ingest import (
+from schemas.commercial import (
     CollectionsSummary,
     ValidationIssue,
     ValidationRule
 )
-from services.ingest import normalize_frame
-from services.ingest_contract import COLLECTION_HEADER_LOOKUP, COLLECTIONS_SCHEMA, validate
-from services.ingest_files import read_file
-from services.ingest_contract import AMOUNT_DECIMALS
+from services.commercial import normalize_frame
+from services.load_contract import COLLECTION_HEADER_LOOKUP, COLLECTIONS_SCHEMA, validate
+from services.load_files import read_file
+from services.load_contract import AMOUNT_DECIMALS
 from services.logger_config import custom_logger as logger
 
 _ORDER = 'order_id'

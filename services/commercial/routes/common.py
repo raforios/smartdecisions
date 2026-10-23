@@ -1,20 +1,33 @@
 '''
-    Dependencies shared by the ingest routers.
+    Dependencies shared by the commercial routers.
 '''
 from typing import Any
 
-from fastapi import Depends
+from fastapi import Depends, File, UploadFile
 
 from schemas.clients import CallerClaims
+from services.common import decode_csv_upload
 from services.security import get_current_payload
+
+
+async def csv_upload_text(file: UploadFile = File(...)) -> str:
+    '''
+        FastAPI dependency: the uploaded CSV as text, or the shared upload
+        error codes. Every bulk-upload endpoint declares it instead of
+        repeating the read-and-decode dance.
+
+        Args:
+            file (UploadFile): The multipart file.
+
+        Returns:
+            str: Decoded CSV text.
+    '''
+    return decode_csv_upload(file.filename or '', await file.read())
 
 
 async def get_caller(payload: dict[str, Any] = Depends(get_current_payload)) -> CallerClaims:
     '''
         FastAPI dependency: the token claims as a DTO instead of a loose dict.
-
-        Named and shaped as in OPTIMIZATION on purpose: the same problem is
-        solved the same way in every service.
 
         Args:
             payload (dict[str, Any]): Decoded token claims.

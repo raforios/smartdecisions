@@ -6,8 +6,8 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from controllers.common import CompanionSpec, load_sales_frame, store_companion
-from schemas.ingest import VisitsResponse
-from services.ingest_utils import get_owned_dataset
+from schemas.commercial import VisitsResponse
+from services.commercial_utils import get_owned_dataset
 from services.visits import parse_and_validate
 from services.utils import audit_event, handle_service_errors
 
@@ -27,8 +27,8 @@ SPEC = CompanionSpec(
 )
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Visits', 'UPLOAD')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Visits', 'UPLOAD')
 async def ingest_visits_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,

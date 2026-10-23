@@ -10,8 +10,8 @@ from boto3.resources.base import ServiceResource
 
 from controllers.collections import ingest_collections_controller
 from controllers.objectives import ingest_objectives_controller
-from controllers.purchases import ingest_purchases_controller
-from controllers.ingest import (
+from controllers.purchases_load import ingest_purchases_controller
+from controllers.commercial import (
     download_rejected_controller,
     download_template_controller,
     get_dataset_status_controller,
@@ -22,7 +22,7 @@ from controllers.ingest import (
 )
 from controllers.stock import get_stock_day_controller, ingest_stock_controller
 from controllers.visits import ingest_visits_controller
-from schemas.ingest import (
+from schemas.commercial import (
     CollectionsResponse,
     PurchasesResponse,
     ObjectivesResponse,
@@ -39,12 +39,12 @@ from schemas.ingest import (
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.exceptions import InvalidInputError
-from services.ingest_files import SUPPORTED_EXTENSIONS
-from services.ingest_utils import HISTORY_DEFAULT_LIMIT
+from services.load_files import SUPPORTED_EXTENSIONS
+from services.commercial_utils import HISTORY_DEFAULT_LIMIT
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner
 
-router = APIRouter(prefix = '/v1/ingest', tags = ['Ingest'])
+router = APIRouter(prefix = '/v1/commercial', tags = ['Ingest'])
 
 # A FastAPI endpoint declares its dependencies as parameters —resource,
 # token, caller, body— so the five-argument budget does not describe it.
@@ -168,7 +168,7 @@ async def ingest_excel_endpoint(
         'pre-signed URL, addressed by its object key, and returns the outcome '
         'synchronously. Used for files that exceed the API Gateway payload '
         '(~10 MB), so the binary never transits API Gateway. Invalid rows are '
-        'accepted partially and offered via GET /v1/ingest/{dataset_id}/rejected.'
+        'accepted partially and offered via GET /v1/commercial/{dataset_id}/rejected.'
     )
 )
 async def ingest_excel_from_s3_endpoint(

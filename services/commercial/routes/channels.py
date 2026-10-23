@@ -32,7 +32,7 @@ from schemas.channels import (
     StockPushSchema,
     VisitsPushSchema
 )
-from schemas.ingest import (
+from schemas.commercial import (
     CollectionsResponse,
     PurchasesResponse,
     ObjectivesResponse,
@@ -44,7 +44,7 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner
 
-router = APIRouter(prefix = '/v1/ingest', tags = ['Daily data (API)'])
+router = APIRouter(prefix = '/v1/commercial', tags = ['Daily data (API)'])
 
 # A FastAPI endpoint declares its dependencies as parameters —resource,
 # token, caller, body— so the five-argument budget does not describe it.

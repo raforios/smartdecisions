@@ -99,7 +99,7 @@ def test_the_controller_returns_its_model(monkeypatch):
     monkeypatch.setattr(controller, 'get_dataset_metadata',
                         lambda **_: {'file_s3_key': 'sales.csv',
                                      'purchases_s3_key': 'purchases.csv'})
-    monkeypatch.setattr(controller, 'load_dataframe_from_s3', lambda key: frames[key])
+    monkeypatch.setattr(controller, 'load_dataframe', lambda key, _token: frames[key])
 
     response = asyncio.run(controller.purchases_controller(
         dynamodb_resource = None, dataset_id = 'test-dataset-id', params = {},

@@ -13,9 +13,9 @@ from controllers.common import (
     store_companion
 )
 from schemas.channels import LoadMode
-from schemas.ingest import PurchasesResponse
-from services.ingest_utils import get_owned_dataset
-from services.purchases import parse_and_validate, validate_rows
+from schemas.commercial import PurchasesResponse
+from services.commercial_utils import get_owned_dataset
+from services.purchases_load import parse_and_validate, validate_rows
 from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
@@ -35,8 +35,8 @@ SPEC = CompanionSpec(
 )
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Purchases', 'UPLOAD')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Purchases', 'UPLOAD')
 async def ingest_purchases_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,

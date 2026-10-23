@@ -29,7 +29,7 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner
 
-router = APIRouter(prefix = '/v1/ingest/clients', tags = ['Client master'])
+router = APIRouter(prefix = '/v1/commercial/clients', tags = ['Client master'])
 
 _CLIENT_ID = PathParam(..., min_length = 1, max_length = 64)
 _SELLER = Query(None, max_length = 128, description = 'Narrow to one portfolio.')

@@ -16,14 +16,14 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from schemas.ingest import PurchasesSummary, ValidationIssue
-from services.ingest import fill_product_ids, normalize_frame
-from services.ingest_contract import (
+from schemas.commercial import PurchasesSummary, ValidationIssue
+from services.commercial import fill_product_ids, normalize_frame
+from services.load_contract import (
     PURCHASE_HEADER_LOOKUP,
     PURCHASES_SCHEMA,
     validate_by_catalogue
 )
-from services.ingest_files import read_file
+from services.load_files import read_file
 from services.logger_config import custom_logger as logger
 
 _PRODUCT = 'product_id'

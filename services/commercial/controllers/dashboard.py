@@ -14,7 +14,7 @@ from services.analytics_utils import (
     get_commercial_policy,
     get_credit_policy,
     get_dataset_metadata,
-    load_dataframe_from_s3
+    load_dataframe
 )
 from services.currency import in_three_currencies
 from services.dashboard import (
@@ -34,7 +34,8 @@ _PERCENT = 100.0
 
 def _companion(
     metadata: dict[str, Any],
-    key: str
+    key: str,
+    auth_token: str
 ) -> Any:
     '''
         A file INGEST attached to the dataset, or None when it was not loaded.
@@ -42,15 +43,16 @@ def _companion(
         Args:
             metadata (dict[str, Any]): The dataset record.
             key (str): The attribute holding the file's key.
+            auth_token (str): The caller's Authorization header, for FILES.
 
         Returns:
             Any: The DataFrame, or None.
     '''
     s3_key = metadata.get(key)
-    return load_dataframe_from_s3(s3_key) if s3_key else None
+    return load_dataframe(s3_key, auth_token) if s3_key else None
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def dashboard_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -64,8 +66,9 @@ async def dashboard_controller(
     dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(dynamodb_resource = dynamodb_resource,
                                     dataset_id = dataset_id, owner_email = current_user)
-    payments = _payments_of(metadata)
-    objectives, _ = select_objective_periods(_companion(metadata, 'objectives_s3_key'),
+    token = (params or {}).get('auth_token') or ''
+    payments = _payments_of(metadata, token)
+    objectives, _ = select_objective_periods(_companion(metadata, 'objectives_s3_key', token),
                                              None, None)
     attainment = None if objectives is None else build_objectives(
         sales = dataframe, objectives = objectives, collections = payments,
@@ -76,13 +79,12 @@ async def dashboard_controller(
         sales = dataframe, collections = payments,
         stored_policy = get_credit_policy(dynamodb_resource = dynamodb_resource,
                                           owner_email = current_user))
-    token = (params or {}).get('auth_token') or ''
     response = in_three_currencies(DashboardResponse, {
         'dataset_id': dataset_id,
         'sales': build_sales_figures(closed, attainment).model_dump(),
         'clients': build_client_figures(dataframe, build_portfolio(closed)).model_dump(),
         'inventory': inventory_figures(build_stock(
-            sales = dataframe, stock = _companion(metadata, 'stock_s3_key'))).model_dump(),
+            sales = dataframe, stock = _companion(metadata, 'stock_s3_key', token))).model_dump(),
         'receivables': receivable_figures(receivables).model_dump(),
         'purchases': purchase_figures(metadata, token).model_dump()
     }, token, get_current_time_gmt().date().isoformat())

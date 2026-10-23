@@ -19,7 +19,7 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner
 
-router = APIRouter(prefix = '/v1/analytics', tags = ['Analytics'])
+router = APIRouter(prefix = '/v1/commercial', tags = ['Analytics'])
 
 
 @router.get(
@@ -104,7 +104,7 @@ async def purchases_endpoint(
 
 
 @router.get(
-    '/clients/{dataset_id}',
+    '/clients/overview/{dataset_id}',
     response_model = ClientListResponse,
     status_code = status.HTTP_200_OK,
     summary = 'The clients of a dataset, the largest first',

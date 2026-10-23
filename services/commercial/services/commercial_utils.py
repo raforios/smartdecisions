@@ -19,9 +19,9 @@ import pandas as pd
 from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
-from models.ingest import IngestDataset
+from models.commercial import IngestDataset
 from schemas.files import FilesError
-from schemas.ingest import IngestError
+from schemas.commercial import IngestError
 from services.crud import create_item, get_item_by_key
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
@@ -107,7 +107,7 @@ def _build_dataset_item(payload: dict[str, Any]) -> IngestDataset:
     }
 
 
-@audit_event('INGEST', 'IngestDataset', 'CREATE')
+@audit_event('COMMERCIAL', 'IngestDataset', 'CREATE')
 def persist_dataset(
     dynamodb_resource: ServiceResource,
     payload: dict[str, Any]
@@ -281,6 +281,43 @@ def find_dataset_by_fingerprint(
         scan_kwargs['ExclusiveStartKey'] = last_key
 
 
+def owned_items(
+    table: Any,
+    owner_email: str,
+    limit: int
+) -> list[dict[str, Any]]:
+    '''
+        The caller's own rows of a table keyed by `id`, newest first.
+
+        The owner is part of the scan filter, so no row of another client can
+        reach the answer. With `id` as the partition key there is no Query that
+        filters by owner, so this scans; at POC volumes that is fine, and the
+        right move when a table grows is a Global Secondary Index on
+        `owner_email`.
+
+        Args:
+            table (Any): The DynamoDB table.
+            owner_email (str): Authenticated caller.
+            limit (int): Most rows to return.
+
+        Returns:
+            list[dict[str, Any]]: The rows, newest first.
+    '''
+    items: list[dict[str, Any]] = []
+    scan_kwargs: dict[str, Any] = {
+        'FilterExpression': Attr('owner_email').eq(owner_email)
+    }
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get('Items', []))
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+    items.sort(key = lambda item: str(item.get('created_at', '')), reverse = True)
+    return items[:limit]
+
+
 def list_datasets_for_owner(
     dynamodb_resource: ServiceResource,
     owner_email: str,
@@ -303,21 +340,7 @@ def list_datasets_for_owner(
         Returns:
             list[dict[str, Any]]: Stored dataset records, newest first.
     '''
-    table = dynamodb_resource.Table(DATASETS_TABLE)
-    items: list[dict[str, Any]] = []
-    scan_kwargs: dict[str, Any] = {
-        'FilterExpression': Attr('owner_email').eq(owner_email)
-    }
-    while True:
-        response = table.scan(**scan_kwargs)
-        items.extend(response.get('Items', []))
-        last_key = response.get('LastEvaluatedKey')
-        if not last_key:
-            break
-        scan_kwargs['ExclusiveStartKey'] = last_key
-
-    items.sort(key = lambda item: str(item.get('created_at', '')), reverse = True)
-    return items[:limit]
+    return owned_items(dynamodb_resource.Table(DATASETS_TABLE), owner_email, limit)
 
 
 def get_owned_dataset(

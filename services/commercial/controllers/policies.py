@@ -18,7 +18,7 @@ from services.receivables import resolve_policy
 from services.utils import audit_event, handle_service_errors
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def get_commercial_policy_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
@@ -41,8 +41,8 @@ async def get_commercial_policy_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
-@audit_event('ANALYTICS', 'CommercialPolicy', 'UPSERT')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'CommercialPolicy', 'UPSERT')
 async def save_commercial_policy_controller(
     dynamodb_resource: ServiceResource,
     policy: CommercialPolicySchema,
@@ -68,7 +68,7 @@ async def save_commercial_policy_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def get_credit_policy_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
@@ -88,8 +88,8 @@ async def get_credit_policy_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
-@audit_event('ANALYTICS', 'CreditPolicy', 'UPSERT')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'CreditPolicy', 'UPSERT')
 async def save_credit_policy_controller(
     dynamodb_resource: ServiceResource,
     policy: CreditPolicyRequest,

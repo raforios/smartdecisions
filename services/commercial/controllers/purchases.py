@@ -9,7 +9,7 @@ from fastapi import Request
 from schemas.analytics import ReferenceRates
 from schemas.dashboard import PurchaseFigures
 from schemas.purchases import PurchasesResponse, PurchasesUnavailable
-from services.analytics_utils import get_dataset_metadata, load_dataframe_from_s3
+from services.analytics_utils import get_dataset_metadata, load_dataframe
 from services.currency import PARALLEL_CURRENCY, PARALLEL_FALLBACK_CURRENCY, current_rate
 from services.purchases import (
     build_purchase_rows,
@@ -35,19 +35,23 @@ def todays_rates(auth_token: str) -> ReferenceRates:
                           usdt = current_rate(PARALLEL_CURRENCY, auth_token, today))
 
 
-def _prices_of(metadata: dict[str, Any]) -> dict[str, float]:
+def _prices_of(
+    metadata: dict[str, Any],
+    auth_token: str
+) -> dict[str, float]:
     '''
         The latest sale price of each product of the dataset.
 
         Args:
             metadata (dict[str, Any]): The dataset record.
+            auth_token (str): The caller's Authorization header, for FILES.
 
         Returns:
             dict[str, float]: Bolivianos per product.
     '''
     stock_key = metadata.get('stock_s3_key')
-    return latest_prices(load_dataframe_from_s3(metadata['file_s3_key']),
-                         load_dataframe_from_s3(stock_key) if stock_key else None)
+    return latest_prices(load_dataframe(metadata['file_s3_key'], auth_token),
+                         load_dataframe(stock_key, auth_token) if stock_key else None)
 
 
 def _cost_moves(rows: list) -> tuple[int, int]:
@@ -82,7 +86,7 @@ def purchase_figures(
     if not key:
         return PurchaseFigures()
     rates = todays_rates(auth_token)
-    costed = with_costs_in_bolivianos(load_dataframe_from_s3(key), auth_token, rates)
+    costed = with_costs_in_bolivianos(load_dataframe(key, auth_token), auth_token, rates)
     if costed.empty:
         return PurchaseFigures()
     rows = build_purchase_rows(costed, {}, rates)
@@ -93,7 +97,7 @@ def purchase_figures(
                            cost_up = up, cost_down = down)
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def purchases_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -113,8 +117,8 @@ async def purchases_controller(
                                  reason_code = PurchasesUnavailable.NO_PURCHASES.value)
     token = (params or {}).get('auth_token') or ''
     rates = todays_rates(token)
-    costed = with_costs_in_bolivianos(load_dataframe_from_s3(key), token, rates)
-    rows = build_purchase_rows(costed, _prices_of(metadata), rates)
+    costed = with_costs_in_bolivianos(load_dataframe(key, token), token, rates)
+    rows = build_purchase_rows(costed, _prices_of(metadata, token), rates)
     month, amount = last_month_amount(costed, token, get_current_time_gmt().date().isoformat())
     up, down = _cost_moves(rows)
     return PurchasesResponse(

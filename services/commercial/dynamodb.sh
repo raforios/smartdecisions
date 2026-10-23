@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Local DynamoDB management script for the Ingest service.
-# Provisions the t_ingest_datasets table required by the API.
+# Local DynamoDB management script for the Commercial service.
+# Provisions the datasets table of the loads and the runs table of the analyses.
 
 CONTAINER_NAME="dynamodb-local-container"
 IMAGE_NAME="amazon/dynamodb-local"
@@ -12,10 +12,12 @@ REGION="us-east-1"
 # Each table is described as a JSON object compatible with the AWS CLI flags.
 TABLES=(
     '{ "name": "t_ingest_datasets", "attributes": "AttributeName=dataset_id,AttributeType=S", "keys": "AttributeName=dataset_id,KeyType=HASH" }'
+    '{ "name": "t_analytics_runs", "attributes": "AttributeName=dataset_id,AttributeType=S AttributeName=run_id,AttributeType=S", "keys": "AttributeName=dataset_id,KeyType=HASH AttributeName=run_id,KeyType=RANGE" }'
+    '{ "name": "t_optimization_routes", "attributes": "AttributeName=route_day_key,AttributeType=S AttributeName=client_id,AttributeType=N", "keys": "AttributeName=route_day_key,KeyType=HASH AttributeName=client_id,KeyType=RANGE" }'
 )
 
 echo "==================================================="
-echo "  Ingest - DynamoDB Local Bootstrap"
+echo "  Commercial - DynamoDB Local Bootstrap"
 echo "==================================================="
 echo ""
 

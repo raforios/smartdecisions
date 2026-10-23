@@ -20,7 +20,7 @@ import pandas as pd
 import pandera.pandas as pa
 from pandera.errors import SchemaErrors
 
-from schemas.ingest import (
+from schemas.commercial import (
     CLIENT_COLUMNS,
     COLLECTION_COLUMNS,
     OBJECTIVE_COLUMNS,

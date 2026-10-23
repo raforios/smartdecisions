@@ -19,7 +19,7 @@ from services.sellers import (
 from services.utils import audit_event, handle_service_errors
 
 
-@handle_service_errors('INGEST')
+@handle_service_errors('COMMERCIAL')
 async def list_sellers_controller(
     dynamodb_resource: ServiceResource,
     user_email: str | None,
@@ -45,8 +45,8 @@ async def list_sellers_controller(
     ))
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Seller', 'UPDATE')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Seller', 'UPDATE')
 async def update_seller_controller(
     dynamodb_resource: ServiceResource,
     seller_id: str,

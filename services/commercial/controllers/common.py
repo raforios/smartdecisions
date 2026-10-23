@@ -17,9 +17,10 @@ from uuid import uuid4
 
 import pandas as pd
 from boto3.resources.base import ServiceResource
+from fastapi import Request
 from pydantic import BaseModel
 
-from schemas.ingest import (
+from schemas.commercial import (
     TEMPLATE_VERSION,
     IngestError,
     IngestResponse,
@@ -31,8 +32,8 @@ from schemas.clients import ClientSource
 from services.clients import CLIENT_FRAME_COLUMNS, sync_master
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
-from services.ingest_files import serialize_dataframe
-from services.ingest_utils import (
+from services.load_files import serialize_dataframe
+from services.commercial_utils import (
     attach_to_dataset,
     persist_dataset,
     read_stored_frame,
@@ -59,6 +60,20 @@ API_ORIGIN = 'API'
 # a client who only sends yesterday's stock should not download a book with
 # three sheets they will never fill in.
 TEMPLATES_S3_PREFIX = ENV_VARS['TEMPLATES_S3_PREFIX'].strip('/')
+
+
+def caller_token(request: Request | None) -> str:
+    '''
+        The caller's Authorization header, forwarded to FILES, ML_FUNCTIONS or
+        QUOTES so they answer for the real user; empty when there is no request.
+
+        Args:
+            request (Request | None): The incoming request.
+
+        Returns:
+            str: The header, or an empty string.
+    '''
+    return (request.headers.get('authorization') if request is not None else None) or ''
 
 
 def template_key(contract: str) -> str:

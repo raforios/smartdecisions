@@ -101,7 +101,7 @@ class StockBlock(BaseModel):
 
 class StockResponse(BaseModel):
     '''
-        Full stock view for GET /v1/analytics/stock/{dataset_id}.
+        Full stock view for GET /v1/commercial/stock/{dataset_id}.
     '''
     dataset_id: str
     period: PeriodInfo = PeriodInfo()
@@ -131,7 +131,7 @@ class StockPhoto(BaseModel):
 
 class StockHistoryResponse(BaseModel):
     '''
-        The inventory over time, for GET /v1/analytics/stock-history/{dataset_id}:
+        The inventory over time, for GET /v1/commercial/stock-history/{dataset_id}:
         one row per stored photo, oldest first. The last one's price list, in
         dollars of its day against today, says whether the prices need an
         adjustment.

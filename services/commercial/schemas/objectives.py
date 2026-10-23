@@ -151,7 +151,7 @@ class ObjectivesBlockSchema(BaseModel):
 
 class ObjectivesResponse(ObjectivesBlockSchema):
     """
-        Full attainment view for GET /v1/analytics/objectives/{dataset_id}.
+        Full attainment view for GET /v1/commercial/objectives/{dataset_id}.
     """
     dataset_id: str
     period: PeriodInfo = PeriodInfo()

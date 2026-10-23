@@ -6,6 +6,7 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from controllers.common import caller_token
 from schemas.analytics import (
     AnalyticsPdvResponse,
     AnalyticsResultsResponse,
@@ -63,7 +64,7 @@ from services.analytics_utils import (
     get_latest_run_for_dataset,
     HISTORY_DEFAULT_LIMIT,
     list_runs_for_owner,
-    load_dataframe_from_s3,
+    load_dataframe,
     persist_run
 )
 from services.environment import load_and_validate_env_vars
@@ -188,7 +189,7 @@ def _scoped_dataframe(
     # (`with_month_close_factors`). The currency a screen asks for only picks what a
     # chart draws, so it never reaches this.
     return apply_date_range(
-        dataframe = load_dataframe_from_s3(metadata['file_s3_key']),
+        dataframe = load_dataframe(metadata['file_s3_key'], (params or {}).get('auth_token') or ''),
         date_from = options.get('date_from'),
         date_to = options.get('date_to')
     )
@@ -248,25 +249,29 @@ def _caller_token(request: Request | None) -> dict[str, Any]:
         Returns:
             dict[str, Any]: {'auth_token': header} or empty.
     '''
-    header = request.headers.get('Authorization') if request is not None else None
+    header = caller_token(request)
     return {'auth_token': header} if header else {}
 
 
-def _payments_of(metadata: dict[str, Any]) -> Any:
+def _payments_of(
+    metadata: dict[str, Any],
+    auth_token: str
+) -> Any:
     '''
         The payments INGEST attached to the dataset, in bolivianos.
 
         Args:
             metadata (dict[str, Any]): The dataset record.
+            auth_token (str): The caller's Authorization header, for FILES.
 
         Returns:
             Any: The payments DataFrame, or None when none were loaded.
     '''
     key = metadata.get('collections_s3_key')
-    return load_dataframe_from_s3(key) if key else None
+    return load_dataframe(key, auth_token) if key else None
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def commercial_summary_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -300,7 +305,7 @@ async def commercial_summary_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def receivables_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -329,7 +334,7 @@ async def receivables_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    payments = _payments_of(metadata)
+    payments = _payments_of(metadata, (params or {}).get('auth_token') or '')
     block = build_receivables(
         sales = dataframe,
         collections = payments,
@@ -349,7 +354,7 @@ async def receivables_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def objectives_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -377,14 +382,15 @@ async def objectives_controller(
     objectives_key = metadata.get('objectives_s3_key')
 
     objectives, available = select_objective_periods(
-        load_dataframe_from_s3(objectives_key) if objectives_key else None,
+        (load_dataframe(objectives_key, (params or {}).get('auth_token') or '')
+         if objectives_key else None),
         (params or {}).get('date_from'),
         (params or {}).get('date_to')
     )
     block = build_objectives(
         sales = dataframe,
         objectives = objectives,
-        collections = _payments_of(metadata),
+        collections = _payments_of(metadata, (params or {}).get('auth_token') or ''),
         stored_policy = get_commercial_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
@@ -399,7 +405,7 @@ async def objectives_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def stock_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -428,7 +434,8 @@ async def stock_controller(
 
     block = build_stock(
         sales = dataframe,
-        stock = load_dataframe_from_s3(stock_key) if stock_key else None
+        stock = (load_dataframe(stock_key, (params or {}).get('auth_token') or '')
+                 if stock_key else None)
     )
     # The photo is what the stock is worth now: today's rate.
     return in_three_currencies(
@@ -439,7 +446,7 @@ async def stock_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def portfolio_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -461,7 +468,7 @@ async def portfolio_controller(
     )
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def forecast_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -476,6 +483,7 @@ async def forecast_controller(
     dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     result = build_forecast(
         dataframe = _at_month_close(dataframe, params),
+        auth_token = (params or {}).get('auth_token') or '',
         months_ahead = params.get('months_ahead', 3),
         method = params.get('method', 'linear'),
         group_by = params.get('group_by')
@@ -484,7 +492,7 @@ async def forecast_controller(
                            params)
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def segmentation_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -502,8 +510,8 @@ async def segmentation_controller(
     return SegmentationResponse(dataset_id = dataset_id, **result.model_dump())
 
 
-@handle_service_errors('ANALYTICS')
-@audit_event('ANALYTICS', 'AnalyticsRun', 'RUN')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'AnalyticsRun', 'RUN')
 async def run_analytics_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -557,7 +565,7 @@ async def run_analytics_controller(
     ), params)
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def list_runs_controller(
     dynamodb_resource: ServiceResource,
     request: Request,
@@ -616,7 +624,7 @@ def _optional_float(value: Any) -> float | None:
     return None if value is None else float(value)
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def get_results_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -641,7 +649,7 @@ async def get_results_controller(
     ), _caller_token(request))
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def get_pdv_opportunities_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -668,7 +676,7 @@ async def get_pdv_opportunities_controller(
     ), _caller_token(request))
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def fx_effect_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -703,7 +711,7 @@ async def fx_effect_controller(
                                             period = period, **block.model_dump()), params)
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def stock_history_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -725,6 +733,6 @@ async def stock_history_controller(
     today = get_current_time_gmt().date().isoformat()
     rates = ReferenceRates(usd = current_rate(PARALLEL_FALLBACK_CURRENCY, token, today),
                            usdt = current_rate(PARALLEL_CURRENCY, token, today))
-    photos = build_stock_history(load_dataframe_from_s3(stock_key), token, rates)
+    photos = build_stock_history(load_dataframe(stock_key, token), token, rates)
     return StockHistoryResponse(dataset_id = dataset_id, available = bool(photos),
                                 rates = rates, photos = photos)

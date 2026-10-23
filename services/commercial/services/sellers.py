@@ -200,3 +200,28 @@ def update_seller(
     message = f'Seller {seller_id} of {owner_email} updated.'
     logger.info(message)
     return stored
+
+
+def users_of_seller(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    seller: str
+) -> set[str]:
+    '''
+        The user emails a seller of the files signs in as.
+
+        A plan names the seller the way the file does ("Ana"); the phone that
+        runs it reports with the email it signed in with. The seller master is
+        where a manager said they are the same person.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): Authenticated account that owns the data.
+            seller (str): The seller as the files write it.
+
+        Returns:
+            set[str]: Linked emails, lower case; empty when nobody is linked.
+    '''
+    return {str(item['user_email']).lower()
+            for item in list_sellers(dynamodb_resource, owner_email)
+            if item.get('id') == seller and item.get('user_email')}

@@ -12,8 +12,8 @@ from io import BytesIO
 
 import pandas as pd
 
-from schemas.ingest import ValidationRule
-from services.objectives import parse_and_validate, prepare_rows, validate_rows
+from schemas.commercial import ValidationRule
+from services.objectives_load import parse_and_validate, prepare_rows, validate_rows
 
 
 SALES = pd.DataFrame({

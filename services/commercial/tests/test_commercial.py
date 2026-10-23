@@ -9,8 +9,8 @@ from io import BytesIO
 import pandas as pd
 import pytest
 
-from schemas.ingest import ValidationRule
-from services.ingest import (
+from schemas.commercial import ValidationRule
+from services.commercial import (
     _coerce_dates,
     _derive_id,
     _id_limit,
@@ -18,7 +18,7 @@ from services.ingest import (
     parse_and_validate,
     parse_and_validate_partial
 )
-from services.ingest_contract import map_columns
+from services.load_contract import map_columns
 
 
 # ---------------------------------------------------------------------------
@@ -331,8 +331,8 @@ def test_the_dataset_model_declares_every_attribute_the_item_stores():
     '''
     # pylint: disable=import-outside-toplevel,protected-access
     from controllers import collections, objectives, stock, visits
-    from models.ingest import IngestDataset
-    from services.ingest_utils import _build_dataset_item
+    from models.commercial import IngestDataset
+    from services.commercial_utils import _build_dataset_item
 
     declared = set(IngestDataset.__annotations__)
     built = _build_dataset_item({'owner_email': 'a@b.c', 'status': 'validated'})

@@ -15,7 +15,7 @@ import pytest
 
 from fastapi import HTTPException
 
-from schemas.ingest import (
+from schemas.commercial import (
     IngestError,
     SALES_COLUMNS,
     TemplateInfo,
@@ -23,10 +23,10 @@ from schemas.ingest import (
     ObjectivesResponse,
     TEMPLATE_COLUMNS
 )
-from services import ingest_utils
-from services.ingest_files import read_file
+from services import commercial_utils
+from services.load_files import read_file
 from controllers import common
-from controllers import ingest as controllers
+from controllers import commercial as controllers
 from controllers import objectives as objectives_controller
 
 
@@ -196,7 +196,7 @@ def test_a_dataset_of_another_client_is_not_readable():
         between storing data and being multi-tenant, and no test covered it while
         the hole was open.
     '''
-    with patch('services.ingest_utils.get_dataset_by_id',
+    with patch('services.commercial_utils.get_dataset_by_id',
                lambda **kwargs: _dataset('otra@empresa.com')):
         with pytest.raises(HTTPException) as failure:
             asyncio.run(controllers.get_dataset_status_controller(
@@ -217,7 +217,7 @@ def test_a_missing_dataset_answers_the_same_as_a_foreign_one():
         Telling them apart would let a caller confirm which identifiers exist,
         which is a map of the customer base.
     '''
-    with patch('services.ingest_utils.get_dataset_by_id', lambda **kwargs: None):
+    with patch('services.commercial_utils.get_dataset_by_id', lambda **kwargs: None):
         with pytest.raises(HTTPException) as failure:
             asyncio.run(controllers.get_dataset_status_controller(
                 dynamodb_resource = None,
@@ -232,7 +232,7 @@ def test_a_missing_dataset_answers_the_same_as_a_foreign_one():
 
 def test_the_owner_reads_their_own_dataset():
     '''The guard must not get in the way of whoever actually owns the data.'''
-    with patch('services.ingest_utils.get_dataset_by_id',
+    with patch('services.commercial_utils.get_dataset_by_id',
                lambda **kwargs: _dataset('yo@miempresa.com')):
         response = asyncio.run(controllers.get_dataset_status_controller(
             dynamodb_resource = None,
@@ -401,9 +401,9 @@ def test_the_fingerprint_is_the_content_and_not_the_name():
         The same figures renamed are the same dataset; a corrected file is a
         different one even under the same name.
     '''
-    same = ingest_utils.content_fingerprint(b'fila1,fila2')
-    assert same == ingest_utils.content_fingerprint(b'fila1,fila2')
-    assert same != ingest_utils.content_fingerprint(b'fila1,fila2,fila3')
+    same = commercial_utils.content_fingerprint(b'fila1,fila2')
+    assert same == commercial_utils.content_fingerprint(b'fila1,fila2')
+    assert same != commercial_utils.content_fingerprint(b'fila1,fila2,fila3')
 
 
 def test_the_objectives_upload_returns_a_full_response():
@@ -549,7 +549,10 @@ def test_every_companion_upload_controller_returns_its_model(
         exactly why nobody wrote one — and exactly how an adapter that names
         a field its schema no longer has reaches production.
     '''
-    module = import_module(f'controllers.{controller_name.split("_")[1]}')
+    # The purchases door lives in purchases_load since ANALYTICS joined (23-oct).
+    name = controller_name.split('_')[1]
+    module = import_module(f'controllers.{name}_load' if name == 'purchases'
+                           else f'controllers.{name}')
     controller = getattr(module, controller_name)
 
     with patch.object(module, 'get_owned_dataset',

@@ -21,15 +21,15 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from schemas.ingest import ValidationIssue, ValidationRule, VisitsSummary
-from services.ingest import fill_pos_ids, normalize_frame, sanitize_geo
-from services.ingest_contract import (
+from schemas.commercial import ValidationIssue, ValidationRule, VisitsSummary
+from services.commercial import fill_pos_ids, normalize_frame, sanitize_geo
+from services.load_contract import (
     VISIT_HEADER_LOOKUP,
     VISITS_SCHEMA,
     unknown_value_issues,
     validate
 )
-from services.ingest_files import read_file
+from services.load_files import read_file
 from services.logger_config import custom_logger as logger
 
 _CLIENT = 'pos_id'

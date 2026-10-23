@@ -33,11 +33,11 @@ from schemas.clients import (
     ClientUpsertResultSchema,
     ClientUpsertSchema
 )
-from schemas.ingest import CLIENT_SALES_ATTRIBUTES
+from schemas.commercial import CLIENT_SALES_ATTRIBUTES
 from services.crud import find_item_by_key, query_by_partition
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
-from services.ingest_utils import from_dynamo, to_dynamo
+from services.commercial_utils import from_dynamo, to_dynamo
 from services.logger_config import custom_logger as logger
 from services.sellers import register_sellers, sellers_from_frame
 from services.utils import get_current_time_gmt

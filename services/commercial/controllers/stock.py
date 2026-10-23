@@ -15,10 +15,11 @@ from controllers.common import (
     stored_companion_frame
 )
 from schemas.channels import LoadMode
-from schemas.ingest import IngestError, StockDayResponse, StockResponse
+from schemas.commercial import IngestError, StockDayItem, StockDayResponse, StockResponse
 from services.exceptions import ResourceNotFoundError
-from services.ingest_utils import get_owned_dataset
-from services.stock import parse_and_validate, stock_of_day, validate_rows
+from services.logger_config import custom_logger as logger
+from services.commercial_utils import get_owned_dataset
+from services.stock_load import parse_and_validate, stock_of_day, validate_rows
 from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
@@ -38,8 +39,8 @@ SPEC = CompanionSpec(
 )
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Stock', 'UPLOAD')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Stock', 'UPLOAD')
 async def ingest_stock_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -86,7 +87,7 @@ async def ingest_stock_controller(
                                  (filename, auth_token))
 
 
-@handle_service_errors('INGEST')
+@handle_service_errors('COMMERCIAL')
 async def get_stock_day_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -111,13 +112,42 @@ async def get_stock_day_controller(
         Raises:
             ResourceNotFoundError: NO_STOCK_FOR_DAY when nothing was loaded for it.
     '''
+    items = stock_items_of_day(dynamodb_resource, (dataset_id, day), current_user, auth_token)
+    return StockDayResponse(dataset_id = dataset_id, date = day, items = items)
+
+
+def stock_items_of_day(
+    dynamodb_resource: ServiceResource,
+    dataset_and_day: tuple[str, str],
+    owner_email: str,
+    auth_token: str
+) -> list[StockDayItem]:
+    '''
+        The products of the stock file of a dataset on one day, read through
+        FILES. The screen of the day and the opening of a route day read it here.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            dataset_and_day (tuple[str, str]): Sales dataset and day, YYYY-MM-DD.
+            owner_email (str): Owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+
+        Returns:
+            list[StockDayItem]: One item per product of that day.
+
+        Raises:
+            ResourceNotFoundError: NO_STOCK_FOR_DAY when nothing was loaded for it.
+    '''
+    dataset_id, day = dataset_and_day
     dataset = get_owned_dataset(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
-        owner_email = current_user
+        owner_email = owner_email
     )
     stored = stored_companion_frame(dataset, SPEC, auth_token)
     items = stock_of_day(stored, day) if stored is not None else []
     if not items:
+        error_msg = f'No stock of {day} in dataset {dataset_id}.'
+        logger.warning(error_msg)
         raise ResourceNotFoundError(detail = IngestError.NO_STOCK_FOR_DAY.value)
-    return StockDayResponse(dataset_id = dataset_id, date = day, items = items)
+    return items

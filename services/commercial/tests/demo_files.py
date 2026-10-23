@@ -22,5 +22,5 @@ def serve_demo_files(
     '''
     for module in modules:
         monkeypatch.setattr(module, 'get_dataset_metadata', lambda **_: METADATA)
-        if hasattr(module, 'load_dataframe_from_s3'):
-            monkeypatch.setattr(module, 'load_dataframe_from_s3', lambda key: FRAMES[key]())
+        if hasattr(module, 'load_dataframe'):
+            monkeypatch.setattr(module, 'load_dataframe', lambda key, _token: FRAMES[key]())

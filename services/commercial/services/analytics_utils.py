@@ -8,11 +8,9 @@
 '''
 import uuid
 from decimal import Decimal
-from io import BytesIO
 from enum import Enum
 from typing import Any
 
-import boto3
 import pandas as pd
 from pydantic import BaseModel
 from boto3.dynamodb.conditions import Attr
@@ -23,17 +21,16 @@ from services.crud import create_item
 from services.environment import load_and_validate_env_vars
 from services.exceptions import (
     InvalidInputError,
-    RegisterNotFoundError,
-    ServiceUnavailableError
+    RegisterNotFoundError
 )
 from services.logger_config import custom_logger as logger
-from services.utils import audit_event, get_current_time_gmt
+from services.commercial_utils import owned_items
+from services.utils import audit_event, get_current_time_gmt, read_file_rows
 
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
     'DYNAMODB_TABLE_NAME_ANALYTICS_RUNS': str,
-    'BUCKET_NAME': str,
     'HISTORY_DEFAULT_LIMIT': int,
     'AMOUNT_DECIMALS': int,
     'CHANGE_DECIMALS': int,
@@ -46,7 +43,6 @@ INGEST_DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 ANALYTICS_RUNS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_ANALYTICS_RUNS']
 CREDIT_POLICIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_CREDIT_POLICIES']
 COMMERCIAL_POLICIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_COMMERCIAL_POLICIES']
-FILES_BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 
 
 # ---------------------------------------------------------------------------
@@ -359,12 +355,6 @@ def apply_date_range(
 # ---------------------------------------------------------------------------
 
 
-# boto3 resolves region + credentials from the default chain (Lambda IAM
-# role in AWS, ~/.aws/credentials in local dev) — same way AUTH and EVENTS
-# do it. No region_name argument needed.
-_s3_client = boto3.client('s3')
-
-
 def get_credit_policy(
     dynamodb_resource: ServiceResource,
     owner_email: str
@@ -550,62 +540,30 @@ def get_dataset_metadata(
     if item.get('status') != 'validated':
         error_msg = (
             f'Dataset {dataset_id} cannot be analyzed because its status is '
-            f'"{item.get("status")}". Re-upload a valid file via /v1/ingest/excel.'
+            f'"{item.get("status")}". Re-upload a valid file via /v1/commercial/excel.'
         )
         logger.warning(error_msg)
         raise InvalidInputError(detail = AnalyticsError.DATASET_NOT_VALIDATED.value)
     return item
 
 
-def _read_dataframe(
-    file_bytes: bytes,
-    s3_key: str
+def load_dataframe(
+    file_key: str,
+    auth_token: str
 ) -> pd.DataFrame:
     '''
-        Parses the downloaded bytes into a DataFrame based on the key suffix.
-    '''
-    lower = s3_key.lower()
-    buffer = BytesIO(file_bytes)
-    if lower.endswith('.xlsx'):
-        return pd.read_excel(buffer, engine = 'openpyxl')
-    if lower.endswith('.csv'):
-        return pd.read_csv(buffer)
-    error_msg = f'Unsupported file extension on S3 key "{s3_key}".'
-    logger.error(error_msg)
-    raise InvalidInputError(detail = AnalyticsError.UNSUPPORTED_FILE_TYPE.value)
-
-
-def load_dataframe_from_s3(s3_key: str) -> pd.DataFrame:
-    '''
-        Downloads the validated file from S3 and returns it as a DataFrame.
+        A file INGEST stored, read through FILES (`CLAUDE.md` §9: FILES is
+        who touches the bucket), which answers its rows already parsed.
 
         Args:
-            s3_key (str): S3 object key under FILES_BUCKET_NAME.
+            file_key (str): Object key of the file in the bucket.
+            auth_token (str): The caller's Authorization header, forwarded so
+                FILES authorizes the real user.
 
         Returns:
-            pd.DataFrame: Sales rows ready for the affinity engine.
-
-        Raises:
-            ServiceUnavailableError: If S3 is unreachable or denies access.
+            pd.DataFrame: The rows of the file.
     '''
-    try:
-        response = _s3_client.get_object(Bucket = FILES_BUCKET_NAME, Key = s3_key)
-        file_bytes = response['Body'].read()
-    except Exception as error:
-        error_msg = (
-            f'Failed to download s3://{FILES_BUCKET_NAME}/{s3_key}: {error}'
-        )
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = AnalyticsError.DATASET_UNREADABLE.value
-        ) from error
-
-    message = (
-        f'Downloaded {len(file_bytes)} bytes from '
-        f's3://{FILES_BUCKET_NAME}/{s3_key} for analytics.'
-    )
-    logger.info(message)
-    return _read_dataframe(file_bytes, s3_key)
+    return pd.DataFrame(read_file_rows(file_key, auth_token))
 
 
 # ---------------------------------------------------------------------------
@@ -665,7 +623,7 @@ def _build_run_item(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@audit_event('ANALYTICS', 'AnalyticsRun', 'CREATE')
+@audit_event('COMMERCIAL', 'AnalyticsRun', 'CREATE')
 def persist_run(
     dynamodb_resource: ServiceResource,
     payload: dict[str, Any]
@@ -724,21 +682,7 @@ def list_runs_for_owner(
         Returns:
             list[dict[str, Any]]: Stored runs, newest first.
     '''
-    table = dynamodb_resource.Table(ANALYTICS_RUNS_TABLE)
-    items: list[dict[str, Any]] = []
-    scan_kwargs: dict[str, Any] = {
-        'FilterExpression': Attr('owner_email').eq(owner_email)
-    }
-    while True:
-        response = table.scan(**scan_kwargs)
-        items.extend(response.get('Items', []))
-        last_key = response.get('LastEvaluatedKey')
-        if not last_key:
-            break
-        scan_kwargs['ExclusiveStartKey'] = last_key
-
-    items.sort(key = lambda item: str(item.get('created_at', '')), reverse = True)
-    return items[:limit]
+    return owned_items(dynamodb_resource.Table(ANALYTICS_RUNS_TABLE), owner_email, limit)
 
 
 def get_latest_run_for_dataset(

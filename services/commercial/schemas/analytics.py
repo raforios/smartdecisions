@@ -28,6 +28,7 @@ class AnalyticsError(str, Enum):
     DATASET_NOT_FOUND = 'DATASET_NOT_FOUND'
     DATASET_NOT_VALIDATED = 'DATASET_NOT_VALIDATED'
     UNSUPPORTED_FILE_TYPE = 'UNSUPPORTED_FILE_TYPE'
+    FORECAST_UNAVAILABLE = 'FORECAST_UNAVAILABLE'
 
 
 # --- Money in three currencies (bolivianos, official dollar, USDT) ---
@@ -136,7 +137,7 @@ class AnalyticsSummary(BaseModel):
 
 class AnalyticsRunResponse(BaseModel):
     '''
-        Response payload for POST /v1/analytics/run/{dataset_id}.
+        Response payload for POST /v1/commercial/run/{dataset_id}.
     '''
     dataset_id: str
     run_id: str
@@ -180,7 +181,7 @@ class RunListResponse(BaseModel):
 
 class AnalyticsResultsResponse(BaseModel):
     '''
-        Compact result for GET /v1/analytics/results/{dataset_id}.
+        Compact result for GET /v1/commercial/results/{dataset_id}.
     '''
     dataset_id: str
     run_id: str
@@ -307,7 +308,7 @@ class ForecastBlock(BaseModel):
 
 class ForecastResponse(ForecastBlock):
     '''
-        Demand forecast for GET /v1/analytics/forecast/{dataset_id}.
+        Demand forecast for GET /v1/commercial/forecast/{dataset_id}.
     '''
     dataset_id: str
     rates: ReferenceRates | None = Field(
@@ -340,7 +341,7 @@ class SegmentationBlock(BaseModel):
 
 class SegmentationResponse(SegmentationBlock):
     '''
-        Customer value segmentation for GET /v1/analytics/segmentation/{dataset_id}.
+        Customer value segmentation for GET /v1/commercial/segmentation/{dataset_id}.
     '''
     dataset_id: str
 
@@ -578,7 +579,7 @@ class PortfolioBlock(BaseModel):
 
 class PortfolioResponse(PortfolioBlock):
     '''
-        Portfolio health for GET /v1/analytics/portfolio/{dataset_id}.
+        Portfolio health for GET /v1/commercial/portfolio/{dataset_id}.
 
         `at_risk` and `lost` are deliberately separate lists: a client
         who slipped this month is a visit, one who has been gone half a year is
@@ -760,7 +761,7 @@ class ChosenMonth(BaseModel):
 
 class CommercialSummaryResponse(CommercialSummaryBlock):
     '''
-        Full commercial summary for GET /v1/analytics/summary/{dataset_id}.
+        Full commercial summary for GET /v1/commercial/summary/{dataset_id}.
 
         The first block answers 'how much did we sell'; the five that follow
         answer the questions a manager asks next — is it growing, where does

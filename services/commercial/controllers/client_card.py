@@ -45,7 +45,7 @@ def _today_rates(
                                get_current_time_gmt().date().isoformat())
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def client_list_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -62,7 +62,7 @@ async def client_list_controller(
                         params)
 
 
-@handle_service_errors('ANALYTICS')
+@handle_service_errors('COMMERCIAL')
 async def client_card_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -82,7 +82,7 @@ async def client_card_controller(
         raise ResourceNotFoundError(detail = AnalyticsError.CLIENT_NOT_FOUND.value)
     metadata = get_dataset_metadata(dynamodb_resource = dynamodb_resource,
                                     dataset_id = dataset_id, owner_email = current_user)
-    payments = _payments_of(metadata)
+    payments = _payments_of(metadata, (params or {}).get('auth_token') or '')
     if payments is not None and ORDER in rows.columns:
         payments = payments.loc[payments[ORDER].isin(rows[ORDER])]
     policy = get_credit_policy(dynamodb_resource = dynamodb_resource,

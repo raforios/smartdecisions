@@ -21,15 +21,15 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from schemas.ingest import StockDayItem, StockSummary, ValidationIssue
-from services.ingest import fill_product_ids, normalize_frame
-from services.ingest_contract import (
+from schemas.commercial import StockDayItem, StockSummary, ValidationIssue
+from services.commercial import fill_product_ids, normalize_frame
+from services.load_contract import (
     STOCK_HEADER_LOOKUP,
     STOCK_SCHEMA,
     validate_by_catalogue
 )
-from services.ingest_files import read_file
-from services.ingest_contract import AMOUNT_DECIMALS
+from services.load_files import read_file
+from services.load_contract import AMOUNT_DECIMALS
 from services.logger_config import custom_logger as logger
 
 _PRODUCT = 'product_id'

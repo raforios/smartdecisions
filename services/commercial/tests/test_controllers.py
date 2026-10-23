@@ -30,7 +30,7 @@ from schemas.objectives import ObjectivesResponse
 from schemas.stock import StockResponse
 from schemas.receivables import ReceivablesResponse
 from controllers import analytics as controllers
-from services import currency
+from services import currency, forecast
 
 
 def _sales_frame() -> pd.DataFrame:
@@ -117,7 +117,7 @@ def _dataset(monkeypatch) -> str:
         controllers, 'get_dataset_metadata',
         lambda **_: {'file_s3_key': 'ingest/normalized/test.csv', 'status': 'validated'}
     )
-    monkeypatch.setattr(controllers, 'load_dataframe_from_s3', lambda _: _sales_frame())
+    monkeypatch.setattr(controllers, 'load_dataframe', lambda *_: _sales_frame())
     return 'test-dataset-id'
 
 
@@ -182,8 +182,8 @@ def test_receivables_returns_a_full_response(
         }
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe_from_s3',
-        lambda key: _collections_frame() if 'collections' in key else _sales_frame()
+        controllers, 'load_dataframe',
+        lambda key, _token: _collections_frame() if 'collections' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
     _rising_rate(monkeypatch)
@@ -226,8 +226,27 @@ def test_portfolio_returns_a_full_response(dataset):
     assert response.kpis and response.movement
 
 
-def test_forecast_returns_a_full_response(dataset):
+def _ml_forecast(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''
+        ML_FUNCTIONS, standing in: holds the last value flat, which is enough
+        for a controller test (the models are tested in ML_FUNCTIONS).
+    '''
+    def _post(
+        _url: str,
+        json: dict,
+        **_: object
+    ) -> Mock:
+        return Mock(ok = True, json = lambda: {'forecast': [json['values'][-1]] * json['horizon']})
+
+    monkeypatch.setattr(forecast.requests, 'post', _post)
+
+
+def test_forecast_returns_a_full_response(
+    dataset: str,
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
     '''The forecast endpoint must honour the requested method and horizon.'''
+    _ml_forecast(monkeypatch)
     response = _call(
         controllers.forecast_controller, dataset,
         {'method': 'linear', 'months_ahead': 3}
@@ -504,12 +523,15 @@ def test_objectives_returns_a_full_response(
         }
     )
 
-    def _load(key):
+    def _load(
+        key,
+        _token
+    ):
         if 'objectives' in key:
             return _objectives_frame()
         return _collections_frame() if 'collections' in key else _sales_frame()
 
-    monkeypatch.setattr(controllers, 'load_dataframe_from_s3', _load)
+    monkeypatch.setattr(controllers, 'load_dataframe', _load)
     monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
     _flat_rate(monkeypatch)
 
@@ -613,8 +635,8 @@ def test_stock_returns_a_full_response(
                      'stock_s3_key': 'ingest/stock/test.csv', 'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe_from_s3',
-        lambda key: _stock_frame() if 'stock' in key else _sales_frame()
+        controllers, 'load_dataframe',
+        lambda key, _token: _stock_frame() if 'stock' in key else _sales_frame()
     )
     with_stock = _call(controllers.stock_controller, dataset)
 
@@ -754,8 +776,8 @@ def test_receivables_carry_every_amount_in_three_currencies(
                      'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe_from_s3',
-        lambda key: _collections_frame() if 'collections' in key else _sales_frame()
+        controllers, 'load_dataframe',
+        lambda key, _token: _collections_frame() if 'collections' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
     _rising_rate(monkeypatch)
@@ -792,8 +814,8 @@ def test_attainment_carries_every_amount_in_three_currencies(
                      'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe_from_s3',
-        lambda key: _objectives_frame() if 'objectives' in key else _sales_frame()
+        controllers, 'load_dataframe',
+        lambda key, _token: _objectives_frame() if 'objectives' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
     _rising_rate(monkeypatch)
@@ -827,8 +849,8 @@ def test_stock_carries_every_amount_in_three_currencies(
                      'stock_s3_key': 'ingest/stock/test.csv', 'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe_from_s3',
-        lambda key: _stock_frame() if 'stock' in key else _sales_frame()
+        controllers, 'load_dataframe',
+        lambda key, _token: _stock_frame() if 'stock' in key else _sales_frame()
     )
     _flat_rate(monkeypatch)
 
@@ -856,6 +878,7 @@ def test_the_forecast_shows_the_past_at_its_days_and_the_future_today(
         worth today's dollars, because it has not happened yet.
     '''
     _rising_rate(monkeypatch)
+    _ml_forecast(monkeypatch)
 
     response = _call(controllers.forecast_controller, dataset,
                      {'months_ahead': 2, 'auth_token': 'Bearer t'})
@@ -903,7 +926,7 @@ def test_a_response_at_todays_rate_keeps_its_type_and_adds_the_dollars() -> None
 
 def test_the_callers_token_travels_from_the_header() -> None:
     '''`_caller_token`: the endpoints without query options still ask QUOTES as the caller.'''
-    request = Mock(headers = {'Authorization': 'Bearer t'})
+    request = Mock(headers = {'authorization': 'Bearer t'})
 
     # The helper is private on purpose; the test pins its one behavior.
     # pylint: disable=protected-access

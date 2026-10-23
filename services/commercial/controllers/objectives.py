@@ -6,9 +6,9 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from controllers.common import CompanionSpec, load_sales_frame, store_companion
-from schemas.ingest import ObjectivesResponse
-from services.ingest_utils import get_owned_dataset
-from services.objectives import parse_and_validate
+from schemas.commercial import ObjectivesResponse
+from services.commercial_utils import get_owned_dataset
+from services.objectives_load import parse_and_validate
 from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
@@ -31,8 +31,8 @@ SPEC = CompanionSpec(
 )
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Objectives', 'UPLOAD')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Objectives', 'UPLOAD')
 async def ingest_objectives_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,

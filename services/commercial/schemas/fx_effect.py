@@ -97,7 +97,7 @@ class FxEffectBlock(BaseModel):
 
 class FxEffectResponse(FxEffectBlock):
     '''
-        GET /v1/analytics/fx-effect/{dataset_id}.
+        GET /v1/commercial/fx-effect/{dataset_id}.
     '''
     dataset_id: str
     source: str = Field(..., description = 'The dollar used: USD (official) or USDT.')

@@ -1,5 +1,5 @@
 '''
-    Ingest Microservice Main Handler
+    Commercial Microservice Main Handler
 '''
 from collections.abc import AsyncGenerator
 import socket
@@ -17,9 +17,15 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
+from routes.analytics import router as analytics_router
+from routes.areas import router as areas_router
 from routes.clients import router as clients_router
+from routes.daily_stock import router as daily_stock_router
+from routes.localization import router as localization_router
+from routes.optimization import router as optimization_router
+from routes.optimization_settings import router as settings_router
 from routes.channels import router as channels_router
-from routes.ingest import router as ingest_router
+from routes.commercial import router as commercial_router
 from routes.sellers import router as sellers_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
@@ -49,7 +55,7 @@ ROOT_PATH_VALUE = (ENV_VARS.get('ROOT_PATH') or '').strip('/')
 ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 # The docs live under the service's own prefix too: api.bearsoft.com.bo only
 # routes /v1/<service>/... to this Lambda, so /docs is unreachable through it.
-DOCS_BASE = '/v1/ingest'
+DOCS_BASE = '/v1/commercial'
 OPENAPI_URL = f'{DOCS_BASE}/openapi.json'
 
 CORS_ALLOWED_ORIGINS_ENV = ENV_VARS.get('CORS_ALLOWED_ORIGINS') or ''
@@ -76,21 +82,23 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         lifecycle (via dynamodb.sh / IaC) and the downloadable template is a
         static object in the default bucket, so there is nothing to prepare.
     '''
-    message = 'Ingest startup: DynamoDB-backed service ready.'
+    message = 'Commercial startup: DynamoDB-backed service ready.'
     logger.info(message)
     yield
-    message = 'Ingest shutdown: closing resources.'
+    message = 'Commercial shutdown: closing resources.'
     logger.info(message)
 
 
 APP_CONFIG = {
     'root_path': ROOT_PATH_NORMALIZED,
-    'title': 'Ingest Service',
+    'title': 'Commercial Service',
     'description': (
-        'SmartDecisions ingestion microservice: receives sales Excel/CSV files, '
-        'validates them against the v1 contract, stores the raw file in S3 via '
-        'FILES and persists dataset metadata in DynamoDB. Powers the upload step '
-        'of the SmartDecisions self-service POC.'
+        'SmartDecisions commercial microservice (INGEST, ANALYTICS and '
+        'OPTIMIZATION joined, 23-oct-2026): receives the sales, stock, purchases, '
+        'collections, visits and objectives of a company, by file through FILES '
+        'or by API, keeps its clients and sellers, analyses them (opportunities, '
+        'forecast, segmentation, portfolio, receivables, stock, purchases) and '
+        'plans and follows the sellers\' routes.'
     ),
     'version': '1.0.0',
     'contact': {
@@ -215,6 +223,14 @@ HEALTH_TABLE_VARS = (
     'DYNAMODB_TABLE_NAME_INGEST_DATASETS',
     'DYNAMODB_TABLE_NAME_INGEST_CLIENTS',
     'DYNAMODB_TABLE_NAME_INGEST_SELLERS',
+    'DYNAMODB_TABLE_NAME_ANALYTICS_RUNS',
+    'DYNAMODB_TABLE_NAME_CREDIT_POLICIES',
+    'DYNAMODB_TABLE_NAME_COMMERCIAL_POLICIES',
+    'DYNAMODB_TABLE_NAME_OPTIMIZATION_ROUTES',
+    'DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES',
+    'DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES',
+    'DYNAMODB_TABLE_NAME_OPTIMIZATION_DAILY_STOCK',
+    'DYNAMODB_TABLE_NAME_OPTIMIZATION_SETTINGS',
 )
 
 
@@ -230,7 +246,7 @@ def tables_health_endpoint() -> TablesHealthResponse:
         names stay off the public health check (Rafael, 21-oct-2026).
     '''
     names = load_and_validate_env_vars(env_vars = dict.fromkeys(HEALTH_TABLE_VARS, str))
-    return tables_health(boto3.client('dynamodb'), 'ingest',
+    return tables_health(boto3.client('dynamodb'), 'commercial',
                          [names[variable] for variable in HEALTH_TABLE_VARS])
 
 
@@ -255,13 +271,20 @@ async def custom_swagger_ui() -> HTMLResponse:
     )
 
 
-# Order matters: `/v1/ingest/{dataset_id}` would swallow `/v1/ingest/clients`
-# and answer 422 for a path that has nothing to do with a dataset. The literal
-# routers go first, the one with the wildcard last.
+# Order matters: `/v1/commercial/{dataset_id}` would swallow
+# `/v1/commercial/clients` or `/v1/commercial/runs` and answer 422 for a path
+# that has nothing to do with a dataset. The literal routers go first, the one
+# with the wildcard last.
+app.include_router(analytics_router)
+app.include_router(areas_router)
+app.include_router(optimization_router)
+app.include_router(localization_router)
+app.include_router(daily_stock_router)
+app.include_router(settings_router)
 app.include_router(clients_router)
 app.include_router(sellers_router)
 app.include_router(channels_router)
-app.include_router(ingest_router)
+app.include_router(commercial_router)
 
 
 def run_local() -> None:

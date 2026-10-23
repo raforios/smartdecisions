@@ -11,7 +11,7 @@ from io import BytesIO
 
 import pandas as pd
 
-from schemas.ingest import ValidationRule
+from schemas.commercial import ValidationRule
 from services.visits import parse_and_validate
 
 

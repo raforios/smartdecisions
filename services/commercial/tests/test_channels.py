@@ -17,7 +17,7 @@ from fastapi import HTTPException
 from controllers import channels
 from controllers import common
 from controllers import stock as stock_controllers
-from services.ingest_files import read_file
+from services.load_files import read_file
 from schemas.channels import (
     CollectionRowSchema,
     SaleRowSchema,

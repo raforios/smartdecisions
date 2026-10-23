@@ -266,7 +266,7 @@ class CreditDevaluation(BaseModel):
 
 class ReceivablesResponse(BaseModel):
     '''
-        Full receivables view for GET /v1/analytics/receivables/{dataset_id}.
+        Full receivables view for GET /v1/commercial/receivables/{dataset_id}.
     '''
     dataset_id: str
     period: PeriodInfo = PeriodInfo()

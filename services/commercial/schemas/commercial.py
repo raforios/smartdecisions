@@ -557,7 +557,7 @@ class StockDayItem(BaseModel):
 
 class StockDayResponse(BaseModel):
     '''
-        The stored snapshot of one day, for GET /v1/ingest/{dataset_id}/stock.
+        The stored snapshot of one day, for GET /v1/commercial/{dataset_id}/stock.
 
         It exists so a service that needs the stock asks INGEST for it instead
         of reading the file: the route module opens its day with the same file

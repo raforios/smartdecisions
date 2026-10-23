@@ -39,7 +39,7 @@ class PurchaseRow(BaseModel):
 
 class PurchasesResponse(BaseModel):
     '''
-        Purchases view for GET /v1/analytics/purchases/{dataset_id}. Each
+        Purchases view for GET /v1/commercial/purchases/{dataset_id}. Each
         purchase reads at its own day (rule 2); next to it, today.
     '''
     dataset_id: str

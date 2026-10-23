@@ -10,11 +10,11 @@ from io import BytesIO
 
 import pandas as pd
 
-from schemas.ingest import (
+from schemas.commercial import (
     ValidationRule
 )
 from services.collections import parse_and_validate
-from services.ingest import parse_and_validate as parse_sales
+from services.commercial import parse_and_validate as parse_sales
 
 
 def _sales_frame() -> pd.DataFrame:

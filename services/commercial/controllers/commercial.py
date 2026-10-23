@@ -16,7 +16,7 @@ from controllers.common import (
     to_ingest_response
 )
 from schemas.clients import ClientSource
-from schemas.ingest import (
+from schemas.commercial import (
     OPTIONAL_COLUMNS,
     SALES_TEMPLATE,
     REQUIRED_COLUMNS,
@@ -34,11 +34,11 @@ from schemas.ingest import (
 )
 from services.exceptions import ResourceNotFoundError
 from services.logger_config import custom_logger as logger
-from services.ingest_utils import HISTORY_DEFAULT_LIMIT
-from services.ingest import parse_and_validate
-from services.ingest import parse_frame as parse_sales_frame
-from services.ingest_files import serialize_dataframe
-from services.ingest_utils import (
+from services.commercial_utils import HISTORY_DEFAULT_LIMIT
+from services.commercial import parse_and_validate
+from services.commercial import parse_frame as parse_sales_frame
+from services.load_files import serialize_dataframe
+from services.commercial_utils import (
     content_fingerprint,
     download_template_bytes,
     find_dataset_by_fingerprint,
@@ -53,8 +53,8 @@ from services.utils import audit_event, delete_stored_file, handle_service_error
 # one is a pipeline over its own sheet and the spec that says how to store it.
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Dataset', 'UPLOAD')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Dataset', 'UPLOAD')
 async def ingest_excel_controller(
     dynamodb_resource: ServiceResource,
     file_bytes: bytes,
@@ -126,8 +126,8 @@ async def ingest_excel_controller(
     return to_ingest_response(persisted)
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Dataset', 'UPLOAD_S3')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Dataset', 'UPLOAD_S3')
 async def ingest_excel_from_s3_controller(
     dynamodb_resource: ServiceResource,
     file_key: str,
@@ -191,7 +191,7 @@ async def ingest_excel_from_s3_controller(
     return to_ingest_response(persisted)
 
 
-@handle_service_errors('INGEST', with_log = False)
+@handle_service_errors('COMMERCIAL', with_log = False)
 async def download_rejected_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -219,7 +219,7 @@ async def download_rejected_controller(
     )
 
 
-@handle_service_errors('INGEST')
+@handle_service_errors('COMMERCIAL')
 async def list_datasets_controller(
     dynamodb_resource: ServiceResource,
     request: Request, # pylint: disable=unused-argument
@@ -264,7 +264,7 @@ async def list_datasets_controller(
     )
 
 
-@handle_service_errors('INGEST')
+@handle_service_errors('COMMERCIAL')
 async def get_dataset_status_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
@@ -305,7 +305,7 @@ async def get_dataset_status_controller(
     )
 
 
-@handle_service_errors('INGEST', with_log = False)
+@handle_service_errors('COMMERCIAL', with_log = False)
 async def download_template_controller(
     contract: str,
     request: Request, # pylint: disable=unused-argument
@@ -330,7 +330,7 @@ async def download_template_controller(
     return download_template_bytes(template_key(contract))
 
 
-@handle_service_errors('INGEST')
+@handle_service_errors('COMMERCIAL')
 async def get_template_info_controller(
     base_path: Path, # pylint: disable=unused-argument
     request: Request, # pylint: disable=unused-argument
@@ -345,7 +345,7 @@ async def get_template_info_controller(
     '''
     return TemplateInfo(
         template_version = TEMPLATE_VERSION,
-        download_url = f'/v1/ingest/template/file/{SALES_TEMPLATE}',
+        download_url = f'/v1/commercial/template/file/{SALES_TEMPLATE}',
         required_columns = list(REQUIRED_COLUMNS),
         optional_columns = list(OPTIONAL_COLUMNS)
     )

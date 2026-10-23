@@ -31,8 +31,8 @@ from services.clients import (
 from services.utils import audit_event, handle_service_errors
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Client', 'UPLOAD')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Client', 'UPLOAD')
 async def upsert_clients_controller(
     dynamodb_resource: ServiceResource,
     payload: ClientBulkUpsertSchema,
@@ -63,7 +63,7 @@ async def upsert_clients_controller(
     )
 
 
-@handle_service_errors('INGEST')
+@handle_service_errors('COMMERCIAL')
 async def list_clients_controller(
     dynamodb_resource: ServiceResource,
     seller: str | None,
@@ -89,7 +89,7 @@ async def list_clients_controller(
     ))
 
 
-@handle_service_errors('INGEST')
+@handle_service_errors('COMMERCIAL')
 async def get_client_controller(
     dynamodb_resource: ServiceResource,
     client_id: str,
@@ -115,8 +115,8 @@ async def get_client_controller(
     ))
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Client', 'UPDATE')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Client', 'UPDATE')
 async def update_client_controller(
     dynamodb_resource: ServiceResource,
     client_id: str,
@@ -149,8 +149,8 @@ async def update_client_controller(
     ))
 
 
-@handle_service_errors('INGEST')
-@audit_event('INGEST', 'Client', 'CREATE')
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Client', 'CREATE')
 async def register_field_client_controller(
     dynamodb_resource: ServiceResource,
     client: FieldClientSchema,

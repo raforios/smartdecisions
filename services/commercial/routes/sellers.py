@@ -19,7 +19,7 @@ from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner, require_roles
 
-router = APIRouter(prefix = '/v1/ingest/sellers', tags = ['Seller master'])
+router = APIRouter(prefix = '/v1/commercial/sellers', tags = ['Seller master'])
 
 _SELLER_ID = PathParam(..., min_length = 1, max_length = 128)
 

@@ -63,7 +63,7 @@ class ReceivableFigures(BaseModel):
 
 class DashboardResponse(BaseModel):
     '''
-        Main dashboard for GET /v1/analytics/dashboard/{dataset_id}. What is
+        Main dashboard for GET /v1/commercial/dashboard/{dataset_id}. What is
         held now (stock, receivables) reads at today's rate; the months, at
         their close. The field figures come from OPTIMIZATION.
     '''

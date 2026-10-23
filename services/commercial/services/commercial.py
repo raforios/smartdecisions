@@ -5,8 +5,8 @@
     are set aside with their reason codes and the rest is loaded.
 
     The contract machinery (lookups, schemas, validation) lives in
-    `ingest_contract`; the file boundary (reading uploads, writing the
-    normalized CSV) in `ingest_files`. This module is the sales pipeline that
+    `load_contract`; the file boundary (reading uploads, writing the
+    normalized CSV) in `load_files`. This module is the sales pipeline that
     puts them together; the payments, stock and visits pipelines reuse the
     same pieces over their own sheets.
 '''
@@ -16,7 +16,7 @@ from typing import Final
 
 import pandas as pd
 
-from schemas.ingest import (
+from schemas.commercial import (
     COLLECTION_COLUMNS,
     SALES_COLUMNS,
     PURCHASE_COLUMNS,
@@ -26,13 +26,13 @@ from schemas.ingest import (
     ValidationIssue,
     ValidationRule
 )
-from services.ingest_contract import (
+from services.load_contract import (
     SALES_HEADER_LOOKUP,
     map_columns,
     normalize_header,
     validate
 )
-from services.ingest_files import read_file
+from services.load_files import read_file
 from services.logger_config import custom_logger as logger
 
 
