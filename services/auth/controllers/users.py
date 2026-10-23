@@ -14,6 +14,7 @@ from services.dynamodb import (
     delete_user_item,
     scan_all_users
 )
+from services.companies import check_company_for_user
 from services.security import hash_password, verify_password
 from services.sessions import company_members, login_update
 from services.jwt_token import decode_access_token
@@ -226,6 +227,11 @@ async def update_user(
         error_msg = f'Update failed: User {email} not found.'
         logger.warning(error_msg)
         return None
+
+    # The company is chosen from the companies table, never typed freely
+    # (Rafael, 21-oct-2026): it must exist and be active.
+    if user_update_data.client is not None:
+        check_company_for_user(user_update_data.client)
 
     final_update_expression, expression_attribute_values, expression_attribute_names = \
         build_user_update_params(user_update_data)

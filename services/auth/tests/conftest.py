@@ -13,4 +13,6 @@ from pathlib import Path
 # either, importing the routes stops the collection.
 CONFIGURED = ((Path(__file__).resolve().parents[1] / '.env').exists()
               or 'TABLE_NAME' in os.environ)
-collect_ignore = [] if CONFIGURED else ['test_routes.py', 'test_health.py']
+collect_ignore = [] if CONFIGURED else [
+    'test_routes.py', 'test_health.py', 'test_companies_service.py'
+]

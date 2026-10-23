@@ -52,3 +52,9 @@ def test_admin_guard_accepts_only_admin() -> None:
     assert asyncio.run(get_current_admin_user(admin)) is admin
     with pytest.raises(ForbiddenError):
         asyncio.run(get_current_admin_user(_user(Role.MANAGER)))
+
+
+def test_companies_require_a_token() -> None:
+    '''The companies are the ADMIN's: without a token nothing is read.'''
+    response = TestClient(app).get('/v1/auth/companies')
+    assert response.status_code in (401, 403)

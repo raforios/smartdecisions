@@ -18,6 +18,7 @@ from mangum import Mangum
 import uvicorn
 
 from routes.auth import router as auth_router
+from routes.companies import router as companies_router
 from routes.users import router as users_router
 
 from controllers.users import get_current_admin_user
@@ -201,6 +202,7 @@ def tables_health(
 # The tables this service reads and writes, by the variables that name them.
 HEALTH_TABLE_VARS = (
     'TABLE_NAME',
+    'TABLE_NAME_COMPANIES',
 )
 
 
@@ -241,6 +243,7 @@ async def custom_swagger_ui() -> HTMLResponse:
 
 # Include routers
 app.include_router(auth_router, tags = ['Authentication'])
+app.include_router(companies_router, tags = ['Companies'])
 app.include_router(users_router, tags = ['Users'])
 
 # Entry point to run the app
