@@ -297,16 +297,13 @@ def check_cross_service_duplicates(service: Path) -> tuple[bool, str]:
 
 
 # FILES is the bucket's owner, so it is the one service that holds an S3
-# client. The single line allowed elsewhere is INGEST reading a STATIC
+# client. The single line allowed elsewhere is COMMERCIAL reading a STATIC
 # template: FILES cannot hand a file back AS a file —its reader parses and
-# returns rows— and `CLAUDE.md` §9 names exactly that case.
+# returns rows— and `CLAUDE.md` §9 names exactly that case. ANALYTICS and
+# OPTIMIZATION read through FILES since 23-oct-2026.
 _S3_ALLOWED: dict[str, tuple[str, ...]] = {
     'files': ('controllers/files.py',),
-    'ingest': ('services/ingest_utils.py',),
-    # Pending, by Rafael's decision of 28-09-2026: they read the dataset
-    # INGEST produced and they migrate when each is worked on.
-    'analytics': ('services/analytics_utils.py',),
-    'optimization': ('services/optimization_utils.py',),
+    'commercial': ('services/commercial_utils.py',),
 }
 
 
@@ -335,12 +332,9 @@ def check_direct_s3(service: Path) -> tuple[bool, str]:
 # INGEST's). Anyone else reading it is coupled to it: the data is asked of its
 # owner over HTTP (`CLAUDE.md` §4, Rafael, 14-10-2026).
 _TABLE_VARIABLE = re.compile(r'^(DYNAMODB_TABLE_NAME_[A-Z0-9_]+)=(.*)$')
-_FOREIGN_TABLES_ALLOWED: dict[str, tuple[str, ...]] = {
-    # Pending, the debt of the commercial module: they read the dataset INGEST
-    # produced and are uncoupled when that module is worked on.
-    'analytics': ('ingest_datasets',),
-    'optimization': ('ingest_datasets',),
-}
+# General tables, read by more than one service in the same environment, are
+# allowed (Rafael, 23-oct-2026) and declared here by the service that reads them.
+_FOREIGN_TABLES_ALLOWED: dict[str, tuple[str, ...]] = {}
 
 
 def _env_tables(service: Path) -> dict[str, str]:
