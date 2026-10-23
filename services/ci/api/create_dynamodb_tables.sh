@@ -24,6 +24,8 @@ TABLES=(
     # El correo es la clave: un usuario se busca siempre por el correo con que
     # ingresa, y el alta es una escritura condicionada a que no exista.
     "auth-users:email:S"
+    # Las empresas (AUTH, 22-oct-2026): el nombre es el client de sus usuarios.
+    "auth-companies:name:S"
 
     # --- Base: auditoría y logs de uso (EVENTS) ---
     "audit_records:id:S"

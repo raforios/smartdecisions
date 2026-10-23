@@ -3,11 +3,16 @@
 #
 #   docker build -f services/ci/api/Dockerfile.local \
 #       --build-arg PORT=3160 -t finance-local services/finance
-#   docker run --env-file services/finance/.env -p 3160:3160 finance-local
+#   docker run --env-file services/finance/.env -p 3160:3160 \
+#       -e AWS_DEFAULT_REGION=us-east-1 -e AWS_PROFILE=deploy_ml \
+#       -v ~/.aws:/root/.aws:ro finance-local
 #
 # The .env stays out of the image (.dockerignore): it is passed when the
-# container runs. PORT is only documentation for EXPOSE; the service listens
-# on the PORT of its .env.
+# container runs, so its lines must read KEY=value, with no spaces around
+# the "=" (docker refuses them). The region and the AWS profile are what
+# Lambda gives for free; locally the container needs them to reach DynamoDB.
+# PORT is only documentation for EXPOSE; the service listens on the PORT of
+# its .env. Checked with FINANCE on 22-oct-2026: /health answers 200.
 ARG VARIANT=3.14
 FROM python:${VARIANT}-slim
 
