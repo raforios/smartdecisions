@@ -326,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (qs('#planTo').value) params.date_to = qs('#planTo').value;
 
             const plan = await window.SD_API.get(
-                `${OPTIMIZATION_URL}/v1/optimization/plan/` +
+                `${OPTIMIZATION_URL}/v1/commercial/plan/` +
                 `${encodeURIComponent(state.datasetId)}`,
                 params
             );

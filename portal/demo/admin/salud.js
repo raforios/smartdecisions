@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Administración › Salud — the thirteen services and their tables, in green
+ * Administración › Salud — the eleven services and their tables, in green
  * or red. The checking lives in js/platform_health.js, shared with the card
  * on Principal.
  */

@@ -178,7 +178,7 @@
             fetch: (force) => {
                 const run = () => window.SD_API.post(analysisUrl('run'));
                 if (force || state.period.from || state.period.to) return run();
-                return window.SD_API.get(`${ANALYTICS_URL}/v1/analytics/results/` +
+                return window.SD_API.get(`${ANALYTICS_URL}/v1/commercial/results/` +
                     `${encodeURIComponent(state.datasetId)}`).catch(run);
             },
             render: (...args) => A.renderOpportunities(...args)
@@ -247,12 +247,12 @@
         if (state.period.to) params.set('date_to', state.period.to);
         params.set('source', qs('#fxSource').value);
         if (qs('#fxRate').value) params.set('rate', qs('#fxRate').value);
-        return `${ANALYTICS_URL}/v1/analytics/fx-effect/` +
+        return `${ANALYTICS_URL}/v1/commercial/fx-effect/` +
             `${encodeURIComponent(state.datasetId)}?${params.toString()}`;
     }
 
     function analysisUrl(kind) {
-        return `${ANALYTICS_URL}/v1/analytics/${kind}/` +
+        return `${ANALYTICS_URL}/v1/commercial/${kind}/` +
             `${encodeURIComponent(state.datasetId)}${analysisQuery()}`;
     }
 
@@ -482,7 +482,7 @@
     async function restoreDataset() {
         try {
             const status = await window.SD_API.get(
-                `${window.SD_CONFIG.API_URL}/v1/ingest/${state.datasetId}`
+                `${window.SD_CONFIG.API_URL}/v1/commercial/${state.datasetId}`
             );
             const isValid = status.status === 'validated';
             // Only Ventas shows the validation of the file that created the set.
@@ -522,7 +522,7 @@
         let source = knownSource;
         if (!source) {
             policySources[kind] = policySources[kind] || window.SD_API.get(
-                `${ANALYTICS_URL}/v1/analytics/${POLICY_PATHS[kind]}`)
+                `${ANALYTICS_URL}/v1/commercial/${POLICY_PATHS[kind]}`)
                 .then((policy) => policy.source_code).catch(() => null);
             source = await policySources[kind];
         }

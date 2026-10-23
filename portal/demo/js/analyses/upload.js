@@ -13,7 +13,7 @@
     // follow what the service publishes, so a new contract never ships with a
     // stale "v1" on the screen.
     const template = { version: '' };
-    window.SD_API.get(`${A.INGEST_URL}/v1/ingest/template`)
+    window.SD_API.get(`${A.INGEST_URL}/v1/commercial/template`)
         .then((info) => {
             template.version = info.template_version || '';
             qs('#templateTitle').textContent = template.version
@@ -30,7 +30,7 @@
         try {
             const contract = qs('#contractSelect').value;
             const response = await fetch(
-                `${A.INGEST_URL}/v1/ingest/template/file/${contract}`, {
+                `${A.INGEST_URL}/v1/commercial/template/file/${contract}`, {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${window.SD_AUTH.getToken()}` }
             });
@@ -142,12 +142,12 @@
             const contract = qs('#contractSelect').value;
             if (contract === 'ventas') {
                 handleIngestResponse(await window.SD_API.post(
-                    `${A.INGEST_URL}/v1/ingest/excel-from-s3`,
+                    `${A.INGEST_URL}/v1/commercial/excel-from-s3`,
                     { file_key: fileKey, file_name: file.name }
                 ));
             } else {
                 const summary = await window.SD_API.post(
-                    `${A.INGEST_URL}/v1/ingest/${encodeURIComponent(A.state.datasetId)}` +
+                    `${A.INGEST_URL}/v1/commercial/${encodeURIComponent(A.state.datasetId)}` +
                     `/${A.COMPANION_PATHS[contract]}/from-s3`,
                     { file_key: fileKey, file_name: file.name }
                 );
@@ -218,7 +218,7 @@
         const done = setButtonBusy(button, 'Descargando…');
         try {
             const response = await fetch(
-                `${A.INGEST_URL}/v1/ingest/${encodeURIComponent(datasetId)}/rejected`,
+                `${A.INGEST_URL}/v1/commercial/${encodeURIComponent(datasetId)}/rejected`,
                 { headers: { 'Authorization': `Bearer ${window.SD_AUTH.getToken()}` } }
             );
             if (!response.ok) {

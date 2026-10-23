@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function paintField(rates) {
         const day = (offset) => window.SD_API.get(
-            `${API_URL}/v1/optimization/statistics/day/${isoDay(offset)}`).catch(() => null);
+            `${API_URL}/v1/commercial/statistics/day/${isoDay(offset)}`).catch(() => null);
         const [today, yesterday] = await Promise.all([day(0), day(-1)]);
         if (!today || !today.routes_started) {
             qs('#fieldEmpty').hidden = false;
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
             paintField(null);
             return;
         }
-        const base = `${API_URL}/v1/analytics`;
+        const base = `${API_URL}/v1/commercial`;
         const id = encodeURIComponent(datasetId);
         const data = await window.SD_API.get(`${base}/dashboard/${id}`).catch((error) => {
             const empty = qs('#overviewEmpty');

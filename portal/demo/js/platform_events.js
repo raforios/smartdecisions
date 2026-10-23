@@ -13,8 +13,11 @@
  * ML_FUNCTIONS do not report, by design.
  */
 (function platformEventsModule() {
-    const REPORTING = ['PARAMETERS', 'AI', 'INGEST', 'ANALYTICS', 'OPTIMIZATION',
-        'MINING_ANALYSIS', 'QUOTES', 'FINANCE', 'BILLING'];
+    const REPORTING = ['PARAMETERS', 'AI', 'COMMERCIAL', 'MINING_ANALYSIS', 'QUOTES',
+        'FINANCE', 'BILLING'];
+    // The names COMMERCIAL had before 23-oct-2026: a user's own history keeps
+    // what was recorded under them.
+    const RECORDED_BEFORE = ['INGEST', 'ANALYTICS', 'OPTIMIZATION'];
 
     // What the services audit, in words; any other action is shown as it is.
     const ACTIONS = { CREATE: 'Alta', UPDATE: 'Cambio', DELETE: 'Baja', UPLOAD: 'Carga',
@@ -47,7 +50,16 @@
         'INGEST.Purchases': ['Carga de compras', 'compras/cargar.html'],
         'INGEST.Collections': ['Carga de cobranza', 'cobranza/cargar.html'],
         'INGEST.Objectives': ['Carga de objetivos', 'ventas/objetivos.html'],
-        'INGEST.Client': ['Cliente', 'clientes/index.html']
+        'INGEST.Client': ['Cliente', 'clientes/index.html'],
+        'COMMERCIAL.CommercialPolicy': ['Política comercial', 'parametros/index.html'],
+        'COMMERCIAL.CreditPolicy': ['Política de crédito', 'parametros/index.html'],
+        'COMMERCIAL.AnalyticsRun': ['Análisis comercial', 'comercial/index.html'],
+        'COMMERCIAL.Dataset': ['Carga de ventas', 'ventas/cargar.html'],
+        'COMMERCIAL.Stock': ['Carga de inventario', 'inventario/cargar.html'],
+        'COMMERCIAL.Purchases': ['Carga de compras', 'compras/cargar.html'],
+        'COMMERCIAL.Collections': ['Carga de cobranza', 'cobranza/cargar.html'],
+        'COMMERCIAL.Objectives': ['Carga de objetivos', 'ventas/objetivos.html'],
+        'COMMERCIAL.Client': ['Cliente', 'clientes/index.html']
     };
     const entity = (change) => ENTITIES[`${change.microservice}.${change.entity_name}`]
         || [change.entity_name || change.microservice, null];
@@ -61,7 +73,7 @@
     /** The caller's own latest changes in our services, newest first. */
     function mine(days, limit) {
         return window.SD_API.get(`${window.SD_CONFIG.API_URL}/v1/events/my-changes`,
-            { microservices: REPORTING.join(','), days, limit });
+            { microservices: REPORTING.concat(RECORDED_BEFORE).join(','), days, limit });
     }
 
     /** Totals over every service. */

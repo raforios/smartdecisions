@@ -183,7 +183,7 @@
         const stored = sessionStorage.getItem(DATASET_KEY);
         if (stored) return stored;
         try {
-            const list = await get(`${window.SD_CONFIG.API_URL}/v1/ingest/datasets`);
+            const list = await get(`${window.SD_CONFIG.API_URL}/v1/commercial/datasets`);
             const latest = (list.datasets || []).find((item) => item.status === 'validated');
             if (!latest) return null;
             sessionStorage.setItem(DATASET_KEY, latest.dataset_id);

@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const M = window.SD_MONEY;
     const O = window.SD_OVERVIEW;
     const { number } = O;
-    const BASE = `${window.SD_CONFIG.API_URL}/v1/analytics`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/commercial`;
     const qs = (selector) => document.querySelector(selector);
 
     const TITLES = { stock: 'Stock del día', stockHistory: 'Evolución del inventario', route: 'Stock en ruta' };
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const iso = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'),
             String(today.getDate()).padStart(2, '0')].join('-');
         const day = await window.SD_API.get(
-            `${window.SD_CONFIG.API_URL}/v1/optimization/statistics/day/${iso}`).catch(() => null);
+            `${window.SD_CONFIG.API_URL}/v1/commercial/statistics/day/${iso}`).catch(() => null);
         if (!day || day.stock_available_value == null) {
             paint('route', '—', 'Hoy no hay stock cargado para la calle.');
             return;

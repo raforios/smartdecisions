@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The health of the platform, for the ADMIN: whether each of the thirteen
+ * The health of the platform, for the ADMIN: whether each of the eleven
  * services answers, how long it takes, and the state of its tables.
  *
  * `/health` is public and says only "available"; `/health/tables` is the
@@ -18,9 +18,8 @@
         { code: 'ml_functions', label: 'ML_FUNCTIONS', path: 'common', base: true, noTables: true },
         { code: 'parameters', label: 'PARAMETERS', path: 'parameters', base: true },
         { code: 'ai', label: 'AI', path: 'ai', base: true },
-        { code: 'ingest', label: 'INGEST', path: 'ingest' },
-        { code: 'analytics', label: 'ANALYTICS', path: 'analytics' },
-        { code: 'optimization', label: 'OPTIMIZATION', path: 'optimization' },
+        // INGEST, ANALYTICS and OPTIMIZATION, joined on 23-oct-2026.
+        { code: 'commercial', label: 'COMMERCIAL', path: 'commercial' },
         { code: 'mining_analysis', label: 'MINING_ANALYSIS', path: 'mining-analysis' },
         { code: 'quotes', label: 'QUOTES', path: 'quotes' },
         { code: 'finance', label: 'FINANCE', path: 'finance' },

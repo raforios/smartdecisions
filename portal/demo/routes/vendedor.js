@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = qs('#newClientName').value.trim();
         if (!name) throw new Error('Indica el nombre del negocio nuevo.');
         const stored = await window.SD_API.post(
-            `${window.SD_CONFIG.API_URL}/v1/ingest/clients/field`,
+            `${window.SD_CONFIG.API_URL}/v1/commercial/clients/field`,
             {
                 name,
                 latitude: here.lat,

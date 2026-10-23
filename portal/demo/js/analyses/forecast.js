@@ -56,7 +56,7 @@
             // on the model, which is the useful question. Where the two lines
             // separate is where the projection stops being solid.
             const url =
-                `${A.ANALYTICS_URL}/v1/analytics/forecast/${encodeURIComponent(A.state.datasetId)}`;
+                `${A.ANALYTICS_URL}/v1/commercial/forecast/${encodeURIComponent(A.state.datasetId)}`;
             const [primary, secondary] = await Promise.all([
                 window.SD_API.get(url, params),
                 window.SD_API.get(url, { ...params, method: A.otherMethod(params.method) })

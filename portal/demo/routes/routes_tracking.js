@@ -9,7 +9,7 @@
  * script (`routes_plans.js`, `routes_stock.js`, …) only paints its own panel.
  */
 (function () {
-    const BASE = `${window.SD_CONFIG.API_URL}/v1/optimization`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/commercial`;
     const API = window.SD_API;
 
     // The service names the reason with a stable code; the sentence lives here.
@@ -98,7 +98,7 @@
     };
     // The seller master lives in INGEST: the files name a seller ("Ana") and
     // the phone signs in with an email; a manager links the two once.
-    const INGEST_SELLERS = `${window.SD_CONFIG.API_URL}/v1/ingest/sellers`;
+    const INGEST_SELLERS = `${window.SD_CONFIG.API_URL}/v1/commercial/sellers`;
     const sellers = {
         list: (userEmail) => API.get(INGEST_SELLERS, userEmail ? { user_email: userEmail } : null),
         link: (id, body) => API.patch(`${INGEST_SELLERS}/${encodeURIComponent(id)}`, body),

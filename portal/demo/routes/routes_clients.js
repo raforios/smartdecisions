@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         T.note(qs('#clientsNote'), 'Consultando…');
         try {
             const data = await window.SD_API.get(
-                `${window.SD_CONFIG.API_URL}/v1/ingest/clients`);
+                `${window.SD_CONFIG.API_URL}/v1/commercial/clients`);
             // Newest first: a client registered today is what the manager came for.
             state.clients = (data.clients || []).slice()
                 .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));

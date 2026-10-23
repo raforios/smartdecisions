@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated()) return;
     const { qs, toast } = window.SD_UI;
     const M = window.SD_MONEY;
-    const BASE = `${window.SD_CONFIG.API_URL}/v1/analytics`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/commercial`;
     const TERMS = { CREDITO: 'Crédito', CONTADO: 'Contado' };
     const ERRORS = { CLIENT_NOT_FOUND: 'Ese cliente no está en tus datos de ventas.' };
     const state = { datasetId: null, card: null, currency: 'BOB', chart: null };
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const list = await window.SD_API.get(
-            `${BASE}/clients/${encodeURIComponent(state.datasetId)}`).catch(() => null);
+            `${BASE}/clients/overview/${encodeURIComponent(state.datasetId)}`).catch(() => null);
         const clients = (list && list.clients) || [];
         qs('#clientOptions').innerHTML = clients.map((client) =>
             `<option value="${escape(client.client_id)}">${escape(client.name || '')}</option>`)

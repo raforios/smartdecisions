@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const M = window.SD_MONEY;
     const O = window.SD_OVERVIEW;
     const { number } = O;
-    const BASE = `${window.SD_CONFIG.API_URL}/v1/analytics`;
+    const BASE = `${window.SD_CONFIG.API_URL}/v1/commercial`;
     const qs = (selector) => document.querySelector(selector);
 
     const TITLES = { portfolio: 'Cartera de clientes', card: 'Ficha del cliente' };
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `en el último mes. ${number(clients.at_risk)} en riesgo, ` +
                 `${number(clients.new_clients)} nuevos y ${number(clients.lost)} perdidos.`);
         }).catch(() => paint('portfolio', '—', 'No se pudo leer la cartera.'));
-        window.SD_API.get(`${BASE}/clients/${id}`).then((list) => {
+        window.SD_API.get(`${BASE}/clients/overview/${id}`).then((list) => {
             const clients = (list && list.clients) || [];
             const top = clients[0];
             paint('card', `${number(clients.length)} clientes`,

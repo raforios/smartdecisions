@@ -92,9 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Each service is asked for one row: the panel shows the latest, and
         // pulling forty to display one would be paid for on every page load.
         const [datasets, runs] = await Promise.all([
-            window.SD_API.get(`${INGEST_URL}/v1/ingest/datasets`, { limit: 1 })
+            window.SD_API.get(`${INGEST_URL}/v1/commercial/datasets`, { limit: 1 })
                 .catch(() => null),
-            window.SD_API.get(`${ANALYTICS_URL}/v1/analytics/runs`, { limit: 1 })
+            window.SD_API.get(`${ANALYTICS_URL}/v1/commercial/runs`, { limit: 1 })
                 .catch(() => null)
         ]);
 
