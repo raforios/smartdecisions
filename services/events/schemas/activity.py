@@ -72,3 +72,22 @@ class ActivityResponseSchema(BaseModel):
     services: list[ServiceActivity]
     latest_errors: list[RecentCall] = Field(..., description = 'Newest first.')
     latest_changes: list[RecentChange] = Field(..., description = 'Newest first.')
+
+
+class MyChangesQuerySchema(BaseModel):
+    '''
+        Which services and how far back to look for the caller's own changes.
+        The user is never a parameter: it is the one in the token.
+    '''
+    microservices: str = Field(..., min_length = 1, max_length = 500,
+                               description = 'Comma-separated service names, e.g. FINANCE,QUOTES.')
+    days: int = Field(30, ge = 1, le = 90, description = 'How many days back.')
+    limit: int = Field(10, ge = 1, le = 20, description = 'How many changes, newest first.')
+
+
+class MyChangesResponseSchema(BaseModel):
+    '''
+        The caller's latest audited changes ("Lo último que hiciste").
+    '''
+    since: str = Field(..., description = 'Start of the period.')
+    changes: list[RecentChange] = Field(..., description = 'Newest first.')

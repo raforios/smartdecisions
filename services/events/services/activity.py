@@ -7,9 +7,14 @@
 '''
 from datetime import timedelta
 from typing import Any
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from boto3.resources.base import ServiceResource
-from schemas.activity import ActivityQuerySchema, ActivityResponseSchema
+from schemas.activity import (
+    ActivityQuerySchema,
+    ActivityResponseSchema,
+    MyChangesQuerySchema,
+    MyChangesResponseSchema
+)
 from services.activity_summary import (
     hour_keys,
     latest_changes,
@@ -40,7 +45,8 @@ def _recent(
     table: Any,
     microservice: str,
     since: str,
-    fields: tuple[str, ...]
+    fields: tuple[str, ...],
+    user: str | None = None
 ) -> list[dict[str, Any]]:
     '''
         Every record of one service since a moment, only the given fields.
@@ -50,6 +56,7 @@ def _recent(
             microservice (str): Service name.
             since (str): ISO moment the period starts at.
             fields (tuple[str, ...]): Attributes to read.
+            user (str | None): Only this user's records, when given.
 
         Returns:
             list[dict[str, Any]]: The records.
@@ -62,6 +69,8 @@ def _recent(
         'ProjectionExpression': ', '.join(names),
         'ExpressionAttributeNames': names
     }
+    if user is not None:
+        kwargs['FilterExpression'] = Attr('user_id').eq(user)
     items: list[dict[str, Any]] = []
     while True:
         page = table.query(**kwargs)
@@ -105,3 +114,33 @@ def recent_activity(
             [call for items in calls.values() for call in items], LIST_SIZE),
         latest_changes = latest_changes(changes, LIST_SIZE)
     )
+
+
+def my_changes(
+    dynamodb_resource: ServiceResource,
+    user: str,
+    query: MyChangesQuerySchema
+) -> MyChangesResponseSchema:
+    '''
+        The caller's latest audited changes, for "Lo último que hiciste".
+
+        The user comes from the token, so nobody reads someone else's work.
+        Each service is a Query over its own days through the index; the
+        user is a filter on that page, as there is no index by user.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            user (str): The authenticated user's e-mail.
+            query (MyChangesQuerySchema): Services, days and how many.
+
+        Returns:
+            MyChangesResponseSchema: The period and the changes, newest first.
+    '''
+    since = (get_current_time_gmt() - timedelta(days = query.days)).isoformat()
+    names = [name.strip() for name in query.microservices.split(',') if name.strip()]
+    audit = dynamodb_resource.Table(AUDIT_TABLE)
+    changes = [change for name in names
+               for change in _recent(audit, name, since, CHANGE_FIELDS, user)]
+    message = f'{len(changes)} changes of {user} in {len(names)} services over {query.days} days.'
+    logger.info(message)
+    return MyChangesResponseSchema(since = since, changes = latest_changes(changes, query.limit))

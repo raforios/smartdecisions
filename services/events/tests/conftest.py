@@ -13,4 +13,5 @@ from pathlib import Path
 # either, importing main stops the collection.
 CONFIGURED = ((Path(__file__).resolve().parents[1] / '.env').exists()
               or 'TARGET_TIMEZONE' in os.environ)
-collect_ignore = [] if CONFIGURED else ['test_health_route.py', 'test_health.py']
+collect_ignore = [] if CONFIGURED else ['test_health_route.py', 'test_health.py',
+                                         'test_my_changes_route.py']
