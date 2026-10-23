@@ -48,12 +48,12 @@ ORDER=(
     "parameters:--skip-table-creation"
     "files:--skip-table-creation"
     "ml_functions:--skip-table-creation"
+    "ai:"
     "ingest:"
     "quotes:"
     "analytics:"
     "optimization:"
     "mining_analysis:"
-    "ai:"
     # Dos tablas, una de clave compuesta: las crea create_dynamodb_tables.sh.
     "finance:--skip-table-creation"
     "billing:"
