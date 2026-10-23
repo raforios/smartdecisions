@@ -22,7 +22,7 @@ SERVICES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # Servicios propios cuyos .env llaman a otros servicios. Los de clientes
 # (TRADE, FORMS, LOCALIZATION, CMS, MINING_SUMMIT) no se tocan.
-SERVICES=(ai analytics billing finance ingest mining_analysis optimization parameters quotes)
+SERVICES=(ai billing commercial finance mining_analysis parameters quotes)
 # Desde el 21-oct-2026 todos los servicios propios usan sólo API_URL.
 VARIABLES=(API_URL)
 

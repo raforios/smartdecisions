@@ -7,7 +7,7 @@
 # Uso:
 #   ./start.sh                         # todo, desde cero o sobre lo existente
 #   ./start.sh --redeploy              # redesplegar todos los servicios
-#   ./start.sh --redeploy ingest ai    # sólo esos, en el orden canónico
+#   ./start.sh --redeploy commercial ai  # sólo esos, en el orden canónico
 #   ./start.sh --urls                  # pasar los .env al dominio y redesplegar
 #                                      # sólo la configuración (sin reconstruir)
 #
@@ -15,14 +15,13 @@
 #   1. Tablas DynamoDB (create_dynamodb_tables.sh). Antes que los servicios: un
 #      Lambda que arranca contra una tabla que no existe falla en la primera
 #      petición, no en el despliegue.
-#   2. Servicios BASE: AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS. Todos
-#      los demás validan el token contra AUTH, auditan en EVENTS, leen sus
-#      valores de negocio de PARAMETERS y guardan en FILES.
-#   3. INGEST y QUOTES. Son los dueños de los datos que otros piden por HTTP:
-#      OPTIMIZATION le pide stock y vendedores a INGEST, ANALYTICS le pide el
-#      tipo de cambio a QUOTES.
-#   4. ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, AI y FINANCE (el Análisis
-#      Financiero, que le pide a QUOTES el tipo de cambio y los factores).
+#   2. Servicios BASE: AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS y AI.
+#      Todos los demás validan el token contra AUTH, auditan en EVENTS, leen
+#      sus valores de negocio de PARAMETERS, guardan en FILES y piden sus
+#      cálculos a ML_FUNCTIONS.
+#   3. QUOTES: el tipo de cambio y los factores que COMMERCIAL y FINANCE piden.
+#   4. COMMERCIAL (INGEST, ANALYTICS y OPTIMIZATION unidos el 23-oct-2026),
+#      MINING_ANALYSIS y FINANCE (el Análisis Financiero).
 #   5. BILLING (SmartBilling).
 #   6. Tareas programadas (create_schedules.sh): necesitan los Lambdas.
 #   7. Dominio api.bearsoft.com.bo y su puerta de entrada bearsoft-gateway
@@ -49,10 +48,9 @@ ORDER=(
     "files:--skip-table-creation"
     "ml_functions:--skip-table-creation"
     "ai:"
-    "ingest:"
     "quotes:"
-    "analytics:"
-    "optimization:"
+    # Once tablas, varias de clave compuesta: las crea create_dynamodb_tables.sh.
+    "commercial:--skip-table-creation"
     "mining_analysis:"
     # Dos tablas, una de clave compuesta: las crea create_dynamodb_tables.sh.
     "finance:--skip-table-creation"
@@ -60,7 +58,7 @@ ORDER=(
 )
 
 # Servicios cuyos .env llaman a otros servicios (ver update_service_urls.sh).
-URL_CONSUMERS=(ai analytics billing finance ingest mining_analysis optimization parameters quotes)
+URL_CONSUMERS=(ai billing commercial finance mining_analysis parameters quotes)
 
 deploy_service() {
     local SERVICE="$1"

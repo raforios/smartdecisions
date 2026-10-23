@@ -2,15 +2,15 @@
 
 # Publica todos los microservicios bajo un solo dominio: api.bearsoft.com.bo.
 #
-#   https://api.bearsoft.com.bo/v1/ingest/...      -> Lambda de INGEST
-#   https://api.bearsoft.com.bo/v1/analytics/...   -> Lambda de ANALYTICS
+#   https://api.bearsoft.com.bo/v1/commercial/...  -> Lambda de COMMERCIAL
+#   https://api.bearsoft.com.bo/v1/finance/...     -> Lambda de FINANCE
 #   ...
 #
 # DISEÑO: una sola puerta de entrada (API HTTP "bearsoft-gateway") con una ruta
-# por servicio —ANY /v1/ingest/{proxy+} -> Lambda de INGEST, etc.— y el dominio
+# por servicio —ANY /v1/commercial/{proxy+} -> Lambda de COMMERCIAL, etc.— y el dominio
 # mapeado ENTERO a ese API. Es el patrón recomendado para varios microservicios
 # detrás de un dominio:
-#   - El Lambda recibe la ruta completa (/v1/ingest/datasets) en el formato de
+#   - El Lambda recibe la ruta completa (/v1/commercial/datasets) en el formato de
 #     evento 2.0, así que el código de los servicios no cambia.
 #   - Un mapeo por prefijo hacia un API por servicio recorta el prefijo, y en
 #     2.0 ese prefijo se pierde: el servicio recibía /datasets y respondía 404.
@@ -60,9 +60,8 @@ ROUTES=(
     "v1/common:ml-functions-handler-service"
     "v1/prediction:ml-functions-handler-service"
     # --- SmartDecisions ---
-    "v1/ingest:ingest-handler-service"
-    "v1/analytics:analytics-handler-service"
-    "v1/optimization:optimization-handler-service"
+    # INGEST, ANALYTICS y OPTIMIZATION unidos (23-oct-2026).
+    "v1/commercial:commercial-handler-service"
     "v1/quotes:quotes-handler-service"
     "v1/ai:ai-handler-service"
     "v1/mining-analysis:mining-handler-service"
@@ -204,7 +203,7 @@ echo "=== 6. Prueba de humo ==="
 # servicio. El DNS de Cloudflare puede tardar en propagar.
 sleep 5
 FAILED=0
-for PROBE in "v1/ingest/datasets" "v1/analytics/runs" "v1/optimization/routes/planned"; do
+for PROBE in "v1/commercial/datasets" "v1/commercial/runs" "v1/commercial/routes/planned"; do
     CODE=$(curl -s -o /dev/null -m 20 -w "%{http_code}" "https://$DOMAIN/$PROBE") || CODE="000"
     echo "  /$PROBE -> HTTP $CODE $([ "$CODE" == "401" ] && echo "(OK)" || echo "(revisar)")"
     [ "$CODE" == "401" ] || FAILED=1

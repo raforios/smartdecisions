@@ -93,7 +93,7 @@ cd /ruta/al/repositorio/app/services/ci/api
 
 ### Paso 1. Revisar los `.env`
 
-Para cada servicio (`auth`, `events`, `files`, `ml_functions`, `ingest`, `quotes`, `analytics`, `optimization`, `mining_analysis`, `ai`, `billing`):
+Para cada servicio (`auth`, `events`, `parameters`, `files`, `ml_functions`, `ai`, `quotes`, `commercial`, `mining_analysis`, `finance`, `billing`):
 
 1. Abre `services/<servicio>/.env`.
 2. Comprueba que **ningún valor tenga comas (`,`) ni llaves (`{` `}`)**. El despliegue pasa el `.env` a AWS en un formato donde la coma separa variables y la llave abre una estructura: un valor así rompe el despliegue a mitad de camino. Si necesitas una plantilla de URL, usa `%s` en lugar de `{nombre}`.
@@ -107,9 +107,9 @@ Para cada servicio (`auth`, `events`, `files`, `ml_functions`, `ingest`, `quotes
 El script hace, en este orden (ver la [sección 8](#8-referencia-el-orden-de-despliegue-y-por-qué)):
 
 1. Crea las tablas DynamoDB que falten.
-2. Despliega AUTH, EVENTS, FILES y ML_FUNCTIONS.
-3. Despliega INGEST y QUOTES.
-4. Despliega ANALYTICS, OPTIMIZATION, MINING_ANALYSIS y AI.
+2. Despliega los servicios base: AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS y AI.
+3. Despliega QUOTES.
+4. Despliega COMMERCIAL, MINING_ANALYSIS y FINANCE.
 5. Despliega BILLING.
 6. Crea las tareas programadas.
 7. Configura el dominio `api.bearsoft.com.bo` y su puerta de entrada `bearsoft-gateway`.
@@ -186,16 +186,16 @@ Vuelve a `services/ci/api` y escribe los nombres de las carpetas de los servicio
 
 ```bash
 # Un servicio
-./start.sh --redeploy ingest
+./start.sh --redeploy commercial
 
 # Varios servicios
-./start.sh --redeploy ingest optimization analytics
+./start.sh --redeploy commercial quotes finance
 ```
 
 - **No importa en qué orden los escribas**: el script los despliega siempre en el orden correcto (base primero, después los dueños de datos, después el resto).
 - Al terminar, el script revisa el dominio y agrega al gateway las rutas de un servicio nuevo.
 
-Los nombres válidos son los de las carpetas: `auth`, `events`, `parameters`, `files`, `ml_functions`, `ingest`, `quotes`, `analytics`, `optimization`, `mining_analysis`, `ai`, `finance`, `billing`.
+Los nombres válidos son los de las carpetas: `auth`, `events`, `parameters`, `files`, `ml_functions`, `ai`, `quotes`, `commercial`, `mining_analysis`, `finance`, `billing`.
 
 ### Si el microservicio es nuevo
 
@@ -251,7 +251,7 @@ Ejemplos: un umbral de negocio, el nombre de una tabla, un tiempo de espera.
    ```
    Ejemplo:
    ```bash
-   ./build_and_deploy.sh --path ../../analytics --skip-code-update --skip-table-creation
+   ./build_and_deploy.sh --path ../../commercial --skip-code-update --skip-table-creation
    ```
 3. Tarda menos de un minuto. El Lambda usa el código que ya tenía, con la configuración nueva.
 
@@ -263,7 +263,7 @@ El CORS de **cada** API se declara en el `deploy.config` de **su** servicio:
 CORS_ALLOW_METHODS="GET,POST,PUT,PATCH,DELETE,OPTIONS"
 ```
 
-- Hoy lo declaran AUTH, INGEST, OPTIMIZATION y BILLING, que son los que tienen rutas `PATCH`.
+- Hoy lo declaran AUTH, COMMERCIAL y BILLING, que son los que tienen rutas `PATCH`.
 - Un servicio **sin** esa variable conserva el CORS que ya tiene: el despliegue no lo toca.
 
 Para aplicar un cambio:
@@ -300,7 +300,7 @@ aws lambda get-function-configuration --profile deploy_ml --region us-east-1 \
   --function-name <nombre-del-lambda> --query "[LastModified,LastUpdateStatus,CodeSize]"
 ```
 
-Los nombres de los Lambda están en `FUNCTION_NAME` de cada `deploy.config` (por ejemplo, `ingest-handler-service`). El estado debe ser `Successful`.
+Los nombres de los Lambda están en `FUNCTION_NAME` de cada `deploy.config` (por ejemplo, `commercial-handler-service`). El estado debe ser `Successful`.
 
 **2. No hay errores al arrancar.** Revisa los registros de los últimos 15 minutos:
 
@@ -314,14 +314,14 @@ Si no imprime nada, está bien. Un error típico al arrancar es una variable fal
 **3. El servicio responde por el dominio.** Cada servicio tiene su healthcheck y su documentación bajo su propio prefijo:
 
 ```bash
-curl https://api.bearsoft.com.bo/v1/ingest/health      # {"Api Healthcheck": "OK", ...}
-open https://api.bearsoft.com.bo/v1/ingest/docs         # Swagger
+curl https://api.bearsoft.com.bo/v1/commercial/health  # {"Api Healthcheck": "OK", ...}
+open https://api.bearsoft.com.bo/v1/commercial/docs     # Swagger
 ```
 
 Y un endpoint protegido, sin token, debe responder `401`:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://api.bearsoft.com.bo/v1/ingest/datasets
+curl -s -o /dev/null -w "%{http_code}\n" https://api.bearsoft.com.bo/v1/commercial/datasets
 ```
 
 ---
@@ -352,9 +352,9 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 | # | Qué | Por qué en este lugar |
 |---|---|---|
 | 1 | Tablas DynamoDB | Un Lambda que arranca contra una tabla inexistente falla en la primera petición, no en el despliegue: el error aparecería tarde y lejos de su causa. |
-| 2 | AUTH, EVENTS, FILES, ML_FUNCTIONS | Son la base. Todos los demás validan el token contra AUTH, registran auditoría en EVENTS y guardan archivos en FILES. |
-| 3 | INGEST, QUOTES | Son dueños de datos que otros servicios piden: OPTIMIZATION pide stock y vendedores a INGEST, ANALYTICS pide el tipo de cambio a QUOTES. |
-| 4 | ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, AI | Consumen lo anterior. |
+| 2 | AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS, AI | Son la base. Todos los demás validan el token contra AUTH, registran auditoría en EVENTS, leen sus valores de PARAMETERS, guardan archivos en FILES y piden sus cálculos a ML_FUNCTIONS. |
+| 3 | QUOTES | Dueño del tipo de cambio y de los factores que COMMERCIAL y FINANCE piden. |
+| 4 | COMMERCIAL, MINING_ANALYSIS, FINANCE | Consumen lo anterior. COMMERCIAL une INGEST, ANALYTICS y OPTIMIZATION desde el 23-oct-2026. |
 | 5 | BILLING | SmartBilling, independiente de SmartDecisions. |
 | 6 | Tareas programadas | Necesitan que los Lambdas existan. |
 | 7 | Dominio y gateway | Necesita que los Lambdas existan. Se repite en cada despliegue porque es seguro repetirlo y agrega las rutas de un servicio nuevo. |
@@ -367,10 +367,10 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 | EVENTS | `https://api.bearsoft.com.bo/v1/events/...` |
 | FILES | `https://api.bearsoft.com.bo/v1/s3/...` |
 | ML_FUNCTIONS | `https://api.bearsoft.com.bo/v1/classification/...`, `/v1/common/...`, `/v1/prediction/...` |
-| INGEST | `https://api.bearsoft.com.bo/v1/ingest/...` |
+| PARAMETERS | `https://api.bearsoft.com.bo/v1/parameters/...` |
 | QUOTES | `https://api.bearsoft.com.bo/v1/quotes/...` |
-| ANALYTICS | `https://api.bearsoft.com.bo/v1/analytics/...` |
-| OPTIMIZATION | `https://api.bearsoft.com.bo/v1/optimization/...` |
+| COMMERCIAL | `https://api.bearsoft.com.bo/v1/commercial/...` |
+| FINANCE | `https://api.bearsoft.com.bo/v1/finance/...` |
 | MINING_ANALYSIS | `https://api.bearsoft.com.bo/v1/mining-analysis/...` |
 | AI | `https://api.bearsoft.com.bo/v1/ai/...` |
 | BILLING | `https://api.bearsoft.com.bo/v1/billing/...` |
@@ -379,7 +379,7 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 
 ### Cómo está armado el dominio
 
-Una sola puerta de entrada, el API HTTP **`bearsoft-gateway`**, recibe todo lo que llega a `api.bearsoft.com.bo` y lo envía al Lambda de cada servicio según el prefijo: `ANY /v1/ingest/{proxy+}` → Lambda de INGEST, y así con cada uno. El Lambda recibe la ruta **completa** (`/v1/ingest/datasets`) en el formato de evento 2.0, así que los servicios no saben ni necesitan saber que hay un dominio delante. El CORS del dominio se define una sola vez, en el gateway.
+Una sola puerta de entrada, el API HTTP **`bearsoft-gateway`**, recibe todo lo que llega a `api.bearsoft.com.bo` y lo envía al Lambda de cada servicio según el prefijo: `ANY /v1/commercial/{proxy+}` → Lambda de COMMERCIAL, y así con cada uno. El Lambda recibe la ruta **completa** (`/v1/commercial/datasets`) en el formato de evento 2.0, así que los servicios no saben ni necesitan saber que hay un dominio delante. El CORS del dominio se define una sola vez, en el gateway.
 
 Los API propios de cada servicio (los de `build_and_deploy.sh`) siguen respondiendo en su URL `execute-api`; el gateway no pasa por ellos.
 

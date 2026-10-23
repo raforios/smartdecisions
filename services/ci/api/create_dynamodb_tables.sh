@@ -38,32 +38,33 @@ TABLES=(
     "parameters_values:scope:S:code:S"
 
     # --- SmartDecisions ---
-    "ingest_datasets:id:S"
+    # --- COMMERCIAL (INGEST, ANALYTICS y OPTIMIZATION unidos, 23-oct-2026) ---
+    "commercial_datasets:id:S"
     # Maestro de clientes: quién compra, dicho una vez y no repetido en cada
     # fila de venta. El dueño es la partición y el código del cliente en el
     # sistema del propio cliente es la clave de orden, así que una recarga
     # reconoce al mismo cliente y un cliente ajeno no existe.
-    "ingest_clients:owner_email:S:id:S"
+    "commercial_clients:owner_email:S:id:S"
     # Maestro de vendedores: el archivo nombra al vendedor como lo escribe el
     # ERP ("Ana", "V-017") y el vendedor ingresa con su correo. Acá se dice
     # una vez que son la misma persona. Misma clave que el de clientes.
-    "ingest_sellers:owner_email:S:id:S"
-    "analytics_runs:id:S"
+    "commercial_sellers:owner_email:S:id:S"
+    "commercial_analytics_runs:id:S"
     # Clave compuesta: cada ítem es un punto de una ruta de un día concreto.
-    "optimization_routes:route_day_key:S:client_id:N"
-    # Seguimiento de rutas (LOCALIZATION portado a OPTIMIZATION). El dueño es
+    "commercial_routes:route_day_key:S:client_id:N"
+    # Seguimiento de rutas (LOCALIZATION portado a COMMERCIAL). El dueño es
     # la partición: sólo se consulta la propia y una ruta ajena no existe. En
     # las ejecutadas el id empieza por la fecha de inicio, así "las de hoy" es
     # una Query acotada sin índice.
-    "optimization_planned_routes:owner_email:S:id:S"
-    "optimization_executed_routes:owner_email:S:id:S"
+    "commercial_planned_routes:owner_email:S:id:S"
+    "commercial_executed_routes:owner_email:S:id:S"
     # Stock del día de la empresa: la clave de orden es "{fecha}#{sku}", y el
     # descuento de cada venta es una transacción condicionada sobre
     # available_quantity (el rol Lambda ya tiene AmazonDynamoDBFullAccess, que
     # incluye dynamodb:TransactWriteItems).
-    "optimization_daily_stock:owner_email:S:stock_key:S"
+    "commercial_daily_stock:owner_email:S:stock_key:S"
     # Parámetros de Rutas de cada empresa: hoy, el punto de partida opcional.
-    "optimization_settings:owner_email:S"
+    "commercial_route_settings:owner_email:S"
     # Clave compuesta: toda lectura es "esta moneda entre estas dos fechas".
     "exchange_rates:currency:S:date:S"
     # Variables fluctuantes: lo que se mueve solo y cambia lo que un reporte
@@ -91,13 +92,13 @@ TABLES=(
     # Política de crédito de cada cliente de SmartDecisions. Clave simple: la
     # política se lee entera por dueño, y el dueño es parte de la consulta y no
     # un filtro posterior — leer la de otro cambiaría sus provisiones.
-    "analytics_credit_policies:owner_email:S"
+    "commercial_credit_policies:owner_email:S"
     # Política comercial: los cortes del semáforo y cuántos bolivianos vale un
     # punto en cada cluster. Aparte de la de crédito porque responde otra
     # pregunta y la cambia otra persona, con la misma clave simple y por el
     # mismo motivo. Los nombres de los clusters son del cliente: el producto no
     # declara ninguno.
-    "analytics_commercial_policies:owner_email:S"
+    "commercial_policies:owner_email:S"
 
     # --- Facturación (BILLING) ---
     # El dueño es el comercio y es parte de cada clave, nunca un filtro
