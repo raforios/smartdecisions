@@ -237,13 +237,21 @@ class ForecastModel(str, Enum):
     NAIVE = 'NAIVE'
     DAMPED_TREND = 'DAMPED_TREND'
     HOLT_WINTERS = 'HOLT_WINTERS'
+    LINEAR = 'LINEAR'
+    MOVING_AVERAGE = 'MOVING_AVERAGE'
+    MEAN = 'MEAN'
+    DRIFT = 'DRIFT'
+    SIMPLE_EXPONENTIAL = 'SIMPLE_EXPONENTIAL'
+    HOLT = 'HOLT'
+    THETA = 'THETA'
 
 
 class ForecastRequest(BaseModel):
     '''
-        A series to project. The caller sends only the series and what it is:
-        the model and its parameters are chosen by the service, from the
-        series itself (Rafael, 19-oct-2026).
+        A series to project. The caller sends the series and what it is; the
+        parameters of each model are fitted by the service, from the series
+        itself (Rafael, 19-oct-2026). It may also name the models: one is used
+        as asked, several compete (23-oct-2026).
     '''
     values: list[float] = Field(..., min_length = 2, max_length = 1000,
                                 description = 'The history, oldest first.')
@@ -253,6 +261,13 @@ class ForecastRequest(BaseModel):
         description = 'Points per season (12 for months); None when the series has none.')
     backtest_points: int = Field(..., ge = 1, le = 120,
                                  description = 'Last points the models are measured on.')
+    models: list[ForecastModel] | None = Field(
+        None, min_length = 1,
+        description = 'The models to compare; one model is used as asked. None: the '
+                      'service chooses among the damped trend and Holt-Winters.')
+    window: int | None = Field(
+        None, ge = 1, le = 120,
+        description = 'Points the moving average takes; all of them when not given.')
 
 
 class ForecastResponse(BaseModel):
@@ -268,3 +283,40 @@ class ForecastResponse(BaseModel):
         None, description = 'The same error for "the next value is the same as the last".')
     tested_points: int = Field(
         ..., ge = 0, description = 'How many points the models were measured on.')
+
+
+class CompareRequest(BaseModel):
+    '''
+        Several models measured on the same series (23-oct-2026, from the bench
+        QUOTES kept): each projects `horizon` steps from every point that
+        leaves `min_train` behind it, and the misses are averaged.
+    '''
+    values: list[float] = Field(..., min_length = 2, max_length = 5000,
+                                description = 'The history, oldest first.')
+    horizon: int = Field(..., ge = 1, le = 366, description = 'Steps ahead.')
+    models: list[ForecastModel] = Field(..., min_length = 1, description = 'Models to run.')
+    min_train: int = Field(..., ge = 2, description = 'Points a replay needs before it projects.')
+    min_windows: int = Field(..., ge = 1, description = 'Replays an error needs to be published.')
+    window: int | None = Field(None, ge = 1, le = 366,
+                               description = 'Points the moving average takes.')
+
+
+class ModelRun(BaseModel):
+    '''
+        One model on the series: its projection and how far it missed.
+    '''
+    model: ForecastModel
+    forecast: list[float]
+    mean_absolute_error: float | None = Field(
+        None, description = 'Mean absolute miss over the replays, in the unit of the series; '
+                            'None with too few replays.')
+
+
+class CompareResponse(BaseModel):
+    '''
+        Every model asked for, the one that missed least first, and the naive
+        guess measured the same way.
+    '''
+    runs: list[ModelRun]
+    naive_mean_absolute_error: float | None = None
+    windows: int = Field(..., ge = 0, description = 'How many replays were averaged.')

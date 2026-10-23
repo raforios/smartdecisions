@@ -8,10 +8,20 @@ import pytest
 from pydantic import ValidationError
 
 from schemas.prediction import ForecastRequest
+from services.forecast_bench import BenchSpec, compare
 from services.forecast import (
     DAMPED_TREND,
+    DRIFT,
+    HOLT,
     HOLT_WINTERS,
+    LINEAR,
+    MEAN,
+    MOVING_AVERAGE,
     NAIVE,
+    SIMPLE_EXPONENTIAL,
+    THETA,
+    ForecastSpec,
+    project,
     backtest,
     candidates,
     choose_and_project,
@@ -72,21 +82,22 @@ def test_each_model_needs_enough_history():
 
 def test_every_model_is_tested_on_the_same_points():
     '''With 21 months and seasons of 12, the comparison starts where all can predict.'''
-    models, start = candidates(SEASONAL, 12, 12)
+    models, start = candidates(SEASONAL, ForecastSpec(horizon = 1, season = 12, points = 12))
     assert models == [NAIVE, DAMPED_TREND, HOLT_WINTERS]
     assert start == 14
-    assert candidates(SEASONAL, None, 12) == ([NAIVE, DAMPED_TREND], 9)
+    no_seasons = ForecastSpec(horizon = 1, season = None, points = 12)
+    assert candidates(SEASONAL, no_seasons) == ([NAIVE, DAMPED_TREND], 9)
 
 
 def test_the_naive_error_is_measured_out_of_sample():
     '''On a flat series the naive guess is exact; with one point nothing is tested.'''
-    assert backtest([100.0] * 6, NAIVE, None, 3) == 0.0
-    assert backtest([100.0], NAIVE, None, 1) is None
+    assert backtest([100.0] * 6, NAIVE, ForecastSpec(1, None, 3), 3) == 0.0
+    assert backtest([100.0], NAIVE, ForecastSpec(1, None, 3), 1) is None
 
 
 def test_a_seasonal_series_is_projected_with_its_seasons():
     '''The case of 19-oct: the seasonal model beats the naive guess and sees December.'''
-    projection = choose_and_project(SEASONAL, 12, 12, 12)
+    projection = choose_and_project(SEASONAL, ForecastSpec(12, 12, 12))
     assert projection.model == HOLT_WINTERS
     assert projection.error_percent < projection.naive_error_percent
     assert projection.tested_points == 7
@@ -96,7 +107,7 @@ def test_a_seasonal_series_is_projected_with_its_seasons():
 
 def test_a_model_that_does_not_beat_the_naive_guess_is_not_used():
     '''Without seasons the trend loses to the naive guess here, so the naive one projects.'''
-    projection = choose_and_project(SEASONAL, 3, None, 12)
+    projection = choose_and_project(SEASONAL, ForecastSpec(3, None, 12))
     assert projection.model == NAIVE
     assert projection.forecast == [SEASONAL[-1]] * 3
     assert projection.error_percent == projection.naive_error_percent
@@ -104,11 +115,11 @@ def test_a_model_that_does_not_beat_the_naive_guess_is_not_used():
 
 def test_too_short_a_series_is_projected_naively():
     '''Two points fit no model: the projection is the last value, tested on the second.'''
-    projection = choose_and_project([100.0, 120.0], 2, 12, 3)
+    projection = choose_and_project([100.0, 120.0], ForecastSpec(2, 12, 3))
     assert (projection.model, projection.forecast) == (NAIVE, [120.0, 120.0])
     assert projection.error_percent == pytest.approx(100 * 20 / 120)
     assert projection.tested_points == 1
-    assert choose_and_project([100.0], 1, None, 3).tested_points == 0
+    assert choose_and_project([100.0], ForecastSpec(1, None, 3)).tested_points == 0
 
 
 def test_the_request_keeps_the_season_in_range():
@@ -123,3 +134,58 @@ def test_an_older_caller_is_still_understood():
                               model = 'DAMPED_TREND',
                               smoothing = {'alpha': 0.4, 'beta': 0.1, 'phi': 0.9})
     assert request.season_length is None
+
+
+def test_the_line_and_the_moving_average_project_as_their_names_say():
+    '''A clean line goes on; the average holds the mean of the last points.'''
+    line = [10.0, 20.0, 30.0, 40.0]
+    projection = choose_and_project(line, ForecastSpec(2, None, 2, models = (LINEAR,)))
+    assert projection.model == LINEAR
+    assert projection.forecast == pytest.approx([50.0, 60.0])
+    averaged = choose_and_project(line, ForecastSpec(2, None, 2, models = (MOVING_AVERAGE,),
+                                                     window = 2))
+    assert (averaged.model, averaged.forecast) == (MOVING_AVERAGE, [35.0, 35.0])
+
+
+def test_a_single_model_asked_for_is_used_even_if_naive_does_better():
+    '''The caller chose the method: its projection comes back, with both errors.'''
+    flat = [100.0, 100.0, 100.0, 100.0, 100.0]
+    projection = choose_and_project(flat, ForecastSpec(1, None, 3, models = (MOVING_AVERAGE,),
+                                                       window = 3))
+    assert projection.model == MOVING_AVERAGE
+    assert projection.naive_error_percent == 0.0
+
+
+def test_the_request_names_the_models_and_the_window():
+    '''Both are optional; an older caller sends neither.'''
+    request = ForecastRequest(values = [1, 2, 3], horizon = 2, backtest_points = 2,
+                              models = ['LINEAR'], window = 3)
+    assert ([model.value for model in request.models], request.window) == (['LINEAR'], 3)
+
+
+def test_the_bench_measures_every_model_and_puts_the_best_first():
+    '''On a clean line the line misses nothing and the naive guess misses.'''
+    line = [float(value) for value in range(10, 210, 10)]
+    runs, naive_error = compare(line, [NAIVE, LINEAR, MEAN, THETA],
+                                BenchSpec(horizon = 3, min_train = 5, min_windows = 3))
+    assert runs[0].model == LINEAR
+    assert runs[0].mean_absolute_error == pytest.approx(0.0, abs = 1e-9)
+    assert runs[0].forecast == pytest.approx([210.0, 220.0, 230.0])
+    assert naive_error == pytest.approx(20.0)
+    assert {run.model for run in runs} == {NAIVE, LINEAR, MEAN, THETA}
+
+
+def test_too_few_replays_publish_no_error():
+    '''An error from two replays is not published.'''
+    runs, naive_error = compare([1.0, 2.0, 3.0, 4.0, 5.0], [DRIFT],
+                                BenchSpec(horizon = 2, min_train = 2, min_windows = 5))
+    assert (runs[0].mean_absolute_error, naive_error) == (None, None)
+    assert runs[0].forecast == pytest.approx([6.0, 7.0])
+
+
+def test_every_general_model_projects_the_horizon_asked():
+    '''Each model answers as many steps as asked, short series included.'''
+    series = [5.0, 7.0, 6.0, 8.0, 9.0, 8.5, 10.0]
+    for model in (MEAN, DRIFT, SIMPLE_EXPONENTIAL, HOLT, THETA):
+        assert len(project(series, model, 4, ForecastSpec(4, None, 1))) == 4
+        assert project([3.0], model, 2, ForecastSpec(2, None, 1)) == [3.0, 3.0]

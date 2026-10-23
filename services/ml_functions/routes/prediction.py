@@ -9,7 +9,8 @@ from controllers.prediction import (
     compute_gradient_linear_regression,
     train_linear_regression,
     predict_linear_regression,
-    forecast_series
+    forecast_series,
+    compare_models
 )
 from schemas.prediction import (
     ComputeCostLinearRequest,
@@ -20,6 +21,8 @@ from schemas.prediction import (
     TrainLinearRegressionResponse,
     PredictLinearRequest,
     PredictLinearResponse,
+    CompareRequest,
+    CompareResponse,
     ForecastRequest,
     ForecastResponse
 )
@@ -201,3 +204,33 @@ async def forecast_series_route(
                f'of {len(request.values)} values.')
     logger.info(message)
     return await forecast_series(request)
+
+
+@router.post(
+    '/forecast/compare',
+    response_model = CompareResponse,
+    summary = 'Run several models over a series',
+    description = '''Runs every model asked for over the same series: each projects
+        `horizon` steps from every point that leaves `min_train` behind it, and
+        its misses are averaged. The one that missed least comes first, and the
+        naive guess is measured the same way. The bench QUOTES shows for the
+        exchange rate.'''
+)
+async def compare_models_route(
+    request: CompareRequest,
+    current_user: str = Depends(get_current_user)
+) -> CompareResponse:
+    '''
+        Runs several models over a series and returns them measured.
+
+        Args:
+            request (CompareRequest): The history, the horizon and the models.
+            current_user (str): The authenticated user's identifier (dependency-injected).
+
+        Returns:
+            CompareResponse: The runs, the best first.
+    '''
+    message = (f'User: {current_user} compared {len(request.models)} model(s) over '
+               f'{len(request.values)} values at {request.horizon} step(s).')
+    logger.info(message)
+    return await compare_models(request)
