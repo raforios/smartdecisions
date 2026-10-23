@@ -24,19 +24,6 @@ from services.utils import audit_event, handle_service_errors
 
 
 
-def _caller_token(request: Request | None) -> str:
-    '''
-        The caller's Authorization header, forwarded to ML_FUNCTIONS so it
-        answers for the real user; empty when there is no request.
-
-        Args:
-            request (Request | None): The incoming request.
-
-        Returns:
-            str: The header, or an empty string.
-    '''
-    return (request.headers.get('authorization') if request is not None else None) or ''
-
 
 @handle_service_errors('QUOTES')
 @audit_event('QUOTES', 'ExchangeRate', 'SYNC')
@@ -108,8 +95,10 @@ async def get_forecast_controller(
         Returns:
             RateForecast: Observed series, projection and confidence.
     '''
+    # The caller's token goes to ML_FUNCTIONS, which answers for the real user.
+    token = (request.headers.get('authorization') if request is not None else None) or ''
     result = await get_forecast_service(days_ahead = days_ahead, currency = currency,
-                                        auth_token = _caller_token(request))
+                                        auth_token = token)
     return RateForecast(**result)
 
 
@@ -134,9 +123,9 @@ async def get_bench_controller(
         Returns:
             ModelBench: The models run, from the one that erred least to most.
     '''
+    token = (request.headers.get('authorization') if request is not None else None) or ''
     result = await get_bench_service(
-        days_ahead = days_ahead, currency = currency, models = models,
-        auth_token = _caller_token(request)
+        days_ahead = days_ahead, currency = currency, models = models, auth_token = token
     )
     return ModelBench(**result)
 
