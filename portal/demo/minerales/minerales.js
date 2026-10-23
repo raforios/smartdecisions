@@ -311,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const data = await window.SD_API.post(
-            `${QUOTES_URL}/v1/quotes/sale-scenario`, body
+            `${QUOTES_URL}/v1/mining-analysis/sale-scenario`, body
         );
         state.scenario = data;
         renderScenario(data, mineral);

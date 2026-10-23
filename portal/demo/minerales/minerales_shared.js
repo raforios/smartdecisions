@@ -51,6 +51,8 @@
         SOURCE_UNAVAILABLE: 'La fuente no respondió. Se guardó lo que sí se pudo leer.',
         RATES_STORE_UNAVAILABLE: 'No se pudieron leer los tipos de cambio guardados. Vuelve a intentarlo en un momento.',
         INVALID_HALF: 'La quincena debe ser la primera o la segunda del mes.',
+        FORECAST_UNAVAILABLE: 'No se pudo calcular la proyección en este momento. Vuelve a intentarlo.',
+        RATES_UNAVAILABLE: 'No se pudo leer la proyección del tipo de cambio. Vuelve a intentarlo.',
         SOURCE_UNREADABLE: 'La página de la fuente cambió de forma y no se ' +
             'puede leer con seguridad.',
         INVALID_DATE_RANGE: 'El plazo pedido está fuera de rango.',
