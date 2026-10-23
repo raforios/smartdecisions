@@ -57,6 +57,10 @@ FUEL_EFFICIENCY_CODE = ENV_VARS['FUEL_EFFICIENCY_FACTOR_CODE']
 # The vehicle comes back. A delivery route ends at the last client and returns
 # empty, so the fuel is spent over both legs.
 _RETURN_LEGS = 2
+# The owner the general factors live under: the ADMIN declares them for every
+# company (Rafael, 21-oct). No company name or e-mail starts with '#', so it
+# can never be somebody's own partition.
+GENERAL_OWNER = '#GENERAL'
 
 
 # The series a factor keeps. Both change over time and both have to survive
@@ -111,7 +115,8 @@ def to_factor_response(item: FactorItem) -> FactorResponseSchema:
         latest_value = (
             float(item['latest_value']) if item.get('latest_value') is not None else None
         ),
-        updated_at = item['updated_at']
+        updated_at = item['updated_at'],
+        general = item.get('owner_email') == GENERAL_OWNER
     )
 
 
@@ -231,13 +236,50 @@ def get_factor(
     return item
 
 
+def readable_factor(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    code: str
+) -> tuple[str, FactorItem]:
+    '''
+        The factor a reading uses: the account's own, or else the general one.
+
+        Only reads fall back on the general factor; a write always goes to the
+        account's own (`get_factor`).
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): Authenticated account.
+            code (str): Factor identifier.
+
+        Returns:
+            tuple[str, FactorItem]: The owner whose series to read, and the factor.
+
+        Raises:
+            ResourceNotFoundError: FACTOR_NOT_FOUND when neither exists.
+    '''
+    for owner in dict.fromkeys((owner_email, GENERAL_OWNER)):
+        item = find_item_by_key(
+            dynamodb_resource = dynamodb_resource,
+            table_name = FACTORS_TABLE,
+            key = {'owner_email': owner, 'code': code}
+        )
+        if item:
+            return owner, item
+    error_msg = f'Factor {code} not found for {owner_email} nor among the general ones.'
+    logger.warning(error_msg)
+    raise ResourceNotFoundError(detail = FactorError.FACTOR_NOT_FOUND.value)
+
+
 def list_factors(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     only_active: bool = False
 ) -> FactorListResponseSchema:
     '''
-        The factors the account declared, with their latest reading.
+        The factors the account declared and the general ones, with their
+        latest reading. A factor of the account's own hides the general one
+        with the same code.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
@@ -247,12 +289,15 @@ def list_factors(
         Returns:
             FactorListResponseSchema: The factors.
     '''
-    items = query_by_partition(
-        dynamodb_resource = dynamodb_resource,
-        table_name = FACTORS_TABLE,
-        partition_key = 'owner_email',
-        partition_value = owner_email
-    )
+    by_code: dict[str, FactorItem] = {}
+    for owner in dict.fromkeys((GENERAL_OWNER, owner_email)):
+        by_code.update({item['code']: item for item in query_by_partition(
+            dynamodb_resource = dynamodb_resource,
+            table_name = FACTORS_TABLE,
+            partition_key = 'owner_email',
+            partition_value = owner
+        )})
+    items = list(by_code.values())
     if only_active:
         items = [
             item for item in items
@@ -287,12 +332,12 @@ def state_on(
         Returns:
             FactorStateSchema: The factor as it stood that day.
     '''
-    factor = get_factor(dynamodb_resource, owner_email, code)
+    owner, factor = readable_factor(dynamodb_resource, owner_email, code)
     return FactorStateSchema(
         code = code,
         unit = factor['unit'],
-        active = _flag_on(dynamodb_resource, owner_email, code, day, SERIES_STATUS),
-        value = _figure_on(dynamodb_resource, owner_email, code, day, SERIES_VALUE),
+        active = _flag_on(dynamodb_resource, owner, code, day, SERIES_STATUS),
+        value = _figure_on(dynamodb_resource, owner, code, day, SERIES_VALUE),
         as_of = day.isoformat()
     )
 
@@ -441,7 +486,8 @@ def read_series(
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            owner_email (str): Authenticated account.
+            owner_email (str): Authenticated account; the general factor is
+                read when the account has none of its own.
             code (str): Factor identifier.
             start (date | None): First day to include.
             end (date | None): Last day to include.
@@ -450,7 +496,7 @@ def read_series(
         Returns:
             FactorSeriesResponseSchema: The series, oldest first.
     '''
-    factor = get_factor(dynamodb_resource, owner_email, code)
+    owner, factor = readable_factor(dynamodb_resource, owner_email, code)
     bounds = {}
     if start:
         bounds['from'] = start.isoformat()
@@ -463,7 +509,7 @@ def read_series(
         dynamodb_resource = dynamodb_resource,
         table_name = FACTOR_VALUES_TABLE,
         partition_key = 'owner_code',
-        partition_value = _series_key(owner_email, code, series),
+        partition_value = _series_key(owner, code, series),
         sort_key = 'factor_date',
         sort_between = bounds or None
     )

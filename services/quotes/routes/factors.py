@@ -11,6 +11,7 @@
     need a release to change.
 '''
 from datetime import date as date_type
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path as PathParam, Query, Request, status
@@ -34,7 +35,8 @@ from schemas.factors import (
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
+from services.factors import GENERAL_OWNER
+from services.security import get_current_payload, resolve_owner
 
 router = APIRouter(prefix = '/v1/quotes/factors', tags = ['Fluctuating factors'])
 
@@ -43,6 +45,21 @@ router = APIRouter(prefix = '/v1/quotes/factors', tags = ['Fluctuating factors']
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 
 _CODE = PathParam(..., min_length = 1, max_length = 40)
+
+
+async def get_factors_owner(payload: dict[str, Any] = Depends(get_current_payload)) -> str:
+    '''
+        FastAPI dependency: whose factors the caller works on. The ADMIN
+        declares and loads the general ones, for every company; anyone else,
+        their company's, and reads the general ones besides (Rafael, 21-oct).
+
+        Args:
+            payload (dict[str, Any]): Decoded token claims.
+
+        Returns:
+            str: The general owner for the ADMIN, the caller's owner key otherwise.
+    '''
+    return GENERAL_OWNER if payload.get('role') == 'ADMIN' else resolve_owner(payload)
 
 
 @router.post(
@@ -61,7 +78,7 @@ async def declare_factor_endpoint(
     request: Request,
     definition: FactorDefinitionSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(get_factors_owner)
 ) -> FactorResponseSchema:
     '''
         Endpoint to declare a fluctuating factor.
@@ -92,7 +109,7 @@ async def list_factors_endpoint(
     request: Request,
     only_active: bool = Query(False, description = 'Leave out the ones turned off.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(get_factors_owner)
 ) -> FactorListResponseSchema:
     '''
         Endpoint listing the account's factors.
@@ -123,7 +140,7 @@ async def load_factor_values_endpoint(
     load: FactorValuesLoadSchema,
     code: str = _CODE,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(get_factors_owner)
 ) -> FactorResponseSchema:
     '''
         Endpoint to load readings of a factor.
@@ -163,7 +180,7 @@ async def transport_cost_endpoint(
         None, gt = 0, description = 'Units carried, to get the cost per unit.'
     ),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(get_factors_owner)
 ) -> TransportCostSchema:
     '''
         Endpoint costing a local delivery.
@@ -197,7 +214,7 @@ async def read_factor_state_endpoint(
     code: str = _CODE,
     day: date_type = Query(..., alias = 'date', description = 'YYYY-MM-DD.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(get_factors_owner)
 ) -> FactorStateSchema:
     '''
         Endpoint reading the state of a factor on a day.
@@ -225,7 +242,7 @@ async def read_factor_series_endpoint(
     start: date_type | None = Query(None, description = 'First day to include.'),
     end: date_type | None = Query(None, description = 'Last day to include.'),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
+    current_user: str = Depends(get_factors_owner)
 ) -> FactorSeriesResponseSchema:
     '''
         Endpoint reading the series of a factor.

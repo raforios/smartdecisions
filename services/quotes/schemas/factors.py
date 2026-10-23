@@ -97,6 +97,12 @@ class FactorResponseSchema(FactorDefinitionSchema):
     latest_date: str | None = None
     latest_value: float | None = None
     updated_at: str
+    general: bool = Field(
+        False,
+        description = 'A general factor, declared by the ADMIN for every company: '
+                      'read only for them, and a factor of their own with the same '
+                      'code takes its place (Rafael, 21-oct).'
+    )
 
 
 class FactorSeriesResponseSchema(BaseModel):

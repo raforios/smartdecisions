@@ -289,3 +289,57 @@ def test_a_missing_factor_refuses_instead_of_inventing_a_cost(factor_store):
     with pytest.raises(ResourceNotFoundError) as refused:
         factors.transport_cost(factor_store, OWNER, (100.0, None), date.today())
     assert refused.value.detail == FactorError.NO_VALUE_FOR_DATE.value
+
+
+# ---------- General factors, declared by the ADMIN (Rafael, 21-oct) ----------
+
+def _general_diesel(
+    factor_store,
+    price: float
+) -> None:
+    '''
+        The ADMIN declares the general diesel and loads one reading.
+
+        Args:
+            factor_store: The resource.
+            price (float): Bs per litre on 1-jan-2026.
+    '''
+    factors.declare_factor(factor_store, factors.GENERAL_OWNER, DIESEL)
+    factors.load_values(factor_store, factors.GENERAL_OWNER, 'DIESEL', [
+        FactorValueSchema(factor_date = date(2026, 1, 1), value = price)])
+
+
+def test_a_company_reads_the_general_factor_it_does_not_have(factor_store):
+    '''Listed as general, and its state is the general reading.'''
+    _general_diesel(factor_store, 9.8)
+
+    listed = factors.list_factors(factor_store, OWNER).factors
+    # Declared today, so it counts from today on.
+    state = factors.state_on(factor_store, OWNER, 'DIESEL', date.today())
+
+    assert [(factor.code, factor.general) for factor in listed] == [('DIESEL', True)]
+    assert (state.active, state.value) == (True, 9.8)
+
+
+def test_a_factor_of_its_own_takes_the_place_of_the_general_one(factor_store):
+    '''Same code: the company's figure wins in the list and in every reading.'''
+    _general_diesel(factor_store, 9.8)
+    factors.declare_factor(factor_store, OWNER, DIESEL)
+    _load(factor_store, [(date(2026, 1, 1), 12.5)])
+
+    listed = factors.list_factors(factor_store, OWNER).factors
+    series = factors.read_series(factor_store, OWNER, 'DIESEL')
+    other = factors.state_on(factor_store, OTHER, 'DIESEL', date(2026, 3, 1))
+
+    assert [(factor.code, factor.general) for factor in listed] == [('DIESEL', False)]
+    assert [value.value for value in series.values] == [12.5]
+    assert other.value == 9.8
+
+
+def test_a_company_cannot_load_readings_into_a_general_factor(factor_store):
+    '''Writes go to its own factors only: the general one is not its to change.'''
+    _general_diesel(factor_store, 9.8)
+
+    with pytest.raises(ResourceNotFoundError):
+        _load(factor_store, [(date(2026, 2, 1), 1.0)])
+    assert factors.state_on(factor_store, OTHER, 'DIESEL', date(2026, 3, 1)).value == 9.8

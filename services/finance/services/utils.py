@@ -2,7 +2,7 @@
     Utils service.
 
     Event emission, usage logging and centralized error handling for the
-    ANALYTICS microservice.
+    FINANCE microservice.
 
     This module is the DynamoDB-backed derivation of the canonical MySQL
     boilerplate `services/localization/services/utils.py`. The function names,

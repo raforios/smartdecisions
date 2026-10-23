@@ -22,7 +22,6 @@ from schemas.factors import (
 from services.factors import (
     SERIES_VALUE,
     declare_factor,
-    get_factor,
     list_factors,
     load_values,
     read_series,
@@ -137,7 +136,7 @@ async def read_factor_series_controller(
             FactorSeriesResponseSchema: The series, oldest first.
     '''
     start, end = window
-    get_factor(dynamodb_resource, current_user, code)
+    # read_series finds the account's own factor or else the general one.
     return read_series(dynamodb_resource, current_user, code, start, end, series)
 
 
