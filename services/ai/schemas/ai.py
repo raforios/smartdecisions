@@ -94,6 +94,11 @@ class RoleDefinition(BaseModel):
     max_tokens: int = Field(..., ge = 1)
     model_id: str = Field(..., description = 'Bedrock inference profile to use.')
     active: bool = True
+    client: str | None = Field(
+        None,
+        description = 'Its company; None is a general role. Read only: AI takes it '
+                      'from the token when a version is stored.'
+    )
 
 
 class RoleSummary(BaseModel):
@@ -103,6 +108,21 @@ class RoleSummary(BaseModel):
     role: str
     model_id: str
     active: bool
+    client: str | None = Field(None, description = 'Its company; None is a general role.')
+
+
+class PromptCaller(BaseModel):
+    '''
+        Who is administering the roles: the ADMIN writes the general ones, a
+        manager those of their company (Rafael, 21-oct).
+    '''
+    owner: str = Field(..., description = 'The caller\'s company, or e-mail when it has none.')
+    role: str | None = Field(None, description = 'The caller\'s role in the token.')
+
+    @property
+    def admin(self) -> bool:
+        '''Whether the caller runs the platform.'''
+        return self.role == 'ADMIN'
 
 
 class RoleListResponse(BaseModel):
@@ -114,6 +134,17 @@ class RoleListResponse(BaseModel):
 class RoleActiveRequest(BaseModel):
     '''
         Turns one version of a role on or off. Turning one on retires the
-        other versions of the same view: a view is explained by one role.
+        other versions of the same view and company: each is explained by one
+        role.
     '''
+    active: bool
+
+
+class RoleSwitch(BaseModel):
+    '''
+        One version of a view's role and whether it is to be in force: what a
+        switch changes, in one piece.
+    '''
+    view: str = Field(..., pattern = VIEW_PATTERN)
+    version: int = Field(..., ge = 1)
     active: bool

@@ -13,12 +13,15 @@ from unittest.mock import patch
 from schemas.ai import (
     ExplainRequest,
     ExplainResponse,
-    RoleActiveRequest,
+    PromptCaller,
     RoleDefinition,
     RoleListResponse,
-    RoleSummary
+    RoleSummary,
+    RoleSwitch
 )
 from controllers import ai as controllers
+
+CALLER = PromptCaller(owner = 'acme', role = 'MANAGER')
 
 
 def test_explain_controller_returns_its_model():
@@ -26,7 +29,8 @@ def test_explain_controller_returns_its_model():
     async def _explain(
         view, # pylint: disable=unused-argument
         data, # pylint: disable=unused-argument
-        auth_token # pylint: disable=unused-argument
+        auth_token, # pylint: disable=unused-argument
+        owner # pylint: disable=unused-argument
     ):
         return {
             'view': 'rate_forecast',
@@ -53,7 +57,7 @@ def test_explain_controller_returns_its_model():
 
 def test_roles_controller_returns_its_model():
     '''The roles endpoint answers a fully built RoleListResponse.'''
-    async def _roles():
+    async def _roles(caller): # pylint: disable=unused-argument
         return {
             'count': 1,
             'roles': [{
@@ -67,7 +71,7 @@ def test_roles_controller_returns_its_model():
 
     with patch.object(controllers, 'list_roles_service', _roles):
         response = asyncio.run(controllers.list_roles_controller(
-            current_user = 'tester', request = None
+            current_user = 'tester', caller = CALLER, request = None
         ))
 
     assert isinstance(response, RoleListResponse)
@@ -79,7 +83,8 @@ def test_get_role_controller_returns_its_model():
     '''One version of a role answers a fully built RoleDefinition.'''
     async def _role(
         view,
-        version
+        version,
+        caller # pylint: disable=unused-argument
     ):
         return {'view': view, 'version': version, 'role': 'Asesor.',
                 'instructions': 'Explica.', 'rules': ['No inventes.'], 'max_tokens': 400,
@@ -87,7 +92,8 @@ def test_get_role_controller_returns_its_model():
 
     with patch.object(controllers, 'get_role_service', _role):
         response = asyncio.run(controllers.get_role_controller(
-            view = 'sale_scenario', version = 2, current_user = 'tester', request = None
+            view = 'sale_scenario', version = 2, current_user = 'tester', caller = CALLER,
+            request = None
         ))
 
     assert isinstance(response, RoleDefinition)
@@ -99,15 +105,16 @@ def test_set_role_active_controller_returns_its_model():
     async def _switch(
         view,
         version,
-        active
+        active,
+        caller # pylint: disable=unused-argument
     ):
         return {'view': view, 'version': version, 'role': 'Asesor.',
                 'model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0', 'active': active}
 
     with patch.object(controllers, 'set_role_active_service', _switch):
         response = asyncio.run(controllers.set_role_active_controller(
-            view = 'sale_scenario', version = 2,
-            change = RoleActiveRequest(active = False), current_user = 'tester', request = None
+            change = RoleSwitch(view = 'sale_scenario', version = 2, active = False),
+            current_user = 'tester', caller = CALLER, request = None
         ))
 
     assert isinstance(response, RoleSummary)
@@ -116,7 +123,10 @@ def test_set_role_active_controller_returns_its_model():
 
 def test_save_role_controller_returns_its_model():
     '''Storing a version answers a fully built RoleSummary.'''
-    async def _save(definition):
+    async def _save(
+        definition,
+        caller # pylint: disable=unused-argument
+    ):
         return {key: definition[key] for key in ('view', 'version', 'role', 'model_id', 'active')}
 
     definition = RoleDefinition(view = 'sale_scenario', version = 3, role = 'Asesor.',
@@ -124,8 +134,29 @@ def test_save_role_controller_returns_its_model():
                                 model_id = 'us.anthropic.claude-haiku-4-5-20251001-v1:0')
     with patch.object(controllers, 'save_role_service', _save):
         response = asyncio.run(controllers.save_role_controller(
-            definition = definition, current_user = 'tester', request = None
+            definition = definition, current_user = 'tester', caller = CALLER, request = None
         ))
 
     assert isinstance(response, RoleSummary)
     assert response.version == 3
+
+
+def test_delete_role_controller_returns_its_model():
+    '''Deleting a version answers a fully built RoleSummary with its company.'''
+    async def _delete(
+        view,
+        version,
+        caller # pylint: disable=unused-argument
+    ):
+        return {'view': view, 'version': version, 'role': 'Asesor.', 'client': 'acme',
+                'model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0', 'active': False}
+
+    with patch.object(controllers, 'delete_role_service', _delete):
+        response = asyncio.run(controllers.delete_role_controller(
+            view = 'sale_scenario', version = 4, current_user = 'tester',
+            caller = PromptCaller(owner = 'admin@bearsoft.com.bo', role = 'ADMIN'),
+            request = None
+        ))
+
+    assert isinstance(response, RoleSummary)
+    assert response.client == 'acme'

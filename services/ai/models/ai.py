@@ -7,7 +7,10 @@
           The expert role each view is explained by. Versioned so a wording
           change is a new row and not an edit that loses what came before, and
           so the version can take part in the cache key: retuning the role
-          invalidates what was cached without deleting anything.
+          invalidates what was cached without deleting anything. `client`
+          names the company a role belongs to; without it the role is a
+          general one. Versions are numbered per view across every company,
+          so view + version still names one role and one cache entry.
 
       ai_explanations  PK: cache_key (S)
           Answers already produced, with a TTL attribute. It can be emptied
@@ -24,9 +27,10 @@ CACHE_PARTITION_KEY = 'cache_key'
 CACHE_TTL_ATTRIBUTE = 'expires_at'
 
 
-# Nine fields because a stored role is nine facts: which view, which version,
+# Ten fields because a stored role is ten facts: which view, which version,
 # who, how to read it, what never to do, the ceiling, the model, whether it is
-# in force and when it was written. Grouping any of them would only hide one.
+# in force, when it was written and whose it is. Grouping any of them would
+# only hide one.
 @dataclass(frozen = True)
 class PromptItem: # pylint: disable=too-many-instance-attributes
     '''
@@ -44,6 +48,10 @@ class PromptItem: # pylint: disable=too-many-instance-attributes
     model_id: str
     active: bool
     created_at: str
+    # The company it belongs to; None is a general one, the default of every
+    # company (Rafael, 21-oct: the ADMIN writes the general ones and each
+    # company may write its own).
+    client: str | None = None
 
     @classmethod
     def from_item(
@@ -68,17 +76,21 @@ class PromptItem: # pylint: disable=too-many-instance-attributes
             max_tokens = int(item.get('max_tokens', 0)),
             model_id = str(item.get('model_id', '')),
             active = bool(item.get('active', True)),
-            created_at = str(item.get('created_at', ''))
+            created_at = str(item.get('created_at', '')),
+            client = None if item.get('client') is None else str(item['client'])
         )
 
     def to_item(self) -> dict[str, Any]:
         '''
-            Renders the record as the item DynamoDB stores.
+            Renders the record as the item DynamoDB stores. A general role
+            carries no `client` attribute at all.
 
             Returns:
                 dict[str, Any]: Item ready for put_item.
         '''
+        owner = {} if self.client is None else {'client': self.client}
         return {
+            **owner,
             PROMPTS_PARTITION_KEY: self.view,
             PROMPTS_SORT_KEY: self.version,
             'role': self.role,

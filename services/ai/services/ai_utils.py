@@ -82,19 +82,15 @@ def build_cache_key(
     return hashlib.sha256(material.encode('utf-8')).hexdigest()
 
 
-def get_active_prompt(view: str) -> PromptItem | None:
+def _versions(view: str) -> list[PromptItem]:
     '''
-        Returns the role in force for a view.
-
-        Reads the partition backwards so the newest version comes first, and
-        takes the newest one marked active: that is what makes a rollback a
-        matter of flipping `active` rather than deleting anything.
+        Every version of a view's role, of every company, newest first.
 
         Args:
             view (str): View to look up.
 
         Returns:
-            PromptItem | None: The active role, or None when none is configured.
+            list[PromptItem]: The stored roles of the view.
 
         Raises:
             ServiceUnavailableError: If the table cannot be read.
@@ -108,12 +104,48 @@ def get_active_prompt(view: str) -> PromptItem | None:
         error_msg = f'Failed to read the role of {view}: {error}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(detail = AIError.ROLE_NOT_CONFIGURED.value) from error
+    return [PromptItem.from_item(item) for item in response.get('Items', [])]
 
-    for item in response.get('Items', []):
-        prompt = PromptItem.from_item(item)
-        if prompt.active:
-            return prompt
-    return None
+
+def get_active_prompt(
+    view: str,
+    owner: str
+) -> PromptItem | None:
+    '''
+        Returns the role in force for a view and a company.
+
+        The company's own active role wins; without one, the general role in
+        force (Rafael, 21-oct: the general ones are every company's default).
+        Newest first, and only active ones: that is what makes a rollback a
+        matter of flipping `active` rather than deleting anything.
+
+        Args:
+            view (str): View to look up.
+            owner (str): The caller's company (or e-mail, when it has none).
+
+        Returns:
+            PromptItem | None: The active role, or None when none is configured.
+
+        Raises:
+            ServiceUnavailableError: If the table cannot be read.
+    '''
+    active = [prompt for prompt in _versions(view) if prompt.active]
+    own = next((prompt for prompt in active if prompt.client == owner), None)
+    return own or next((prompt for prompt in active if prompt.client is None), None)
+
+
+def next_version(view: str) -> int:
+    '''
+        The number the next version of a view takes, counting every company's,
+        so two companies never write over each other.
+
+        Args:
+            view (str): View to look up.
+
+        Returns:
+            int: One more than the highest stored version, or 1.
+    '''
+    return max((prompt.version for prompt in _versions(view)), default = 0) + 1
 
 
 def list_prompts() -> list[PromptItem]:
@@ -190,6 +222,30 @@ def put_prompt(prompt: PromptItem) -> None:
         _table(PROMPTS_TABLE).put_item(Item = prompt.to_item())
     except ClientError as error:
         error_msg = f'Failed to store the role of {prompt.view}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(detail = AIError.ROLE_NOT_CONFIGURED.value) from error
+
+
+def delete_prompt(
+    view: str,
+    version: int
+) -> None:
+    '''
+        Deletes one version of a role.
+
+        Args:
+            view (str): View the role explains.
+            version (int): Version to delete.
+
+        Raises:
+            ServiceUnavailableError: If the delete is rejected.
+    '''
+    try:
+        _table(PROMPTS_TABLE).delete_item(
+            Key = {PROMPTS_PARTITION_KEY: view, PROMPTS_SORT_KEY: version}
+        )
+    except ClientError as error:
+        error_msg = f'Failed to delete role {view} v{version}: {error}'
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(detail = AIError.ROLE_NOT_CONFIGURED.value) from error
 

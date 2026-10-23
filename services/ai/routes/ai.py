@@ -1,11 +1,12 @@
 '''
     AI: routes handler
 '''
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Path, Request, status
 
 from controllers.ai import (
+    delete_role_controller,
     explain_controller,
     get_role_controller,
     list_roles_controller,
@@ -15,17 +16,38 @@ from controllers.ai import (
 from schemas.ai import (
     ExplainRequest,
     ExplainResponse,
+    PromptCaller,
     RoleActiveRequest,
     RoleDefinition,
     RoleListResponse,
     RoleSummary,
+    RoleSwitch,
     VIEW_PATTERN
 )
 from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
+from services.security import (
+    get_current_owner,
+    get_current_payload,
+    require_roles,
+    resolve_owner
+)
 
 
 router = APIRouter(prefix = '/v1/ai', tags = ['AI'])
+
+
+async def get_prompt_caller(payload: dict[str, Any] = Depends(get_current_payload)) -> PromptCaller:
+    '''
+        FastAPI dependency: the caller's company and role, which decide whose
+        roles they see and write (Rafael, 21-oct).
+
+        Args:
+            payload (dict[str, Any]): Decoded token claims.
+
+        Returns:
+            PromptCaller: Company (or e-mail) and role.
+    '''
+    return PromptCaller(owner = resolve_owner(payload), role = payload.get('role'))
 
 
 @router.post(
@@ -68,14 +90,15 @@ async def explain_endpoint(
 )
 async def list_roles_endpoint(
     request: Request,
-    current_user: str = Depends(get_current_owner)
+    caller: PromptCaller = Depends(get_prompt_caller)
 ) -> RoleListResponse:
-    ''' Endpoint listing the configured expert roles. '''
-    message = f'User: {current_user}. Requested the configured roles.'
+    ''' Endpoint listing the expert roles the caller may see. '''
+    message = f'User: {caller.owner}. Requested the configured roles.'
     logger.info(message)
 
     return await list_roles_controller(
-        current_user = current_user,
+        current_user = caller.owner,
+        caller = caller,
         request = request
     )
 
@@ -96,16 +119,16 @@ async def list_roles_endpoint(
 async def save_role_endpoint(
     request: Request,
     definition: RoleDefinition,
-    current_user: str = Depends(get_current_owner)
+    caller: PromptCaller = Depends(get_prompt_caller)
 ) -> RoleSummary:
     ''' Endpoint storing a version of an expert role. '''
-    message = (f'User: {current_user}. Stored role {definition.view} '
-               f'v{definition.version}.')
+    message = f'User: {caller.owner}. Storing a role of {definition.view}.'
     logger.info(message)
 
     return await save_role_controller(
         definition = definition,
-        current_user = current_user,
+        current_user = caller.owner,
+        caller = caller,
         request = request
     )
 
@@ -123,16 +146,17 @@ async def get_role_endpoint(
     request: Request,
     view: Annotated[str, Path(pattern = VIEW_PATTERN)],
     version: int,
-    current_user: str = Depends(get_current_owner)
+    caller: PromptCaller = Depends(get_prompt_caller)
 ) -> RoleDefinition:
     ''' Endpoint returning one version of an expert role. '''
-    message = f'User: {current_user}. Requested role {view} v{version}.'
+    message = f'User: {caller.owner}. Requested role {view} v{version}.'
     logger.info(message)
 
     return await get_role_controller(
         view = view,
         version = version,
-        current_user = current_user,
+        current_user = caller.owner,
+        caller = caller,
         request = request
     )
 
@@ -151,17 +175,44 @@ async def set_role_active_endpoint(
     view: Annotated[str, Path(pattern = VIEW_PATTERN)],
     version: int,
     change: RoleActiveRequest,
-    current_user: str = Depends(get_current_owner)
+    caller: PromptCaller = Depends(get_prompt_caller)
 ) -> RoleSummary:
     ''' Endpoint turning a version of an expert role on or off. '''
-    message = (f'User: {current_user}. Set role {view} v{version} '
+    message = (f'User: {caller.owner}. Set role {view} v{version} '
                f'active={change.active}.')
     logger.info(message)
 
     return await set_role_active_controller(
+        change = RoleSwitch(view = view, version = version, active = change.active),
+        current_user = caller.owner,
+        caller = caller,
+        request = request
+    )
+
+
+@router.delete(
+    '/roles/{view}/{version}',
+    response_model = RoleSummary,
+    status_code = status.HTTP_200_OK,
+    summary = 'Delete one version of a view\'s expert role (ADMIN).',
+    description = 'The ADMIN deletes a version of any company or a general one '
+                  '(Rafael, 21-oct). A company without its own role in force '
+                  'goes back to the general one.'
+)
+async def delete_role_endpoint(
+    request: Request,
+    view: Annotated[str, Path(pattern = VIEW_PATTERN)],
+    version: int,
+    current_user: str = Depends(require_roles('ADMIN'))
+) -> RoleSummary:
+    ''' Endpoint deleting a version of an expert role. '''
+    message = f'User: {current_user}. Deleting role {view} v{version}.'
+    logger.info(message)
+
+    return await delete_role_controller(
         view = view,
         version = version,
-        change = change,
         current_user = current_user,
+        caller = PromptCaller(owner = current_user, role = 'ADMIN'),
         request = request
     )

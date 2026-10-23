@@ -16,9 +16,13 @@ import pytest
 from fastapi import HTTPException
 
 from models.ai import PromptItem
-from schemas.ai import AIError
-from services import ai
+from schemas.ai import AIError, PromptCaller
+from services import ai, ai_utils
 from services.ai_utils import build_cache_key
+
+# The ADMIN writes the general roles; a manager, those of their company.
+ADMIN = PromptCaller(owner = 'admin@bearsoft.com.bo', role = 'ADMIN')
+MANAGER = PromptCaller(owner = 'acme', role = 'MANAGER')
 
 
 def _run(coroutine):
@@ -130,9 +134,9 @@ def test_an_unconfigured_view_is_refused_before_reaching_the_model(model):
         Without a role there is nothing to write from, and answering anyway
         would mean the model inventing its own voice.
     '''
-    with patch.object(ai, 'get_active_prompt', lambda view: None):
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: None):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+            _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
 
     assert AIError.ROLE_NOT_CONFIGURED.value in str(failure.value.detail)
     assert not model
@@ -143,9 +147,9 @@ def test_an_empty_payload_is_refused(model):
         Nothing to explain is not an explanation. The view must send what the
         backend answered, and an empty object means the caller has nothing.
     '''
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service('rate_forecast', {}, None))
+            _run(ai.explain_service('rate_forecast', {}, None, 'acme'))
 
     assert AIError.EMPTY_PAYLOAD.value in str(failure.value.detail)
     assert not model
@@ -164,8 +168,8 @@ def test_the_backend_response_travels_whole(
     '''
     answered = dict(RATE_VIEW, campo_nuevo = 'agregado por otro servicio')
 
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        _run(ai.explain_service('rate_forecast', answered, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
+        _run(ai.explain_service('rate_forecast', answered, None, 'acme'))
 
     sent = model[0]['user_prompt']
     assert 'campo_nuevo' in sent
@@ -183,9 +187,9 @@ def test_a_second_identical_request_is_served_from_cache(
         fresh answer and a stored one is the difference between paying for it
         and not.
     '''
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        first = _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
-        second = _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
+        first = _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
+        second = _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
 
     assert first['cached'] is False
     assert second['cached'] is True
@@ -204,11 +208,11 @@ def test_retuning_the_role_stops_serving_what_the_old_one_produced(
         keep answering with text written under the previous rules — and nothing
         has to be deleted for that to hold.
     '''
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt(version = 1)):
-        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt(version = 1)):
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
 
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt(version = 2)):
-        after = _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt(version = 2)):
+        after = _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
 
     assert after['cached'] is False
     assert after['prompt_version'] == 2
@@ -227,10 +231,10 @@ def test_a_model_that_says_nothing_is_not_published_as_an_answer(
     ):
         return {'text': '', 'input_tokens': 100, 'output_tokens': 0}
 
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()), \
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()), \
          patch.object(ai, 'invoke', _silent):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+            _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
 
     assert AIError.MODEL_REFUSED.value in str(failure.value.detail)
 
@@ -245,8 +249,8 @@ def test_the_prompt_carries_the_role_and_every_rule(
         visibly; the answers would just start drifting.
     '''
     prompt = _prompt()
-    with patch.object(ai, 'get_active_prompt', lambda view: prompt):
-        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: prompt):
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
 
     system = model[0]['system_prompt']
     assert prompt.role in system
@@ -297,6 +301,7 @@ def test_storing_a_role_retires_the_previous_version():
 
     old = _prompt(version = 1)
     with patch.object(ai, 'put_prompt', _put), \
+         patch.object(ai, 'next_version', lambda view: 2), \
          patch.object(ai, 'list_prompts', lambda: [old]):
         result = _run(ai.save_role_service({
             'view': 'rate_forecast',
@@ -307,7 +312,7 @@ def test_storing_a_role_retires_the_previous_version():
             'max_tokens': 500,
             'model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
             'active': True,
-        }))
+        }, ADMIN))
 
     assert result['version'] == 2
     assert result['active'] is True
@@ -330,8 +335,8 @@ def test_a_long_response_is_sampled_instead_of_refused(
         {'date': '2026-09-05', 'rate': 12.5, 'relleno': 'x' * 60} for _ in range(3000)
     ])
 
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        result = _run(ai.explain_service('rate_forecast', huge, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
+        result = _run(ai.explain_service('rate_forecast', huge, None, 'acme'))
 
     assert result['text']
     sent = model[0]['user_prompt']
@@ -348,8 +353,8 @@ def test_a_response_that_fits_is_not_touched(
     cache # pylint: disable=unused-argument
 ):
     """Trimming is a last resort, not something that happens on every call."""
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
 
     sent = model[0]['user_prompt']
     assert 'muestra' not in sent
@@ -358,9 +363,9 @@ def test_a_response_that_fits_is_not_touched(
 
 def test_an_empty_payload_is_still_refused(model):
     """Nothing to explain is not an explanation."""
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
         with pytest.raises(HTTPException) as failure:
-            _run(ai.explain_service('rate_forecast', {}, None))
+            _run(ai.explain_service('rate_forecast', {}, None, 'acme'))
 
     assert AIError.EMPTY_PAYLOAD.value in str(failure.value.detail)
     assert not model
@@ -384,8 +389,8 @@ def test_a_long_list_is_trimmed_at_any_depth(
         ]
     }
 
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        _run(ai.explain_service('rate_forecast', nested, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
+        _run(ai.explain_service('rate_forecast', nested, None, 'acme'))
 
     sent = model[0]['user_prompt']
     assert len(sent) <= SETTINGS.max_payload_characters + 500
@@ -397,7 +402,7 @@ def test_a_long_list_is_trimmed_at_any_depth(
 def test_a_role_is_read_whole_to_be_edited():
     '''The editor needs the instructions and every rule, not the summary.'''
     with patch.object(ai, 'get_prompt', lambda view, version: _prompt(version)):
-        role = _run(ai.get_role_service('rate_forecast', 3))
+        role = _run(ai.get_role_service('rate_forecast', 3, ADMIN))
 
     assert role['version'] == 3
     assert role['instructions'] == 'Explica la serie.'
@@ -408,7 +413,7 @@ def test_a_version_that_does_not_exist_answers_not_found():
     '''Reading or switching a missing version is a 404 with its code.'''
     with patch.object(ai, 'get_prompt', lambda view, version: None):
         with pytest.raises(HTTPException) as raised:
-            _run(ai.get_role_service('rate_forecast', 9))
+            _run(ai.get_role_service('rate_forecast', 9, ADMIN))
 
     assert raised.value.status_code == 404
     assert raised.value.detail == AIError.ROLE_NOT_FOUND.value
@@ -422,7 +427,7 @@ def test_turning_a_version_on_retires_the_one_in_force():
          patch.object(ai, 'put_prompt',
                       lambda prompt: stored.__setitem__(prompt.version, prompt.active)), \
          patch.object(ai, 'list_prompts', lambda: [old, new]):
-        result = _run(ai.set_role_active_service('rate_forecast', 1, True))
+        result = _run(ai.set_role_active_service('rate_forecast', 1, True, ADMIN))
 
     assert result['active'] is True
     assert stored == {1: True, 2: False}
@@ -435,7 +440,7 @@ def test_turning_a_version_off_touches_nothing_else():
          patch.object(ai, 'put_prompt',
                       lambda prompt: stored.__setitem__(prompt.version, prompt.active)), \
          patch.object(ai, 'list_prompts', lambda: [_prompt(1)]):
-        _run(ai.set_role_active_service('rate_forecast', 2, False))
+        _run(ai.set_role_active_service('rate_forecast', 2, False, ADMIN))
 
     assert stored == {2: False}
 
@@ -474,6 +479,91 @@ def test_the_configured_temperature_reaches_the_model(
     cache # pylint: disable=unused-argument
 ):
     '''The temperature is the one in PARAMETERS, not a number in the code.'''
-    with patch.object(ai, 'get_active_prompt', lambda view: _prompt()):
-        _run(ai.explain_service('rate_forecast', RATE_VIEW, None))
+    with patch.object(ai, 'get_active_prompt', lambda view, owner: _prompt()):
+        _run(ai.explain_service('rate_forecast', RATE_VIEW, None, 'acme'))
     assert model[0]['temperature'] == SETTINGS.temperature
+
+
+# ---------- Roles per company (Rafael, 21-oct) ----------
+
+ROLE_BODY = {'view': 'rate_forecast', 'version': 1, 'role': 'Analista de acme.',
+             'instructions': 'Explica la serie.', 'rules': [], 'max_tokens': 500,
+             'model_id': 'us.anthropic.claude-haiku-4-5-20251001-v1:0', 'active': True}
+
+
+def test_a_company_role_wins_and_the_general_one_is_the_default():
+    '''acme gets its own role in force; any other company, the general one.'''
+    general = _prompt(1)
+    own = replace(_prompt(2), client = 'acme')
+    retired = replace(_prompt(3), client = 'acme', active = False)
+    with patch.object(ai_utils, '_versions', lambda view: [retired, own, general]):
+        assert ai_utils.get_active_prompt('rate_forecast', 'acme') == own
+        assert ai_utils.get_active_prompt('rate_forecast', 'other') == general
+
+
+def test_the_next_version_counts_every_company():
+    '''Numbers are per view across companies, so no one writes over another.'''
+    stored = [_prompt(1), replace(_prompt(4), client = 'other')]
+    with patch.object(ai_utils, '_versions', lambda view: stored):
+        assert ai_utils.next_version('rate_forecast') == 5
+
+
+def test_a_manager_stores_for_their_company_and_retires_only_theirs():
+    '''The company comes from the token; the general role stays in force.'''
+    general = _prompt(1)
+    older = replace(_prompt(2), client = 'acme')
+    written = []
+    with patch.object(ai, 'put_prompt', written.append), \
+         patch.object(ai, 'next_version', lambda view: 3), \
+         patch.object(ai, 'list_prompts', lambda: [general, older]):
+        result = _run(ai.save_role_service({**ROLE_BODY, 'client': 'intruso'}, MANAGER))
+    assert (result['version'], result['client']) == (3, 'acme')
+    assert [(prompt.version, prompt.active) for prompt in written] == [(3, True), (2, False)]
+
+
+def test_only_the_admin_and_managers_write_roles():
+    '''A query user is refused before anything is stored.'''
+    reader = PromptCaller(owner = 'acme', role = 'REQUESTER')
+    with patch.object(ai, 'put_prompt', pytest.fail):
+        with pytest.raises(HTTPException) as refused:
+            _run(ai.save_role_service(ROLE_BODY, reader))
+    assert refused.value.status_code == 403
+
+
+def test_a_manager_sees_the_general_roles_and_theirs_only():
+    '''Another company's role is left out of the list.'''
+    stored = [_prompt(1), replace(_prompt(2), client = 'acme'),
+              replace(_prompt(3), client = 'other')]
+    with patch.object(ai, 'list_prompts', lambda: stored):
+        listed = _run(ai.list_roles_service(MANAGER))
+        everything = _run(ai.list_roles_service(ADMIN))
+    assert [role['version'] for role in listed['roles']] == [1, 2]
+    assert everything['count'] == 3
+
+
+def test_another_company_role_answers_like_one_that_does_not_exist():
+    '''Same 404 as a missing version: nothing says it exists.'''
+    with patch.object(ai, 'get_prompt', lambda view, version: replace(_prompt(5),
+                                                                       client = 'other')):
+        with pytest.raises(HTTPException) as hidden:
+            _run(ai.get_role_service('rate_forecast', 5, MANAGER))
+    assert hidden.value.detail == AIError.ROLE_NOT_FOUND.value
+
+
+def test_a_manager_cannot_switch_the_general_role():
+    '''They may read it to start theirs from it, never turn it off.'''
+    with patch.object(ai, 'get_prompt', lambda view, version: _prompt(1)), \
+         patch.object(ai, 'put_prompt', pytest.fail):
+        with pytest.raises(HTTPException) as refused:
+            _run(ai.set_role_active_service('rate_forecast', 1, False, MANAGER))
+    assert refused.value.status_code == 403
+
+
+def test_the_admin_deletes_a_company_role():
+    '''The deleted version is reported with its company.'''
+    deleted = []
+    with patch.object(ai, 'get_prompt', lambda view, version: replace(_prompt(7),
+                                                                       client = 'acme')), \
+         patch.object(ai, 'delete_prompt', lambda view, version: deleted.append(version)):
+        result = _run(ai.delete_role_service('rate_forecast', 7, ADMIN))
+    assert (deleted, result['client']) == ([7], 'acme')

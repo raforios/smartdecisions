@@ -25,18 +25,21 @@ from datetime import timedelta
 from typing import Any
 
 from models.ai import ExplanationItem, PromptItem
-from schemas.ai import AIError
+from schemas.ai import AIError, PromptCaller
 from services.ai_utils import (
     build_cache_key,
+    delete_prompt,
     get_active_prompt,
     get_cached,
     get_prompt,
     list_prompts,
+    next_version,
     put_cached,
     put_prompt
 )
 from services.bedrock_client import invoke
 from services.exceptions import (
+    ForbiddenError,
     InvalidInputError,
     RegisterNotFoundError,
     ServiceUnavailableError
@@ -203,7 +206,8 @@ def _fit_to_budget(
 async def explain_service(
     view: str,
     data: dict[str, Any],
-    auth_token: str | None
+    auth_token: str | None,
+    owner: str
 ) -> dict[str, Any]:
     '''
     Explains what a view is showing, from the point of view of its expert.
@@ -213,6 +217,7 @@ async def explain_service(
         data (dict[str, Any]): The payload the view is displaying.
         auth_token (str | None): The caller's Authorization header, forwarded
             to PARAMETERS.
+        owner (str): The caller's company: its own role wins over the general.
 
     Returns:
         dict[str, Any]: Payload matching ExplainResponse shape.
@@ -233,7 +238,7 @@ async def explain_service(
     settings = explain_settings(auth_token)
     payload = _fit_to_budget(data, settings)
 
-    prompt = get_active_prompt(view)
+    prompt = get_active_prompt(view, owner)
     if prompt is None:
         error_msg = f'No active role is configured for {view}.'
         logger.warning(error_msg)
@@ -297,84 +302,39 @@ async def explain_service(
     }
 
 
-@handle_service_errors('AI')
-async def list_roles_service() -> dict[str, Any]:
+# Who may write roles: the ADMIN the general ones, a manager their company's.
+WRITERS = ('ADMIN', 'MANAGER')
+
+
+def _scope(caller: PromptCaller) -> str | None:
     '''
-    Returns the roles currently configured.
+        The company a caller writes for: none (general) for the ADMIN.
 
-    Exists so the wording in force can be reviewed without opening the console:
-    the whole point of keeping it in a table is that it changes often, and what
-    changes often has to be inspectable.
+        Args:
+            caller (PromptCaller): Who is administering.
 
-    Returns:
-        dict[str, Any]: Payload matching RoleListResponse shape.
+        Returns:
+            str | None: The company, or None for the general roles.
     '''
-    prompts = list_prompts()
-    return {
-        'count': len(prompts),
-        'roles': [
-            {
-                'view': prompt.view,
-                'version': prompt.version,
-                'role': prompt.role,
-                'model_id': prompt.model_id,
-                'active': prompt.active,
-            }
-            for prompt in prompts
-        ],
-    }
+    return None if caller.admin else caller.owner
 
 
-@handle_service_errors('AI')
-async def save_role_service(definition: dict[str, Any]) -> dict[str, Any]:
+def _visible(
+    prompt: PromptItem,
+    caller: PromptCaller
+) -> bool:
     '''
-    Stores a version of the role a view is explained from.
+        Whether a caller may see a role: the ADMIN every one; anyone else the
+        general ones and their company's.
 
-    This is how the wording is administered — through the API, like everything
-    else. Writing a version does not overwrite the previous one: it is stored
-    alongside and the older versions of that view are marked inactive, so a
-    rollback is flipping a flag and nothing is ever lost. The version also takes
-    part in the cache key, so retuning stops serving what the previous wording
-    produced without deleting a single row.
+        Args:
+            prompt (PromptItem): Stored role.
+            caller (PromptCaller): Who asks.
 
-    Args:
-        definition (dict[str, Any]): Payload matching RoleDefinition shape.
-
-    Returns:
-        dict[str, Any]: The stored role, as RoleSummary shape.
+        Returns:
+            bool: True when it may be shown.
     '''
-    prompt = PromptItem(
-        view = definition['view'],
-        version = definition['version'],
-        role = definition['role'],
-        instructions = definition['instructions'],
-        rules = list(definition.get('rules', [])),
-        max_tokens = definition['max_tokens'],
-        model_id = definition['model_id'],
-        active = bool(definition.get('active', True)),
-        created_at = get_current_time_gmt().isoformat()
-    )
-    put_prompt(prompt)
-
-    retired = 0
-    if prompt.active:
-        for stored in list_prompts():
-            if (stored.view == prompt.view and stored.version != prompt.version
-                    and stored.active):
-                put_prompt(replace(stored, active = False))
-                retired += 1
-
-    message = (f'Role of {prompt.view} stored as version {prompt.version}; '
-               f'{retired} earlier version(s) retired.')
-    logger.info(message)
-
-    return {
-        'view': prompt.view,
-        'version': prompt.version,
-        'role': prompt.role,
-        'model_id': prompt.model_id,
-        'active': prompt.active,
-    }
+    return caller.admin or prompt.client in (None, caller.owner)
 
 
 def _summary(prompt: PromptItem) -> dict[str, Any]:
@@ -385,7 +345,8 @@ def _summary(prompt: PromptItem) -> dict[str, Any]:
             prompt (PromptItem): Stored role.
 
         Returns:
-            dict[str, Any]: View, version, role, model and whether it is in force.
+            dict[str, Any]: View, version, role, model, whether it is in force
+            and its company.
     '''
     return {
         'view': prompt.view,
@@ -393,29 +354,127 @@ def _summary(prompt: PromptItem) -> dict[str, Any]:
         'role': prompt.role,
         'model_id': prompt.model_id,
         'active': prompt.active,
+        'client': prompt.client,
     }
+
+
+def _retire_others(prompt: PromptItem) -> int:
+    '''
+        Turns off the other active versions of the same view and company: a
+        company's view is explained by one role, and so is the general one.
+
+        Args:
+            prompt (PromptItem): The version just turned on.
+
+        Returns:
+            int: How many were retired.
+    '''
+    retired = 0
+    for stored in list_prompts():
+        if (stored.view == prompt.view and stored.client == prompt.client
+                and stored.version != prompt.version and stored.active):
+            put_prompt(replace(stored, active = False))
+            retired += 1
+    return retired
+
+
+@handle_service_errors('AI')
+async def list_roles_service(caller: PromptCaller) -> dict[str, Any]:
+    '''
+    Returns the roles the caller may see: every one for the ADMIN, the general
+    ones and their company's for anyone else.
+
+    Exists so the wording in force can be reviewed without opening the console:
+    the whole point of keeping it in a table is that it changes often, and what
+    changes often has to be inspectable.
+
+    Args:
+        caller (PromptCaller): Who asks.
+
+    Returns:
+        dict[str, Any]: Payload matching RoleListResponse shape.
+    '''
+    prompts = [prompt for prompt in list_prompts() if _visible(prompt, caller)]
+    return {'count': len(prompts), 'roles': [_summary(prompt) for prompt in prompts]}
+
+
+@handle_service_errors('AI')
+async def save_role_service(
+    definition: dict[str, Any],
+    caller: PromptCaller
+) -> dict[str, Any]:
+    '''
+    Stores a version of the role a view is explained from.
+
+    This is how the wording is administered — through the API, like everything
+    else. Writing a version does not overwrite the previous one: it is stored
+    alongside and the older versions of that view and company are marked
+    inactive, so a rollback is flipping a flag and nothing is ever lost. The
+    version also takes part in the cache key, so retuning stops serving what
+    the previous wording produced without deleting a single row.
+
+    The company comes from the token, never from the body: the ADMIN writes
+    general roles, a manager their company's. The number is the next one of
+    the view across every company, whatever the body says, so two companies
+    never write over each other.
+
+    Args:
+        definition (dict[str, Any]): Payload matching RoleDefinition shape.
+        caller (PromptCaller): Who is writing.
+
+    Returns:
+        dict[str, Any]: The stored role, as RoleSummary shape.
+
+    Raises:
+        ForbiddenError: If the caller's role may not write roles.
+    '''
+    if caller.role not in WRITERS:
+        error_msg = f'{caller.owner} with role {caller.role} tried to store a role.'
+        logger.warning(error_msg)
+        raise ForbiddenError(detail = 'ROLE_NOT_ALLOWED')
+    prompt = PromptItem(
+        view = definition['view'],
+        version = next_version(definition['view']),
+        role = definition['role'],
+        instructions = definition['instructions'],
+        rules = list(definition.get('rules', [])),
+        max_tokens = definition['max_tokens'],
+        model_id = definition['model_id'],
+        active = bool(definition.get('active', True)),
+        created_at = get_current_time_gmt().isoformat(),
+        client = _scope(caller)
+    )
+    put_prompt(prompt)
+    retired = _retire_others(prompt) if prompt.active else 0
+    message = (f'Role of {prompt.view} stored as version {prompt.version} for '
+               f'{prompt.client or "every company"}; {retired} earlier version(s) retired.')
+    logger.info(message)
+    return _summary(prompt)
 
 
 def _stored(
     view: str,
-    version: int
+    version: int,
+    caller: PromptCaller
 ) -> PromptItem:
     '''
-        One stored version of a role, or the not-found answer.
+        One stored version of a role the caller may see, or the not-found
+        answer: another company's role answers like one that does not exist.
 
         Args:
             view (str): View the role explains.
             version (int): Version to read.
+            caller (PromptCaller): Who asks.
 
         Returns:
             PromptItem: The role.
 
         Raises:
-            RegisterNotFoundError: If that version does not exist.
+            RegisterNotFoundError: If that version does not exist for the caller.
     '''
     prompt = get_prompt(view, version)
-    if prompt is None:
-        error_msg = f'Role {view} v{version} does not exist.'
+    if prompt is None or not _visible(prompt, caller):
+        error_msg = f'Role {view} v{version} does not exist for {caller.owner}.'
         logger.warning(error_msg)
         raise RegisterNotFoundError(detail = AIError.ROLE_NOT_FOUND.value)
     return prompt
@@ -424,20 +483,23 @@ def _stored(
 @handle_service_errors('AI')
 async def get_role_service(
     view: str,
-    version: int
+    version: int,
+    caller: PromptCaller
 ) -> dict[str, Any]:
     '''
         Returns one version of a role in full, so it can be edited: an edit is
-        stored as the next version, never over this one.
+        stored as the next version, never over this one. A manager may open a
+        general role to start their company's from it.
 
         Args:
             view (str): View the role explains.
             version (int): Version to read.
+            caller (PromptCaller): Who asks.
 
         Returns:
             dict[str, Any]: Payload matching RoleDefinition shape.
     '''
-    prompt = _stored(view, version)
+    prompt = _stored(view, version, caller)
     return {
         'view': prompt.view,
         'version': prompt.version,
@@ -447,6 +509,7 @@ async def get_role_service(
         'max_tokens': prompt.max_tokens,
         'model_id': prompt.model_id,
         'active': prompt.active,
+        'client': prompt.client,
     }
 
 
@@ -454,29 +517,62 @@ async def get_role_service(
 async def set_role_active_service(
     view: str,
     version: int,
-    active: bool
+    active: bool,
+    caller: PromptCaller
 ) -> dict[str, Any]:
     '''
         Turns one version of a role on or off.
 
-        Turning a version on retires the others of the same view, because a
-        view is explained by one role; turning it off leaves the view without
-        a role until another is turned on, and the explanation says so.
+        Only the caller's own: the ADMIN the general ones, a manager their
+        company's. Turning a version on retires the others of the same view
+        and company; turning it off leaves that company on the general role.
 
         Args:
             view (str): View the role explains.
             version (int): Version to change.
             active (bool): Whether it is in force.
+            caller (PromptCaller): Who is changing it.
 
         Returns:
             dict[str, Any]: The changed role, as RoleSummary shape.
+
+        Raises:
+            ForbiddenError: If the role is not the caller's to change.
     '''
-    prompt = replace(_stored(view, version), active = active)
+    stored = _stored(view, version, caller)
+    if caller.role not in WRITERS or stored.client != _scope(caller):
+        error_msg = f'{caller.owner} tried to switch role {view} v{version} of another owner.'
+        logger.warning(error_msg)
+        raise ForbiddenError(detail = 'ROLE_NOT_ALLOWED')
+    prompt = replace(stored, active = active)
     put_prompt(prompt)
     if active:
-        for stored in list_prompts():
-            if stored.view == view and stored.version != version and stored.active:
-                put_prompt(replace(stored, active = False))
+        _retire_others(prompt)
     message = f'Role {view} v{version} set to active={active}.'
+    logger.info(message)
+    return _summary(prompt)
+
+
+@handle_service_errors('AI')
+async def delete_role_service(
+    view: str,
+    version: int,
+    caller: PromptCaller
+) -> dict[str, Any]:
+    '''
+        Deletes one version of a role, of any company (the ADMIN only, by the
+        route: Rafael, 21-oct). The company falls back on the general role.
+
+        Args:
+            view (str): View the role explains.
+            version (int): Version to delete.
+            caller (PromptCaller): Who is deleting.
+
+        Returns:
+            dict[str, Any]: The deleted role, as RoleSummary shape.
+    '''
+    prompt = _stored(view, version, caller)
+    delete_prompt(view, version)
+    message = f'Role {view} v{version} of {prompt.client or "every company"} deleted.'
     logger.info(message)
     return _summary(prompt)

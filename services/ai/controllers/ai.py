@@ -6,12 +6,14 @@ from fastapi import Request
 from schemas.ai import (
     ExplainRequest,
     ExplainResponse,
-    RoleActiveRequest,
+    PromptCaller,
     RoleDefinition,
     RoleListResponse,
-    RoleSummary
+    RoleSummary,
+    RoleSwitch
 )
 from services.ai import (
+    delete_role_service,
     explain_service,
     get_role_service,
     list_roles_service,
@@ -25,7 +27,7 @@ from services.utils import audit_event, handle_service_errors
 @audit_event('AI', 'Explanation', 'GENERATE')
 async def explain_controller(
     payload: ExplainRequest,
-    current_user: str, # pylint: disable=unused-argument
+    current_user: str,
     request: Request, # pylint: disable=unused-argument
     auth_token: str | None
 ) -> ExplainResponse:
@@ -34,7 +36,7 @@ async def explain_controller(
 
         Args:
             payload (ExplainRequest): View and the data it displays.
-            current_user (str): Authenticated caller.
+            current_user (str): The caller's company: its own role wins.
             request (Request): Incoming request, used by the audit decorator.
             auth_token (str | None): The caller's Authorization header, to read
                 the explanation settings from PARAMETERS.
@@ -43,26 +45,28 @@ async def explain_controller(
             ExplainResponse: The interpretation and what produced it.
     '''
     result = await explain_service(view = payload.view, data = payload.data,
-                                   auth_token = auth_token)
+                                   auth_token = auth_token, owner = current_user)
     return ExplainResponse(**result)
 
 
 @handle_service_errors('AI')
 async def list_roles_controller(
     current_user: str, # pylint: disable=unused-argument
+    caller: PromptCaller,
     request: Request # pylint: disable=unused-argument
 ) -> RoleListResponse:
     '''
-        Returns the expert roles currently configured.
+        Returns the expert roles the caller may see.
 
         Args:
-            current_user (str): Authenticated caller.
+            current_user (str): Authenticated caller, as the audit reads it.
+            caller (PromptCaller): The caller's company and role.
             request (Request): Incoming request, used by the audit decorator.
 
         Returns:
             RoleListResponse: The configured roles.
     '''
-    result = await list_roles_service()
+    result = await list_roles_service(caller = caller)
     return RoleListResponse(**result)
 
 
@@ -71,6 +75,7 @@ async def list_roles_controller(
 async def save_role_controller(
     definition: RoleDefinition,
     current_user: str, # pylint: disable=unused-argument
+    caller: PromptCaller,
     request: Request # pylint: disable=unused-argument
 ) -> RoleSummary:
     '''
@@ -78,13 +83,15 @@ async def save_role_controller(
 
         Args:
             definition (RoleDefinition): The expert, its instructions and rules.
-            current_user (str): Authenticated caller.
+            current_user (str): Authenticated caller, as the audit reads it.
+            caller (PromptCaller): The caller's company and role.
             request (Request): Incoming request, used by the audit decorator.
 
         Returns:
             RoleSummary: The stored role.
     '''
-    result = await save_role_service(definition = definition.model_dump(mode = 'json'))
+    result = await save_role_service(definition = definition.model_dump(mode = 'json'),
+                                     caller = caller)
     return RoleSummary(**result)
 
 
@@ -93,6 +100,7 @@ async def get_role_controller(
     view: str,
     version: int,
     current_user: str, # pylint: disable=unused-argument
+    caller: PromptCaller,
     request: Request # pylint: disable=unused-argument
 ) -> RoleDefinition:
     '''
@@ -101,38 +109,63 @@ async def get_role_controller(
         Args:
             view (str): View the role explains.
             version (int): Version to read.
-            current_user (str): Authenticated caller.
+            current_user (str): Authenticated caller, as the audit reads it.
+            caller (PromptCaller): The caller's company and role.
             request (Request): Incoming request.
 
         Returns:
             RoleDefinition: The role with its instructions and rules.
     '''
-    result = await get_role_service(view = view, version = version)
+    result = await get_role_service(view = view, version = version, caller = caller)
     return RoleDefinition(**result)
 
 
 @handle_service_errors('AI')
 @audit_event('AI', 'Role', 'UPDATE')
 async def set_role_active_controller(
-    view: str,
-    version: int,
-    change: RoleActiveRequest,
+    change: RoleSwitch,
     current_user: str, # pylint: disable=unused-argument
+    caller: PromptCaller,
     request: Request # pylint: disable=unused-argument
 ) -> RoleSummary:
     '''
         Turns one version of a role on or off.
 
         Args:
-            view (str): View the role explains.
-            version (int): Version to change.
-            change (RoleActiveRequest): Whether it is in force.
-            current_user (str): Authenticated caller.
+            change (RoleSwitch): View, version and whether it is in force.
+            current_user (str): Authenticated caller, as the audit reads it.
+            caller (PromptCaller): The caller's company and role.
             request (Request): Incoming request, used by the audit decorator.
 
         Returns:
             RoleSummary: The changed role.
     '''
-    result = await set_role_active_service(view = view, version = version,
-                                           active = change.active)
+    result = await set_role_active_service(view = change.view, version = change.version,
+                                           active = change.active, caller = caller)
+    return RoleSummary(**result)
+
+
+@handle_service_errors('AI')
+@audit_event('AI', 'Role', 'DELETE')
+async def delete_role_controller(
+    view: str,
+    version: int,
+    current_user: str, # pylint: disable=unused-argument
+    caller: PromptCaller,
+    request: Request # pylint: disable=unused-argument
+) -> RoleSummary:
+    '''
+        Deletes one version of a role, of any company (ADMIN only).
+
+        Args:
+            view (str): View the role explains.
+            version (int): Version to delete.
+            current_user (str): Authenticated caller, as the audit reads it.
+            caller (PromptCaller): The caller's company and role.
+            request (Request): Incoming request, used by the audit decorator.
+
+        Returns:
+            RoleSummary: The deleted role.
+    '''
+    result = await delete_role_service(view = view, version = version, caller = caller)
     return RoleSummary(**result)
