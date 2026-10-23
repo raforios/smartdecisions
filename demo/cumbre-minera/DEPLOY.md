@@ -4,6 +4,13 @@ Guía operativa para publicar `app/demo/cumbre-minera/` en
 **https://cumbre.mineria.gob.bo** usando AWS S3 + CloudFront, con DNS gestionado
 en Cloudflare.
 
+> **Desde el 20-oct-2026 el sitio vive sólo en
+> https://d1wz098n1gidtt.cloudfront.net** (Rafael). El acuerdo con el
+> Ministerio terminó y `cumbre.mineria.gob.bo` ya no apunta aquí: se quitó de
+> la distribución, que usa el certificado de CloudFront, y se borró el
+> certificado ACM, que ya no se podía renovar sin el DNS del Ministerio. Lo
+> que sigue describe cómo se montó en mayo.
+
 ## Arquitectura
 
 ```
