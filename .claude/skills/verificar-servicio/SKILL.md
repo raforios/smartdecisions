@@ -30,7 +30,7 @@ cubre, y cómo se corrige cada cosa:
 | `pylint` | 10.00 sobre las cinco capas y tests | un `disable` sólo con comentario del porqué |
 | `signatures` | más de un parámetro → uno por línea | `python3 tools/verification/check_signatures.py services/$1 --fix` |
 | `type-hints` | todo parámetro y todo retorno anotados (tests exentos; `self`/`cls` y `__init__` también) | anotar a mano; el retorno de un endpoint es su `response_model` |
-| `size` | ningún archivo propio ≥ 800 líneas | partir por funcionalidad (`ingest_contract.py`, `ingest_files.py`) o, en `controllers/`, por proceso |
+| `size` | ningún archivo propio ≥ 800 líneas | partir por funcionalidad (`load_contract.py`, `load_files.py`) o, en `controllers/`, por proceso |
 | `duplicates` | ningún cuerpo de función repetido | una función parametrizada (`store_companion(spec)`, `read_sheet(name)`) |
 | `except-pass` | nunca `except: pass` | capturar la excepción específica y loguear `error_msg` |
 | `env-shorthand` | ningún valor del `.env` con coma ni llave | listas con guion; plantillas con `%s`, no `{x}` |

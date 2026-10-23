@@ -17,7 +17,7 @@ git diff --name-only; git ls-files --others --exclude-standard
 Una revisión general alcanza **sólo los once servicios propios de BearSoft**:
 
 ```
-SmartDecisions   AI · ANALYTICS · INGEST · MINING_ANALYSIS · OPTIMIZATION · QUOTES
+SmartDecisions   COMMERCIAL · MINING_ANALYSIS · FINANCE
 SmartBilling     BILLING
 Genéricos        AUTH · EVENTS · FILES
 Capacitación     ML_FUNCTIONS
@@ -64,8 +64,8 @@ SPANISH = re.compile(
 
 # Los once servicios propios. Todo lo demás es de un cliente y queda fuera
 # del barrido: se reporta, no se corrige.
-OURS = ('ai', 'analytics', 'auth', 'billing', 'events', 'files', 'ingest',
-        'mining_analysis', 'ml_functions', 'optimization', 'quotes')
+OURS = ('ai', 'auth', 'billing', 'commercial', 'events', 'files', 'finance',
+        'mining_analysis', 'ml_functions', 'parameters', 'quotes')
 
 
 def is_ours(path: Path) -> bool:

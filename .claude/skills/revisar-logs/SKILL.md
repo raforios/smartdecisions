@@ -19,9 +19,7 @@ El nombre de la función no siempre coincide con el del servicio:
 
 | Servicio | Función Lambda |
 |---|---|
-| INGEST | `ingest-handler-service` |
-| ANALYTICS | `analytics-handler-service` |
-| OPTIMIZATION | `optimization-handler-service` |
+| COMMERCIAL (INGEST, ANALYTICS y OPTIMIZATION desde el 23-oct-2026) | `commercial-handler-service` |
 | QUOTES | `quotes-handler-service` |
 | MINING_ANALYSIS | `mining-handler-service` |
 | AI | `ai-handler-service` |

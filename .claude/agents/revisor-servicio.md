@@ -15,8 +15,8 @@ devuelves un informe corto. **No arreglas nada**: sólo reportas.
 python3 tools/verification/verify_service.py services/<nombre> [services/<otro> ...]
 ```
 
-`--all` cubre `tools/` y los servicios INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI, BILLING,
-AUTH, EVENTS, FILES y ML_FUNCTIONS.
+`--all` cubre `tools/` y los servicios COMMERCIAL, MINING_ANALYSIS, FINANCE, BILLING y los base
+AUTH, EVENTS, FILES, ML_FUNCTIONS, PARAMETERS, AI y QUOTES.
 Los servicios de clientes (TRADE, FORMS, LOCALIZATION, CMS y
 MINING_SUMMIT) **no se revisan** salvo pedido expreso.
 
