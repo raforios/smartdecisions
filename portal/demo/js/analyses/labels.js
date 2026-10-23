@@ -14,7 +14,9 @@
         UNSUPPORTED_FILE_FORMAT: 'Formato no soportado. Sube un archivo .xlsx o .csv.',
         EMPTY_UPLOAD: 'El archivo que subiste está vacío.',
         FILES_SERVICE_UNREACHABLE: 'No se pudo contactar al servicio de archivos.',
-        FILES_SERVICE_REJECTED_UPLOAD: 'El servicio de archivos rechazó la subida.'
+        FILES_SERVICE_REJECTED_UPLOAD: 'El servicio de archivos rechazó la subida.',
+        FILES_SERVICE_REJECTED: 'No se pudo leer el archivo cargado. Vuelve a intentarlo en un momento.',
+        FILES_SERVICE_NOT_CONFIGURED: 'El servicio de archivos no está configurado.'
     };
 
     // Falls back to the raw message so services that still answer with prose
