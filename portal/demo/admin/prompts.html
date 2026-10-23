@@ -24,19 +24,23 @@
 <main>
     <div class="container">
         <h1 class="page-title">Prompts de la IA</h1>
-        <p class="page-subtitle">El experto con que la IA explica cada pantalla del producto. Lo ven todas las empresas.</p>
+        <p class="page-subtitle" id="promptsSubtitle">El experto con que la IA explica cada pantalla del producto.</p>
 
         <!-- The expert each view is explained by: shown only where AI is configured. -->
         <section class="card" id="promptsSection" hidden>
-                        <p class="legend-hint">
+                        <p class="legend-hint" id="promptsHint">
                 El experto con que la IA explica cada vista. Editar guarda una versión nueva
                 y deja la anterior inactiva; activar una versión vieja es volver atrás.
-                No se borra nada.
             </p>
+            <!-- The ADMIN sees every company's prompts and filters them (Rafael, 21-oct). -->
+            <div class="field-row" id="promptsFilters" hidden>
+                <label>Empresa
+                    <select id="promptsCompany"><option value="">Todas</option></select></label>
+            </div>
             <div class="table-wrapper">
                 <table class="data-table" id="promptsTable">
                     <thead><tr>
-                        <th>Vista</th><th class="numeric">Versión</th><th>Rol</th>
+                        <th>Vista</th><th>Empresa</th><th class="numeric">Versión</th><th>Rol</th>
                         <th>Estado</th><th></th>
                     </tr></thead>
                     <tbody></tbody>

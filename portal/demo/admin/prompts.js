@@ -1,17 +1,23 @@
 'use strict';
 
 /**
- * Parámetros — the expert each view is explained by (the AI prompts).
+ * Prompts de la IA — the expert each view is explained by.
  *
  * AI keeps every version: editing stores the next version and retires the one
- * in force, and turning an old version on is the rollback. Nothing is deleted,
- * so this screen has no delete either.
+ * in force, and turning an old version on is the rollback. Prompts per company
+ * (Rafael, 21-oct): the ADMIN writes the general ones, the defaults of every
+ * company, sees every company's and may delete any; a manager sees the general
+ * ones and writes their company's, starting from a general one. AI takes the
+ * company from the token: the screen never sends it.
  */
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.SD_AUTH.isAuthenticated() || !window.SD_CONFIG.API_URL) return;
     const { qs, toast, setButtonBusy } = window.SD_UI;
     const icon = window.SD_ICONS.svg;
     const BASE = `${window.SD_CONFIG.API_URL}/v1/ai/roles`;
+    const admin = window.SD_SHELL && window.SD_SHELL.role === 'ADMIN';
+    const GENERAL = 'General';
+    const companyOf = (role) => role.client || GENERAL;
 
     // The service names each view with a code; the screen with its name.
     const VIEW_LABELS = {
@@ -58,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.roles = (data.roles || []).slice().sort((left, right) =>
                 viewLabel(left.view).localeCompare(viewLabel(right.view)) ||
                 right.version - left.version);
+            if (admin) fillCompanies();
             paint();
             note(state.roles.length ? '' : 'Todavía no hay prompts configurados.');
         } catch (error) {
@@ -65,22 +72,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /** The ADMIN's filter: General and every company that has its own prompts. */
+    function fillCompanies() {
+        const select = qs('#promptsCompany');
+        const chosen = select.value;
+        const companies = [...new Set(state.roles.map((role) => role.client).filter(Boolean))].sort();
+        select.innerHTML = '<option value="">Todas</option>' +
+            `<option value="${GENERAL}">${GENERAL}</option>` +
+            companies.map((name) => `<option value="${escape(name)}">${escape(name)}</option>`).join('');
+        select.value = chosen;
+    }
+
+    /**
+     * What each row offers. Own prompts (the ADMIN's general ones, a manager's
+     * company ones) are edited and switched; a manager starts theirs from a
+     * general one; the ADMIN deletes any.
+     */
+    function actions(role) {
+        const own = admin ? !role.client : Boolean(role.client);
+        const key = `data-view="${role.view}" data-version="${role.version}"`;
+        const edit = own || !admin ? `<button type="button" class="btn-icon" ${key}
+                data-action="edit" data-tip="${own ? 'Editar' : 'Crear el de mi empresa a partir de este'}"
+                aria-label="${own ? 'Editar' : 'Crear el de mi empresa'}">${icon(own ? 'edit' : 'plus')}</button>` : '';
+        const toggle = own ? `<button type="button" class="btn-icon${role.active ? ' is-on' : ''}" ${key}
+                data-action="toggle" data-active="${role.active}"
+                data-tip="${role.active ? 'Desactivar' : 'Activar'}"
+                aria-label="${role.active ? 'Desactivar' : 'Activar'}">${icon('power')}</button>` : '';
+        const remove = admin ? `<button type="button" class="btn-icon" ${key} data-action="delete"
+                data-tip="Eliminar" aria-label="Eliminar">${icon('trash')}</button>` : '';
+        return edit + toggle + remove;
+    }
+
     function paint() {
-        qs('#promptsTable tbody').innerHTML = state.roles.map((role) => `
+        const company = admin ? qs('#promptsCompany').value : '';
+        const rows = state.roles.filter((role) => !company || companyOf(role) === company);
+        qs('#promptsTable tbody').innerHTML = rows.map((role) => `
             <tr>
                 <td>${escape(viewLabel(role.view))}</td>
+                <td>${escape(companyOf(role))}</td>
                 <td class="numeric">${role.version}</td>
                 <td>${escape(role.role)}</td>
                 <td>${role.active ? 'En uso' : 'Inactivo'}</td>
-                <td class="row-actions">
-                    <button type="button" class="btn-icon" data-tip="Editar" aria-label="Editar"
-                            data-edit="${role.view}" data-version="${role.version}">${icon('edit')}</button>
-                    <button type="button" class="btn-icon${role.active ? ' is-on' : ''}"
-                            data-tip="${role.active ? 'Desactivar' : 'Activar'}"
-                            aria-label="${role.active ? 'Desactivar' : 'Activar'}"
-                            data-toggle="${role.view}" data-version="${role.version}"
-                            data-active="${role.active}">${icon('power')}</button>
-                </td>
+                <td class="row-actions">${actions(role)}</td>
             </tr>`).join('');
     }
 
@@ -89,7 +122,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const role = await window.SD_API.get(`${BASE}/${view}/${version}`);
             const form = qs('#promptForm');
             form.hidden = false;
-            qs('#promptView').textContent = `${viewLabel(view)} — versión ${version}`;
+            // A manager opening a general prompt starts their company's from it.
+            const starting = !admin && !role.client;
+            qs('#promptView').textContent = starting
+                ? `${viewLabel(view)} — el de tu empresa, a partir de la versión general ${version}`
+                : `${viewLabel(view)} — versión ${version}`;
             form.dataset.view = view;
             form.dataset.model = role.model_id;
             qs('#promptRole').value = role.role;
@@ -105,14 +142,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveVersion(button) {
         const form = qs('#promptForm');
         const view = form.dataset.view;
-        // An edit is the next version of the view, never a rewrite of one.
-        const next = Math.max(0, ...state.roles.filter((role) => role.view === view)
-            .map((role) => role.version)) + 1;
         const done = setButtonBusy(button, 'Guardando…');
         try {
-            await window.SD_API.post(BASE, {
+            // An edit is a new version, never a rewrite of one; AI numbers it
+            // across every company and takes the company from the token.
+            const saved = await window.SD_API.post(BASE, {
                 view,
-                version: next,
+                version: 1,
                 role: qs('#promptRole').value.trim(),
                 instructions: qs('#promptInstructions').value.trim(),
                 rules: qs('#promptRules').value.split('\n').map((rule) => rule.trim())
@@ -122,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 active: true
             });
             form.hidden = true;
-            toast(`Guardado como versión ${next}; la anterior quedó inactiva.`, 'success');
+            toast(`Guardado como versión ${saved.version}; la anterior quedó inactiva.`, 'success');
             await load();
         } catch (error) {
             note((error && error.message) || 'No se pudo guardar el prompt.', 'error');
@@ -145,15 +181,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    qs('#promptsTable').addEventListener('click', (event) => {
-        const button = event.target.closest('button');
-        if (!button) return;
-        const version = Number(button.dataset.version);
-        if (button.dataset.edit) edit(button.dataset.edit, version);
-        if (button.dataset.toggle) {
-            toggle(button.dataset.toggle, version, button.dataset.active === 'true', button);
+    /** First click asks, the second deletes: no browser dialogs in the portal. */
+    async function remove(view, version, button) {
+        if (button.dataset.confirm !== '1') {
+            button.dataset.confirm = '1';
+            button.dataset.tip = 'Confirmar eliminación';
+            button.classList.add('is-danger');
+            note(`Eliminar la versión ${version} de ${viewLabel(view)} no se puede deshacer.`);
+            return;
         }
+        const done = setButtonBusy(button, '…');
+        try {
+            await window.SD_API.del(`${BASE}/${view}/${version}`);
+            toast(`Versión ${version} de ${viewLabel(view)} eliminada.`, 'success');
+            note('');
+            await load();
+        } catch (error) {
+            note((error && error.message) || 'No se pudo eliminar el prompt.', 'error');
+            done();
+        }
+    }
+
+    qs('#promptsTable').addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const { view, action } = button.dataset;
+        const version = Number(button.dataset.version);
+        if (action === 'edit') edit(view, version);
+        if (action === 'toggle') toggle(view, version, button.dataset.active === 'true', button);
+        if (action === 'delete') remove(view, version, button);
     });
+    if (admin) {
+        qs('#promptsFilters').hidden = false;
+        qs('#promptsCompany').addEventListener('change', paint);
+    } else {
+        qs('#promptsSubtitle').textContent = 'El experto con que la IA explica cada pantalla. ' +
+            'Los generales valen para todas las empresas; los de tu empresa, sólo para la tuya.';
+        qs('#promptsHint').textContent = 'Para ajustar uno, créalo para tu empresa a partir del ' +
+            'general: desde entonces la IA usa el tuyo. Si lo desactivas, vuelve a usar el general.';
+    }
     qs('#promptSave').addEventListener('click', (event) => saveVersion(event.currentTarget));
     // Cancel closes the form unsaved and takes the reader back to the list.
     qs('#promptCancel').addEventListener('click', () => {

@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#homeHello').textContent = `Hola, ${profile.first_name}`;
         const last = when(profile.previous_login);
         qs('#homeLast').textContent = last
-            ? `Tu última sesión fue el ${last}. Entras como ${ROLES[profile.role] || profile.role}.`
+            ? `Tu última sesión fue el ${last.replace(/\.$/, '')}. Entras como ${ROLES[profile.role] || profile.role}.`
             : `Es tu primera sesión registrada. Entras como ${ROLES[profile.role] || profile.role}.`;
     }
 
@@ -200,8 +200,9 @@ document.addEventListener('DOMContentLoaded', () => {
             qs('#homeMineList').innerHTML = changes.map((change) => {
                 const [label, page] = window.SD_EVENTS.entity(change);
                 const what = `${window.SD_EVENTS.actionLabel(change.action)} · ${escape(label)}` +
-                    // A short code says which one (6.1.98); a long identifier says nothing.
-                    (change.entity_id && change.entity_id.length <= 20
+                    // A short code says which one (6.1.98); a long identifier says
+                    // nothing, and 0 is what was stored before 22-oct when there was none.
+                    (change.entity_id && change.entity_id !== '0' && change.entity_id.length <= 20
                         ? ` <code>${escape(change.entity_id)}</code>` : '');
                 const text = page ? `<a href="${page}">${what}</a>` : what;
                 return `<div class="sd-list-row"><span>${text}</span>` +

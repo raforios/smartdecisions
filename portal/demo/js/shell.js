@@ -90,7 +90,9 @@
         { group: 'Configuración', roles: ['MANAGER'], items: [
             { label: 'Parámetros', icon: 'settings', page: 'parametros/index.html', children: [
                 { label: 'Configuración comercial', page: 'parametros/index.html' },
-                { label: 'Factores externos', page: 'parametros/factores.html' }
+                { label: 'Factores externos', page: 'parametros/factores.html' },
+                // Each company writes its own prompts (Rafael, 21-oct).
+                { label: 'Prompts de la IA', page: 'admin/prompts.html' }
             ] }
         ] },
         // The platform, for the ADMIN only (Rafael, 21-oct): Minerales is no
