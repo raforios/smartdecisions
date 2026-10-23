@@ -11,6 +11,7 @@ from controllers.market import (
     estimate_controller,
     list_rules_controller,
     market_series_controller,
+    preview_sale_scenario_controller,
     save_rule_controller,
     sync_market_controller
 )
@@ -20,7 +21,9 @@ from schemas.market import (
     MarketSyncResult,
     MarketWindow,
     RoyaltyRuleSchema,
-    RoyaltyRulesResponse
+    RoyaltyRulesResponse,
+    SaleScenario,
+    SaleScenarioRequest
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
@@ -174,4 +177,30 @@ async def save_rule_endpoint(
     return await save_rule_controller(
         dynamodb_resource = dynamodb_resource, rule = rule,
         request = request, current_user = current_user
+    )
+
+
+@router.post(
+    '/sale-scenario',
+    response_model = SaleScenario,
+    status_code = status.HTTP_200_OK,
+    summary = 'Selling today against waiting.',
+    description = 'Prices the same sale under today\'s official rate and under the one '
+                  'QUOTES projects, and returns the difference in bolivianos. Supply '
+                  'the mineral\'s expected change to weigh both movements together; '
+                  'omit it to price the currency move alone. Moved from QUOTES on '
+                  '23-oct-2026.'
+)
+async def sale_scenario_endpoint(
+    request: Request,
+    scenario: SaleScenarioRequest,
+    current_user: str = Depends(require_roles(*MINERALS_ROLES))
+) -> SaleScenario:
+    '''
+        Endpoint comparing a sale settled today against one settled later.
+    '''
+    message = f'User: {current_user}. Requested a sale scenario over {scenario.days_ahead} day(s).'
+    logger.info(message)
+    return await preview_sale_scenario_controller(
+        scenario = scenario, current_user = current_user, request = request
     )

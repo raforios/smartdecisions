@@ -6,7 +6,8 @@
     `min_train` points behind it, and its misses are averaged: the error
     published next to a projection comes from the series itself, never from an
     assumed interval. The naive guess is measured the same way, because it is
-    the one to beat. Each model's weights are fitted once, on the whole series.
+    the one to beat. Each replay fits the model's weights on the points
+    before it only, so no replay sees the future it is measured against.
 
     Pure Python and free of the environment, like the rest of the projection.
 '''

@@ -16,8 +16,12 @@
                       a series that oscillates without direction, where a fitted
                       line would invent a trend that is not there.
 
-    Nothing heavier is used on purpose: with roughly a hundred daily points, a
-    fitted line and a moving average are as much as the data supports. A model
+    The arithmetic is asked of ML_FUNCTIONS, the base service of calculations
+    (Rafael, 17-oct and 23-oct-2026); what stays here is what belongs to the
+    minerals: the confidence, the fallback when the line sinks, the floor at
+    zero and the official quotation. Nothing heavier is used on purpose: with
+    roughly a hundred daily points, a fitted line and a moving average are as
+    much as the data supports. A model
     with more parameters would produce a more confident-looking curve without
     being any more right, which on a bulletin that reaches a mining association
     is worse than useless.
@@ -31,10 +35,11 @@ from datetime import date as date_type, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-import numpy as np
+import requests
 from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 
+from schemas.market import MarketError
 from schemas.mining_analysis import (
     ForecastConfidence,
     ForecastMethod,
@@ -53,7 +58,13 @@ from services.official_reports import (
     resolve_mineral_id_map
 )
 from services.prices_store import PriceRecord, prices_in_window
-from services.utils import get_current_time_gmt, handle_service_errors
+from services.exceptions import ServiceUnavailableError
+from services.utils import (
+    API_URL,
+    REQUEST_TIMEOUT_SECONDS,
+    get_current_time_gmt,
+    handle_service_errors
+)
 
 
 # Required, not optional: a fallback in code is still a number the code chose.
@@ -64,9 +75,6 @@ ENV_VARS = load_and_validate_env_vars({
     'FORECAST_MOVING_AVERAGE_WINDOW': int,
     'FORECAST_HISTORY_POINTS': int,
     'OFFICIAL_HISTORY_PERIODS': int,
-    'HOLT_ALPHA': float,
-    'HOLT_BETA': float,
-    'HOLT_PHI': float,
     'BACKTEST_MIN_TRAIN': int,
     'BACKTEST_MIN_WINDOWS': int,
     'FORECAST_COLLAPSE_FLOOR_RATIO': float,
@@ -82,13 +90,6 @@ ERROR_DECIMALS = ENV_VARS['ERROR_DECIMALS']
 CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']
 PRICE_DECIMALS = ENV_VARS['PRICE_DECIMALS']
 PUBLISHED_PRICE_DECIMALS = ENV_VARS['PUBLISHED_PRICE_DECIMALS']
-
-# Smoothing parameters, fitted by minimising the backtest error over the six
-# minerals with enough history. Configurable because they belong to the data:
-# refitting them as the series grows must not need a release.
-HOLT_ALPHA = ENV_VARS['HOLT_ALPHA']
-HOLT_BETA = ENV_VARS['HOLT_BETA']
-HOLT_PHI = ENV_VARS['HOLT_PHI']
 
 # How much history each replay needs, and how many replays make a published
 # average honest.
@@ -136,6 +137,8 @@ class Projection:
     method: ForecastMethod
     confidence: ForecastConfidence
     change_percent: float | None
+    mean_absolute_error: float | None = None
+    baseline_error: float | None = None
 
 def confidence_for(sample_size: int) -> ForecastConfidence:
     '''
@@ -156,122 +159,52 @@ def confidence_for(sample_size: int) -> ForecastConfidence:
     return ForecastConfidence.LOW
 
 
-def _project_damped(
-    prices: list[float],
-    days_ahead: int
-) -> list[float]:
-    '''
-        Extends the series with exponential smoothing and a damped trend.
-
-        This replaced the least-squares line as the default. Measured over the
-        six minerals with enough history, the line missed roughly twice as much
-        as this at every horizon — 0.070 against 0.044 in normalised error at 30
-        days — because a slope fitted over five months keeps being added forever,
-        and a quotation does not work that way.
-
-        The level follows the last observations and the trend **fades**: each
-        further day inherits less of the recent drift, so the projection settles
-        instead of running away. That is also why it cannot collapse through
-        zero the way the line did with Wólfram.
-
-        Args:
-            prices (list[float]): Observed quotations in chronological order.
-            days_ahead (int): How many days to project.
-
-        Returns:
-            list[float]: Projected values.
-    '''
-    level, trend = prices[0], prices[1] - prices[0]
-    for price in prices[1:]:
-        previous = level
-        level = HOLT_ALPHA * price + (1 - HOLT_ALPHA) * (level + HOLT_PHI * trend)
-        trend = HOLT_BETA * (level - previous) + (1 - HOLT_BETA) * HOLT_PHI * trend
-
-    damping = np.cumsum(HOLT_PHI ** np.arange(1, days_ahead + 1))
-    return [float(value) for value in level + damping * trend]
-
-
-def _backtest(
+def _ml_projection(
     prices: list[float],
     days_ahead: int,
-    naive: bool = False
-) -> float | None:
+    method: ForecastMethod,
+    auth_token: str
+) -> dict[str, Any]:
     '''
-        Measures how far a model has missed on this very mineral.
-
-        The series is replayed from every starting point that leaves room for
-        the horizon. `naive` measures the benchmark instead — repeating the last
-        quotation — which is what makes the published error judgeable rather
-        than decorative.
-
-        Args:
-            prices (list[float]): Observed quotations in chronological order.
-            days_ahead (int): Horizon to measure.
-            naive (bool): Measure the benchmark instead of the model.
-
-        Returns:
-            float | None: Mean absolute error, or None with too few windows.
-    '''
-    errors: list[float] = []
-    for cut in range(BACKTEST_MIN_TRAIN, len(prices) - days_ahead + 1):
-        actual = np.array(prices[cut:cut + days_ahead])
-        forecast = (np.full(days_ahead, prices[cut - 1]) if naive
-                    else np.array(_project_damped(prices[:cut], days_ahead)))
-        errors.append(float(np.mean(np.abs(forecast - actual))))
-
-    if len(errors) < BACKTEST_MIN_WINDOWS:
-        return None
-    return round(float(np.mean(errors)), ERROR_DECIMALS)
-
-
-def _project_linear(
-    prices: list[float],
-    days_ahead: int
-) -> list[float] | None:
-    '''
-        Extends the least-squares line fitted over the series.
+        One method run over a mineral's series in ML_FUNCTIONS, measured by
+        replaying the series from every point that leaves enough history.
 
         Args:
             prices (list[float]): Observed quotations in chronological order.
             days_ahead (int): How many days to project.
+            method (ForecastMethod): The method to run.
+            auth_token (str): The caller's Authorization header.
 
         Returns:
-            list[float] | None: Projected values, or None when the fitted line
-                runs into the floor. A steep decline over a short window sends
-                the line below zero within the horizon, and clamping it at zero
-                would publish "this mineral will be worth nothing" as if it were
-                a finding. When that happens the series does not support a
-                linear projection and the caller falls back.
+            dict[str, Any]: `forecast`, `mean_absolute_error` and the naive
+                guess's `baseline_error`.
+
+        Raises:
+            ServiceUnavailableError: SOURCE_UNAVAILABLE when ML_FUNCTIONS cannot answer.
     '''
-    positions = np.arange(len(prices), dtype = float)
-    slope, intercept = np.polyfit(positions, np.array(prices, dtype = float), 1)
-    future = np.arange(len(prices), len(prices) + days_ahead, dtype = float)
-    projected = [float(value) for value in slope * future + intercept]
-
-    floor = min(prices) * _COLLAPSE_FLOOR_RATIO
-    if any(value <= floor for value in projected):
-        return None
-    return projected
-
-
-def _project_moving_average(
-    prices: list[float],
-    days_ahead: int
-) -> list[float]:
-    '''
-        Projects the mean of the most recent days as a flat line.
-
-        Args:
-            prices (list[float]): Observed quotations in chronological order.
-            days_ahead (int): How many days to project.
-
-        Returns:
-            list[float]: The same value repeated; a moving average carries no
-                direction of its own.
-    '''
-    window = prices[-MOVING_AVERAGE_WINDOW:]
-    level = float(sum(window) / len(window))
-    return [max(level, 0.0)] * days_ahead
+    body = {'values': prices, 'horizon': days_ahead, 'models': [method.value],
+            'min_train': BACKTEST_MIN_TRAIN, 'min_windows': BACKTEST_MIN_WINDOWS,
+            'window': MOVING_AVERAGE_WINDOW}
+    try:
+        response = requests.post(f'{API_URL}/v1/prediction/forecast/compare', json = body,
+                                 headers = {'Authorization': auth_token},
+                                 timeout = REQUEST_TIMEOUT_SECONDS)
+    except requests.exceptions.RequestException as error:
+        error_msg = f'Network error asking ML_FUNCTIONS for a {method.value} projection: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(detail = MarketError.SOURCE_UNAVAILABLE.value) from error
+    if not response.ok:
+        error_msg = (f'ML_FUNCTIONS refused the {method.value} projection: '
+                     f'status={response.status_code} body={response.text[:200]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = MarketError.SOURCE_UNAVAILABLE.value)
+    answer = response.json()
+    run = answer['runs'][0]
+    errors = {'mean_absolute_error': run.get('mean_absolute_error'),
+              'baseline_error': answer.get('naive_mean_absolute_error')}
+    return {'forecast': [float(value) for value in run['forecast']],
+            **{key: None if value is None else round(float(value), ERROR_DECIMALS)
+               for key, value in errors.items()}}
 
 
 def _future_dates(
@@ -291,32 +224,31 @@ def _future_dates(
     return [last_day + timedelta(days = offset) for offset in range(1, days_ahead + 1)]
 
 
-# Which callable produces each method. A projector may answer None when the
-# series does not support it, and the caller falls back reporting what actually
-# ran — the reader must never be told a method that did not produce the number.
-_PROJECTORS = {
-    ForecastMethod.DAMPED_TREND: _project_damped,
-    ForecastMethod.LINEAR: _project_linear,
-    ForecastMethod.MOVING_AVERAGE: _project_moving_average,
-}
 def project(
     prices: list[PriceRecord],
     days_ahead: int,
-    method: ForecastMethod = ForecastMethod.DAMPED_TREND
+    method: ForecastMethod = ForecastMethod.DAMPED_TREND,
+    auth_token: str = ''
 ) -> Projection:
     '''
         Projects one mineral's quotations forward.
+
+        A fitted line that sinks below the floor inside the horizon is not
+        published as "this mineral will be worth nothing": the projection falls
+        back to the level of the recent days and reports the method that
+        actually produced the number. A moving average never goes below zero.
 
         Args:
             prices (list[PriceRecord]): Observed quotations, any order.
             days_ahead (int): How many days to project.
             method (ForecastMethod): Which projection to apply.
+            auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
         Returns:
             Projection: The projected points, the method actually used, the
-                confidence the sample earns and the change against the last
-                observed price. Empty when the history cannot support a
-                projection.
+                confidence the sample earns, the change against the last
+                observed price and the measured errors. Empty when the history
+                cannot support a projection.
     '''
     observed = sorted(
         (record for record in prices if record.price_low is not None),
@@ -327,34 +259,26 @@ def project(
         return Projection([], method, confidence, None)
 
     values = [float(record.price_low) for record in observed]
-    used_method = method if method in _PROJECTORS else ForecastMethod.DAMPED_TREND
-    projected = _PROJECTORS.get(method, _project_damped)(values, days_ahead)
-
-    if projected is None:
-        # The fitted line collapses inside the horizon: fall back to the level
-        # of the recent days, which cannot invent a slope it does not have, and
-        # report the method that actually produced the number.
+    used_method = method
+    run = _ml_projection(values, days_ahead, used_method, auth_token)
+    if used_method is ForecastMethod.LINEAR and any(
+            value <= min(values) * _COLLAPSE_FLOOR_RATIO for value in run['forecast']):
         used_method = ForecastMethod.MOVING_AVERAGE
-        projected = _project_moving_average(values, days_ahead)
-        error_msg = (
-            f'{method.value} projection produced nothing over {len(observed)} '
-            f'observations; fell back to {used_method.value}.'
-        )
+        error_msg = (f'{method.value} projection collapses over {len(observed)} '
+                     f'observations; fell back to {used_method.value}.')
         logger.warning(error_msg)
+        run = _ml_projection(values, days_ahead, used_method, auth_token)
+    projected = ([max(value, 0.0) for value in run['forecast']]
+                 if used_method is ForecastMethod.MOVING_AVERAGE else run['forecast'])
 
-    last_price = values[-1]
-    change = (
-        round((projected[-1] - last_price) / last_price * 100, CHANGE_DECIMALS)
-        if last_price else None
-    )
-
-    message = (
-        f'Projected {days_ahead} day(s) with {used_method.value} over '
-        f'{len(observed)} observations; confidence {confidence.value}.'
-    )
+    change = (round((projected[-1] - values[-1]) / values[-1] * 100, CHANGE_DECIMALS)
+              if values[-1] else None)
+    message = (f'Projected {days_ahead} day(s) with {used_method.value} over '
+               f'{len(observed)} observations; confidence {confidence.value}.')
     logger.info(message)
-    dates = _future_dates(observed[-1].date, days_ahead)
-    return Projection(list(zip(dates, projected)), used_method, confidence, change)
+    return Projection(list(zip(_future_dates(observed[-1].date, days_ahead), projected)),
+                      used_method, confidence, change,
+                      run['mean_absolute_error'], run['baseline_error'])
 
 
 # The official quotation is published with two decimals, so that is the figure
@@ -603,7 +527,8 @@ async def get_price_forecast_service(
     dynamodb_resource: ServiceResource | None,
     days_ahead: int = 30,
     method: ForecastMethod = ForecastMethod.DAMPED_TREND,
-    db: Session | None = None
+    db: Session | None = None,
+    auth_token: str = ''
 ) -> dict[str, Any]:
     '''
     Projects every official mineral forward and returns the payload the API
@@ -618,6 +543,7 @@ async def get_price_forecast_service(
         db (Session): Database session; ignored when running on DynamoDB.
         days_ahead (int): How many days to project.
         method (ForecastMethod): Requested projection method.
+        auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
     Returns:
         dict[str, Any]: Payload matching PriceForecastResponse shape.
@@ -645,7 +571,8 @@ async def get_price_forecast_service(
                 days_ahead = days_ahead,
                 method = method,
                 mineral_id = mineral_id,
-                reference = reference
+                reference = reference,
+                auth_token = auth_token
             ),
             dynamodb_resource = dynamodb_resource,
             db = db
@@ -678,6 +605,7 @@ class ForecastRequest:
     method: ForecastMethod
     mineral_id: str | None = None
     reference: date_type | None = None
+    auth_token: str = ''
 
 
 def _forecast_row(
@@ -698,7 +626,7 @@ def _forecast_row(
     '''
     catalog, history = request.catalog, request.history
     days_ahead, method = request.days_ahead, request.method
-    result = project(history, days_ahead, method)
+    result = project(history, days_ahead, method, request.auth_token)
     priced = [record for record in history if record.price_low is not None]
     return {
         'mineral': catalog['name'],
@@ -709,12 +637,8 @@ def _forecast_row(
         'sample_size': len(priced),
         'last_price': priced[-1].price_low if priced else None,
         'change_percent': result.change_percent,
-        'mean_absolute_error': _backtest(
-            [record.price_low for record in priced], days_ahead
-        ) if len(priced) > 1 else None,
-        'baseline_error': _backtest(
-            [record.price_low for record in priced], days_ahead, naive = True
-        ) if len(priced) > 1 else None,
+        'mean_absolute_error': result.mean_absolute_error,
+        'baseline_error': result.baseline_error,
         'history': [
             {'date': record.date, 'price': record.price_low} for record in priced
         ],

@@ -11,8 +11,6 @@ from schemas.quotes import (
     ExchangeRateHistory,
     ModelBench,
     RateForecast,
-    SaleScenario,
-    SaleScenarioRequest,
     SyncResult
 )
 from services.quotes import (
@@ -20,10 +18,24 @@ from services.quotes import (
     get_bench_service,
     get_forecast_service,
     get_history_service,
-    sale_scenario_service,
     sync_rates_service
 )
 from services.utils import audit_event, handle_service_errors
+
+
+
+def _caller_token(request: Request | None) -> str:
+    '''
+        The caller's Authorization header, forwarded to ML_FUNCTIONS so it
+        answers for the real user; empty when there is no request.
+
+        Args:
+            request (Request | None): The incoming request.
+
+        Returns:
+            str: The header, or an empty string.
+    '''
+    return (request.headers.get('authorization') if request is not None else None) or ''
 
 
 @handle_service_errors('QUOTES')
@@ -78,38 +90,11 @@ async def get_history_controller(
 
 
 @handle_service_errors('QUOTES')
-async def preview_sale_scenario_controller(
-    scenario: SaleScenarioRequest,
-    current_user: str, # pylint: disable=unused-argument
-    request: Request # pylint: disable=unused-argument
-) -> SaleScenario:
-    '''
-        Compares settling a sale today against settling it after a wait.
-
-        Args:
-            scenario (SaleScenarioRequest): What is being sold and for how long
-                the seller is willing to wait.
-            current_user (str): Authenticated caller.
-            request (Request): Incoming request, used by the audit decorator.
-
-        Returns:
-            SaleScenario: Both outcomes and the difference between them.
-    '''
-    result = await sale_scenario_service(
-        quantity = scenario.quantity,
-        unit_price_usd = scenario.unit_price_usd,
-        days_ahead = scenario.days_ahead,
-        mineral_change_percent = scenario.mineral_change_percent
-    )
-    return SaleScenario(**result)
-
-
-@handle_service_errors('QUOTES')
 async def get_forecast_controller(
     days_ahead: int,
     currency: str,
     current_user: str, # pylint: disable=unused-argument
-    request: Request # pylint: disable=unused-argument
+    request: Request
 ) -> RateForecast:
     '''
         Projects the exchange rate forward on its own.
@@ -123,7 +108,8 @@ async def get_forecast_controller(
         Returns:
             RateForecast: Observed series, projection and confidence.
     '''
-    result = await get_forecast_service(days_ahead = days_ahead, currency = currency)
+    result = await get_forecast_service(days_ahead = days_ahead, currency = currency,
+                                        auth_token = _caller_token(request))
     return RateForecast(**result)
 
 
@@ -133,7 +119,7 @@ async def get_bench_controller(
     currency: str,
     models: list[str] | None,
     current_user: str, # pylint: disable=unused-argument
-    request: Request # pylint: disable=unused-argument
+    request: Request
 ) -> ModelBench:
     '''
         Runs several models over the series and returns them measured.
@@ -149,7 +135,8 @@ async def get_bench_controller(
             ModelBench: The models run, from the one that erred least to most.
     '''
     result = await get_bench_service(
-        days_ahead = days_ahead, currency = currency, models = models
+        days_ahead = days_ahead, currency = currency, models = models,
+        auth_token = _caller_token(request)
     )
     return ModelBench(**result)
 

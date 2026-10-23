@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError, RateConfidence
-from services import bcb_source, forecast_models, quotes, rate_forecast, usdt_source
+from services import bcb_source, quotes, rate_forecast, usdt_source
 from services.exceptions import ServiceUnavailableError
 
 from tests.conftest import build_history
@@ -174,95 +174,6 @@ def test_source_refuses_to_guess_when_the_page_changes_shape():
     assert excinfo.value.detail == QuotesError.SOURCE_UNREADABLE.value
 
 
-def test_scenario_prices_both_paths_when_the_history_supports_it(store):
-    '''
-        With a rising rate and a flat mineral, waiting is worth more bolivianos
-        even though the sale is the same amount of dollars.
-    '''
-    for item in build_history(60):
-        store[(item.currency, item.date)] = item
-
-    result = _run(quotes.sale_scenario_service(
-        quantity = 10, unit_price_usd = 100, days_ahead = 30
-    ))
-
-    assert result['today']['amount_usd'] == 1000
-    assert result['projected']['amount_usd'] == 1000
-    assert result['projected']['exchange_rate'] > result['today']['exchange_rate']
-    assert result['difference_bob'] > 0
-    assert result['rate_change_percent'] > 0
-
-
-def test_scenario_weighs_a_falling_mineral_against_a_rising_rate(store):
-    '''
-        The decision is the net of both moves: a mineral falling harder than the
-        currency climbs turns waiting into a loss, and that is what the seller
-        must see.
-    '''
-    for item in build_history(60):
-        store[(item.currency, item.date)] = item
-
-    result = _run(quotes.sale_scenario_service(
-        quantity = 10,
-        unit_price_usd = 100,
-        days_ahead = 30,
-        mineral_change_percent = -25.0
-    ))
-
-    assert result['mineral_change_percent'] == -25.0
-    assert result['projected']['mineral_price'] == 75.0
-    assert result['difference_bob'] < 0
-    assert result['difference_percent'] < 0
-
-
-def test_scenario_answers_today_only_when_history_is_too_thin(store):
-    '''
-        Below the minimum sample the projection is refused rather than guessed,
-        and the caller still gets today's figure plus the reason.
-    '''
-    for item in build_history(5):
-        store[(item.currency, item.date)] = item
-
-    result = _run(quotes.sale_scenario_service(
-        quantity = 10, unit_price_usd = 100, days_ahead = 30
-    ))
-
-    assert result['projected'] is None
-    assert result['difference_bob'] is None
-    assert result['difference_percent'] is None
-    assert result['rate_confidence'] is RateConfidence.INSUFFICIENT
-    assert result['today']['amount_bob'] > 0
-
-
-def test_scenario_refuses_a_horizon_beyond_the_bound(store):
-    '''
-        Past a quarter the projection describes the fitted line, not the market.
-    '''
-    for item in build_history(60):
-        store[(item.currency, item.date)] = item
-
-    with pytest.raises(HTTPException) as failure:
-        _run(quotes.sale_scenario_service(
-            quantity = 10, unit_price_usd = 100,
-            days_ahead = quotes.SCENARIO_MAX_DAYS + 1
-        ))
-
-    assert QuotesError.INVALID_DATE_RANGE.value in str(failure.value.detail)
-
-
-def test_scenario_reports_no_rate_when_nothing_is_stored(
-    store # pylint: disable=unused-argument
-):
-    '''
-        Without a published rate there is no figure to settle at, and saying so
-        is the only honest answer.
-    '''
-    with pytest.raises(HTTPException) as failure:
-        _run(quotes.sale_scenario_service(quantity = 10, unit_price_usd = 100))
-
-    assert QuotesError.NO_RATE_PUBLISHED.value in str(failure.value.detail)
-
-
 def test_forecast_projects_the_rate_on_its_own(store):
     '''The dollar is a question by itself, not only an input to a sale.'''
     for item in build_history(60):
@@ -364,48 +275,6 @@ def test_the_projection_reports_what_it_has_been_worth(store):
     assert accuracy['mean_absolute_error'] >= 0
     assert accuracy['baseline_error'] >= 0
     assert accuracy['windows'] > 0
-
-
-def test_a_flat_series_projects_flat():
-    '''
-        With no movement there is no trend to carry forward, so the projection
-        must repeat the level. A straight-line fit did this too; the point is
-        that damping does not invent a slope where there is none.
-    '''
-    flat = [10.0] * 40
-
-    projected = rate_forecast.damped_trend(flat, 10)
-
-    assert all(abs(value - 10.0) < 1e-9 for value in projected)
-
-
-def test_the_trend_fades_instead_of_running_away():
-    '''
-        This is the whole reason the straight line was replaced.
-
-        On a rising series a line keeps adding the same slope forever; the
-        damped trend adds less every step, so the projection converges instead
-        of extrapolating two months of drift into a number nobody should trust.
-    '''
-    rising = [10.0 + 0.05 * index for index in range(60)]
-
-    projected = rate_forecast.damped_trend(rising, 30)
-    steps = [projected[i + 1] - projected[i] for i in range(len(projected) - 1)]
-
-    assert projected[-1] > projected[0]
-    # Every step is smaller than the one before it.
-    assert all(steps[i + 1] < steps[i] + 1e-12 for i in range(len(steps) - 1))
-    # And a straight line would have gone further than the damped one.
-    assert projected[-1] < rising[-1] + 0.05 * 30
-
-
-def test_the_error_is_not_published_without_enough_windows():
-    '''
-        A mean over two replays is not a measurement. Better no number than one
-        that looks measured and is not.
-    '''
-    assert rate_forecast.backtest_error([10.0] * 32, 30) is None
-    assert rate_forecast.baseline_error([10.0] * 32, 30) is None
 
 
 def test_a_saturday_rate_governs_until_monday():
@@ -519,7 +388,7 @@ def test_the_bench_runs_every_model_and_ranks_them_by_error(store):
     errors = [run['mean_absolute_error'] for run in result['runs']
               if run['mean_absolute_error'] is not None]
 
-    assert len(result['runs']) == len(forecast_models.MODELS)
+    assert len(result['runs']) == len(rate_forecast.BENCH_MODELS)
     assert errors == sorted(errors)
     for run in result['runs']:
         assert len(run['projected']) == 15
@@ -547,31 +416,6 @@ def test_an_unknown_model_is_refused(store):
         _run(quotes.get_bench_service(days_ahead = 15, models = ['ARIMA_MAGICO']))
 
     assert QuotesError.UNKNOWN_MODEL.value in str(failure.value.detail)
-
-
-def test_every_model_answers_the_horizon_asked_for():
-    """
-        Every model returns as many values as steps asked of it. That is the
-        only guarantee the bench needs to walk them without knowing any.
-    """
-    series = [10.0 + 0.05 * index for index in range(40)]
-
-    for name, projector in forecast_models.MODELS.items():
-        projected = projector(series, 12)
-        assert len(projected) == 12, name
-        assert all(isinstance(value, float) for value in projected), name
-
-
-def test_a_flat_series_is_projected_flat_by_every_model():
-    """
-        With no movement there is no trend to carry. A model that invents a
-        slope over a flat series is reading noise.
-    """
-    flat = [10.0] * 40
-
-    for name, projector in forecast_models.MODELS.items():
-        projected = projector(flat, 10)
-        assert all(abs(value - 10.0) < 1e-6 for value in projected), name
 
 
 def test_a_day_before_the_float_answers_with_the_fixed_rate():
@@ -647,3 +491,19 @@ def test_the_usdt_source_reads_the_p2p_price():
 
     with patch.object(usdt_source.requests, 'get', lambda *a, **k: _Answer()):
         assert usdt_source.fetch_usdt_rate() == 11.99
+
+
+def test_the_projection_is_asked_of_ml_functions(
+    store,
+    ml_functions
+):
+    '''The live projection asks for the damped trend, with the replay bounds of QUOTES.'''
+    for item in build_history(60):
+        store[(item.currency, item.date)] = item
+
+    _run(quotes.get_forecast_service(days_ahead = 15, auth_token = 'Bearer t'))
+
+    assert ml_functions[0]['url'].endswith('/v1/prediction/forecast/compare')
+    assert ml_functions[0]['models'] == ['DAMPED_TREND']
+    assert (ml_functions[0]['min_train'], ml_functions[0]['min_windows']) == (
+        rate_forecast.BACKTEST_MIN_TRAIN, rate_forecast.BACKTEST_MIN_WINDOWS)

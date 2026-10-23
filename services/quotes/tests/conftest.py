@@ -15,7 +15,7 @@ import pytest
 from moto import mock_aws
 
 from models.quotes import USD, ExchangeRateItem
-from services import bcb_source, factors, quotes
+from services import bcb_source, factors, quotes, rate_forecast
 
 
 # First day of the float regime; the series every fixture builds starts here
@@ -145,3 +145,51 @@ def factor_store_fixture():
                 BillingMode = 'PAY_PER_REQUEST'
             )
         yield resource
+
+
+class _Answer:  # pylint: disable=too-few-public-methods
+    '''What `requests.post` returns: ok and a JSON body.'''
+
+    def __init__(
+        self,
+        body: dict
+    ) -> None:
+        self.ok = True
+        self.status_code = 200
+        self.text = ''
+        self._body = body
+
+    def json(self) -> dict:
+        '''The body.'''
+        return self._body
+
+
+@pytest.fixture(autouse = True)
+def ml_functions(monkeypatch: pytest.MonkeyPatch) -> list:
+    '''
+        ML_FUNCTIONS, standing in: every model carries the drift of the series
+        forward, and the errors grow with the order asked, so the answer comes
+        best first like the real one. The models themselves are tested in
+        ML_FUNCTIONS; here what is tested is what QUOTES asks and does.
+    '''
+    asked: list = []
+
+    def _post(
+        url: str,
+        json: dict,
+        **_: object
+    ) -> _Answer:
+        if not url.endswith('/v1/prediction/forecast/compare'):
+            # Any other post (the audit, the usage log) is answered as received.
+            return _Answer({})
+        asked.append({'url': url, **json})
+        values, horizon = json['values'], json['horizon']
+        slope = (values[-1] - values[0]) / max(len(values) - 1, 1)
+        runs = [{'model': model, 'mean_absolute_error': 0.01 * (index + 1),
+                 'forecast': [values[-1] + slope * step for step in range(1, horizon + 1)]}
+                for index, model in enumerate(json['models'])]
+        windows = max(0, len(values) - horizon + 1 - json['min_train'])
+        return _Answer({'runs': runs, 'naive_mean_absolute_error': 0.05, 'windows': windows})
+
+    monkeypatch.setattr(rate_forecast.requests, 'post', _post)
+    return asked

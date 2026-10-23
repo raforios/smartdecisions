@@ -10,7 +10,6 @@ from controllers.quotes import (
     get_rate_on_controller,
     get_forecast_controller,
     get_history_controller,
-    preview_sale_scenario_controller,
     sync_rates_controller
 )
 from models.quotes import USD
@@ -19,19 +18,13 @@ from schemas.quotes import (
     RateOnDate,
     ModelBench,
     RateForecast,
-    SaleScenario,
-    SaleScenarioRequest,
     SyncResult
 )
 from services.logger_config import custom_logger as logger
-from services.security import get_current_owner, require_roles
+from services.security import get_current_owner
 
 
 router = APIRouter(prefix = '/v1/quotes', tags = ['Quotes'])
-
-# «Vender hoy o esperar» is a Minerales screen, and Minerales belongs to the
-# platform's administrator (Rafael, 21-oct-2026).
-MINERALS_ROLES = ('ADMIN',)
 
 
 @router.get(
@@ -128,34 +121,6 @@ async def sync_exchange_rates_endpoint(
     return await sync_rates_controller(
         days_back = days_back,
         currency = currency,
-        current_user = current_user,
-        request = request
-    )
-
-
-@router.post(
-    '/sale-scenario',
-    response_model = SaleScenario,
-    status_code = status.HTTP_200_OK,
-    summary = 'Selling today against waiting.',
-    description = 'Prices the same sale under today\'s official rate and under '
-                  'the projected one, and returns the difference in bolivianos. '
-                  'Supply the mineral\'s expected change (from the '
-                  'MINING_ANALYSIS projection) to weigh both movements together; '
-                  'omit it to price the currency move alone.'
-)
-async def sale_scenario_endpoint(
-    request: Request,
-    scenario: SaleScenarioRequest,
-    current_user: str = Depends(require_roles(*MINERALS_ROLES))
-) -> SaleScenario:
-    ''' Endpoint comparing a sale settled today against one settled later. '''
-    message = (f'User: {current_user}. Requested a sale scenario over '
-               f'{scenario.days_ahead} day(s).')
-    logger.info(message)
-
-    return await preview_sale_scenario_controller(
-        scenario = scenario,
         current_user = current_user,
         request = request
     )

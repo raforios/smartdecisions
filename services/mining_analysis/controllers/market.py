@@ -18,11 +18,14 @@ from schemas.market import (
     MarketSyncResult,
     MarketWindow,
     RoyaltyRuleSchema,
-    RoyaltyRulesResponse
+    RoyaltyRulesResponse,
+    SaleScenario,
+    SaleScenarioRequest
 )
 from services.market_sources import sync_market_prices
 from services.official_estimate import estimate_all, market_series
 from services.royalty_rules import ensure_rules, save_rule, to_rule_schema
+from services.sale_scenario import rate_forecast, sale_scenario
 from services.utils import audit_event, handle_service_errors
 
 
@@ -94,3 +97,25 @@ async def save_rule_controller(
         Creates or replaces one scale.
     '''
     return to_rule_schema(save_rule(dynamodb_resource, rule))
+
+
+@handle_service_errors('MINING_ANALYSIS')
+async def preview_sale_scenario_controller(
+    scenario: SaleScenarioRequest,
+    current_user: str, # pylint: disable=unused-argument
+    request: Request
+) -> SaleScenario:
+    '''
+        Compares a sale settled today against one settled after a wait, with
+        the dollar QUOTES projects for that day.
+
+        Args:
+            scenario (SaleScenarioRequest): What is being sold and for how long.
+            current_user (str): Authenticated caller.
+            request (Request): Incoming request; its token is forwarded to QUOTES.
+
+        Returns:
+            SaleScenario: Both outcomes and the difference between them.
+    '''
+    token = (request.headers.get('authorization') if request is not None else None) or ''
+    return sale_scenario(scenario, rate_forecast(scenario.days_ahead, token))

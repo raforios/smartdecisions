@@ -33,9 +33,8 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 from services.quotes_utils import get_rate, put_rate, query_rates
-from services.forecast_models import MODELS
 from services.rate_forecast import (
-    backtest_windows,
+    BENCH_MODELS,
     confidence_for,
     project as project_rate,
     run_bench
@@ -58,7 +57,6 @@ ENV_VARS = load_and_validate_env_vars({
     'SCHEDULED_SYNC_DAYS': int,
     'PARALLEL_CURRENCY': str,
     'RATE_BLOCK_WEEKDAYS': str,
-    'AMOUNT_DECIMALS': int,
     'RATE_DECIMALS': int,
     'HISTORY_FLOAT_REGIME_ONLY': int,
 })
@@ -104,14 +102,11 @@ PARALLEL_CURRENCY = ENV_VARS['PARALLEL_CURRENCY']
 SCENARIO_MAX_DAYS = ENV_VARS['SCENARIO_MAX_DAYS']
 SCENARIO_DEFAULT_DAYS = ENV_VARS['SCENARIO_DEFAULT_DAYS']
 
-# How many decimals a settled amount and a quoted rate carry. Money and
-# quotation are not the same precision, and neither is ours to assume.
-AMOUNT_DECIMALS = ENV_VARS['AMOUNT_DECIMALS']
-
 # Whether a history request without a lower bound starts at the float regime.
 # It is the sane default, but it is a decision about what a chart should show,
 # not an invariant of the code.
 HISTORY_FLOAT_REGIME_ONLY = bool(ENV_VARS['HISTORY_FLOAT_REGIME_ONLY'])
+# How many decimals a quoted rate carries.
 RATE_DECIMALS = ENV_VARS['RATE_DECIMALS']
 
 
@@ -284,120 +279,20 @@ def stored_rates(
 
 
 @handle_service_errors('QUOTES')
-async def sale_scenario_service(
-    quantity: float,
-    unit_price_usd: float,
-    days_ahead: int = SCENARIO_DEFAULT_DAYS,
-    mineral_change_percent: float | None = None
-) -> dict[str, Any]:
-    '''
-    Compares settling a sale today against settling it after a wait.
-
-    Both sides of the price move: the mineral is quoted in dollars and the
-    dollar is quoted in bolivianos. Waiting can gain on one and lose on the
-    other, and what the seller actually decides on is the difference in
-    bolivianos, which is what this returns.
-
-    The mineral's expected change is supplied by the caller rather than fetched:
-    it comes from the MINING_ANALYSIS projection, and keeping it as an input
-    means this service answers with whatever assumption the seller wants to
-    test — including none, which prices the currency move alone.
-
-    Args:
-        quantity (float): Units being sold.
-        unit_price_usd (float): Price per unit today, in dollars.
-        days_ahead (int): How far ahead to compare.
-        mineral_change_percent (float | None): Expected change of the unit
-            price over the horizon. None prices the currency move alone.
-
-    Returns:
-        dict[str, Any]: Payload matching SaleScenario shape.
-
-    Raises:
-        InvalidInputError: If the horizon is out of bounds.
-        ServiceUnavailableError: If no rate has been published yet.
-    '''
-    if days_ahead < 1 or days_ahead > SCENARIO_MAX_DAYS:
-        raise InvalidInputError(detail = QuotesError.INVALID_DATE_RANGE.value)
-
-    history = stored_rates()
-    if not history:
-        raise ServiceUnavailableError(detail = QuotesError.NO_RATE_PUBLISHED.value)
-
-    today_rate = history[-1].official_rate
-    amount_usd_today = round(quantity * unit_price_usd, AMOUNT_DECIMALS)
-    today = {
-        'exchange_rate': today_rate,
-        'mineral_price': unit_price_usd,
-        'amount_usd': amount_usd_today,
-        'amount_bob': round(amount_usd_today * today_rate, AMOUNT_DECIMALS),
-    }
-
-    projection = project_rate(history, days_ahead)
-    if projection.final_rate is None:
-        message = (
-            f'Sale scenario over {days_ahead} day(s) priced today only: the rate '
-            f'history does not support a projection ({projection.confidence.value}).'
-        )
-        logger.info(message)
-        return {
-            'days_ahead': days_ahead,
-            'rate_confidence': projection.confidence,
-            'rate_change_percent': None,
-            'mineral_change_percent': mineral_change_percent,
-            'today': today,
-            'projected': None,
-            'difference_bob': None,
-            'difference_percent': None,
-        }
-
-    future_price = unit_price_usd * (1 + (mineral_change_percent or 0.0) / 100)
-    amount_usd_future = round(quantity * future_price, AMOUNT_DECIMALS)
-    projected = {
-        'exchange_rate': round(projection.final_rate, RATE_DECIMALS),
-        'mineral_price': round(future_price, RATE_DECIMALS),
-        'amount_usd': amount_usd_future,
-        'amount_bob': round(amount_usd_future * projection.final_rate, AMOUNT_DECIMALS),
-    }
-
-    difference = round(projected['amount_bob'] - today['amount_bob'], AMOUNT_DECIMALS)
-    difference_percent = (
-        round(difference / today['amount_bob'] * 100, AMOUNT_DECIMALS)
-        if today['amount_bob'] else None
-    )
-
-    message = (
-        f'Sale scenario over {days_ahead} day(s): {difference:+.2f} Bs '
-        f'({difference_percent:+.2f}%).'
-    )
-    logger.info(message)
-    return {
-        'days_ahead': days_ahead,
-        'rate_confidence': projection.confidence,
-        'rate_change_percent': projection.change_percent,
-        'mineral_change_percent': mineral_change_percent,
-        'today': today,
-        'projected': projected,
-        'difference_bob': difference,
-        'difference_percent': difference_percent,
-    }
-
-
-@handle_service_errors('QUOTES')
 async def get_forecast_service(
     days_ahead: int = SCENARIO_DEFAULT_DAYS,
-    currency: str = USD
+    currency: str = USD,
+    auth_token: str = ''
 ) -> dict[str, Any]:
     '''
-    Projects the exchange rate forward on its own.
-
-    The sale scenario answers "today or in a month" for a given sale; this
-    answers the narrower question of where the rate itself is heading, which is
-    what a chart of the dollar needs.
+    Projects the exchange rate forward on its own: where the rate is heading,
+    which is what a chart of the dollar and the sale scenario of the minerals
+    need.
 
     Args:
         days_ahead (int): How far ahead to project.
         currency (str): ISO 4217 code.
+        auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
     Returns:
         dict[str, Any]: Payload matching RateForecast shape.
@@ -413,7 +308,7 @@ async def get_forecast_service(
     if not history:
         raise ServiceUnavailableError(detail = QuotesError.NO_RATE_PUBLISHED.value)
 
-    projection = project_rate(history, days_ahead)
+    projection = project_rate(history, days_ahead, auth_token)
     message = (
         f'{currency} projected {days_ahead} day(s) over {len(history)} observation(s); '
         f'confidence {projection.confidence.value}.'
@@ -429,9 +324,7 @@ async def get_forecast_service(
             'mean_absolute_error': projection.expected_error,
             'baseline_method': ForecastMethod.NAIVE,
             'baseline_error': projection.baseline_error,
-            'windows': backtest_windows(
-                [item.official_rate for item in history], days_ahead
-            ),
+            'windows': projection.windows,
         },
         'last_rate': history[-1].official_rate,
         'last_date': history[-1].date,
@@ -509,7 +402,8 @@ def store_today_usdt() -> bool:
 async def get_bench_service(
     days_ahead: int = SCENARIO_DEFAULT_DAYS,
     currency: str = USD,
-    models: list[str] | None = None
+    models: list[str] | None = None,
+    auth_token: str = ''
 ) -> dict[str, Any]:
     '''
     Runs several models over the same series and returns them measured.
@@ -523,6 +417,7 @@ async def get_bench_service(
         days_ahead (int): Days to project.
         currency (str): ISO 4217 code.
         models (list[str] | None): Models to run. None runs them all.
+        auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
     Returns:
         dict[str, Any]: Payload matching the ModelBench shape.
@@ -538,12 +433,11 @@ async def get_bench_service(
     if not history:
         raise ServiceUnavailableError(detail = QuotesError.NO_RATE_PUBLISHED.value)
 
-    chosen = [name for name in (models or list(MODELS)) if name in MODELS]
+    chosen = [name for name in (models or list(BENCH_MODELS)) if name in BENCH_MODELS]
     if not chosen:
         raise InvalidInputError(detail = QuotesError.UNKNOWN_MODEL.value)
 
-    runs = run_bench(history, days_ahead, chosen)
-    values = [item.official_rate for item in history]
+    runs, windows = run_bench(history, days_ahead, chosen, auth_token)
 
     message = (
         f'{currency} bench over {len(history)} observation(s): '
@@ -558,7 +452,7 @@ async def get_bench_service(
         'last_date': history[-1].date,
         'valid_from': validity_of(history[-1].date)[0],
         'valid_to': validity_of(history[-1].date)[1],
-        'windows': backtest_windows(values, days_ahead),
+        'windows': windows,
         'history': [
             {'date': item.date, 'rate': item.official_rate} for item in history
         ],

@@ -6,6 +6,7 @@
     that collapses must never be published as a finding.
 '''
 from datetime import date, timedelta
+from typing import Any
 
 import pytest
 
@@ -36,6 +37,72 @@ def _series(values: list) -> list:
         PriceRecord('1', start + timedelta(days = index), price_low = value)
         for index, value in enumerate(values)
     ]
+
+
+class _Answer:  # pylint: disable=too-few-public-methods
+    '''What `requests.post` returns: ok and a JSON body.'''
+
+    def __init__(
+        self,
+        body: dict
+    ) -> None:
+        self.ok = True
+        self.status_code = 200
+        self.text = ''
+        self._body = body
+
+    def json(self) -> dict:
+        '''The body.'''
+        return self._body
+
+
+def _projection(
+    model: str,
+    values: list[float],
+    horizon: int,
+    window: int
+) -> list[float]:
+    '''The three methods, the plain way: enough for what this module decides.'''
+    if model == 'MOVING_AVERAGE':
+        last = values[-window:]
+        return [sum(last) / len(last)] * horizon
+    count = len(values)
+    mean_x, mean_y = (count - 1) / 2, sum(values) / count
+    slope = (sum((index - mean_x) * (value - mean_y) for index, value in enumerate(values))
+             / sum((index - mean_x) ** 2 for index in range(count)))
+    if model == 'DAMPED_TREND':
+        # Each step carries a tenth less of the slope: the trend fades.
+        return [values[-1] + slope * sum(0.9 ** ahead for ahead in range(1, step + 1))
+                for step in range(1, horizon + 1)]
+    return [mean_y + slope * (count - 1 + step - mean_x) for step in range(1, horizon + 1)]
+
+
+@pytest.fixture(name = 'asked', autouse = True)
+def ml_functions(monkeypatch: pytest.MonkeyPatch) -> list:
+    '''
+        ML_FUNCTIONS, standing in. The errors are published only with enough
+        replays, like the real one; the models themselves are tested there.
+    '''
+    received: list = []
+
+    def _post(
+        url: str,
+        json: dict[str, Any],
+        **_: Any
+    ) -> _Answer:
+        if not url.endswith('/v1/prediction/forecast/compare'):
+            return _Answer({})
+        received.append(json)
+        values, horizon = json['values'], json['horizon']
+        enough = len(values) - horizon + 1 - json['min_train'] >= json['min_windows']
+        model = json['models'][0]
+        return _Answer({'runs': [{'model': model, 'mean_absolute_error': 0.1 if enough else None,
+                                  'forecast': _projection(model, values, horizon,
+                                                          json['window'])}],
+                        'naive_mean_absolute_error': 0.2 if enough else None})
+
+    monkeypatch.setattr(price_forecast.requests, 'post', _post)
+    return received
 
 
 def test_rising_series_is_projected_upwards():
@@ -274,41 +341,22 @@ def test_official_history_skips_the_period_already_in_force():
     assert history[0]['avg_price_low'] == 10.0
 
 
-def test_the_damped_trend_does_not_extrapolate_a_collapse():
-    '''
-        The Wolfram case, with the method that is now the default.
-
-        A straight line fitted over 22 falling days crossed zero inside the
-        horizon and had to fall back. The damped trend never gets there: each
-        step carries less of the decline than the one before, so it settles
-        instead of collapsing, and no fallback is needed.
-    '''
-    steep_decline = [61000 - index * 2000 for index in range(22)]
-
-    result = project(_series(steep_decline), days_ahead = 30)
-
-    assert result.method is ForecastMethod.DAMPED_TREND
-    assert all(price > 0 for _, price in result.points)
-    assert result.points[-1][1] > steep_decline[-1] * 0.5
-
-
-def test_the_projection_reports_the_error_it_has_made():
+def test_the_projection_reports_the_error_it_has_made(asked):
     '''
         Every mineral publishes how far this method has missed on its own
         series, alongside the same measurement for repeating the last
         quotation. A number without that is asking to be believed on faith.
     '''
-    prices = [10 + index * 0.1 for index in range(100)]
+    result = project(_series([10 + index * 0.1 for index in range(100)]), days_ahead = 15)
 
-    measured = price_forecast._backtest(prices, 15) # pylint: disable=protected-access
-    naive = price_forecast._backtest(prices, 15, naive = True) # pylint: disable=protected-access
-
-    assert measured is not None and measured >= 0
-    assert naive is not None and naive >= 0
-    # On a steadily rising series the trend model must beat repeating a value.
-    assert measured < naive
+    assert (result.mean_absolute_error, result.baseline_error) == (0.1, 0.2)
+    assert asked[0]['models'] == ['DAMPED_TREND']
+    assert (asked[0]['min_train'], asked[0]['min_windows']) == (
+        price_forecast.BACKTEST_MIN_TRAIN, price_forecast.BACKTEST_MIN_WINDOWS)
 
 
 def test_the_error_is_withheld_when_there_are_too_few_windows():
     '''A mean over two replays is not a measurement, so it is not published.'''
-    assert price_forecast._backtest([10.0] * 32, 30) is None # pylint: disable=protected-access
+    result = project(_series([10.0] * 32), days_ahead = 30)
+
+    assert (result.mean_absolute_error, result.baseline_error) == (None, None)

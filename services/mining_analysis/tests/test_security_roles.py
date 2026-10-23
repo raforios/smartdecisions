@@ -58,3 +58,15 @@ def test_only_the_admin_opens_minerales():
                                          client = 'acme')}
     response = TestClient(app).get('/v1/mining-analysis/prices', headers = headers)
     assert (response.status_code, response.json()['detail']) == (403, 'ROLE_NOT_ALLOWED')
+
+
+def test_only_the_admin_weighs_selling_today():
+    '''«Vender hoy o esperar» is a Minerales screen: a manager is refused.'''
+    # Imported here: main reads the configuration, which the CI does not have.
+    from fastapi.testclient import TestClient  # pylint: disable=import-outside-toplevel
+    from main import app  # pylint: disable=import-outside-toplevel
+    headers = {'Authorization': _bearer(email = 'gerente@acme.com', role = 'MANAGER',
+                                         client = 'acme')}
+    response = TestClient(app).post('/v1/mining-analysis/sale-scenario', headers = headers,
+                                    json = {'quantity': 1, 'unit_price_usd': 1})
+    assert (response.status_code, response.json()['detail']) == (403, 'ROLE_NOT_ALLOWED')

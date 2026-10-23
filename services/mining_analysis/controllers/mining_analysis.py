@@ -96,7 +96,7 @@ async def get_biweekly_history_controller(
 @handle_service_errors('MINING_ANALYSIS')
 async def get_price_forecast_controller(
     dynamodb_resource: ServiceResource,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str,
     days_ahead: int,
     method: ForecastMethod
@@ -107,7 +107,8 @@ async def get_price_forecast_controller(
     message = (f'User: {current_user} requesting a {days_ahead}-day price '
                f'forecast with {method.value}.')
     logger.info(message)
+    token = (request.headers.get('authorization') if request is not None else None) or ''
     result = await get_price_forecast_service(
-        dynamodb_resource, days_ahead = days_ahead, method = method
+        dynamodb_resource, days_ahead = days_ahead, method = method, auth_token = token
     )
     return PriceForecastResponse(**result)

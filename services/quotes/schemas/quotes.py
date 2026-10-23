@@ -24,6 +24,7 @@ class QuotesError(str, Enum):
     INVALID_DATE_RANGE = 'INVALID_DATE_RANGE'
     UNKNOWN_MODEL = 'UNKNOWN_MODEL'
     NO_RATE_FOR_DATE = 'NO_RATE_FOR_DATE'
+    FORECAST_UNAVAILABLE = 'FORECAST_UNAVAILABLE'
     RATES_STORE_UNAVAILABLE = 'RATES_STORE_UNAVAILABLE'
 
 
@@ -158,60 +159,6 @@ class ModelBench(BaseModel):
     windows: int = Field(0, ge = 0, description = 'Réplicas que promedia el error.')
     history: list[ExchangeRatePoint] = Field(default_factory = list)
     runs: list[ModelRun] = Field(default_factory = list)
-
-
-class SaleOutcome(BaseModel):
-    '''
-        What a sale is worth under one set of conditions.
-    '''
-    exchange_rate: float = Field(..., description = 'Bolivianos per dollar applied.')
-    mineral_price: float | None = Field(
-        None, description = 'Unit price applied, when the caller supplied one.'
-    )
-    amount_usd: float = Field(..., ge = 0, description = 'Value of the sale in dollars.')
-    amount_bob: float = Field(..., ge = 0, description = 'Value of the sale in bolivianos.')
-
-
-class SaleScenario(BaseModel):
-    '''
-        Selling today against waiting, with what each path is worth.
-
-        The comparison exists because both variables move: the mineral is
-        quoted in dollars and the dollar is quoted in bolivianos, so waiting can
-        gain on one side and lose on the other. `difference_bob` is what the
-        decision is actually worth.
-    '''
-    days_ahead: int = Field(..., ge = 1)
-    rate_confidence: RateConfidence
-    rate_change_percent: float | None = None
-    mineral_change_percent: float | None = Field(
-        None, description = 'Expected change of the mineral price, as supplied.'
-    )
-    today: SaleOutcome
-    projected: SaleOutcome | None = Field(
-        None, description = 'Absent when the history cannot support a projection.'
-    )
-    difference_bob: float | None = Field(
-        None, description = 'Projected minus today, in bolivianos.'
-    )
-    difference_percent: float | None = None
-
-
-class SaleScenarioRequest(BaseModel):
-    '''
-        What the seller is weighing: how much, at what price, for how long.
-    '''
-    quantity: float = Field(..., gt = 0, description = 'Units being sold.')
-    unit_price_usd: float = Field(
-        ..., gt = 0, description = 'Price per unit today, in dollars.'
-    )
-    days_ahead: int = Field(30, ge = 1, le = 90, description = 'Days to wait.')
-    mineral_change_percent: float | None = Field(
-        None,
-        description = 'Expected change of the unit price over the horizon, from '
-                      'the MINING_ANALYSIS projection. Omit to price the '
-                      'currency move alone.'
-    )
 
 
 class RateForecast(BaseModel):

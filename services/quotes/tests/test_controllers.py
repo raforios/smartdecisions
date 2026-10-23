@@ -30,8 +30,6 @@ from schemas.quotes import (
     ModelBench,
     RateForecast,
     RateOnDate,
-    SaleScenario,
-    SaleScenarioRequest,
     SyncResult
 )
 from controllers import quotes as controllers
@@ -80,30 +78,6 @@ def test_sync_controller_returns_its_model(
     assert isinstance(response, SyncResult)
     assert response.stored + response.already_present + \
         response.without_publication == response.requested_days
-
-
-def test_scenario_controller_returns_its_model(
-    seeded_store # pylint: disable=unused-argument
-):
-    '''
-        The scenario endpoint answers a fully built SaleScenario, nested
-        outcomes included: the failure this guards against is exactly a nested
-        payload that never gets coerced into its model.
-    '''
-    response = _run(controllers.preview_sale_scenario_controller(
-        scenario = SaleScenarioRequest(
-            quantity = 10, unit_price_usd = 100,
-            days_ahead = 30, mineral_change_percent = -5.0
-        ),
-        current_user = 'tester',
-        request = None
-    ))
-
-    assert isinstance(response, SaleScenario)
-    assert response.today.amount_bob > 0
-    assert response.projected is not None
-    assert response.projected.mineral_price == 95.0
-    assert response.difference_bob is not None
 
 
 def test_declaring_a_factor_answers_its_model(factor_store):
