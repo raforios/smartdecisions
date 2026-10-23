@@ -29,7 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     const ERRORS = {
         RATES_UNAVAILABLE: 'No hay tipo de cambio de hoy: el servicio de cotizaciones no ' +
-            'respondió. Vuelve a intentar en unos minutos.'
+            'respondió. Vuelve a intentar en unos minutos.',
+        RATES_STORE_UNAVAILABLE: 'No se pudieron leer los tipos de cambio guardados. ' +
+            'Vuelve a intentarlo en unos minutos.'
     };
     const state = { trend: [], months: 12, currency: 'BOB', charts: {} };
 

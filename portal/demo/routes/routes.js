@@ -44,7 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
         INVALID_ROW: 'Una fila del archivo tiene valores inválidos.',
         INVALID_POINT: 'Un punto del archivo tiene valores inválidos.',
         ROUTING_SERVICE_UNAVAILABLE: 'El servicio de ruteo vial (OSRM) no está disponible.',
-        ROUTING_SERVICE_NO_ROUTE: 'No se encontró una ruta por calles para ese tramo.'
+        ROUTING_SERVICE_NO_ROUTE: 'No se encontró una ruta por calles para ese tramo.',
+        ROUTE_POINTS_NOT_FOUND: 'Esa ruta no tiene puntos para ese día.',
+        DATASET_NOT_FOUND: 'No encontramos tus datos de ventas. Cárgalos en Cargar datos.',
+        DATASET_NOT_VALIDATED: 'Tu archivo de ventas no pasó la validación. Corrígelo y vuelve a cargarlo.',
+        DATASET_UNREADABLE: 'No se pudo leer el archivo cargado. Vuelve a intentarlo en un momento.',
+        UNSUPPORTED_FILE_TYPE: 'El archivo debe ser Excel (.xlsx) o CSV.'
     };
 
     function errorText(error, fallback) {

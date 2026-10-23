@@ -49,6 +49,8 @@
     const SERVICE_ERRORS = {
         NO_RATE_PUBLISHED: 'Todavía no hay cotizaciones del dólar guardadas.',
         SOURCE_UNAVAILABLE: 'La fuente no respondió. Se guardó lo que sí se pudo leer.',
+        RATES_STORE_UNAVAILABLE: 'No se pudieron leer los tipos de cambio guardados. Vuelve a intentarlo en un momento.',
+        INVALID_HALF: 'La quincena debe ser la primera o la segunda del mes.',
         SOURCE_UNREADABLE: 'La página de la fuente cambió de forma y no se ' +
             'puede leer con seguridad.',
         INVALID_DATE_RANGE: 'El plazo pedido está fuera de rango.',

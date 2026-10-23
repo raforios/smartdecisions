@@ -125,7 +125,10 @@
         NO_DATE_COLUMN: 'El archivo no tiene una columna de fecha válida, ' +
             'no se puede filtrar por período.',
         EMPTY_PERIOD: 'No hay ventas en el período seleccionado. Elige otro rango.',
-        DATASET_UNREADABLE: 'No se pudo leer el archivo del bucket de FILES.'
+        DATASET_UNREADABLE: 'No se pudo leer el archivo cargado. Vuelve a intentarlo en un momento.',
+        DATASET_NOT_FOUND: 'No encontramos tus datos de ventas. Cárgalos en Cargar datos.',
+        DATASET_NOT_VALIDATED: 'Tu archivo de ventas no pasó la validación. Corrígelo y vuelve a cargarlo.',
+        UNSUPPORTED_FILE_TYPE: 'El archivo debe ser Excel (.xlsx) o CSV.'
     };
 
     // The same level code, read over products instead of clients: the
