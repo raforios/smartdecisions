@@ -24,6 +24,7 @@ from boto3.resources.base import ServiceResource
 
 from models.clients import ClientItem
 from schemas.clients import (
+    ClientError,
     ClientListResponseSchema,
     FieldClientSchema,
     ClientResponseSchema,
@@ -148,7 +149,7 @@ def get_client(
     if not item:
         error_msg = f'Client {client_id} not found for {owner_email}.'
         logger.warning(error_msg)
-        raise ResourceNotFoundError(detail = error_msg)
+        raise ResourceNotFoundError(detail = ClientError.CLIENT_NOT_FOUND.value)
     return item
 
 

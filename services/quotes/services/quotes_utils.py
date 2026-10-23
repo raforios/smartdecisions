@@ -17,6 +17,7 @@ from models.quotes import (
     RATES_SORT_KEY,
     ExchangeRateItem
 )
+from schemas.quotes import QuotesError
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
@@ -66,7 +67,7 @@ def _table() -> Any:
     except ClientError as error:
         error_msg = f'DynamoDB table "{RATES_TABLE}" is not reachable: {error}'
         logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(detail = error_msg) from error
+        raise ServiceUnavailableError(detail = QuotesError.RATES_STORE_UNAVAILABLE.value) from error
 
 
 def get_rate(
@@ -91,7 +92,7 @@ def get_rate(
     except ClientError as error:
         error_msg = f'Failed to read the rate of {currency} on {day}: {error}'
         logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(detail = error_msg) from error
+        raise ServiceUnavailableError(detail = QuotesError.RATES_STORE_UNAVAILABLE.value) from error
     item = response.get('Item')
     return ExchangeRateItem.from_item(item) if item else None
 
@@ -111,7 +112,7 @@ def put_rate(rate: ExchangeRateItem) -> None:
     except ClientError as error:
         error_msg = f'Failed to store the rate of {rate.currency} on {rate.date}: {error}'
         logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(detail = error_msg) from error
+        raise ServiceUnavailableError(detail = QuotesError.RATES_STORE_UNAVAILABLE.value) from error
 
 
 def query_rates(
@@ -156,5 +157,5 @@ def query_rates(
     except ClientError as error:
         error_msg = f'Failed to query the rates of {currency}: {error}'
         logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(detail = error_msg) from error
+        raise ServiceUnavailableError(detail = QuotesError.RATES_STORE_UNAVAILABLE.value) from error
     return [ExchangeRateItem.from_item(item) for item in items]

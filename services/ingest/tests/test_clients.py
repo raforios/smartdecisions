@@ -234,7 +234,7 @@ def test_another_owners_client_does_not_exist(resource):
 
     with pytest.raises(Exception) as error:
         master.get_client(resource, OWNER, 'C-1')
-    assert 'not found' in str(error.value).lower()
+    assert error.value.detail == 'CLIENT_NOT_FOUND'
 
 
 def _frame(rows: list[dict[str, Any]]) -> pd.DataFrame:

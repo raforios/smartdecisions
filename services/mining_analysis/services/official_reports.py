@@ -17,9 +17,11 @@ from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
 
 from models.mining_analysis import Mineral
+from schemas.market import MarketError
 from schemas.mining_analysis import MiningResult, MiningStatus
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError
+from services.logger_config import custom_logger as logger
 from services.mining_analysis import CHANGE_DECIMALS, OFFICIAL_MINERALS, normalize_name
 from services.prices_store import (
     average_low,
@@ -43,7 +45,9 @@ def biweekly_period_bounds(
     Half 1 covers days 1-15, half 2 covers day 16 through month end.
     '''
     if half not in (1, 2):
-        raise InvalidInputError(detail = 'half must be 1 (days 1-15) or 2 (16-end).')
+        error_msg = f'half must be 1 (days 1-15) or 2 (16-end), got {half}.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = MarketError.INVALID_HALF.value)
     if half == 1:
         return date(year, month, 1), date(year, month, 15)
     last_day = calendar.monthrange(year, month)[1]

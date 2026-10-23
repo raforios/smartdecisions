@@ -25,6 +25,9 @@ class AnalyticsError(str, Enum):
     RUN_NOT_FOUND = 'RUN_NOT_FOUND'
     RATES_UNAVAILABLE = 'RATES_UNAVAILABLE'
     CLIENT_NOT_FOUND = 'CLIENT_NOT_FOUND'
+    DATASET_NOT_FOUND = 'DATASET_NOT_FOUND'
+    DATASET_NOT_VALIDATED = 'DATASET_NOT_VALIDATED'
+    UNSUPPORTED_FILE_TYPE = 'UNSUPPORTED_FILE_TYPE'
 
 
 # --- Money in three currencies (bolivianos, official dollar, USDT) ---

@@ -136,7 +136,7 @@ def get_route_points(
             f'No route points found for route_id={route_id} day={day}.'
         )
         logger.warning(error_msg)
-        raise RegisterNotFoundError(detail = error_msg)
+        raise RegisterNotFoundError(detail = OptimizationError.ROUTE_POINTS_NOT_FOUND.value)
 
     message = (
         f'Retrieved {len(items)} client points for route_id={route_id} '
@@ -293,14 +293,14 @@ def get_dataset_metadata(
     if not item:
         error_msg = f'Dataset {dataset_id} not found in {INGEST_DATASETS_TABLE}.'
         logger.warning(error_msg)
-        raise RegisterNotFoundError(detail = error_msg)
+        raise RegisterNotFoundError(detail = OptimizationError.DATASET_NOT_FOUND.value)
     if item.get('status') != 'validated':
         error_msg = (
             f'Dataset {dataset_id} cannot be analyzed because its status is '
             f'"{item.get("status")}". Re-upload a valid file via /v1/ingest/excel.'
         )
         logger.warning(error_msg)
-        raise InvalidInputError(detail = error_msg)
+        raise InvalidInputError(detail = OptimizationError.DATASET_NOT_VALIDATED.value)
     return item
 
 
@@ -319,7 +319,7 @@ def _read_dataframe(
         return pd.read_csv(buffer)
     error_msg = f'Unsupported file extension on S3 key "{s3_key}".'
     logger.error(error_msg)
-    raise InvalidInputError(detail = error_msg)
+    raise InvalidInputError(detail = OptimizationError.UNSUPPORTED_FILE_TYPE.value)
 
 
 def load_dataframe_from_s3(s3_key: str) -> pd.DataFrame:
@@ -344,7 +344,7 @@ def load_dataframe_from_s3(s3_key: str) -> pd.DataFrame:
         )
         logger.error(error_msg, exc_info = True)
         raise ServiceUnavailableError(
-            detail = 'No se pudo leer el archivo del bucket de FILES.'
+            detail = OptimizationError.DATASET_UNREADABLE.value
         ) from error
 
     message = (
