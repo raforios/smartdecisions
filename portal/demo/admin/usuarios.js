@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;');
 
-    const state = { users: [], editing: null };
+    const state = { users: [], editing: null, formCompanies: null, fromTable: false };
     // The eye beside the password, as in the sign-in; it hides again on every open.
     const hidePassword = revealToggle(qs('#userPassword'), qs('#userPasswordReveal'));
     const note = (text, kind) => {
@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** What AUTH answered, in words: it sends English sentences, not codes. */
     function failure(error, fallback) {
+        const code = error && (error.code || error.message);
+        if (code === 'COMPANY_NOT_FOUND') return 'Esa empresa no existe: créala en Empresas.';
+        if (code === 'COMPANY_INACTIVE') return 'Esa empresa está inactiva.';
         if (error && error.status === 409) return 'Ese correo ya está registrado.';
         if (error && error.status === 404) return 'El usuario ya no existe.';
         if (error && error.status === 422) return 'Revisa los datos: nombre y apellido de 3 a 30 letras, contraseña de 8 o más.';
@@ -52,9 +55,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return fallback;
     }
 
+    /**
+     * The companies a user may be given: the active ones of AUTH's table
+     * (Rafael, 21-oct). Until AUTH serves them, the clients users already
+     * have, and a new one may still be typed.
+     */
+    async function loadCompanies() {
+        try {
+            const list = await API.get(`${window.SD_CONFIG.API_URL}/v1/auth/companies`);
+            state.formCompanies = list.filter((company) => company.active).map((company) => company.name);
+            state.fromTable = true;
+        } catch (error) {
+            state.formCompanies = null;
+            state.fromTable = false;
+        }
+    }
+
     async function load() {
         try {
-            state.users = await API.get(`${USERS}/`);
+            [state.users] = await Promise.all([API.get(`${USERS}/`), loadCompanies()]);
             fillCompanyFilter();
             // The form offers the existing companies: it opens once they are known.
             qs('#userNew').disabled = false;
@@ -133,10 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
             `<option value="${code}">${escape(roleLabel(code))}</option>`).join('');
         qs('#userRole').value = creating ? 'MANAGER' : user.role;
 
-        qs('#userCompany').innerHTML = companies().map((name) =>
+        const offered = state.fromTable ? state.formCompanies.slice() : companies();
+        if (user && user.client && !offered.includes(user.client)) offered.push(user.client);
+        qs('#userCompany').innerHTML = offered.map((name) =>
             `<option>${escape(name)}</option>`).join('') +
-            `<option value="${NEW_COMPANY}">Otra empresa…</option>`;
-        qs('#userCompany').value = (user && user.client) || (companies()[0] ? companies()[0] : NEW_COMPANY);
+            (state.fromTable ? '' : `<option value="${NEW_COMPANY}">Otra empresa…</option>`);
+        qs('#userCompany').value = (user && user.client) || (offered[0] ? offered[0] : NEW_COMPANY);
         qs('#userNewCompany').value = '';
         syncCompany();
 

@@ -96,6 +96,7 @@
         // The platform, for the ADMIN only (Rafael, 21-oct): Minerales is no
         // longer shown to the companies.
         { group: 'Administración', roles: ['ADMIN'], items: [
+            { label: 'Empresas', icon: 'clients', page: 'admin/empresas.html' },
             { label: 'Usuarios', icon: 'user', page: 'admin/usuarios.html' },
             { label: 'Salud', icon: 'pulse', page: 'admin/salud.html' },
             { label: 'Eventos y alertas', icon: 'clock', page: 'admin/eventos.html' },

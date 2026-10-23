@@ -46,14 +46,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /** The last published rate of a currency and the one before it. */
-    async function lastTwo(currency) {
+    // The week the chart shows (Rafael, 21-oct: the last week of the rate).
+    const WEEK_POINTS = 7;
+
+    /** The last published rates of a currency, oldest first: enough for a week. */
+    async function recentRates(currency) {
         const end = new Date();
         const start = new Date(end.getTime() - 14 * 86400000);
         const iso = (day) => day.toISOString().slice(0, 10);
         const answer = await window.SD_API.get(`${API_URL}/v1/quotes/exchange-rates`,
             { currency, start: iso(start), end: iso(end) });
         const rates = (answer && answer.rates) || [];
-        return rates.slice(-2);
+        return rates.slice(-WEEK_POINTS);
+    }
+
+    /** The official dollar and USDT of the week, drawn on the dark card. */
+    function weekChart(canvas, usd, usdt) {
+        if (!window.Chart || !usd.length) return;
+        const dayLabel = (rate) => {
+            const [, month, day] = String(rate.date).slice(0, 10).split('-');
+            return `${Number(day)}/${Number(month)}`;
+        };
+        const byDate = new Map(usdt.map((rate) => [String(rate.date).slice(0, 10), rate.rate]));
+        const light = 'rgba(214, 222, 236, 0.85)';
+        new window.Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: usd.map(dayLabel),
+                datasets: [
+                    { label: 'Dólar oficial', data: usd.map((rate) => rate.rate),
+                      borderColor: '#ffffff', backgroundColor: '#ffffff', tension: 0.3, pointRadius: 2 },
+                    { label: 'USDT', data: usd.map((rate) => byDate.get(String(rate.date).slice(0, 10)) ?? null),
+                      borderColor: '#4fd1c5', backgroundColor: '#4fd1c5', tension: 0.3, pointRadius: 2,
+                      spanGaps: true }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: light, boxWidth: 10 } },
+                    tooltip: { callbacks: { label: (item) => `${item.dataset.label}: Bs ${number(item.raw, 2)}` } } },
+                scales: {
+                    x: { ticks: { color: light }, grid: { display: false } },
+                    y: { ticks: { color: light, callback: (value) => number(value, 2) },
+                         grid: { color: 'rgba(255, 255, 255, 0.08)' } }
+                }
+            }
+        });
     }
 
     async function rates() {
@@ -62,8 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shell.role === 'ADMIN') card.setAttribute('href', 'admin/tipo-cambio.html');
         else card.removeAttribute('href');
         try {
-            const [usd, usdt] = await Promise.all([lastTwo('USD'), lastTwo('USDT')]);
-            const line = (pair) => {
+            const [usd, usdt] = await Promise.all([recentRates('USD'), recentRates('USDT')]);
+            const line = (rates) => {
+                const pair = rates.slice(-2);
                 const [before, now] = pair.length > 1 ? pair : [null, pair[0]];
                 if (!now) return '—';
                 const change = before ? now.rate - before.rate : null;
@@ -76,7 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<p class="sd-hero-value">Bs ${number(official && official.rate, 2)}</p>` +
                 `<div class="sd-hero-other"><span>Dólar oficial<b>${line(usd)}</b></span>` +
                 `<span>USDT<b>${line(usdt)}</b></span>` +
-                `<span>Brecha<b>${number(gap, 2)} %</b></span></div>`;
+                `<span>Brecha<b>${number(gap, 2)} %</b></span></div>` +
+                '<div class="sd-hero-chart"><canvas id="homeRatesChart"></canvas></div>';
+            weekChart(qs('#homeRatesChart'), usd, usdt);
         } catch (error) {
             card.innerHTML = '<p class="sd-hero-label">Cotizaciones del día</p>' +
                 '<p class="sd-hero-other">No se pudieron leer las cotizaciones.</p>';
