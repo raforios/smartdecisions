@@ -19,8 +19,7 @@ Una revisión general alcanza **sólo los once servicios propios de BearSoft**:
 ```
 SmartDecisions   COMMERCIAL · MINING_ANALYSIS · FINANCE
 SmartBilling     BILLING
-Genéricos        AUTH · EVENTS · FILES
-Capacitación     ML_FUNCTIONS
+Base             AUTH · EVENTS · FILES · ML_FUNCTIONS · PARAMETERS · AI · QUOTES
 ```
 
 **Nunca se tocan sin que Rafael lo pida para ese servicio en concreto:**
