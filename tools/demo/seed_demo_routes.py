@@ -42,10 +42,10 @@ from boto3.resources.base import ServiceResource
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
-OPTIMIZATION_PATH = ROOT / 'services' / 'commercial'
-sys.path.insert(0, str(OPTIMIZATION_PATH))
+COMMERCIAL_PATH = ROOT / 'services' / 'commercial'
+sys.path.insert(0, str(COMMERCIAL_PATH))
 # The service validates its environment on import, so it is loaded first.
-load_dotenv(OPTIMIZATION_PATH / '.env')
+load_dotenv(COMMERCIAL_PATH / '.env')
 
 # pylint: disable=wrong-import-position
 from schemas.daily_stock import (  # noqa: E402

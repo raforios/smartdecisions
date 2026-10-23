@@ -2,7 +2,7 @@
     Builds and publishes the four templates the client downloads.
 
     It is generated **from the contract** and not by hand: `TEMPLATE_COLUMNS` in
-    `schemas/ingest.py` is the single source of truth about which columns exist,
+    `schemas/commercial.py` is the single source of truth about which columns exist,
     which are mandatory and in what order they go. A template written apart
     diverges from the validator the day somebody adds a column, and the client
     finds out when their file is rejected.
@@ -28,8 +28,8 @@ import pandas as pd
 
 # The microservice declares the contract; this script imports it instead of
 # repeating it.
-INGEST_PATH = Path(__file__).resolve().parents[2] / 'services' / 'ingest'
-sys.path.insert(0, str(INGEST_PATH))
+COMMERCIAL_PATH = Path(__file__).resolve().parents[2] / 'services' / 'commercial'
+sys.path.insert(0, str(COMMERCIAL_PATH))
 
 BUCKET = 'ml-data-file-handler'
 PROFILE = 'deploy_ml'
@@ -288,7 +288,7 @@ def _contracts() -> list[tuple[str, Any, Any, Any]]:
                 function that builds sample rows from the sales sample.
     """
     # The module, not its eighteen names: each imported name counted as a local.
-    import schemas.ingest as contract # pylint: disable=import-outside-toplevel
+    import schemas.commercial as contract # pylint: disable=import-outside-toplevel
     return [
         (contract.SALES_TEMPLATE, contract.TEMPLATE_COLUMNS, contract.TEMPLATE_HEADERS,
          lambda sample: sample),
@@ -392,7 +392,7 @@ def main() -> int:
                         help = 'Construye y sube. Sin esto sólo informa.')
     parser.add_argument('--rows', type = int, default = 6,
                         help = 'Filas de ejemplo. Por defecto 6.')
-    parser.add_argument('--prefix', default = 'ingest/templates',
+    parser.add_argument('--prefix', default = 'commercial/templates',
                         help = 'Carpeta en S3. Debe coincidir con TEMPLATES_S3_PREFIX del .env.')
     args = parser.parse_args()
 

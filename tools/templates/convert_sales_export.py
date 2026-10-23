@@ -9,7 +9,7 @@
     Two things it must not get wrong:
 
     1. **The output is the contract, not an approximation.** The headers and
-       their order come from `TEMPLATE_COLUMNS` in `schemas/ingest.py`, the
+       their order come from `TEMPLATE_COLUMNS` in `schemas/commercial.py`, the
        same tuple the validator reads. A mapping written by hand diverges the
        day a column is added.
     2. **Simulated coordinates are declared as simulated.** This export has no
@@ -32,11 +32,11 @@ import pandas as pd
 
 # The microservice declares the contract; this script imports it instead of
 # repeating it.
-INGEST_PATH = Path(__file__).resolve().parents[2] / 'services' / 'ingest'
-sys.path.insert(0, str(INGEST_PATH))
+COMMERCIAL_PATH = Path(__file__).resolve().parents[2] / 'services' / 'commercial'
+sys.path.insert(0, str(COMMERCIAL_PATH))
 
 # pylint: disable=wrong-import-position
-from schemas.ingest import TEMPLATE_HEADERS  # noqa: E402
+from schemas.commercial import TEMPLATE_HEADERS  # noqa: E402
 
 # Where the report's own header row sits. The first rows carry the title and
 # the period, which is what every ERP print-out puts above the data.
