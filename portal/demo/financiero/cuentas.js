@@ -215,12 +215,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 note('El código sólo lleva números y puntos, por ejemplo 6.1.20.', 'error');
             }
         });
+        // The group is picked the same way (Rafael, 23-oct): the longest group
+        // whose code starts the typed one, so 6.1.98 lands in 6.1 and is never
+        // left as a stray top-level group by mistake.
         qs('#accountCode').addEventListener('input', () => {
-            const digit = qs('#accountCode').value.trim().charAt(0);
+            const code = qs('#accountCode').value.trim();
+            const digit = code.charAt(0);
             if (TYPES[digit] && qs('#accountTypeInput').value !== digit) {
                 qs('#accountTypeInput').value = digit;
                 fillGroups();
             }
+            const parent = [...qs('#accountGroup').options].map((option) => option.value)
+                .filter((group) => group && code.startsWith(`${group}.`))
+                .sort((a, b) => b.length - a.length)[0];
+            qs('#accountGroup').value = parent || '';
         });
         qs('#accountNew').addEventListener('click', () => { note(''); openForm(null); });
         qs('#accountCancel').addEventListener('click', closeForm);

@@ -184,6 +184,36 @@ document.addEventListener('DOMContentLoaded', () => {
         note.textContent = down ? `${down} con problemas: abre Salud para el detalle.` : 'Todo responde.';
     }
 
+    // How far back and how many changes the card shows.
+    const MINE_DAYS = 30;
+    const MINE_SIZE = 6;
+
+    /** Everyone but the ADMIN: their own latest changes, each opening its screen. */
+    async function mine() {
+        if (shell.role === 'ADMIN' || !window.SD_EVENTS) return;
+        qs('#homeTop').classList.add('sd-grid-half');
+        qs('#homeMine').hidden = false;
+        const note = qs('#homeMineNote');
+        try {
+            const answer = await window.SD_EVENTS.mine(MINE_DAYS, MINE_SIZE);
+            const changes = answer.changes || [];
+            qs('#homeMineList').innerHTML = changes.map((change) => {
+                const [label, page] = window.SD_EVENTS.entity(change);
+                const what = `${window.SD_EVENTS.actionLabel(change.action)} · ${escape(label)}` +
+                    // A short code says which one (6.1.98); a long identifier says nothing.
+                    (change.entity_id && change.entity_id.length <= 20
+                        ? ` <code>${escape(change.entity_id)}</code>` : '');
+                const text = page ? `<a href="${page}">${what}</a>` : what;
+                return `<div class="sd-list-row"><span>${text}</span>` +
+                    `<b>${window.SD_EVENTS.when(change.timestamp)}</b></div>`;
+            }).join('');
+            note.textContent = changes.length ? ''
+                : `No hiciste cambios en los últimos ${MINE_DAYS} días.`;
+        } catch (error) {
+            note.textContent = 'No se pudo leer tu actividad.';
+        }
+    }
+
     /** The ADMIN's last hours: the chart and the newest failures. */
     async function events() {
         if (shell.role !== 'ADMIN' || !window.SD_EVENTS || !window.Chart) return;
@@ -211,5 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
     rates();
     users();
     health();
+    mine();
     events();
 });

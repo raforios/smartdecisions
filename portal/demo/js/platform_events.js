@@ -4,7 +4,9 @@
  * The recent activity of the platform, for the ADMIN: calls answered and
  * failed per hour, the latest failures and the latest audited changes, read
  * from EVENTS (`/v1/events/activity`, ADMIN only). Used by Administración ›
- * Eventos and by the segment on Principal.
+ * Eventos and by the segment on Principal. Also "Lo último que hiciste" on
+ * the Principal of the other roles: each user's own audited changes
+ * (`/v1/events/my-changes`, the user is the one in the token).
  *
  * EVENTS records every product, its clients' included; the dashboard names
  * the services it covers: ours that report to it. AUTH, FILES and
@@ -16,13 +18,50 @@
 
     // What the services audit, in words; any other action is shown as it is.
     const ACTIONS = { CREATE: 'Alta', UPDATE: 'Cambio', DELETE: 'Baja', UPLOAD: 'Carga',
-        RUN: 'Cálculo', ACTIVATE: 'Activación', DEACTIVATE: 'Desactivación' };
+        RUN: 'Cálculo', ACTIVATE: 'Activación', DEACTIVATE: 'Desactivación', UPSERT: 'Cambio',
+        UPLOAD_S3: 'Carga', LOAD: 'Carga', BULK_CREATE: 'Alta masiva', SYNC: 'Actualización',
+        GENERATE: 'Pedido', READ: 'Consulta', CLOSE: 'Cierre', REOPEN: 'Reapertura',
+        INFER: 'Inferencia', REPEAT: 'Repetición', UPDATE_STATUS: 'Cambio de estado',
+        ISSUE: 'Emisión', CANCEL: 'Anulación' };
     const actionLabel = (code) => ACTIONS[code] || code || '—';
+
+    // What each audited entity is, in words, and the screen it lives on (none
+    // when no screen shows it). An entity not listed is shown by its code.
+    const ENTITIES = {
+        'FINANCE.Account': ['Cuenta del catálogo', 'financiero/cuentas.html'],
+        'FINANCE.Load': ['Carga de estados financieros', 'financiero/cargar.html'],
+        'FINANCE.Entry': ['Monto de una cuenta', 'financiero/cargar.html'],
+        'FINANCE.Period': ['Período cargado', 'financiero/cargar.html'],
+        'FINANCE.BusinessModel': ['Modelo de negocio', 'financiero/modelo.html'],
+        'FINANCE.ClientParameter': ['Parámetro de impuestos', 'financiero/impuestos.html'],
+        'AI.Explanation': ['Explicación de la IA', null],
+        'AI.Role': ['Prompt de la IA', 'admin/prompts.html'],
+        'QUOTES.Factor': ['Factor externo', 'parametros/factores.html'],
+        'QUOTES.ExchangeRate': ['Tipo de cambio', 'admin/tipo-cambio.html'],
+        'PARAMETERS.Parameter': ['Parámetro', 'parametros/index.html'],
+        'ANALYTICS.CommercialPolicy': ['Política comercial', 'parametros/index.html'],
+        'ANALYTICS.CreditPolicy': ['Política de crédito', 'parametros/index.html'],
+        'ANALYTICS.AnalyticsRun': ['Análisis comercial', 'comercial/index.html'],
+        'INGEST.Dataset': ['Carga de ventas', 'ventas/cargar.html'],
+        'INGEST.Stock': ['Carga de inventario', 'inventario/cargar.html'],
+        'INGEST.Purchases': ['Carga de compras', 'compras/cargar.html'],
+        'INGEST.Collections': ['Carga de cobranza', 'cobranza/cargar.html'],
+        'INGEST.Objectives': ['Carga de objetivos', 'ventas/objetivos.html'],
+        'INGEST.Client': ['Cliente', 'clientes/index.html']
+    };
+    const entity = (change) => ENTITIES[`${change.microservice}.${change.entity_name}`]
+        || [change.entity_name || change.microservice, null];
 
     /** The activity of the last `hours` hours. */
     function load(hours) {
         return window.SD_API.get(`${window.SD_CONFIG.API_URL}/v1/events/activity`,
             { microservices: REPORTING.join(','), hours });
+    }
+
+    /** The caller's own latest changes in our services, newest first. */
+    function mine(days, limit) {
+        return window.SD_API.get(`${window.SD_CONFIG.API_URL}/v1/events/my-changes`,
+            { microservices: REPORTING.join(','), days, limit });
     }
 
     /** Totals over every service. */
@@ -84,5 +123,5 @@
         });
     }
 
-    window.SD_EVENTS = { REPORTING, load, totals, hourly, when, chart, actionLabel };
+    window.SD_EVENTS = { REPORTING, load, mine, totals, hourly, when, chart, actionLabel, entity };
 })();
