@@ -17,12 +17,12 @@ ROOT = Path(__file__).resolve().parents[2]
 # accumulated findings nobody ever saw: a sweep that skips a service is a
 # sweep that certifies it by omission.
 PRODUCT_SERVICES = (
-    # SmartDecisions
-    'ingest', 'analytics', 'optimization', 'mining_analysis', 'quotes', 'finance',
+    # SmartDecisions (COMMERCIAL joined INGEST, ANALYTICS and OPTIMIZATION on 23-10-2026)
+    'commercial', 'mining_analysis', 'finance',
     # SmartBilling
     'billing',
-    # Genéricos y obligatorios
-    'auth', 'events', 'files', 'ml_functions', 'parameters', 'ai',
+    # Base: generic, for any product (QUOTES joined on 23-10-2026)
+    'auth', 'events', 'files', 'ml_functions', 'parameters', 'ai', 'quotes',
 )
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
@@ -239,14 +239,6 @@ _CROSS_SERVICE_MIN_LINES = 8
 # needs Rafael's go-ahead.
 _PENDING_BOILERPLATE = ('to_dynamo', 'from_dynamo', 'get_caller')
 
-# ANALYTICS and OPTIMIZATION read the dataset INGEST produced, straight from
-# S3 and with the same two helpers. It is real duplication and a real crossing
-# of the bucket rule, and it predates the rule. Rafael's call on 28-09-2026:
-# FILES goes into the service that needs it —INGEST— and these two follow when
-# each is worked on, not by symmetry. Listed so the debt stays visible.
-_PENDING_DATASET_READERS = ('_read_dataframe', 'get_dataset_metadata')
-
-
 def _service_bodies(service: Path) -> tuple[tuple[str, str], ...]:
     '''
         The comparable body of every own function of a service.
@@ -267,7 +259,6 @@ def _service_bodies(service: Path) -> tuple[tuple[str, str], ...]:
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
                     and node.name not in _PENDING_BOILERPLATE \
-                    and node.name not in _PENDING_DATASET_READERS \
                     and node.end_lineno - node.lineno >= _CROSS_SERVICE_MIN_LINES:
                 bodies.append((_body_signature(node),
                                f'{path.relative_to(service)}:{node.name}'))
@@ -299,8 +290,7 @@ def check_cross_service_duplicates(service: Path) -> tuple[bool, str]:
 # FILES is the bucket's owner, so it is the one service that holds an S3
 # client. The single line allowed elsewhere is COMMERCIAL reading a STATIC
 # template: FILES cannot hand a file back AS a file —its reader parses and
-# returns rows— and `CLAUDE.md` §9 names exactly that case. ANALYTICS and
-# OPTIMIZATION read through FILES since 23-oct-2026.
+# returns rows— and `CLAUDE.md` §9 names exactly that case.
 _S3_ALLOWED: dict[str, tuple[str, ...]] = {
     'files': ('controllers/files.py',),
     'commercial': ('services/commercial_utils.py',),
