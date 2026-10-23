@@ -42,7 +42,7 @@ from boto3.resources.base import ServiceResource
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
-OPTIMIZATION_PATH = ROOT / 'services' / 'optimization'
+OPTIMIZATION_PATH = ROOT / 'services' / 'commercial'
 sys.path.insert(0, str(OPTIMIZATION_PATH))
 # The service validates its environment on import, so it is loaded first.
 load_dotenv(OPTIMIZATION_PATH / '.env')
@@ -551,14 +551,14 @@ def reset_demo(
         Returns:
             tuple[int, int]: Plans and runs deleted.
     '''
-    plans = [plan for plan in _query(resource, 'optimization_planned_routes', owner)
+    plans = [plan for plan in _query(resource, 'commercial_planned_routes', owner)
              if str(plan.get('route_code', '')).startswith('DEMO-')
              and plan.get('plan_date') in days]
     ids = {plan['id'] for plan in plans}
-    runs = [run for run in _query(resource, 'optimization_executed_routes', owner)
+    runs = [run for run in _query(resource, 'commercial_executed_routes', owner)
             if run.get('planned_route_id') in ids]
-    for table, items in (('optimization_planned_routes', plans),
-                         ('optimization_executed_routes', runs)):
+    for table, items in (('commercial_planned_routes', plans),
+                         ('commercial_executed_routes', runs)):
         with resource.Table(table).batch_writer() as batch:
             for item in items:
                 batch.delete_item(Key = {'owner_email': owner, 'id': item['id']})
