@@ -36,6 +36,7 @@ from typing import Any
 
 import requests as req
 from fastapi import HTTPException, Request
+from jose import JWTError, jwt
 from pydantic import BaseModel, ValidationError
 from botocore.exceptions import ClientError as AWSClientError
 
@@ -342,7 +343,8 @@ def handle_service_errors(
                         method = request.method,
                         status_code = status_code,
                         ip_address = getattr(request.client, 'host', '0.0.0.0'),
-                        user_app = kwargs.get('current_user') or 'anonymous',
+                        user_app = (_caller_email(request) or kwargs.get('current_user')
+                                    or 'anonymous'),
                         request_body = request_body,
                         response_time_ms = int((end_time - start_time) * 1000)
                     )
@@ -403,7 +405,8 @@ def _audit_payload(
     '''
         Builds the audit record of a call: who changed which entity, and how.
     '''
-    user_id = kwargs.get('current_user') or kwargs.get('user_id') or 'usr_test'
+    user_id = (_caller_email(kwargs.get('request')) or kwargs.get('current_user')
+               or kwargs.get('user_id') or 'usr_test')
     entity_id, new_values = _resolve_audit_entity(result, spec.id_field)
     formatted_new = (
         json.dumps(new_values, cls = CustomJSONEncoder) if new_values is not None else None
@@ -481,6 +484,31 @@ def _caller_authorization(request: Request | None) -> str | None:
             str | None: The header, or None for calls with no request.
     '''
     return request.headers.get('authorization') if request is not None else None
+
+
+def _caller_email(request: Request | None) -> str | None:
+    '''
+        The e-mail of whoever signed in and made the call: the person a log
+        records, never the company that owns the data (Rafael, 23-oct-2026:
+        by the user we know the company, not the other way round).
+
+        The token was already validated by the route, so its claims are only
+        read here, not checked again.
+
+        Args:
+            request (Request | None): The incoming request, when there is one.
+
+        Returns:
+            str | None: The e-mail in the token, or None when there is none.
+    '''
+    header = _caller_authorization(request) or ''
+    scheme, _, token = header.partition(' ')
+    if scheme.lower() != 'bearer' or not token:
+        return None
+    try:
+        return jwt.get_unverified_claims(token).get('email')
+    except JWTError:
+        return None
 
 
 # ---------------------------------------------------------------------------
