@@ -1,255 +1,512 @@
-# Commercial Service
+# 🛍️ Commercial-Service 📈
 
-Microservicio backend del producto **SmartDecisions** (de BearSoft): el
-**módulo comercial**. Recibe lo que una empresa vende, cobra, compra, tiene en
-stock y recorre en la calle —por archivo o por API desde su ERP—, guarda el
-maestro de clientes y vendedores, y responde los análisis comerciales y las
-rutas.
+The **commercial module** service of SmartDecisions. It receives what a company sells, collects, buys, holds in stock and covers on the street —by file or by API from its ERP—, keeps the client and seller master data, and answers the commercial analyses and the routes.
 
-Une desde el 23-oct-2026 lo que eran INGEST (cargas y maestros), ANALYTICS
-(análisis) y OPTIMIZATION (rutas): un solo microservicio con varias partes,
-como FINANCE. El plan y la historia viven en
-`docs/cambios/smartdecisions/plan.md` (fase 10).
+-----
 
-## Reglas que lo gobiernan
+## 🎯 Main Purpose
 
-- **El dueño es parte de cada consulta.** Es el `client` del JWT (o el correo
-  si no lo tiene) y está en la clave de cada tabla: un recurso ajeno responde
-  igual que uno inexistente.
-- **Dos canales de entrada, los dos obligatorios:** el archivo que el cliente
-  llena (sube por FILES a S3 y el servicio lo lee por su clave) y el API que
-  consume su ERP. Mismo contrato, mismo validador, mismos códigos.
-- **El cliente se describe una sola vez,** en el maestro (`commercial_clients`).
-  Una recarga completa los campos vacíos; nunca reescribe una corrección.
-- **Devuelve datos y códigos, nunca texto de cara al usuario.** El portal
-  traduce cada código.
-- **Todo monto viaja en bolivianos, dólar oficial y USDT** (las cotizaciones
-  las pide a QUOTES): lo pasado al tipo de su día, lo de hoy al de hoy.
-- **Los cálculos generales los pide a ML_FUNCTIONS** con el token del que
-  llama (`services/calculations.py`): la proyección de ventas, los niveles de
-  la segmentación, las reglas de afinidad (Apriori), el reparto en días y el
-  orden de las paradas. Se quedan aquí la serie, las canastas, las paradas y
-  cómo se muestra la respuesta. Las calles las da OSRM.
-- **Los archivos los toca FILES** (bloque estándar de `services/utils.py`).
-  Única lectura directa: la descarga de la plantilla estática.
+The **Commercial-Service** brings loads, analyses and routes together in one service. Its key features:
 
-## Stack
+  * **File and API Loads:** Sales, payments, stock, purchases, visits and objectives, with the same contract, the same validator and the same error codes on both channels; invalid rows are set aside with their reason and the rest goes in. Files go through FILES.
+  * **Master Data:** Clients and sellers, described once; a reload fills the empty fields and never overwrites a correction. A seller can register a client on the street.
+  * **Analyses:** Commercial summary, volume source, demand forecast, segmentation, portfolio health, objectives, receivables, stock of the day, inventory history, purchases and exchange-rate effect.
+  * **Opportunities:** Affinity × drop size: association rules between products and the expected sale of recommending each one to each point of sale.
+  * **Routes:** Plans (imported, inferred from the day worked or built from sales), live routes with their position, plan against route comparison, order optimization and the stock of the day on the route.
+  * **Three Currencies:** Every amount in bolivianos, official dollar and USDT (rates from QUOTES): the past at its own day's rate, today at today's.
+  * **Calculations:** The projection, the segmentation tiers, the affinity rules, the split into days and the stop order are computed by ML-Functions; the streets, by OSRM.
+  * **Ownership:** The owner (the JWT `client`) is part of every table key; someone else's resource answers like a missing one.
 
-- Python 3.14 + FastAPI + Uvicorn; AWS Lambda (`Mangum`) detrás de
-  `api.bearsoft.com.bo/v1/commercial`
-- AWS DynamoDB (`boto3`); pandas para leer y validar los archivos
-- AUTH (JWT), EVENTS (uso y auditoría), FILES (archivos), QUOTES
-  (cotizaciones), ML_FUNCTIONS (cálculos) y OSRM (calles)
+-----
 
-## Estructura
+## 🛠️ Technologies
 
-Cinco capas; en cada una el archivo principal es `commercial.py` (las cargas) y
-los complementos se nombran por lo que hacen: `analytics.py` y sus motores
-(`receivables.py`, `stock.py`, `portfolio.py`, `affinity.py`,
-`segmentation.py`, `forecast.py`…), `localization*.py` (planes y recorridos),
-`optimization.py` (plan desde las ventas), `clients.py`, `sellers.py`,
-`daily_stock.py` (stock del día en ruta) y `calculations.py` (lo que se pide a
-ML_FUNCTIONS).
+  * **Language:** Python 3.14 🐍
+  * **Web Framework:** FastAPI ✨
+  * **ASGI Server:** Uvicorn 🚀
+  * **Database:** AWS DynamoDB (`boto3`)
+  * **Data Processing:** pandas 🐼, `openpyxl`
+  * **Routing:** OSRM (`requests`)
+  * **Data Validation:** Pydantic V2
+  * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
 
-## Endpoints
+-----
 
-Todos bajo `/v1/commercial` y con `Authorization: Bearer <jwt>`. La
-documentación interactiva está en `/v1/commercial/docs`.
+## 🚀 API Endpoints
 
-| Parte | Endpoints |
-|---|---|
-| **Cargas por archivo** | `GET /template`, `GET /template/file/{contract}`, `POST /excel`, `POST /excel-from-s3`, `POST /{dataset_id}/{collections,stock,visits,objectives,purchases}`, `GET /datasets`, `GET /{dataset_id}`, `GET /{dataset_id}/rejected`, `GET /{dataset_id}/stock` |
-| **Cargas por API (ERP)** | `POST /sales/rows`, `POST /{dataset_id}/sales/rows`, `POST /{dataset_id}/{collections,stock,visits,objectives,purchases}/rows`, y `/from-s3` de cada una |
-| **Maestros** | `GET · POST /clients`, `POST /clients/field` (alta en la calle), `GET · PATCH /clients/{client_id}`, `GET /sellers`, `PATCH /sellers/{seller_id}` |
-| **Análisis** | `GET /summary`, `/forecast`, `/segmentation`, `/receivables`, `/objectives`, `/stock`, `/portfolio`, `/fx-effect`, `/purchases`, `/stock-history`, `/dashboard`, `/clients/overview` y `/client/{dataset_id}/{client_id}`, todos con `/{dataset_id}` |
-| **Oportunidades** | `POST /run/{dataset_id}`, `GET /runs`, `GET /results/{dataset_id}`, `GET /results/{dataset_id}/pdv/{pdv_id}` |
-| **Políticas de la empresa** | `GET · PUT /commercial-policy`, `GET · PUT /credit-policy` |
-| **Rutas planificadas** | `/routes/planned` (crear, listar, filtrar, importar CSV, inferir del día trabajado), `/routes/planned/{id}` (ver, editar, estado, borrar, paradas), `/routes/planned/{id}/optimization` y `/repeat` |
-| **Rutas recorridas** | `/routes/executed` (iniciar, listar, reportar puntos, última posición, cerrar, reabrir) |
-| **Comparación y estadísticas** | `GET /routes/comparison/{id}`, `/statistics/route-comparisons/{id}`, `/statistics/sellers/{seller}/points-visited`, `/statistics/day/{day}` |
-| **Plan desde las ventas** | `GET /plan/{dataset_id}`, `POST /plan/{dataset_id}/by-seller` |
-| **Stock del día en ruta** | `PUT /stock/day`, `POST /stock/day/from-ingest`, `GET /stock/day/{day}` |
-| **Ajustes de rutas** | `GET · PUT /settings` (punto de partida y llegada) |
-| **Salud** | `GET /health` |
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` unless stated otherwise.
 
-## Datos que guarda
+### File Loads
 
-### Tablas DynamoDB
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/commercial/template` | Metadata of the sales **template**. |
+| `GET` | `/v1/commercial/template/file/{contract}` | Downloads the **template** of a contract. |
+| `POST` | `/v1/commercial/excel` | Uploads and validates a **sales file**, Excel or CSV. |
+| `POST` | `/v1/commercial/excel-from-s3` | Loads a large **sales file** already uploaded to S3. |
+| `POST` | `/v1/commercial/{dataset_id}/collections` | Uploads the **payments** of a sales load. |
+| `POST` | `/v1/commercial/{dataset_id}/stock` | Uploads the **stock snapshot** of a sales load. |
+| `POST` | `/v1/commercial/{dataset_id}/purchases` | Uploads the **purchases** of a sales load. |
+| `POST` | `/v1/commercial/{dataset_id}/visits` | Uploads the sales force **visits**. |
+| `POST` | `/v1/commercial/{dataset_id}/objectives` | Uploads the monthly **objectives**. |
+| `GET` | `/v1/commercial/{dataset_id}/stock` | The **stock snapshot** of one day. |
+| `GET` | `/v1/commercial/datasets` | Your own **loads**, newest first. |
+| `GET` | `/v1/commercial/{dataset_id}` | Status of a **load**. |
+| `GET` | `/v1/commercial/{dataset_id}/rejected` | Downloads the **rejected rows** with their reason. |
 
-Se crean con `services/ci/api/create_dynamodb_tables.sh`.
+### API Loads (ERP)
 
-| Tabla | Partición | Orden | Qué guarda |
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/commercial/sales/rows` | Creates a **sales load** from an ERP. |
+| `POST` | `/v1/commercial/{dataset_id}/sales/rows` | Adds **sales lines** from an ERP. |
+| `POST` | `/v1/commercial/{dataset_id}/collections/rows` | Pushes the **payments** from an ERP. |
+| `POST` | `/v1/commercial/{dataset_id}/stock/rows` | Pushes the day's **stock** from an ERP. |
+| `POST` | `/v1/commercial/{dataset_id}/purchases/rows` | Pushes the **purchases** from an ERP. |
+| `POST` | `/v1/commercial/{dataset_id}/visits/rows` | Pushes the day's **visits** from an ERP. |
+| `POST` | `/v1/commercial/{dataset_id}/objectives/rows` | Pushes the monthly **objectives** from an ERP. |
+| `POST` | `/v1/commercial/{dataset_id}/collections/from-s3` | Loads a **payments** file already staged in S3. |
+| `POST` | `/v1/commercial/{dataset_id}/stock/from-s3` | Loads a **stock** file already staged in S3. |
+| `POST` | `/v1/commercial/{dataset_id}/purchases/from-s3` | Loads a **purchases** file already staged in S3. |
+| `POST` | `/v1/commercial/{dataset_id}/visits/from-s3` | Loads a **visits** file already staged in S3. |
+| `POST` | `/v1/commercial/{dataset_id}/objectives/from-s3` | Loads an **objectives** file already staged in S3. |
+
+### Master Data
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/commercial/clients` | Pushes the **client master** from an ERP. |
+| `POST` | `/v1/commercial/clients/field` | Registers a **client** on the street. |
+| `GET` | `/v1/commercial/clients` | The company's **clients**. |
+| `GET` | `/v1/commercial/clients/{client_id}` | One **client**. |
+| `PATCH` | `/v1/commercial/clients/{client_id}` | Corrects a **client**. |
+| `GET` | `/v1/commercial/sellers` | The company's **sellers**. |
+| `PATCH` | `/v1/commercial/sellers/{seller_id}` | Links a **seller** to a user, or renames them. |
+
+### Analyses
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/commercial/summary/{dataset_id}` | **Commercial summary**: KPIs, rankings, distributions and trend. |
+| `GET` | `/v1/commercial/forecast/{dataset_id}` | **Demand forecast**: linear trend or moving average, total or by category. |
+| `GET` | `/v1/commercial/segmentation/{dataset_id}` | Client value **segmentation** (High, Medium, Low). |
+| `GET` | `/v1/commercial/portfolio/{dataset_id}` | **Portfolio health**: coverage, churn and clients at risk. |
+| `GET` | `/v1/commercial/objectives/{dataset_id}` | **Objective attainment**: traffic light, gap and points. |
+| `GET` | `/v1/commercial/receivables/{dataset_id}` | **Receivables**: aging, recoverability and collection agenda. |
+| `GET` | `/v1/commercial/stock/{dataset_id}` | **Stock of the day**: coverage, stockout risk and tied-up capital. |
+| `GET` | `/v1/commercial/stock-history/{dataset_id}` | **Inventory over time**. |
+| `GET` | `/v1/commercial/purchases/{dataset_id}` | **Cost of purchases**. |
+| `GET` | `/v1/commercial/fx-effect/{dataset_id}` | **Exchange-rate effect** on sales, margin and restocking. |
+| `GET` | `/v1/commercial/dashboard/{dataset_id}` | **Main dashboard**: the salient figure of each area. |
+| `GET` | `/v1/commercial/clients/overview/{dataset_id}` | The **clients** of a load, largest first. |
+| `GET` | `/v1/commercial/client/{dataset_id}/{client_id}` | The **card** of one client. |
+
+### Opportunities
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/commercial/run/{dataset_id}` | Runs the **affinity × drop size engine** on a load. |
+| `GET` | `/v1/commercial/runs` | Your own **runs**, newest first. |
+| `GET` | `/v1/commercial/results/{dataset_id}` | The latest **run** of a load. |
+| `GET` | `/v1/commercial/results/{dataset_id}/pdv/{pdv_id}` | The **opportunities** of one point of sale. |
+
+### Company Policies
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/commercial/commercial-policy` | The **commercial policy** applied to the company's attainment. |
+| `PUT` | `/v1/commercial/commercial-policy` | Sets the company's **commercial policy**. |
+| `GET` | `/v1/commercial/credit-policy` | The **credit policy** applied to the company's book. |
+| `PUT` | `/v1/commercial/credit-policy` | Sets the company's **credit policy**. |
+
+### Planned Routes
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/commercial/routes/planned` | Creates a **planned route** with its stops. |
+| `GET` | `/v1/commercial/routes/planned` | Lists the company's **planned routes**. |
+| `POST` | `/v1/commercial/routes/planned/filter` | Filters the **planned routes**. |
+| `POST` | `/v1/commercial/routes/planned/bulk-upload` | Imports **planned routes** from a CSV. |
+| `POST` | `/v1/commercial/routes/planned/infer` | Builds the **plan** from what a seller visited on a day. |
+| `GET` | `/v1/commercial/routes/planned/{planned_route_id}` | One **planned route** with its stops. |
+| `PATCH` | `/v1/commercial/routes/planned/{planned_route_id}` | Updates the header of a **planned route**. |
+| `PATCH` | `/v1/commercial/routes/planned/{planned_route_id}/status` | Changes the status of a **planned route** (`IN CREATION`, `ACTIVE`, `INACTIVE`). |
+| `DELETE` | `/v1/commercial/routes/planned/{planned_route_id}` | Deletes a **planned route** still in creation. |
+| `POST` | `/v1/commercial/routes/planned/{planned_route_id}/points` | Adds a **stop** to a route in creation. |
+| `PATCH` | `/v1/commercial/routes/planned/{planned_route_id}/points/{planned_point_id}` | Edits a **stop** of a route in creation. |
+| `DELETE` | `/v1/commercial/routes/planned/{planned_route_id}/points/{planned_point_id}` | Removes a **stop** from a route in creation. |
+| `GET` | `/v1/commercial/routes/planned/{planned_route_id}/optimization` | In what **order** the route was worth doing, measured on the streets. |
+| `POST` | `/v1/commercial/routes/planned/{planned_route_id}/repeat` | Runs a **route** again on another day, in its current or optimized order. |
+
+### Plan from Sales
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/commercial/plan/{dataset_id}` | **Visit plan** derived from a sales load: clients split into days and ordered. |
+| `POST` | `/v1/commercial/plan/{dataset_id}/by-seller` | One **plan per seller**, from each seller's own portfolio. |
+
+### Executed Routes
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/commercial/routes/executed` | A seller **starts** a route. |
+| `GET` | `/v1/commercial/routes/executed` | Lists the **executed routes**. |
+| `POST` | `/v1/commercial/routes/executed/points` | Reports a **position** or a **visit** on an open route. |
+| `GET` | `/v1/commercial/routes/executed/last-location` | Where each **seller** last reported from. |
+| `GET` | `/v1/commercial/routes/executed/{executed_route_id}` | One **executed route** with every reported point. |
+| `PATCH` | `/v1/commercial/routes/executed/{executed_route_id}` | A seller **ends** a route. |
+| `PATCH` | `/v1/commercial/routes/executed/{executed_route_id}/reopen` | Reopens a route closed by mistake, the same day. |
+
+### Comparison and Statistics
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/commercial/routes/comparison/{planned_route_id}` | The **plan** and its executions with their points. |
+| `GET` | `/v1/commercial/statistics/route-comparisons/{planned_route_id}` | Scores every **execution** of a plan. |
+| `GET` | `/v1/commercial/statistics/sellers/{seller}/points-visited` | Every **point** a seller reported in a period. |
+| `GET` | `/v1/commercial/statistics/day/{day}` | What the **field** did on one day. |
+
+### Stock of the Day on the Route
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `PUT` | `/v1/commercial/stock/day` | Loads the opening **stock** of a day. |
+| `POST` | `/v1/commercial/stock/day/from-ingest` | Opens the day from the **stock file** already loaded. |
+| `GET` | `/v1/commercial/stock/day/{day}` | What is left of the day's **stock**, per SKU. |
+
+### Route Settings
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/commercial/settings` | The routes' **start and end point**. |
+| `PUT` | `/v1/commercial/settings` | Sets the routes' **start and end point**. |
+
+### Health
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Service home page. |
+| `GET` | `/v1/commercial/health` | Service health and configuration check. |
+| `GET` | `/v1/commercial/health/tables` | State of the service's DynamoDB tables. |
+
+-----
+
+## 🗄️ Stored Data
+
+| Table | Partition key | Sort key | What it holds |
 |---|---|---|---|
-| `commercial_datasets` | `id` | — | Una carga de ventas: dueño, estado, resumen y punteros a sus archivos en S3 (los de cobros, stock, visitas, objetivos y compras enganchados) |
-| `commercial_clients` | `owner_email` | `id` | Maestro de clientes |
-| `commercial_sellers` | `owner_email` | `id` | Maestro de vendedores y el usuario con que ingresan |
-| `commercial_analytics_runs` | `id` | — | Las corridas de oportunidades |
-| `commercial_policies` | `owner_email` | — | Política comercial de la empresa (semáforo de objetivos, bolivianos por punto, parte del costo en dólares) |
-| `commercial_credit_policies` | `owner_email` | — | Política de crédito de la empresa (tramos, pérdidas, tasa, plazo) |
-| `commercial_planned_routes` | `owner_email` | `id` | Planes de ruta con sus paradas |
-| `commercial_executed_routes` | `owner_email` | `id` | Recorridos reales con cada punto reportado |
-| `commercial_daily_stock` | `owner_email` | `stock_key` | Stock con que abre el día y lo vendido en ruta |
-| `commercial_route_settings` | `owner_email` | — | Punto de partida y llegada de las rutas |
-| `commercial_parameters` | `code` | — | Los valores de negocio del servicio (ver abajo) |
+| `commercial_datasets` | `id` | — | A sales load: owner, status, summary and pointers to its files in S3 (the payments, stock, purchases, visits and objectives attached) |
+| `commercial_clients` | `owner_email` | `id` | Client master data |
+| `commercial_sellers` | `owner_email` | `id` | Seller master data and the user they sign in with |
+| `commercial_analytics_runs` | `id` | — | The opportunity runs |
+| `commercial_policies` | `owner_email` | — | The company's commercial policy (objective traffic light, bolivianos per point, share of cost in dollars) |
+| `commercial_credit_policies` | `owner_email` | — | The company's credit policy (aging buckets, losses, rate, term) |
+| `commercial_planned_routes` | `owner_email` | `id` | Route plans with their stops |
+| `commercial_executed_routes` | `owner_email` | `id` | Executed routes with every reported point |
+| `commercial_daily_stock` | `owner_email` | `stock_key` | The stock a day opens with and what was sold on the route |
+| `commercial_route_settings` | `owner_email` | — | The routes' start and end point |
+| `commercial_parameters` | `code` | — | The service's business values |
 
-### Archivos en S3 (por FILES)
+-----
 
-Bucket de FILES, prefijo `commercial/` (`BUCKET_PATH`). Cada archivo es un CSV
-con los **campos** de su contrato, no con las cabeceras en castellano. El
-contrato es `schemas/commercial.py`: de ahí salen el validador, las plantillas
-(`tools/templates/`) y estas tablas. Las filas apartadas van a
-`commercial/rejected/` con su código de motivo.
+## 📂 Files in S3
 
-### Ventas — `commercial/normalized/<uuid>.csv`
+FILES bucket, prefix `commercial/`. Each file is a CSV with the **fields** of its contract, not the Spanish template headers. The contract is `schemas/commercial.py`: the validator, the templates (`tools/templates/`) and these tables come from it. Set-aside rows go to `commercial/rejected/` with their reason code.
 
-| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+#### Sales — `commercial/normalized/<uuid>.csv`
+
+| Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
-| Fecha | `date` | fecha | sí |  |
-| Nro Factura | `order_id` | texto | sí | hasta 64 car. |
-| Cliente ID | `pos_id` | texto | la deriva el servicio | hasta 64 car. |
-| Cliente | `pos_name` | texto | sí |  |
-| Zona | `zone` | texto | no |  |
-| Ciudad | `city` | texto | no |  |
-| Region | `region` | texto | no |  |
-| Canal | `channel` | texto | no |  |
-| Vendedor | `seller` | texto | no |  |
-| Latitud | `latitude` | número | no | entre -90 y 90 |
-| Longitud | `longitude` | número | no | entre -180 y 180 |
-| Producto ID | `product_id` | texto | la deriva el servicio | hasta 64 car. |
-| Producto | `product_name` | texto | sí |  |
-| Categoria | `category` | texto | no |  |
-| Cantidad | `quantity` | número | sí | > 0 |
-| Precio Unitario | `unit_price` | número | no | ≥ 0 |
-| Costo Unitario | `unit_cost` | número | no | ≥ 0 |
-| Monto Total | `total_amount` | número | no | ≥ 0 |
-| Condicion Venta | `payment_terms` | texto | no | hasta 16 car.; uno de: CONTADO, CREDITO |
-| Plazo Dias | `credit_days` | entero | no | ≥ 0 |
-| Fecha Vencimiento | `due_date` | fecha | no |  |
-| Responsable Cobro | `collector` | texto | no |  |
-| Limite Credito | `credit_limit` | número | no | ≥ 0 |
+| Fecha | `date` | date | yes |  |
+| Nro Factura | `order_id` | text | yes | up to 64 chars |
+| Cliente ID | `pos_id` | text | derived by the service | up to 64 chars |
+| Cliente | `pos_name` | text | yes |  |
+| Zona | `zone` | text | no |  |
+| Ciudad | `city` | text | no |  |
+| Region | `region` | text | no |  |
+| Canal | `channel` | text | no |  |
+| Vendedor | `seller` | text | no |  |
+| Latitud | `latitude` | number | no | between -90 and 90 |
+| Longitud | `longitude` | number | no | between -180 and 180 |
+| Producto ID | `product_id` | text | derived by the service | up to 64 chars |
+| Producto | `product_name` | text | yes |  |
+| Categoria | `category` | text | no |  |
+| Cantidad | `quantity` | number | yes | > 0 |
+| Precio Unitario | `unit_price` | number | no | ≥ 0 |
+| Costo Unitario | `unit_cost` | number | no | ≥ 0 |
+| Monto Total | `total_amount` | number | no | ≥ 0 |
+| Condicion Venta | `payment_terms` | text | no | up to 16 chars; one of: CONTADO, CREDITO |
+| Plazo Dias | `credit_days` | integer | no | ≥ 0 |
+| Fecha Vencimiento | `due_date` | date | no |  |
+| Responsable Cobro | `collector` | text | no |  |
+| Limite Credito | `credit_limit` | number | no | ≥ 0 |
 
-### Cobros — `commercial/collections/<uuid>.csv`
+#### Payments — `commercial/collections/<uuid>.csv`
 
-| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+| Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
-| Nro Factura | `order_id` | texto | sí | hasta 64 car. |
-| Fecha Cobro | `payment_date` | fecha | sí |  |
-| Monto Cobrado | `paid_amount` | número | sí | > 0 |
-| Medio | `payment_method` | texto | no | hasta 32 car. |
-| Responsable Cobro | `collector` | texto | no |  |
+| Nro Factura | `order_id` | text | yes | up to 64 chars |
+| Fecha Cobro | `payment_date` | date | yes |  |
+| Monto Cobrado | `paid_amount` | number | yes | > 0 |
+| Medio | `payment_method` | text | no | up to 32 chars |
+| Responsable Cobro | `collector` | text | no |  |
 
-### Stock — `commercial/stock/<uuid>.csv`
+#### Stock — `commercial/stock/<uuid>.csv`
 
-| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+| Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
-| Fecha | `snapshot_date` | fecha | sí |  |
-| Producto ID | `product_id` | texto | la deriva el servicio | hasta 64 car. |
-| Producto | `product_name` | texto | sí |  |
-| Existencia | `on_hand` | número | sí | ≥ 0 |
-| Comprometido | `committed` | número | no | ≥ 0 |
-| En Transito | `in_transit` | número | no | ≥ 0 |
-| Almacen | `warehouse` | texto | no | hasta 64 car. |
-| Costo Unitario | `unit_cost` | número | no | ≥ 0 |
-| Precio de Venta | `unit_price` | número | sí | ≥ 0 |
+| Fecha | `snapshot_date` | date | yes |  |
+| Producto ID | `product_id` | text | derived by the service | up to 64 chars |
+| Producto | `product_name` | text | yes |  |
+| Existencia | `on_hand` | number | yes | ≥ 0 |
+| Comprometido | `committed` | number | no | ≥ 0 |
+| En Transito | `in_transit` | number | no | ≥ 0 |
+| Almacen | `warehouse` | text | no | up to 64 chars |
+| Costo Unitario | `unit_cost` | number | no | ≥ 0 |
+| Precio de Venta | `unit_price` | number | yes | ≥ 0 |
 
-### Compras — `commercial/purchases/<uuid>.csv`
+#### Purchases — `commercial/purchases/<uuid>.csv`
 
-| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+| Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
-| Fecha | `purchase_date` | fecha | sí |  |
-| Proveedor | `supplier` | texto | sí | hasta 128 car. |
-| Producto ID | `product_id` | texto | la deriva el servicio | hasta 64 car. |
-| Producto | `product_name` | texto | sí |  |
-| Cantidad | `quantity` | número | sí | > 0 |
-| Costo Unitario | `unit_cost` | número | sí | ≥ 0 |
-| Moneda | `currency` | texto | sí | uno de: BOB, USD, USDT |
+| Fecha | `purchase_date` | date | yes |  |
+| Proveedor | `supplier` | text | yes | up to 128 chars |
+| Producto ID | `product_id` | text | derived by the service | up to 64 chars |
+| Producto | `product_name` | text | yes |  |
+| Cantidad | `quantity` | number | yes | > 0 |
+| Costo Unitario | `unit_cost` | number | yes | ≥ 0 |
+| Moneda | `currency` | text | yes | one of: BOB, USD, USDT |
 
-### Visitas — `commercial/visits/<uuid>.csv`
+#### Visits — `commercial/visits/<uuid>.csv`
 
-| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+| Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
-| Fecha | `visit_date` | fecha | sí |  |
-| Hora | `visit_time` | texto | no | hasta 8 car. |
-| Vendedor | `seller` | texto | sí | hasta 128 car. |
-| Cliente ID | `pos_id` | texto | la deriva el servicio | hasta 64 car. |
-| Cliente | `pos_name` | texto | sí |  |
-| Latitud | `latitude` | número | no | entre -90 y 90 |
-| Longitud | `longitude` | número | no | entre -180 y 180 |
-| Resultado | `outcome` | texto | no | hasta 16 car.; uno de: VENTA, SIN_VENTA, CERRADO, NO_ENCONTRADO |
-| Nro Factura | `order_id` | texto | no | hasta 64 car. |
+| Fecha | `visit_date` | date | yes |  |
+| Hora | `visit_time` | text | no | up to 8 chars |
+| Vendedor | `seller` | text | yes | up to 128 chars |
+| Cliente ID | `pos_id` | text | derived by the service | up to 64 chars |
+| Cliente | `pos_name` | text | yes |  |
+| Latitud | `latitude` | number | no | between -90 and 90 |
+| Longitud | `longitude` | number | no | between -180 and 180 |
+| Resultado | `outcome` | text | no | up to 16 chars; one of: VENTA, SIN_VENTA, CERRADO, NO_ENCONTRADO |
+| Nro Factura | `order_id` | text | no | up to 64 chars |
 
-### Objetivos — `commercial/objectives/<uuid>.csv`
+#### Objectives — `commercial/objectives/<uuid>.csv`
 
-| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+| Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
-| Cliente ID | `pos_id` | texto | la deriva el servicio | hasta 64 car. |
-| Cliente | `pos_name` | texto | sí |  |
-| Periodo | `period` | texto | sí | hasta 7 car. |
-| Objetivo | `target_amount` | número | sí | ≥ 0 |
+| Cliente ID | `pos_id` | text | derived by the service | up to 64 chars |
+| Cliente | `pos_name` | text | yes |  |
+| Periodo | `period` | text | yes | up to 7 chars |
+| Objetivo | `target_amount` | number | yes | ≥ 0 |
 
-### Clientes — maestro (va a `commercial_clients`, no a S3)
+#### Clients — master data (goes to `commercial_clients`, not to S3)
 
-| Cabecera (plantilla) | Campo | Tipo | Obligatoria | Regla |
+| Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
-| Cliente ID | `id` | texto | sí | hasta 64 car. |
-| Cliente | `name` | texto | sí | hasta 150 car. |
-| NIT | `tax_id` | texto | no | hasta 40 car. |
-| Tipo Negocio | `client_type` | texto | no | hasta 64 car. |
-| Canal | `channel` | texto | no | hasta 64 car. |
-| Zona | `zone` | texto | no | hasta 100 car. |
-| Ciudad | `city` | texto | no | hasta 100 car. |
-| Region | `region` | texto | no | hasta 100 car. |
-| Direccion | `address` | texto | no | hasta 255 car. |
-| Latitud | `latitude` | número | no | entre -90 y 90 |
-| Longitud | `longitude` | número | no | entre -180 y 180 |
-| Telefono | `phone` | texto | no | hasta 40 car. |
-| Contacto | `contact` | texto | no | hasta 150 car. |
-| Vendedor | `seller` | texto | no | hasta 128 car. |
-| Limite Credito | `credit_limit` | número | no | ≥ 0 |
-| Cluster | `cluster` | texto | no | hasta 40 car. |
-| Supervisor | `supervisor` | texto | no | hasta 128 car. |
-| Mercado | `market` | texto | no | hasta 100 car. |
+| Cliente ID | `id` | text | yes | up to 64 chars |
+| Cliente | `name` | text | yes | up to 150 chars |
+| NIT | `tax_id` | text | no | up to 40 chars |
+| Tipo Negocio | `client_type` | text | no | up to 64 chars |
+| Canal | `channel` | text | no | up to 64 chars |
+| Zona | `zone` | text | no | up to 100 chars |
+| Ciudad | `city` | text | no | up to 100 chars |
+| Region | `region` | text | no | up to 100 chars |
+| Direccion | `address` | text | no | up to 255 chars |
+| Latitud | `latitude` | number | no | between -90 and 90 |
+| Longitud | `longitude` | number | no | between -180 and 180 |
+| Telefono | `phone` | text | no | up to 40 chars |
+| Contacto | `contact` | text | no | up to 150 chars |
+| Vendedor | `seller` | text | no | up to 128 chars |
+| Limite Credito | `credit_limit` | number | no | ≥ 0 |
+| Cluster | `cluster` | text | no | up to 40 chars |
+| Supervisor | `supervisor` | text | no | up to 128 chars |
+| Mercado | `market` | text | no | up to 100 chars |
 
-## Valores de negocio
+-----
 
-Los 86 valores que el servicio usa —umbrales, ventanas, topes, decimales,
-pesos de los modelos— viven en su tabla `commercial_parameters`, no en el
-`.env` (Rafael, 24-oct-2026: cada microservicio guarda sus parámetros en sus
-propias tablas). Los lee el bloque estándar SERVICE PARAMETERS de
-`services/utils.py` una vez por contenedor; un valor cambiado en la tabla lo
-toman los contenedores que arrancan después, sin redesplegar. Si falta uno, el
-servicio no arranca.
+## ⚙️ Business Values
 
-- **Definición y valores:** filas `commercial` de `docs/parametros.md`.
-- **Siembra:** `python -m tools.seeds.seed_service_parameters commercial --yes`.
-- **Lo que cambia por empresa** está en sus políticas (`commercial_policies`,
-  `commercial_credit_policies`), que se editan en Parámetros del portal; lo que
-  la empresa no registra cae al valor de la tabla.
+The service's business values live in the `commercial_parameters` table (one item per code),
+not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
+block at the end of `services/utils.py`, once per container; a value changed in
+the table is picked up by the containers that start afterwards. If one is
+missing, the service does not start. What each company sets lives in its policies (`commercial_policies`, `commercial_credit_policies`); what the company does not set takes the table value. Definition: the `commercial` rows of
+`docs/parametros.md`. Seed:
 
-## Variables de entorno
-
-Sólo entorno (`.env`; el despliegue lo pasa entero al Lambda, así que ningún
-valor lleva coma ni llave):
-
-| Variable | Qué es |
-|---|---|
-| `HOST`, `PORT`, `APP_ENV`, `ROOT_PATH` | Arranque de Uvicorn y prefijo detrás del gateway |
-| `SECRET_KEY`, `ALGORITHM` | Validación del JWT de AUTH |
-| `TARGET_TIMEZONE` | Zona con que se decide el día (`America/La_Paz`) |
-| `API_URL` | Gateway `api.bearsoft.com.bo`: FILES, EVENTS, QUOTES y ML_FUNCTIONS |
-| `BUCKET_NAME`, `BUCKET_PATH`, `TEMPLATES_S3_PREFIX` | Bucket de FILES, prefijo de los archivos y de las plantillas |
-| `DYNAMODB_TABLE_NAME_*` | Las tablas de arriba; `DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS` es `commercial_parameters` |
-| `REQUEST_TIMEOUT_SECONDS`, `FILES_TIMEOUT_SECONDS`, `QUOTES_TIMEOUT_SECONDS` | Esperas de red |
-| `OSRM_BASE_URL`, `OSRM_REQUEST_TIMEOUT_SECONDS` | Ruteo por calles |
-
-## Local
-
-```bash
-cd services/commercial
-python main.py            # puerto 3110, contra las tablas del .env
-python -m pytest -q       # los tests no tocan AWS: moto, sembrado desde docs/parametros.md
+```shell
+python -m tools.seeds.seed_service_parameters commercial --yes
 ```
 
-Los tests responden lo que se pide a ML_FUNCTIONS con el propio código de
-ML_FUNCTIONS (`tests/conftest.py`), así que no hay una segunda copia de ninguna
-fórmula.
+-----
+
+## 🗂️ Service Structure
+
+```txt
+commercial/
+├── controllers/
+│   ├── __init__.py
+│   ├── analytics.py
+│   ├── channels.py
+│   ├── client_card.py
+│   ├── clients.py
+│   ├── collections.py
+│   ├── commercial.py
+│   ├── common.py
+│   ├── daily_stock.py
+│   ├── dashboard.py
+│   ├── localization.py
+│   ├── objectives.py
+│   ├── optimization.py
+│   ├── optimization_settings.py
+│   ├── policies.py
+│   ├── purchases.py
+│   ├── purchases_load.py
+│   ├── sellers.py
+│   ├── stock.py
+│   └── visits.py
+├── models/
+│   ├── __init__.py
+│   ├── analytics.py
+│   ├── clients.py
+│   ├── commercial.py
+│   ├── daily_stock.py
+│   ├── localization.py
+│   ├── optimization.py
+│   ├── optimization_settings.py
+│   └── sellers.py
+├── routes/
+│   ├── __init__.py
+│   ├── analytics.py
+│   ├── areas.py
+│   ├── channels.py
+│   ├── clients.py
+│   ├── commercial.py
+│   ├── common.py
+│   ├── daily_stock.py
+│   ├── localization.py
+│   ├── optimization.py
+│   ├── optimization_settings.py
+│   └── sellers.py
+├── schemas/
+│   ├── __init__.py
+│   ├── analytics.py
+│   ├── channels.py
+│   ├── client.py
+│   ├── clients.py
+│   ├── commercial.py
+│   ├── daily_stock.py
+│   ├── dashboard.py
+│   ├── files.py
+│   ├── fx_effect.py
+│   ├── health.py
+│   ├── localization.py
+│   ├── objectives.py
+│   ├── optimization.py
+│   ├── optimization_settings.py
+│   ├── purchases.py
+│   ├── receivables.py
+│   ├── route_optimization.py
+│   ├── sellers.py
+│   └── stock.py
+├── services/
+│   ├── __init__.py
+│   ├── affinity.py
+│   ├── analytics.py
+│   ├── analytics_utils.py
+│   ├── api_exceptions.py
+│   ├── calculations.py
+│   ├── client_card.py
+│   ├── clients.py
+│   ├── collections.py
+│   ├── commercial.py
+│   ├── commercial_utils.py
+│   ├── common.py
+│   ├── concentration.py
+│   ├── crud.py
+│   ├── currency.py
+│   ├── daily_stock.py
+│   ├── dashboard.py
+│   ├── day_statistics.py
+│   ├── db_connection.py
+│   ├── efficiency.py
+│   ├── environment.py
+│   ├── exceptions.py
+│   ├── forecast.py
+│   ├── fx_effect.py
+│   ├── growth.py
+│   ├── load_contract.py
+│   ├── load_files.py
+│   ├── localization.py
+│   ├── localization_executed.py
+│   ├── localization_sources.py
+│   ├── localization_stats.py
+│   ├── logger_config.py
+│   ├── margin.py
+│   ├── month.py
+│   ├── objectives.py
+│   ├── objectives_load.py
+│   ├── optimization.py
+│   ├── optimization_settings.py
+│   ├── portfolio.py
+│   ├── purchases.py
+│   ├── purchases_load.py
+│   ├── receivables.py
+│   ├── receivables_fx.py
+│   ├── receivables_views.py
+│   ├── route_optimization.py
+│   ├── routing.py
+│   ├── security.py
+│   ├── segmentation.py
+│   ├── sellers.py
+│   ├── stock.py
+│   ├── stock_history.py
+│   ├── stock_load.py
+│   ├── utils.py
+│   ├── visits.py
+│   └── volume.py
+├── tests/
+├── .dockerignore
+├── .env
+├── .gitignore
+├── deploy.config
+├── main.py
+├── README.md
+└── requirements.txt
+```
+
+-----
+
+## 📀 Local Setup
+
+To run the service locally:
+
+1.  **Install the dependencies:**
+
+```shell
+pip install -r requirements.txt
+```
+
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `BUCKET_NAME`, `BUCKET_PATH`, `TEMPLATES_S3_PREFIX`, the tables `DYNAMODB_TABLE_NAME_*`, the timeouts and `OSRM_BASE_URL`.
+
+3.  **Start the API server:**
+
+```shell
+python main.py
+```
+
+4.  **Run the tests:**
+
+```shell
+python -m pytest -q
+pylint --fail-under=10.0 .
+```
+
+The tests never touch AWS: `tests/conftest.py` seeds the business values table in moto from `docs/parametros.md` and answers the ML-Functions calls with ML-Functions' own code.
+
+-----
+
+## 👤 Created By
+
+**Rafael Ríos Bascón**
+[raforios@gmail.com](mailto:raforios@gmail.com)

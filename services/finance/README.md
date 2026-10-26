@@ -1,115 +1,115 @@
 # 📊 Finance-Service 💰
 
-Microservicio del **Análisis Financiero** de SmartDecisions. Con cifras agregadas por cuenta —diarias, mensuales o anuales, en bolivianos— arma el Estado de Resultados y el Balance General, y proyecta los meses siguientes en tres escenarios.
+The **Financial Analysis** service of SmartDecisions. From amounts aggregated by account —daily, monthly or yearly, in bolivianos— it builds the Income Statement and the Balance Sheet, and projects the coming months in three scenarios.
 
 -----
 
-## 🎯 Propósito Principal
+## 🎯 Main Purpose
 
-El **Finance-Service** convierte los montos de cada cuenta en informes y respuestas para el gerente. Sus funcionalidades clave incluyen:
+The **Finance-Service** turns the amounts of each account into reports and answers for the manager. Its key features:
 
-  * **Catálogo de Cuentas:** Uno solo, de BearSoft; sólo el `ADMIN` lo cambia.
-  * **Tasas de Ley:** IVA, IT e IUE con la fecha desde la que rigen; un mes se calcula con la tasa vigente en ese mes.
-  * **Carga de Montos:** Por API o por la plantilla, con el historial de cargas; cada monto se corrige o se borra, y un período se vacía.
-  * **Informe:** Estado de Resultados, impuestos, Balance General e indicadores por mes y año, calculado al pedirlo; cada línea dice si fue cargada o calculada.
-  * **Proyección:** Tres escenarios (peor, realista, mejor) con la serie proyectada por ML-Functions y los porcentajes que el gerente puede cambiar.
-  * **Modelo de Negocio:** Lo que el cliente describe de su negocio, para leer sus números.
-  * **Moneda:** Todo en bolivianos; dólar oficial y USDT de QUOTES como referencia.
-
------
-
-## 🛠️ Tecnologías Utilizadas
-
-  * **Lenguaje:** Python 3.14 🐍
-  * **Framework Web:** FastAPI ✨
-  * **Servidor ASGI:** Uvicorn 🚀
-  * **Base de Datos:** AWS DynamoDB (`boto3`)
-  * **Lectura de Plantillas:** pandas y `openpyxl`, a través de FILES
-  * **Validación de Datos:** Pydantic V2
-  * **Plataforma Cloud:** AWS Lambda (`Mangum`) detrás de `api.bearsoft.com.bo`
+  * **Chart of Accounts:** A single one, owned by BearSoft; only the `ADMIN` changes it.
+  * **Statutory Rates:** VAT (IVA), IT and IUE with the date each applies from; a month is computed with the rate in force that month.
+  * **Amount Loads:** By API or by the template, with the load history; each amount can be corrected or removed, and a period emptied.
+  * **Report:** Income Statement, taxes, Balance Sheet and ratios by month and year, computed on request; each line says whether it was loaded or calculated.
+  * **Projection:** Three scenarios (worst, realistic, best) with the series projected by ML-Functions and percentages the manager can change.
+  * **Business Model:** What the client describes about their business, to read their figures.
+  * **Currency:** Everything in bolivianos; official dollar and USDT from QUOTES as reference.
 
 -----
 
-## 🚀 Endpoints de la API
+## 🛠️ Technologies
 
-A continuación se listan los **endpoints** de la API, agrupados por su funcionalidad. Todos exigen `Authorization: Bearer <jwt>` salvo que se indique otra cosa.
-
-### Catálogo y Tasas de Ley
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/v1/finance/accounts` | El **catálogo de cuentas**. |
-| `POST` | `/v1/finance/accounts` | Agrega una **cuenta** al catálogo. Sólo `ADMIN`. |
-| `PATCH` | `/v1/finance/accounts/{account_code}` | Cambia el nombre de una **cuenta**. Sólo `ADMIN`. |
-| `DELETE` | `/v1/finance/accounts/{account_code}` | Quita una **cuenta** sin montos cargados. Sólo `ADMIN`. |
-| `GET` | `/v1/finance/law-parameters` | Las **tasas de ley**, con el día desde el que rige cada una. |
-| `POST` | `/v1/finance/law-parameters` | Registra una **tasa** desde el día en que rige. Sólo `ADMIN`. |
-
-### Cargas y Montos
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `POST` | `/v1/finance/loads` | Carga **montos** por API. `MANAGER`. |
-| `POST` | `/v1/finance/loads/file` | Carga **montos** desde la plantilla subida a FILES. `MANAGER`. |
-| `GET` | `/v1/finance/loads` | Las **cargas** del cliente, la más reciente primero. |
-| `GET` | `/v1/finance/entries` | Los **montos** del cliente. |
-| `PATCH` | `/v1/finance/entries` | Corrige un **monto**. |
-| `DELETE` | `/v1/finance/entries` | Elimina un **monto**. |
-| `DELETE` | `/v1/finance/periods` | Vacía un **período**. |
-
-### Informe, Proyección y Parámetros
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/v1/finance/report` | El **informe financiero**: Estado de Resultados, impuestos, Balance e indicadores por mes y año. |
-| `GET` | `/v1/finance/projection` | La **proyección** de los meses siguientes en tres escenarios. |
-| `GET` | `/v1/finance/parameters` | Los **parámetros** que el cliente puede fijar, junto a la sugerencia. |
-| `PUT` | `/v1/finance/parameters/{parameter_code}` | Fija el valor que el cliente eligió para un **parámetro**. |
-| `GET` | `/v1/finance/suggested-parameters` | Los valores que BearSoft **sugiere** a todos los clientes. |
-| `PUT` | `/v1/finance/suggested-parameters` | Fija un valor **sugerido**. Sólo `ADMIN`. |
-| `GET` | `/v1/finance/business-model` | El **modelo de negocio** que describió el cliente. |
-| `PUT` | `/v1/finance/business-model` | Guarda el **modelo de negocio** del cliente. |
-
-### Salud
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/` | Página de inicio del servicio. |
-| `GET` | `/v1/finance/health` | Salud del servicio y validación de su configuración. |
-| `GET` | `/v1/finance/health/tables` | Estado de las tablas DynamoDB del servicio. |
+  * **Language:** Python 3.14 🐍
+  * **Web Framework:** FastAPI ✨
+  * **ASGI Server:** Uvicorn 🚀
+  * **Database:** AWS DynamoDB (`boto3`)
+  * **Template Reading:** through FILES
+  * **Data Validation:** Pydantic V2
+  * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
 
 -----
 
-## 🗄️ Datos que guarda
+## 🚀 API Endpoints
 
-| Tabla | Partición | Orden | Qué guarda |
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` unless stated otherwise.
+
+### Chart of Accounts and Statutory Rates
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/finance/accounts` | The **chart of accounts**. |
+| `POST` | `/v1/finance/accounts` | Adds an **account** to the chart. `ADMIN` only. |
+| `PATCH` | `/v1/finance/accounts/{account_code}` | Renames an **account**. `ADMIN` only. |
+| `DELETE` | `/v1/finance/accounts/{account_code}` | Removes an **account** with no amounts loaded. `ADMIN` only. |
+| `GET` | `/v1/finance/law-parameters` | The **statutory rates**, with the day each one applies from. |
+| `POST` | `/v1/finance/law-parameters` | Sets a **rate** from the day it applies. `ADMIN` only. |
+
+### Loads and Amounts
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/finance/loads` | Loads **amounts** by API. `MANAGER`. |
+| `POST` | `/v1/finance/loads/file` | Loads **amounts** from the template uploaded to FILES. `MANAGER`. |
+| `GET` | `/v1/finance/loads` | The client's **loads**, newest first. |
+| `GET` | `/v1/finance/entries` | The client's **amounts**. |
+| `PATCH` | `/v1/finance/entries` | Corrects one **amount**. |
+| `DELETE` | `/v1/finance/entries` | Removes one **amount**. |
+| `DELETE` | `/v1/finance/periods` | Empties a **period**. |
+
+### Report, Projection and Parameters
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/finance/report` | The **financial report**: Income Statement, taxes, Balance Sheet and ratios by month and year. |
+| `GET` | `/v1/finance/projection` | How the next months may go, in three **scenarios**. |
+| `GET` | `/v1/finance/parameters` | The **parameters** the client can set, next to the suggestion. |
+| `PUT` | `/v1/finance/parameters/{parameter_code}` | Sets the value the client chose for a **parameter**. |
+| `GET` | `/v1/finance/suggested-parameters` | The values BearSoft **suggests** to every client. |
+| `PUT` | `/v1/finance/suggested-parameters` | Sets a **suggested** value. `ADMIN` only. |
+| `GET` | `/v1/finance/business-model` | The **business model** the client described. |
+| `PUT` | `/v1/finance/business-model` | Saves the client's **business model**. |
+
+### Health
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Service home page. |
+| `GET` | `/v1/finance/health` | Service health and configuration check. |
+| `GET` | `/v1/finance/health/tables` | State of the service's DynamoDB tables. |
+
+-----
+
+## 🗄️ Stored Data
+
+| Table | Partition key | Sort key | What it holds |
 |---|---|---|---|
-| `finance_accounts` | `account_code` | — | El catálogo de cuentas |
-| `finance_law_parameters` | `parameter_code` | `valid_from` | Las tasas de ley y desde cuándo rigen |
-| `finance_loads` | `client` | `load_id` | El historial de cargas |
-| `finance_entries` | `client` | `entry_key` | Los montos por cuenta y período (índice `account_code-index`) |
-| `finance_suggested_parameters` | `parameter_code` | — | Los valores que BearSoft sugiere |
-| `finance_client_parameters` | `client` | `parameter_code` | Los valores que cada cliente eligió |
-| `finance_business_models` | `client` | — | El modelo de negocio de cada cliente |
-| `finance_parameters` | `code` | — | Los valores de negocio del servicio |
+| `finance_accounts` | `account_code` | — | The chart of accounts |
+| `finance_law_parameters` | `parameter_code` | `valid_from` | The statutory rates and since when they apply |
+| `finance_loads` | `client` | `load_id` | The load history |
+| `finance_entries` | `client` | `entry_key` | The amounts by account and period (index `account_code-index`) |
+| `finance_suggested_parameters` | `parameter_code` | — | The values BearSoft suggests |
+| `finance_client_parameters` | `client` | `parameter_code` | The values each client chose |
+| `finance_business_models` | `client` | — | Each client's business model |
+| `finance_parameters` | `code` | — | The service's business values |
 
-El catálogo y las tasas se siembran desde el contrato aprobado (`docs/cambios/smartdecisions/contrato.md`):
+The chart of accounts and the rates are seeded from the approved contract (`docs/cambios/smartdecisions/contrato.md`):
 
 ```shell
-python -m tools.seeds.seed_finance          # simulación
+python -m tools.seeds.seed_finance          # dry run
 python -m tools.seeds.seed_finance --yes
 ```
 
 -----
 
-## ⚙️ Valores de negocio
+## ⚙️ Business Values
 
-Los valores de negocio del servicio viven en la tabla `finance_parameters` (un ítem por
-código), no en el `.env`. Los lee `load_parameters`, del bloque SERVICE
-PARAMETERS al final de `services/utils.py`, una vez por contenedor; un valor
-cambiado en la tabla lo toman los contenedores que arrancan después. Si falta
-uno, el servicio no arranca. Lo de cada cliente está en `finance_client_parameters`. Definición: filas `finance` de
-`docs/parametros.md`. Siembra:
+The service's business values live in the `finance_parameters` table (one item per code),
+not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
+block at the end of `services/utils.py`, once per container; a value changed in
+the table is picked up by the containers that start afterwards. If one is
+missing, the service does not start. What each client sets lives in `finance_client_parameters`. Definition: the `finance` rows of
+`docs/parametros.md`. Seed:
 
 ```shell
 python -m tools.seeds.seed_service_parameters finance --yes
@@ -117,7 +117,7 @@ python -m tools.seeds.seed_service_parameters finance --yes
 
 -----
 
-## 🗂️ Estructura del Microservicio
+## 🗂️ Service Structure
 
 ```txt
 finance/
@@ -175,25 +175,25 @@ finance/
 
 -----
 
-## 📀 Ejecución Local
+## 📀 Local Setup
 
-Para ejecutar el microservicio localmente, sigue los siguientes pasos:
+To run the service locally:
 
-1.  **Instala las dependencias:**
+1.  **Install the dependencies:**
 
 ```shell
 pip install -r requirements.txt
 ```
 
-2.  **Configura el entorno:** Crea el archivo `.env` con `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `BUCKET_NAME`, `BUCKET_PATH`, las tablas `DYNAMODB_TABLE_NAME_*` y los tiempos de espera.
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `BUCKET_NAME`, `BUCKET_PATH`, the tables `DYNAMODB_TABLE_NAME_*` and the timeouts.
 
-3.  **Ejecuta el servidor de la API:**
+3.  **Start the API server:**
 
 ```shell
 python main.py
 ```
 
-4.  **Ejecuta las pruebas:**
+4.  **Run the tests:**
 
 ```shell
 python -m pytest -q
@@ -202,7 +202,7 @@ pylint --fail-under=10.0 .
 
 -----
 
-## 👤 Creado Por
+## 👤 Created By
 
 **Rafael Ríos Bascón**
 [raforios@gmail.com](mailto:raforios@gmail.com)

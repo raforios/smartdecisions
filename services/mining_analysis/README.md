@@ -1,282 +1,264 @@
 # ⛏️ Mining-Analysis-Service 📊
 
-Bienvenido al microservicio de **Análisis Minero**, un componente estratégico dentro de la arquitectura de la API **SMARTBEAR**. Este servicio actúa como un **Data Warehouse** especializado en el sector minero, permitiendo la ingesta, normalización y análisis avanzado tanto de cotizaciones de minerales como de la recaudación de regalías mineras, impulsando la generación de KPI's críticos.
+The **mining analysis** service of SmartDecisions. It stores and serves the official mineral quotations, the market prices that anticipate them and the royalty scales, and answers whether to sell today or wait.
 
----
+-----
 
-## 🎯 Propósito Principal
+## 🎯 Main Purpose
 
-El **Mining-Analysis-Service** está diseñado para centralizar la inteligencia de mercado y la gestión financiera del sector minero. Su propósito es transformar datos operativos brutos en información estratégica para la toma de decisiones. Sus funcionalidades clave incluyen:
+The **Mining-Analysis-Service** centralizes mineral price information. Its key features:
 
-* **Motor ETL Especializado:** Capacidad dual para procesar archivos CSV (cotizaciones diarias con limpieza automática de formatos numéricos latinos) y archivos Excel (liquidaciones y transacciones de regalías procesadas directamente en memoria).
-* **Data Warehouse Relacional:** Almacena de forma eficiente y normalizada el catálogo de minerales (`t_minerals`), histórico de precios (`t_mining_prices`), padrón de operadores mineros (`t_companies`) y el desglose de distribución de regalías a nivel departamental y municipal (`t_royalties` y `t_royalty_transactions`).
-* **Interconexión Institucional:** Provee **endpoints** seguros para que otras instituciones puedan consultar históricos de precios y resúmenes de recaudación de manera estandarizada.
-* **Módulo de BI Integrado:** Diseñado para alimentar interfaces analíticas (como Streamlit), entregando estructuras de datos optimizadas para visualizaciones de tendencias, variaciones porcentuales (YOY/MoM) y distribución geográfica de recursos.
-* **Auditoría y Trazabilidad:** Identificación precisa del usuario que ejecuta las cargas masivas con registros detallados en los logs del sistema, asegurando el seguimiento de operaciones financieras sensibles.
+  * **Official Quotations:** The fortnightly quotations per mineral and the daily (**Minerales_01**) and fortnightly (**Minerales_02**) reports, falling back to the latest available data.
+  * **Public Reports:** The same reports without JWT, as JSON, PDF and PNG, for the institutional website.
+  * **Market Prices:** Daily sync of the LBMA fixings (via Westmetall) and LME cash, and the estimate of the official quotation of the current fortnight.
+  * **Price Projection:** Each mineral's series projected by ML-Functions (`/v1/prediction/forecast/compare`), with its confidence.
+  * **Royalties:** The Art. 227 scales per mineral.
+  * **Sell Today or Wait:** Compares both ends in bolivianos with the projected dollar from QUOTES.
+  * **Switchable Persistence:** DynamoDB on AWS or MySQL locally, according to `PERSISTENCE_BACKEND`.
 
----
+-----
 
-## 🛠️ Tecnologías Utilizadas
+## 🛠️ Technologies
 
-Este microservicio sigue los estándares de alta disponibilidad, precisión financiera y robustez de la arquitectura SmartDecisions:
+  * **Language:** Python 3.14 🐍
+  * **Web Framework:** FastAPI ✨
+  * **ASGI Server:** Uvicorn 🚀
+  * **Database:** AWS DynamoDB (`boto3`) on AWS; MySQL (SQLAlchemy) locally
+  * **Data Validation:** Pydantic V2
+  * **Data Processing:** pandas 🐼
+  * **Reports:** PDF and PNG over the official templates
+  * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
 
-* **Lenguaje:** Python 3.14 🐍
-* **Framework Web:** FastAPI ✨
-* **Servidor ASGI:** Uvicorn 🚀
-* **ORM & Base de Datos:** SQLAlchemy (MySQL)
-* **Validación de Datos:** Pydantic
-* **Procesamiento de Datos:** Pandas 🐼
-* **Seguridad:** JWT (Integrado con Central Auth Service)
-* **Contenedorización:** Docker 🐳
+-----
 
----
+## 🚀 API Endpoints
 
-## 🚀 Endpoints de la API
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` except the public reports, meant for `mineria.gob.bo` and other anonymous consumers; the default CORS regex already covers `*.mineria.gob.bo`, `*.bearsoft.com.bo`, `*.cloudfront.net` and `localhost`, and other domains go in `CORS_ALLOWED_ORIGINS` (CSV list) or `CORS_ALLOWED_ORIGIN_REGEX`.
 
-A continuación se listan los **endpoints** principales de la API, agrupados por su dominio de datos para una mejor referencia.
+### Quotations, Projection and Market
 
-### Cotizaciones, proyección y mercado (con JWT)
-
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET`  | `/v1/mining-analysis/prices` | Todas las cotizaciones oficiales guardadas, con los datos de cada mineral. |
-| `GET`  | `/v1/mining-analysis/reports/daily?date=YYYY-MM-DD` | La cotización más reciente de cada mineral del catálogo hasta esa fecha (`is_fallback` cuando se usa un día anterior), con la variación frente al día previo. Plantilla **Minerales_01**. |
-| `GET`  | `/v1/mining-analysis/reports/biweekly?year=YYYY&month=MM&half=1\|2` | Promedio de la quincena por mineral; si no hay datos, retrocede hasta la última quincena con cotizaciones. Plantilla **Minerales_02**. |
-| `GET`  | `/v1/mining-analysis/forecast/prices` | Proyección del precio de un mineral, pedida a ML_FUNCTIONS (`/v1/prediction/forecast/compare`), con su confianza. |
-| `POST` | `/v1/mining-analysis/market/sync` | Lee las fuentes públicas de mercado (LBMA vía Westmetall, LME cash) y guarda los días que falten. |
-| `GET`  | `/v1/mining-analysis/market/estimate` | La cotización oficial a la que va cada mineral, estimada con el mercado de la quincena. |
-| `GET`  | `/v1/mining-analysis/market/prices/{mineral_id}` | Serie diaria de mercado de un mineral. |
-| `GET · PUT` | `/v1/mining-analysis/royalty-rules` | Las escalas de regalía vigentes (Art. 227) y su alta o reemplazo por mineral. |
-| `POST` | `/v1/mining-analysis/sale-scenario` | «Vender hoy o esperar»: compara las dos puntas en bolivianos con el dólar proyectado que da QUOTES (sólo `ADMIN`; se mudó desde QUOTES el 23-oct-2026). |
+| `GET` | `/v1/mining-analysis/prices` | Every stored official **quotation**, with each mineral's data. |
+| `GET` | `/v1/mining-analysis/reports/daily?date=YYYY-MM-DD` | The latest **quotation** of each catalogue mineral up to that date (`is_fallback` when an earlier day is used), with the change against the previous day. Template **Minerales_01**. |
+| `GET` | `/v1/mining-analysis/reports/biweekly?year=YYYY&month=MM&half=1\|2` | The fortnight **average** per mineral; with no data, it goes back to the latest fortnight with quotations. Template **Minerales_02**. |
+| `GET` | `/v1/mining-analysis/forecast/prices` | A mineral's **price projection**, with its confidence. |
+| `POST` | `/v1/mining-analysis/market/sync` | Reads the public **market sources** (LBMA via Westmetall, LME cash) and stores the missing days. |
+| `GET` | `/v1/mining-analysis/market/estimate` | The **official quotation** each mineral is heading to, estimated from the fortnight's market. |
+| `GET` | `/v1/mining-analysis/market/prices/{mineral_id}` | A mineral's daily **market series**. |
+| `GET` | `/v1/mining-analysis/royalty-rules` | The **royalty scales** in force (Art. 227). |
+| `PUT` | `/v1/mining-analysis/royalty-rules` | Creates or replaces a mineral's **royalty scale**. |
+| `POST` | `/v1/mining-analysis/sale-scenario` | **Sell today or wait**: compares both ends in bolivianos. `ADMIN` only. |
 
-### Endpoints públicos (sin JWT) para el sitio institucional
+### Public Reports (no JWT)
 
-Pensados para `mineria.gob.bo` y otros consumidores anónimos. El default del regex CORS ya cubre `*.mineria.gob.bo` (además de `*.bearsoft.com.bo`, `*.cloudfront.net` y `localhost`), así que no requieren configuración extra. Para otros dominios de terceros, agrégalos a `CORS_ALLOWED_ORIGINS` (lista CSV) o ajusta `CORS_ALLOWED_ORIGIN_REGEX`.
-
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET`  | `/v1/mining-analysis/public/reports/daily?date=YYYY-MM-DD` | Idéntico a `/reports/daily` pero anónimo. |
-| `GET`  | `/v1/mining-analysis/public/reports/biweekly?year=&month=&half=` | Idéntico a `/reports/biweekly` pero anónimo. |
-| `GET`  | `/v1/mining-analysis/public/reports/biweekly/history?from=YYYY-MM-DD&to=YYYY-MM-DD` | Serie histórica de quincenas con datos, ordenada cronológicamente. `from`/`to` opcionales (defaults a `MIN`/`MAX` de `t_mining_prices`). |
-| `GET`  | `/v1/mining-analysis/public/reports/daily/{png\|pdf}?date=YYYY-MM-DD` | Reporte diario renderizado sobre la plantilla **Minerales_01** (binario, descarga directa). |
-| `GET`  | `/v1/mining-analysis/public/reports/biweekly/{png\|pdf}?year=&month=&half=` | Reporte quincenal renderizado sobre la plantilla **Minerales_02** (binario, descarga directa). |
+| `GET` | `/v1/mining-analysis/public/reports/daily?date=YYYY-MM-DD` | Same as `/reports/daily`, anonymous. |
+| `GET` | `/v1/mining-analysis/public/reports/biweekly?year=&month=&half=` | Same as `/reports/biweekly`, anonymous. |
+| `GET` | `/v1/mining-analysis/public/reports/biweekly/history?from=YYYY-MM-DD&to=YYYY-MM-DD` | Historical series of the **fortnights** with data, in chronological order; `from` and `to` are optional. |
+| `GET` | `/v1/mining-analysis/public/reports/daily/png` | Daily **report** rendered as PNG (template **Minerales_01**). |
+| `GET` | `/v1/mining-analysis/public/reports/daily/pdf` | Daily **report** rendered as PDF (template **Minerales_01**). |
+| `GET` | `/v1/mining-analysis/public/reports/biweekly/png` | Fortnightly **report** rendered as PNG (template **Minerales_02**). |
+| `GET` | `/v1/mining-analysis/public/reports/biweekly/pdf` | Fortnightly **report** rendered as PDF (template **Minerales_02**). |
 
-### Utilidades y Salud
+### Health
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | Healthcheck del servicio, estado de la conexión a la base de datos y validación del entorno. |
-| `GET` | `/docs` | Documentación interactiva Swagger UI con esquemas detallados de Request/Response. |
+| `GET` | `/` | Service home page. |
+| `GET` | `/v1/mining-analysis/health` | Service health and configuration check. |
+| `GET` | `/v1/mining-analysis/health/tables` | State of the service's DynamoDB tables. |
 
----
+-----
 
-## 🗄️ Datos que guarda
+## 🗄️ Stored Data
 
-En DynamoDB (tablas creadas con `services/ci/api/create_dynamodb_tables.sh`;
-modelos en `models/mining_analysis_dyb.py` y `models/market_prices.py`):
+On DynamoDB (models in `models/mining_analysis_dyb.py` and `models/market_prices.py`):
 
-| Tabla | Partición | Orden | Qué guarda |
+| Table | Partition key | Sort key | What it holds |
 |---|---|---|---|
-| `minerals` | `mineral_id` | — | Catálogo: `name`, `unit`, `chemical_symbol`, `quoted_in`, `method`, `created_at` |
-| `mining_prices` | `mineral_id` | `date` | Cotización oficial quincenal: `price_low`, `price_high`, `created_at` |
-| `mining_market_prices` | `mineral_id` | `date` | Precio de mercado diario (LME, LBMA): `price`, `source`, `retrieved_at` |
-| `mining_royalty_rules` | `mineral_id` | — | Alícuota de regalía: `slope`, `intercept`, `min_rate`, `max_rate`, `internal_factor`, `legal_basis`, `updated_at` |
-| `mining_analysis_parameters` | `code` | — | Los valores de negocio del servicio (ver abajo) |
+| `minerals` | `mineral_id` | — | Catalogue: `name`, `unit`, `chemical_symbol`, `quoted_in`, `method`, `created_at` |
+| `mining_prices` | `mineral_id` | `date` | Official fortnightly quotation: `price_low`, `price_high`, `created_at` |
+| `mining_market_prices` | `mineral_id` | `date` | Daily market price (LME, LBMA): `price`, `source`, `retrieved_at` |
+| `mining_royalty_rules` | `mineral_id` | — | Royalty rate: `slope`, `intercept`, `min_rate`, `max_rate`, `internal_factor`, `legal_basis`, `updated_at` |
+| `mining_analysis_parameters` | `code` | — | The service's business values |
 
-**Valores de negocio.** Los 20 valores del servicio —quincenas de historia,
-ventanas y umbrales de confianza de la proyección, decimales, días que repara
-la sincronización de mercado— viven en `mining_analysis_parameters`, no en el
-`.env`. Los lee el bloque estándar SERVICE PARAMETERS de `services/utils.py`.
-Definición: filas `mining_analysis` de `docs/parametros.md`; siembra:
-`python -m tools.seeds.seed_service_parameters mining_analysis --yes`.
+The sort key is what reads "this mineral between these two dates" in a single query. The relational data (departments, municipalities, companies, royalty transactions and payments) lives in the local MySQL, in `models/mining_analysis.py`, and is used only by the `*_sql.py` modules.
 
-Lo relacional (departamentos, municipios, empresas, transacciones y pagos de
-regalías) vive en MySQL local, en `models/mining_analysis.py`, y se usa sólo
-por los módulos `*_sql.py`.
+-----
 
-## 🗂️ Estructura del Microservicio
+## ⚙️ Business Values
 
-Cinco capas; `mining_analysis.py` es el principal en cada una (cotizaciones
-oficiales y reportes) y los complementos se nombran por lo que hacen:
-
-- `market.py` (rutas, controlador y esquema): fuentes de mercado, estimación,
-  escalas de regalía y «vender hoy o esperar».
-- `public_reports.py`: los reportes anónimos y su PDF/PNG.
-- En `services/`: `market_sources.py` (LBMA, LME), `official_estimate.py`,
-  `official_reports.py`, `price_forecast.py` (lo que pide a ML_FUNCTIONS),
-  `prices_store.py` con `prices_dyb.py` y `db_connection_sql.py` (persistencia
-  conmutable DynamoDB/MySQL), `reports_renderer.py`, `royalty_rules.py` y
-  `sale_scenario.py`.
-- `scripts/`: la carga quincenal local (se retira cuando corra con
-  `tools/etl_minerals/`).
-
----
-
-## 📀 Ejecución Local
-
-Para levantar el microservicio en tu entorno de desarrollo local, sigue estos pasos:
-
-1. **Instalar dependencias:**
-   ```shell
-   pip install -r requirements.txt
-   ```
-
-2. **Configurar Variables de Entorno:** Renombra o crea un archivo `.env` en la raíz del proyecto y ajusta las credenciales de conexión a MySQL, así como la URL del servicio de autenticación central.
-
-3. **Iniciar el Servicio:**
-   ```shell
-   python main.py
-   ```
-   *(El servidor se iniciará típicamente en `http://localhost:3000`, y podrás acceder a la documentación en `/docs`).*
-
----
-
-## 🧰 Scripts Operativos
-
-Viven en `scripts/` y se ejecutan como módulos, para que respeten el
-`PYTHONPATH` del microservicio. **Los que escriben exigen `--yes`**; sin esa
-bandera imprimen el plan y salen sin tocar nada.
-
-### La rutina de cada quincena, en orden
-
-Estos tres se usan juntos, cada 15 días, cuando llega el PDF del Ministerio:
-
-**1. `audit_decimals.py` — antes de cargar.** Solo lee. El PDF oficial publica
-con dos decimales (`WÓLFRAM 64205.75`); al re-tipearlos al Excel consolidado a
-veces se pierden y quedan enteros. Este auditor recorre cada hoja `Diario`,
-cruza el promedio que trae el Excel contra el promedio aritmético de los días, y
-lista las celdas que hay que verificar contra el PDF. No corrige nada: dice
-dónde mirar.
+The service's business values live in the `mining_analysis_parameters` table (one item per code),
+not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
+block at the end of `services/utils.py`, once per container; a value changed in
+the table is picked up by the containers that start afterwards. If one is
+missing, the service does not start. Definition: the `mining_analysis` rows of
+`docs/parametros.md`. Seed:
 
 ```shell
-python -m scripts.audit_decimals                       # usa data/cotizaciones_mineras_bolivia.xlsx
-python -m scripts.audit_decimals --source /ruta.xlsx --tolerance 0.01
+python -m tools.seeds.seed_service_parameters mining_analysis --yes
 ```
 
-**2. `ingest_pdf_xlsx.py` — la carga.** Lee las hojas `{Mes} Q{1|2} - Diario`
-del Excel consolidado y las inserta en `t_mining_prices`. Idempotente: omite las
-fechas que ya tienen registro, así que volver a correrlo sobre el mismo archivo
-no duplica nada.
+-----
 
-```shell
-python -m scripts.ingest_pdf_xlsx --source /ruta/cotizaciones_mineras_bolivia.xlsx --yes
-```
+## ☁️ Switchable Persistence
 
-**3. `migrate_to_dynamodb.py` — publicar a la nube.** El ETL escribe en el
-relacional y el servicio desplegado lee de DynamoDB, así que la quincena recién
-cargada hay que empujarla. Idempotente: cada escritura es un put por clave.
+The service runs on **MySQL or DynamoDB**, according to `PERSISTENCE_BACKEND` in `.env`:
 
-```shell
-python -m scripts.migrate_to_dynamodb            # informa qué copiaría
-python -m scripts.migrate_to_dynamodb --yes      # copia y verifica
-```
-
-### El que no se ejecuta
-
-**`cli_support.py` — no se ejecuta.** Es el andamiaje que comparten los demás:
-abre la sesión de base de datos, la cierra bien y aborta si el archivo fuente no
-existe. Estaba escrito dos veces con formas distintas; vive acá una sola vez.
-
----
-
-## 🧪 Pruebas
-
-```shell
-pytest -v
-```
-
-Suite enfocada en:
-- `clean_currency_pro` (formato anglo vs. europeo, casos límite y la regresión Bismuto `17.54 → 1754`).
-- Servicio de reporte diario con fallback al registro previo más reciente.
-- Servicio de reporte quincenal con promedio sobre días disponibles, fallback al periodo anterior y manejo de `half` inválido.
-- Idempotencia del seed `ensure_official_minerals`.
-
----
-
-## ☁️ Despliegue y persistencia conmutable
-
-El servicio corre sobre **MySQL/PostgreSQL o DynamoDB**, según
-`PERSISTENCE_BACKEND` en el `.env`:
-
-| Valor | Qué usa |
+| Value | What it uses |
 |---|---|
-| `sql` | El motor relacional de `DB_HOST`/`DATABASE`. |
-| `dynamodb` | Las tablas `minerals` y `mining_prices`. |
+| `sql` | The relational engine of `DB_HOST` / `DATABASE`. |
+| `dynamodb` | The DynamoDB tables above. |
 
-**En AWS tiene que ser `dynamodb`:** no hay RDS levantado. Para trabajar local
-contra el MySQL del Docker, cambia el valor a `sql`. La suite de pruebas queda
-fijada al camino SQL desde `tests/conftest.py`, así que no depende de lo que
-diga el `.env` ni toca AWS.
+**On AWS it must be `dynamodb`:** there is no RDS. To work locally against the Docker MySQL, set it to `sql`. The test suite is pinned to the SQL path by `tests/conftest.py`, so it does not depend on `.env` and never touches AWS.
 
-### Tablas
+-----
 
-Las crea `services/ci/api/create_dynamodb_tables.sh`, que sabe de claves
-compuestas:
+## 🧰 Operational Scripts
 
-| Tabla | Partición | Ordenamiento |
-|---|---|---|
-| `minerals` | `mineral_id` (S) | — |
-| `mining_prices` | `mineral_id` (S) | `date` (S, ISO) |
+They live in `scripts/` and run as modules, so they keep the service's `PYTHONPATH`. **The ones that write require `--yes`**; without it they print the plan and exit without touching anything.
 
-La clave de ordenamiento es lo que permite leer "este mineral entre estas dos
-fechas" en una sola consulta, que es como se lee siempre.
+#### The fortnightly routine, in order
 
-### Permisos
+Used together every 15 days, when the Ministry PDF arrives:
 
-El rol del Lambda recibe `AmazonDynamoDBFullAccess` del propio
-`build_and_deploy.sh`, así que las dos tablas quedan cubiertas sin pasos
-extra.
+**1. `audit_decimals.py` — before loading.** Read-only. The official PDF publishes two decimals (`WÓLFRAM 64205.75`); retyping them into the consolidated Excel sometimes drops them. It walks every `Diario` sheet, checks the average in the Excel against the arithmetic mean of the days, and lists the cells to verify against the PDF.
 
-### Proceso quincenal del boletín (Ministerio)
+```shell
+python -m scripts.audit_decimals                       # uses data/cotizaciones_mineras_bolivia.xlsx
+python -m scripts.audit_decimals --source /path.xlsx --tolerance 0.01
+```
 
-El ETL escribe **solo** en el relacional; las lecturas sí saben de los dos
-motores. Hasta que la escritura también pase por `prices_store`, la quincena se
-carga contra MySQL local y después se empuja a la nube:
+**2. `ingest_pdf_xlsx.py` — the load.** Reads the `{Mes} Q{1|2} - Diario` sheets of the consolidated Excel and inserts them into `t_mining_prices`. Idempotent: dates already stored are skipped.
+
+```shell
+python -m scripts.ingest_pdf_xlsx --source /path/cotizaciones_mineras_bolivia.xlsx --yes
+```
+
+**3. `migrate_to_dynamodb.py` — publishing.** The load writes to the relational database and the deployed service reads DynamoDB, so the new fortnight has to be pushed. Idempotent: every write is a put by key, using as partition the same numeric id the SQL path exposes (`str(row.id)`).
+
+```shell
+python -m scripts.migrate_to_dynamodb            # reports what it would copy
+python -m scripts.migrate_to_dynamodb --yes      # copies and verifies
+```
+
+`cli_support.py` is not run: it is the shared scaffolding (opens and closes the database session, aborts if the source file is missing).
+
+#### Loading against MySQL, then publishing
 
 ```bash
-# 1. Levantar el servicio contra MySQL, sin tocar el .env
-PERSISTENCE_BACKEND=sql python main.py
-
-# 2. Subir el xlsx desde el Streamlit (apunta a http://localhost:3020)
-#    y generar el boletín PDF/PNG como siempre.
-
-# 3. Empujar la quincena nueva a DynamoDB
-python -m scripts.migrate_to_dynamodb --yes
+PERSISTENCE_BACKEND=sql python main.py          # 1. the service against MySQL, without editing .env
+                                                # 2. upload the xlsx from Streamlit (http://localhost:3020)
+python -m scripts.migrate_to_dynamodb --yes     # 3. push the new fortnight to DynamoDB
 ```
 
-### Apuntar el Streamlit al servicio desplegado
+#### Pointing Streamlit at the deployed service
 
-`demo/utils/config.py` lee `API_BASE_URL` del entorno y su default es
-`http://localhost:3020/v1/mining-analysis`; sin esa variable el Streamlit
-siempre golpea localhost, aunque el Lambda esté arriba.
+`demo/utils/config.py` reads `API_BASE_URL` from the environment; its default is the service's former API Gateway URL.
 
 ```bash
 export API_BASE_URL="https://api.bearsoft.com.bo/v1/mining-analysis"
 streamlit run app.py
 ```
 
-**Sirve para consultar, no para cargar.** Contra AWS las lecturas funcionan
-—`/prices`, los reportes diario y quincenal, el PDF y el PNG—. La carga de la
-quincena se hace en local, según el flujo de arriba.
+Against AWS the reads work (`/prices`, the daily and fortnightly reports, the PDF and the PNG); the fortnightly load runs locally, as above.
 
-El paso 3 es idempotente: reescribe lo que ya estaba con los mismos valores y
-agrega lo nuevo.
+-----
 
-### Migrar el histórico
+## 🗂️ Service Structure
 
-El ETL carga el MySQL local; DynamoDB arranca vacío. Para copiar el histórico:
-
-```bash
-python -m scripts.migrate_to_dynamodb          # informa qué copiaría
-python -m scripts.migrate_to_dynamodb --yes    # copia y verifica
+```txt
+mining_analysis/
+├── assets/
+│   └── templates/
+├── controllers/
+│   ├── __init__.py
+│   ├── market.py
+│   └── mining_analysis.py
+├── models/
+│   ├── __init__.py
+│   ├── market_prices.py
+│   ├── mining_analysis.py
+│   └── mining_analysis_dyb.py
+├── routes/
+│   ├── __init__.py
+│   ├── market.py
+│   ├── mining_analysis.py
+│   └── public_reports.py
+├── schemas/
+│   ├── __init__.py
+│   ├── health.py
+│   ├── market.py
+│   └── mining_analysis.py
+├── scripts/
+│   ├── __init__.py
+│   ├── audit_decimals.py
+│   ├── cli_support.py
+│   ├── ingest_pdf_xlsx.py
+│   └── migrate_to_dynamodb.py
+├── services/
+│   ├── __init__.py
+│   ├── api_exceptions.py
+│   ├── crud.py
+│   ├── db_connection.py
+│   ├── db_connection_sql.py
+│   ├── environment.py
+│   ├── exceptions.py
+│   ├── logger_config.py
+│   ├── market_sources.py
+│   ├── mining_analysis.py
+│   ├── official_estimate.py
+│   ├── official_reports.py
+│   ├── price_forecast.py
+│   ├── prices_dyb.py
+│   ├── prices_store.py
+│   ├── reports_renderer.py
+│   ├── royalty_rules.py
+│   ├── sale_scenario.py
+│   ├── security.py
+│   └── utils.py
+├── tests/
+├── .dockerignore
+├── .env
+├── .gitignore
+├── deploy.config
+├── main.py
+├── README.md
+└── requirements.txt
 ```
 
-Lee siempre del relacional y escribe en DynamoDB, sea cual sea el
-`PERSISTENCE_BACKEND`. Es idempotente: cada escritura es un put por clave, así
-que correrlo dos veces deja el mismo estado. Usa como partición el mismo
-identificador numérico que expone el camino SQL (`str(row.id)`), que es lo que
-mantiene los dos backends hablando del mismo mineral.
+-----
 
-## 👤 Creado Por
+## 📀 Local Setup
 
-**Rafael Ríos Bascón** [raforios@gmail.com](mailto:raforios@gmail.com)
+To run the service locally:
+
+1.  **Install the dependencies:**
+
+```shell
+pip install -r requirements.txt
+```
+
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, `PERSISTENCE_BACKEND`, the MySQL connection (`DB_*`, `DATABASE`), the tables `DYNAMODB_TABLE_NAME_*` and the market sources (`LBMA_PRICES_URL`, `WESTMETALL_*`, `MARKET_SOURCE_TIMEOUT_SECONDS`).
+
+3.  **Start the API server:**
+
+```shell
+python main.py
+```
+
+4.  **Run the tests:**
+
+```shell
+python -m pytest -q
+pylint --fail-under=10.0 .
+```
+
+-----
+
+## 👤 Created By
+
+**Rafael Ríos Bascón**
+[raforios@gmail.com](mailto:raforios@gmail.com)

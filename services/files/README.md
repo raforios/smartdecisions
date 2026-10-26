@@ -1,78 +1,130 @@
-# FILES — File-Handler-Service
+# 📁 File-Handler-Service 🗃️
 
-Servicio **base** de BearSoft (CLAUDE.md §4, §7 y §9).
+The **Amazon S3 file service** of the BearSoft platform. It is the single gateway for reading, writing and deleting files in the data bucket.
 
-## Para qué sirve
+-----
 
-Es el **único servicio que toca el bucket**: sube, baja, lista, borra y
-**lee los datos** de los archivos de S3 (CSV, Excel, TXT). Un servicio que
-necesita un archivo se lo pide a FILES por HTTP, reenviando el token de quien
-llama; nunca abre su propio `boto3.client('s3')`. El binario sube directo a S3
-con una URL pre-firmada, así no atraviesa API Gateway (límite de 10 MB).
+## 🎯 Main Purpose
 
-FILES no reporta a EVENTS: mover un archivo no dice nada del negocio
-(Rafael, 17-oct-2026).
+The **File-Handler-Service** concentrates access to S3. Its key features:
 
-## Endpoints y quién puede llamarlos
+  * **Data Reading:** Reads a CSV, Excel (`.xlsx`, `.xls`) or text file and returns its rows; a binary file travels as base64.
+  * **Upload and Delete:** Uploads a file to a bucket path and deletes it on request.
+  * **Listing:** Lists the bucket's files, with an optional prefix.
+  * **Pre-signed URL:** Returns a URL to upload a large file straight to S3, bypassing API Gateway.
 
-Todos exigen un token válido de AUTH, de cualquier rol.
+-----
 
-| Método | Ruta | Qué hace |
-|---|---|---|
-| GET | `/v1/s3/read/{bucket_name}/{file_key}` | Lee un archivo y devuelve sus filas |
-| POST | `/v1/s3/upload` | Sube un archivo a través del servicio |
-| DELETE | `/v1/s3/delete` | Borra un archivo |
-| POST | `/v1/s3/list-files` | Lista los archivos, con prefijo opcional |
-| POST | `/v1/s3/upload-presigned` | Devuelve una URL pre-firmada para subir directo a S3 |
+## 🛠️ Technologies
 
-`/read` no acepta `/` dentro de `file_key`: los archivos de una carga masiva
-van a la raíz del bucket (`BUCKET_PATH=''` en quien llama), igual que en las
-cargas de BINARIA.
+  * **Language:** Python 3.14 🐍
+  * **Web Framework:** FastAPI ✨
+  * **ASGI Server:** Uvicorn 🚀
+  * **Storage:** Amazon S3 (`boto3`)
+  * **Data Reading:** pandas, `openpyxl` and `xlrd`
+  * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
 
-## Qué servicios lo llaman
+-----
 
-- **FINANCE, INGEST y MINING_ANALYSIS**, por el bloque FILES del final de su
-  `services/utils.py` (el estándar vive en `services/finance/services/utils.py`).
-- **Portal demo** (`portal/demo/js/api.js`, `uploadToBucket`): pide la URL
-  pre-firmada y sube el archivo.
+## 🚀 API Endpoints
 
-## Variables de entorno
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` unless stated otherwise.
 
-Sólo entorno (CLAUDE.md §5.3):
+### Files (`/v1/s3`)
 
-| Variable | Qué es |
-|---|---|
-| `HOST`, `PORT`, `APP_ENV` | Servidor local y entorno |
-| `SECRET_KEY`, `ALGORITHM` | Verificación del JWT de AUTH |
-| `ML_DATA_BUCKET_NAME` | Bucket del servicio (`ml-data-file-handler`) |
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/s3/read/{bucket_name}/{file_key}` | Reads a **file** and returns its rows. The key may contain folders. |
+| `POST` | `/v1/s3/upload` | Uploads a **file** to a bucket path. |
+| `DELETE` | `/v1/s3/delete` | Deletes a **file**. |
+| `POST` | `/v1/s3/list-files` | Lists the bucket's **files**, with an optional prefix. |
+| `POST` | `/v1/s3/upload-presigned` | Returns a **pre-signed URL** to upload straight to S3. |
 
-## Tablas y buckets
+### Health
 
-No tiene tablas. El bucket es `ml-data-file-handler`; lo que hay adentro lo
-decide cada servicio que lo usa. INGEST guarda bajo `ingest/` los CSV de cada
-contrato (estructura en `services/ingest/README.md`).
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Service home page. |
+| `GET` | `/v1/s3/health` | Service health and configuration check. |
 
-## Cómo correrlo y probarlo
+-----
 
-```bash
-cd services/files
-python main.py            # puerto del .env (PORT); usa el bucket real de S3
+## 🗄️ Stored Data
+
+No tables. The bucket is `ml-data-file-handler`; the folder of each file is chosen by the service that stores it.
+
+-----
+
+## 🧪 Continuous Integration
+
+`.github/workflows/python-package.yml`, on every push and pull request to `main`:
+installs `requirements.txt`, runs `pylint --fail-under=10.0 .` **without** the
+repository `.pylintrc`, and `pytest` **without `.env`**. `tests/test_files.py` tests the reading with S3 stubbed (CSV with and without a separator, text, base64 binary), the translation of AWS errors and the file key.
+
+-----
+
+## 🗂️ Service Structure
+
+```txt
+files/
+├── controllers/
+│   ├── __init__.py
+│   └── files.py
+├── routes/
+│   ├── __init__.py
+│   └── files.py
+├── schemas/
+│   ├── __init__.py
+│   └── files.py
+├── services/
+│   ├── __init__.py
+│   ├── api_exceptions.py
+│   ├── environment.py
+│   ├── exceptions.py
+│   ├── logger_config.py
+│   ├── security.py
+│   └── utils.py
+├── tests/
+├── .dockerignore
+├── .env
+├── .gitignore
+├── deploy.config
+├── favicon.ico
+├── main.py
+├── README.md
+└── requirements.txt
+```
+
+-----
+
+## 📀 Local Setup
+
+To run the service locally:
+
+1.  **Install the dependencies:**
+
+```shell
+pip install -r requirements.txt
+```
+
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH` and `ML_DATA_BUCKET_NAME`. It uses the real S3 bucket of the active AWS profile.
+
+3.  **Start the API server:**
+
+```shell
+python main.py
+```
+
+4.  **Run the tests:**
+
+```shell
 python -m pytest -q
 pylint --fail-under=10.0 .
 ```
 
-Se despliega con `services/ci/api/start.sh --redeploy files` (lo despliega
-Rafael).
+-----
 
-## Qué revisa el CI
+## 👤 Created By
 
-`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
-instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
-`.pylintrc` del repositorio y `pytest` **sin `.env`**: un test que importe
-algo que lea configuración al importarse rompe el CI. `tests/test_files.py`
-prueba la lectura con S3 reemplazado (CSV con y sin separador, texto, binario
-en base64), la traducción de los errores de AWS y la clave del archivo.
-
-## Creado por
-
-**Rafael Ríos Bascón** — [raforios@gmail.com](mailto:raforios@gmail.com)
+**Rafael Ríos Bascón**
+[raforios@gmail.com](mailto:raforios@gmail.com)

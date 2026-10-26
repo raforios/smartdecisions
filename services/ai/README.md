@@ -1,83 +1,83 @@
 # 💬 AI-Interpretation-Service 🤖
 
-Microservicio de **explicaciones con IA** de la plataforma de BearSoft. Convierte en palabras lo que una pantalla muestra como datos y códigos, desde el punto de vista del experto configurado para esa pantalla.
+The **AI explanations** service of the BearSoft platform. It turns what a screen shows as data and codes into words, from the point of view of the expert configured for that screen.
 
 -----
 
-## 🎯 Propósito Principal
+## 🎯 Main Purpose
 
-El **AI-Interpretation-Service** explica lo que recibe, y nada más. Sus funcionalidades clave incluyen:
+The **AI-Interpretation-Service** explains what it receives, and nothing else. Its key features:
 
-  * **Explicación de una Vista:** Recibe `{view, data}` —el JSON que devolvió el servicio que produjo la pantalla— y devuelve el texto, el rol usado y la versión.
-  * **Roles por Vista:** Cada vista tiene versiones de su rol (contexto, misión, reglas, modelo y tokens) en `ai_prompts`; una sola activa por vista, y cada empresa puede tener la suya.
-  * **Caché:** Una explicación se guarda y se reutiliza mientras la misma pantalla muestre los mismos datos.
-  * **Recorte del Payload:** Una lista larga se recorta a una muestra para que una pantalla grande no sea una factura grande.
-  * **Modelo:** Claude Haiku 4.5 por Amazon Bedrock (perfiles `us.`).
-
------
-
-## 🛠️ Tecnologías Utilizadas
-
-  * **Lenguaje:** Python 3.14 🐍
-  * **Framework Web:** FastAPI ✨
-  * **Servidor ASGI:** Uvicorn 🚀
-  * **Base de Datos:** AWS DynamoDB (`boto3`)
-  * **IA:** Amazon Bedrock (`boto3`, `bedrock-runtime`)
-  * **Validación de Datos:** Pydantic V2
-  * **Plataforma Cloud:** AWS Lambda (`Mangum`) detrás de `api.bearsoft.com.bo`
+  * **View Explanation:** Takes `{view, data}` —the JSON returned by the service that produced the screen— and returns the text, the role used and its version.
+  * **Roles per View:** Each view has versions of its role (context, mission, rules, model and tokens) in `ai_prompts`; one active per view, and each company may have its own.
+  * **Cache:** An explanation is stored and reused while the same screen shows the same data.
+  * **Payload Trimming:** A long list is trimmed to a sample, so a large screen is not a large bill.
+  * **Model:** Claude Haiku 4.5 on Amazon Bedrock (`us.` inference profiles).
 
 -----
 
-## 🚀 Endpoints de la API
+## 🛠️ Technologies
 
-A continuación se listan los **endpoints** de la API, agrupados por su funcionalidad. Todos exigen `Authorization: Bearer <jwt>` salvo que se indique otra cosa.
+  * **Language:** Python 3.14 🐍
+  * **Web Framework:** FastAPI ✨
+  * **ASGI Server:** Uvicorn 🚀
+  * **Database:** AWS DynamoDB (`boto3`)
+  * **AI:** Amazon Bedrock (`boto3`, `bedrock-runtime`)
+  * **Data Validation:** Pydantic V2
+  * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
 
-### Explicaciones (`/v1/ai`)
+-----
 
-| Método | Endpoint | Descripción |
+## 🚀 API Endpoints
+
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` unless stated otherwise.
+
+### Explanations (`/v1/ai`)
+
+| Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/v1/ai/explain` | Explica lo que una **vista** está mostrando. |
+| `POST` | `/v1/ai/explain` | Explains what a **view** is showing. |
 
 ### Roles (`/v1/ai/roles`)
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/v1/ai/roles` | Las versiones del **rol** de cada vista y cuál está activa. |
-| `POST` | `/v1/ai/roles` | Guarda una versión del **rol** de una vista. |
-| `GET` | `/v1/ai/roles/{view}/{version}` | Una versión completa del **rol**. |
-| `PATCH` | `/v1/ai/roles/{view}/{version}/active` | Activa una versión (retira las otras de esa vista) o la apaga. |
-| `DELETE` | `/v1/ai/roles/{view}/{version}` | Elimina una versión del **rol**. Sólo `ADMIN`. |
+| `GET` | `/v1/ai/roles` | The versions of each view's **role** and which one is active. |
+| `POST` | `/v1/ai/roles` | Stores a version of a view's **role**. |
+| `GET` | `/v1/ai/roles/{view}/{version}` | One full version of a **role**. |
+| `PATCH` | `/v1/ai/roles/{view}/{version}/active` | Activates a version (retiring the others of that view) or turns it off. |
+| `DELETE` | `/v1/ai/roles/{view}/{version}` | Deletes a version of a **role**. `ADMIN` only. |
 
-### Salud
+### Health
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | Página de inicio del servicio. |
-| `GET` | `/v1/ai/health` | Salud del servicio y validación de su configuración. |
-| `GET` | `/v1/ai/health/tables` | Estado de las tablas DynamoDB del servicio. |
+| `GET` | `/` | Service home page. |
+| `GET` | `/v1/ai/health` | Service health and configuration check. |
+| `GET` | `/v1/ai/health/tables` | State of the service's DynamoDB tables. |
 
 -----
 
-## 🗄️ Datos que guarda
+## 🗄️ Stored Data
 
-| Tabla | Partición | Orden | Qué guarda |
+| Table | Partition key | Sort key | What it holds |
 |---|---|---|---|
-| `ai_prompts` | `view` | `version` | El rol de cada vista: `role`, `instructions`, `rules`, `model_id`, `max_tokens`, `active` y la empresa dueña |
-| `ai_explanations` | `cache_key` | — | Las explicaciones generadas, para reutilizarlas |
-| `ai_parameters` | `code` | — | Los valores de negocio del servicio |
+| `ai_prompts` | `view` | `version` | Each view's role: `role`, `instructions`, `rules`, `model_id`, `max_tokens`, `active` and the owning company |
+| `ai_explanations` | `cache_key` | — | Generated explanations, for reuse |
+| `ai_parameters` | `code` | — | The service's business values |
 
-Los fallos viajan como códigos: `EMPTY_PAYLOAD`, `ROLE_NOT_CONFIGURED`, `ROLE_NOT_FOUND`, `MODEL_UNAVAILABLE` y `MODEL_REFUSED`.
+Failures travel as codes: `EMPTY_PAYLOAD`, `ROLE_NOT_CONFIGURED`, `ROLE_NOT_FOUND`, `MODEL_UNAVAILABLE` and `MODEL_REFUSED`.
 
 -----
 
-## ⚙️ Valores de negocio
+## ⚙️ Business Values
 
-Los valores de negocio del servicio viven en la tabla `ai_parameters` (un ítem por
-código), no en el `.env`. Los lee `load_parameters`, del bloque SERVICE
-PARAMETERS al final de `services/utils.py`, una vez por contenedor; un valor
-cambiado en la tabla lo toman los contenedores que arrancan después. Si falta
-uno, el servicio no arranca. Definición: filas `ai` de
-`docs/parametros.md`. Siembra:
+The service's business values live in the `ai_parameters` table (one item per code),
+not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
+block at the end of `services/utils.py`, once per container; a value changed in
+the table is picked up by the containers that start afterwards. If one is
+missing, the service does not start. Definition: the `ai` rows of
+`docs/parametros.md`. Seed:
 
 ```shell
 python -m tools.seeds.seed_service_parameters ai --yes
@@ -85,15 +85,15 @@ python -m tools.seeds.seed_service_parameters ai --yes
 
 -----
 
-## 🧪 Integración Continua
+## 🧪 Continuous Integration
 
-`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
-instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
-`.pylintrc` del repositorio y `pytest` **sin `.env`**. `tests/conftest.py` deja fuera sin `.env` los tests que leen configuración; corren los de los esquemas y sus reglas.
+`.github/workflows/python-package.yml`, on every push and pull request to `main`:
+installs `requirements.txt`, runs `pylint --fail-under=10.0 .` **without** the
+repository `.pylintrc`, and `pytest` **without `.env`**. Without `.env`, `tests/conftest.py` skips the tests that read configuration; the schema tests run.
 
 -----
 
-## 🗂️ Estructura del Microservicio
+## 🗂️ Service Structure
 
 ```txt
 ai/
@@ -135,25 +135,25 @@ ai/
 
 -----
 
-## 📀 Ejecución Local
+## 📀 Local Setup
 
-Para ejecutar el microservicio localmente, sigue los siguientes pasos:
+To run the service locally:
 
-1.  **Instala las dependencias:**
+1.  **Install the dependencies:**
 
 ```shell
 pip install -r requirements.txt
 ```
 
-2.  **Configura el entorno:** Crea el archivo `.env` con `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, las tablas `DYNAMODB_TABLE_NAME_AI_PROMPTS`, `DYNAMODB_TABLE_NAME_AI_EXPLANATIONS` y `DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS`, y `BEDROCK_REGION` y `BEDROCK_ANTHROPIC_VERSION`.
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, the tables `DYNAMODB_TABLE_NAME_AI_PROMPTS`, `DYNAMODB_TABLE_NAME_AI_EXPLANATIONS` and `DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS`, and `BEDROCK_REGION` and `BEDROCK_ANTHROPIC_VERSION`.
 
-3.  **Ejecuta el servidor de la API:**
+3.  **Start the API server:**
 
 ```shell
 python main.py
 ```
 
-4.  **Ejecuta las pruebas:**
+4.  **Run the tests:**
 
 ```shell
 python -m pytest -q
@@ -162,7 +162,7 @@ pylint --fail-under=10.0 .
 
 -----
 
-## 👤 Creado Por
+## 👤 Created By
 
 **Rafael Ríos Bascón**
 [raforios@gmail.com](mailto:raforios@gmail.com)

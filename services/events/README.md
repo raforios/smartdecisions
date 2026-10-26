@@ -1,81 +1,166 @@
-# EVENTS — Events-Service
+# 📜 Events-Service 📊
 
-Servicio **base** de BearSoft (CLAUDE.md §4 y §7).
+The **audit and usage-log** service of the BearSoft platform. It records who changed what, and every call the services receive.
 
-## Para qué sirve
+-----
 
-Registra **quién cambió qué** (auditoría) y **cada llamada** a los servicios
-(uso). Sin él, un servicio es invisible: nadie puede decir quién anuló una
-nota. Los servicios no escriben aquí a mano: lo hacen los decoradores del
-boilerplate, `@handle_service_errors` (uso) y `@audit_event` (auditoría).
+## 🎯 Main Purpose
 
-EVENTS no se audita a sí mismo.
+The **Events-Service** is the memory of what happens on the platform. Its key features:
 
-## Endpoints y quién puede llamarlos
+  * **Audit Trail:** Records every data change with the service, entity, action, user, and the values before and after.
+  * **Usage Log:** Records every request with its endpoint, method, status code, response time and trimmed bodies.
+  * **Paginated Queries:** Filters by service, entity, user and dates, 1 to 100 records per page.
+  * **Activity:** Recent activity of the services for the `ADMIN`, and each user's latest changes.
 
-| Método | Ruta | Quién |
+-----
+
+## 🛠️ Technologies
+
+  * **Language:** Python 3.14 🐍
+  * **Web Framework:** FastAPI ✨
+  * **ASGI Server:** Uvicorn 🚀
+  * **Database:** AWS DynamoDB (`boto3`)
+  * **Data Validation:** Pydantic V2
+  * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
+
+-----
+
+## 🚀 API Endpoints
+
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` unless stated otherwise.
+
+### Audit (`/v1/events/audit`)
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/events/audit` | Creates an **audit record**. Any valid token. |
+| `GET` | `/v1/events/audit` | Lists **audit records** with filters and pagination. `ADMIN` only. |
+
+### Usage Log (`/v1/events/usage-log`)
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/events/usage-log` | Creates a **usage log**. Any valid token. |
+| `GET` | `/v1/events/usage-log` | Lists **usage logs** with filters and pagination. `ADMIN` only. |
+
+### Activity
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/events/activity` | Recent activity of the given services. `ADMIN` only. |
+| `GET` | `/v1/events/my-changes` | The signed-in user's latest **changes**. |
+
+### Health
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Service home page. |
+| `GET` | `/v1/events/health` | Service health and configuration check. |
+| `GET` | `/v1/events/health/tables` | State of the service's DynamoDB tables. |
+
+-----
+
+## 🗄️ Stored Data
+
+| Table | Partition key | What it holds |
 |---|---|---|
-| POST | `/v1/events/audit` | Cualquier token válido: el servicio reenvía el de la petición que registra |
-| GET | `/v1/events/audit` | `ADMIN`: lista paginada con filtros |
-| POST | `/v1/events/usage-log` | Cualquier token válido, igual que la auditoría |
-| GET | `/v1/events/usage-log` | `ADMIN`: lista paginada con filtros |
+| `audit_records` | `id` (UUID) | `microservice`, `entity_name`, `entity_id`, `action`, `user_id`, `timestamp`, `old_values`, `new_values` (`models/audit.py`) |
+| `usage_logs` | `id` (UUID) | `user_app`, `microservice`, `endpoint`, `method`, `status_code`, `ip_address`, `request_body`, `response_body`, `response_time_ms`, `timestamp` (`models/usage_log.py`) |
 
-Los roles de lectura están en `schemas/audit.py` (`READ_ROLES`).
+-----
 
-## Qué servicios lo llaman
+## 🧪 Continuous Integration
 
-INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES, AI, FINANCE,
-BILLING y PARAMETERS (este último sólo por sus cambios: PUT y DELETE).
+`.github/workflows/python-package.yml`, on every push and pull request to `main`:
+installs `requirements.txt`, runs `pylint --fail-under=10.0 .` **without** the
+repository `.pylintrc`, and `pytest` **without `.env`**. `tests/test_events.py` tests the body trimming (`services/payload_limits.py`) and the schemas.
 
-No lo llaman AUTH, FILES ni ML_FUNCTIONS: son base técnica, y registrar un
-inicio de sesión, un archivo movido o un cálculo no dice nada del negocio
-(Rafael, 17-oct-2026). `tools/verification/verify_checks.py` (chequeo
-`events`) lo comprueba.
+-----
 
-## Variables de entorno
+## 🗂️ Service Structure
 
-Sólo entorno (CLAUDE.md §5.3):
+```txt
+events/
+├── controllers/
+│   ├── __init__.py
+│   ├── activity.py
+│   ├── audit.py
+│   └── usage_log.py
+├── models/
+│   ├── __init__.py
+│   ├── audit.py
+│   └── usage_log.py
+├── routes/
+│   ├── __init__.py
+│   ├── activity.py
+│   ├── audit.py
+│   └── usage_log.py
+├── schemas/
+│   ├── __init__.py
+│   ├── activity.py
+│   ├── audit.py
+│   ├── health.py
+│   └── usage_log.py
+├── services/
+│   ├── __init__.py
+│   ├── activity.py
+│   ├── activity_summary.py
+│   ├── api_exceptions.py
+│   ├── audit.py
+│   ├── crud.py
+│   ├── db_connection.py
+│   ├── environment.py
+│   ├── exceptions.py
+│   ├── logger_config.py
+│   ├── payload_limits.py
+│   ├── security.py
+│   ├── usage_log.py
+│   └── utils.py
+├── tests/
+├── .dockerignore
+├── .env
+├── .gitignore
+├── deploy.config
+├── dynamodb.sh
+├── favicon.ico
+├── main.py
+├── README.md
+└── requirements.txt
+```
 
-| Variable | Qué es |
-|---|---|
-| `HOST`, `PORT`, `APP_ENV` | Servidor local y entorno |
-| `SECRET_KEY`, `ALGORITHM` | Verificación del JWT de AUTH |
-| `DYNAMODB_TABLE_NAME_AUDIT` | Tabla de auditoría (`audit_records`) |
-| `DYNAMODB_TABLE_NAME_USAGE` | Tabla de uso (`usage_logs`) |
+-----
 
-## Tablas
+## 📀 Local Setup
 
-| Tabla | Partición | Qué guarda |
-|---|---|---|
-| `audit_records` | `id` (UUID) | Quién cambió qué: `microservice`, `entity_name`, `entity_id`, `action`, `user_id`, `timestamp`, `old_values`, `new_values` (`models/audit.py`) |
-| `usage_logs` | `id` (UUID) | Cada llamada a un servicio: `user_app`, `microservice`, `endpoint`, `method`, `status_code`, `ip_address`, `request_body`, `response_body`, `response_time_ms`, `timestamp` (`models/usage_log.py`) |
+To run the service locally:
 
-## Cómo correrlo y probarlo
+1.  **Install the dependencies:**
 
-`boto3.resource('dynamodb')` no lleva endpoint: corre contra la DynamoDB de
-la cuenta y región del perfil AWS activo. Para trabajar en local,
-`dynamodb.sh` levanta DynamoDB en Docker (puerto 3100) con `audit_records` y
-`usage_logs`, y se exporta `AWS_ENDPOINT_URL_DYNAMODB=http://localhost:3100`:
+```shell
+pip install -r requirements.txt
+```
 
-```bash
-cd services/events
-python main.py            # puerto del .env (PORT)
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH` and the tables `DYNAMODB_TABLE_NAME_AUDIT` and `DYNAMODB_TABLE_NAME_USAGE`.
+
+3.  **Start the API server:**
+
+```shell
+python main.py
+```
+
+4.  **Run the tests:**
+
+```shell
 python -m pytest -q
 pylint --fail-under=10.0 .
 ```
 
-Se despliega con `services/ci/api/start.sh --redeploy events` (lo despliega
-Rafael).
+To work against a local DynamoDB, `dynamodb.sh` starts it in Docker (port 3100) with both tables; then export `AWS_ENDPOINT_URL_DYNAMODB=http://localhost:3100`.
 
-## Qué revisa el CI
+-----
 
-`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
-instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
-`.pylintrc` del repositorio y `pytest` **sin `.env`**: un test que importe
-algo que lea configuración al importarse rompe el CI. `tests/test_events.py`
-prueba el recorte de los cuerpos (`services/payload_limits.py`) y los
-esquemas: campos de más ignorados, página de 1 a 100 y lectura sólo `ADMIN`.
+## 👤 Created By
 
-## Creado por
-
-**Rafael Ríos Bascón** — [raforios@gmail.com](mailto:raforios@gmail.com)
+**Rafael Ríos Bascón**
+[raforios@gmail.com](mailto:raforios@gmail.com)

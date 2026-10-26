@@ -1,93 +1,167 @@
-# AUTH — Auth-Handler-Service
+# 🔒 Auth-Handler-Service 🔑
 
-Servicio **base** de BearSoft (CLAUDE.md §4 y §7).
+The **authentication and authorization** service of the BearSoft platform. It manages the users of every company and issues the JWT that authenticates every request to the other services.
 
-## Para qué sirve
+-----
 
-Es la puerta de entrada de toda la API: guarda los usuarios y emite el token
-JWT que los demás servicios exigen en cada llamada. El token lleva `email`,
-`role` y `client`; `client` es la empresa y es el **dueño de los datos** en
-todos los servicios (un MANAGER y sus vendedores ven lo mismo).
+## 🎯 Main Purpose
 
-Los demás servicios **no llaman a AUTH** para validar el token: lo verifican
-ellos mismos con `security.py` y la misma `SECRET_KEY` / `ALGORITHM`. AUTH no
-reporta a EVENTS (no se audita el inicio de sesión, Rafael 17-oct-2026).
+The **Auth-Handler-Service** is the source of truth for users, companies and roles. Its key features:
 
-## Endpoints y quién puede llamarlos
+  * **Sign-in:** Checks e-mail and password and issues a JWT carrying `email`, `role` and `client` (the company); records the last sign-in, the previous one and the count.
+  * **User Management:** Sign-up (`ADMIN` only), lookup, role and company changes, removal, and changing one's own password.
+  * **Company Management:** Creating, changing the tax id or status of, and removing the companies users belong to.
+  * **Roles:** Defined in `schemas/role.py`; SmartDecisions uses `ADMIN`, `MANAGER` and `SELLER`, and a new sign-up starts as `REQUESTER`.
+  * **Passwords:** Hashed with plain `bcrypt` (`$2b$`), compatible with the older `passlib` hashes.
 
-| Método | Ruta | Quién |
+-----
+
+## 🛠️ Technologies
+
+  * **Language:** Python 3.14 🐍
+  * **Web Framework:** FastAPI ✨
+  * **ASGI Server:** Uvicorn 🚀
+  * **Database:** AWS DynamoDB (`boto3`)
+  * **Security:** JWT (`python-jose`) and `bcrypt`
+  * **Data Validation:** Pydantic V2
+  * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
+
+-----
+
+## 🚀 API Endpoints
+
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` unless stated otherwise.
+
+### Authentication (`/v1/auth`)
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/auth/login` | Takes e-mail and password and returns the **JWT**. No token required. |
+| `POST` | `/v1/auth/signup` | Creates a **user** as `REQUESTER` with no company. `ADMIN` only. |
+
+### Companies (`/v1/auth/companies`)
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/auth/companies` | Every **company**, with how many users it has. `ADMIN` only. |
+| `POST` | `/v1/auth/companies` | Adds a **company**. `ADMIN` only. |
+| `PATCH` | `/v1/auth/companies/{name}` | Changes a **company**'s tax id or status. `ADMIN` only. |
+| `DELETE` | `/v1/auth/companies/{name}` | Removes a **company** with no users. `ADMIN` only. |
+
+### Users (`/v1/users`)
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/users/` | Every **user**. `ADMIN` only. |
+| `GET` | `/v1/users/me` | The signed-in **user**, with their last and previous sign-in. |
+| `GET` | `/v1/users/company` | The **users** of the caller's company. `MANAGER` or `ADMIN`. |
+| `POST` | `/v1/users/me/password` | Changes one's own **password**; the current one is required. |
+| `GET` | `/v1/users/{email}` | One **user** by e-mail. `ADMIN` only. |
+| `PATCH` | `/v1/users/{email}` | Updates a **user**'s name, role, company or status. `ADMIN` only. |
+| `DELETE` | `/v1/users/{email}` | Removes a **user**. `ADMIN` only. |
+
+### Health
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Service home page. |
+| `GET` | `/v1/auth/health` | Service health and configuration check. |
+| `GET` | `/v1/auth/health/tables` | State of the service's DynamoDB tables. |
+
+-----
+
+## 🗄️ Stored Data
+
+| Table | Partition key | What it holds |
 |---|---|---|
-| POST | `/v1/auth/login` | Sin token: recibe email y contraseña, devuelve el JWT |
-| POST | `/v1/auth/signup` | `ADMIN` (desde el 19-oct-2026): da de alta un usuario como `REQUESTER` y sin empresa; luego el `ADMIN` le pone rol y empresa con `PATCH /v1/users/{email}` |
-| GET | `/v1/users/me` | Cualquier usuario activo: sus propios datos |
-| POST | `/v1/users/me/password` | Cualquier usuario activo: cambia su contraseña |
-| GET | `/v1/users/company` | `MANAGER` o `ADMIN`: los usuarios de su empresa |
-| GET | `/v1/users/` | `ADMIN` |
-| GET | `/v1/users/{email}` | `ADMIN` |
-| PATCH | `/v1/users/{email}` | `ADMIN` |
-| DELETE | `/v1/users/{email}` | `ADMIN` |
+| `auth-users` | `email` | `first_name`, `last_name`, `hashed_password`, `client`, `role`, `status`, `date_register` and the sign-ins |
+| `auth-companies` | `name` | `tax_id`, `active`, `created_at`, `updated_at` |
 
-Roles en `schemas/role.py`.
+**The first administrator** is created by writing the item straight into `auth-users`, with the hash from `services/security.py`; from then on, an `ADMIN` signs the others up and promotes them with `PATCH /v1/users/{email}`.
 
-**El primer administrador.** Como el alta exige un `ADMIN`, el primero (o uno
-nuevo si no quedara ninguno) se crea escribiendo el ítem directo en
-`auth-users`, con el hash de `services/security.py`. Desde ahí, cualquier
-`ADMIN` da de alta a otro y lo promueve con `PATCH` (`role: ADMIN`).
+-----
 
-## Qué servicios lo llaman
+## 🧪 Continuous Integration
 
-- **Portal demo** (`portal/demo/js/auth.js`, `account.js`, `home.js`): login,
-  cambio de contraseña y usuarios de la empresa.
-- **Portal de BILLING** (`portal/billing/js/services/AuthService.js`).
-- Ningún microservicio lo llama por HTTP: todos verifican el token localmente.
+`.github/workflows/python-package.yml`, on every push and pull request to `main`:
+installs `requirements.txt`, runs `pylint --fail-under=10.0 .` **without** the
+repository `.pylintrc`, and `pytest` **without `.env`**. `tests/test_auth.py` imports only schemas and pure functions, so it runs in CI; `tests/test_routes.py` reads configuration and `tests/conftest.py` skips it without `.env`.
 
-## Variables de entorno
+-----
 
-Sólo entorno (CLAUDE.md §5.3):
+## 🗂️ Service Structure
 
-| Variable | Qué es |
-|---|---|
-| `HOST`, `PORT`, `APP_ENV` | Servidor local y entorno |
-| `SECRET_KEY`, `ALGORITHM` | Firma del JWT; **la misma en todos los servicios** |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Vida del token |
-| `TABLE_NAME` | Tabla de usuarios (`auth-users`) |
+```txt
+auth/
+├── controllers/
+│   ├── __init__.py
+│   ├── companies.py
+│   └── users.py
+├── routes/
+│   ├── __init__.py
+│   ├── auth.py
+│   ├── companies.py
+│   └── users.py
+├── schemas/
+│   ├── __init__.py
+│   ├── auth.py
+│   ├── companies.py
+│   ├── health.py
+│   ├── role.py
+│   └── users.py
+├── services/
+│   ├── __init__.py
+│   ├── api_exceptions.py
+│   ├── companies.py
+│   ├── dynamodb.py
+│   ├── environment.py
+│   ├── exceptions.py
+│   ├── jwt_token.py
+│   ├── logger_config.py
+│   ├── security.py
+│   ├── sessions.py
+│   └── utils.py
+├── tests/
+├── .dockerignore
+├── .env
+├── .gitignore
+├── deploy.config
+├── favicon.ico
+├── main.py
+├── README.md
+└── requirements.txt
+```
 
-## Tablas
+-----
 
-`auth-users`, partición `email`. Cada ítem es un usuario: `email`,
-`first_name`, `last_name`, `hashed_password` (nunca la contraseña), `client`,
-`role`, `status` y `date_register`. Esquemas en `schemas/users.py`.
+## 📀 Local Setup
 
-Las contraseñas se guardan con `bcrypt` directo (hash `$2b$`), sin `passlib`
-desde el 19-oct-2026: `passlib` ya no se mantiene y obligaba a fijar
-versiones. Los hashes anteriores siguen validando; `bcrypt` lee sólo los
-primeros 72 bytes, y el servicio los corta igual que lo hacía `passlib`.
+To run the service locally:
 
-## Cómo correrlo y probarlo
+1.  **Install the dependencies:**
 
-```bash
-cd services/auth
-python main.py            # puerto del .env (PORT)
+```shell
+pip install -r requirements.txt
+```
+
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `ROOT_PATH` and the tables `TABLE_NAME` and `TABLE_NAME_COMPANIES`.
+
+3.  **Start the API server:**
+
+```shell
+python main.py
+```
+
+4.  **Run the tests:**
+
+```shell
 python -m pytest -q
 pylint --fail-under=10.0 .
 ```
 
-Se despliega con `services/ci/api/start.sh --redeploy auth` (lo despliega
-Rafael).
+-----
 
-## Qué revisa el CI
+## 👤 Created By
 
-`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
-instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
-`.pylintrc` del repositorio y `pytest` **sin `.env`**.
-
-- `tests/test_auth.py` importa sólo esquemas y funciones puras
-  (`services/sessions.py`, `services/security.py`), así que corre en el CI:
-  sesiones, cambio de contraseña y el hash, incluido uno hecho por `passlib`.
-- `tests/test_routes.py` (el alta sólo para `ADMIN`) importa las rutas, que
-  leen configuración: `tests/conftest.py` lo deja fuera sin `.env` y corre en
-  local.
-
-## Creado por
-
-**Rafael Ríos Bascón** — [raforios@gmail.com](mailto:raforios@gmail.com)
+**Rafael Ríos Bascón**
+[raforios@gmail.com](mailto:raforios@gmail.com)
