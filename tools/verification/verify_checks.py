@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 # The services BearSoft owns, in the four groups of SMARTDECISIONS.md: FINANCE
-# joined on 15-10-2026 and PARAMETERS on 17-10-2026.
+# joined on 15-10-2026.
 # AUTH, EVENTS, FILES and ML_FUNCTIONS were missing until 27-09-2026, so they
 # accumulated findings nobody ever saw: a sweep that skips a service is a
 # sweep that certifies it by omission.
@@ -22,7 +22,7 @@ PRODUCT_SERVICES = (
     # SmartBilling
     'billing',
     # Base: generic, for any product (QUOTES joined on 23-10-2026)
-    'auth', 'events', 'files', 'ml_functions', 'parameters', 'ai', 'quotes',
+    'auth', 'events', 'files', 'ml_functions', 'ai', 'quotes',
 )
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
@@ -658,9 +658,8 @@ def _controllers_by_verb(service: Path) -> dict[str, set[str]]:
     return found
 
 
-# Base services that never report to EVENTS, and the one that audits its writes only.
+# Base services that never report to EVENTS.
 EVENTS_EXEMPT = ('auth', 'files', 'ml_functions')
-READS_NOT_LOGGED = ('parameters',)
 
 
 def check_events(service: Path) -> tuple[bool, str]:
@@ -690,9 +689,7 @@ def check_events(service: Path) -> tuple[bool, str]:
     by_verb = _controllers_by_verb(service)
     every = {name for names in by_verb.values() for name in names}
 
-    # PARAMETERS audits its changes but does not log its reads (Rafael, 17-oct):
-    # every service reads there, and a log per read says nothing.
-    missing_log = [] if service.name in READS_NOT_LOGGED else sorted(every - logged)
+    missing_log = sorted(every - logged)
     writing = {name for verb in WRITING_VERBS for name in by_verb.get(verb, ())}
     writing = {name for name in writing if not name.startswith(QUERY_PREFIXES)}
     missing_audit = sorted(writing - audited)

@@ -25,7 +25,9 @@
     filled with each company's SKUs, to try the stock upload in Rutas.
 '''
 import argparse
+import importlib.util
 import io
+import os
 import random
 import sys
 from dataclasses import dataclass
@@ -35,17 +37,23 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import boto3
-import numpy as np
 import pandas as pd
 from boto3.dynamodb.conditions import Key
 from boto3.resources.base import ServiceResource
 from dotenv import load_dotenv
 
+PROFILE = 'deploy_ml'
+REGION = 'us-east-1'
+
 ROOT = Path(__file__).resolve().parents[2]
 COMMERCIAL_PATH = ROOT / 'services' / 'commercial'
 sys.path.insert(0, str(COMMERCIAL_PATH))
-# The service validates its environment on import, so it is loaded first.
+# The service validates its environment on import, so it is loaded first; it
+# also reads its business values from `commercial_parameters` on import, with
+# the same account the rest of this tool writes to.
 load_dotenv(COMMERCIAL_PATH / '.env')
+os.environ.setdefault('AWS_PROFILE', PROFILE)
+os.environ.setdefault('AWS_DEFAULT_REGION', REGION)
 
 # pylint: disable=wrong-import-position
 from schemas.daily_stock import (  # noqa: E402
@@ -76,14 +84,28 @@ from services.localization_executed import (  # noqa: E402
     create_executed_route,
     register_executed_point
 )
-from services.optimization import order_stops  # noqa: E402
+from services.utils import load_parameters  # noqa: E402
 from services.optimization_settings import save_route_settings  # noqa: E402
 
-PROFILE = 'deploy_ml'
-REGION = 'us-east-1'
 BUCKET = 'ml-data-file-handler'
 ZONE = ZoneInfo('America/La_Paz')
-SAMPLES = ROOT / 'tools' / 'samples'
+SAMPLES = ROOT / 'tools' / 'demo' / 'samples'
+
+# The visit order is ML_FUNCTIONS' (24-oct-2026). This tool has no user token
+# to ask for it by HTTP, so it runs ML_FUNCTIONS' own pure module, loaded from
+# its file: the same order the product proposes, from the one copy of it.
+_ROUTING_SPEC = importlib.util.spec_from_file_location(
+    'ml_functions_routing', ROOT / 'services' / 'ml_functions' / 'services' / 'routing.py')
+ML_ROUTING = importlib.util.module_from_spec(_ROUTING_SPEC)
+_ROUTING_SPEC.loader.exec_module(ML_ROUTING)
+TWO_OPT_PASSES = load_parameters({'ROUTES_TWO_OPT_PASSES': int})['ROUTES_TWO_OPT_PASSES']
+
+# The tables, by the names COMMERCIAL's own .env gives them.
+DATASETS_TABLE = os.environ['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
+CLIENTS_TABLE = os.environ['DYNAMODB_TABLE_NAME_INGEST_CLIENTS']
+SELLERS_TABLE = os.environ['DYNAMODB_TABLE_NAME_INGEST_SELLERS']
+PLANNED_TABLE = os.environ['DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES']
+EXECUTED_TABLE = os.environ['DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES']
 
 DEPOT_NAME = 'BearSoft'
 DEPOT = (-16.543376949529225, -68.0718549258045)
@@ -157,7 +179,7 @@ def _stock_frame(
     owner: str
 ) -> pd.DataFrame:
     '''
-        The company's stock photo as INGEST stored it.
+        The company's stock photo as COMMERCIAL stored it.
 
         Args:
             resource: DynamoDB resource.
@@ -166,11 +188,14 @@ def _stock_frame(
         Returns:
             pd.DataFrame: product_id, product_name, on_hand, committed.
     '''
-    datasets = [item for item in resource.Table('ingest_datasets').scan()['Items']
+    datasets = [item for item in resource.Table(DATASETS_TABLE).scan()['Items']
                 if item.get('owner_email') == owner and item.get('stock_s3_key')]
     key = max(datasets, key = lambda item: item['created_at'])['stock_s3_key']
     body = _session().client('s3').get_object(Bucket = BUCKET, Key = key)['Body'].read()
     frame = pd.read_csv(io.BytesIO(body))
+    # The file keeps every monthly photo: the day opens with the latest one.
+    if 'snapshot_date' in frame.columns:
+        frame = frame[frame['snapshot_date'] == frame['snapshot_date'].max()].copy()
     frame['available'] = (frame['on_hand'] - frame.get('committed', 0).fillna(0)).clip(lower = 0)
     return frame[frame['available'] > 0]
 
@@ -212,9 +237,9 @@ def _ordered(
         bad = list(clients)
         shuffle.shuffle(bad)
         return bad
-    points = np.array([DEPOT] + [(float(c['latitude']), float(c['longitude']))
-                                 for c in clients])
-    order = order_stops(points)
+    points = [list(DEPOT)] + [[float(c['latitude']), float(c['longitude'])]
+                              for c in clients]
+    order = ML_ROUTING.order_points(points, TWO_OPT_PASSES)
     return [clients[index - 1] for index in order if index != 0]
 
 
@@ -392,11 +417,17 @@ def _load_stock(
             day (date): The day.
             stock (pd.DataFrame): The stock photo.
     '''
+    # A product with no price cannot be sold on the street: it stays out of
+    # the day, as it would from a stock file loaded by hand.
+    priced = stock[stock['unit_price'].notna()]
     load_daily_stock(resource, owner, DailyStockLoadSchema(date = day.isoformat(), items = [
         StockItemLoadSchema(sku = str(row['product_id']),
                             product_name = str(row.get('product_name') or '')[:150] or None,
-                            quantity = float(row['available']))
-        for _, row in stock.iterrows()
+                            quantity = float(row['available']),
+                            unit_price = float(row['unit_price']),
+                            unit_cost = (None if pd.isna(row.get('unit_cost'))
+                                         else float(row['unit_cost'])))
+        for _, row in priced.iterrows()
     ]))
 
 
@@ -438,11 +469,11 @@ def _link_seller(
             company (Company): The company.
             seller (str): Seller name as the file writes it.
     '''
-    linked = [item for item in _query(resource, 'ingest_sellers', company.owner)
+    linked = [item for item in _query(resource, SELLERS_TABLE, company.owner)
               if item.get('user_email') == company.seller_user]
     if linked:
         return
-    resource.Table('ingest_sellers').update_item(
+    resource.Table(SELLERS_TABLE).update_item(
         Key = {'owner_email': company.owner, 'id': seller},
         UpdateExpression = 'SET user_email = :u',
         ExpressionAttributeValues = {':u': company.seller_user}
@@ -504,9 +535,9 @@ def seed_company(
     '''
     rng = random.Random(f'{SEED}{company.slug}{demo_day}')
     stock = _stock_frame(resource, company.owner)
-    portfolios = _portfolios(_query(resource, 'ingest_clients', company.owner))
+    portfolios = _portfolios(_query(resource, CLIENTS_TABLE, company.owner))
     linked = {item['id']: item.get('user_email')
-              for item in _query(resource, 'ingest_sellers', company.owner)}
+              for item in _query(resource, SELLERS_TABLE, company.owner)}
     print(f'\n{company.owner}: {len(stock)} SKU con stock, vendedores {list(portfolios)}')
     if not write:
         return
@@ -551,14 +582,13 @@ def reset_demo(
         Returns:
             tuple[int, int]: Plans and runs deleted.
     '''
-    plans = [plan for plan in _query(resource, 'commercial_planned_routes', owner)
+    plans = [plan for plan in _query(resource, PLANNED_TABLE, owner)
              if str(plan.get('route_code', '')).startswith('DEMO-')
              and plan.get('plan_date') in days]
     ids = {plan['id'] for plan in plans}
-    runs = [run for run in _query(resource, 'commercial_executed_routes', owner)
+    runs = [run for run in _query(resource, EXECUTED_TABLE, owner)
             if run.get('planned_route_id') in ids]
-    for table, items in (('commercial_planned_routes', plans),
-                         ('commercial_executed_routes', runs)):
+    for table, items in ((PLANNED_TABLE, plans), (EXECUTED_TABLE, runs)):
         with resource.Table(table).batch_writer() as batch:
             for item in items:
                 batch.delete_item(Key = {'owner_email': owner, 'id': item['id']})

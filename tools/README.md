@@ -12,12 +12,12 @@ simulación y sólo escriben con `--yes`.
 | | | `verify_checks.py` | No se corre sola: son las reglas que usa `verify_service.py` |
 | | | `check_signatures.py` | La corre el hook al editar un `.py` de `services/`; `--fix` reescribe las firmas |
 | `deploy/` | Publicar el frontend | `deploy_demo_portal.py` | Cada despliegue del portal demo: `python -m tools.deploy.deploy_demo_portal --yes` |
-| `templates/` | Plantillas que el cliente llena | `build_sales_template.py` | Cuando cambia el contrato de INGEST |
+| `templates/` | Plantillas que el cliente llena | `build_sales_template.py` | Cuando cambia el contrato de COMMERCIAL |
 | | | `build_finance_template.py` | Cuando cambia el contrato de FINANCE; escribe en `portal/demo/plantillas/` |
 | | | `build_finance_catalog.py` | Cada vez que el `ADMIN` cambia el catálogo de cuentas: lo genera desde AWS en `portal/demo/plantillas/` y se publica con el portal |
 | | | `convert_sales_export.py` | Al recibir el export de ventas de un ERP nuevo, para llevarlo a la plantilla |
 | `seeds/` | Datos base que todo ambiente necesita | `seed_finance.py` | Catálogo de cuentas y tasas de ley de FINANCE, leídos del contrato aprobado |
-| | | `seed_parameters.py` | Valores de negocio de PARAMETERS, leídos de `docs/parametros.md` |
+| `seeds/` | | `seed_service_parameters.py` | Los valores de negocio de un servicio en su tabla `<servicio>_parameters`, desde `docs/parametros.md` |
 | `demo/` | Preparar una demostración | `seed_demo_routes.py` | La mañana de cada demo de Rutas: `--date AAAA-MM-DD --yes --reset` |
 | | | `seed_billing_demo.py` | La farmacia de demostración de BILLING |
 | | | `samples/` | Archivos de ejemplo para subir en una demo (ventas, stock) |
