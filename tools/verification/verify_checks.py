@@ -21,8 +21,10 @@ PRODUCT_SERVICES = (
     'commercial', 'mining_analysis', 'finance',
     # SmartBilling
     'billing',
-    # Base: generic, for any product (QUOTES joined on 23-10-2026)
-    'auth', 'events', 'files', 'ml_functions', 'ai', 'quotes',
+    # Independent: neither base nor of a single product (26-10-2026)
+    'quotes',
+    # Base: generic, for any product
+    'auth', 'events', 'files', 'ml_functions', 'ai',
 )
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
