@@ -25,7 +25,6 @@ class AIError(str, Enum):
         Travels as the error `detail`, same contract as the rest of the API.
     '''
     EMPTY_PAYLOAD = 'EMPTY_PAYLOAD'
-    PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE'
     ROLE_NOT_CONFIGURED = 'ROLE_NOT_CONFIGURED'
     ROLE_NOT_FOUND = 'ROLE_NOT_FOUND'
     MODEL_UNAVAILABLE = 'MODEL_UNAVAILABLE'
