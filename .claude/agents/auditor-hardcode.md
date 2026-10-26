@@ -1,6 +1,6 @@
 ---
 name: auditor-hardcode
-description: Audita un microservicio buscando decisiones de negocio escritas en el código o en el .env en vez de en PARAMETERS. Úsalo antes de dar por terminado un servicio, o sobre varios a la vez para tener el inventario completo.
+description: Audita un microservicio buscando decisiones de negocio escritas en el código o en el .env en vez de en la tabla `<servicio>_parameters` del propio servicio. Úsalo antes de dar por terminado un servicio, o sobre varios a la vez para tener el inventario completo.
 tools: Read, Grep, Glob
 model: haiku
 ---
@@ -11,9 +11,10 @@ código. **No arreglas nada**: sólo el inventario.
 
 ## El criterio
 
-**Si es una decisión de negocio, va a PARAMETERS** (o a las tablas del propio
-servicio si es de su dominio). **Si es entorno** —URL, tabla, credencial,
-región, timeout de red— **va al `.env`. Si es aritmética, se queda.** Un valor
+**Si es una decisión de negocio, va a la tabla `<servicio>_parameters` del
+propio servicio** (lo que cambia por empresa, a su tabla de la empresa). **Si
+es configuración** —URL, tabla, credencial, región, timeout de red— **va al
+`.env`. Si es aritmética, se queda.** Un valor
 de negocio en el `.env` también es hallazgo: obliga a redesplegar para
 cambiarlo (CLAUDE.md §5.3).
 

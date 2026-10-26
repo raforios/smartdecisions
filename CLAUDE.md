@@ -85,13 +85,13 @@ nombrados por funcionalidad.
    `db_connection.py`, `environment.py`, `exceptions.py`, `logger_config.py`,
    `security.py` y `utils.py` no se modifican sin consulta; si se autoriza una
    adición, va al final del archivo.
-   - **Los siete servicios propios que no son base** (INGEST, ANALYTICS,
-     OPTIMIZATION, MINING_ANALYSIS, QUOTES, BILLING y FINANCE) tienen el
+   - **Los seis servicios con el boilerplate común** (COMMERCIAL,
+     MINING_ANALYSIS, BILLING y FINANCE, y los base QUOTES y AI) tienen el
      **mismo boilerplate con las mismas funciones** (Rafael, 19-oct-2026;
-     eran ocho hasta que AI pasó a base al cerrar la fase 8, 21-oct-2026).
-     Un cambio autorizado en uno se aplica a los siete en el mismo paso; lo
-     propio de un servicio (el bloque FILES, el de PARAMETERS) va al final
-     del archivo, nunca en lugar de lo común.
+     desde el 23-oct-2026 COMMERCIAL reemplaza a INGEST, ANALYTICS y
+     OPTIMIZATION). Un cambio autorizado en uno se aplica a los seis en el
+     mismo paso; los bloques estándar (FILES, SERVICE PARAMETERS) van al
+     final del archivo, idénticos donde se usan, nunca en lugar de lo común.
 3. **No se inventan módulos de infraestructura** con nombres genéricos
    (`settings.py`, `config.py`, `text_catalog.py`). Lo común ya existe.
 
@@ -101,21 +101,32 @@ nombrados por funcionalidad.
 
 **Base**, compartidos por todos los productos: **AUTH** (JWT, DynamoDB),
 **EVENTS** (auditoría, DynamoDB), **FILES** (S3), **ML_FUNCTIONS** (el centro
-de cálculos y fórmulas: predicciones, proyecciones, clasificaciones) y
-**PARAMETERS** (valores de negocio que cambian sin redesplegar, DynamoDB) y
+de cálculos y fórmulas: predicciones, proyecciones, clasificaciones; no
+guarda nada: recibe el objeto completo y devuelve el resultado),
 **AI** (explicaciones con Bedrock: cada producto registra sus vistas en
-`ai_prompts`, sin tocar el código de AI). ML_FUNCTIONS y PARAMETERS son base
-desde el 17-oct-2026, y AI desde el cierre de la fase 8, el 21-oct-2026
-(Rafael).
+`ai_prompts`, sin tocar el código de AI) y **QUOTES** (tipo de cambio y
+factores externos, generales y de cada empresa). ML_FUNCTIONS es base desde
+el 17-oct-2026, AI desde el 21-oct-2026 y QUOTES desde el 23-oct-2026
+(Rafael). Los base son genéricos: sirven a cualquier producto, no sólo a
+SmartDecisions. **No existe un servicio genérico de parámetros**: se
+eliminó el 25-oct-2026 (Rafael: «no sirve para nada»).
+
+**Ningún microservicio depende de otro para levantar** (Rafael,
+24-oct-2026): puede no operar una opción que necesita a otro, pero arranca y
+responde.
 
 **Un cálculo común vive una sola vez.** Proyectar una serie, clasificar,
 ajustar un modelo: lo pide cada servicio por HTTP a ML_FUNCTIONS, como pide
-autenticación a AUTH, en vez de guardar su propia copia de la fórmula. FINANCE
-ya lo hace (`/v1/prediction/forecast`); ANALYTICS, MINING_ANALYSIS y QUOTES
-tienen todavía su copia y se pasan después del Análisis Financiero.
+autenticación a AUTH, en vez de guardar su propia copia de la fórmula
+(`/v1/prediction/forecast` y `/v1/prediction/forecast/compare`; todos lo hacen
+desde el 23-oct-2026). Lo que sólo tiene sentido para el propósito de un
+servicio —la confianza del tipo de cambio, la caída de una línea de un
+mineral— se queda en ese servicio (Rafael, 23-oct-2026).
 
-**SmartDecisions:** INGEST, ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, QUOTES y
-FINANCE (Análisis Financiero).
+**SmartDecisions:** FINANCE (Análisis Financiero), COMMERCIAL (cargas,
+análisis y rutas; une INGEST, ANALYTICS y OPTIMIZATION desde el 23-oct-2026,
+un solo microservicio con varias partes, como FINANCE) y MINING_ANALYSIS
+(minerales y «vender hoy o esperar»).
 
 **BILLING** (antes SUPPLIES) es el otro producto propio: facturación de
 comercios sobre DynamoDB, con las farmacias como primer vertical. Se vende solo
@@ -128,10 +139,11 @@ misma disposición, mismas soluciones para los mismos problemas.
 **No pertenecen al API:** TRADE, FORMS y LOCALIZATION son del cliente Binaria.
 
 **Microservicios sin acoplamiento** (Rafael, 14-oct-2026). Un servicio no lee
-tablas ni buckets de otro: lo ajeno se pide por HTTP al dueño, y los archivos
-pasan por FILES. INGEST, ANALYTICS y OPTIMIZATION hoy comparten
-`ingest_datasets` y leen S3 por su cuenta: es la deuda del módulo comercial,
-no el modelo a copiar.
+buckets por su cuenta: los archivos pasan por FILES. Lo ajeno se pide por HTTP
+al dueño. **Una tabla general** —que no es de un microservicio en particular—
+puede leerla más de uno, porque todos viven en el mismo entorno (Rafael,
+23-oct-2026); se declara en `tools/verification/verify_checks.py`. Las tablas
+de un servicio llevan su prefijo (`commercial_*`).
 
 ---
 
@@ -142,21 +154,24 @@ no el modelo a copiar.
 2. **Las variables son requeridas, no opcionales.** `ENV_VARS['X'] or 30` sigue
    siendo un número elegido por el código: si falta configuración, el servicio
    debe fallar al arrancar, no correr callado sobre un valor que nadie eligió.
-3. **El `.env` es sólo configuración de entorno** (Rafael, 17-oct-2026): URLs
-   de servicios, nombres de tablas y buckets, credenciales, región, timeouts de
-   red. Así lo usan AUTH, EVENTS, FILES, ML_FUNCTIONS y AI (BEDROCK). **Los
-   valores de negocio no van al `.env`**: plazos, decimales, umbrales, cuentas,
-   parámetros de modelos, tamaños de página. En el `.env` obligan a redesplegar
-   para cambiar un número.
-   - Lo general, que sirve a más de un servicio (decimales, medidas,
-     unidades), y lo que hoy está en el `.env` de cada servicio, va al servicio
-     base **PARAMETERS**, que cada servicio consulta por HTTP.
-   - Lo propio del dominio de un servicio se queda en sus tablas (en FINANCE,
-     las tasas de ley y los parámetros de cada cliente).
+3. **El `.env` es configuración** (Rafael, 17 y 24-oct-2026): entorno,
+   configuración del Lambda y del servicio, variables globales, nombres de
+   tablas y buckets, credenciales, URLs de servicios y de fuentes, timeouts
+   de red. El modelo son AUTH, EVENTS, FILES y ML_FUNCTIONS; los servicios
+   que llaman a los base llevan la misma estructura más `API_URL`. **Nunca
+   valores de transacciones o de cálculos**: plazos, decimales, umbrales,
+   cuentas, parámetros de modelos, tamaños de página. En el `.env` obligan a
+   redesplegar para cambiar un número.
+   - **Cada microservicio guarda sus parámetros en sus propias tablas**
+     (Rafael, 24-oct-2026): los que no cambian
+     por empresa, en su tabla `<servicio>_parameters`; los que cambian, en
+     otra tabla del servicio que asocia el parámetro a la empresa. Se leen
+     con `load_parameters` del bloque estándar SERVICE PARAMETERS, al final
+     de `services/utils.py` e idéntico en cada servicio que lo usa. La
+     definición única es `docs/parametros.md`; la siembra,
+     `tools/seeds/seed_service_parameters.py`.
    - En el código se quedan sólo las constantes físicas y las conversiones de
      unidad.
-   - Los servicios que todavía tienen valores de negocio en el `.env` se pasan
-     a PARAMETERS uno por uno, después del Análisis Financiero.
 4. **Una sola dirección para los servicios: `API_URL`** (Rafael, 17-oct-2026).
    El gateway `api.bearsoft.com.bo` envía cada `/v1/<servicio>` a su Lambda,
    así que la ruta nombra al servicio y cada llamada arma
@@ -203,8 +218,8 @@ De referencia, `trade`, `forms` y `localization` los usan desde siempre.
 ## 8. Propiedad y forma de los datos
 
 El dueño es **parte de la consulta**, no un filtro posterior que se pueda
-olvidar; en OPTIMIZATION además es parte de la clave de partición. Un recurso
-ajeno responde **igual que uno inexistente**.
+olvidar; en las rutas de COMMERCIAL además es parte de la clave de partición.
+Un recurso ajeno responde **igual que uno inexistente**.
 
 **Toda carga tiene dueño:** el usuario autenticado que la ejecuta, venga por
 archivo o por API. Nunca se deriva del contenido.

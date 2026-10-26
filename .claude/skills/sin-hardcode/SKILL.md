@@ -1,6 +1,6 @@
 ---
 name: sin-hardcode
-description: Barre un servicio buscando decisiones de negocio escritas en el código y las mueve a PARAMETERS (o a las tablas del propio servicio); al .env sólo va el entorno. Es la corrección que más se ha repetido en este proyecto.
+description: Barre un servicio buscando decisiones de negocio escritas en el código y las mueve a la tabla `<servicio>_parameters` del propio servicio; al .env sólo va la configuración. Es la corrección que más se ha repetido en este proyecto.
 argument-hint: [servicio]
 allowed-tools: Bash(cd *), Bash(grep *), Bash(python3 *), Read, Edit
 ---
@@ -9,9 +9,10 @@ Barre `$1` buscando valores de negocio incrustados y muévelos fuera del código
 
 ## El criterio
 
-**Si es una decisión de negocio, va a PARAMETERS** (o a las tablas del propio
-servicio si es de su dominio). **Si es entorno** —URL, tabla, credencial,
-región, timeout de red— **va al `.env`. Si es aritmética, se queda.**
+**Si es una decisión de negocio, va a la tabla `<servicio>_parameters` del
+propio servicio** (lo que cambia por empresa, a su tabla de la empresa). **Si
+es configuración** —URL, tabla, credencial, región, timeout de red— **va al
+`.env`. Si es aritmética, se queda.**
 (CLAUDE.md §5.3: el `.env` con valores de negocio obliga a redesplegar para
 cambiar un número.)
 
@@ -79,7 +80,9 @@ grep -rnE "^_[A-Z_]+: (int|float) = [0-9]" services/*.py
 
 ## Cómo dejarlo
 
-Un valor de negocio se da de alta en PARAMETERS con su descripción. Una
+Un valor de negocio se da de alta como fila del servicio en `docs/parametros.md`
+(con su descripción), se siembra con `tools/seeds/seed_service_parameters.py`
+y se lee con `load_parameters` del bloque SERVICE PARAMETERS. Una
 variable de entorno nueva va al `.env` **con un comentario que diga qué
 gobierna y por qué ese valor**, no qué es:
 

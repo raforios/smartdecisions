@@ -19,7 +19,7 @@ Una revisión general alcanza **sólo los once servicios propios de BearSoft**:
 ```
 SmartDecisions   COMMERCIAL · MINING_ANALYSIS · FINANCE
 SmartBilling     BILLING
-Base             AUTH · EVENTS · FILES · ML_FUNCTIONS · PARAMETERS · AI · QUOTES
+Base             AUTH · EVENTS · FILES · ML_FUNCTIONS · AI · QUOTES
 ```
 
 **Nunca se tocan sin que Rafael lo pida para ese servicio en concreto:**
@@ -61,10 +61,10 @@ SPANISH = re.compile(
     r'cobro|cobros|fecha|días|monto|saldo|crédito|plazo|factura|facturas|'
     r'tramo|tramos|política|almacén|demanda|cobertura)\b', re.I)
 
-# Los once servicios propios. Todo lo demás es de un cliente y queda fuera
+# Los diez servicios propios. Todo lo demás es de un cliente y queda fuera
 # del barrido: se reporta, no se corrige.
 OURS = ('ai', 'auth', 'billing', 'commercial', 'events', 'files', 'finance',
-        'mining_analysis', 'ml_functions', 'parameters', 'quotes')
+        'mining_analysis', 'ml_functions', 'quotes')
 
 
 def is_ours(path: Path) -> bool:
