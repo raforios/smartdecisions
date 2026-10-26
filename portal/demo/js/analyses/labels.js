@@ -14,7 +14,6 @@
         UNSUPPORTED_FILE_FORMAT: 'Formato no soportado. Sube un archivo .xlsx o .csv.',
         EMPTY_UPLOAD: 'El archivo que subiste está vacío.',
         FILES_SERVICE_UNREACHABLE: 'No se pudo contactar al servicio de archivos.',
-        FILES_SERVICE_REJECTED_UPLOAD: 'El servicio de archivos rechazó la subida.',
         FILES_SERVICE_REJECTED: 'No se pudo leer el archivo cargado. Vuelve a intentarlo en un momento.',
         FILES_SERVICE_NOT_CONFIGURED: 'El servicio de archivos no está configurado.'
     };
@@ -127,11 +126,15 @@
         NO_DATE_COLUMN: 'El archivo no tiene una columna de fecha válida, ' +
             'no se puede filtrar por período.',
         EMPTY_PERIOD: 'No hay ventas en el período seleccionado. Elige otro rango.',
-        DATASET_UNREADABLE: 'No se pudo leer el archivo cargado. Vuelve a intentarlo en un momento.',
         DATASET_NOT_FOUND: 'No encontramos tus datos de ventas. Cárgalos en Cargar datos.',
         DATASET_NOT_VALIDATED: 'Tu archivo de ventas no pasó la validación. Corrígelo y vuelve a cargarlo.',
         UNSUPPORTED_FILE_TYPE: 'El archivo debe ser Excel (.xlsx) o CSV.',
         FORECAST_UNAVAILABLE: 'No se pudo calcular el pronóstico en este momento. Vuelve a intentarlo.',
+        FILES_SERVICE_NOT_CONFIGURED: 'El servicio de archivos no está configurado.',
+        FILES_SERVICE_UNREACHABLE: 'El servicio de archivos no responde ahora. Intenta en unos minutos.',
+        FILES_SERVICE_REJECTED: 'El servicio de archivos rechazó el archivo. Vuelve a intentarlo.',
+        RUN_NOT_FOUND: 'Todavía no hay un cálculo de oportunidades para esta carga. Pulsa «Recalcular».',
+        NO_REJECTED_ROWS: 'Esa carga no tiene filas rechazadas.',
         CALCULATION_UNAVAILABLE: 'No se pudo hacer el cálculo en este momento. Vuelve a intentarlo.'
     };
 

@@ -52,6 +52,8 @@
         RATES_STORE_UNAVAILABLE: 'No se pudieron leer los tipos de cambio guardados. Vuelve a intentarlo en un momento.',
         INVALID_HALF: 'La quincena debe ser la primera o la segunda del mes.',
         FORECAST_UNAVAILABLE: 'No se pudo calcular la proyección en este momento. Vuelve a intentarlo.',
+        UNKNOWN_MODEL: 'Ese modelo de proyección no existe.',
+        NO_RATE_FOR_DATE: 'No hay cotización guardada para esa fecha.',
         RATES_UNAVAILABLE: 'No se pudo leer la proyección del tipo de cambio. Vuelve a intentarlo.',
         SOURCE_UNREADABLE: 'La página de la fuente cambió de forma y no se ' +
             'puede leer con seguridad.',

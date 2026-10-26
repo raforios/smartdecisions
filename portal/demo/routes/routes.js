@@ -41,11 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
         EMPTY_UPLOAD: 'El archivo que subiste está vacío.',
         INVALID_ROW: 'Una fila del archivo tiene valores inválidos.',
         ROUTING_SERVICE_UNAVAILABLE: 'El servicio de ruteo vial (OSRM) no está disponible.',
-        ROUTING_SERVICE_NO_ROUTE: 'No se encontró una ruta por calles para ese tramo.',
         CALCULATION_UNAVAILABLE: 'No se pudo calcular la ruta en este momento. Vuelve a intentarlo.',
         DATASET_NOT_FOUND: 'No encontramos tus datos de ventas. Cárgalos en Cargar datos.',
         DATASET_NOT_VALIDATED: 'Tu archivo de ventas no pasó la validación. Corrígelo y vuelve a cargarlo.',
-        DATASET_UNREADABLE: 'No se pudo leer el archivo cargado. Vuelve a intentarlo en un momento.',
         UNSUPPORTED_FILE_TYPE: 'El archivo debe ser Excel (.xlsx) o CSV.'
     };
 

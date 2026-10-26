@@ -18,7 +18,6 @@
     // The AI service answers with stable codes; the user reads these instead.
     const ERRORS = {
         EMPTY_PAYLOAD: 'Todavía no hay resultados en esta vista.',
-        PAYLOAD_TOO_LARGE: 'Hay demasiados datos en pantalla para interpretarlos de una vez.',
         ROLE_NOT_CONFIGURED: 'La interpretación de esta pantalla todavía no está habilitada.',
         ROLE_NOT_FOUND: 'La interpretación de esta pantalla todavía no está habilitada.',
         MODEL_UNAVAILABLE: 'El servicio de interpretación no responde ahora. Intenta en unos minutos.',

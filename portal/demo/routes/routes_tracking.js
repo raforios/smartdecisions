@@ -24,6 +24,11 @@
         PLANNED_ROUTE_NOT_ACTIVE: 'El plan no está activo.',
         OUTSIDE_START_GEOFENCE: 'Estás demasiado lejos de la primera parada para iniciar.',
         OUTSIDE_END_GEOFENCE: 'Estás demasiado lejos de la última parada para cerrar.',
+        OUTSIDE_STOP_GEOFENCE: 'Estás demasiado lejos de esa parada para registrar la visita.',
+        CLIENT_NOT_FOUND: 'Ese cliente no existe en tu cartera.',
+        MISSING_PRICE: 'El stock del día no trae precio de venta para algún producto.',
+        NOT_ENOUGH_STOPS: 'La ruta tiene muy pocas paradas con ubicación para ordenarla.',
+        NO_COORDINATES: 'Ninguna parada de la ruta tiene ubicación.',
         ROUTE_ALREADY_OPEN: 'La ruta ya está abierta.',
         ROUTE_ALREADY_CLOSED: 'La ruta ya está cerrada.',
         REOPEN_NOT_SAME_DAY: 'Sólo se puede reabrir una ruta el mismo día que empezó.',
@@ -33,19 +38,15 @@
         INVALID_ROW: 'Una fila tiene valores inválidos.',
         MISSING_COLUMNS: 'Al archivo le faltan columnas obligatorias.',
         NO_VISITS_TO_INFER: 'Ese vendedor no registró visitas ese día.',
-        EMPTY_STOCK_LOAD: 'No hay productos en la carga.',
         DUPLICATE_SKU: 'Hay un SKU repetido en la carga.',
         STOCK_NOT_LOADED: 'Ese producto no está en el stock del día.',
         INSUFFICIENT_STOCK: 'No hay stock suficiente para esa venta.',
         NO_STOCK_FOR_DAY: 'El archivo de stock no tiene productos para esa fecha.',
-        STOCK_SOURCE_UNAVAILABLE: 'No se pudo leer el archivo de stock. Intenta de nuevo.',
         DATASET_NOT_FOUND: 'No se encontró tu archivo de ventas. Vuelve a cargarlo.',
         UNSUPPORTED_FILE_FORMAT: 'Sólo se aceptan archivos .xlsx o .csv.',
         SELLER_NOT_FOUND: 'Ese vendedor no existe en tu cartera.',
         NO_SELLERS_IN_FILE: 'El archivo de ventas no tiene la columna Vendedor llena.',
         BASE_POINT_NOT_SET: 'Todavía no cargaste el punto de partida: hazlo en Configuración.',
-        SELLERS_UNAVAILABLE: 'No se pudo consultar a qué usuario corresponde el vendedor. ' +
-            'Intenta de nuevo.',
         ROLE_NOT_ALLOWED: 'Tu rol no permite esta acción.'
     };
 
