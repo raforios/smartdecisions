@@ -82,23 +82,15 @@ def write_rows(
                                    'value_type': row.kind, 'description': row.description})
 
 
-def create_and_seed(
-    resource: Any,
-    table_name: str,
-    scope: str
-) -> None:
+def values(scope: str) -> dict[str, Decimal | str | list[str]]:
     '''
-        Creates a service's parameters table and writes its rows: what a
-        service's tests do in moto before the modules read their values.
+        The values of one service as its table stores them: what a service's
+        tests load in memory, with no AWS and no simulated table.
 
         Args:
-            resource (Any): The boto3 DynamoDB resource.
-            table_name (str): The service's parameters table.
             scope (str): The service, as the document names it.
+
+        Returns:
+            dict[str, Decimal | str | list[str]]: {code: value}.
     '''
-    table = resource.create_table(
-        TableName = table_name,
-        KeySchema = [{'AttributeName': 'code', 'KeyType': 'HASH'}],
-        AttributeDefinitions = [{'AttributeName': 'code', 'AttributeType': 'S'}],
-        BillingMode = 'PAY_PER_REQUEST')
-    write_rows(table, read_rows(scope))
+    return {row.code: row.value for row in read_rows(scope)}
