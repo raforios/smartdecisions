@@ -380,6 +380,6 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 
 Una sola puerta de entrada, el API HTTP **`bearsoft-gateway`**, recibe todo lo que llega a `api.bearsoft.com.bo` y lo envía al Lambda de cada servicio según el prefijo: `ANY /v1/commercial/{proxy+}` → Lambda de COMMERCIAL, y así con cada uno. El Lambda recibe la ruta **completa** (`/v1/commercial/datasets`) en el formato de evento 2.0, así que los servicios no saben ni necesitan saber que hay un dominio delante. El CORS del dominio se define una sola vez, en el gateway.
 
-Los API propios de cada servicio (los de `build_and_deploy.sh`) siguen respondiendo en su URL `execute-api`; el gateway no pasa por ellos.
+Los servicios propios no tienen API por servicio: su `deploy.config` no lleva `API_NAME`, así que `build_and_deploy.sh` no lo crea y sólo se llega a ellos por el gateway. La excepción es EVENTS, que conserva `events-handler-service` porque el entorno de desarrollo de BINARIA apunta a esa URL.
 
 **Si un servicio agrega un prefijo de rutas nuevo** (un `APIRouter(prefix = '/v1/algo')` que no estaba), agrégalo a la lista `ROUTES` de `setup_api_domain.sh` y ejecuta el script.

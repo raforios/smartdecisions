@@ -87,7 +87,9 @@ fi
 : "${FUNCTION_NAME:?Error: FUNCTION_NAME no definida en deploy.config}"
 : "${ROLE_NAME:?Error: ROLE_NAME no definida en deploy.config}"
 : "${ZIP_FILE:?Error: ZIP_FILE no definida en deploy.config}"
-: "${API_NAME:?Error: API_NAME no definida en deploy.config}"
+# API_NAME es opcional (Rafael, 26-oct-2026): los servicios propios entran
+# sólo por el gateway único api.bearsoft.com.bo (setup_api_domain.sh) y no
+# llevan API propia; la declaran AUTH, EVENTS y los servicios de clientes.
 : "${REGION:?Error: REGION no definida en deploy.config}"
 : "${TIMEOUT:?Error: TIMEOUT no definida en deploy.config}"
 : "${MEMORY_SIZE:?Error: MEMORY_SIZE no definida en deploy.config}"
@@ -182,8 +184,13 @@ destroy_resources() {
     echo "Eliminando función Lambda '$FUNCTION_NAME'..."
     aws lambda delete-function --function-name "$FUNCTION_NAME" --region "$REGION" --profile "$PROFILE" 2>/dev/null || true
 
-    echo "Eliminando API Gateway HTTP '$API_NAME'..."
-    API_ID=$(aws apigatewayv2 get-apis --region "$REGION" --profile "$PROFILE" --query "Items[?Name=='$API_NAME'].ApiId" --output text 2>/dev/null)
+    if [ -z "$API_NAME" ]; then
+        echo "Sin API propia (API_NAME vacío): nada que eliminar en API Gateway."
+        API_ID=""
+    else
+        echo "Eliminando API Gateway HTTP '$API_NAME'..."
+        API_ID=$(aws apigatewayv2 get-apis --region "$REGION" --profile "$PROFILE" --query "Items[?Name=='$API_NAME'].ApiId" --output text 2>/dev/null)
+    fi
     if [ -n "$API_ID" ]; then
         echo "API Gateway ID: $API_ID. Eliminando..."
         aws apigatewayv2 delete-api --api-id "$API_ID" --region "$REGION" --profile "$PROFILE" || echo "API Gateway '$API_NAME' no encontrada o ya eliminada."
@@ -881,11 +888,14 @@ main_deploy_flow() {
     # Paso 5: Gestión de la Función Lambda
     manage_lambda_function
 
-    # Paso 6: Gestión de API Gateway (siempre necesario)
-    manage_api_gateway
-
-    # Paso 7: Configuración de Permisos (siempre necesario)
-    configure_lambda_permission
+    # Paso 6 y 7: API propia y su permiso, sólo si el deploy.config declara
+    # API_NAME. Sin ella, el servicio entra por el gateway único.
+    if [ -n "$API_NAME" ]; then
+        manage_api_gateway
+        configure_lambda_permission
+    else
+        echo "Sin API propia (API_NAME vacío): el servicio entra por api.bearsoft.com.bo."
+    fi
 
     # Paso 8: Limpieza del ZIP local (condicional)
     if [[ "$SKIP_CODE_UPDATE" == false ]]; then
