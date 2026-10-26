@@ -56,7 +56,7 @@ def invoke(
             user_prompt (str): The view payload and the question.
             max_tokens (int): Ceiling on the answer.
             temperature (float): How freely the model words it; a business
-                value read from PARAMETERS (BEDROCK_TEMPERATURE).
+                value read from `ai_parameters` (BEDROCK_TEMPERATURE).
 
         Returns:
             dict[str, Any]: `text`, `input_tokens` and `output_tokens`.

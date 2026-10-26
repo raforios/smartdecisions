@@ -16,6 +16,7 @@ import uvicorn
 
 from routes.classification import router as classification_router
 from routes.prediction import router as prediction_router
+from routes.routing import router as routing_router
 from routes.common import router as common_router
 
 from services.api_exceptions import setup_exception_handlers
@@ -151,6 +152,7 @@ async def custom_swagger_ui() -> HTMLResponse:
 # Include routers
 app.include_router(classification_router, tags = ['ML Classification'])
 app.include_router(prediction_router, tags = ['ML Prediction'])
+app.include_router(routing_router, tags = ['ML Routing'])
 app.include_router(common_router, tags = ['ML Common Functions'])
 
 # Entry point to run the app

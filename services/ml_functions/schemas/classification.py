@@ -1,7 +1,7 @@
 '''
     Classification Schemas (Request/Response)
 '''
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from schemas.base import NumPyValidatorBase
 
@@ -241,3 +241,66 @@ class PredictLogisticResponse(BaseModel):
             ]
         }
     }
+
+
+class TiersRequest(BaseModel):
+    '''
+        Values to split in tiers by their place in the ranking (24-oct-2026,
+        from the segmentation COMMERCIAL kept).
+    '''
+    values: list[float] = Field(..., min_length = 1, max_length = 100000,
+                                description = 'One value per member, in any order.')
+    cuts: list[float] = Field(
+        ..., min_length = 1, max_length = 10,
+        description = 'Increasing shares of the ranking (0..1) where each tier ends.')
+
+    @field_validator('cuts')
+    @classmethod
+    def _increasing_shares(
+        cls,
+        cuts: list[float]
+    ) -> list[float]:
+        '''
+            The cuts are shares, strictly increasing.
+        '''
+        if any(cut <= 0 or cut >= 1 for cut in cuts) or cuts != sorted(set(cuts)):
+            raise ValueError('cuts must be strictly increasing shares between 0 and 1')
+        return cuts
+
+
+class TiersResponse(BaseModel):
+    '''
+        The tier of each value, in the order they came (0 = the top).
+    '''
+    tiers: list[int]
+
+
+class AssociationRulesRequest(BaseModel):
+    '''
+        Transactions to mine for association rules (24-oct-2026, from the
+        Apriori COMMERCIAL kept).
+    '''
+    transactions: list[list[str]] = Field(
+        ..., max_length = 200000, description = 'The items of each transaction.')
+    min_support: float = Field(..., gt = 0, le = 1,
+                               description = 'Minimum share of transactions.')
+    min_lift: float = Field(..., ge = 0, description = 'Minimum lift a rule needs.')
+
+
+class AssociationRule(BaseModel):
+    '''
+        When a transaction holds `antecedents`, it tends to hold `consequents` too.
+    '''
+    antecedents: list[str]
+    consequents: list[str]
+    support: float
+    confidence: float
+    lift: float
+
+
+class AssociationRulesResponse(BaseModel):
+    '''
+        The rules kept and how many transactions were mined.
+    '''
+    rules: list[AssociationRule]
+    transactions: int = Field(..., ge = 0)

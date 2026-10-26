@@ -29,7 +29,6 @@ def test_explain_controller_returns_its_model():
     async def _explain(
         view, # pylint: disable=unused-argument
         data, # pylint: disable=unused-argument
-        auth_token, # pylint: disable=unused-argument
         owner # pylint: disable=unused-argument
     ):
         return {
@@ -46,8 +45,7 @@ def test_explain_controller_returns_its_model():
         response = asyncio.run(controllers.explain_controller(
             payload = ExplainRequest(view = 'rate_forecast', data = {'currency': 'USD'}),
             current_user = 'tester',
-            request = None,
-            auth_token = None
+            request = None
         ))
 
     assert isinstance(response, ExplainResponse)

@@ -1,132 +1,168 @@
-# AI — Interpretation Service
+# 💬 AI-Interpretation-Service 🤖
 
-Servicio **base** de BearSoft desde el cierre de la fase 8, el 21-oct-2026
-(CLAUDE.md §4).
+Microservicio de **explicaciones con IA** de la plataforma de BearSoft. Convierte en palabras lo que una pantalla muestra como datos y códigos, desde el punto de vista del experto configurado para esa pantalla.
 
-## Para qué sirve
+-----
 
-Convierte en palabras lo que el resto del sistema devuelve como datos y
-códigos. Un microservicio devuelve **datos y códigos, nunca texto de cara al
-usuario** (CLAUDE.md §6); el portal traduce los códigos cortos a etiquetas, y
-lo que no puede hacer —**explicar**— lo hace este servicio: qué dice un estado
-de resultados, hasta cuándo alcanza el efectivo en cada escenario, si el
-modelo de negocio del dueño se sostiene con sus números.
+## 🎯 Propósito Principal
 
-Tres principios:
+El **AI-Interpretation-Service** explica lo que recibe, y nada más. Sus funcionalidades clave incluyen:
 
-1. **Explica lo que recibe, y nada más.** Sin bases de datos de otros, sin
-   herramientas, sin ir a buscar nada: si una cifra no está en la pantalla, no
-   está en la respuesta.
-2. **Lee la respuesta del backend tal cual.** `data` es el JSON que devolvió el
-   servicio que produjo la vista, ya validado por su modelo Pydantic; volver a
-   declararlo aquí serían dos contratos para una sola cosa.
-3. **Las vistas y su redacción viven en la base de datos.** Una vista existe si
-   tiene un rol activo en `ai_prompts`: un producto nuevo registra las suyas
-   sin cambiar el código de AI, y ajustar un texto no exige desplegar.
+  * **Explicación de una Vista:** Recibe `{view, data}` —el JSON que devolvió el servicio que produjo la pantalla— y devuelve el texto, el rol usado y la versión.
+  * **Roles por Vista:** Cada vista tiene versiones de su rol (contexto, misión, reglas, modelo y tokens) en `ai_prompts`; una sola activa por vista, y cada empresa puede tener la suya.
+  * **Caché:** Una explicación se guarda y se reutiliza mientras la misma pantalla muestre los mismos datos.
+  * **Recorte del Payload:** Una lista larga se recorta a una muestra para que una pantalla grande no sea una factura grande.
+  * **Modelo:** Claude Haiku 4.5 por Amazon Bedrock (perfiles `us.`).
 
-El modelo es **Claude Haiku 4.5** por Bedrock (`model_id` de cada rol). Toda
-respuesta se muestra con «Texto generado por IA; revísalo antes de decidir»
-(política de uso de Anthropic).
+-----
 
-## Endpoints y quién puede llamarlos
+## 🛠️ Tecnologías Utilizadas
 
-Todos piden el JWT de AUTH. Los roles no se limitan a `ADMIN` (Rafael,
-19-oct-2026: quizá se abra un chat más adelante).
+  * **Lenguaje:** Python 3.14 🐍
+  * **Framework Web:** FastAPI ✨
+  * **Servidor ASGI:** Uvicorn 🚀
+  * **Base de Datos:** AWS DynamoDB (`boto3`)
+  * **IA:** Amazon Bedrock (`boto3`, `bedrock-runtime`)
+  * **Validación de Datos:** Pydantic V2
+  * **Plataforma Cloud:** AWS Lambda (`Mangum`) detrás de `api.bearsoft.com.bo`
 
-| Método | Ruta | Qué hace |
-|---|---|---|
-| POST | `/v1/ai/explain` | Explica lo que una vista está mostrando: `{view, data}` |
-| GET | `/v1/ai/roles` | Las versiones de cada vista y cuál está activa |
-| GET | `/v1/ai/roles/{view}/{version}` | Una versión completa |
-| POST | `/v1/ai/roles` | Guarda una versión; con `active: false` no retira las demás |
-| PATCH | `/v1/ai/roles/{view}/{version}/active` | La activa (retira las otras de esa vista) o la apaga |
+-----
 
-Los cambios de roles y cada explicación generada se auditan en EVENTS. Nada se
-borra por la API: volver atrás es activar otra versión.
+## 🚀 Endpoints de la API
 
-Los fallos viajan como códigos: `EMPTY_PAYLOAD`, `ROLE_NOT_CONFIGURED`,
-`ROLE_NOT_FOUND`, `MODEL_UNAVAILABLE`, `MODEL_REFUSED`, `PARAMETER_MISSING` y
-los `PARAMETERS_SERVICE_*`; `portal/demo/js/ai.js` los pasa a palabras.
+A continuación se listan los **endpoints** de la API, agrupados por su funcionalidad. Todos exigen `Authorization: Bearer <jwt>` salvo que se indique otra cosa.
 
-## Qué servicios lo llaman
+### Explicaciones (`/v1/ai`)
 
-- **El portal**: `portal/demo/js/ai.js` pone el botón «¿Qué significa esto?»
-  en cada pantalla y manda lo que muestra; `portal/demo/js/prompts.js` edita
-  los roles en Parámetros › Prompts de la IA.
-- **Ningún servicio del backend** lo llama hoy.
-- AI llama a **PARAMETERS** (alcance `ai`, guardado `PARAMETERS_CACHE_SECONDS`)
-  y a **EVENTS**, por `API_URL`.
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `POST` | `/v1/ai/explain` | Explica lo que una **vista** está mostrando. |
 
-## Variables de entorno
+### Roles (`/v1/ai/roles`)
 
-Sólo entorno (CLAUDE.md §5.3). Los valores de negocio —horas de caché, tamaño
-máximo del payload, muestra de una lista larga, la pregunta y la temperatura—
-están en PARAMETERS, alcance `ai` (`docs/parametros.md`).
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/v1/ai/roles` | Las versiones del **rol** de cada vista y cuál está activa. |
+| `POST` | `/v1/ai/roles` | Guarda una versión del **rol** de una vista. |
+| `GET` | `/v1/ai/roles/{view}/{version}` | Una versión completa del **rol**. |
+| `PATCH` | `/v1/ai/roles/{view}/{version}/active` | Activa una versión (retira las otras de esa vista) o la apaga. |
+| `DELETE` | `/v1/ai/roles/{view}/{version}` | Elimina una versión del **rol**. Sólo `ADMIN`. |
 
-| Variable | Qué es |
-|---|---|
-| `HOST`, `PORT`, `APP_ENV`, `ROOT_PATH` | Servidor local y entorno |
-| `SECRET_KEY`, `ALGORITHM` | Verificación del JWT de AUTH |
-| `TARGET_TIMEZONE` | Zona horaria de las fechas que registra |
-| `API_URL` | Gateway `api.bearsoft.com.bo`, para PARAMETERS y EVENTS |
-| `REQUEST_TIMEOUT_SECONDS` | Timeout de esas llamadas |
-| `PARAMETERS_CACHE_SECONDS` | Cuánto guarda lo leído de PARAMETERS |
-| `DYNAMODB_TABLE_NAME_AI_PROMPTS` | Tabla de roles |
-| `DYNAMODB_TABLE_NAME_AI_EXPLANATIONS` | Tabla de caché |
-| `BEDROCK_REGION`, `BEDROCK_ANTHROPIC_VERSION` | Proveedor del modelo |
+### Salud
 
-Dos hechos de Bedrock que cuesta encontrar: el `model_id` lleva el prefijo
-`us.` del perfil de inferencia (sin él: `on-demand throughput isn't
-supported`), y los modelos de Anthropic piden un formulario de caso de uso una
-vez por cuenta, que tarda hasta 15 minutos en propagar.
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/` | Página de inicio del servicio. |
+| `GET` | `/v1/ai/health` | Salud del servicio y validación de su configuración. |
+| `GET` | `/v1/ai/health/tables` | Estado de las tablas DynamoDB del servicio. |
 
-## Tablas
+-----
+
+## 🗄️ Datos que guarda
 
 | Tabla | Partición | Orden | Qué guarda |
 |---|---|---|---|
-| `ai_prompts` | `view` | `version` (N) | El rol de cada vista: `role`, `instructions`, `rules`, `max_tokens`, `model_id`, `active`, `created_at` |
-| `ai_explanations` | `cache_key` | — | Explicaciones ya generadas, con TTL en `expires_at` |
+| `ai_prompts` | `view` | `version` | El rol de cada vista: `role`, `instructions`, `rules`, `model_id`, `max_tokens`, `active` y la empresa dueña |
+| `ai_explanations` | `cache_key` | — | Las explicaciones generadas, para reutilizarlas |
+| `ai_parameters` | `code` | — | Los valores de negocio del servicio |
 
-La clave del caché es la huella de **vista + payload + versión del rol**: si
-cambia cualquiera de los tres, la respuesta sería otra. Por eso, para probar
-una redacción nueva hace falta una versión nueva. Una respuesta guardada sale
-en ~0,3 s contra ~5 s, y sin pagar el modelo.
+Los fallos viajan como códigos: `EMPTY_PAYLOAD`, `ROLE_NOT_CONFIGURED`, `ROLE_NOT_FOUND`, `MODEL_UNAVAILABLE` y `MODEL_REFUSED`.
 
-Las reglas comunes de los textos nacen de errores vistos: contar diez minerales
-donde había nueve, el voseo, cuentas propias mal hechas, comparar un año sin
-terminar con uno entero. Están escritas como prohibiciones explícitas, con el
-ejemplo textual cuando una sola regla no alcanzó.
+-----
 
-Las dos tablas las crea `services/ci/api/create_dynamodb_tables.sh`. El rol del
-Lambda necesita `bedrock:InvokeModel` sobre los perfiles de inferencia (con
-comodín de región: el perfil enruta entre regiones).
+## ⚙️ Valores de negocio
 
-## Cómo correrlo y probarlo
+Los valores de negocio del servicio viven en la tabla `ai_parameters` (un ítem por
+código), no en el `.env`. Los lee `load_parameters`, del bloque SERVICE
+PARAMETERS al final de `services/utils.py`, una vez por contenedor; un valor
+cambiado en la tabla lo toman los contenedores que arrancan después. Si falta
+uno, el servicio no arranca. Definición: filas `ai` de
+`docs/parametros.md`. Siembra:
 
-```bash
-cd services/ai
-python main.py            # puerto del .env (PORT)
+```shell
+python -m tools.seeds.seed_service_parameters ai --yes
+```
+
+-----
+
+## 🧪 Integración Continua
+
+`.github/workflows/python-package.yml`, en cada push y pull request a `main`:
+instala `requirements.txt`, corre `pylint --fail-under=10.0 .` **sin** el
+`.pylintrc` del repositorio y `pytest` **sin `.env`**. `tests/conftest.py` deja fuera sin `.env` los tests que leen configuración; corren los de los esquemas y sus reglas.
+
+-----
+
+## 🗂️ Estructura del Microservicio
+
+```txt
+ai/
+├── controllers/
+│   ├── __init__.py
+│   └── ai.py
+├── models/
+│   ├── __init__.py
+│   └── ai.py
+├── routes/
+│   ├── __init__.py
+│   └── ai.py
+├── schemas/
+│   ├── __init__.py
+│   ├── ai.py
+│   └── health.py
+├── services/
+│   ├── __init__.py
+│   ├── ai.py
+│   ├── ai_utils.py
+│   ├── api_exceptions.py
+│   ├── bedrock_client.py
+│   ├── crud.py
+│   ├── db_connection.py
+│   ├── environment.py
+│   ├── exceptions.py
+│   ├── logger_config.py
+│   ├── security.py
+│   └── utils.py
+├── tests/
+├── .dockerignore
+├── .env
+├── .gitignore
+├── deploy.config
+├── main.py
+├── README.md
+└── requirements.txt
+```
+
+-----
+
+## 📀 Ejecución Local
+
+Para ejecutar el microservicio localmente, sigue los siguientes pasos:
+
+1.  **Instala las dependencias:**
+
+```shell
+pip install -r requirements.txt
+```
+
+2.  **Configura el entorno:** Crea el archivo `.env` con `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, las tablas `DYNAMODB_TABLE_NAME_AI_PROMPTS`, `DYNAMODB_TABLE_NAME_AI_EXPLANATIONS` y `DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS`, y `BEDROCK_REGION` y `BEDROCK_ANTHROPIC_VERSION`.
+
+3.  **Ejecuta el servidor de la API:**
+
+```shell
+python main.py
+```
+
+4.  **Ejecuta las pruebas:**
+
+```shell
 python -m pytest -q
 pylint --fail-under=10.0 .
 ```
 
-El modelo nunca se llama en las pruebas. Cubren lo que lo rodea: un rol que
-nadie configuró, un caché que serviría una respuesta escrita con otras reglas,
-un payload que hay que recortar.
+-----
 
-Para probar un texto contra el modelo sin tocar la vista real: guardarlo como
-`prueba_<vista>` con una versión propia, llamar a `/v1/ai/explain` con el
-payload de la pantalla y borrar después las filas `prueba_*`.
+## 👤 Creado Por
 
-Se despliega con `services/ci/api/start.sh --redeploy ai` (lo despliega
-Rafael).
-
-## Qué revisa el CI
-
-Todavía no está en la matriz de `.github/workflows/python-package.yml`. Pylint
-da 10.00 sin el `.pylintrc` del repositorio, pero sus tests importan módulos que
-leen el `.env` al importarse, y sin `.env` no llegan a correr.
-
-## Creado por
-
-**Rafael Ríos Bascón** — [raforios@gmail.com](mailto:raforios@gmail.com)
+**Rafael Ríos Bascón**
+[raforios@gmail.com](mailto:raforios@gmail.com)

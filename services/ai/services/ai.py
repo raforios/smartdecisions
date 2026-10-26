@@ -48,22 +48,22 @@ from services.logger_config import custom_logger as logger
 from services.utils import (
     get_current_time_gmt,
     handle_service_errors,
-    read_parameters,
-    required_parameters
+    load_parameters
 )
 
 
-# The business values of an explanation live in PARAMETERS (scope `ai`), not
-# in the .env (Rafael, 17-oct-2026): changing one must not need a release.
-AI_SCOPE = 'ai'
-SETTINGS_CODES = ('EXPLANATION_CACHE_HOURS', 'MAX_PAYLOAD_CHARACTERS', 'LIST_SAMPLE_SIZE',
-                  'EXPLANATION_QUESTION', 'BEDROCK_TEMPERATURE')
+# The business values of an explanation live in the service's own table
+# `ai_parameters`, not in the .env (Rafael, 17-oct-2026; 24-oct-2026: every
+# service keeps its parameters in its own tables).
+SETTINGS_SPEC = {'EXPLANATION_CACHE_HOURS': int, 'MAX_PAYLOAD_CHARACTERS': int,
+                 'LIST_SAMPLE_SIZE': int, 'EXPLANATION_QUESTION': str,
+                 'BEDROCK_TEMPERATURE': float}
 
 
 @dataclass(frozen = True)
 class ExplainSettings:
     '''
-        What shapes an explanation, as read from PARAMETERS.
+        What shapes an explanation, as read from the service's own table.
 
         - cache_hours: how long an answer stays valid.
         - max_payload_characters: ceiling on what a view may send; a screen
@@ -80,26 +80,21 @@ class ExplainSettings:
     temperature: float
 
 
-def explain_settings(auth_token: str | None) -> ExplainSettings:
+def explain_settings() -> ExplainSettings:
     '''
-        Reads the explanation settings from PARAMETERS, all of them or none.
-
-        Args:
-            auth_token (str | None): The caller's Authorization header.
+        The explanation settings, from the service's own table, all of them
+        or none.
 
         Returns:
             ExplainSettings: The values in force.
-
-        Raises:
-            ServiceUnavailableError: PARAMETERS unreachable, or a value missing.
     '''
-    values = required_parameters(read_parameters(AI_SCOPE, auth_token), SETTINGS_CODES)
+    values = load_parameters(SETTINGS_SPEC)
     return ExplainSettings(
-        cache_hours = int(values['EXPLANATION_CACHE_HOURS']),
-        max_payload_characters = int(values['MAX_PAYLOAD_CHARACTERS']),
-        sample_size = int(values['LIST_SAMPLE_SIZE']),
-        question = str(values['EXPLANATION_QUESTION']),
-        temperature = float(values['BEDROCK_TEMPERATURE'])
+        cache_hours = values['EXPLANATION_CACHE_HOURS'],
+        max_payload_characters = values['MAX_PAYLOAD_CHARACTERS'],
+        sample_size = values['LIST_SAMPLE_SIZE'],
+        question = values['EXPLANATION_QUESTION'],
+        temperature = values['BEDROCK_TEMPERATURE']
     )
 
 
@@ -206,7 +201,6 @@ def _fit_to_budget(
 async def explain_service(
     view: str,
     data: dict[str, Any],
-    auth_token: str | None,
     owner: str
 ) -> dict[str, Any]:
     '''
@@ -215,8 +209,6 @@ async def explain_service(
     Args:
         view (str): View being explained; it exists if it has an active role.
         data (dict[str, Any]): The payload the view is displaying.
-        auth_token (str | None): The caller's Authorization header, forwarded
-            to PARAMETERS.
         owner (str): The caller's company: its own role wins over the general.
 
     Returns:
@@ -235,7 +227,7 @@ async def explain_service(
     # would be a second contract for one thing, and would drop fields the
     # expert could have used. The only thing done to it is fitting it to the
     # budget when a list is longer than anyone can read.
-    settings = explain_settings(auth_token)
+    settings = explain_settings()
     payload = _fit_to_budget(data, settings)
 
     prompt = get_active_prompt(view, owner)

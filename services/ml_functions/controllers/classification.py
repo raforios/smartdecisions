@@ -12,7 +12,13 @@ from services.machine_learning import (
     gradient_descent_logistic,
     predict_logistic
 )
+from services.classification import association_rules, rank_tiers
 from schemas.classification import (
+    AssociationRule,
+    AssociationRulesRequest,
+    AssociationRulesResponse,
+    TiersRequest,
+    TiersResponse,
     SigmoidBatchRequest,
     ComputeCostLogisticRequest,
     ComputeGradientLogisticRequest,
@@ -115,3 +121,35 @@ async def predicting_logistic_classification(
     logger.info(message)
 
     return PredictLogisticResponse(predictions = predictions_list)
+
+
+@handle_operation(exc_type = (ValueError, TypeError))
+async def ranking_tiers(request_body: TiersRequest) -> TiersResponse:
+    '''
+    Controller splitting the values in tiers by their place in the ranking.
+    '''
+    tiers = rank_tiers(request_body.values, request_body.cuts)
+    message = f'{len(tiers)} value(s) split in {len(request_body.cuts) + 1} tiers.'
+    logger.info(message)
+    return TiersResponse(tiers = tiers)
+
+
+@handle_operation(exc_type = (ValueError, TypeError))
+async def mining_association_rules(
+    request_body: AssociationRulesRequest
+) -> AssociationRulesResponse:
+    '''
+    Controller mining the association rules of the transactions (Apriori).
+    '''
+    rules = association_rules(request_body.transactions, request_body.min_support,
+                              request_body.min_lift)
+    message = (f'{len(rules)} association rule(s) from '
+               f'{len(request_body.transactions)} transaction(s).')
+    logger.info(message)
+    return AssociationRulesResponse(
+        rules = [AssociationRule(antecedents = list(rule.antecedents),
+                                 consequents = list(rule.consequents),
+                                 support = rule.support, confidence = rule.confidence,
+                                 lift = rule.lift) for rule in rules],
+        transactions = len(request_body.transactions)
+    )

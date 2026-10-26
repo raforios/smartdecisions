@@ -3,7 +3,7 @@
 '''
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Path, Request, status
+from fastapi import APIRouter, Depends, Path, Request, status
 
 from controllers.ai import (
     delete_role_controller,
@@ -64,7 +64,6 @@ async def get_prompt_caller(payload: dict[str, Any] = Depends(get_current_payloa
 async def explain_endpoint(
     request: Request,
     payload: ExplainRequest,
-    authorization: str | None = Header(None),
     current_user: str = Depends(get_current_owner)
 ) -> ExplainResponse:
     ''' Endpoint returning the interpretation of a view. '''
@@ -74,8 +73,7 @@ async def explain_endpoint(
     return await explain_controller(
         payload = payload,
         current_user = current_user,
-        request = request,
-        auth_token = authorization
+        request = request
     )
 
 

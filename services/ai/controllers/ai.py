@@ -28,8 +28,7 @@ from services.utils import audit_event, handle_service_errors
 async def explain_controller(
     payload: ExplainRequest,
     current_user: str,
-    request: Request, # pylint: disable=unused-argument
-    auth_token: str | None
+    request: Request # pylint: disable=unused-argument
 ) -> ExplainResponse:
     '''
         Explains what a view is showing.
@@ -38,14 +37,12 @@ async def explain_controller(
             payload (ExplainRequest): View and the data it displays.
             current_user (str): The caller's company: its own role wins.
             request (Request): Incoming request, used by the audit decorator.
-            auth_token (str | None): The caller's Authorization header, to read
-                the explanation settings from PARAMETERS.
 
         Returns:
             ExplainResponse: The interpretation and what produced it.
     '''
     result = await explain_service(view = payload.view, data = payload.data,
-                                   auth_token = auth_token, owner = current_user)
+                                   owner = current_user)
     return ExplainResponse(**result)
 
 

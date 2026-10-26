@@ -11,9 +11,15 @@ from controllers.classification import (
     calculating_cost_logistic,
     calculating_gradient_logistic,
     performing_gradient_descent_logistic,
-    predicting_logistic_classification
+    predicting_logistic_classification,
+    ranking_tiers,
+    mining_association_rules
 )
 from schemas.classification import (
+    AssociationRulesRequest,
+    AssociationRulesResponse,
+    TiersRequest,
+    TiersResponse,
     SigmoidBatchRequest,
     ComputeCostLogisticRequest,
     ComputeGradientLogisticRequest,
@@ -198,3 +204,61 @@ async def predict_logistic_classification_route(
     message = f'User: {current_user} requested logistic regression prediction for new data.'
     logger.info(message)
     return await predicting_logistic_classification(request)
+
+
+@router.post(
+    '/tiers',
+    response_model = TiersResponse,
+    summary = 'Split values in tiers by their place in the ranking',
+    description = '''Sorts the values from the highest down and gives each one the
+        tier of the share of the ranking it falls in: with cuts [0.2, 0.5] the top
+        20 % is tier 0, the next 30 % tier 1 and the rest tier 2. The client value
+        segmentation COMMERCIAL shows, and colours its route stops with.'''
+)
+async def tiers_route(
+    request: TiersRequest,
+    current_user: str = Depends(get_current_user)
+) -> TiersResponse:
+    '''
+        Splits the values in tiers by their place in the ranking.
+
+        Args:
+            request (TiersRequest): The values and the cuts.
+            current_user (str): The authenticated user's identifier (dependency-injected).
+
+        Returns:
+            TiersResponse: The tier of each value.
+    '''
+    message = (f'User: {current_user} asked tiers of {len(request.values)} value(s) '
+               f'with cuts {request.cuts}.')
+    logger.info(message)
+    return await ranking_tiers(request)
+
+
+@router.post(
+    '/association-rules',
+    response_model = AssociationRulesResponse,
+    summary = 'Mine association rules (Apriori)',
+    description = '''Finds the itemsets present in at least `min_support` of the
+        transactions and derives every rule antecedents -> consequents whose lift
+        reaches `min_lift`, with support, confidence and lift. The affinity
+        COMMERCIAL recommends products with.'''
+)
+async def association_rules_route(
+    request: AssociationRulesRequest,
+    current_user: str = Depends(get_current_user)
+) -> AssociationRulesResponse:
+    '''
+        Mines the association rules of the transactions.
+
+        Args:
+            request (AssociationRulesRequest): The transactions and the thresholds.
+            current_user (str): The authenticated user's identifier (dependency-injected).
+
+        Returns:
+            AssociationRulesResponse: The rules kept.
+    '''
+    message = (f'User: {current_user} asked association rules over '
+               f'{len(request.transactions)} transaction(s).')
+    logger.info(message)
+    return await mining_association_rules(request)
