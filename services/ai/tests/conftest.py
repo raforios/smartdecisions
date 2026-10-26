@@ -29,7 +29,9 @@ if CONFIGURED:
     import importlib.util  # noqa: E402
 
     import boto3  # noqa: E402
-    from moto import mock_aws  # noqa: E402
+    # moto is in services/requirements-dev.txt: the GitHub CI installs only
+    # requirements.txt and never reaches this block (no .env there).
+    from moto import mock_aws  # noqa: E402 pylint: disable=import-error
 
     from services.environment import load_and_validate_env_vars  # noqa: E402
     # pylint: enable=wrong-import-position,ungrouped-imports
