@@ -86,7 +86,7 @@ nombrados por funcionalidad.
    `security.py` y `utils.py` no se modifican sin consulta; si se autoriza una
    adición, va al final del archivo.
    - **Los seis servicios con el boilerplate común** (COMMERCIAL,
-     MINING_ANALYSIS, BILLING y FINANCE, y los base QUOTES y AI) tienen el
+     MINING_ANALYSIS, QUOTES, BILLING y FINANCE, y el base AI) tienen el
      **mismo boilerplate con las mismas funciones** (Rafael, 19-oct-2026;
      desde el 23-oct-2026 COMMERCIAL reemplaza a INGEST, ANALYTICS y
      OPTIMIZATION). Un cambio autorizado en uno se aplica a los seis en el
@@ -103,13 +103,15 @@ nombrados por funcionalidad.
 **EVENTS** (auditoría, DynamoDB), **FILES** (S3), **ML_FUNCTIONS** (el centro
 de cálculos y fórmulas: predicciones, proyecciones, clasificaciones; no
 guarda nada: recibe el objeto completo y devuelve el resultado),
-**AI** (explicaciones con Bedrock: cada producto registra sus vistas en
-`ai_prompts`, sin tocar el código de AI) y **QUOTES** (tipo de cambio y
-factores externos, generales y de cada empresa). ML_FUNCTIONS es base desde
-el 17-oct-2026, AI desde el 21-oct-2026 y QUOTES desde el 23-oct-2026
-(Rafael). Los base son genéricos: sirven a cualquier producto, no sólo a
-SmartDecisions. **No existe un servicio genérico de parámetros**: se
-eliminó el 25-oct-2026 (Rafael: «no sirve para nada»).
+y **AI** (explicaciones con Bedrock: cada producto registra sus vistas en
+`ai_prompts`, sin tocar el código de AI). ML_FUNCTIONS es base desde el
+17-oct-2026 y AI desde el 21-oct-2026 (Rafael). **QUOTES** (tipo de cambio y
+factores externos) es un **servicio independiente**, ni base ni de un solo
+producto (Rafael, 26-oct-2026): lo usan SmartDecisions y SmartBilling; si
+más adelante muestra más potencial, pasará a base. Los base son genéricos:
+sirven a cualquier producto, no sólo a SmartDecisions. **No existe un
+servicio genérico de parámetros**: se eliminó el 25-oct-2026 (Rafael: «no
+sirve para nada»).
 
 **Ningún microservicio depende de otro para levantar** (Rafael,
 24-oct-2026): puede no operar una opción que necesita a otro, pero arranca y

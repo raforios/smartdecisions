@@ -14,12 +14,13 @@ git diff --name-only; git ls-files --others --exclude-standard
 
 ## Qué entra y qué no
 
-Una revisión general alcanza **sólo los once servicios propios de BearSoft**:
+Una revisión general alcanza **sólo los diez servicios propios de BearSoft**:
 
 ```
 SmartDecisions   COMMERCIAL · MINING_ANALYSIS · FINANCE
 SmartBilling     BILLING
-Base             AUTH · EVENTS · FILES · ML_FUNCTIONS · AI · QUOTES
+Base             AUTH · EVENTS · FILES · ML_FUNCTIONS · AI
+Independiente    QUOTES (SmartDecisions y SmartBilling)
 ```
 
 **Nunca se tocan sin que Rafael lo pida para ese servicio en concreto:**
