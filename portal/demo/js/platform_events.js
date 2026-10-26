@@ -13,8 +13,7 @@
  * ML_FUNCTIONS do not report, by design.
  */
 (function platformEventsModule() {
-    const REPORTING = ['PARAMETERS', 'AI', 'COMMERCIAL', 'MINING_ANALYSIS', 'QUOTES',
-        'FINANCE', 'BILLING'];
+    const REPORTING = ['AI', 'COMMERCIAL', 'MINING_ANALYSIS', 'QUOTES', 'FINANCE', 'BILLING'];
     // The names COMMERCIAL had before 23-oct-2026: a user's own history keeps
     // what was recorded under them.
     const RECORDED_BEFORE = ['INGEST', 'ANALYTICS', 'OPTIMIZATION'];
@@ -41,7 +40,6 @@
         'AI.Role': ['Prompt de la IA', 'admin/prompts.html'],
         'QUOTES.Factor': ['Factor externo', 'parametros/factores.html'],
         'QUOTES.ExchangeRate': ['Tipo de cambio', 'admin/tipo-cambio.html'],
-        'PARAMETERS.Parameter': ['Parámetro', 'parametros/index.html'],
         'ANALYTICS.CommercialPolicy': ['Política comercial', 'parametros/index.html'],
         'ANALYTICS.CreditPolicy': ['Política de crédito', 'parametros/index.html'],
         'ANALYTICS.AnalyticsRun': ['Análisis comercial', 'comercial/index.html'],

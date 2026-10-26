@@ -131,7 +131,8 @@
         DATASET_NOT_FOUND: 'No encontramos tus datos de ventas. Cárgalos en Cargar datos.',
         DATASET_NOT_VALIDATED: 'Tu archivo de ventas no pasó la validación. Corrígelo y vuelve a cargarlo.',
         UNSUPPORTED_FILE_TYPE: 'El archivo debe ser Excel (.xlsx) o CSV.',
-        FORECAST_UNAVAILABLE: 'No se pudo calcular el pronóstico en este momento. Vuelve a intentarlo.'
+        FORECAST_UNAVAILABLE: 'No se pudo calcular el pronóstico en este momento. Vuelve a intentarlo.',
+        CALCULATION_UNAVAILABLE: 'No se pudo hacer el cálculo en este momento. Vuelve a intentarlo.'
     };
 
     // The same level code, read over products instead of clients: the

@@ -2,7 +2,7 @@
 
 /**
  * Proyección: the three scenarios of the plan. The percentages and the
- * horizon start from the defaults FINANCE reads from PARAMETERS and the
+ * horizon start from the defaults FINANCE reads from its own table and the
  * manager can type others; FINANCE validates them and recalculates
  * (Rafael, 17-oct). Future months have no exchange rate yet: they are read
  * at today's.

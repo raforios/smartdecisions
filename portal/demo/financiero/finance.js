@@ -63,8 +63,6 @@
         MISSING_TAXES_INCLUDED: 'Falta «Impuestos incluidos» (Sí o No) en una cuenta con factura.',
         ENTRY_NOT_FOUND: 'Ese monto ya no existe.',
         PARAMETER_NOT_FOUND: 'Ese parámetro no existe.',
-        PARAMETERS_SERVICE_REJECTED: 'No se pudieron leer los parámetros del cálculo.',
-        PARAMETER_MISSING: 'Falta un parámetro del cálculo; avisa al administrador.',
         HORIZON_OUT_OF_RANGE: 'Los meses a proyectar están fuera del rango permitido.',
         CHANGE_OUT_OF_RANGE: 'Un porcentaje de escenario está fuera del rango permitido.',
         ACCOUNT_NOT_FOUND: 'Esa cuenta ya no está en el catálogo.',

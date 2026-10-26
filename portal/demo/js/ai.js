@@ -23,10 +23,6 @@
         ROLE_NOT_FOUND: 'La interpretación de esta pantalla todavía no está habilitada.',
         MODEL_UNAVAILABLE: 'El servicio de interpretación no responde ahora. Intenta en unos minutos.',
         MODEL_REFUSED: 'No se pudo interpretar esta vista.',
-        PARAMETER_MISSING: 'Falta configurar el servicio de interpretación.',
-        PARAMETERS_SERVICE_NOT_CONFIGURED: 'Falta configurar el servicio de interpretación.',
-        PARAMETERS_SERVICE_UNREACHABLE: 'El servicio de interpretación no responde ahora. Intenta en unos minutos.',
-        PARAMETERS_SERVICE_REJECTED: 'El servicio de interpretación no responde ahora. Intenta en unos minutos.'
     };
 
     /**

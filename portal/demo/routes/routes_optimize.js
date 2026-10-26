@@ -36,8 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }());
 
     /** Every plan of the account can be studied, dated or not. */
-    document.addEventListener('sd:plans-loaded', (event) => {
-        state.plans = event.detail || [];
+    function fillPlans(plans) {
+        state.plans = plans || [];
         const select = qs('#optimizePlan');
         const chosen = select.value;
         select.innerHTML = state.plans
@@ -47,7 +47,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 ` · ${plan.points.length} paradas</option>`)
             .join('');
         if (chosen) select.value = chosen;
-    });
+    }
+
+    document.addEventListener('sd:plans-loaded', (event) => fillPlans(event.detail));
+
+    /**
+     * Opening Optimizar straight —from the Rutas card or a link— must not
+     * depend on Planes having been visited first, as Comparación already does.
+     */
+    async function ensurePlans() {
+        if (state.plans && state.plans.length) return;
+        try {
+            fillPlans(await T.planned.list());
+        } catch (error) {
+            note('#optimizeNote', T.errorText(error, 'No se pudieron cargar los planes.'), 'error');
+        }
+    }
 
     /**
      * One ordering on one map: the stops numbered in visiting order and the
@@ -153,5 +168,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function note(id, text, kind) { T.note(qs(id), text, kind); }
 
-    T.onShow('optimize', () => { currentMap.refresh(); optimizedMap.refresh(); });
+    T.onShow('optimize', () => { currentMap.refresh(); optimizedMap.refresh(); ensurePlans(); });
 });
