@@ -10,25 +10,9 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from services import forecast
+from services import calculations, forecast
 from services.forecast import build_forecast
-
-
-class _Answer:  # pylint: disable=too-few-public-methods
-    '''What `requests.post` returns: ok and a JSON body.'''
-
-    def __init__(
-        self,
-        body: dict[str, Any]
-    ) -> None:
-        self.ok = True
-        self.status_code = 200
-        self.text = ''
-        self._body = body
-
-    def json(self) -> dict[str, Any]:
-        '''The body.'''
-        return self._body
+from tests.conftest import Answer
 
 
 @pytest.fixture(name = 'asked')
@@ -43,16 +27,16 @@ def _ml_functions(monkeypatch) -> list[dict[str, Any]]:
         url: str,
         json: dict[str, Any],
         **_: Any
-    ) -> _Answer:
+    ) -> Answer:
         received.append({'url': url, **json})
         values, horizon = json['values'], json['horizon']
         if json['models'] == ['MOVING_AVERAGE']:
             last = values[-json['window']:]
-            return _Answer({'forecast': [sum(last) / len(last)] * horizon})
+            return Answer({'forecast': [sum(last) / len(last)] * horizon})
         step = values[-1] - values[-2]
-        return _Answer({'forecast': [values[-1] + step * ahead for ahead in range(1, horizon + 1)]})
+        return Answer({'forecast': [values[-1] + step * ahead for ahead in range(1, horizon + 1)]})
 
-    monkeypatch.setattr(forecast.requests, 'post', _post)
+    monkeypatch.setattr(calculations.requests, 'post', _post)
     return received
 
 

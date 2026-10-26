@@ -47,49 +47,6 @@ def _fetch_osrm_route(coordinates: str) -> dict[str, Any]:
         ) from error
 
 
-def road_segment(
-    origin: tuple[float, float],
-    destination: tuple[float, float]
-) -> dict[str, Any]:
-    '''
-        Projects a single origin → destination segment onto the road network
-        using OSRM and returns its real driving distance, duration and the
-        polyline geometry along the streets.
-
-        Args:
-            origin (tuple[float, float]): (latitude, longitude) of the start.
-            destination (tuple[float, float]): (latitude, longitude) of the end.
-
-        Returns:
-            dict[str, Any]: Keys `distance` (meters), `duration` (seconds) and
-                `geometry` (list of [longitude, latitude] pairs).
-
-        Raises:
-            ServiceUnavailableError: If OSRM is unreachable or returns no route.
-    '''
-    origin_lat, origin_lon = origin
-    destination_lat, destination_lon = destination
-    coordinates = f'{origin_lon},{origin_lat};{destination_lon},{destination_lat}'
-
-    payload = _fetch_osrm_route(coordinates)
-
-    routes = payload.get('routes') or []
-    if not routes:
-        error_msg = f'OSRM returned no route for segment {coordinates}.'
-        logger.error(error_msg)
-        raise ServiceUnavailableError(
-            detail = OptimizationError.ROUTING_SERVICE_NO_ROUTE.value
-        )
-
-    best_route = routes[0]
-    geometry = best_route.get('geometry', {}).get('coordinates', [])
-    return {
-        'distance': float(best_route.get('distance', 0.0)),
-        'duration': float(best_route.get('duration', 0.0)),
-        'geometry': geometry
-    }
-
-
 def road_trip(stops: list[tuple[float, float]]) -> dict[str, Any]:
     '''
         Projects a whole ordered route onto the street network in ONE call.

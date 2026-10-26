@@ -49,14 +49,14 @@ from services.analytics_utils import (
     ratio
 )
 from services.currency import money_row, money_sums, money_total
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
 # Business thresholds: configurable per deployment, never literals in the code.
 # They repeat the concentration ones on purpose — the same cut points applied
 # to products instead of clients — so a distributor can move one without
 # moving the other.
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'VOLUME_SHARE_DECIMALS': int,
     'VOLUME_PARETO_TARGET': float,
     'VOLUME_ABC_A_LIMIT': float,
@@ -66,7 +66,7 @@ _SETTINGS = load_and_validate_env_vars({
     'VOLUME_MATRIX_CLIENTS': int,
     'VOLUME_MATRIX_PRODUCTS': int,
     'VOLUME_HHI_MODERATE': float,
-    'VOLUME_HHI_HIGH': float,
+    'VOLUME_HHI_HIGH': float
 })
 _PARETO_TARGET = _SETTINGS['VOLUME_PARETO_TARGET']
 _ABC_A_LIMIT = _SETTINGS['VOLUME_ABC_A_LIMIT']

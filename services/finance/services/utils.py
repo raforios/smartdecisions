@@ -32,6 +32,7 @@ from zoneinfo import ZoneInfo
 from functools import wraps
 from typing import Any
 
+import boto3
 import requests as req
 from fastapi import HTTPException, Request
 from jose import JWTError, jwt
@@ -39,7 +40,6 @@ from pydantic import BaseModel, ValidationError
 from botocore.exceptions import ClientError as AWSClientError
 
 from schemas.files import FilesError
-from schemas.parameters import ParametersError
 from services.logger_config import custom_logger as logger
 from services.exceptions import (
     InvalidInputError,
@@ -717,89 +717,100 @@ def delete_stored_file(
 
 
 # ---------------------------------------------------------------------------
-# PARAMETERS: the standard addition for a service that reads business values
+# SERVICE PARAMETERS: the standard block for a service with business values
 # ---------------------------------------------------------------------------
 #
-# Approved by Rafael on 17-oct-2026 (CLAUDE.md §5.3): the `.env` is only the
-# environment; decimals, accounts, thresholds live in PARAMETERS and change
-# without a release. A service reads its own scope and `global` by HTTP,
-# forwarding its caller's token, and keeps what it read for a few minutes so
-# PARAMETERS is not asked on every request. It talks to PARAMETERS and to
-# nothing else: no other service's tables.
+# Rafael, 24-oct-2026: every microservice keeps its own parameters in its own
+# tables and starts without depending on any other service. The values that
+# are the same for every company live in `<service>_parameters`, one item per
+# code; what each company changes lives in a table of the service that ties
+# the parameter to the company. The `.env` keeps only the configuration.
+#
+# The table is read with the Lambda's own role, once per container, the first
+# time a module asks: no HTTP, no token, no other service. A value changed in
+# the table is used by every container that starts after the change, with no
+# release. Like an environment variable, a missing or malformed value stops
+# the service instead of running on a number nobody chose. The definition and
+# the seed are the service's rows of `docs/parametros.md`
+# (`tools/seeds/seed_service_parameters.py`).
+#
+# The same block, word for word, in every service that has business values.
 
-PARAMETERS_ENV_VARS = load_and_validate_env_vars(
+SERVICE_PARAMETERS_TABLE = load_and_validate_env_vars(
     env_vars = {
-        'PARAMETERS_CACHE_SECONDS': int
+        'DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS': str
     }
-)
-PARAMETERS_CACHE_SECONDS = PARAMETERS_ENV_VARS['PARAMETERS_CACHE_SECONDS']
+)['DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS']
 
-# {scope: (moment it expires, {code: value})}, per warm container.
-_PARAMETERS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+# {code: value} as stored, read once per container.
+_SERVICE_PARAMETERS: dict[str, Any] = {}
 
 
-def read_parameters(
-    scope: str,
-    auth_token: str | None
-) -> dict[str, Any]:
+def _read_service_parameters() -> dict[str, Any]:
     '''
-        The business values of one scope, read through PARAMETERS and kept
-        for PARAMETERS_CACHE_SECONDS.
-
-        Args:
-            scope (str): `global` or this service's name.
-            auth_token (str | None): The caller's Authorization header.
+        Every item of the service's parameters table, by code.
 
         Returns:
-            dict[str, Any]: {code: value}; a NUMBER as float, a LIST as a list.
-
-        Raises:
-            ServiceUnavailableError: PARAMETERS unreachable or refusing.
+            dict[str, Any]: {code: value} as DynamoDB returns it.
     '''
-    cached = _PARAMETERS_CACHE.get(scope)
-    if cached and cached[0] > time.monotonic():
-        return cached[1]
-    try:
-        response = req.get(f'{API_URL}/v1/parameters/{scope}',
-                           headers = {'Authorization': auth_token or ''},
-                           timeout = REQUEST_TIMEOUT_SECONDS)
-    except req.exceptions.RequestException as error:
-        error_msg = f'Network error reading the {scope} parameters: {error}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(detail = ParametersError.UNREACHABLE.value) from error
-    if not response.ok:
-        error_msg = (f'PARAMETERS refused the {scope} parameters: '
-                     f'status={response.status_code} body={response.text[:300]}')
-        logger.error(error_msg)
-        raise ServiceUnavailableError(detail = ParametersError.REJECTED.value)
-    values = {item['code']: item['value'] for item in response.json().get('parameters', [])}
-    _PARAMETERS_CACHE[scope] = (time.monotonic() + PARAMETERS_CACHE_SECONDS, values)
-    message = f'Read {len(values)} {scope} parameter(s) from PARAMETERS.'
+    table = boto3.resource('dynamodb').Table(SERVICE_PARAMETERS_TABLE)
+    response = table.scan()
+    items = list(response.get('Items', []))
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey = response['LastEvaluatedKey'])
+        items.extend(response.get('Items', []))
+    message = f'Read {len(items)} parameter(s) from {SERVICE_PARAMETERS_TABLE}.'
     logger.info(message)
-    return values
+    return {item['code']: item.get('value') for item in items}
 
 
-def required_parameters(
-    values: dict[str, Any],
-    codes: tuple[str, ...]
-) -> dict[str, Any]:
+def _typed_parameter(
+    code: str,
+    raw: Any,
+    kind: type
+) -> Any:
     '''
-        The values a calculation needs, all of them or none: a missing one
-        stops it instead of running on a number nobody chose.
-
-        Args:
-            values (dict[str, Any]): What PARAMETERS answered.
-            codes (tuple[str, ...]): The codes the calculation reads.
-
-        Returns:
-            dict[str, Any]: The same values.
+        One stored value in the type its module reads: int, float, str or list.
 
         Raises:
-            ServiceUnavailableError: PARAMETER_MISSING.
+            ValueError: When the stored value is not of that type.
     '''
-    missing = [code for code in codes if code not in values]
+    if kind is list:
+        if not isinstance(raw, list):
+            raise ValueError(f'{code} must be a list, got {raw}')
+        return [str(item) for item in raw]
+    if kind is int:
+        number = decimal.Decimal(str(raw))
+        if number != number.to_integral_value():
+            raise ValueError(f'{code} must be a whole number, got {raw}')
+        return int(number)
+    if kind is float:
+        return float(decimal.Decimal(str(raw)))
+    if kind is str:
+        return str(raw)
+    raise ValueError(f'{code}: unsupported type {kind.__name__}')
+
+
+def load_parameters(spec: dict[str, type]) -> dict[str, Any]:
+    '''
+        The business values a module needs, all of them typed, or the service
+        stops.
+
+        Args:
+            spec (dict[str, type]): {code: int, float, str or list}.
+
+        Returns:
+            dict[str, Any]: {code: value}.
+
+        Raises:
+            ValueError: When a code is missing from the table or malformed.
+    '''
+    if not _SERVICE_PARAMETERS:
+        _SERVICE_PARAMETERS.update(_read_service_parameters())
+    missing = [code for code in spec if _SERVICE_PARAMETERS.get(code) is None]
     if missing:
-        error_msg = f'Parameters missing in PARAMETERS: {missing}.'
-        logger.error(error_msg)
-        raise ServiceUnavailableError(detail = ParametersError.MISSING.value)
-    return values
+        error_msg = f'Parameters missing in {SERVICE_PARAMETERS_TABLE}: {missing}.'
+        logger.critical(error_msg)
+        raise ValueError(error_msg)
+    return {code: _typed_parameter(code, _SERVICE_PARAMETERS[code], kind)
+            for code, kind in spec.items()}

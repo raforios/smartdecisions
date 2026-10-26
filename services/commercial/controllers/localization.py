@@ -10,6 +10,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from controllers.common import caller_token
 from schemas.localization import (
     BulkUploadPlannedResponseSchema,
     ExecutedPointCreateSchema,
@@ -235,7 +236,7 @@ async def optimize_planned_route_controller(
     dynamodb_resource: ServiceResource,
     planned_route_id: str,
     current_user: str,
-    request: Request # pylint: disable=unused-argument
+    request: Request
 ) -> RouteOptimizationSchema:
     '''
         Studies a route the caller already has and proposes a better order.
@@ -247,7 +248,8 @@ async def optimize_planned_route_controller(
     return optimize_planned_route(
         dynamodb_resource = dynamodb_resource,
         owner_email = current_user,
-        route_id = planned_route_id
+        route_id = planned_route_id,
+        auth_token = caller_token(request)
     )
 
 
@@ -258,7 +260,7 @@ async def repeat_planned_route_controller(
     planned_route_id: str,
     repeat: RepeatPlannedRouteSchema,
     current_user: str,
-    request: Request # pylint: disable=unused-argument
+    request: Request
 ) -> PlannedRouteResponseSchema:
     '''
         Runs an existing route again on another day.
@@ -267,7 +269,8 @@ async def repeat_planned_route_controller(
         dynamodb_resource = dynamodb_resource,
         owner_email = current_user,
         route_id = planned_route_id,
-        repeat = repeat
+        repeat = repeat,
+        auth_token = caller_token(request)
     ))
 
 

@@ -4,9 +4,9 @@
     Pipeline:
         1. Group the ingested sales DataFrame by `order_id` to form
            transactions (lists of products bought together).
-        2. Run a lightweight, dependency-free Apriori to find frequent
-           itemsets, then derive affinity rules with support, confidence
-           and lift (same metrics as mlxtend, no scikit-learn/scipy weight).
+        2. Ask ML_FUNCTIONS for the association rules of those
+           transactions (Apriori, with support, confidence and lift): the
+           one copy of the algorithm lives there since 24-oct-2026.
         3. Per PdV: identify which products the PdV already buys and which
            association rules apply.
         4. For each candidate consequent (product the PdV doesn't yet buy),
@@ -18,20 +18,31 @@
     public schema.
 '''
 from dataclasses import dataclass
-from itertools import combinations
 from typing import Any
 
 import pandas as pd
 
-from schemas.analytics import AnalyticsSummary, Opportunity
+from schemas.analytics import AnalyticsError, AnalyticsSummary, Opportunity
 
+from services.calculations import ask_ml_functions
 from services.logger_config import custom_logger as logger
 
 
 PRODUCT_NAMES_KEY = 'product_names'
 PDV_NAMES_KEY = 'pdv_names'
 
-_RULE_COLUMNS = ['antecedents', 'consequents', 'support', 'confidence', 'lift']
+
+
+@dataclass(frozen = True)
+class AffinitySettings:
+    '''
+        How the engine runs: the Apriori thresholds, how many opportunities
+        each point of sale keeps and the basket item ('category' or 'product').
+    '''
+    min_support: float
+    min_lift: float
+    top_n_per_pdv: int
+    item_level: str
 
 
 @dataclass
@@ -77,165 +88,33 @@ def _build_transactions(dataframe: pd.DataFrame) -> list[list[str]]:
     return [products for products in grouped.tolist() if products]
 
 
-def _count_singletons(transaction_sets: list[frozenset]) -> dict[frozenset, int]:
-    '''
-        Counts how many transactions contain each single product.
-    '''
-    counts: dict[frozenset, int] = {}
-    for items in transaction_sets:
-        for item in items:
-            single = frozenset((item,))
-            counts[single] = counts.get(single, 0) + 1
-    return counts
-
-
-def _generate_candidates(
-    previous_frequent: list[frozenset],
-    size: int
-) -> set:
-    '''
-        Builds candidate k-itemsets from frequent (k-1)-itemsets and prunes
-        them with the Apriori property: every (k-1)-subset must be frequent.
-    '''
-    frequent = set(previous_frequent)
-    candidates: set = set()
-    for left, right in combinations(previous_frequent, 2):
-        union = left | right
-        if len(union) != size:
-            continue
-        if all(frozenset(subset) in frequent
-               for subset in combinations(union, size - 1)):
-            candidates.add(union)
-    return candidates
-
-
-def _count_supersets(
-    transaction_sets: list[frozenset],
-    candidates: set
-) -> dict[frozenset, int]:
-    '''
-        Counts, for each candidate itemset, the transactions that contain it.
-    '''
-    candidate_counts: dict[frozenset, int] = {candidate: 0 for candidate in candidates}
-    for items in transaction_sets:
-        for candidate in candidates:
-            if candidate <= items:
-                candidate_counts[candidate] += 1
-    return candidate_counts
-
-
-def _frequent_itemsets(
+def _affinity_rules(
     transactions: list[list[str]],
-    min_support: float
-) -> dict[frozenset, float]:
+    settings: AffinitySettings,
+    auth_token: str
+) -> list[dict[str, Any]]:
     '''
-        Apriori frequent-itemset mining without external dependencies.
+        The association rules of the transactions, asked of ML_FUNCTIONS, as
+        records whose antecedents and consequents are sets: the PdV loop
+        checks them against what each PdV buys.
 
         Args:
-            transactions (list[list[str]]): One list of unique SKUs per order.
-            min_support (float): Minimum fraction of transactions (0..1).
+            transactions (list[list[str]]): One list of unique items per order.
+            settings (AffinitySettings): The Apriori thresholds.
+            auth_token (str): The caller's Authorization header.
 
         Returns:
-            dict[frozenset, float]: Frequent itemsets mapped to their support.
+            list[dict[str, Any]]: antecedents, consequents, support, confidence, lift.
     '''
-    total = len(transactions)
-    if total == 0:
-        return {}
-
-    transaction_sets = [frozenset(items) for items in transactions]
-    min_count = min_support * total
-
-    current = {
-        itemset: count
-        for itemset, count in _count_singletons(transaction_sets).items()
-        if count >= min_count
-    }
-    supports: dict[frozenset, float] = dict(current)
-
-    size = 2
-    while current:
-        candidates = _generate_candidates(list(current.keys()), size)
-        if not candidates:
-            break
-        candidate_counts = _count_supersets(transaction_sets, candidates)
-        current = {
-            itemset: count
-            for itemset, count in candidate_counts.items()
-            if count >= min_count
-        }
-        supports.update(current)
-        size += 1
-
-    return {itemset: count / total for itemset, count in supports.items()}
-
-
-def _rules_from_itemset(
-    itemset: frozenset,
-    itemset_support: float,
-    supports: dict[frozenset, float],
-    min_lift: float
-) -> list[Opportunity]:
-    '''
-        Evaluates every non-empty antecedent → consequent partition of a
-        single frequent itemset and keeps the rules whose lift reaches
-        `min_lift`.
-    '''
-    rules: list[dict[str, Any]] = []
-    items = sorted(itemset)
-    for antecedent_size in range(1, len(items)):
-        for antecedent_items in combinations(items, antecedent_size):
-            antecedents = frozenset(antecedent_items)
-            consequents = itemset - antecedents
-            antecedent_support = supports.get(antecedents)
-            consequent_support = supports.get(consequents)
-            if not antecedent_support or not consequent_support:
-                continue
-            confidence = itemset_support / antecedent_support
-            lift = confidence / consequent_support
-            if lift < min_lift:
-                continue
-            rules.append({
-                'antecedents': antecedents,
-                'consequents': consequents,
-                'support': itemset_support,
-                'confidence': confidence,
-                'lift': lift
-            })
-    return rules
-
-
-def _compute_affinity_rules(
-    transactions: list[list[str]],
-    min_support: float,
-    min_lift: float
-) -> pd.DataFrame:
-    '''
-        Derives association rules from the frequent itemsets and returns the
-        rule table with columns
-        `[antecedents, consequents, support, confidence, lift]`.
-
-        For every frequent itemset of size >= 2 it evaluates each non-empty
-        antecedent → consequent partition, computing the same metrics mlxtend
-        produced:
-            support    = support(antecedents ∪ consequents)
-            confidence = support(itemset) / support(antecedents)
-            lift       = confidence / support(consequents)
-        Rules are kept when `lift >= min_lift`.
-    '''
-    supports = _frequent_itemsets(transactions, min_support)
-    if not supports:
-        return pd.DataFrame(columns = _RULE_COLUMNS)
-
-    records: list[dict[str, Any]] = []
-    for itemset, itemset_support in supports.items():
-        if len(itemset) >= 2:
-            records.extend(
-                _rules_from_itemset(itemset, itemset_support, supports, min_lift)
-            )
-
-    if not records:
-        return pd.DataFrame(columns = _RULE_COLUMNS)
-    return pd.DataFrame(records, columns = _RULE_COLUMNS)
+    if not transactions:
+        return []
+    answer = ask_ml_functions(
+        '/v1/classification/association-rules',
+        {'transactions': transactions, 'min_support': settings.min_support,
+         'min_lift': settings.min_lift},
+        auth_token, AnalyticsError.CALCULATION_UNAVAILABLE.value)
+    return [{**rule, 'antecedents': frozenset(rule['antecedents']),
+             'consequents': frozenset(rule['consequents'])} for rule in answer['rules']]
 
 
 def _compute_drop_size(dataframe: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
@@ -480,51 +359,47 @@ def _apply_item_level(
 
 def compute_opportunities(
     dataframe: pd.DataFrame,
-    min_support: float = 0.01,
-    min_lift: float = 1.0,
-    top_n_per_pdv: int = 10,
-    item_level: str = 'product'
+    settings: AffinitySettings,
+    auth_token: str
 ) -> tuple[list[Opportunity], AnalyticsSummary]:
     '''
         End-to-end orchestration. Returns the opportunity list + summary stats.
 
         Args:
             dataframe (pd.DataFrame): Validated sales rows from ingest.
-            min_support (float): Apriori minimum support (0..1).
-            min_lift (float): association_rules lift threshold (>= 1 = no anti-correlation).
-            top_n_per_pdv (int): Max opportunities returned per PdV.
-            item_level (str): Basket granularity — 'category' (default in the
-                controller for mass-consumption data) or 'product' (SKU).
+            settings (AffinitySettings): Thresholds, opportunities per PdV and
+                basket granularity — 'category' (default in the controller for
+                mass-consumption data) or 'product' (SKU).
+            auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
         Returns:
             tuple[list[Opportunity], AnalyticsSummary]:
                 - Flat list of Opportunity dicts (ready to wrap in the schema).
                 - Summary dict with run-level stats and the parameters used.
     '''
-    working = _apply_item_level(dataframe, item_level)
-    transactions = _build_transactions(working)
-    rules = _compute_affinity_rules(transactions, min_support, min_lift)
+    working = _apply_item_level(dataframe, settings.item_level)
+    rules = _affinity_rules(_build_transactions(working), settings, auth_token)
+    parameters = {
+        'min_support': settings.min_support,
+        'min_lift': settings.min_lift,
+        'top_n_per_pdv': settings.top_n_per_pdv,
+        'item_level': settings.item_level
+    }
+
+    if not rules:
+        message = 'Affinity rules table is empty; returning zero opportunities.'
+        logger.info(message)
+        return [], _build_summary([], 0, parameters)
+
     avg_units, avg_amount = _compute_drop_size(working)
     data = _EngineData(
-        rules = rules.to_dict('records'),
+        rules = rules,
         avg_units = avg_units,
         avg_amount = avg_amount,
         product_names = _build_product_name_index(working),
         pdv_names = _build_pdv_name_index(working)
     )
-    parameters = {
-        'min_support': min_support,
-        'min_lift': min_lift,
-        'top_n_per_pdv': top_n_per_pdv,
-        'item_level': item_level
-    }
-
-    if rules.empty:
-        message = 'Affinity rules table is empty; returning zero opportunities.'
-        logger.info(message)
-        return [], _build_summary([], 0, parameters)
-
-    opportunities = _collect_opportunities(working, data, top_n_per_pdv)
+    opportunities = _collect_opportunities(working, data, settings.top_n_per_pdv)
     summary = _build_summary(opportunities, len(rules), parameters)
 
     message = (

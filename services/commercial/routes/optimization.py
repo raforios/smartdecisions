@@ -1,229 +1,26 @@
 '''
-    Optimization: routes handler.
-
-    Mirrors the legacy monolith endpoints (`api/routes/optimization.py`):
-    `/data_model`, `/distances`, `/optimal_route`, `/distance_matrix`, `/route`.
-    Same query-string contract (route_id, day, dist) so existing notebook /
-    frontend clients only need to swap the base URL.
+    Optimization: routes handler. The visit plan drawn from a sales dataset
+    and one plan per seller from each seller's portfolio.
 '''
 from fastapi import APIRouter, Depends, Path, Request, status
 from boto3.resources.base import ServiceResource
 
 from controllers.optimization import (
     plans_by_seller_controller,
-    route_plan_controller,
-    bulk_upload_routes_controller,
-    data_ordered_controller,
-    optimization_algorithm_controller,
-    preparing_data_controller,
-    simulation_algorithm_controller
+    route_plan_controller
 )
 from schemas.localization import MANAGEMENT_ROLES
 from schemas.optimization import (
     PlansBySellerResponse,
     PlansBySellerSchema,
     PlanQueryParams,
-    RoutePlanResponse,
-    BulkUploadResponse,
-    DataMapResponse,
-    OptimizationQueryParams,
-    OptimizationResponse,
-    RouteResponse
+    RoutePlanResponse
 )
-from routes.common import csv_upload_text
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner, require_roles
 
 router = APIRouter(prefix = '/v1/commercial', tags = ['Optimization'])
-
-
-@router.get(
-    '/data_model',
-    response_model = list[DataMapResponse],
-    status_code = status.HTTP_200_OK,
-    summary = 'Base map data for a (route_id, day)',
-    description = 'Returns the geolocated client points tagged with start/middle/end colors.'
-)
-async def get_base_data_endpoint(
-    request: Request,
-    query_params: OptimizationQueryParams = Depends(),
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> list[DataMapResponse]:
-    '''
-        Endpoint mirroring legacy GET /api/v1/commercial/data_model.
-    '''
-    message = (
-        f'User: {current_user}. Retrieving base data for '
-        f'route_id={query_params.route_id} day={query_params.day}.'
-    )
-    logger.info(message)
-    return await preparing_data_controller(
-        dynamodb_resource = dynamodb_resource,
-        route_id = query_params.route_id,
-        day = query_params.day,
-        request = request,
-        current_user = current_user
-    )
-
-
-@router.get(
-    '/distances',
-    response_model = list[OptimizationResponse],
-    status_code = status.HTTP_200_OK,
-    summary = 'Ordered linear distances between points',
-    description = 'Returns the ordered (origin, target, distance) triples for the route.'
-)
-async def get_distances_endpoint(
-    request: Request,
-    query_params: OptimizationQueryParams = Depends(),
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> list[OptimizationResponse]:
-    '''
-        Endpoint mirroring legacy GET /api/v1/commercial/distances.
-    '''
-    message = (
-        f'User: {current_user}. Computing distances for '
-        f'route_id={query_params.route_id} day={query_params.day}.'
-    )
-    logger.info(message)
-    return await data_ordered_controller(
-        dynamodb_resource = dynamodb_resource,
-        route_id = query_params.route_id,
-        day = query_params.day,
-        request = request,
-        current_user = current_user
-    )
-
-
-@router.get(
-    '/optimal_route',
-    response_model = list[RouteResponse],
-    status_code = status.HTTP_200_OK,
-    summary = 'Optimized route projected on the road network (OSRM)',
-    description = (
-        'Returns the per-segment optimized route with real road distance, '
-        'duration and street geometry.'
-    )
-)
-async def get_optimal_route_endpoint(
-    request: Request,
-    query_params: OptimizationQueryParams = Depends(),
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> list[RouteResponse]:
-    '''
-        Endpoint mirroring legacy GET /api/v1/commercial/optimal_route.
-    '''
-    message = (
-        f'User: {current_user}. Optimizing route route_id={query_params.route_id} '
-        f'day={query_params.day} dist={query_params.dist}.'
-    )
-    logger.info(message)
-    return await optimization_algorithm_controller(
-        dynamodb_resource = dynamodb_resource,
-        route_id = query_params.route_id,
-        day = query_params.day,
-        request = request,
-        current_user = current_user
-    )
-
-
-@router.get(
-    '/distance_matrix',
-    response_model = dict,
-    status_code = status.HTTP_200_OK,
-    summary = 'Geodesic distance matrix between all points',
-    description = (
-        'Returns the symmetric distance matrix (in meters) between every '
-        'pair of client points.'
-    )
-)
-async def get_distance_matrix_endpoint(
-    request: Request,
-    query_params: OptimizationQueryParams = Depends(),
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> dict:
-    '''
-        Endpoint mirroring legacy GET /api/v1/commercial/distance_matrix.
-    '''
-    message = (
-        f'User: {current_user}. Building distance matrix for '
-        f'route_id={query_params.route_id} day={query_params.day}.'
-    )
-    logger.info(message)
-    return await simulation_algorithm_controller(
-        dynamodb_resource = dynamodb_resource,
-        route_id = query_params.route_id,
-        day = query_params.day,
-        request = request,
-        current_user = current_user
-    )
-
-
-@router.get(
-    '/route',
-    response_model = list[RouteResponse],
-    status_code = status.HTTP_200_OK,
-    summary = 'Per-segment route data (alias of /optimal_route)',
-    description = 'Mirrors the legacy /route endpoint kept for notebook compatibility.'
-)
-async def get_route_endpoint(
-    request: Request,
-    query_params: OptimizationQueryParams = Depends(),
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> list[RouteResponse]:
-    '''
-        Endpoint mirroring legacy GET /api/v1/commercial/route.
-    '''
-    message = (
-        f'User: {current_user}. Building route segments for '
-        f'route_id={query_params.route_id} day={query_params.day} '
-        f'dist={query_params.dist}.'
-    )
-    logger.info(message)
-    return await optimization_algorithm_controller(
-        dynamodb_resource = dynamodb_resource,
-        route_id = query_params.route_id,
-        day = query_params.day,
-        request = request,
-        current_user = current_user
-    )
-
-
-@router.post(
-    '/routes/bulk-upload',
-    response_model = BulkUploadResponse,
-    status_code = status.HTTP_201_CREATED,
-    summary = 'Upload route points from a CSV',
-    description = (
-        'Accepts a CSV with columns route_id, day, client_id, latitude, '
-        'longitude (+ optional client name). All rows must share the same '
-        '(route_id, day); re-upload of the same pair replaces the previous '
-        'content.'
-    )
-)
-async def bulk_upload_routes_endpoint(
-    request: Request,
-    csv_text: str = Depends(csv_upload_text),
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(get_current_owner)
-) -> BulkUploadResponse:
-    '''
-        Endpoint to bulk-upload route points via CSV.
-    '''
-    message = f'Bulk-uploading routes CSV from {current_user}.'
-    logger.info(message)
-    return await bulk_upload_routes_controller(
-        dynamodb_resource = dynamodb_resource,
-        csv_text = csv_text,
-        current_user = current_user,
-        request = request
-    )
 
 
 @router.get(

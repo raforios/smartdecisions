@@ -23,22 +23,26 @@ from models.commercial import IngestDataset
 from schemas.files import FilesError
 from schemas.commercial import IngestError
 from services.crud import create_item, get_item_by_key
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 from services.utils import (
-    audit_event,
     get_current_time_gmt,
     read_file_rows,
     store_file
 )
 
 
-ENV_VARS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
-    'BUCKET_NAME': str,
-    'HISTORY_DEFAULT_LIMIT': int,
-})
+ENV_VARS = {
+    **load_and_validate_env_vars({
+        'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
+        'BUCKET_NAME': str
+    }),
+    **load_parameters({
+        'HISTORY_DEFAULT_LIMIT': int
+    })
+}
 DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 
@@ -107,7 +111,6 @@ def _build_dataset_item(payload: dict[str, Any]) -> IngestDataset:
     }
 
 
-@audit_event('COMMERCIAL', 'IngestDataset', 'CREATE')
 def persist_dataset(
     dynamodb_resource: ServiceResource,
     payload: dict[str, Any]

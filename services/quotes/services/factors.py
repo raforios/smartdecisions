@@ -35,18 +35,23 @@ from schemas.factors import (
     FactorValueSchema
 )
 from services.crud import find_item_by_key, query_by_partition
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.quotes_utils import to_dynamo
 from services.exceptions import ResourceNotFoundError
 from services.logger_config import custom_logger as logger
 from services.utils import get_current_time_gmt
 
-ENV_VARS = load_and_validate_env_vars({
-    'FUEL_PRICE_FACTOR_CODE': str,
-    'FUEL_EFFICIENCY_FACTOR_CODE': str,
-    'DYNAMODB_TABLE_NAME_QUOTES_FACTORS': str,
-    'DYNAMODB_TABLE_NAME_QUOTES_FACTOR_VALUES': str,
-})
+ENV_VARS = {
+    **load_and_validate_env_vars({
+        'DYNAMODB_TABLE_NAME_QUOTES_FACTORS': str,
+        'DYNAMODB_TABLE_NAME_QUOTES_FACTOR_VALUES': str
+    }),
+    **load_parameters({
+        'FUEL_PRICE_FACTOR_CODE': str,
+        'FUEL_EFFICIENCY_FACTOR_CODE': str
+    })
+}
 FACTORS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_QUOTES_FACTORS']
 FACTOR_VALUES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_QUOTES_FACTOR_VALUES']
 # Which declared factor plays each role in the transport cost. Named here and

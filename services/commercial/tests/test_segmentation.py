@@ -6,6 +6,8 @@ import pandas as pd
 from services import segmentation
 from services.segmentation import build_segmentation
 
+TOKEN = 'Bearer test'
+
 
 def _clients_frame(n: int) -> pd.DataFrame:
     '''
@@ -23,7 +25,7 @@ def _clients_frame(n: int) -> pd.DataFrame:
 
 def test_tiers_split_top20_next30_rest():
     '''10 clients -> 2 Alto (top 20%), 3 Medio (next 30%), 5 Bajo.'''
-    result = build_segmentation(_clients_frame(10))
+    result = build_segmentation(_clients_frame(10), TOKEN)
     counts = {tier.tier: tier.clients for tier in result.tiers}
     assert counts == {'HIGH': 2, 'MEDIUM': 3, 'LOW': 5}
     assert result.total_clients == 10
@@ -31,7 +33,7 @@ def test_tiers_split_top20_next30_rest():
 
 def test_top_client_is_alto_and_first():
     '''The highest spender is listed first and tagged Alto.'''
-    result = build_segmentation(_clients_frame(10))
+    result = build_segmentation(_clients_frame(10), TOKEN)
     first = result.clients[0]
     assert first.client == 'Cliente 0'
     assert first.tier == 'HIGH'
@@ -39,14 +41,14 @@ def test_top_client_is_alto_and_first():
 
 def test_tier_shares_sum_to_100():
     '''The three tiers' sales shares add up to 100%.'''
-    result = build_segmentation(_clients_frame(20))
+    result = build_segmentation(_clients_frame(20), TOKEN)
     total = sum(tier.percentage for tier in result.tiers)
     assert round(total) == 100
 
 
 def test_missing_columns_returns_empty():
     '''Without amount/client columns the result is empty, not an error.'''
-    result = build_segmentation(pd.DataFrame([{'foo': 1}]))
+    result = build_segmentation(pd.DataFrame([{'foo': 1}]), TOKEN)
     assert not result.tiers
     assert result.total_clients == 0
 

@@ -30,7 +30,7 @@ from schemas.objectives import ObjectivesResponse
 from schemas.stock import StockResponse
 from schemas.receivables import ReceivablesResponse
 from controllers import analytics as controllers
-from services import currency, forecast
+from services import calculations, currency
 
 
 def _sales_frame() -> pd.DataFrame:
@@ -238,7 +238,7 @@ def _ml_forecast(monkeypatch: pytest.MonkeyPatch) -> None:
     ) -> Mock:
         return Mock(ok = True, json = lambda: {'forecast': [json['values'][-1]] * json['horizon']})
 
-    monkeypatch.setattr(forecast.requests, 'post', _post)
+    monkeypatch.setattr(calculations.requests, 'post', _post)
 
 
 def test_forecast_returns_a_full_response(

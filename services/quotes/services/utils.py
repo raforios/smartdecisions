@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo
 from functools import wraps
 from typing import Any
 
+import boto3
 import requests as req
 from fastapi import HTTPException, Request
 from jose import JWTError, jwt
@@ -501,3 +502,103 @@ def _caller_email(request: Request | None) -> str | None:
         return jwt.get_unverified_claims(token).get('email')
     except JWTError:
         return None
+
+
+# ---------------------------------------------------------------------------
+# SERVICE PARAMETERS: the standard block for a service with business values
+# ---------------------------------------------------------------------------
+#
+# Rafael, 24-oct-2026: every microservice keeps its own parameters in its own
+# tables and starts without depending on any other service. The values that
+# are the same for every company live in `<service>_parameters`, one item per
+# code; what each company changes lives in a table of the service that ties
+# the parameter to the company. The `.env` keeps only the configuration.
+#
+# The table is read with the Lambda's own role, once per container, the first
+# time a module asks: no HTTP, no token, no other service. A value changed in
+# the table is used by every container that starts after the change, with no
+# release. Like an environment variable, a missing or malformed value stops
+# the service instead of running on a number nobody chose. The definition and
+# the seed are the service's rows of `docs/parametros.md`
+# (`tools/seeds/seed_service_parameters.py`).
+#
+# The same block, word for word, in every service that has business values.
+
+SERVICE_PARAMETERS_TABLE = load_and_validate_env_vars(
+    env_vars = {
+        'DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS': str
+    }
+)['DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS']
+
+# {code: value} as stored, read once per container.
+_SERVICE_PARAMETERS: dict[str, Any] = {}
+
+
+def _read_service_parameters() -> dict[str, Any]:
+    '''
+        Every item of the service's parameters table, by code.
+
+        Returns:
+            dict[str, Any]: {code: value} as DynamoDB returns it.
+    '''
+    table = boto3.resource('dynamodb').Table(SERVICE_PARAMETERS_TABLE)
+    response = table.scan()
+    items = list(response.get('Items', []))
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey = response['LastEvaluatedKey'])
+        items.extend(response.get('Items', []))
+    message = f'Read {len(items)} parameter(s) from {SERVICE_PARAMETERS_TABLE}.'
+    logger.info(message)
+    return {item['code']: item.get('value') for item in items}
+
+
+def _typed_parameter(
+    code: str,
+    raw: Any,
+    kind: type
+) -> Any:
+    '''
+        One stored value in the type its module reads: int, float, str or list.
+
+        Raises:
+            ValueError: When the stored value is not of that type.
+    '''
+    if kind is list:
+        if not isinstance(raw, list):
+            raise ValueError(f'{code} must be a list, got {raw}')
+        return [str(item) for item in raw]
+    if kind is int:
+        number = decimal.Decimal(str(raw))
+        if number != number.to_integral_value():
+            raise ValueError(f'{code} must be a whole number, got {raw}')
+        return int(number)
+    if kind is float:
+        return float(decimal.Decimal(str(raw)))
+    if kind is str:
+        return str(raw)
+    raise ValueError(f'{code}: unsupported type {kind.__name__}')
+
+
+def load_parameters(spec: dict[str, type]) -> dict[str, Any]:
+    '''
+        The business values a module needs, all of them typed, or the service
+        stops.
+
+        Args:
+            spec (dict[str, type]): {code: int, float, str or list}.
+
+        Returns:
+            dict[str, Any]: {code: value}.
+
+        Raises:
+            ValueError: When a code is missing from the table or malformed.
+    '''
+    if not _SERVICE_PARAMETERS:
+        _SERVICE_PARAMETERS.update(_read_service_parameters())
+    missing = [code for code in spec if _SERVICE_PARAMETERS.get(code) is None]
+    if missing:
+        error_msg = f'Parameters missing in {SERVICE_PARAMETERS_TABLE}: {missing}.'
+        logger.critical(error_msg)
+        raise ValueError(error_msg)
+    return {code: _typed_parameter(code, _SERVICE_PARAMETERS[code], kind)
+            for code, kind in spec.items()}

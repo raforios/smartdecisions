@@ -9,7 +9,7 @@ import pytest
 import requests
 
 from services.exceptions import ServiceUnavailableError
-from services.routing import road_segment
+from services.routing import road_trip
 
 
 def _osrm_payload() -> dict:
@@ -29,7 +29,7 @@ def _osrm_payload() -> dict:
     }
 
 
-def test_road_segment_returns_distance_duration_and_geometry() -> None:
+def test_road_trip_returns_distance_duration_and_geometry() -> None:
     '''
         A successful OSRM response is mapped to distance, duration and the
         street polyline as [longitude, latitude] pairs.
@@ -39,7 +39,7 @@ def test_road_segment_returns_distance_duration_and_geometry() -> None:
     response.raise_for_status.return_value = None
 
     with patch('services.routing.requests.get', return_value = response) as mock_get:
-        result = road_segment((-16.50, -68.15), (-16.505, -68.145))
+        result = road_trip([(-16.50, -68.15), (-16.505, -68.145)])
 
     assert result['distance'] == 1234.5
     assert result['duration'] == 321.0
@@ -49,25 +49,25 @@ def test_road_segment_returns_distance_duration_and_geometry() -> None:
     assert '-68.15,-16.5;-68.145,-16.505' in called_url
 
 
-def test_road_segment_raises_service_unavailable_on_network_error() -> None:
+def test_road_trip_raises_service_unavailable_on_network_error() -> None:
     '''
         A network/HTTP failure surfaces as ServiceUnavailableError (HTTP 503).
     '''
     with patch('services.routing.requests.get',
                side_effect = requests.RequestException('boom')):
         with pytest.raises(ServiceUnavailableError):
-            road_segment((-16.50, -68.15), (-16.505, -68.145))
+            road_trip([(-16.50, -68.15), (-16.505, -68.145)])
 
 
-def test_road_segment_raises_service_unavailable_when_no_route() -> None:
+def test_road_trip_without_a_route_keeps_the_plan_with_no_geometry() -> None:
     '''
-        An empty `routes` list (OSRM could not resolve the segment) raises
-        ServiceUnavailableError instead of returning a malformed segment.
+        An empty `routes` list (OSRM could not resolve the trip) must not
+        lose the plan: the map falls back to straight lines.
     '''
     response = MagicMock()
     response.json.return_value = {'routes': []}
     response.raise_for_status.return_value = None
 
     with patch('services.routing.requests.get', return_value = response):
-        with pytest.raises(ServiceUnavailableError):
-            road_segment((-16.50, -68.15), (-16.505, -68.145))
+        assert road_trip([(-16.50, -68.15), (-16.505, -68.145)]) == {
+            'distance': 0.0, 'duration': 0.0, 'geometry': []}

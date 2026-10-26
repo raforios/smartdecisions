@@ -25,7 +25,7 @@ from schemas.localization import (
     RouteComparisonsResponseSchema
 )
 from services.common import calculate_distance
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.localization import get_planned_route, to_point_response
 from services.localization_executed import (
     list_executed_routes,
@@ -35,7 +35,9 @@ from services.localization_executed import (
 from services.logger_config import custom_logger as logger
 from services.sellers import users_of_seller
 
-_SETTINGS = load_and_validate_env_vars({'ROUTES_VISIT_MATCH_RADIUS_M': float})
+_SETTINGS = load_parameters({
+    'ROUTES_VISIT_MATCH_RADIUS_M': float
+})
 VISIT_MATCH_RADIUS_M = _SETTINGS['ROUTES_VISIT_MATCH_RADIUS_M']
 
 

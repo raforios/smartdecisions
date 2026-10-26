@@ -3,8 +3,10 @@
 
     Classifies each client into value tiers (Alto / Medio / Bajo) from a
     normalized sales DataFrame, so the sales team knows who to prioritize. The
-    tiers are cut by monetary quantiles (top 20% -> Alto, next 30% -> Medio, rest
-    -> Bajo), a simple and explainable RFM-style value split.
+    tiers are cut by the client's place in the value ranking (top 20% -> Alto,
+    next 30% -> Medio, rest -> Bajo), a simple and explainable value split. The
+    cut itself is asked of ML_FUNCTIONS (24-oct-2026), the one the route map
+    asks too, so a client is the same tier on both screens.
 
     Returns per-tier totals plus the list of clients (capped) so the frontend can
     show both a summary chart and an actionable table.
@@ -12,10 +14,11 @@
 
 import pandas as pd
 
-from schemas.analytics import SegmentationBlock, SegmentClient, SegmentTier
+from schemas.analytics import AnalyticsError, SegmentationBlock, SegmentClient, SegmentTier
 
+from services.calculations import rank_tiers
 from services.currency import money_row, money_sums
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
 _AMOUNT = 'total_amount'
@@ -23,14 +26,12 @@ _CLIENT_ID = 'pos_id'
 _CLIENT_NAME = 'pos_name'
 _ORDER = 'order_id'
 
-# Tier cut points on the cumulative client value (share of total sales).
-# The OPTIMIZATION service colours every route stop by the same tiers, so it
-# reads variables of these exact names. Change one, change both, or the same
-# client shows as 'HIGH' on one screen and 'MEDIUM' on the other.
-_SETTINGS = load_and_validate_env_vars({
+# Tier cut points on the client value ranking. The route planner colours
+# every stop by the same tiers and reads these same variables.
+_SETTINGS = load_parameters({
     'SEGMENTATION_HIGH_TOP_SHARE': float,
     'SEGMENTATION_MEDIUM_TOP_SHARE': float,
-    'SEGMENTATION_MAX_CLIENTS': int,
+    'SEGMENTATION_MAX_CLIENTS': int
 })
 _ALTO_TOP_SHARE = _SETTINGS['SEGMENTATION_HIGH_TOP_SHARE']
 _MEDIO_TOP_SHARE = _SETTINGS['SEGMENTATION_MEDIUM_TOP_SHARE']
@@ -40,18 +41,6 @@ _TIER_ALTO = 'HIGH'
 _TIER_MEDIO = 'MEDIUM'
 _TIER_BAJO = 'LOW'
 _TIER_ORDER = (_TIER_ALTO, _TIER_MEDIO, _TIER_BAJO)
-
-
-def _assign_tier(rank_ratio: float) -> str:
-    '''
-        Maps a client's descending value-rank ratio (0 = highest spender) to a
-        tier. The top 20% are Alto, the next 30% Medio, the remainder Bajo.
-    '''
-    if rank_ratio < _ALTO_TOP_SHARE:
-        return _TIER_ALTO
-    if rank_ratio < _MEDIO_TOP_SHARE:
-        return _TIER_MEDIO
-    return _TIER_BAJO
 
 
 def _tier_summary(agg: pd.DataFrame) -> list[SegmentTier]:
@@ -81,12 +70,16 @@ def _tier_summary(agg: pd.DataFrame) -> list[SegmentTier]:
     return summary
 
 
-def build_segmentation(dataframe: pd.DataFrame) -> SegmentationBlock:
+def build_segmentation(
+    dataframe: pd.DataFrame,
+    auth_token: str
+) -> SegmentationBlock:
     '''
         Builds the customer value segmentation from a normalized sales frame.
 
         Args:
             dataframe (pd.DataFrame): Normalized sales rows.
+            auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
         Returns:
             dict[str, Any]: 'tiers' (per-tier count, total and share) and
@@ -116,10 +109,10 @@ def build_segmentation(dataframe: pd.DataFrame) -> SegmentationBlock:
     if total_clients == 0:
         return SegmentationBlock()
 
-    # Descending value rank ratio (0 = top spender) -> tier.
-    ranks = range(total_clients)
-    tiers = [_assign_tier(rank / total_clients) for rank in ranks]
-    agg = agg.assign(tier = tiers)
+    tiers = rank_tiers([float(value) for value in agg['bob']],
+                       [_ALTO_TOP_SHARE, _MEDIO_TOP_SHARE], auth_token,
+                       AnalyticsError.CALCULATION_UNAVAILABLE.value)
+    agg = agg.assign(tier = [_TIER_ORDER[tier] for tier in tiers])
 
     tier_summary = _tier_summary(agg)
 

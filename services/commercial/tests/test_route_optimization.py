@@ -18,6 +18,7 @@ from services.exceptions import InvalidInputError
 from tests.dynamo_helpers import build_resource
 
 OWNER = 'yo@miempresa.com'
+TOKEN = 'Bearer test'
 
 # A square with its stops loaded in the worst possible order: opposite corners
 # first, so the route crosses itself twice. Straight-line lengths make the
@@ -78,10 +79,10 @@ def _straight_line_trip(stops: list) -> dict:
             dict: Distance, duration and an empty geometry.
     '''
     import numpy as np # pylint: disable=import-outside-toplevel
-    from services.optimization import haversine_matrix # pylint: disable=import-outside-toplevel
+    from tests.conftest import ML_ROUTING # pylint: disable=import-outside-toplevel
     if len(stops) < 2:
         return {'distance': 0.0, 'duration': 0.0, 'geometry': []}
-    matrix = haversine_matrix(np.array(stops))
+    matrix = ML_ROUTING.haversine_matrix(np.array(stops))
     total = sum(matrix[index][index + 1] for index in range(len(stops) - 1))
     return {'distance': float(total), 'duration': float(total) / 10.0,
             'geometry': [[lon, lat] for lat, lon in stops]}
@@ -98,7 +99,7 @@ def test_a_crossed_route_is_proposed_untangled_and_the_saving_is_measured(dynamo
     plan = _plan(dynamodb, CROSSED)
 
     with patch.object(optimizer, 'road_trip', _straight_line_trip):
-        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'])
+        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'], TOKEN)
 
     assert study.already_optimal is False
     assert study.saved_metres > 0
@@ -120,7 +121,7 @@ def test_a_route_already_in_the_best_order_says_so(dynamodb):
     ])
 
     with patch.object(optimizer, 'road_trip', _straight_line_trip):
-        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'])
+        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'], TOKEN)
 
     assert study.already_optimal is True
     assert study.saved_percentage == 0.0
@@ -134,7 +135,7 @@ def test_studying_a_route_never_changes_it(dynamodb):
     plan = _plan(dynamodb, CROSSED)
 
     with patch.object(optimizer, 'road_trip', _straight_line_trip):
-        optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'])
+        optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'], TOKEN)
 
     stored = localization.get_planned_route(dynamodb, OWNER, plan['id'])
     assert [stop['point_name'] for stop in stored['points']] == ['A', 'C', 'B', 'D']
@@ -145,7 +146,7 @@ def test_a_route_with_two_stops_has_nothing_to_propose(dynamodb):
     plan = _plan(dynamodb, CROSSED[:2])
 
     with pytest.raises(InvalidInputError) as refused:
-        optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'])
+        optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'], TOKEN)
     assert refused.value.detail == RouteOptimizationError.NOT_ENOUGH_STOPS.value
 
 
@@ -157,7 +158,7 @@ def test_a_route_without_coordinates_cannot_be_studied(dynamodb):
     plan = _plan(dynamodb, [('A', 0.0, 0.0), ('B', 0.0, 0.0), ('C', 0.0, 0.0)])
 
     with pytest.raises(InvalidInputError) as refused:
-        optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'])
+        optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'], TOKEN)
     assert refused.value.detail == RouteOptimizationError.NO_COORDINATES.value
 
 
@@ -168,7 +169,7 @@ def test_the_accepted_order_renumbers_the_stops(dynamodb):
     plan = _plan(dynamodb, CROSSED)
 
     with patch.object(optimizer, 'road_trip', _straight_line_trip):
-        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'])
+        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'], TOKEN)
     reordered = optimizer.apply_optimized_order(plan['points'], study)
 
     assert [stop['secuencial'] for stop in reordered] == [1, 2, 3, 4]
@@ -189,10 +190,10 @@ def test_repeating_a_route_optimized_creates_it_in_the_better_order(dynamodb):
 
     plan = _plan(dynamodb, CROSSED)
     with patch.object(optimizer, 'road_trip', _straight_line_trip):
-        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'])
+        study = optimizer.optimize_planned_route(dynamodb, OWNER, plan['id'], TOKEN)
         created = sources.repeat_planned_route(
             dynamodb, OWNER, plan['id'],
-            RepeatPlannedRouteSchema(plan_date = '2026-10-05', optimized = True)
+            RepeatPlannedRouteSchema(plan_date = '2026-10-05', optimized = True), TOKEN
         )
 
     assert [stop['point_name'] for stop in created['points']] == \

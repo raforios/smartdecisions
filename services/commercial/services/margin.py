@@ -25,7 +25,7 @@ from schemas.analytics import (
 )
 
 from services.currency import money_row, money_sums, money_total
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.analytics_utils import (
     QUANTITY,
     CATEGORY,
@@ -42,9 +42,9 @@ from services.analytics_utils import (
 )
 
 
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'MARGIN_TOP_ROWS': int,
-    'MARGIN_THIN_THRESHOLD': float,
+    'MARGIN_THIN_THRESHOLD': float
 })
 
 # Rows kept in each breakdown, so the response stays renderable in a table.

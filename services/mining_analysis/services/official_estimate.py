@@ -21,7 +21,7 @@ from schemas.market import (
     MarketPricesResponse,
     MarketSource
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
 from services.market_sources import source_for
@@ -38,7 +38,7 @@ from services.prices_store import average_low, list_minerals
 from services.royalty_rules import apply_rule, rules_by_mineral
 from services.utils import get_current_time_gmt
 
-ENV_VARS = load_and_validate_env_vars({
+ENV_VARS = load_parameters({
     'ESTIMATE_HIGH_CONFIDENCE_DAYS': int,
     'ESTIMATE_MEDIUM_CONFIDENCE_DAYS': int,
     'CHANGE_DECIMALS': int

@@ -37,26 +37,48 @@ from services.finance import catalog_by_code
 from services.parameters import client_value, law_rates, rate_on
 from services.rates import period_rates
 from services.report_periods import Period, add_month, split_periods
-from services.utils import read_parameters, required_parameters
+from services.utils import load_parameters
 
-# The business values the report reads, by their code in PARAMETERS: the
-# `finance` scope and the `global` one. They are read on every request (kept a
-# few minutes by the PARAMETERS block), never from the .env (CLAUDE.md §5.3).
-FINANCE_SCOPE = 'finance'
-GLOBAL_SCOPE = 'global'
+# The business values the report reads, by their code in the service's own
+# table `finance_parameters` (the SERVICE PARAMETERS block), never from the
+# .env (Rafael, 24-oct-2026: every service keeps its parameters in its own
+# tables). Numbers come as float, lists as lists, as the report has always
+# read them.
 FINANCE_CODES = (
     'SALES_GROUP', 'FINANCIAL_EXPENSE_GROUP', 'IT_ACCOUNT', 'CASH_ACCOUNTS',
     'CURRENT_ASSETS_GROUP', 'CURRENT_LIABILITIES_GROUP', 'VAT_CODE', 'TRANSACTIONS_TAX_CODE',
     'INCOME_TAX_CODE', 'INCOME_TAX_PROVISION_CODE', 'COVERAGE_MONTHS', 'MIN_MONTHS_FOR_TRENDS',
     'MIN_MONTHS_FOR_PROJECTION', 'BALANCE_TOLERANCE',
 )
-GLOBAL_CODES = ('AMOUNT_DECIMALS', 'RATIO_DECIMALS')
+DECIMAL_CODES = ('AMOUNT_DECIMALS', 'RATIO_DECIMALS')
+_LIST_CODES = frozenset({'CASH_ACCOUNTS', 'NON_CASH_ACCOUNTS'})
+_TEXT_CODES = frozenset({
+    'SALES_GROUP', 'FINANCIAL_EXPENSE_GROUP', 'IT_ACCOUNT', 'CURRENT_ASSETS_GROUP',
+    'CURRENT_LIABILITIES_GROUP', 'VAT_CODE', 'TRANSACTIONS_TAX_CODE', 'INCOME_TAX_CODE',
+    'INCOME_TAX_PROVISION_CODE',
+})
+
+
+def finance_parameters(codes: tuple[str, ...]) -> dict[str, Any]:
+    '''
+        The values of the given codes, from the service's own table.
+
+        Args:
+            codes (tuple[str, ...]): The codes a calculation reads.
+
+        Returns:
+            dict[str, Any]: {code: value}; a number as float, a list as a list.
+    '''
+    return load_parameters({
+        code: list if code in _LIST_CODES else str if code in _TEXT_CODES else float
+        for code in codes
+    })
 
 
 @dataclass(frozen = True)
 class ReportSettings:  # pylint: disable=too-many-instance-attributes
     '''
-        The business values of the report, as PARAMETERS holds them. Sixteen
+        The business values of the report, as `finance_parameters` holds them. Sixteen
         values the ADMIN can change without a release; grouped here so every
         function receives one argument instead of sixteen.
     '''
@@ -83,7 +105,7 @@ def settings_from(
     general: dict[str, Any]
 ) -> ReportSettings:
     '''
-        The report's values from what PARAMETERS answered for both scopes.
+        The report's values, from what `finance_parameters` holds.
 
         Args:
             finance (dict[str, Any]): The `finance` scope.
@@ -637,7 +659,7 @@ def _rounded(
 ) -> FinanceReportSchema:
     '''
         The report as it is published: amounts and ratios rounded once, at
-        the end, with the decimals PARAMETERS holds. The calculation itself
+        the end, with the decimals `finance_parameters` holds. The calculation itself
         never rounds, so no error piles up from one line to the next.
 
         Args:
@@ -674,21 +696,15 @@ def _published(report: FinanceReportSchema) -> list[PeriodReportSchema]:
     return report.months + report.years + ([previous] if previous else [])
 
 
-def report_settings(auth_token: str | None) -> ReportSettings:
+def report_settings() -> ReportSettings:
     '''
-        The report's business values, read from PARAMETERS with the caller's
-        token. A missing one stops the report: there is no default in the code.
-
-        Args:
-            auth_token (str | None): The caller's Authorization header.
+        The report's business values, from the service's own table. A missing
+        one stops the report: there is no default in the code.
 
         Returns:
             ReportSettings: The values.
     '''
-    return settings_from(
-        required_parameters(read_parameters(FINANCE_SCOPE, auth_token), FINANCE_CODES),
-        required_parameters(read_parameters(GLOBAL_SCOPE, auth_token), GLOBAL_CODES)
-    )
+    return settings_from(finance_parameters(FINANCE_CODES), finance_parameters(DECIMAL_CODES))
 
 
 def finance_report(
@@ -702,12 +718,12 @@ def finance_report(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             client (str): The owner.
-            auth_token (str | None): The caller's Authorization header, for PARAMETERS.
+            auth_token (str | None): The caller's Authorization header, for QUOTES.
 
         Returns:
             FinanceReportSchema: The report.
     '''
-    settings = report_settings(auth_token)
+    settings = report_settings()
     context = Context(
         catalog = catalog_by_code(dynamodb_resource),
         rates = law_rates(dynamodb_resource),

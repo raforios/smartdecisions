@@ -24,7 +24,7 @@ from schemas.analytics import (
 )
 
 from services.currency import money_row, money_sums
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.analytics_utils import (
     AMOUNT,
     dates,
@@ -35,8 +35,8 @@ from services.logger_config import custom_logger as logger
 
 # A seasonality index built on less than a full year compares months that never
 # repeat, which reads as signal when it is noise.
-_SETTINGS = load_and_validate_env_vars({
-    'GROWTH_MIN_MONTHS_FOR_SEASONALITY': int,
+_SETTINGS = load_parameters({
+    'GROWTH_MIN_MONTHS_FOR_SEASONALITY': int
 })
 _MIN_MONTHS_FOR_SEASONALITY = _SETTINGS['GROWTH_MIN_MONTHS_FOR_SEASONALITY']
 

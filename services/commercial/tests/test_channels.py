@@ -18,6 +18,7 @@ from controllers import channels
 from controllers import common
 from controllers import stock as stock_controllers
 from services.load_files import read_file
+from services.utils import DEFAULT_BUCKET_PATH
 from schemas.channels import (
     CollectionRowSchema,
     SaleRowSchema,
@@ -458,7 +459,7 @@ def test_the_erp_pushes_sales_lines_into_its_dataset(world):
 
     assert response.summary.valid_rows == 2
     assert response.status == 'validated'
-    assert world['dataset']['file_s3_key'].startswith('ingest/normalized/')
+    assert world['dataset']['file_s3_key'].startswith(f'{DEFAULT_BUCKET_PATH}/normalized/')
 
 
 def test_pushing_the_same_line_twice_does_not_count_the_invoice_twice(world):
@@ -643,7 +644,7 @@ def test_an_erp_with_no_file_creates_its_dataset_through_the_api(world): # pylin
     assert response.summary.valid_rows == 2
     assert response.status == 'validated'
     assert persisted['owner_email'] == OWNER
-    assert persisted['file_s3_key'].startswith('ingest/normalized/')
+    assert persisted['file_s3_key'].startswith(f'{DEFAULT_BUCKET_PATH}/normalized/')
 
 
 def test_pushing_the_same_lines_again_returns_the_same_dataset(world): # pylint: disable=unused-argument

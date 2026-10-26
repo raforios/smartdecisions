@@ -36,7 +36,7 @@ from services.receivables import build_receivables
 from services.receivables_fx import build_credit_devaluation
 from services.stock import build_stock
 from services.stock_history import build_stock_history
-from services.affinity import compute_opportunities
+from services.affinity import AffinitySettings, compute_opportunities
 from services.analytics import build_commercial_summary
 from services.concentration import build_concentration
 from services.efficiency import build_efficiency
@@ -67,19 +67,19 @@ from services.analytics_utils import (
     load_dataframe,
     persist_run
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.utils import audit_event, get_current_time_gmt, handle_service_errors
 
 
 # Caps on opportunities kept in the run (DynamoDB item limit + usable table)
 # and the affinity-engine tuning knobs. Configurable per deployment.
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'ANALYTICS_MAX_PER_PRODUCT': int,
     'ANALYTICS_MAX_OPPORTUNITIES': int,
     'AFFINITY_MIN_SUPPORT': float,
     'AFFINITY_MIN_LIFT': float,
     'AFFINITY_TOP_N_PER_PDV': int,
-    'AFFINITY_ITEM_LEVEL': str,
+    'AFFINITY_ITEM_LEVEL': str
 })
 _MAX_PER_PRODUCT = _SETTINGS['ANALYTICS_MAX_PER_PRODUCT']
 _MAX_OPPORTUNITIES = _SETTINGS['ANALYTICS_MAX_OPPORTUNITIES']
@@ -107,11 +107,11 @@ def _top_opportunities_per_product(opportunities: list[Opportunity]) -> list[Opp
 
 def _engine_parameters() -> dict[str, Any]:
     '''
-        Reads the affinity-engine tuning parameters from the environment.
+        The affinity-engine tuning parameters, from `commercial_parameters`.
 
         item_level defaults to 'category': at SKU level real mass-consumption
         baskets are too sparse to yield rules, while category-level affinity is
-        dense and interpretable. Override with AFFINITY_ITEM_LEVEL=product.
+        dense and interpretable. AFFINITY_ITEM_LEVEL = product goes to SKU level.
     '''
     return {
         'min_support': _SETTINGS['AFFINITY_MIN_SUPPORT'],
@@ -506,7 +506,7 @@ async def segmentation_controller(
     '''
     dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     result = build_segmentation(
-        _at_month_close(dataframe, params))
+        _at_month_close(dataframe, params), (params or {}).get('auth_token') or '')
     return SegmentationResponse(dataset_id = dataset_id, **result.model_dump())
 
 
@@ -532,10 +532,8 @@ async def run_analytics_controller(
     parameters = _engine_parameters()
     opportunities, summary = compute_opportunities(
         dataframe = dataframe,
-        min_support = parameters['min_support'],
-        min_lift = parameters['min_lift'],
-        top_n_per_pdv = parameters['top_n_per_pdv'],
-        item_level = parameters['item_level']
+        settings = AffinitySettings(**parameters),
+        auth_token = (params or {}).get('auth_token') or ''
     )
 
     # A large dataset yields tens of thousands of opportunities — too big for one

@@ -24,6 +24,7 @@ from boto3.resources.base import ServiceResource
 
 from models.market_prices import MarketPriceItem
 from schemas.market import MarketError, MarketSource, MarketSyncResult
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
@@ -32,14 +33,18 @@ from services.mining_analysis import OFFICIAL_MINERALS, normalize_name
 from services.prices_store import list_minerals
 from services.utils import get_current_time_gmt
 
-ENV_VARS = load_and_validate_env_vars({
-    'LBMA_PRICES_URL': str,
-    'WESTMETALL_TABLE_URL': str,
-    'WESTMETALL_GOLD_URL': str,
-    'MARKET_SOURCE_TIMEOUT_SECONDS': int,
-    'MARKET_SYNC_DAYS': int,
-    'PRICE_DECIMALS': int
-})
+ENV_VARS = {
+    **load_and_validate_env_vars({
+        'LBMA_PRICES_URL': str,
+        'WESTMETALL_TABLE_URL': str,
+        'WESTMETALL_GOLD_URL': str,
+        'MARKET_SOURCE_TIMEOUT_SECONDS': int
+    }),
+    **load_parameters({
+        'MARKET_SYNC_DAYS': int,
+        'PRICE_DECIMALS': int
+    })
+}
 LBMA_PRICES_URL = ENV_VARS['LBMA_PRICES_URL']
 WESTMETALL_TABLE_URL = ENV_VARS['WESTMETALL_TABLE_URL']
 WESTMETALL_GOLD_URL = ENV_VARS['WESTMETALL_GOLD_URL']

@@ -23,16 +23,21 @@ from pydantic import BaseModel
 
 from schemas.analytics import AnalyticsError, Money, ReferenceRates
 from services.analytics_utils import AMOUNT_DECIMALS
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 from services.utils import API_URL
 
-ENV_VARS = load_and_validate_env_vars({
-    'QUOTES_TIMEOUT_SECONDS': int,
-    'PARALLEL_CURRENCY': str,
-    'PARALLEL_FALLBACK_CURRENCY': str,
-})
+ENV_VARS = {
+    **load_and_validate_env_vars({
+        'QUOTES_TIMEOUT_SECONDS': int
+    }),
+    **load_parameters({
+        'PARALLEL_CURRENCY': str,
+        'PARALLEL_FALLBACK_CURRENCY': str
+    })
+}
 QUOTES_TIMEOUT_SECONDS = ENV_VARS['QUOTES_TIMEOUT_SECONDS']
 # The USDT series (Binance P2P, the parallel dollar) starts the day it was
 # connected; days before it read at the official rate, and the answer says so.

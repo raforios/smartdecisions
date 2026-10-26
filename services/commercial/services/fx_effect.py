@@ -43,11 +43,13 @@ from services.analytics_utils import (
     money,
     ratio
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 from services.margin import has_cost_data
 
-_SETTINGS = load_and_validate_env_vars({'FX_UNCOVERED_ROWS': int})
+_SETTINGS = load_parameters({
+    'FX_UNCOVERED_ROWS': int
+})
 UNCOVERED_ROWS = _SETTINGS['FX_UNCOVERED_ROWS']
 _PERCENT = 100.0
 _NO_CATEGORY = 'SIN_CATEGORIA'

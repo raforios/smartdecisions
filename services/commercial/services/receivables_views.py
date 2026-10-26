@@ -24,17 +24,17 @@ from schemas.receivables import (
     PriorityRow
 )
 from services.analytics_utils import money, ratio
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'RECEIVABLES_WATCH_DAYS': int,
-    'RECEIVABLES_DELINQUENT_DAYS': int,
+    'RECEIVABLES_DELINQUENT_RISK_DAYS': int,
     'RECEIVABLES_CRITICAL_DAYS': int,
     'RECEIVABLES_CALENDAR_DAYS': int,
     'RECEIVABLES_COHORT_MONTHS': int,
     'RECEIVABLES_TOP_CLIENTS': int,
     'RECEIVABLES_TOP_COLLECTORS': int,
-    'RECEIVABLES_PRIORITY_ROWS': int,
+    'RECEIVABLES_PRIORITY_ROWS': int
 })
 _CALENDAR_DAYS = _SETTINGS['RECEIVABLES_CALENDAR_DAYS']
 _COHORT_MONTHS = _SETTINGS['RECEIVABLES_COHORT_MONTHS']
@@ -47,7 +47,7 @@ _PERCENT = 100.0
 # Risk cut points of a debtor, in days past due of its oldest balance. They are
 # reading bands, not provisioning ones: the provision is decided by the policy.
 _WATCH_DAYS = _SETTINGS['RECEIVABLES_WATCH_DAYS']
-_DELINQUENT_DAYS = _SETTINGS['RECEIVABLES_DELINQUENT_DAYS']
+_DELINQUENT_DAYS = _SETTINGS['RECEIVABLES_DELINQUENT_RISK_DAYS']
 _CRITICAL_DAYS = _SETTINGS['RECEIVABLES_CRITICAL_DAYS']
 
 # Windows of the collection calendar. Overdue goes on its own because it is not

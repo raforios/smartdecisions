@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from models.mining_analysis import Mineral
 from schemas.market import MarketError
 from schemas.mining_analysis import MiningResult, MiningStatus
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
 from services.mining_analysis import CHANGE_DECIMALS, OFFICIAL_MINERALS, normalize_name
@@ -33,7 +33,9 @@ from services.utils import handle_service_errors
 
 # Required, not optional: a fallback written in code is still a number the
 # code chose.
-ENV_VARS = load_and_validate_env_vars({'MAX_FALLBACK_PERIODS': int})
+ENV_VARS = load_parameters({
+    'MAX_FALLBACK_PERIODS': int
+})
 
 def biweekly_period_bounds(
     year: int,

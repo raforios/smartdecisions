@@ -15,24 +15,22 @@
 from typing import Any
 
 import pandas as pd
-import requests
 
 from schemas.analytics import AnalyticsError, ForecastBlock
 from services.analytics_utils import AMOUNT_DECIMALS, FORECAST_MONTHS_AHEAD
 from services.currency import money_row, money_sums
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
+from services.calculations import ask_ml_functions
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
-from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
 # How the projection is shaped. The moving-average window, the ceiling on how
 # far ahead anybody may ask and how many category lines fit on one chart are
 # all judgements about the business being forecast, so an operation can retune
 # them without a release.
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'FORECAST_MOVING_AVERAGE_MONTHS': int,
     'FORECAST_MAX_MONTHS_AHEAD': int,
-    'FORECAST_MAX_CATEGORIES': int,
+    'FORECAST_MAX_CATEGORIES': int
 })
 MOVING_AVERAGE_MONTHS = _SETTINGS['FORECAST_MOVING_AVERAGE_MONTHS']
 MAX_MONTHS_AHEAD = _SETTINGS['FORECAST_MAX_MONTHS_AHEAD']
@@ -80,21 +78,9 @@ def _forecast_values(
     '''
     body = {'values': history, 'horizon': months_ahead, 'models': [_ML_MODELS[method]],
             'window': MOVING_AVERAGE_MONTHS, 'backtest_points': max(1, len(history) - 1)}
-    try:
-        response = requests.post(f'{API_URL}/v1/prediction/forecast', json = body,
-                                 headers = {'Authorization': auth_token},
-                                 timeout = REQUEST_TIMEOUT_SECONDS)
-    except requests.exceptions.RequestException as error:
-        error_msg = f'Network error asking ML_FUNCTIONS for a {method} forecast: {error}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = AnalyticsError.FORECAST_UNAVAILABLE.value) from error
-    if not response.ok:
-        error_msg = (f'ML_FUNCTIONS refused the {method} forecast: '
-                     f'status={response.status_code} body={response.text[:200]}')
-        logger.error(error_msg)
-        raise ServiceUnavailableError(detail = AnalyticsError.FORECAST_UNAVAILABLE.value)
-    projected = response.json().get('forecast') or []
+    answer = ask_ml_functions('/v1/prediction/forecast', body, auth_token,
+                              AnalyticsError.FORECAST_UNAVAILABLE.value)
+    projected = answer.get('forecast') or []
     return [round(max(float(value), 0.0), AMOUNT_DECIMALS) for value in projected]
 
 

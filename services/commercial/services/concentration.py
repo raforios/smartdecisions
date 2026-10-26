@@ -27,17 +27,17 @@ from services.analytics_utils import (
     ratio
 )
 from services.currency import money_row, money_sums
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
 # Business thresholds: configurable per deployment, never literals in the code.
 # The HHI cut points are borrowed from competition analysis and read here as
 # "how much of the revenue depends on a handful of accounts".
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'CONCENTRATION_PARETO_TARGET': float,
     'CONCENTRATION_TOP_CLIENTS': int,
     'CONCENTRATION_HHI_MODERATE': float,
-    'CONCENTRATION_HHI_HIGH': float,
+    'CONCENTRATION_HHI_HIGH': float
 })
 _PARETO_TARGET = _SETTINGS['CONCENTRATION_PARETO_TARGET']
 _TOP_CLIENTS = _SETTINGS['CONCENTRATION_TOP_CLIENTS']

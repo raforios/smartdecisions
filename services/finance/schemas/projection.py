@@ -5,7 +5,7 @@
     Nothing is stored: the projection is computed when asked for, from the
     months the client loaded and the values the manager types on the screen
     (Rafael, 17-oct: the scenario percentages and the horizon start from the
-    defaults in PARAMETERS and can be changed by keyboard, validated).
+    defaults in `finance_parameters` and can be changed by keyboard, validated).
 '''
 from enum import Enum
 from pydantic import BaseModel, Field

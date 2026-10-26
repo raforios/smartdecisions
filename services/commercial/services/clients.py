@@ -35,6 +35,7 @@ from schemas.clients import (
 )
 from schemas.commercial import CLIENT_SALES_ATTRIBUTES
 from services.crud import find_item_by_key, query_by_partition
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
 from services.commercial_utils import from_dynamo, to_dynamo
@@ -43,10 +44,14 @@ from services.sellers import register_sellers, sellers_from_frame
 from services.utils import get_current_time_gmt
 
 
-ENV_VARS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_INGEST_CLIENTS': str,
-    'FIELD_CLIENT_COORDINATE_DECIMALS': int,
-})
+ENV_VARS = {
+    **load_and_validate_env_vars({
+        'DYNAMODB_TABLE_NAME_INGEST_CLIENTS': str
+    }),
+    **load_parameters({
+        'FIELD_CLIENT_COORDINATE_DECIMALS': int
+    })
+}
 CLIENTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_CLIENTS']
 
 # How a client is identified inside a validated frame: its code and its name.

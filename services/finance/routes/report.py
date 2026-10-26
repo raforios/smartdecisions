@@ -203,7 +203,7 @@ def _change(
     description = (
         'The realistic scenario is a damped trend over the loaded months; the '
         'worst and the best move it by the percentages given here, or by the '
-        'defaults in PARAMETERS. Each scenario says when its cash runs out.'
+        'defaults of the service. Each scenario says when its cash runs out.'
     )
 )
 async def finance_projection_endpoint(

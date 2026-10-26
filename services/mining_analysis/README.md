@@ -35,14 +35,19 @@ Este microservicio sigue los estándares de alta disponibilidad, precisión fina
 
 A continuación se listan los **endpoints** principales de la API, agrupados por su dominio de datos para una mejor referencia.
 
-### Cotizaciones y Precios de Minerales
+### Cotizaciones, proyección y mercado (con JWT)
 
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `POST` | `/v1/mining-analysis/etl/upload` | Carga masiva de cotizaciones mineras desde un archivo CSV. Dispara proceso de normalización y auditoría. |
-| `GET`  | `/v1/mining-analysis/prices` | Recupera el listado completo de precios históricos, incluyendo la metadata de cada mineral. |
-| `GET`  | `/v1/mining-analysis/reports/daily?date=YYYY-MM-DD` | Devuelve la cotización más reciente por mineral del catálogo oficial hasta la fecha indicada, con `is_fallback = true` cuando se usa un día anterior. Incluye `previous_price_low` y `change_pct` (variación vs. día previo con dato). Insumo del reporte interno **Minerales_01**. |
-| `GET`  | `/v1/mining-analysis/reports/biweekly?year=YYYY&month=MM&half=1\|2` | Promedio simple de `price_low` por mineral en la quincena solicitada (`half=1` cubre los días 1-15; `half=2` cubre del 16 al fin de mes). Cuando no hay datos en el periodo, retrocede hasta hallar la quincena más reciente con cotizaciones. Insumo del reporte oficial **Minerales_02**. |
+| `GET`  | `/v1/mining-analysis/prices` | Todas las cotizaciones oficiales guardadas, con los datos de cada mineral. |
+| `GET`  | `/v1/mining-analysis/reports/daily?date=YYYY-MM-DD` | La cotización más reciente de cada mineral del catálogo hasta esa fecha (`is_fallback` cuando se usa un día anterior), con la variación frente al día previo. Plantilla **Minerales_01**. |
+| `GET`  | `/v1/mining-analysis/reports/biweekly?year=YYYY&month=MM&half=1\|2` | Promedio de la quincena por mineral; si no hay datos, retrocede hasta la última quincena con cotizaciones. Plantilla **Minerales_02**. |
+| `GET`  | `/v1/mining-analysis/forecast/prices` | Proyección del precio de un mineral, pedida a ML_FUNCTIONS (`/v1/prediction/forecast/compare`), con su confianza. |
+| `POST` | `/v1/mining-analysis/market/sync` | Lee las fuentes públicas de mercado (LBMA vía Westmetall, LME cash) y guarda los días que falten. |
+| `GET`  | `/v1/mining-analysis/market/estimate` | La cotización oficial a la que va cada mineral, estimada con el mercado de la quincena. |
+| `GET`  | `/v1/mining-analysis/market/prices/{mineral_id}` | Serie diaria de mercado de un mineral. |
+| `GET · PUT` | `/v1/mining-analysis/royalty-rules` | Las escalas de regalía vigentes (Art. 227) y su alta o reemplazo por mineral. |
+| `POST` | `/v1/mining-analysis/sale-scenario` | «Vender hoy o esperar»: compara las dos puntas en bolivianos con el dólar proyectado que da QUOTES (sólo `ADMIN`; se mudó desde QUOTES el 23-oct-2026). |
 
 ### Endpoints públicos (sin JWT) para el sitio institucional
 
@@ -55,14 +60,6 @@ Pensados para `mineria.gob.bo` y otros consumidores anónimos. El default del re
 | `GET`  | `/v1/mining-analysis/public/reports/biweekly/history?from=YYYY-MM-DD&to=YYYY-MM-DD` | Serie histórica de quincenas con datos, ordenada cronológicamente. `from`/`to` opcionales (defaults a `MIN`/`MAX` de `t_mining_prices`). |
 | `GET`  | `/v1/mining-analysis/public/reports/daily/{png\|pdf}?date=YYYY-MM-DD` | Reporte diario renderizado sobre la plantilla **Minerales_01** (binario, descarga directa). |
 | `GET`  | `/v1/mining-analysis/public/reports/biweekly/{png\|pdf}?year=&month=&half=` | Reporte quincenal renderizado sobre la plantilla **Minerales_02** (binario, descarga directa). |
-
-### Regalías Mineras y Transacciones
-
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `POST` | `/v1/mining-analysis/royalties/upload` | Ejecuta el proceso ETL en memoria a partir de un archivo Excel con las liquidaciones oficiales del SIN. |
-| `GET`  | `/v1/mining-analysis/royalties/summary` | Obtiene el resumen agregado de coparticipación de regalías mineras (recaudación bruta, comisiones y distribución neta a gobernaciones y municipios). Soporta filtrado por gestión fiscal. |
-| `GET`  | `/v1/mining-analysis/royalties/transactions` | Recupera un análisis granular de las transacciones de pago de regalías agrupadas por empresa operadora (NIT), municipio y gestión. |
 
 ### Utilidades y Salud
 
@@ -84,6 +81,14 @@ modelos en `models/mining_analysis_dyb.py` y `models/market_prices.py`):
 | `mining_prices` | `mineral_id` | `date` | Cotización oficial quincenal: `price_low`, `price_high`, `created_at` |
 | `mining_market_prices` | `mineral_id` | `date` | Precio de mercado diario (LME, LBMA): `price`, `source`, `retrieved_at` |
 | `mining_royalty_rules` | `mineral_id` | — | Alícuota de regalía: `slope`, `intercept`, `min_rate`, `max_rate`, `internal_factor`, `legal_basis`, `updated_at` |
+| `mining_analysis_parameters` | `code` | — | Los valores de negocio del servicio (ver abajo) |
+
+**Valores de negocio.** Los 20 valores del servicio —quincenas de historia,
+ventanas y umbrales de confianza de la proyección, decimales, días que repara
+la sincronización de mercado— viven en `mining_analysis_parameters`, no en el
+`.env`. Los lee el bloque estándar SERVICE PARAMETERS de `services/utils.py`.
+Definición: filas `mining_analysis` de `docs/parametros.md`; siembra:
+`python -m tools.seeds.seed_service_parameters mining_analysis --yes`.
 
 Lo relacional (departamentos, municipios, empresas, transacciones y pagos de
 regalías) vive en MySQL local, en `models/mining_analysis.py`, y se usa sólo
@@ -91,41 +96,19 @@ por los módulos `*_sql.py`.
 
 ## 🗂️ Estructura del Microservicio
 
-```txt
-mining_analysis/
-├── controllers/
-│   ├── __init__.py
-│   └── mining_analysis.py
-├── models/
-│   ├── __init__.py
-│   └── mining_analysis.py
-├── routes/
-│   ├── __init__.py
-│   └── mining_analysis.py
-├── schemas/
-│   ├── __init__.py
-│   └── mining_analysis.py
-├── services/
-│   ├── __init__.py
-│   ├── api_exceptions.py
-│   ├── crud.py
-│   ├── db_connection.py
-│   ├── environment.py
-│   ├── exceptions.py
-│   ├── logger_config.py
-│   ├── mining_analysis.py
-│   ├── royalties_etl.py
-│   ├── security.py
-│   └── utils.py
-├── .dockerignore
-├── .env
-├── .gitignore
-├── deploy.config
-├── main.py
-├── README.md
-├── requirements.txt
-└── seed_locations.txt
-```
+Cinco capas; `mining_analysis.py` es el principal en cada una (cotizaciones
+oficiales y reportes) y los complementos se nombran por lo que hacen:
+
+- `market.py` (rutas, controlador y esquema): fuentes de mercado, estimación,
+  escalas de regalía y «vender hoy o esperar».
+- `public_reports.py`: los reportes anónimos y su PDF/PNG.
+- En `services/`: `market_sources.py` (LBMA, LME), `official_estimate.py`,
+  `official_reports.py`, `price_forecast.py` (lo que pide a ML_FUNCTIONS),
+  `prices_store.py` con `prices_dyb.py` y `db_connection_sql.py` (persistencia
+  conmutable DynamoDB/MySQL), `reports_renderer.py`, `royalty_rules.py` y
+  `sale_scenario.py`.
+- `scripts/`: la carga quincenal local (se retira cuando corra con
+  `tools/etl_minerals/`).
 
 ---
 
@@ -268,14 +251,13 @@ python -m scripts.migrate_to_dynamodb --yes
 siempre golpea localhost, aunque el Lambda esté arriba.
 
 ```bash
-export API_BASE_URL="https://jvxmqeg601.execute-api.us-east-1.amazonaws.com/minig_analysis/v1/mining-analysis"
+export API_BASE_URL="https://api.bearsoft.com.bo/v1/mining-analysis"
 streamlit run app.py
 ```
 
 **Sirve para consultar, no para cargar.** Contra AWS las lecturas funcionan
-—`/prices`, los reportes diario y quincenal, el PDF y el PNG—, pero
-`POST /etl/upload` escribe en el relacional y en el Lambda no hay ninguno. La
-carga de la quincena se hace con el servicio local, según el flujo de arriba.
+—`/prices`, los reportes diario y quincenal, el PDF y el PNG—. La carga de la
+quincena se hace en local, según el flujo de arriba.
 
 El paso 3 es idempotente: reescribe lo que ya estaba con los mismos valores y
 agrega lo nuevo.

@@ -6,12 +6,42 @@
     built differently in one of them would let the suite agree with itself
     and disagree with AWS.
 '''
+import importlib.util
+from pathlib import Path
+
 import boto3
 import pytest
 from moto import mock_aws
 
-from schemas.finance import AccountSchema, AccountType
-from services import business_model, entries, finance, parameters
+from services.environment import load_and_validate_env_vars
+
+# The business values live in the service's parameters table and are read the
+# first time a module asks: moto holds that table, seeded from the `finance`
+# rows of docs/parametros.md (the rows the real table is seeded from), and
+# they are read here, before any test starts its own moto.
+_DOCUMENT_READER = (Path(__file__).resolve().parents[3] / 'tools' / 'seeds'
+                    / 'parameters_document.py')
+_SPEC = importlib.util.spec_from_file_location('parameters_document', _DOCUMENT_READER)
+_DOCUMENT = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_DOCUMENT)
+_PARAMETERS_MOCK = mock_aws()
+_PARAMETERS_MOCK.start()
+_DOCUMENT.create_and_seed(
+    boto3.resource('dynamodb', region_name = 'us-east-1'),
+    load_and_validate_env_vars({'DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS': str})[
+        'DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS'],
+    'finance')
+
+# The services are imported only once moto holds their parameters table, so
+# they cannot be grouped with the environment reader above.
+# pylint: disable=wrong-import-position,ungrouped-imports
+from schemas.finance import AccountSchema, AccountType  # noqa: E402
+from services import business_model, entries, finance, parameters  # noqa: E402
+from services.utils import load_parameters  # noqa: E402
+# pylint: enable=wrong-import-position,ungrouped-imports
+
+load_parameters({})
+_PARAMETERS_MOCK.stop()
 
 
 @pytest.fixture(name = 'finance_store')

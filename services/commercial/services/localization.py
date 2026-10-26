@@ -31,6 +31,7 @@ from schemas.localization import (
 )
 from services.common import from_dynamo, new_id, now_iso, to_dynamo
 from services.crud import get_item_by_key, put_unique_composite_item, query_by_partition
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import (
     InvalidInputError,
@@ -39,10 +40,14 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 
-_SETTINGS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES': str,
-    'STOP_POSITION_DECIMALS': int
-})
+_SETTINGS = {
+    **load_and_validate_env_vars({
+        'DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES': str
+    }),
+    **load_parameters({
+        'STOP_POSITION_DECIMALS': int
+    })
+}
 PLANNED_ROUTES_TABLE = _SETTINGS['DYNAMODB_TABLE_NAME_OPTIMIZATION_PLANNED_ROUTES']
 # How close two readings have to be to count as the same stop when neither
 # names a client. A decision —it is the difference between one shop and two—

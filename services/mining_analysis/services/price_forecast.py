@@ -46,7 +46,7 @@ from schemas.mining_analysis import (
     MiningResult,
     MiningStatus
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 from services.mining_analysis import OFFICIAL_MINERALS
 from services.official_reports import (
@@ -68,7 +68,7 @@ from services.utils import (
 
 
 # Required, not optional: a fallback in code is still a number the code chose.
-ENV_VARS = load_and_validate_env_vars({
+ENV_VARS = load_parameters({
     'FORECAST_MIN_DAYS': int,
     'FORECAST_HIGH_CONFIDENCE_DAYS': int,
     'FORECAST_MEDIUM_CONFIDENCE_DAYS': int,
@@ -81,7 +81,7 @@ ENV_VARS = load_and_validate_env_vars({
     'ERROR_DECIMALS': int,
     'CHANGE_DECIMALS': int,
     'PRICE_DECIMALS': int,
-    'PUBLISHED_PRICE_DECIMALS': int,
+    'PUBLISHED_PRICE_DECIMALS': int
 })
 
 # Decimals a published error, a published percentage and a published price

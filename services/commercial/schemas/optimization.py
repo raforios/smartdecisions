@@ -7,14 +7,16 @@
 '''
 from enum import Enum
 from datetime import date
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 
 # How many visit days a plan spreads the clients over when the caller does not
 # say. It is the length of the commercial cycle of the operation being planned
 # — weekly, fortnightly — so it is configured, not assumed here.
-_SETTINGS = load_and_validate_env_vars({'ROUTES_DEFAULT_PLAN_DAYS': int})
+_SETTINGS = load_parameters({
+    'ROUTES_DEFAULT_PLAN_DAYS': int
+})
 DEFAULT_PLAN_DAYS = _SETTINGS['ROUTES_DEFAULT_PLAN_DAYS']
 
 
@@ -26,102 +28,14 @@ class OptimizationError(str, Enum):
     EMPTY_UPLOAD = 'EMPTY_UPLOAD'
     UNSUPPORTED_FILE_TYPE = 'UNSUPPORTED_FILE_TYPE'
     INVALID_ENCODING = 'INVALID_ENCODING'
-    EMPTY_CSV = 'EMPTY_CSV'
     NO_GEOCODED_CLIENTS = 'NO_GEOCODED_CLIENTS'
     EMPTY_PERIOD = 'EMPTY_PERIOD'
-    EMPTY_POINT_LIST = 'EMPTY_POINT_LIST'
     MISSING_COORDINATES = 'MISSING_COORDINATES'
-    INVALID_ROW = 'INVALID_ROW'
-    INVALID_POINT = 'INVALID_POINT'
     ROUTING_SERVICE_UNAVAILABLE = 'ROUTING_SERVICE_UNAVAILABLE'
+    CALCULATION_UNAVAILABLE = 'CALCULATION_UNAVAILABLE'
     NO_SELLERS_IN_FILE = 'NO_SELLERS_IN_FILE'
     BASE_POINT_NOT_SET = 'BASE_POINT_NOT_SET'
     ROUTING_SERVICE_NO_ROUTE = 'ROUTING_SERVICE_NO_ROUTE'
-    ROUTE_POINTS_NOT_FOUND = 'ROUTE_POINTS_NOT_FOUND'
-    DATASET_NOT_FOUND = 'DATASET_NOT_FOUND'
-    DATASET_NOT_VALIDATED = 'DATASET_NOT_VALIDATED'
-    DATASET_UNREADABLE = 'DATASET_UNREADABLE'
-
-
-class OptimizationQueryParams(BaseModel):
-    '''
-        Shared query-string contract for all optimization endpoints.
-
-        `dist` is retained for backward compatibility with the legacy OSM-graph
-        radius contract; routing now uses OSRM, which resolves the full street
-        geometry regardless of this value. The data-extraction endpoints
-        ignore it as well.
-    '''
-    model_config = ConfigDict(extra = 'forbid')
-
-    route_id: int = Field(..., gt = 0, description = 'Identifier of the planned route.')
-    day: int = Field(..., ge = 0, description = 'Day index within the route plan.')
-    dist: int | None = Field(
-        default = 1500,
-        ge = 100,
-        le = 50000,
-        description = 'Legacy OSM graph radius in meters; kept for compatibility, no longer used.'
-    )
-
-
-class DataMapResponse(BaseModel):
-    '''
-        Raw geolocated client point for the base data map.
-
-        Fields mirror the legacy `api/schemas/optimization.py:DataMapResponse`
-        to preserve the notebook contract.
-    '''
-    day: int
-    client_id: int
-    y: float = Field(..., description = 'Latitude.')
-    x: float = Field(..., description = 'Longitude.')
-    color: str = Field(..., description = "'red' for start, 'green' for end, 'black' otherwise.")
-
-
-class OptimizationResponse(BaseModel):
-    '''
-        Pair (origin, target) of clients with the linear distance and the
-        target coordinates. Used by `/distances` and `/optimal_route`.
-    '''
-    origin: int
-    target: int
-    distance: float
-    y: float
-    x: float
-
-
-class BulkUploadResponse(BaseModel):
-    '''
-        Response for POST /v1/commercial/routes/bulk-upload.
-    '''
-    route_id: int
-    day: int
-    points_written: int = Field(..., ge = 0)
-    columns_detected: list[str] = Field(
-        ..., description = 'Headers parsed from the CSV that were recognized.'
-    )
-
-
-class RouteResponse(BaseModel):
-    '''
-        Final route segment with road-network projection (OSRM).
-
-        `route` is the street polyline that joins the segment endpoints,
-        expressed as a list of `[longitude, latitude]` points (GeoJSON order)
-        ready to be drawn on a map. `road_distance` and `road_duration` are the
-        real driving distance (meters) and duration (seconds) reported by OSRM.
-    '''
-    origin: int
-    target: int
-    y: float
-    x: float
-    y_next: float
-    x_next: float
-    distance: float
-    time_seg: float
-    road_distance: float
-    road_duration: float
-    route: list[list[float]]
 
 
 # --- Route plan derived from a sales dataset ---

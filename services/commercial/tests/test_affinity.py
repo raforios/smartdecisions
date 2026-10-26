@@ -5,7 +5,18 @@ import pandas as pd
 import pytest
 
 from services import affinity
-from services.affinity import compute_opportunities
+from services.affinity import AffinitySettings, compute_opportunities
+
+TOKEN = 'Bearer test'
+
+
+def _settings(
+    min_support: float,
+    top_n_per_pdv: int
+) -> AffinitySettings:
+    '''SKU baskets, lift from 1, with the support and the cap asked.'''
+    return AffinitySettings(min_support = min_support, min_lift = 1.0,
+                            top_n_per_pdv = top_n_per_pdv, item_level = 'product')
 
 
 def _sales_frame() -> pd.DataFrame:
@@ -50,12 +61,7 @@ def test_recommends_b_to_pdv3_that_only_buys_a() -> None:
     '''
         Given strong A→B affinity, PdV-3 (only buys A) must receive B.
     '''
-    opportunities, summary = compute_opportunities(
-        dataframe = _sales_frame(),
-        min_support = 0.1,
-        min_lift = 1.0,
-        top_n_per_pdv = 10
-    )
+    opportunities, summary = compute_opportunities(_sales_frame(), _settings(0.1, 10), TOKEN)
     pdv3 = [opp for opp in opportunities if opp.pdv_id == 'PDV-3']
     assert pdv3, 'expected at least one opportunity for PDV-3'
     assert any(opp.recommended_product_id == 'B' for opp in pdv3)
@@ -66,12 +72,7 @@ def test_does_not_recommend_already_purchased_products() -> None:
     '''
         PdVs that already buy B must not receive B as a recommendation.
     '''
-    opportunities, _ = compute_opportunities(
-        dataframe = _sales_frame(),
-        min_support = 0.1,
-        min_lift = 1.0,
-        top_n_per_pdv = 10
-    )
+    opportunities, _ = compute_opportunities(_sales_frame(), _settings(0.1, 10), TOKEN)
     pdv1_recs = {opp.recommended_product_id for opp in opportunities if opp.pdv_id == 'PDV-1'}
     assert 'B' not in pdv1_recs
 
@@ -81,12 +82,7 @@ def test_opportunity_includes_drop_size_amount_when_prices_present() -> None:
         The dataset includes total_amount for every row, so expected_drop_size_amount
         must be populated and used in the opportunity_score.
     '''
-    opportunities, _ = compute_opportunities(
-        dataframe = _sales_frame(),
-        min_support = 0.1,
-        min_lift = 1.0,
-        top_n_per_pdv = 10
-    )
+    opportunities, _ = compute_opportunities(_sales_frame(), _settings(0.1, 10), TOKEN)
     assert all(opp.expected_drop_size_amount is not None for opp in opportunities)
     for opp in opportunities:
         expected_score = (
@@ -99,12 +95,7 @@ def test_top_n_caps_opportunities_per_pdv() -> None:
     '''
         With top_n_per_pdv = 1, every PdV must have at most one opportunity.
     '''
-    opportunities, _ = compute_opportunities(
-        dataframe = _sales_frame(),
-        min_support = 0.05,
-        min_lift = 1.0,
-        top_n_per_pdv = 1
-    )
+    opportunities, _ = compute_opportunities(_sales_frame(), _settings(0.05, 1), TOKEN)
     by_pdv: dict = {}
     for opp in opportunities:
         by_pdv.setdefault(opp.pdv_id, 0)
@@ -119,7 +110,7 @@ def test_empty_dataframe_returns_zero_opportunities() -> None:
     empty = pd.DataFrame(columns = [
         'order_id', 'pos_id', 'product_id', 'quantity', 'total_amount'
     ])
-    opportunities, summary = compute_opportunities(empty)
+    opportunities, summary = compute_opportunities(empty, _settings(0.01, 10), TOKEN)
     assert not opportunities
     assert summary.total_opportunities == 0
     assert summary.affinity_rules_evaluated == 0
@@ -143,11 +134,6 @@ def test_rules_reach_the_pdv_loop_as_records(monkeypatch: pytest.MonkeyPatch) ->
         return original(basket, data)
 
     monkeypatch.setattr(affinity, '_candidates_for_pdv', _spy)
-    opportunities, _ = compute_opportunities(
-        dataframe = _sales_frame(),
-        min_support = 0.1,
-        min_lift = 1.0,
-        top_n_per_pdv = 10
-    )
+    opportunities, _ = compute_opportunities(_sales_frame(), _settings(0.1, 10), TOKEN)
     assert seen and all(kind is list for kind in seen)
     assert any(opp.pdv_id == 'PDV-3' for opp in opportunities)

@@ -12,7 +12,7 @@ from fastapi import (
 from boto3.resources.base import ServiceResource
 from services.logger_config import custom_logger as logger
 from services.db_connection import GET_DB_DEPENDENCY
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.security import require_roles
 from routes.market import MINERALS_ROLES
 from controllers.mining_analysis import (
@@ -30,7 +30,9 @@ from schemas.mining_analysis import (
 )
 
 # Days a price projection covers when the caller does not ask for a horizon.
-_SETTINGS = load_and_validate_env_vars({'FORECAST_DEFAULT_DAYS_AHEAD': int})
+_SETTINGS = load_parameters({
+    'FORECAST_DEFAULT_DAYS_AHEAD': int
+})
 DEFAULT_DAYS_AHEAD = _SETTINGS['FORECAST_DEFAULT_DAYS_AHEAD']
 
 router = APIRouter(prefix = '/v1/mining-analysis', tags = ['Mining Analysis'])

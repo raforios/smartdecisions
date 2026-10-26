@@ -38,13 +38,13 @@ from services.analytics_utils import (
     ratio,
     unavailable_block
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
 # Business thresholds. Days of coverage are a policy of the operation —a
 # distributor with weekly deliveries reads 10 days very differently from one
 # importing by sea— so they are configured, never literals.
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'STOCK_COVERAGE_DECIMALS': int,
     'STOCK_ABC_A_LIMIT': float,
     'STOCK_ABC_B_LIMIT': float,
@@ -53,7 +53,7 @@ _SETTINGS = load_and_validate_env_vars({
     'STOCK_LOW_COVERAGE_DAYS': int,
     'STOCK_EXCESS_COVERAGE_DAYS': int,
     'STOCK_TOP_ROWS': int,
-    'STOCK_MAX_PRODUCT_ROWS': int,
+    'STOCK_MAX_PRODUCT_ROWS': int
 })
 _DEMAND_WINDOW = _SETTINGS['STOCK_DEMAND_WINDOW_DAYS']
 _CRITICAL_DAYS = _SETTINGS['STOCK_CRITICAL_COVERAGE_DAYS']

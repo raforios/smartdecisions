@@ -50,7 +50,7 @@ from services.analytics_utils import (
     ratio,
     unavailable_block
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 from services.margin import has_cost_data
 from services.receivables_views import (
@@ -63,24 +63,23 @@ from services.receivables_views import (
 
 # Business parameters. They are defaults, not constants: the policy of a client
 # overrides them one by one.
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'RECEIVABLES_AGING_BUCKETS': str,
     'RECEIVABLES_LOSS_RATES': str,
     'RECEIVABLES_FINANCIAL_RATE_DAILY': float,
     'RECEIVABLES_DELINQUENT_DAYS': int,
     'RECEIVABLES_DEFAULT_TERM_DAYS': int,
     'RECEIVABLES_DSO_WINDOW_DAYS': int,
-    'RECEIVABLES_CEI_WINDOW_DAYS': int,
+    'RECEIVABLES_CEI_WINDOW_DAYS': int
 })
 
 
 def _numbers(raw: str) -> list[float]:
     '''
-        Reads a dash-separated list of numbers from configuration.
+        Reads a dash-separated list of numbers from a parameter.
 
-        The separator is a dash and not a comma because the deploy passes the
-        whole `.env` to `--environment Variables={...}`, where a comma starts a
-        new variable.
+        The separator is a dash because the same lists are written in
+        `docs/parametros.md` and in each company's credit policy that way.
 
         Args:
             raw (str): Value as configured, e.g. '15-30-60-90-120'.

@@ -5,13 +5,15 @@ import unicodedata
 from typing import Any
 from boto3.resources.base import ServiceResource
 from sqlalchemy.orm import Session
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.prices_store import all_quotations
 
 
 # Required, not optional: a fallback written in code is still a number the
 # code chose.
-ENV_VARS = load_and_validate_env_vars({'CHANGE_DECIMALS': int})
+ENV_VARS = load_parameters({
+    'CHANGE_DECIMALS': int
+})
 
 # Decimals a published percentage carries.
 CHANGE_DECIMALS = ENV_VARS['CHANGE_DECIMALS']

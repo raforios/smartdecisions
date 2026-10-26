@@ -27,6 +27,7 @@ from services.exceptions import (
 from tests.dynamo_helpers import build_resource
 
 OWNER = 'yo@miempresa.com'
+TOKEN = 'Bearer test'
 OTHER = 'otra@empresa.com'
 
 
@@ -460,7 +461,7 @@ def test_repeating_a_route_copies_its_stops_onto_another_day(dynamodb):
 
     repeated = sources.repeat_planned_route(
         dynamodb, OWNER, original['id'],
-        RepeatPlannedRouteSchema(plan_date = '2026-09-28', seller = 'Juan')
+        RepeatPlannedRouteSchema(plan_date = '2026-09-28', seller = 'Juan'), TOKEN
     )
 
     assert repeated['plan_date'] == '2026-09-28'

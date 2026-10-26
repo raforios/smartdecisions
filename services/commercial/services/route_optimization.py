@@ -113,7 +113,8 @@ def _savings(
 def optimize_planned_route(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    route_id: str
+    route_id: str,
+    auth_token: str
 ) -> RouteOptimizationSchema:
     '''
         Proposes a better order for a route the owner already has.
@@ -122,6 +123,7 @@ def optimize_planned_route(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
             route_id (str): The route to study.
+            auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
         Returns:
             RouteOptimizationSchema: Both orders, both measured, and the saving.
@@ -144,7 +146,7 @@ def optimize_planned_route(
 
     current = _shape(points, list(range(len(points))))
     proposal = order_stops(
-        np.array([[point['latitude'], point['longitude']] for point in points])
+        np.array([[point['latitude'], point['longitude']] for point in points]), auth_token
     )
     optimized = _shape(points, proposal)
 

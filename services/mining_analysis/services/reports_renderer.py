@@ -18,7 +18,7 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 from fpdf import FPDF
 
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
 
@@ -100,7 +100,9 @@ def _draw_centered(
 
 # Bulletins publish fewer decimals than the database keeps: how many is a
 # decision of whoever signs the bulletin, not of this renderer.
-_SETTINGS = load_and_validate_env_vars({'PUBLISHED_PRICE_DECIMALS': int})
+_SETTINGS = load_parameters({
+    'PUBLISHED_PRICE_DECIMALS': int
+})
 _PRICE_QUANTUM: Decimal = Decimal(1).scaleb(-_SETTINGS['PUBLISHED_PRICE_DECIMALS'])
 
 

@@ -23,7 +23,7 @@ import requests
 
 from models.quotes import ExchangeRateItem
 from schemas.quotes import QuotesError, RateConfidence
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
@@ -31,7 +31,7 @@ from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
 # Required, not optional: a fallback in code is still a number living in
 # code. Missing configuration must fail loudly at startup.
-ENV_VARS = load_and_validate_env_vars({
+ENV_VARS = load_parameters({
     'RATE_FORECAST_MIN_DAYS': int,
     'RATE_FORECAST_HIGH_CONFIDENCE_DAYS': int,
     'RATE_FORECAST_MEDIUM_CONFIDENCE_DAYS': int,
@@ -41,7 +41,7 @@ ENV_VARS = load_and_validate_env_vars({
     'RATE_MOVING_AVERAGE_WINDOW': int,
     'ERROR_DECIMALS': int,
     'CHANGE_DECIMALS': int,
-    'RATE_DECIMALS': int,
+    'RATE_DECIMALS': int
 })
 
 # Backtest bounds: how much history each replay needs before forecasting, and

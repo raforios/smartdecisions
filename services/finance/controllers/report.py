@@ -48,7 +48,7 @@ async def finance_report_controller(
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
             client (str): The owner of the data, from the token.
-            auth_token (str | None): The caller's Authorization header, for PARAMETERS.
+            auth_token (str | None): The caller's Authorization header, for QUOTES.
             current_user (str): The user, read by the decorators.
             request (Request): Incoming request, used by the decorators.
 

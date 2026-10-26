@@ -47,7 +47,6 @@ from schemas.report import (
     SuggestedParameterSchema
 )
 from services import entries, security
-from services import projection as projection_service
 from services import report as report_service
 from tests.test_projection import PROJECTION_VALUES
 from tests.test_report import FINANCE_VALUES, GLOBAL_VALUES
@@ -227,8 +226,9 @@ def test_every_report_route_answers_its_model(
         parameter_code = 'IUE_PROVISION', **who))
     assert isinstance(chosen, ClientParameterResponseSchema)
 
-    monkeypatch.setattr(report_service, 'read_parameters', lambda scope, token: (
-        FINANCE_VALUES if scope == 'finance' else GLOBAL_VALUES))
+    report_values = {**FINANCE_VALUES, **GLOBAL_VALUES}
+    monkeypatch.setattr(report_service, 'load_parameters',
+                        lambda spec: {code: report_values[code] for code in spec})
     monkeypatch.setattr(report_service, 'period_rates', lambda periods, today, token: (
         {period: ExchangeSchema(date = '2026-03-31', usd = 6.96, usdt = None)
          for period in periods}, []))
@@ -251,13 +251,9 @@ def test_the_projection_route_answers_its_model(
             request = None, parameter = LawParameterSchema(
                 parameter_code = code, name = code, rate = rate, valid_from = date(1995, 1, 1)),
             dynamodb_resource = catalog, current_user = 'admin'))
-    def values(
-        scope: str,
-        token: str | None  # pylint: disable=unused-argument
-    ) -> dict:
-        return PROJECTION_VALUES if scope == 'finance' else GLOBAL_VALUES
-    monkeypatch.setattr(projection_service, 'read_parameters', values)
-    monkeypatch.setattr(report_service, 'read_parameters', values)
+    projection_values = {**PROJECTION_VALUES, **GLOBAL_VALUES}
+    monkeypatch.setattr(report_service, 'load_parameters',
+                        lambda spec: {code: projection_values[code] for code in spec})
     who = {'dynamodb_resource': catalog, 'client': 'acme', 'current_user': 'ana@acme.com'}
     _run(entry_routes.load_entries_endpoint(
         request = None, load = EntryLoadSchema(flow = LoadFlow.PROCESSED, rows = [EntryRowSchema(

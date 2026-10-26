@@ -35,10 +35,12 @@ from schemas.commercial import (
     ValidationIssue,
     ValidationRule
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
-_ENV_VARS = load_and_validate_env_vars({'AMOUNT_DECIMALS': int})
+_ENV_VARS = load_parameters({
+    'AMOUNT_DECIMALS': int
+})
 # What a stock photo or a purchase is married to the sales catalogue by.
 _CATALOGUE_KEY = 'product_id'
 # Decimals a published amount carries. A decision —a distributor in bolivianos

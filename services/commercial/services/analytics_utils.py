@@ -18,6 +18,7 @@ from boto3.resources.base import ServiceResource
 
 from schemas.analytics import AnalyticsError, ConcentrationLevel, PeriodInfo
 from services.crud import create_item
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import (
     InvalidInputError,
@@ -25,20 +26,24 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 from services.commercial_utils import owned_items
-from services.utils import audit_event, get_current_time_gmt, read_file_rows
+from services.utils import get_current_time_gmt, read_file_rows
 
 
-ENV_VARS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
-    'DYNAMODB_TABLE_NAME_ANALYTICS_RUNS': str,
-    'HISTORY_DEFAULT_LIMIT': int,
-    'AMOUNT_DECIMALS': int,
-    'CHANGE_DECIMALS': int,
-    'FORECAST_MONTHS_AHEAD': int,
-    'RANKING_SIZE': int,
-    'DYNAMODB_TABLE_NAME_CREDIT_POLICIES': str,
-    'DYNAMODB_TABLE_NAME_COMMERCIAL_POLICIES': str,
-})
+ENV_VARS = {
+    **load_and_validate_env_vars({
+        'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
+        'DYNAMODB_TABLE_NAME_ANALYTICS_RUNS': str,
+        'DYNAMODB_TABLE_NAME_CREDIT_POLICIES': str,
+        'DYNAMODB_TABLE_NAME_COMMERCIAL_POLICIES': str
+    }),
+    **load_parameters({
+        'HISTORY_DEFAULT_LIMIT': int,
+        'AMOUNT_DECIMALS': int,
+        'CHANGE_DECIMALS': int,
+        'FORECAST_MONTHS_AHEAD': int,
+        'RANKING_SIZE': int
+    })
+}
 INGEST_DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
 ANALYTICS_RUNS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_ANALYTICS_RUNS']
 CREDIT_POLICIES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_CREDIT_POLICIES']
@@ -623,7 +628,6 @@ def _build_run_item(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@audit_event('COMMERCIAL', 'AnalyticsRun', 'CREATE')
 def persist_run(
     dynamodb_resource: ServiceResource,
     payload: dict[str, Any]

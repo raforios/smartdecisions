@@ -31,20 +31,20 @@ from schemas.objectives import (
     ObjectivesTotalsSchema,
     Semaphore
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 from services.receivables import CASH, TERMS
 
 # Business parameters. Defaults, not constants: the policy of an account
 # overrides them one by one, which is how two companies read the same sales
 # by their own standards.
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'OBJECTIVES_YELLOW_FROM': float,
     'OBJECTIVES_GREEN_FROM': float,
     'OBJECTIVES_BS_PER_POINT': float,
     'OBJECTIVES_AMOUNT_DECIMALS': int,
     'OBJECTIVES_RATIO_DECIMALS': int,
-    'FX_USD_COST_SHARE': float,
+    'FX_USD_COST_SHARE': float
 })
 
 _YELLOW_FROM: Final[float] = _SETTINGS['OBJECTIVES_YELLOW_FROM']

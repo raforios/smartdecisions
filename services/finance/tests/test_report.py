@@ -12,7 +12,7 @@ from schemas.entries import EntrySchema, LoadFlow, Periodicity
 from schemas.report import FigureOrigin, ReportError
 from services.report import Context, build_report, settings_from
 
-# The values docs/parametros.md seeds into PARAMETERS.
+# The values docs/parametros.md seeds into `finance_parameters`.
 FINANCE_VALUES = {
     'SALES_GROUP': '4.1', 'FINANCIAL_EXPENSE_GROUP': '6.3', 'IT_ACCOUNT': '6.1.10',
     'CASH_ACCOUNTS': ['1.1.01', '1.1.02', '1.1.03', '1.1.04', '1.1.05'],

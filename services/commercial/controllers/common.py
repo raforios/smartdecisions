@@ -30,6 +30,7 @@ from schemas.commercial import (
 from schemas.channels import LoadMode
 from schemas.clients import ClientSource
 from services.clients import CLIENT_FRAME_COLUMNS, sync_master
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
 from services.load_files import serialize_dataframe
@@ -40,13 +41,18 @@ from services.commercial_utils import (
     upload_bytes
 )
 from services.logger_config import custom_logger as logger
+from services.utils import DEFAULT_BUCKET_PATH
 
 # Only a slice of the issues travels in the JSON response / DynamoDB item
 # (400 KB limit); the full set lives in the rejected CSV in S3.
-ENV_VARS = load_and_validate_env_vars({
-    'MAX_ISSUES_ON_RESPONSE': int,
-    'TEMPLATES_S3_PREFIX': str,
-})
+ENV_VARS = {
+    **load_and_validate_env_vars({
+        'TEMPLATES_S3_PREFIX': str
+    }),
+    **load_parameters({
+        'MAX_ISSUES_ON_RESPONSE': int
+    })
+}
 MAX_ISSUES_ON_RESPONSE = ENV_VARS['MAX_ISSUES_ON_RESPONSE']
 # The MIME type of the rejected-rows download. It stays in the code because it
 # describes the format of the file, not a decision anybody would take
@@ -164,7 +170,7 @@ def store_frame(
     if frame.empty:
         return None
     return upload_bytes(
-        file_key = f'ingest/{folder}/{uuid4().hex}.csv',
+        file_key = f'{DEFAULT_BUCKET_PATH}/{folder}/{uuid4().hex}.csv',
         data = serialize_dataframe(frame, f'{folder}.csv'),
         content_type = CSV_CONTENT_TYPE,
         auth_token = auth_token
@@ -390,7 +396,7 @@ async def store_companion(
     stored_key: str | None = None
     if has_rows:
         stored_key = upload_bytes(
-            file_key = f'ingest/{spec.name}/{uuid4().hex}.csv',
+            file_key = f'{DEFAULT_BUCKET_PATH}/{spec.name}/{uuid4().hex}.csv',
             data = serialize_dataframe(result.accepted, f'{spec.name}.csv'),
             content_type = CSV_CONTENT_TYPE,
             auth_token = auth_token

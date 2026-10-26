@@ -37,17 +37,22 @@ from schemas.localization import (
 from services.common import calculate_distance, from_dynamo, new_id, to_dynamo
 from services.crud import get_item_by_key, put_unique_composite_item, query_by_partition
 from services.daily_stock import draw_down_stock
+from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.localization import get_planned_route
 from services.logger_config import custom_logger as logger
 from services.utils import TARGET_TIMEZONE, get_current_time_gmt
 
-_SETTINGS = load_and_validate_env_vars({
-    'DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES': str,
-    'ROUTES_LIVE_LOOKBACK_DAYS': int,
-    'ROUTES_VISIT_MATCH_RADIUS_M': float
-})
+_SETTINGS = {
+    **load_and_validate_env_vars({
+        'DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES': str
+    }),
+    **load_parameters({
+        'ROUTES_LIVE_LOOKBACK_DAYS': int,
+        'ROUTES_VISIT_MATCH_RADIUS_M': float
+    })
+}
 EXECUTED_ROUTES_TABLE = _SETTINGS['DYNAMODB_TABLE_NAME_OPTIMIZATION_EXECUTED_ROUTES']
 LIVE_LOOKBACK_DAYS = _SETTINGS['ROUTES_LIVE_LOOKBACK_DAYS']
 # Metres a reading may be from the stop it claims. The same radius the

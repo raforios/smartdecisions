@@ -21,6 +21,7 @@ import csv
 import io
 import unicodedata
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
@@ -49,7 +50,7 @@ from schemas.localization import (
     RepeatPlannedRouteSchema,
     RouteEndpointSchema
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from services.localization import (
     _assert_route_code_free,
@@ -74,7 +75,9 @@ from services.route_optimization import (
     optimize_planned_route
 )
 
-_SETTINGS = load_and_validate_env_vars({'STOP_POSITION_DECIMALS': int})
+_SETTINGS = load_parameters({
+    'STOP_POSITION_DECIMALS': int
+})
 # How close two readings have to be to count as the same stop when neither
 # names a client. A decision —it is the difference between one shop and two—
 # so it lives in the environment.
@@ -328,7 +331,8 @@ def repeat_planned_route(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     route_id: str,
-    repeat: RepeatPlannedRouteSchema
+    repeat: RepeatPlannedRouteSchema,
+    auth_token: str
 ) -> PlannedRouteItem:
     '''
         Runs an existing route again on another day.
@@ -344,6 +348,7 @@ def repeat_planned_route(
             owner_email (str): Authenticated account.
             route_id (str): The route to repeat.
             repeat (RepeatPlannedRouteSchema): New day, seller and code.
+            auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
 
         Returns:
             PlannedRouteItem: The new plan, IN CREATION.
@@ -354,7 +359,7 @@ def repeat_planned_route(
     points = original.get('points', [])
     if repeat.optimized:
         points = apply_optimized_order(
-            points, optimize_planned_route(dynamodb_resource, owner_email, route_id)
+            points, optimize_planned_route(dynamodb_resource, owner_email, route_id, auth_token)
         )
     stops = [
         PlannedPointSchema(
@@ -386,6 +391,17 @@ def repeat_planned_route(
     return plan
 
 
+@dataclass(frozen = True)
+class SalesSource:
+    '''
+        The sales a plan is drawn from: the dataset, its rows of the period
+        and the caller's token, which ML_FUNCTIONS needs to plan the days.
+    '''
+    dataset_id: str
+    dataframe: pd.DataFrame
+    auth_token: str
+
+
 # A route code is unique per owner and goes in URLs and file names, so the
 # seller part is reduced to safe characters and kept short.
 _CODE_UNSAFE = re.compile(r'[^A-Za-z0-9@._-]')
@@ -393,7 +409,7 @@ _CODE_SELLER_LENGTH = 20
 
 
 def _seller_stops(
-    dataframe: pd.DataFrame,
+    source: SalesSource,
     seller: str,
     request: PlansBySellerSchema
 ) -> list[PlannedPointSchema]:
@@ -406,7 +422,7 @@ def _seller_stops(
         punishes.
 
         Args:
-            dataframe (pd.DataFrame): Sales rows of the period.
+            source (SalesSource): Sales rows of the period and the caller's token.
             seller (str): The seller as the file writes it.
             request (PlansBySellerSchema): Days, day and period.
 
@@ -415,10 +431,10 @@ def _seller_stops(
                 the seller's split has no placeable client.
     '''
     try:
-        clients = build_client_points(dataframe, seller = seller)
+        clients = build_client_points(source.dataframe, source.auth_token, seller = seller)
     except InvalidInputError:
         return []
-    clients = assign_days(clients, request.days)
+    clients = assign_days(clients, request.days, source.auth_token)
     return [
         PlannedPointSchema(
             point_name = stop.client[:100],
@@ -427,7 +443,7 @@ def _seller_stops(
             longitude = stop.longitude,
             client_id = stop.client_id[:64]
         )
-        for stop in plan_day(clients, request.day)
+        for stop in plan_day(clients, request.day, source.auth_token)
     ]
 
 
@@ -509,8 +525,7 @@ def _base_endpoints(
 def plans_by_seller(
     dynamodb_resource: ServiceResource,
     owner_email: str,
-    dataset_id: str,
-    dataframe: pd.DataFrame,
+    source: SalesSource,
     request: PlansBySellerSchema
 ) -> PlansBySellerResponse:
     '''
@@ -524,8 +539,8 @@ def plans_by_seller(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner_email (str): Authenticated account.
-            dataset_id (str): The sales dataset the portfolios come from.
-            dataframe (pd.DataFrame): Sales rows of the period.
+            source (SalesSource): The sales dataset the portfolios come from,
+                its rows of the period and the caller's token.
             request (PlansBySellerSchema): Days, day, date and sellers.
 
         Returns:
@@ -534,7 +549,7 @@ def plans_by_seller(
         Raises:
             InvalidInputError: NO_SELLERS_IN_FILE when the file names nobody.
     '''
-    sellers = available_sellers(dataframe)
+    sellers = available_sellers(source.dataframe)
     if request.sellers:
         wanted = set(request.sellers)
         sellers = [seller for seller in sellers if seller in wanted]
@@ -546,7 +561,7 @@ def plans_by_seller(
     without_stops: list[str] = []
     already_planned: list[str] = []
     for seller in sellers:
-        stops = _seller_stops(dataframe, seller, request)
+        stops = _seller_stops(source, seller, request)
         if not stops:
             without_stops.append(seller)
             continue
@@ -561,7 +576,7 @@ def plans_by_seller(
                f'{len(without_stops)} without stops, {len(already_planned)} already planned.')
     logger.info(message)
     return PlansBySellerResponse(
-        dataset_id = dataset_id,
+        dataset_id = source.dataset_id,
         day = request.day,
         plan_date = request.plan_date,
         created = created,

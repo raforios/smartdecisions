@@ -2,7 +2,7 @@
     Tests for the projection, with figures worked out by hand.
 
     What they defend: the manager's percentages are kept within the ranges
-    PARAMETERS holds, the realistic series come from ML_FUNCTIONS, and the
+    `finance_parameters` holds, the realistic series come from ML_FUNCTIONS, and the
     IUE of April is paid from the reserve first and from the cash only for
     what the reserve does not cover (Rafael, 17-oct). The model itself is
     tested in ML_FUNCTIONS, which owns it.

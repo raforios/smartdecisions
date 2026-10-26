@@ -22,15 +22,15 @@ from schemas.billing import (
     SaleStatus,
     TopProduct
 )
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.billing import products_by_sku, read_partition
 from services.billing_cash import method_totals
 from services.billing_sales import list_sales
 
-ENV_VARS = load_and_validate_env_vars({
+ENV_VARS = load_parameters({
     'BILLING_EXPIRY_ALERT_DAYS': int,
     'BILLING_TOP_ROWS': int,
-    'BILLING_LIST_ROWS': int,
+    'BILLING_LIST_ROWS': int
 })
 EXPIRY_ALERT_DAYS = ENV_VARS['BILLING_EXPIRY_ALERT_DAYS']
 

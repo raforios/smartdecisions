@@ -25,7 +25,7 @@ from typing import Any
 from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError
 from services.bcb_source import SOURCE_NAME, fetch_official_rate
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.exceptions import (
     InvalidInputError,
     ResourceNotFoundError,
@@ -47,7 +47,7 @@ from services.utils import get_current_time_gmt, handle_service_errors
 # A fallback in code is still a number living in code: the day the service is
 # deployed without one of these it must say so, not run quietly on a value
 # nobody chose.
-ENV_VARS = load_and_validate_env_vars({
+ENV_VARS = load_parameters({
     'FLOAT_REGIME_START': str,
     'FIXED_REGIME_RATE': float,
     'SYNC_MAX_DAYS': int,
@@ -58,7 +58,7 @@ ENV_VARS = load_and_validate_env_vars({
     'PARALLEL_CURRENCY': str,
     'RATE_BLOCK_WEEKDAYS': str,
     'RATE_DECIMALS': int,
-    'HISTORY_FLOAT_REGIME_ONLY': int,
+    'HISTORY_FLOAT_REGIME_ONLY': int
 })
 
 # The day the rate stopped being fixed. Series fitted for projection must start

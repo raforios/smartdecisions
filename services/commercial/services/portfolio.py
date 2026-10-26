@@ -34,20 +34,20 @@ from services.analytics_utils import (
     ratio
 )
 from services.currency import money_row, money_sums
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
 # What counts as "at risk" is a business rule, not a constant of nature: a
 # distributor whose clients restock weekly and one whose clients restock
 # quarterly need different numbers, and getting them wrong flags either nobody
-# or the whole book. They are read from the environment so an operation can be
-# tuned without a redeploy, with the defaults below calibrated on real data.
-_SETTINGS = load_and_validate_env_vars({
+# or the whole book. They live in `commercial_parameters`, so an operation can
+# be tuned without a redeploy.
+_SETTINGS = load_parameters({
     'PORTFOLIO_RISK_DROP_PERCENT': float,
     'PORTFOLIO_RISK_SILENCE_DAYS': int,
     'PORTFOLIO_LOST_SILENCE_DAYS': int,
     'PORTFOLIO_MAX_RISK_CLIENTS': int,
-    'PORTFOLIO_MAX_LOST_CLIENTS': int,
+    'PORTFOLIO_MAX_LOST_CLIENTS': int
 })
 
 # A client whose latest month falls this far below their own monthly average is

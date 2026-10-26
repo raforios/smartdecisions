@@ -7,7 +7,7 @@
     of calculations every service asks instead of keeping its own copy of the
     formulas (Rafael, 17-oct). The worst and the best
     move the realistic one by the percentages the manager types, starting from
-    the defaults in PARAMETERS (Rafael, 17-oct).
+    the defaults in `finance_parameters` (Rafael, 17-oct).
 
     The cash is an approximation, as realistic as the loaded figures allow
     (Rafael, 17-oct; not an accounting system):
@@ -46,17 +46,12 @@ from services.parameters import client_value, law_rates, rate_on
 from services.rates import period_rates
 from services.report import (
     FINANCE_CODES,
-    FINANCE_SCOPE,
     Context,
     build_report,
+    finance_parameters,
     report_settings
 )
-from services.utils import (
-    API_URL,
-    REQUEST_TIMEOUT_SECONDS,
-    read_parameters,
-    required_parameters
-)
+from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
 PROJECTION_CODES = (
     'PROJECTION_HORIZON', 'PROJECTION_MAX_HORIZON', 'WORST_SALES_CHANGE', 'WORST_OUTFLOW_CHANGE',
@@ -70,7 +65,7 @@ MONTHS_PER_YEAR = 12
 @dataclass(frozen = True)
 class ProjectionSettings:  # pylint: disable=too-many-instance-attributes
     '''
-        The business values of the projection, as PARAMETERS holds them.
+        The business values of the projection, as `finance_parameters` holds them.
     '''
     horizon: int
     max_horizon: int
@@ -84,10 +79,10 @@ class ProjectionSettings:  # pylint: disable=too-many-instance-attributes
 
 def projection_settings_from(finance: dict[str, Any]) -> ProjectionSettings:
     '''
-        The projection's values from the `finance` scope of PARAMETERS.
+        The projection's values, from `finance_parameters`.
 
         Args:
-            finance (dict[str, Any]): What PARAMETERS answered.
+            finance (dict[str, Any]): The values read from the table.
 
         Returns:
             ProjectionSettings: The values.
@@ -545,7 +540,7 @@ def validated_request(
 ) -> tuple[int, ScenarioInputSchema, ScenarioInputSchema]:
     '''
         The horizon and the scenario changes to use: what the manager typed,
-        within the ranges PARAMETERS holds, or the defaults.
+        within the ranges `finance_parameters` holds, or the defaults.
 
         Args:
             asked (ProjectionRequest): What the screen sent.
@@ -576,7 +571,7 @@ def _rounded(
 
         Args:
             projection (ProjectionSchema): Unrounded.
-            decimals (int): Decimals of an amount, from PARAMETERS.
+            decimals (int): Decimals of an amount, from `finance_parameters`.
 
         Returns:
             ProjectionSchema: The same projection, rounded.
@@ -605,16 +600,15 @@ def finance_projection(
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             client (str): The owner.
-            auth_token (str | None): The caller's token, for PARAMETERS and QUOTES.
+            auth_token (str | None): The caller's token, for QUOTES.
             asked (ProjectionRequest): What the manager typed.
 
         Returns:
             ProjectionSchema: The three scenarios, or why there are none.
     '''
-    settings = projection_settings_from(required_parameters(
-        read_parameters(FINANCE_SCOPE, auth_token), FINANCE_CODES + PROJECTION_CODES))
+    settings = projection_settings_from(finance_parameters(FINANCE_CODES + PROJECTION_CODES))
     request = validated_request(asked, settings)
-    report_values = report_settings(auth_token)
+    report_values = report_settings()
     context = Context(catalog_by_code(dynamodb_resource), law_rates(dynamodb_resource),
                       client_value(dynamodb_resource, client, report_values.iue_provision_code),
                       report_values)

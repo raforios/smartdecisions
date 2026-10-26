@@ -9,14 +9,14 @@ from typing import Any
 import requests
 
 from schemas.market import MarketError, SaleOutcome, SaleScenario, SaleScenarioRequest
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.exceptions import ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
-ENV_VARS = load_and_validate_env_vars({
+ENV_VARS = load_parameters({
     'AMOUNT_DECIMALS': int,
-    'RATE_DECIMALS': int,
+    'RATE_DECIMALS': int
 })
 # Decimals a published amount and a published rate carry.
 AMOUNT_DECIMALS = ENV_VARS['AMOUNT_DECIMALS']

@@ -36,15 +36,15 @@ from services.analytics_utils import (
     ratio
 )
 from services.currency import money_row, money_total
-from services.environment import load_and_validate_env_vars
+from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
 
 # Price drift is only reported for products with enough movement in both halves
 # of the period; a single invoice is an anecdote, not a trend.
-_SETTINGS = load_and_validate_env_vars({
+_SETTINGS = load_parameters({
     'EFFICIENCY_MAX_SELLERS': int,
     'EFFICIENCY_MAX_PRICE_ROWS': int,
-    'EFFICIENCY_MIN_UNITS_FOR_PRICE': int,
+    'EFFICIENCY_MIN_UNITS_FOR_PRICE': int
 })
 _MAX_SELLERS = _SETTINGS['EFFICIENCY_MAX_SELLERS']
 _MAX_PRICE_ROWS = _SETTINGS['EFFICIENCY_MAX_PRICE_ROWS']
