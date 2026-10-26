@@ -19,8 +19,6 @@ class ClientError(str, Enum):
         it. Same reasoning as IngestError.
     '''
     CLIENT_NOT_FOUND = 'CLIENT_NOT_FOUND'
-    EMPTY_CLIENT_LOAD = 'EMPTY_CLIENT_LOAD'
-    DUPLICATE_CLIENT_ID = 'DUPLICATE_CLIENT_ID'
 
 
 class ClientSource(str, Enum):

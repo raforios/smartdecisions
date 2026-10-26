@@ -3,11 +3,9 @@
 
     1. Its business values. They live in the service's parameters table
        (`commercial_parameters`) and the modules read them on import; here
-       the table is created in moto and seeded from the `commercial` rows of
-       `docs/parametros.md`, the same rows the real table is seeded from, so
-       the tests read the values the service reads and never AWS. moto is
-       stopped once the tests are collected: by then every module has its
-       values.
+       they are loaded in memory from the `commercial` rows of
+       `docs/parametros.md`, the same rows the real table is seeded from,
+       with no AWS and no simulated table.
     2. ML_FUNCTIONS: every calculation COMMERCIAL asks for by HTTP is
        answered by ML_FUNCTIONS' own pure modules, loaded from their files, so
        the tests run the one copy of each formula and never the network.
@@ -21,11 +19,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import boto3
 import pytest
-from moto import mock_aws
 
-from services.environment import load_and_validate_env_vars
 
 _SERVICES = Path(__file__).resolve().parents[2]
 _ML_SERVICES = _SERVICES / 'ml_functions' / 'services'
@@ -46,34 +41,23 @@ def _load(
     return module
 
 
-_PARAMETERS_MOCK = mock_aws()
-_PARAMETERS_MOCK.start()
-_load('parameters_document', _DOCUMENT_READER).create_and_seed(
-    boto3.resource('dynamodb', region_name = 'us-east-1'),
-    load_and_validate_env_vars({'DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS': str})[
-        'DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS'],
-    'commercial')
+_DOCUMENT = _load('parameters_document', _DOCUMENT_READER)
 
-# The services are imported only once moto holds their parameters table, so
-# they cannot be grouped with the environment reader above.
+# The business values live in the service's parameters table. The tests load
+# the same rows in memory, from docs/parametros.md, before any module reads
+# them on import: no AWS and no simulated table. That is why the service's
+# modules are imported here, after the values, and not with the others.
 # pylint: disable=wrong-import-position,ungrouped-imports
+from services import utils as _utils  # noqa: E402
+
+_utils._SERVICE_PARAMETERS.update(_DOCUMENT.values('commercial'))  # pylint: disable=protected-access
+
 from services import calculations  # noqa: E402
-from services.utils import load_parameters  # noqa: E402
 # pylint: enable=wrong-import-position,ungrouped-imports
 
-# Every value is read now, while moto holds the table.
-load_parameters({})
 
 _CLASSIFICATION = _load('ml_functions_classification', _ML_SERVICES / 'classification.py')
 ML_ROUTING = _load('ml_functions_routing', _ML_SERVICES / 'routing.py')
-
-
-def pytest_collection_finish(session: pytest.Session) -> None:  # pylint: disable=unused-argument
-    '''
-        Every module read its values while the tests were collected: moto
-        stops here, so each test starts its own as it always did.
-    '''
-    _PARAMETERS_MOCK.stop()
 
 
 class Answer:  # pylint: disable=too-few-public-methods

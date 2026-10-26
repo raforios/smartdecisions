@@ -19,7 +19,7 @@ from schemas.quotes import ForecastMethod, QuotesError, RateConfidence
 from services import bcb_source, quotes, rate_forecast, usdt_source
 from services.exceptions import ServiceUnavailableError
 
-from tests.conftest import build_history
+from tests.fixtures import build_history
 
 
 def _run(coroutine):

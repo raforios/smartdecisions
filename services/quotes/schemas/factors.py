@@ -26,7 +26,6 @@ class FactorError(str, Enum):
     '''
     FACTOR_NOT_FOUND = 'FACTOR_NOT_FOUND'
     NO_VALUE_FOR_DATE = 'NO_VALUE_FOR_DATE'
-    EMPTY_LOAD = 'EMPTY_LOAD'
 
 
 class FactorStatus(str, Enum):

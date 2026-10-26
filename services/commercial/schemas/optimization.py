@@ -35,7 +35,6 @@ class OptimizationError(str, Enum):
     CALCULATION_UNAVAILABLE = 'CALCULATION_UNAVAILABLE'
     NO_SELLERS_IN_FILE = 'NO_SELLERS_IN_FILE'
     BASE_POINT_NOT_SET = 'BASE_POINT_NOT_SET'
-    ROUTING_SERVICE_NO_ROUTE = 'ROUTING_SERVICE_NO_ROUTE'
 
 
 # --- Route plan derived from a sales dataset ---
