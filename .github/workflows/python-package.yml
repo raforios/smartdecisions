@@ -19,7 +19,6 @@ jobs:
           - "services/events"
           - "services/files"
           - "services/ml_functions"
-          - "services/parameters"
           - "services/ai"
 
     steps:

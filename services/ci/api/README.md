@@ -93,7 +93,7 @@ cd /ruta/al/repositorio/app/services/ci/api
 
 ### Paso 1. Revisar los `.env`
 
-Para cada servicio (`auth`, `events`, `parameters`, `files`, `ml_functions`, `ai`, `quotes`, `commercial`, `mining_analysis`, `finance`, `billing`):
+Para cada servicio (`auth`, `events`, `files`, `ml_functions`, `ai`, `quotes`, `commercial`, `mining_analysis`, `finance`, `billing`):
 
 1. Abre `services/<servicio>/.env`.
 2. Comprueba que **ningún valor tenga comas (`,`) ni llaves (`{` `}`)**. El despliegue pasa el `.env` a AWS en un formato donde la coma separa variables y la llave abre una estructura: un valor así rompe el despliegue a mitad de camino. Si necesitas una plantilla de URL, usa `%s` en lugar de `{nombre}`.
@@ -107,7 +107,7 @@ Para cada servicio (`auth`, `events`, `parameters`, `files`, `ml_functions`, `ai
 El script hace, en este orden (ver la [sección 8](#8-referencia-el-orden-de-despliegue-y-por-qué)):
 
 1. Crea las tablas DynamoDB que falten.
-2. Despliega los servicios base: AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS y AI.
+2. Despliega los servicios base: AUTH, EVENTS, FILES, ML_FUNCTIONS y AI.
 3. Despliega QUOTES.
 4. Despliega COMMERCIAL, MINING_ANALYSIS y FINANCE.
 5. Despliega BILLING.
@@ -195,7 +195,7 @@ Vuelve a `services/ci/api` y escribe los nombres de las carpetas de los servicio
 - **No importa en qué orden los escribas**: el script los despliega siempre en el orden correcto (base primero, después los dueños de datos, después el resto).
 - Al terminar, el script revisa el dominio y agrega al gateway las rutas de un servicio nuevo.
 
-Los nombres válidos son los de las carpetas: `auth`, `events`, `parameters`, `files`, `ml_functions`, `ai`, `quotes`, `commercial`, `mining_analysis`, `finance`, `billing`.
+Los nombres válidos son los de las carpetas: `auth`, `events`, `files`, `ml_functions`, `ai`, `quotes`, `commercial`, `mining_analysis`, `finance`, `billing`.
 
 ### Si el microservicio es nuevo
 
@@ -352,7 +352,7 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 | # | Qué | Por qué en este lugar |
 |---|---|---|
 | 1 | Tablas DynamoDB | Un Lambda que arranca contra una tabla inexistente falla en la primera petición, no en el despliegue: el error aparecería tarde y lejos de su causa. |
-| 2 | AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS, AI | Son la base. Todos los demás validan el token contra AUTH, registran auditoría en EVENTS, leen sus valores de PARAMETERS, guardan archivos en FILES y piden sus cálculos a ML_FUNCTIONS. |
+| 2 | AUTH, EVENTS, FILES, ML_FUNCTIONS, AI | Son la base. Todos los demás validan el token contra AUTH, registran auditoría en EVENTS, guardan archivos en FILES y piden sus cálculos a ML_FUNCTIONS; sus valores de negocio los lee cada uno de sus propias tablas. |
 | 3 | QUOTES | Dueño del tipo de cambio y de los factores que COMMERCIAL y FINANCE piden. |
 | 4 | COMMERCIAL, MINING_ANALYSIS, FINANCE | Consumen lo anterior. COMMERCIAL une INGEST, ANALYTICS y OPTIMIZATION desde el 23-oct-2026. |
 | 5 | BILLING | SmartBilling, independiente de SmartDecisions. |
@@ -367,7 +367,6 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 | EVENTS | `https://api.bearsoft.com.bo/v1/events/...` |
 | FILES | `https://api.bearsoft.com.bo/v1/s3/...` |
 | ML_FUNCTIONS | `https://api.bearsoft.com.bo/v1/classification/...`, `/v1/common/...`, `/v1/prediction/...` |
-| PARAMETERS | `https://api.bearsoft.com.bo/v1/parameters/...` |
 | QUOTES | `https://api.bearsoft.com.bo/v1/quotes/...` |
 | COMMERCIAL | `https://api.bearsoft.com.bo/v1/commercial/...` |
 | FINANCE | `https://api.bearsoft.com.bo/v1/finance/...` |

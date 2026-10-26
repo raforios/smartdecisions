@@ -31,12 +31,6 @@ TABLES=(
     "audit_records:id:S"
     "usage_logs:id:S"
 
-    # --- Base: parámetros (PARAMETERS) ---
-    # Los valores de negocio que se cambian sin redesplegar. El alcance
-    # (`global` o el servicio que lo lee) es la partición: cada servicio lee
-    # los suyos con una sola Query.
-    "parameters_values:scope:S:code:S"
-
     # --- SmartDecisions ---
     # --- COMMERCIAL (INGEST, ANALYTICS y OPTIMIZATION unidos, 23-oct-2026) ---
     "commercial_datasets:id:S"
@@ -50,8 +44,6 @@ TABLES=(
     # una vez que son la misma persona. Misma clave que el de clientes.
     "commercial_sellers:owner_email:S:id:S"
     "commercial_analytics_runs:id:S"
-    # Clave compuesta: cada ítem es un punto de una ruta de un día concreto.
-    "commercial_routes:route_day_key:S:client_id:N"
     # Seguimiento de rutas (LOCALIZATION portado a COMMERCIAL). El dueño es
     # la partición: sólo se consulta la propia y una ruta ajena no existe. En
     # las ejecutadas el id empieza por la fecha de inicio, así "las de hoy" es
@@ -99,6 +91,19 @@ TABLES=(
     # mismo motivo. Los nombres de los clusters son del cliente: el producto no
     # declara ninguno.
     "commercial_policies:owner_email:S"
+    # Los valores de negocio de COMMERCIAL, iguales para todas las empresas
+    # (Rafael, 24-oct-2026: cada servicio guarda sus parámetros en sus tablas).
+    # Un ítem por código; se siembran con tools/seeds/seed_service_parameters.py.
+    "commercial_parameters:code:S"
+    # Los de QUOTES, con la misma forma (un ítem por código).
+    "quotes_parameters:code:S"
+    # Los de MINING_ANALYSIS, con la misma forma.
+    "mining_analysis_parameters:code:S"
+    # Los de BILLING, con la misma forma.
+    "billing_parameters:code:S"
+    # Los de FINANCE y AI, con la misma forma.
+    "finance_parameters:code:S"
+    "ai_parameters:code:S"
 
     # --- Facturación (BILLING) ---
     # El dueño es el comercio y es parte de cada clave, nunca un filtro

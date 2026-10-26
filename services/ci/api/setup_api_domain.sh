@@ -55,10 +55,10 @@ ROUTES=(
     "v1/users:auth-handler-service"
     "v1/events:events-handler-service"
     "v1/s3:file-handler-service"
-    "v1/parameters:parameters-handler-service"
     "v1/classification:ml-functions-handler-service"
     "v1/common:ml-functions-handler-service"
     "v1/prediction:ml-functions-handler-service"
+    "v1/routing:ml-functions-handler-service"
     # --- SmartDecisions ---
     # INGEST, ANALYTICS y OPTIMIZATION unidos (23-oct-2026).
     "v1/commercial:commercial-handler-service"

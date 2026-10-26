@@ -15,10 +15,10 @@
 #   1. Tablas DynamoDB (create_dynamodb_tables.sh). Antes que los servicios: un
 #      Lambda que arranca contra una tabla que no existe falla en la primera
 #      petición, no en el despliegue.
-#   2. Servicios BASE: AUTH, EVENTS, PARAMETERS, FILES, ML_FUNCTIONS y AI.
-#      Todos los demás validan el token contra AUTH, auditan en EVENTS, leen
-#      sus valores de negocio de PARAMETERS, guardan en FILES y piden sus
-#      cálculos a ML_FUNCTIONS.
+#   2. Servicios BASE: AUTH, EVENTS, FILES, ML_FUNCTIONS y AI.
+#      Todos los demás validan el token contra AUTH, auditan en EVENTS,
+#      guardan en FILES y piden sus cálculos a ML_FUNCTIONS. Sus valores de
+#      negocio los lee cada uno de sus propias tablas.
 #   3. QUOTES: el tipo de cambio y los factores que COMMERCIAL y FINANCE piden.
 #   4. COMMERCIAL (INGEST, ANALYTICS y OPTIMIZATION unidos el 23-oct-2026),
 #      MINING_ANALYSIS y FINANCE (el Análisis Financiero).
@@ -43,8 +43,6 @@ SERVICES_DIR="$(cd ../.. && pwd)"
 ORDER=(
     "auth:"
     "events:"
-    # Clave compuesta (scope + code): la tabla la crea create_dynamodb_tables.sh.
-    "parameters:--skip-table-creation"
     "files:--skip-table-creation"
     "ml_functions:--skip-table-creation"
     "ai:"
@@ -58,7 +56,7 @@ ORDER=(
 )
 
 # Servicios cuyos .env llaman a otros servicios (ver update_service_urls.sh).
-URL_CONSUMERS=(ai billing commercial finance mining_analysis parameters quotes)
+URL_CONSUMERS=(ai billing commercial finance mining_analysis quotes)
 
 deploy_service() {
     local SERVICE="$1"
