@@ -17,10 +17,10 @@
         { code: 'files', label: 'FILES', path: 's3', base: true, noTables: true },
         { code: 'ml_functions', label: 'ML_FUNCTIONS', path: 'common', base: true, noTables: true },
         { code: 'ai', label: 'AI', path: 'ai', base: true },
+        { code: 'quotes', label: 'QUOTES', path: 'quotes', base: true },
         // INGEST, ANALYTICS and OPTIMIZATION, joined on 23-oct-2026.
         { code: 'commercial', label: 'COMMERCIAL', path: 'commercial' },
         { code: 'mining_analysis', label: 'MINING_ANALYSIS', path: 'mining-analysis' },
-        { code: 'quotes', label: 'QUOTES', path: 'quotes' },
         { code: 'finance', label: 'FINANCE', path: 'finance' },
         { code: 'billing', label: 'BILLING', path: 'billing' }
     ];
