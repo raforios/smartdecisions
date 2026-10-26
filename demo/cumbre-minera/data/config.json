@@ -9,7 +9,7 @@
     "organizer": "Ministerio de Minería y Metalurgia | Estado Plurinacional de Bolivia"
   },
   "endpoints": {
-    "auth": "https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth",
+    "auth": "https://api.bearsoft.com.bo/v1/auth",
     "miningSummit": "https://dlhnaicgf2.execute-api.us-east-1.amazonaws.com"
   },
   "auth": {

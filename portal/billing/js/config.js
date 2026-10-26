@@ -9,7 +9,9 @@
  * localhost, which is what `resolveBases` decides.
  */
 export const AUTH_URL = 'https://api.bearsoft.com.bo';
-export const AUTH_URL_LOCAL = 'https://32652ile50.execute-api.us-east-1.amazonaws.com';
+// There is no local AUTH: a page served from localhost signs in through the
+// same gateway.
+export const AUTH_URL_LOCAL = 'https://api.bearsoft.com.bo';
 
 // Production, verified against the deployed API Gateway: the service answers
 // under /v1/billing. The local one stays on 3004 and only takes effect when the

@@ -63,7 +63,7 @@ Code. Los `[ ]` te quedan a ti.
 - **ACM Certificate ARN**: `arn:aws:acm:us-east-1:732887652913:certificate/0264f6d5-6d62-4d9e-bcbb-5e8b05495362`
 - **Dominio público**: `cumbre.mineria.gob.bo`
 - **Endpoints API**:
-  - AUTH: `https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth`
+  - AUTH: `https://api.bearsoft.com.bo/v1/auth`
   - mining_summit: `https://dlhnaicgf2.execute-api.us-east-1.amazonaws.com`
 
 ---
@@ -265,7 +265,7 @@ curl -I https://cumbre.mineria.gob.bo/login.html
 curl -s https://cumbre.mineria.gob.bo/data/config.json | jq '.endpoints'
 
 # 5. ¿Preflight OPTIONS de AUTH responde 200 desde el nuevo origen?
-curl -i -X OPTIONS 'https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth/login' \
+curl -i -X OPTIONS 'https://api.bearsoft.com.bo/v1/auth/login' \
   -H 'Origin: https://cumbre.mineria.gob.bo' \
   -H 'Access-Control-Request-Method: POST' \
   -H 'Access-Control-Request-Headers: content-type' | head -10
