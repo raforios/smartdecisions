@@ -36,8 +36,8 @@ DEFAULT_SOURCE_URL = 'https://www.mineria.gob.bo'
 # AUTH and FILES microservices live on AWS Lambda (API Gateway). The CMS
 # is still running locally during the greenfield phase, so its default
 # stays on localhost.
-DEFAULT_AUTH = 'https://32652ile50.execute-api.us-east-1.amazonaws.com/v1/auth'
-DEFAULT_FILES = 'https://ek2xktuyr4.execute-api.us-east-1.amazonaws.com/v1/s3'
+DEFAULT_AUTH = 'https://api.bearsoft.com.bo/v1/auth'
+DEFAULT_FILES = 'https://api.bearsoft.com.bo/v1/s3'
 DEFAULT_CMS = 'http://localhost:3021/v1/cms'
 DEFAULT_BUCKET = 'ml-data-file-handler'
 DEFAULT_BASE_PATH = 'cms/'
