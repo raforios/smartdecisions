@@ -11,6 +11,9 @@
  * needs, which is why the page size is declared in millimetres with `auto`
  * height. Fixing it to A4 is what makes a till spit out three blank pages.
  */
+import { BillingService, errorText } from '../services/BillingService.js';
+import { notify } from '../ui.js';
+
 const WIDTHS = {
     MM_58: { page: '58mm', body: '54mm', font: '10px', columns: [26, 5, 10] },
     MM_80: { page: '80mm', body: '72mm', font: '11px', columns: [34, 6, 14] }
@@ -84,6 +87,7 @@ function styles(size) {
                box-shadow: 0 0 0 1px #dbe4f0; margin: 12px auto; }
     }
     .qr { display: block; width: 32mm; height: 32mm; margin: 4px auto; }
+    .qr svg { width: 100%; height: 100%; }
     .code { word-break: break-all; }
     .small { font-size: calc(${size.font} - 1px); }
 `;
@@ -95,11 +99,12 @@ function styles(size) {
  * @param {object} sale Nota de venta as the service returned it.
  * @param {object} settings Trade name, NIT, address and footer of the shop.
  * @param {string} width MM_58 or MM_80.
+ * @param {string} qrSvg The invoice's QR, from `invoiceQr`; empty on a note.
  * @returns {string} A complete document, ready for an iframe or a window.
  */
-export function ticketHtml(sale, settings, width = 'MM_80') {
+export function ticketHtml(sale, settings, width = 'MM_80', qrSvg = '') {
     const size = WIDTHS[width] || WIDTHS.MM_80;
-    if (sale.invoice) return invoiceHtml(sale, settings, size);
+    if (sale.invoice) return invoiceHtml(sale, { settings, size, qrSvg });
     const rows = sale.lines.flatMap(lineRows);
 
     const header = [
@@ -228,11 +233,11 @@ function invoiceRows(line) {
  * carries.
  *
  * @param {object} sale Sale with its `invoice`.
- * @param {object} settings Trade name and phone of the shop.
- * @param {object} size One of WIDTHS.
+ * @param {object} paper The shop's `settings`, the roll's `size` (one of
+ *     WIDTHS) and the `qrSvg` the service drew.
  * @returns {string} A complete document.
  */
-function invoiceHtml(sale, settings, size) {
+function invoiceHtml(sale, { settings, size, qrSvg }) {
     const invoice = sale.invoice;
     const place = invoice.branch ? `Sucursal N° ${invoice.branch}` : 'Casa Matriz';
     const body = sale.lines.flatMap(invoiceRows).map((row) => `
@@ -296,9 +301,29 @@ function invoiceHtml(sale, settings, size) {
         <div class="rule"></div>
         <div>“Este documento es la Representación Gráfica de un Documento Fiscal
              Digital emitido en una modalidad de facturación en línea”</div>
-        <div class="qr" id="invoice-qr" data-url="${escape(invoice.qr_url)}"></div>
+        <!-- Drawn by the service from the link the invoice stored; it is
+             our own SVG, so it goes in as markup. -->
+        <div class="qr">${qrSvg}</div>
     </div>
 </body></html>`;
+}
+
+/**
+ * The QR of an invoice, as the service draws it; empty for an internal note.
+ * A QR that cannot be fetched is said aloud: an invoice printed without it
+ * is not a valid representation.
+ *
+ * @param {object} sale Sale, invoiced or not.
+ * @returns {Promise<string>} Inline SVG, or ''.
+ */
+export async function invoiceQr(sale) {
+    if (!sale.invoice) return '';
+    try {
+        return (await BillingService.saleQr(sale.sale_id)).svg;
+    } catch (error) {
+        notify(errorText(error, 'No se pudo dibujar el QR de la factura.'), 'error');
+        return '';
+    }
 }
 
 /**
@@ -311,14 +336,15 @@ function invoiceHtml(sale, settings, size) {
  * @param {object} settings Shop parameters.
  * @param {string} width MM_58 or MM_80.
  */
-export function printTicket(sale, settings, width) {
+export async function printTicket(sale, settings, width) {
+    const qrSvg = await invoiceQr(sale);
     const frame = document.createElement('iframe');
     frame.setAttribute('aria-hidden', 'true');
     frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
     document.body.appendChild(frame);
 
     frame.contentDocument.open();
-    frame.contentDocument.write(ticketHtml(sale, settings, width));
+    frame.contentDocument.write(ticketHtml(sale, settings, width, qrSvg));
     frame.contentDocument.close();
 
     // The roll has no page count to wait for, but the fonts do: printing

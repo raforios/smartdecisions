@@ -33,6 +33,7 @@ export const ERRORS = {
     SIAT_REFUSED: 'Impuestos Nacionales rechazó la factura: la venta no se registró.',
     SIAT_ISSUER_INCOMPLETE: 'Para facturar, completa el NIT y el municipio en Configuración.',
     CATALOG_NOT_SYNCED: 'Sincroniza los catálogos del SIN en Configuración antes de facturar.',
+    SALE_NOT_INVOICED: 'Esa venta es una nota interna: no tiene factura ni QR.',
     CANCELLATION_REASON_REQUIRED: 'Elige el motivo de la anulación: el SIN lo exige.',
     LEGEND_NOT_FOUND: 'El SIN no tiene leyendas para la actividad del producto: revisa sus códigos.',
     PURCHASE_NOT_FOUND: 'Esa nota de compra no existe.',
@@ -130,6 +131,7 @@ export const BillingService = {
 
     listSales: (params) => call(`/sales${query(params)}`),
     getSale: (id) => call(`/sales/${encodeURIComponent(id)}`),
+    saleQr: (id) => call(`/sales/${encodeURIComponent(id)}/qr`),
     issueSale: (body) => call('/sales', { method: 'POST', body: JSON.stringify(body) }),
     cancelSale: (id, reasonCode = null) => call(`/sales/${encodeURIComponent(id)}/cancel`, {
         method: 'POST', body: JSON.stringify({ reason_code: reasonCode })

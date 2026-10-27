@@ -7,7 +7,7 @@
  */
 import { BillingService, errorText } from '../services/BillingService.js';
 import { hasRole } from '../auth.js';
-import { printTicket, ticketHtml } from './TicketPrinter.js';
+import { invoiceQr, printTicket, ticketHtml } from './TicketPrinter.js';
 import { escapeHtml, money, notify, setBusy, stamp, todayIso } from '../ui.js';
 
 let settings = null;
@@ -180,7 +180,8 @@ export async function mountSales(host) {
             host.querySelector('#detail').hidden = false;
             host.querySelector('#detail-title').textContent = `Nota ${note.number}`;
             const frame = host.querySelector('#preview');
-            frame.srcdoc = ticketHtml(note, settings, settings.ticket_width);
+            frame.srcdoc = ticketHtml(note, settings, settings.ticket_width,
+                                      await invoiceQr(note));
             host.querySelector('#detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             return;
         }
