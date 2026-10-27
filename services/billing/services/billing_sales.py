@@ -32,10 +32,17 @@ from schemas.billing import (
     SaleNoteIn,
     SaleNoteOut,
     SaleNotesResponse,
-    SaleStatus
+    SaleStatus,
+    SettingsResponse
 )
+from schemas.billing_siat import SaleInvoice
 from services.billing_cash import require_sale_session
-from services.exceptions import InvalidInputError, RegisterNotFoundError
+from services.billing_invoicing import cancel_at_sin, issue_invoice, prepare_invoice
+from services.exceptions import (
+    InvalidInputError,
+    RegisterNotFoundError,
+    ServiceUnavailableError
+)
 from services.logger_config import custom_logger as logger
 from services.billing import (
     SortBounds,
@@ -78,20 +85,28 @@ def issue_sale(
         Raises:
             InvalidInputError: No open till of today for the seller, no
                 buyer where the pharmacy requires one, repeated SKU, discount
-                where discounts are off, a discount larger than its line, or
-                not enough stock.
+                where discounts are off, a discount larger than its line, not
+                enough stock, or an invoice that cannot be issued or that the
+                SIN refused.
             RegisterNotFoundError: A SKU is not in the catalogue.
+            ServiceUnavailableError: The shop invoices and the SIAT is
+                unreachable.
     '''
     settings = get_settings(dynamodb_resource, owner)
     # Before any stock moves: a sale refused for want of a till must not have
     # touched a shelf.
     session_id = require_sale_session(dynamodb_resource, owner, created_by)
-    _require_buyer(note, settings.buyer_required)
+    _require_buyer(note, settings)
     card = _masked_card(note)
     _reject_repeated_lines(note.lines)
 
-    lines, consumption = _price_lines(dynamodb_resource, owner, note,
+    products = products_by_sku(dynamodb_resource, owner)
+    lines, consumption = _price_lines(dynamodb_resource, owner, note, products,
                                       settings.discounts_enabled)
+    # Also before any stock moves: a sale that cannot be invoiced is refused
+    # with the shelf untouched.
+    plan = (prepare_invoice(dynamodb_resource, owner, settings, lines, products)
+            if settings.invoicing_enabled else None)
     draw_down(dynamodb_resource, owner, consumption)
 
     stamp = now_iso()
@@ -109,6 +124,14 @@ def issue_sale(
         card_number = card, cash_session_id = session_id,
         **money
     )
+    if plan is not None:
+        try:
+            item.invoice = issue_invoice(dynamodb_resource, owner, plan,
+                                         _sale_out(item.__dict__)).model_dump(mode = 'json')
+        except (InvalidInputError, ServiceUnavailableError):
+            # Refused or unreachable, the sale is not issued: its units go back.
+            give_back(dynamodb_resource, owner, consumption)
+            raise
     write_item(dynamodb_resource, SALES_TABLE, item.__dict__)
 
     message = (f'Sale {item.number} issued by {created_by} for {owner}: '
@@ -121,6 +144,7 @@ def _price_lines(
     dynamodb_resource: ServiceResource,
     owner: str,
     note: SaleNoteIn,
+    products: dict[str, dict[str, Any]],
     discounts_enabled: bool
 ) -> tuple[list[SaleLineOut], dict[str, list[SaleAllocation]]]:
     '''
@@ -134,6 +158,7 @@ def _price_lines(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The pharmacy.
             note (SaleNoteIn): What is being sold.
+            products (dict[str, dict[str, Any]]): The catalogue by SKU.
             discounts_enabled (bool): Whether this pharmacy allows discounts.
 
         Returns:
@@ -144,7 +169,6 @@ def _price_lines(
             RegisterNotFoundError: A SKU is not in the catalogue.
             InvalidInputError: The SKU is inactive or there is not enough stock.
     '''
-    products = products_by_sku(dynamodb_resource, owner)
     lots = _available_lots_by_sku(dynamodb_resource, owner)
 
     lines: list[SaleLineOut] = []
@@ -188,29 +212,45 @@ def cancel_sale(
     dynamodb_resource: ServiceResource,
     owner: str,
     sale_id: str,
-    cancelled_by: str
+    cancelled_by: str,
+    reason_code: int | None = None
 ) -> SaleNoteOut:
     '''
         Cancels a note and returns its units to the batches they left.
+
+        An invoiced note is cancelled at the SIN first: if the SIN refuses,
+        nothing here changes, and the shelf never holds units of an invoice
+        that is still in force.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The pharmacy.
             sale_id (str): Note to cancel.
             cancelled_by (str): Who cancels it.
+            reason_code (int | None): Code of CANCELLATION_REASONS; required
+                when the note is an invoice.
 
         Returns:
             SaleNoteOut: The cancelled note.
 
         Raises:
             RegisterNotFoundError: No such note in this pharmacy.
-            InvalidInputError: The note was already cancelled.
+            InvalidInputError: The note was already cancelled, an invoice came
+                with no reason, or the SIN refused to cancel it.
+            ServiceUnavailableError: The note is an invoice and the SIAT is
+                unreachable.
     '''
     stored = _read_sale(dynamodb_resource, owner, sale_id)
     if stored is None:
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     if stored['status'] == SaleStatus.CANCELLED.value:
         raise InvalidInputError(detail = BillingError.SALE_ALREADY_CANCELLED.value)
+    if stored.get('invoice'):
+        if reason_code is None:
+            raise InvalidInputError(detail = BillingError.CANCELLATION_REASON_REQUIRED.value)
+        stored['invoice'] = cancel_at_sin(dynamodb_resource, owner,
+                                          SaleInvoice(**stored['invoice']),
+                                          reason_code).model_dump(mode = 'json')
 
     consumption = {
         line['sku']: [SaleAllocation(**allocation) for allocation in line['allocations']]
@@ -289,7 +329,7 @@ def list_sales(
 
 def _require_buyer(
     note: SaleNoteIn,
-    required: bool
+    settings: SettingsResponse
 ) -> None:
     """
         Refuses a sale with no buyer document where the pharmacy needs one.
@@ -302,18 +342,23 @@ def _require_buyer(
         obliged to give.
 
         It is a setting and not a constant because a pharmacy still issuing
-        internal notes has to keep working until it is authorised.
+        internal notes has to keep working until it is authorised. Invoicing
+        demands it too, and also the document type: the XSD has no empty
+        `codigoTipoDocumentoIdentidad`.
 
         Args:
             note (SaleNoteIn): What is being sold, with its buyer.
-            required (bool): Whether this pharmacy must name the buyer.
+            settings (SettingsResponse): Whether this pharmacy must name the
+                buyer, and whether it invoices.
 
         Raises:
             InvalidInputError: BUYER_REQUIRED when the document is missing.
     """
-    if not required:
+    if not (settings.buyer_required or settings.invoicing_enabled):
         return
     if not (note.buyer and (note.buyer.document or '').strip()):
+        raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
+    if settings.invoicing_enabled and note.buyer.document_type is None:
         raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
 
 

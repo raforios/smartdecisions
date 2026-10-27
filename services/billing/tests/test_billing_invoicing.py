@@ -371,7 +371,7 @@ def test_the_cuis_request_carries_the_system_code_and_the_environment(monkeypatc
         office. A code asked for in the pilot does not work in production, so
         both travel on every call and neither is hardcoded.
     '''
-    calls = _captured(monkeypatch, _Answer(codigo = 'CUIS123',
+    calls = _captured(monkeypatch, _Answer(transaccion = True, codigo = 'CUIS123',
                                           fechaVigencia = '2027-09-29'))
 
     answer = siat_client.request_cuis(EMITTER)
@@ -391,7 +391,7 @@ def test_the_cufd_request_carries_the_cuis_and_returns_the_control_code(monkeypa
         CUFD without it cannot produce a valid invoice.
     '''
     calls = _captured(monkeypatch, _Answer(
-        codigo = 'CUFD456', codigoControl = 'A19E23EF34124CD',
+        transaccion = True, codigo = 'CUFD456', codigoControl = 'A19E23EF34124CD',
         direccion = 'Av. Arce 2020', fechaVigencia = '2026-09-29'
     ))
 
@@ -406,7 +406,7 @@ def test_a_point_of_sale_travels_only_when_there_is_one(monkeypatch):
         A pharmacy with no point of sale must not send a zero as if it had
         one: the tax office issues codes against what it is told.
     '''
-    calls = _captured(monkeypatch, _Answer(codigo = 'C', fechaVigencia = 'D'))
+    calls = _captured(monkeypatch, _Answer(transaccion = True, codigo = 'C', fechaVigencia = 'D'))
 
     siat_client.request_cuis(siat_client.Emitter(nit = '1234567', branch = 0))
     assert 'codigoPuntoVenta' not in calls[0][2]
@@ -426,7 +426,9 @@ def test_the_receipt_keeps_the_tax_offices_own_messages(monkeypatch):
         mensajesList = [_Answer(codigo = 981, descripcion = 'Recepcion exitosa')]
     ))
 
-    receipt = siat_client.send_invoice(EMITTER, {'cuis': 'C', 'cufd': 'D'}, 'H4sI')
+    receipt = siat_client.send_invoice(EMITTER, siat_client.InvoiceSubmission(
+        cuis = 'C', cufd = 'D', archive = b'H4sI', sent_at = '2026-10-26T10:00:00.000'
+    ))
 
     assert receipt.accepted is True
     assert receipt.reception_code == 'REC789'
@@ -442,7 +444,9 @@ def test_a_refused_document_comes_back_as_not_accepted(monkeypatch):
         mensajesList = [_Answer(codigo = 1004, descripcion = 'CUFD no vigente')]
     ))
 
-    receipt = siat_client.cancel_invoice(EMITTER, {'cuis': 'C', 'cufd': 'D', 'cuf': 'F'}, 1)
+    receipt = siat_client.cancel_invoice(EMITTER, siat_client.InvoiceCancellation(
+        cuis = 'C', cufd = 'D', cuf = 'F', reason_code = 1
+    ))
 
     assert receipt.accepted is False
     assert receipt.messages == ['1004: CUFD no vigente']

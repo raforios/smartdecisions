@@ -372,14 +372,32 @@ def next_number(
         Returns:
             str: Formatted number, e.g. "A-000041".
     '''
+    return f'{series}-{take_counter(dynamodb_resource, owner, counter_key):06d}'
+
+
+def take_counter(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    counter_key: str
+) -> int:
+    '''
+        Takes the next value of one counter, atomically, unformatted.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The pharmacy.
+            counter_key (str): Which counter.
+
+        Returns:
+            int: The value taken, 1 the first time.
+    '''
     response = dynamodb_resource.Table(SETTINGS_TABLE).update_item(
         Key = {OWNER_KEY: owner, SETTING_SORT_KEY: counter_key},
         UpdateExpression = 'ADD last_number :one',
         ExpressionAttributeValues = {':one': 1},
         ReturnValues = 'UPDATED_NEW'
     )
-    taken = int(from_dynamo(response['Attributes'])['last_number'])
-    return f'{series}-{taken:06d}'
+    return int(from_dynamo(response['Attributes'])['last_number'])
 
 
 # --- catalogue ---------------------------------------------------------------

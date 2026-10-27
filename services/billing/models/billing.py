@@ -162,6 +162,9 @@ class SaleItem:
     cancelled_by: str | None = None
     # The till the sale went into. Empty on notes issued before tills existed.
     cash_session_id: str | None = None
+    # The invoice the sale became, when the shop invoices. Empty on an
+    # internal note.
+    invoice: dict[str, Any] | None = None
 
 
 @dataclass

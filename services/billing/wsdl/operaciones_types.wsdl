@@ -1,0 +1,466 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:ns1="https://siat.impuestos.gob.bo/" name="ServicioFacturacionOperaciones" targetNamespace="https://siat.impuestos.gob.bo/">
+  <wsdl:types>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="https://siat.impuestos.gob.bo/" elementFormDefault="unqualified" targetNamespace="https://siat.impuestos.gob.bo/" version="1.0">
+
+  <xs:element name="cierreOperacionesSistema" type="tns:cierreOperacionesSistema"/>
+
+  <xs:element name="cierreOperacionesSistemaResponse" type="tns:cierreOperacionesSistemaResponse"/>
+
+  <xs:element name="cierrePuntoVenta" type="tns:cierrePuntoVenta"/>
+
+  <xs:element name="cierrePuntoVentaResponse" type="tns:cierrePuntoVentaResponse"/>
+
+  <xs:element name="consultaEventoSignificativo" type="tns:consultaEventoSignificativo"/>
+
+  <xs:element name="consultaEventoSignificativoResponse" type="tns:consultaEventoSignificativoResponse"/>
+
+  <xs:element name="consultaPuntoVenta" type="tns:consultaPuntoVenta"/>
+
+  <xs:element name="consultaPuntoVentaResponse" type="tns:consultaPuntoVentaResponse"/>
+
+  <xs:element name="registroEventoSignificativo" type="tns:registroEventoSignificativo"/>
+
+  <xs:element name="registroEventoSignificativoResponse" type="tns:registroEventoSignificativoResponse"/>
+
+  <xs:element name="registroPuntoVenta" type="tns:registroPuntoVenta"/>
+
+  <xs:element name="registroPuntoVentaComisionista" type="tns:registroPuntoVentaComisionista"/>
+
+  <xs:element name="registroPuntoVentaComisionistaResponse" type="tns:registroPuntoVentaComisionistaResponse"/>
+
+  <xs:element name="registroPuntoVentaResponse" type="tns:registroPuntoVentaResponse"/>
+
+  <xs:element name="verificarComunicacion" type="tns:verificarComunicacion"/>
+
+  <xs:element name="verificarComunicacionResponse" type="tns:verificarComunicacionResponse"/>
+
+  <xs:complexType name="verificarComunicacion">
+    <xs:sequence/>
+  </xs:complexType>
+
+  <xs:complexType name="verificarComunicacionResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="return" type="tns:respuestaComunicacion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaComunicacion">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType abstract="true" name="modelDto">
+    <xs:complexContent>
+      <xs:extension base="tns:model">
+        <xs:sequence/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType abstract="true" name="model">
+    <xs:sequence/>
+  </xs:complexType>
+
+  <xs:complexType name="mensajeServicio">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigo" type="xs:int"/>
+          <xs:element minOccurs="0" name="descripcion" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="registroPuntoVenta">
+    <xs:sequence>
+      <xs:element name="SolicitudRegistroPuntoVenta" type="tns:solicitudRegistroPuntoVenta"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudRegistroPuntoVenta">
+    <xs:sequence>
+      <xs:element name="codigoAmbiente" type="xs:int"/>
+      <xs:element name="codigoModalidad" type="xs:int"/>
+      <xs:element name="codigoSistema" type="xs:string"/>
+      <xs:element name="codigoSucursal" type="xs:int"/>
+      <xs:element name="codigoTipoPuntoVenta" type="xs:int"/>
+      <xs:element name="cuis" type="xs:string"/>
+      <xs:element name="descripcion" type="xs:string"/>
+      <xs:element name="nit" type="xs:long"/>
+      <xs:element name="nombrePuntoVenta" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="registroPuntoVentaResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaRegistroPuntoVenta" type="tns:respuestaRegistroPuntoVenta"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaRegistroPuntoVenta">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigoPuntoVenta" type="xs:int"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="registroPuntoVentaComisionista">
+    <xs:sequence>
+      <xs:element name="SolicitudPuntoVentaComisionista" type="tns:solicitudPuntoVentaComisionista"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudPuntoVentaComisionista">
+    <xs:sequence>
+      <xs:element name="codigoAmbiente" type="xs:int"/>
+      <xs:element name="codigoModalidad" type="xs:int"/>
+      <xs:element name="codigoSistema" type="xs:string"/>
+      <xs:element name="codigoSucursal" type="xs:int"/>
+      <xs:element name="cuis" type="xs:string"/>
+      <xs:element name="descripcion" type="xs:string"/>
+      <xs:element name="fechaFin" type="xs:dateTime"/>
+      <xs:element name="fechaInicio" type="xs:dateTime"/>
+      <xs:element name="nit" type="xs:long"/>
+      <xs:element name="nitComisionista" type="xs:long"/>
+      <xs:element name="nombrePuntoVenta" type="xs:string"/>
+      <xs:element name="numeroContrato" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="registroPuntoVentaComisionistaResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaPuntoVentaComisionista" type="tns:respuestaPuntoVentaComisionista"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaPuntoVentaComisionista">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigoPuntoVenta" type="xs:int"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="cierreOperacionesSistema">
+    <xs:sequence>
+      <xs:element name="SolicitudOperaciones" type="tns:solicitudOperaciones"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudOperaciones">
+    <xs:sequence>
+      <xs:element name="codigoAmbiente" type="xs:int"/>
+      <xs:element name="codigoModalidad" type="xs:int"/>
+      <xs:element minOccurs="0" name="codigoPuntoVenta" nillable="true" type="xs:int"/>
+      <xs:element name="codigoSistema" type="xs:string"/>
+      <xs:element name="codigoSucursal" type="xs:int"/>
+      <xs:element name="cuis" type="xs:string"/>
+      <xs:element name="nit" type="xs:long"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="cierreOperacionesSistemaResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaCierreSistemas" type="tns:respuestaCierreSistemas"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaCierreSistemas">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigoSistema" type="xs:string"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="consultaEventoSignificativo">
+    <xs:sequence>
+      <xs:element name="SolicitudConsultaEvento" type="tns:solicitudConsultaEvento"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudConsultaEvento">
+    <xs:sequence>
+      <xs:element name="codigoAmbiente" type="xs:int"/>
+      <xs:element minOccurs="0" name="codigoPuntoVenta" nillable="true" type="xs:int"/>
+      <xs:element name="codigoSistema" type="xs:string"/>
+      <xs:element name="codigoSucursal" type="xs:int"/>
+      <xs:element name="cufd" type="xs:string"/>
+      <xs:element name="cuis" type="xs:string"/>
+      <xs:element name="fechaEvento" type="xs:dateTime"/>
+      <xs:element name="nit" type="xs:long"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="consultaEventoSignificativoResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaListaEventos" type="tns:respuestaListaEventos"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaListaEventos">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigoRecepcionEventoSignificativo" type="xs:long"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="listaCodigos" nillable="true" type="tns:eventosSignificativosDto"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="eventosSignificativosDto">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="codigoEvento" type="xs:int"/>
+      <xs:element minOccurs="0" name="codigoRecepcionEventoSignificativo" type="xs:long"/>
+      <xs:element minOccurs="0" name="descripcion" type="xs:string"/>
+      <xs:element minOccurs="0" name="fechaFin" type="xs:string"/>
+      <xs:element minOccurs="0" name="fechaInicio" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="consultaPuntoVenta">
+    <xs:sequence>
+      <xs:element name="SolicitudConsultaPuntoVenta" type="tns:solicitudConsultaPuntoVenta"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudConsultaPuntoVenta">
+    <xs:sequence>
+      <xs:element name="codigoAmbiente" type="xs:int"/>
+      <xs:element name="codigoSistema" type="xs:string"/>
+      <xs:element name="codigoSucursal" type="xs:int"/>
+      <xs:element name="cuis" type="xs:string"/>
+      <xs:element name="nit" type="xs:long"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="consultaPuntoVentaResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaConsultaPuntoVenta" type="tns:respuestaConsultaPuntoVenta"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaConsultaPuntoVenta">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="listaPuntosVentas" nillable="true" type="tns:puntosVentasDto"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="puntosVentasDto">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="codigoPuntoVenta" type="xs:int"/>
+      <xs:element minOccurs="0" name="nombrePuntoVenta" type="xs:string"/>
+      <xs:element minOccurs="0" name="tipoPuntoVenta" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="registroEventoSignificativo">
+    <xs:sequence>
+      <xs:element name="SolicitudEventoSignificativo" type="tns:solicitudEventoSignificativo"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudEventoSignificativo">
+    <xs:sequence>
+      <xs:element name="codigoAmbiente" type="xs:int"/>
+      <xs:element name="codigoMotivoEvento" type="xs:int"/>
+      <xs:element minOccurs="0" name="codigoPuntoVenta" nillable="true" type="xs:int"/>
+      <xs:element name="codigoSistema" type="xs:string"/>
+      <xs:element name="codigoSucursal" type="xs:int"/>
+      <xs:element name="cufd" type="xs:string"/>
+      <xs:element name="cufdEvento" type="xs:string"/>
+      <xs:element name="cuis" type="xs:string"/>
+      <xs:element name="descripcion" type="xs:string"/>
+      <xs:element name="fechaHoraFinEvento" type="xs:dateTime"/>
+      <xs:element name="fechaHoraInicioEvento" type="xs:dateTime"/>
+      <xs:element name="nit" type="xs:long"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="registroEventoSignificativoResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaListaEventos" type="tns:respuestaListaEventos"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="cierrePuntoVenta">
+    <xs:sequence>
+      <xs:element name="SolicitudCierrePuntoVenta" type="tns:solicitudCierrePuntoVenta"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudCierrePuntoVenta">
+    <xs:sequence>
+      <xs:element name="codigoAmbiente" type="xs:int"/>
+      <xs:element name="codigoPuntoVenta" type="xs:int"/>
+      <xs:element name="codigoSistema" type="xs:string"/>
+      <xs:element name="codigoSucursal" type="xs:int"/>
+      <xs:element name="cuis" type="xs:string"/>
+      <xs:element name="nit" type="xs:long"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="cierrePuntoVentaResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaCierrePuntoVenta" type="tns:respuestaCierrePuntoVenta"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaCierrePuntoVenta">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigoPuntoVenta" type="xs:int"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+</xs:schema>
+  </wsdl:types>
+  <wsdl:message name="registroPuntoVenta">
+    <wsdl:part element="ns1:registroPuntoVenta" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="registroPuntoVentaComisionistaResponse">
+    <wsdl:part element="ns1:registroPuntoVentaComisionistaResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="consultaEventoSignificativoResponse">
+    <wsdl:part element="ns1:consultaEventoSignificativoResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="cierreOperacionesSistema">
+    <wsdl:part element="ns1:cierreOperacionesSistema" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="consultaEventoSignificativo">
+    <wsdl:part element="ns1:consultaEventoSignificativo" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="consultaPuntoVentaResponse">
+    <wsdl:part element="ns1:consultaPuntoVentaResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="consultaPuntoVenta">
+    <wsdl:part element="ns1:consultaPuntoVenta" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="verificarComunicacion">
+    <wsdl:part element="ns1:verificarComunicacion" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="verificarComunicacionResponse">
+    <wsdl:part element="ns1:verificarComunicacionResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="registroPuntoVentaResponse">
+    <wsdl:part element="ns1:registroPuntoVentaResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="registroEventoSignificativoResponse">
+    <wsdl:part element="ns1:registroEventoSignificativoResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="registroPuntoVentaComisionista">
+    <wsdl:part element="ns1:registroPuntoVentaComisionista" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="cierreOperacionesSistemaResponse">
+    <wsdl:part element="ns1:cierreOperacionesSistemaResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="cierrePuntoVentaResponse">
+    <wsdl:part element="ns1:cierrePuntoVentaResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="registroEventoSignificativo">
+    <wsdl:part element="ns1:registroEventoSignificativo" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="cierrePuntoVenta">
+    <wsdl:part element="ns1:cierrePuntoVenta" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:portType name="ServicioFacturacionOperaciones">
+    <wsdl:operation name="verificarComunicacion">
+      <wsdl:input message="ns1:verificarComunicacion" name="verificarComunicacion">
+    </wsdl:input>
+      <wsdl:output message="ns1:verificarComunicacionResponse" name="verificarComunicacionResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="registroPuntoVenta">
+      <wsdl:input message="ns1:registroPuntoVenta" name="registroPuntoVenta">
+    </wsdl:input>
+      <wsdl:output message="ns1:registroPuntoVentaResponse" name="registroPuntoVentaResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="registroPuntoVentaComisionista">
+      <wsdl:input message="ns1:registroPuntoVentaComisionista" name="registroPuntoVentaComisionista">
+    </wsdl:input>
+      <wsdl:output message="ns1:registroPuntoVentaComisionistaResponse" name="registroPuntoVentaComisionistaResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="cierreOperacionesSistema">
+      <wsdl:input message="ns1:cierreOperacionesSistema" name="cierreOperacionesSistema">
+    </wsdl:input>
+      <wsdl:output message="ns1:cierreOperacionesSistemaResponse" name="cierreOperacionesSistemaResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="consultaEventoSignificativo">
+      <wsdl:input message="ns1:consultaEventoSignificativo" name="consultaEventoSignificativo">
+    </wsdl:input>
+      <wsdl:output message="ns1:consultaEventoSignificativoResponse" name="consultaEventoSignificativoResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="consultaPuntoVenta">
+      <wsdl:input message="ns1:consultaPuntoVenta" name="consultaPuntoVenta">
+    </wsdl:input>
+      <wsdl:output message="ns1:consultaPuntoVentaResponse" name="consultaPuntoVentaResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="registroEventoSignificativo">
+      <wsdl:input message="ns1:registroEventoSignificativo" name="registroEventoSignificativo">
+    </wsdl:input>
+      <wsdl:output message="ns1:registroEventoSignificativoResponse" name="registroEventoSignificativoResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="cierrePuntoVenta">
+      <wsdl:input message="ns1:cierrePuntoVenta" name="cierrePuntoVenta">
+    </wsdl:input>
+      <wsdl:output message="ns1:cierrePuntoVentaResponse" name="cierrePuntoVentaResponse">
+    </wsdl:output>
+    </wsdl:operation>
+  </wsdl:portType>
+</wsdl:definitions>

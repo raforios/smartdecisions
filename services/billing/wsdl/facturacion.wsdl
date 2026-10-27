@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="https://siat.impuestos.gob.bo/ServicioFacturacionCompraVenta" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns2="http://schemas.xmlsoap.org/soap/http" xmlns:ns1="https://siat.impuestos.gob.bo/" name="ServicioFacturacion" targetNamespace="https://siat.impuestos.gob.bo/ServicioFacturacionCompraVenta">
-  <wsdl:import location="https://pilotosiatservicios.impuestos.gob.bo/v2/ServicioFacturacionCompraVenta?wsdl=ServicioFacturacion.wsdl" namespace="https://siat.impuestos.gob.bo/">
+  <wsdl:import location="facturacion_types.wsdl" namespace="https://siat.impuestos.gob.bo/">
     </wsdl:import>
   <wsdl:binding name="ServicioFacturacionSoapBinding" type="ns1:ServicioFacturacion">
     <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>

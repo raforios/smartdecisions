@@ -68,7 +68,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `POST` | `/v1/billing/sales` | Sells over the **counter**. |
 | `GET` | `/v1/billing/sales` | The **sale notes** of a period. |
 | `GET` | `/v1/billing/sales/{sale_id}` | One **sale note**, as it prints. |
-| `POST` | `/v1/billing/sales/{sale_id}/cancel` | Voids a **note** and returns its units to their batches. |
+| `POST` | `/v1/billing/sales/{sale_id}/cancel` | Voids a **note** and returns its units to their batches; an invoice is cancelled at the SIN first, with `reason_code`. |
 
 ### Till (`/v1/billing/cash`)
 
@@ -82,6 +82,14 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `POST` | `/v1/billing/cash/sessions/{session_id}/expenses/{movement_id}/cancel` | Cancels an **expense** of the open till. |
 | `POST` | `/v1/billing/cash/sessions/{session_id}/close` | Closes a **till** against the cash counted. |
 | `GET` | `/v1/billing/cash/alerts` | The **tills** to close now. |
+
+### SIAT (`/v1/billing/siat`)
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/v1/billing/siat/codes` | The **CUIS** and **CUFD** in force for the shop's branch and point of sale; asks the SIN only for the ones missing or expired. |
+| `POST` | `/v1/billing/siat/catalogs/sync` | Brings the 17 **SIN catalogues** and stores them (managers). |
+| `GET` | `/v1/billing/siat/catalogs/{catalog}` | One stored **catalogue** (`LEGENDS`, `PAYMENT_METHODS`, `UNITS_OF_MEASURE`...). |
 
 ### Health
 
@@ -110,7 +118,13 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 
 **A till:** `user_email`, `status` (`OPEN`, `CLOSED`), `business_day`, `opened_at`, `opening_cash` and, on closing, `closed_at`, `closed_by`, `counted_cash`, `expected_cash`, `difference`, `note`. **An expense:** `expense_type` (`SUPPLIER_PAYMENT`, `SERVICE_PAYMENT`, `PETTY_CASH`), `amount`, `concept`, `purchase_id`, `status` (`ACTIVE`, `CANCELLED`) and who created or cancelled it and when. Payment methods: `EFECTIVO`, `QR`, `TARJETA_DEBITO`, `TARJETA_CREDITO`. Till specification: `docs/cambios/billing-caja/spec.md`.
 
-Error codes: `INSUFFICIENT_STOCK`, `PRODUCT_NOT_FOUND`, `DUPLICATE_LINE`, `DISCOUNTS_DISABLED`, `SALE_ALREADY_CANCELLED`, `SETTINGS_NOT_FOUND`, among others.
+**SIAT codes and catalogues** live in `billing_settings`: `siat#codes#<branch>#<point_of_sale>` (CUIS, CUFD, control code, validity) and `siat#catalog#<catalogue>` (rows with `code`, `description`, `activity_code`).
+
+**Invoicing a sale.** With `invoicing_enabled` on in the settings, `POST /v1/billing/sales` turns every sale into an invoice sent with `recepcionFactura`. Before any stock moves it requires the buyer's document and document type, the shop's `municipality`, the three SIN codes on every product and a legend of the product's activity in the synced `LEGENDS`. Then it draws the stock down, takes the invoice number (`counter#invoice#<branch>#<point_of_sale>`), builds the CUF with the day's control code and the XML, and sends it. If the SIN refuses it or cannot be reached, the units go back and the sale is not issued. The accepted invoice is stored on the sale as `invoice` (`number`, `cuf`, `cufd`, `issued_at`, `legend`, `address`, `branch`, `point_of_sale`, `state`, `reception_code`, `siat_state`, `qr_url`, `cancellation_reason`); `qr_url` points at `SIAT_QR_URL`. Off, the sale is an internal note as before.
+
+**Cancelling an invoice.** `POST /v1/billing/sales/{sale_id}/cancel` takes an optional body `{"reason_code": <CANCELLATION_REASONS code>}`. An invoiced note requires it and is cancelled with `anulacionFactura` first, with the codes in force; if the SIN refuses, the note stays issued and nothing moves. An internal note needs no body.
+
+Error codes: `SIAT_REFUSED`, `SIAT_ISSUER_INCOMPLETE`, `CATALOG_NOT_SYNCED`, `LEGEND_NOT_FOUND`, `CANCELLATION_REASON_REQUIRED`, `PRODUCT_NOT_HOMOLOGATED`, `BUYER_REQUIRED`, `INSUFFICIENT_STOCK`, `PRODUCT_NOT_FOUND`, `DUPLICATE_LINE`, `DISCOUNTS_DISABLED`, `SALE_ALREADY_CANCELLED`, `SETTINGS_NOT_FOUND`, among others.
 
 -----
 
@@ -136,18 +150,21 @@ billing/
 ├── controllers/
 │   ├── __init__.py
 │   ├── billing.py
-│   └── billing_cash.py
+│   ├── billing_cash.py
+│   └── billing_siat.py
 ├── models/
 │   ├── __init__.py
 │   └── billing.py
 ├── routes/
 │   ├── __init__.py
 │   ├── billing.py
-│   └── billing_cash.py
+│   ├── billing_cash.py
+│   └── billing_siat.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── billing.py
 │   ├── billing_cash.py
+│   ├── billing_siat.py
 │   └── health.py
 ├── services/
 │   ├── __init__.py
@@ -155,11 +172,13 @@ billing/
 │   ├── billing.py
 │   ├── billing_cash.py
 │   ├── billing_invoice_xml.py
+│   ├── billing_invoicing.py
 │   ├── billing_purchases.py
 │   ├── billing_reports.py
 │   ├── billing_sales.py
 │   ├── billing_siat.py
 │   ├── billing_siat_client.py
+│   ├── billing_siat_codes.py
 │   ├── billing_stock.py
 │   ├── crud.py
 │   ├── db_connection.py
@@ -169,10 +188,9 @@ billing/
 │   ├── security.py
 │   └── utils.py
 ├── wsdl/
-│   ├── codigos.wsdl
-│   ├── facturacion.wsdl
-│   ├── LEEME.md
-│   └── sincronizacion.wsdl
+│   ├── <service>.wsdl          # codigos, facturacion, sincronizacion, operaciones, ajuste, compras
+│   ├── <service>_types.wsdl    # the half each one imports, kept on disk
+│   └── LEEME.md
 ├── tests/
 ├── .dockerignore
 ├── .env

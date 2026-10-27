@@ -125,6 +125,26 @@ def _missing_homologation(lines: list[InvoiceLine]) -> list[str]:
     return missing
 
 
+def require_homologated(lines: list[InvoiceLine]) -> None:
+    '''
+        Refuses lines whose products are not homologated with the SIN.
+
+        Public so a sale can be refused before any stock moves, not only when
+        the document is built.
+
+        Args:
+            lines (list[InvoiceLine]): The lines as the invoice needs them.
+
+        Raises:
+            InvalidInputError: PRODUCT_NOT_HOMOLOGATED.
+    '''
+    missing = _missing_homologation(lines)
+    if missing:
+        error_msg = f'Lines cannot be invoiced; missing SIN codes: {missing}.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = BillingError.PRODUCT_NOT_HOMOLOGATED.value)
+
+
 def _card_for_xml(sale: SaleNoteOut) -> str | None:
     '''
         The masked card number, as the schema types it.
@@ -240,11 +260,7 @@ def build_invoice_xml(
             InvalidInputError: A product is not homologated with the SIN, or
                 the sale has more lines than one invoice may carry.
     '''
-    missing = _missing_homologation(lines)
-    if missing:
-        error_msg = f'Sale {sale.number} cannot be invoiced; missing SIN codes: {missing}.'
-        logger.warning(error_msg)
-        raise InvalidInputError(detail = BillingError.PRODUCT_NOT_HOMOLOGATED.value)
+    require_homologated(lines)
 
     if len(lines) > MAX_DETAIL_LINES:
         error_msg = (f'Sale {sale.number} has {len(lines)} lines; one invoice '

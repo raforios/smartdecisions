@@ -24,6 +24,7 @@ import uvicorn
 
 from routes.billing import router as billing_router
 from routes.billing_cash import router as billing_cash_router
+from routes.billing_siat import router as billing_siat_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
 from services.api_exceptions import setup_exception_handlers
@@ -276,6 +277,7 @@ app.add_middleware(
 
 app.include_router(billing_router)
 app.include_router(billing_cash_router)
+app.include_router(billing_siat_router)
 
 
 def run_local() -> None:

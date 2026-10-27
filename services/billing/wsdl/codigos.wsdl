@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="https://siat.impuestos.gob.bo/FacturacionCodigos" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns2="http://schemas.xmlsoap.org/soap/http" xmlns:ns1="https://siat.impuestos.gob.bo/" name="ServicioFacturacionCodigos" targetNamespace="https://siat.impuestos.gob.bo/FacturacionCodigos">
-  <wsdl:import location="https://pilotosiatservicios.impuestos.gob.bo/v2/FacturacionCodigos?wsdl=ServicioFacturacionCodigos.wsdl" namespace="https://siat.impuestos.gob.bo/">
+  <wsdl:import location="codigos_types.wsdl" namespace="https://siat.impuestos.gob.bo/">
     </wsdl:import>
   <wsdl:binding name="ServicioFacturacionCodigosSoapBinding" type="ns1:ServicioFacturacionCodigos">
     <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>

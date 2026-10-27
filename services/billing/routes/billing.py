@@ -53,6 +53,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SettingsResponse
 )
+from schemas.billing_siat import SaleCancelIn, SaleCancellation
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner, get_current_user, require_roles
@@ -135,6 +136,24 @@ def lot_edit(
             LotEdit: The edit the controller receives.
     '''
     return LotEdit(sku = sku, lot_id = lot_id, sale_price = lot.sale_price)
+
+
+def sale_cancellation(
+    cancel: SaleCancelIn = Body(default_factory = SaleCancelIn),
+    sale_id: str = Path(..., min_length = 1, max_length = 120)
+) -> SaleCancellation:
+    '''
+        Which note is cancelled and why. The body is optional: an internal
+        note needs no reason.
+
+        Args:
+            cancel (SaleCancelIn): The reason, for an invoice.
+            sale_id (str): Note to cancel.
+
+        Returns:
+            SaleCancellation: The cancellation the controller receives.
+    '''
+    return SaleCancellation(sale_id = sale_id, reason_code = cancel.reason_code)
 
 
 @router.get('/dashboard', response_model = BillingDashboard)
@@ -381,15 +400,15 @@ async def get_sale_endpoint(
 @router.post('/sales/{sale_id}/cancel', response_model = SaleNoteOut)
 async def cancel_sale_endpoint(
     request: Request,
-    sale_id: str = Path(..., min_length = 1, max_length = 120),
+    cancellation: SaleCancellation = Depends(sale_cancellation),
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
     owner: str = Depends(require_roles(*MANAGERS)),
     current_user: str = Depends(get_current_user)
 ) -> SaleNoteOut:
-    ''' Endpoint to void a note and return its units to their batches. '''
-    message = f'Shop {owner}: {current_user} cancelled sale {sale_id}.'
+    ''' Endpoint to void a note, at the SIN too when it is an invoice. '''
+    message = f'Shop {owner}: {current_user} cancelled sale {cancellation.sale_id}.'
     logger.info(message)
     return await cancel_sale_controller(
-        dynamodb_resource = dynamodb_resource, owner = owner, sale_id = sale_id,
+        dynamodb_resource = dynamodb_resource, owner = owner, cancellation = cancellation,
         request = request, current_user = current_user
     )

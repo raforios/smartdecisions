@@ -45,7 +45,12 @@ def check_digit(
 
         The SIAT publishes it in Java and in C#; this is that same sum. Each
         digit is multiplied by a factor that climbs from 2 to the limit and
-        starts again, and the remainder decides: 10 writes "1", 11 writes "0".
+        starts again, and the remainder decides: 10 writes "1".
+
+        The SIN calls it with `x10 = false`, so the digit is the plain sum
+        modulo 11 and not `((sum * 10) % 11) % 10`. The two agree on many
+        chains, the worked example among them; the pilot rejected a CUF on
+        26-oct where they did not.
 
         Args:
             chain (str): Chain of digits to verify.
@@ -67,12 +72,8 @@ def check_digit(
         if multiplier > limit:
             multiplier = 2
 
-    digit = ((total * 10) % 11) % 10
-    if digit == 10:
-        return '1'
-    if digit == 11:
-        return '0'
-    return str(digit)
+    digit = total % 11
+    return '1' if digit == 10 else str(digit)
 
 
 def cuf_chain(data: CufInput) -> str:

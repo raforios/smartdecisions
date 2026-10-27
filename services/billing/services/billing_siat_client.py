@@ -24,6 +24,7 @@
     References, all in `docs/siat/SIAT.md`: Solicitud CUIS, Solicitud CUFD,
     Verifica NIT, Recepción de factura, Anulación.
 '''
+import hashlib
 import os
 from dataclasses import dataclass
 from typing import Any, Final
@@ -33,9 +34,18 @@ from zeep import Client, Settings
 from zeep.exceptions import Error as ZeepError
 from zeep.transports import Transport
 
-from schemas.billing import BillingError, CuisResponse, CufdResponse, SiatReceipt
+from schemas.billing import (
+    EMISSION_ONLINE,
+    INVOICE_WITH_TAX_CREDIT,
+    SECTOR_DOCUMENT_PURCHASE_SALE,
+    BillingError,
+    CuisResponse,
+    CufdResponse,
+    SiatReceipt
+)
+from schemas.billing_siat import CatalogEntry, SiatCatalog
 from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
+from services.exceptions import InvalidInputError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
 
 # The delegation token and the system code are credentials: they live in the
@@ -64,6 +74,11 @@ MODALITY: Final[int] = 2
 SERVICE_CODES = 'codigos'
 SERVICE_INVOICE = 'facturacion'
 SERVICE_SYNC = 'sincronizacion'
+
+# Asked for a CUIS while one is in force, the SIN answers `transaccion` false
+# with this message AND the CUIS in force (checked on the pilot, 26-oct): it is
+# the code, not a refusal.
+CUIS_IN_FORCE: Final[int] = 980
 
 # Authorization scheme of the `apikey` header, fixed by the SIAT protocol.
 TOKEN_SCHEME: Final[str] = 'TokenApi'
@@ -95,7 +110,9 @@ def wsdl_path(service: str) -> str:
         Returns:
             str: Absolute path to the .wsdl file.
     '''
-    return os.path.join(WSDL_DIR, f'{service}.wsdl')
+    # Absolute, because each WSDL imports its other half from the file next to
+    # it, and zeep resolves that relative import only against an absolute path.
+    return os.path.abspath(os.path.join(WSDL_DIR, f'{service}.wsdl'))
 
 
 def _client(service: str) -> Client:
@@ -195,6 +212,44 @@ def _base_request(emitter: Emitter) -> dict[str, Any]:
     return request
 
 
+def _accepted(
+    operation: str,
+    answer: Any,
+    tolerated: tuple[int, ...] = ()
+) -> Any:
+    '''
+        The answer, once the tax office said it processed the request.
+
+        A refused CUIS or CUFD comes back with empty codes; stored, it would
+        poison every invoice of the day. The SIN's own messages go to the log,
+        where a person can read why.
+
+        Args:
+            operation (str): Operation name, for the log.
+            answer (Any): The response as zeep returns it.
+            tolerated (tuple[int, ...]): SIN message codes that come with
+                `transaccion` false and still carry a valid answer.
+
+        Returns:
+            Any: The same answer.
+
+        Raises:
+            InvalidInputError: The tax office refused the request.
+    '''
+    if getattr(answer, 'transaccion', False):
+        return answer
+    codes = {getattr(item, 'codigo', None)
+             for item in (getattr(answer, 'mensajesList', None) or [])}
+    # Tolerated only with the answer it promises: a 980 with no code is still
+    # nothing to store.
+    if codes & set(tolerated) and getattr(answer, 'codigo', None):
+        return answer
+    error_msg = (f'SIAT refused {operation}: '
+                 f'{_receipt_from(answer).messages or "no messages"}')
+    logger.error(error_msg)
+    raise InvalidInputError(detail = BillingError.SIAT_REFUSED.value)
+
+
 def request_cuis(emitter: Emitter) -> CuisResponse:
     '''
         Asks for the CUIS of a branch or point of sale.
@@ -211,7 +266,8 @@ def request_cuis(emitter: Emitter) -> CuisResponse:
         Raises:
             ServiceUnavailableError: The SIAT is unreachable or refused.
     '''
-    answer = _invoke(SERVICE_CODES, 'cuis', _base_request(emitter))
+    answer = _accepted('cuis', _invoke(SERVICE_CODES, 'cuis', _base_request(emitter)),
+                       tolerated = (CUIS_IN_FORCE,))
     return CuisResponse(
         cuis = str(answer.codigo),
         valid_until = str(answer.fechaVigencia)
@@ -238,7 +294,9 @@ def request_cufd(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable or refused.
     '''
-    answer = _invoke(SERVICE_CODES, 'cufd', {**_base_request(emitter), 'cuis': cuis})
+    answer = _accepted('cufd', _invoke(SERVICE_CODES, 'cufd', {
+        **_base_request(emitter), 'cuis': cuis
+    }))
     return CufdResponse(
         cufd = str(answer.codigo),
         control_code = str(answer.codigoControl),
@@ -275,69 +333,93 @@ def verify_document(
     return bool(getattr(answer, 'transaccion', False))
 
 
+@dataclass(frozen = True)
+class InvoiceSubmission:
+    '''
+        One invoice as `recepcionFactura` takes it.
+
+        `archive` is the GZIPped XML as bytes. The WSDL types it
+        `base64Binary`, so zeep encodes it on the wire; encoding it here as
+        well would send base64 of base64.
+    '''
+    cuis: str
+    cufd: str
+    archive: bytes
+    sent_at: str
+
+
 def send_invoice(
     emitter: Emitter,
-    codes: dict[str, str],
-    packed_xml: str
+    submission: InvoiceSubmission
 ) -> SiatReceipt:
     '''
         Hands one invoice to the tax office.
 
-        The document travels GZIPped and base64-encoded, which is what
-        `billing_siat.pack` produces, with its hash so the SIAT can tell a
+        It travels with the SHA-256 of the archive, so the SIAT can tell a
         truncated upload from a bad document.
 
         Args:
             emitter (Emitter): Who is issuing.
-            codes (dict[str, str]): The `cuis`, `cufd` and `cuf` in force.
-            packed_xml (str): The invoice, packed and encoded.
+            submission (InvoiceSubmission): The codes in force and the document.
 
         Returns:
             SiatReceipt: What the tax office answered.
 
         Raises:
-            ServiceUnavailableError: The SIAT is unreachable or refused.
+            ServiceUnavailableError: The SIAT is unreachable.
     '''
     answer = _invoke(SERVICE_INVOICE, 'recepcionFactura', {
         **_base_request(emitter),
-        'cuis': codes['cuis'],
-        'cufd': codes['cufd'],
-        'codigoDocumentoSector': 1,
-        'codigoEmision': 1,
-        'tipoFacturaDocumento': 1,
-        'archivo': packed_xml,
-        'fechaEnvio': codes.get('sent_at'),
-        'hashArchivo': codes.get('hash')
+        'cuis': submission.cuis,
+        'cufd': submission.cufd,
+        'codigoDocumentoSector': SECTOR_DOCUMENT_PURCHASE_SALE,
+        'codigoEmision': EMISSION_ONLINE,
+        'tipoFacturaDocumento': INVOICE_WITH_TAX_CREDIT,
+        'archivo': submission.archive,
+        'fechaEnvio': submission.sent_at,
+        'hashArchivo': hashlib.sha256(submission.archive).hexdigest()
     })
     return _receipt_from(answer)
 
 
+@dataclass(frozen = True)
+class InvoiceCancellation:
+    '''
+        One invoice as `anulacionFactura` takes it: the codes in force today,
+        not those it was issued with, and the reason.
+    '''
+    cuis: str
+    cufd: str
+    cuf: str
+    reason_code: int
+
+
 def cancel_invoice(
     emitter: Emitter,
-    codes: dict[str, str],
-    reason_code: int
+    cancellation: InvoiceCancellation
 ) -> SiatReceipt:
     '''
         Cancels an invoice already accepted.
 
         Args:
             emitter (Emitter): Who is issuing.
-            codes (dict[str, str]): The `cuis`, `cufd` and `cuf` of the invoice.
-            reason_code (int): Reason, from the SIN's parametric.
+            cancellation (InvoiceCancellation): The codes, the CUF and the reason.
 
         Returns:
             SiatReceipt: What the tax office answered.
 
         Raises:
-            ServiceUnavailableError: The SIAT is unreachable or refused.
+            ServiceUnavailableError: The SIAT is unreachable.
     '''
     answer = _invoke(SERVICE_INVOICE, 'anulacionFactura', {
         **_base_request(emitter),
-        'cuis': codes['cuis'],
-        'cufd': codes['cufd'],
-        'cuf': codes['cuf'],
-        'codigoDocumentoSector': 1,
-        'codigoMotivo': reason_code
+        'cuis': cancellation.cuis,
+        'cufd': cancellation.cufd,
+        'cuf': cancellation.cuf,
+        'codigoDocumentoSector': SECTOR_DOCUMENT_PURCHASE_SALE,
+        'codigoEmision': EMISSION_ONLINE,
+        'tipoFacturaDocumento': INVOICE_WITH_TAX_CREDIT,
+        'codigoMotivo': cancellation.reason_code
     })
     return _receipt_from(answer)
 
@@ -379,3 +461,108 @@ def _text(value: Any) -> str | None:
             str | None: The text.
     '''
     return None if value is None else str(value)
+
+
+# Where each shape of the synchronisation answer keeps its code and its
+# description, in the order they are tried. Parametrics use
+# codigoClasificador; activities, codigoCaeb; products, codigoProducto; and
+# the activity of each sector document, codigoDocumentoSector. Legends have no
+# code at all.
+_CODE_FIELDS: Final[tuple[str, ...]] = (
+    'codigoClasificador', 'codigoCaeb', 'codigoProducto', 'codigoDocumentoSector'
+)
+_DESCRIPTION_FIELDS: Final[tuple[str, ...]] = (
+    'descripcion', 'descripcionProducto', 'descripcionLeyenda', 'tipoDocumentoSector'
+)
+
+
+# The SIN operation that brings each catalogue.
+_SYNC_OPERATIONS: Final[dict[SiatCatalog, str]] = {
+    SiatCatalog.ACTIVITIES: 'sincronizarActividades',
+    SiatCatalog.SECTOR_DOCUMENT_ACTIVITIES: 'sincronizarListaActividadesDocumentoSector',
+    SiatCatalog.LEGENDS: 'sincronizarListaLeyendasFactura',
+    SiatCatalog.SERVICE_MESSAGES: 'sincronizarListaMensajesServicios',
+    SiatCatalog.PRODUCTS_AND_SERVICES: 'sincronizarListaProductosServicios',
+    SiatCatalog.SIGNIFICANT_EVENTS: 'sincronizarParametricaEventosSignificativos',
+    SiatCatalog.CANCELLATION_REASONS: 'sincronizarParametricaMotivoAnulacion',
+    SiatCatalog.COUNTRIES: 'sincronizarParametricaPaisOrigen',
+    SiatCatalog.IDENTITY_DOCUMENT_TYPES: 'sincronizarParametricaTipoDocumentoIdentidad',
+    SiatCatalog.SECTOR_DOCUMENT_TYPES: 'sincronizarParametricaTipoDocumentoSector',
+    SiatCatalog.EMISSION_TYPES: 'sincronizarParametricaTipoEmision',
+    SiatCatalog.ROOM_TYPES: 'sincronizarParametricaTipoHabitacion',
+    SiatCatalog.PAYMENT_METHODS: 'sincronizarParametricaTipoMetodoPago',
+    SiatCatalog.CURRENCIES: 'sincronizarParametricaTipoMoneda',
+    SiatCatalog.POINT_OF_SALE_TYPES: 'sincronizarParametricaTipoPuntoVenta',
+    SiatCatalog.INVOICE_TYPES: 'sincronizarParametricaTiposFactura',
+    SiatCatalog.UNITS_OF_MEASURE: 'sincronizarParametricaUnidadMedida',
+}
+
+
+def sync_catalog(
+    emitter: Emitter,
+    cuis: str,
+    catalog: SiatCatalog
+) -> list[CatalogEntry]:
+    '''
+        Brings one catalogue from the tax office.
+
+        The synchronisation request is the base one without the modality: the
+        catalogues are the same whichever way the shop issues.
+
+        Args:
+            emitter (Emitter): Who is issuing.
+            cuis (str): The CUIS in force.
+            catalog (SiatCatalog): Which catalogue.
+
+        Returns:
+            list[CatalogEntry]: Its rows, as the SIN lists them.
+
+        Raises:
+            ServiceUnavailableError: The SIAT is unreachable.
+            InvalidInputError: The tax office refused the request.
+    '''
+    request = {**_base_request(emitter), 'cuis': cuis}
+    request.pop('codigoModalidad')
+    operation = _SYNC_OPERATIONS[catalog]
+    answer = _accepted(operation, _invoke(SERVICE_SYNC, operation, request))
+    return [_catalog_entry(row) for row in _catalog_rows(answer)]
+
+
+def _catalog_rows(answer: Any) -> list[Any]:
+    '''
+        The list a synchronisation answer carries, whatever it is called.
+
+        Every answer brings exactly one list besides its messages, named after
+        the catalogue (listaCodigos, listaActividades, listaLeyendas...).
+
+        Args:
+            answer (Any): The response as zeep returns it.
+
+        Returns:
+            list[Any]: Its rows; empty when it brought none.
+    '''
+    for name, value in vars(answer).get('__values__', vars(answer)).items():
+        if name != 'mensajesList' and isinstance(value, list):
+            return value
+    return []
+
+
+def _catalog_entry(row: Any) -> CatalogEntry:
+    '''
+        One catalogue row as a DTO.
+
+        Args:
+            row (Any): The row as zeep returns it.
+
+        Returns:
+            CatalogEntry: Its code, description and activity.
+    '''
+    code = next((getattr(row, name) for name in _CODE_FIELDS
+                 if getattr(row, name, None) is not None), '')
+    description = next((getattr(row, name) for name in _DESCRIPTION_FIELDS
+                        if getattr(row, name, None) is not None), '')
+    return CatalogEntry(
+        code = str(code),
+        description = str(description),
+        activity_code = _text(getattr(row, 'codigoActividad', None))
+    )

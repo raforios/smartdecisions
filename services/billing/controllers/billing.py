@@ -34,6 +34,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SettingsResponse
 )
+from schemas.billing_siat import SaleCancellation
 from services import (
     billing,
     billing_purchases,
@@ -261,14 +262,16 @@ async def issue_sale_controller(
 async def cancel_sale_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
-    sale_id: str,
+    cancellation: SaleCancellation,
     request: Request, # pylint: disable=unused-argument
     current_user: str
 ) -> SaleNoteOut:
     '''
-        Cancels a note and returns its units to the batches they left.
+        Cancels a note, at the SIN first when it is an invoice, and returns its
+        units to the batches they left.
     '''
-    return billing_sales.cancel_sale(dynamodb_resource, owner, sale_id, current_user)
+    return billing_sales.cancel_sale(dynamodb_resource, owner, cancellation.sale_id,
+                                     current_user, cancellation.reason_code)
 
 
 @handle_service_errors(SERVICE)

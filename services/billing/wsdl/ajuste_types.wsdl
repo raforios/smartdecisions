@@ -1,0 +1,280 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:ns1="https://siat.impuestos.gob.bo/" name="ServicioFacturacion" targetNamespace="https://siat.impuestos.gob.bo/">
+  <wsdl:types>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="https://siat.impuestos.gob.bo/" elementFormDefault="unqualified" targetNamespace="https://siat.impuestos.gob.bo/" version="1.0">
+
+  <xs:element name="anulacionDocumentoAjuste" type="tns:anulacionDocumentoAjuste"/>
+
+  <xs:element name="anulacionDocumentoAjusteResponse" type="tns:anulacionDocumentoAjusteResponse"/>
+
+  <xs:element name="recepcionDocumentoAjuste" type="tns:recepcionDocumentoAjuste"/>
+
+  <xs:element name="recepcionDocumentoAjusteResponse" type="tns:recepcionDocumentoAjusteResponse"/>
+
+  <xs:element name="reversionAnulacionDocumentoAjuste" type="tns:reversionAnulacionDocumentoAjuste"/>
+
+  <xs:element name="reversionAnulacionDocumentoAjusteResponse" type="tns:reversionAnulacionDocumentoAjusteResponse"/>
+
+  <xs:element name="verificacionEstadoDocumentoAjuste" type="tns:verificacionEstadoDocumentoAjuste"/>
+
+  <xs:element name="verificacionEstadoDocumentoAjusteResponse" type="tns:verificacionEstadoDocumentoAjusteResponse"/>
+
+  <xs:element name="verificarComunicacion" type="tns:verificarComunicacion"/>
+
+  <xs:element name="verificarComunicacionResponse" type="tns:verificarComunicacionResponse"/>
+
+  <xs:complexType name="anulacionDocumentoAjuste">
+    <xs:sequence>
+      <xs:element name="SolicitudServicioAnulacionDocumentoAjuste" type="tns:solicitudAnulacion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType final="extension restriction" name="solicitudAnulacion">
+    <xs:complexContent>
+      <xs:extension base="tns:solicitudRecepcion">
+        <xs:sequence>
+          <xs:element name="codigoMotivo" type="xs:int"/>
+          <xs:element name="cuf" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudRecepcion">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element name="codigoAmbiente" type="xs:int"/>
+          <xs:element name="codigoDocumentoSector" type="xs:int"/>
+          <xs:element name="codigoEmision" type="xs:int"/>
+          <xs:element name="codigoModalidad" type="xs:int"/>
+          <xs:element minOccurs="0" name="codigoPuntoVenta" type="xs:int"/>
+          <xs:element name="codigoSistema" type="xs:string"/>
+          <xs:element name="codigoSucursal" type="xs:int"/>
+          <xs:element name="cufd" type="xs:string"/>
+          <xs:element name="cuis" type="xs:string"/>
+          <xs:element name="nit" type="xs:long"/>
+          <xs:element name="tipoFacturaDocumento" type="xs:int"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType abstract="true" name="modelDto">
+    <xs:complexContent>
+      <xs:extension base="tns:model">
+        <xs:sequence/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType abstract="true" name="model">
+    <xs:sequence/>
+  </xs:complexType>
+
+  <xs:complexType name="anulacionDocumentoAjusteResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaServicioFacturacion" type="tns:respuestaRecepcion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType final="extension restriction" name="respuestaRecepcion">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigoDescripcion" type="xs:string"/>
+          <xs:element minOccurs="0" name="codigoEstado" type="xs:int"/>
+          <xs:element minOccurs="0" name="codigoRecepcion" type="xs:string"/>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeRecepcion"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType final="extension restriction" name="mensajeRecepcion">
+    <xs:complexContent>
+      <xs:extension base="tns:mensajeServicio">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="advertencia" type="xs:boolean"/>
+          <xs:element minOccurs="0" name="numeroArchivo" type="xs:int"/>
+          <xs:element minOccurs="0" name="numeroDetalle" type="xs:int"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="mensajeServicio">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="codigo" type="xs:int"/>
+          <xs:element minOccurs="0" name="descripcion" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="reversionAnulacionDocumentoAjuste">
+    <xs:sequence>
+      <xs:element name="SolicitudServicioReversionAnulacionDocumentoAjuste" type="tns:solicitudReversionAnulacion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType final="extension restriction" name="solicitudReversionAnulacion">
+    <xs:complexContent>
+      <xs:extension base="tns:solicitudRecepcion">
+        <xs:sequence>
+          <xs:element name="cuf" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="reversionAnulacionDocumentoAjusteResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaServicioFacturacion" type="tns:respuestaRecepcion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="verificarComunicacion">
+    <xs:sequence/>
+  </xs:complexType>
+
+  <xs:complexType name="verificarComunicacionResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="return" type="tns:respuestaComunicacion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="respuestaComunicacion">
+    <xs:complexContent>
+      <xs:extension base="tns:modelDto">
+        <xs:sequence>
+          <xs:element maxOccurs="unbounded" minOccurs="0" name="mensajesList" nillable="true" type="tns:mensajeServicio"/>
+          <xs:element minOccurs="0" name="transaccion" type="xs:boolean"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="recepcionDocumentoAjuste">
+    <xs:sequence>
+      <xs:element name="SolicitudServicioRecepcionDocumentoAjuste" type="tns:solicitudRecepcionFactura"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudRecepcionFactura">
+    <xs:complexContent>
+      <xs:extension base="tns:solicitudRecepcion">
+        <xs:sequence>
+          <xs:element name="archivo" type="xs:base64Binary"/>
+          <xs:element name="fechaEnvio" type="xs:string"/>
+          <xs:element name="hashArchivo" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="recepcionDocumentoAjusteResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaServicioFacturacion" type="tns:respuestaRecepcion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="verificacionEstadoDocumentoAjuste">
+    <xs:sequence>
+      <xs:element name="SolicitudServicioVerificacionEstadoDocumentoAjuste" type="tns:solicitudVerificacionEstado"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="solicitudVerificacionEstado">
+    <xs:complexContent>
+      <xs:extension base="tns:solicitudRecepcion">
+        <xs:sequence>
+          <xs:element name="cuf" type="xs:string"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="verificacionEstadoDocumentoAjusteResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="RespuestaServicioFacturacion" type="tns:respuestaRecepcion"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>
+  </wsdl:types>
+  <wsdl:message name="anulacionDocumentoAjuste">
+    <wsdl:part element="ns1:anulacionDocumentoAjuste" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="verificarComunicacion">
+    <wsdl:part element="ns1:verificarComunicacion" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="verificarComunicacionResponse">
+    <wsdl:part element="ns1:verificarComunicacionResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="verificacionEstadoDocumentoAjusteResponse">
+    <wsdl:part element="ns1:verificacionEstadoDocumentoAjusteResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="recepcionDocumentoAjuste">
+    <wsdl:part element="ns1:recepcionDocumentoAjuste" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="verificacionEstadoDocumentoAjuste">
+    <wsdl:part element="ns1:verificacionEstadoDocumentoAjuste" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="reversionAnulacionDocumentoAjuste">
+    <wsdl:part element="ns1:reversionAnulacionDocumentoAjuste" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="anulacionDocumentoAjusteResponse">
+    <wsdl:part element="ns1:anulacionDocumentoAjusteResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="reversionAnulacionDocumentoAjusteResponse">
+    <wsdl:part element="ns1:reversionAnulacionDocumentoAjusteResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="recepcionDocumentoAjusteResponse">
+    <wsdl:part element="ns1:recepcionDocumentoAjusteResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:portType name="ServicioFacturacion">
+    <wsdl:operation name="anulacionDocumentoAjuste">
+      <wsdl:input message="ns1:anulacionDocumentoAjuste" name="anulacionDocumentoAjuste">
+    </wsdl:input>
+      <wsdl:output message="ns1:anulacionDocumentoAjusteResponse" name="anulacionDocumentoAjusteResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="reversionAnulacionDocumentoAjuste">
+      <wsdl:input message="ns1:reversionAnulacionDocumentoAjuste" name="reversionAnulacionDocumentoAjuste">
+    </wsdl:input>
+      <wsdl:output message="ns1:reversionAnulacionDocumentoAjusteResponse" name="reversionAnulacionDocumentoAjusteResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="verificarComunicacion">
+      <wsdl:input message="ns1:verificarComunicacion" name="verificarComunicacion">
+    </wsdl:input>
+      <wsdl:output message="ns1:verificarComunicacionResponse" name="verificarComunicacionResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="recepcionDocumentoAjuste">
+      <wsdl:input message="ns1:recepcionDocumentoAjuste" name="recepcionDocumentoAjuste">
+    </wsdl:input>
+      <wsdl:output message="ns1:recepcionDocumentoAjusteResponse" name="recepcionDocumentoAjusteResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="verificacionEstadoDocumentoAjuste">
+      <wsdl:input message="ns1:verificacionEstadoDocumentoAjuste" name="verificacionEstadoDocumentoAjuste">
+    </wsdl:input>
+      <wsdl:output message="ns1:verificacionEstadoDocumentoAjusteResponse" name="verificacionEstadoDocumentoAjusteResponse">
+    </wsdl:output>
+    </wsdl:operation>
+  </wsdl:portType>
+</wsdl:definitions>

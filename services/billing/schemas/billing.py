@@ -17,6 +17,8 @@ from typing import Final
 
 from pydantic import BaseModel, Field
 
+from schemas.billing_siat import SaleInvoice
+
 
 # The SIAT numbers its catalogues; only the codes BILLING issues today are
 # here, and the rest are added when a trade that needs them is sold to. They
@@ -89,6 +91,11 @@ class BillingError(str, Enum):
     TOO_MANY_LINES = 'TOO_MANY_LINES'
     SIAT_UNREACHABLE = 'SIAT_UNREACHABLE'
     SIAT_WSDL_MISSING = 'SIAT_WSDL_MISSING'
+    SIAT_REFUSED = 'SIAT_REFUSED'
+    SIAT_ISSUER_INCOMPLETE = 'SIAT_ISSUER_INCOMPLETE'
+    CATALOG_NOT_SYNCED = 'CATALOG_NOT_SYNCED'
+    LEGEND_NOT_FOUND = 'LEGEND_NOT_FOUND'
+    CANCELLATION_REASON_REQUIRED = 'CANCELLATION_REASON_REQUIRED'
     CASH_SESSION_ALREADY_OPEN = 'CASH_SESSION_ALREADY_OPEN'
     CASH_SESSION_REQUIRED = 'CASH_SESSION_REQUIRED'
     CASH_SESSION_CLOSED = 'CASH_SESSION_CLOSED'
@@ -446,6 +453,8 @@ class SaleNoteOut(BaseModel):
     cash_session_id: str | None = Field(
         None, description = 'The till the sale went into; empty on notes issued before tills.'
     )
+    # Only when the shop invoices; empty on an internal note.
+    invoice: SaleInvoice | None = None
 
 
 class SaleNotesResponse(BaseModel):
@@ -503,6 +512,12 @@ class BillingSettings(BaseModel):
         description = 'Refuse a sale with no buyer. Required once invoicing '
                       'electronically: the norm names the buyer on every '
                       'invoice, regardless of the amount.'
+    )
+    # Off by default: a shop issues internal notes until it is authorised,
+    # and the day it is, turning this on is the only change.
+    invoicing_enabled: bool = Field(
+        False,
+        description = 'Every sale becomes an invoice sent to the SIN; off, an internal note.'
     )
     # --- Cash tills ------------------------------------------------------------
     # Per shop and not in the service configuration: each shop closes at its
