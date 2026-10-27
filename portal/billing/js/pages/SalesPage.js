@@ -15,8 +15,10 @@ let settings = null;
 function rowHtml(note) {
     const cancelled = note.status === 'CANCELLED';
     return `
-        <tr data-id="${escapeHtml(note.sale_id)}" class="${cancelled ? 'muted' : ''}">
+        <tr data-id="${escapeHtml(note.sale_id)}" class="${cancelled ? 'muted' : ''}"
+            ${note.invoice ? `data-invoice="${note.invoice.number}"` : ''}>
             <td><strong>${escapeHtml(note.number)}</strong>
+                ${note.invoice ? `<span class="muted">Factura ${note.invoice.number}</span>` : ''}
                 ${cancelled ? '<span class="chip chip-danger">anulada</span>' : ''}</td>
             <td>${stamp(note.created_at)}</td>
             <td>${note.buyer?.name ? escapeHtml(note.buyer.name)
@@ -53,6 +55,55 @@ async function load(host) {
         body.innerHTML = `<tr class="empty"><td colspan="8">${
             escapeHtml(errorText(error, 'No se pudieron leer las notas.'))}</td></tr>`;
     }
+}
+
+/**
+ * Opens the panel that cancels an invoice, with the SIN's reasons.
+ *
+ * @param {HTMLElement} host Where the section mounts.
+ * @param {string} saleId Note to cancel.
+ * @param {string} number Its invoice number.
+ */
+async function askCancellationReason(host, saleId, number) {
+    const panel = host.querySelector('#cancel-panel');
+    try {
+        const { entries } = await BillingService.siatCatalog('CANCELLATION_REASONS');
+        host.querySelector('#cancel-reason').innerHTML = entries.map((reason) =>
+            `<option value="${escapeHtml(reason.code)}">${escapeHtml(reason.description)}</option>`
+        ).join('');
+    } catch (error) {
+        notify(errorText(error, 'No se pudieron leer los motivos del SIN.'), 'error');
+        return;
+    }
+    host.querySelector('#cancel-title').textContent = `Anular factura ${number}`;
+    panel.dataset.saleId = saleId;
+    panel.dataset.number = number;
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/**
+ * Wires the cancellation panel once.
+ *
+ * @param {HTMLElement} host Where the section mounts.
+ */
+function wireCancelPanel(host) {
+    const panel = host.querySelector('#cancel-panel');
+    host.querySelector('#cancel-back').addEventListener('click', () => { panel.hidden = true; });
+    host.querySelector('#cancel-confirm').addEventListener('click', async (event) => {
+        const done = setBusy(event.currentTarget, 'Anulando…');
+        try {
+            await BillingService.cancelSale(panel.dataset.saleId,
+                                            Number(host.querySelector('#cancel-reason').value));
+            notify(`Factura ${panel.dataset.number} anulada en el SIN.`, 'success');
+            panel.hidden = true;
+            await load(host);
+        } catch (error) {
+            notify(errorText(error, 'No se pudo anular.'), 'error');
+        } finally {
+            done();
+        }
+    });
 }
 
 /**
@@ -94,11 +145,28 @@ export async function mountSales(host) {
             </div>
         </section>
 
+        <!-- An invoice is cancelled at the SIN too, and the SIN asks why:
+             the reason comes from its own catalogue. -->
+        <section class="card" id="cancel-panel" hidden>
+            <h3 id="cancel-title">Anular factura</h3>
+            <label class="field">
+                <span>Motivo de la anulación</span>
+                <select id="cancel-reason"></select>
+            </label>
+            <p class="muted small">Se anula en Impuestos Nacionales y las unidades
+               vuelven a stock. No se puede deshacer.</p>
+            <div class="form-actions">
+                <button class="btn btn-danger" id="cancel-confirm" type="button">Anular</button>
+                <button class="btn btn-ghost" id="cancel-back" type="button">Volver</button>
+            </div>
+        </section>
+
         <section class="card" id="detail" hidden>
             <h3 id="detail-title">Nota</h3>
             <div class="ticket-preview"><iframe id="preview" title="Vista de la nota"></iframe></div>
         </section>`;
 
+    wireCancelPanel(host);
     await load(host);
     host.querySelector('#reload').addEventListener('click', () => load(host));
 
@@ -119,6 +187,11 @@ export async function mountSales(host) {
 
         if (event.target.classList.contains('print')) {
             printTicket(await BillingService.getSale(saleId), settings, settings.ticket_width);
+            return;
+        }
+
+        if (event.target.classList.contains('cancel') && row.dataset.invoice) {
+            await askCancellationReason(host, saleId, row.dataset.invoice);
             return;
         }
 

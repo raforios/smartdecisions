@@ -30,6 +30,11 @@ export const ERRORS = {
     TOO_MANY_LINES: 'La nota tiene más líneas de las que admite una factura.',
     SIAT_UNREACHABLE: 'Impuestos Nacionales (SIAT) no responde ahora. Intenta en unos minutos.',
     SIAT_WSDL_MISSING: 'Falta la configuración del SIAT en el servicio.',
+    SIAT_REFUSED: 'Impuestos Nacionales rechazó la factura: la venta no se registró.',
+    SIAT_ISSUER_INCOMPLETE: 'Para facturar, completa el NIT y el municipio en Configuración.',
+    CATALOG_NOT_SYNCED: 'Sincroniza los catálogos del SIN en Configuración antes de facturar.',
+    CANCELLATION_REASON_REQUIRED: 'Elige el motivo de la anulación: el SIN lo exige.',
+    LEGEND_NOT_FOUND: 'El SIN no tiene leyendas para la actividad del producto: revisa sus códigos.',
     PURCHASE_NOT_FOUND: 'Esa nota de compra no existe.',
     SETTINGS_NOT_FOUND: 'Todavía no configuraste el comercio.',
     ROLE_NOT_ALLOWED: 'Tu rol no permite esta acción.',
@@ -126,7 +131,13 @@ export const BillingService = {
     listSales: (params) => call(`/sales${query(params)}`),
     getSale: (id) => call(`/sales/${encodeURIComponent(id)}`),
     issueSale: (body) => call('/sales', { method: 'POST', body: JSON.stringify(body) }),
-    cancelSale: (id) => call(`/sales/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
+    cancelSale: (id, reasonCode = null) => call(`/sales/${encodeURIComponent(id)}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason_code: reasonCode })
+    }),
+
+    siatCodes: () => call('/siat/codes'),
+    syncSiatCatalogs: () => call('/siat/catalogs/sync', { method: 'POST' }),
+    siatCatalog: (name) => call(`/siat/catalogs/${encodeURIComponent(name)}`),
 
     openTill: (openingCash) => call('/cash/sessions', {
         method: 'POST', body: JSON.stringify({ opening_cash: openingCash })

@@ -20,8 +20,8 @@ export async function mountSettings(host) {
     try {
         settings = await BillingService.getSettings();
     } catch (error) {
-        // Un comercio recién instalado todavía no tiene parámetros: eso no es
-        // un fallo, es el estado inicial.
+        // A freshly installed shop has no settings yet: that is not a failure,
+        // it is where it starts.
         if (error.code !== 'SETTINGS_NOT_FOUND') throw error;
     }
 
@@ -120,9 +120,40 @@ export async function mountSettings(host) {
                  keep selling until it is authorized. -->
             <section class="card">
                 <h3>Facturación electrónica</h3>
+                <label class="field">
+                    <span>Emitir factura en cada venta</span>
+                    <select id="invoicing_enabled">
+                        <option value="false" ${settings?.invoicing_enabled ? '' : 'selected'}>
+                            No — nota de venta interna
+                        </option>
+                        <option value="true" ${settings?.invoicing_enabled ? 'selected' : ''}>
+                            Sí — cada venta se envía al SIN como factura
+                        </option>
+                    </select>
+                </label>
                 <p class="muted small">
-                    Estos datos forman parte del CUF de cada factura. Déjalos en
-                    cero mientras no tengas la autorización del SIN.
+                    Al activarlo, toda venta pide el documento del comprador y su
+                    tipo, y cada producto necesita sus códigos del SIN. Si el SIN
+                    rechaza la factura o no responde, la venta no se registra.
+                </p>
+                <label class="field">
+                    <span>Municipio</span>
+                    <input type="text" id="municipality" maxlength="25"
+                           placeholder="La Paz" value="${value('municipality')}">
+                </label>
+                <p class="muted small">
+                    Sucursal y punto de venta forman parte del CUF de cada factura:
+                    deben ser los que registraste en el SIN.
+                </p>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="sync-catalogs" type="button">
+                        Sincronizar catálogos del SIN
+                    </button>
+                </div>
+                <p class="muted small">
+                    Trae del SIN las leyendas, los tipos de documento, las unidades y
+                    los productos de tu actividad. Hazlo antes de la primera factura
+                    y cuando el SIN anuncie cambios.
                 </p>
                 <div class="field-row">
                     <label class="field">
@@ -167,6 +198,18 @@ export async function mountSettings(host) {
             </section>
         </div>`;
 
+    host.querySelector('#sync-catalogs').addEventListener('click', async (event) => {
+        const done = setBusy(event.currentTarget, 'Sincronizando…');
+        try {
+            const { catalogs } = await BillingService.syncSiatCatalogs();
+            notify(`${catalogs.length} catálogos del SIN sincronizados.`, 'success');
+        } catch (error) {
+            notify(errorText(error, 'No se pudieron sincronizar los catálogos.'), 'error');
+        } finally {
+            done();
+        }
+    });
+
     host.querySelector('#save').addEventListener('click', async (event) => {
         const tradeName = host.querySelector('#trade_name').value.trim();
         if (!tradeName) {
@@ -176,8 +219,8 @@ export async function mountSettings(host) {
         const done = setBusy(event.currentTarget, 'Guardando…');
         const text = (id) => host.querySelector(`#${id}`).value.trim() || null;
         try {
-            // The record is saved whole: what this form does not show
-            // (the invoice municipality, for example) is kept as it is.
+            // The record is saved whole: what this form does not show is kept
+            // as it is.
             const { next_sale_number: _sale, next_purchase_number: _purchase, ...kept } =
                 settings || {};
             await BillingService.saveSettings({
@@ -194,6 +237,8 @@ export async function mountSettings(host) {
                 branch: Number(host.querySelector('#branch').value) || 0,
                 point_of_sale: Number(host.querySelector('#point_of_sale').value) || 0,
                 buyer_required: host.querySelector('#buyer_required').value === 'true',
+                invoicing_enabled: host.querySelector('#invoicing_enabled').value === 'true',
+                municipality: text('municipality'),
                 cash_alert_time: host.querySelector('#cash_alert_time').value || null
             });
             document.getElementById('shopName').textContent = tradeName;

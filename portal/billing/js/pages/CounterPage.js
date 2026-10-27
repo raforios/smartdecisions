@@ -126,7 +126,8 @@ async function charge(host) {
         const sale = await BillingService.issueSale({
             buyer: {
                 name: host.querySelector('#buyer-name').value.trim() || null,
-                document: host.querySelector('#buyer-document').value.trim() || null
+                document: host.querySelector('#buyer-document').value.trim() || null,
+                document_type: Number(host.querySelector('#buyer-document-type').value) || null
             },
             payment_method: host.querySelector('#payment-method').value,
             card_number: host.querySelector('#card-number').value.trim() || null,
@@ -138,7 +139,9 @@ async function charge(host) {
             }))
         });
 
-        notify(`Nota ${sale.number} emitida por Bs ${money(sale.total)}.`, 'success');
+        notify(sale.invoice
+            ? `Factura ${sale.invoice.number} emitida por Bs ${money(sale.total)}.`
+            : `Nota ${sale.number} emitida por Bs ${money(sale.total)}.`, 'success');
         printTicket(sale, settings, settings.ticket_width);
 
         basket = new Map();
@@ -173,6 +176,27 @@ function renderTillBar(host, till) {
         bar.innerHTML = `<p class="muted small">Caja abierta desde ${
             escapeHtml(till.opened_at.slice(11, 16))} · efectivo esperado Bs ${
             money(till.expected_cash)}</p>`;
+    }
+}
+
+/**
+ * What changes at the counter when the shop invoices: the document type,
+ * taken from the SIN's catalogue, and the line saying what the paper is.
+ */
+async function renderInvoicing(host) {
+    const invoicing = Boolean(settings?.invoicing_enabled);
+    host.querySelector('#document-kind').textContent = invoicing
+        ? 'Cada venta se envía al SIN como factura.'
+        : 'Nota de venta interna: no es factura fiscal.';
+    host.querySelector('#document-type-field').hidden = !invoicing;
+    if (!invoicing) return;
+    try {
+        const { entries } = await BillingService.siatCatalog('IDENTITY_DOCUMENT_TYPES');
+        host.querySelector('#buyer-document-type').innerHTML = entries.map((type) =>
+            `<option value="${escapeHtml(type.code)}">${escapeHtml(type.description)}</option>`
+        ).join('');
+    } catch (error) {
+        notify(errorText(error, 'No se pudieron leer los tipos de documento.'), 'error');
     }
 }
 
@@ -246,6 +270,12 @@ export async function mountCounter(host) {
                     <span id="document-label">NIT / CI</span>
                     <input type="text" id="buyer-document" inputmode="numeric">
                 </label>
+                <!-- The invoice carries the type of the buyer's document, from
+                     the SIN's catalogue; an internal note does not need it. -->
+                <label class="field" id="document-type-field" hidden>
+                    <span>Tipo de documento</span>
+                    <select id="buyer-document-type"></select>
+                </label>
                 <label class="field">
                     <span>Nota</span>
                     <input type="text" id="sale-notes" maxlength="300">
@@ -254,8 +284,7 @@ export async function mountCounter(host) {
                 <button class="btn btn-primary btn-block" id="charge" disabled>
                     Cobrar e imprimir
                 </button>
-                <p class="muted small">Documento interno del comercio. La factura
-                   fiscal llega con la fase del SIAT.</p>
+                <p class="muted small" id="document-kind"></p>
             </aside>
         </div>`;
 
@@ -274,6 +303,7 @@ export async function mountCounter(host) {
     }
 
     renderTillBar(host, till);
+    await renderInvoicing(host);
 
     const search = host.querySelector('#search');
     search.addEventListener('input', (event) => renderResults(host, event.target.value));
@@ -340,7 +370,7 @@ export async function mountCounter(host) {
 
     // With nominativity on, the document stops being optional, and the label
     // has to say so before the cashier charges.
-    if (settings?.buyer_required) {
+    if (settings?.buyer_required || settings?.invoicing_enabled) {
         host.querySelector('#document-label').textContent = 'NIT / CI (obligatorio)';
         host.querySelector('#buyer-document').required = true;
     }
