@@ -129,6 +129,15 @@ class SaleInvoice(BaseModel):
     )
 
 
+class InvoiceQrOut(BaseModel):
+    '''
+        The QR the invoice prints, drawn from the link it stored.
+    '''
+    sale_id: str
+    # Inline SVG with no fixed size: the ticket's box sizes it.
+    svg: str
+
+
 class SaleCancelIn(BaseModel):
     '''
         Why a note is cancelled. Only an invoiced note needs it: the SIN

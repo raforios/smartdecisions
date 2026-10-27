@@ -34,7 +34,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SettingsResponse
 )
-from schemas.billing_siat import SaleCancellation
+from schemas.billing_siat import InvoiceQrOut, SaleCancellation
 from services import (
     billing,
     billing_purchases,
@@ -304,3 +304,17 @@ async def get_sale_controller(
         One note, as it prints.
     '''
     return billing_sales.get_sale(dynamodb_resource, owner, sale_id)
+
+
+@handle_service_errors(SERVICE)
+async def sale_qr_controller(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    sale_id: str,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> InvoiceQrOut:
+    '''
+        The QR the invoice of a sale prints.
+    '''
+    return billing_sales.sale_qr(dynamodb_resource, owner, sale_id)

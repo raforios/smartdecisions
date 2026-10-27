@@ -484,3 +484,43 @@ def test_the_cancel_controller_returns_the_note(
     assert isinstance(cancelled, SaleNoteOut)
     assert cancelled.status == SaleStatus.CANCELLED
     assert not sent
+
+
+def test_the_qr_carries_the_link_the_invoice_stored(
+    dynamodb,
+    sent
+):
+    '''
+        Decoded, the QR is exactly the SIN's link of that invoice.
+    '''
+    _invoicing_shop(dynamodb)
+    note = _sell(dynamodb)
+
+    qr = billing_sales.sale_qr(dynamodb, OWNER, note.sale_id)
+
+    assert qr.svg.startswith('<svg viewBox=')
+    assert qr.svg == billing_invoicing.qr_svg(note.invoice.qr_url)
+    assert qr.svg != billing_invoicing.qr_svg(note.invoice.qr_url.replace('numero=1', 'numero=2'))
+    assert len(sent) == 1
+
+
+def test_an_internal_note_has_no_qr(
+    dynamodb,
+    sent
+):
+    '''
+        Only an invoice is checked at the SIN.
+    '''
+    _invoicing_shop(dynamodb)
+    settings = billing.get_settings(dynamodb, OWNER)
+    billing.save_settings(dynamodb, OWNER, BillingSettings(**{
+        **settings.model_dump(include = set(BillingSettings.model_fields)),
+        'invoicing_enabled': False
+    }))
+    note = _sell(dynamodb, buyer = Buyer())
+
+    with pytest.raises(InvalidInputError) as refused:
+        billing_sales.sale_qr(dynamodb, OWNER, note.sale_id)
+
+    assert refused.value.detail == BillingError.SALE_NOT_INVOICED.value
+    assert not sent

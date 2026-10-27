@@ -29,6 +29,7 @@ from controllers.billing import (
     lots_controller,
     receive_purchase_controller,
     reprice_lot_controller,
+    sale_qr_controller,
     save_settings_controller,
     update_product_controller
 )
@@ -53,7 +54,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SettingsResponse
 )
-from schemas.billing_siat import SaleCancelIn, SaleCancellation
+from schemas.billing_siat import InvoiceQrOut, SaleCancelIn, SaleCancellation
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner, get_current_user, require_roles
@@ -392,6 +393,21 @@ async def get_sale_endpoint(
 ) -> SaleNoteOut:
     ''' Endpoint for one sale note, as it prints. '''
     return await get_sale_controller(
+        dynamodb_resource = dynamodb_resource, owner = owner, sale_id = sale_id,
+        request = request, current_user = current_user
+    )
+
+
+@router.get('/sales/{sale_id}/qr', response_model = InvoiceQrOut)
+async def sale_qr_endpoint(
+    request: Request,
+    sale_id: str = Path(..., min_length = 1, max_length = 120),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    owner: str = Depends(get_current_owner),
+    current_user: str = Depends(get_current_user)
+) -> InvoiceQrOut:
+    ''' Endpoint for the QR the invoice of a sale prints. '''
+    return await sale_qr_controller(
         dynamodb_resource = dynamodb_resource, owner = owner, sale_id = sale_id,
         request = request, current_user = current_user
     )

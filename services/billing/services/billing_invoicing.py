@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 from dataclasses import dataclass
 from typing import Any, Final
 
+import segno
 from boto3.resources.base import ServiceResource
 
 from schemas.billing import (
@@ -58,6 +59,11 @@ EXCHANGE_RATE_BOLIVIANO: Final[float] = 1.0
 INVOICE_COUNTER_PREFIX = 'counter#invoice#'
 
 MONEY_DECIMALS = 2
+
+# Medium error correction: the roll is thermal paper, and a smudged corner
+# must still scan. The SIN asks for at least 3 x 3 cm; the ticket sizes it.
+QR_ERROR_CORRECTION = 'm'
+QR_BORDER_MODULES = 2
 
 
 @dataclass(frozen = True)
@@ -215,6 +221,24 @@ def cancel_at_sin(
     return invoice.model_copy(update = {'state': InvoiceState.CANCELLED,
                                         'cancellation_reason': reason_code,
                                         'siat_state': receipt.state})
+
+
+def qr_svg(url: str) -> str:
+    '''
+        The QR of a link, as inline SVG.
+
+        Drawn on demand from the stored link rather than stored itself: the
+        link is the data, the picture is how one ticket shows it.
+
+        Args:
+            url (str): The link the QR carries.
+
+        Returns:
+            str: An `<svg>` element with no fixed size, so it fills its box.
+    '''
+    return segno.make(url, error = QR_ERROR_CORRECTION).svg_inline(
+        omitsize = True, border = QR_BORDER_MODULES
+    )
 
 
 def _qr_url(

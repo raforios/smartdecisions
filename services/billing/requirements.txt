@@ -8,3 +8,4 @@ boto3
 requests
 lxml
 zeep
+segno

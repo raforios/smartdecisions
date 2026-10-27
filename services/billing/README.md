@@ -68,6 +68,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `POST` | `/v1/billing/sales` | Sells over the **counter**. |
 | `GET` | `/v1/billing/sales` | The **sale notes** of a period. |
 | `GET` | `/v1/billing/sales/{sale_id}` | One **sale note**, as it prints. |
+| `GET` | `/v1/billing/sales/{sale_id}/qr` | The invoice's **QR** as inline SVG (drawn with `segno` from the stored `qr_url`); `SALE_NOT_INVOICED` for an internal note. |
 | `POST` | `/v1/billing/sales/{sale_id}/cancel` | Voids a **note** and returns its units to their batches; an invoice is cancelled at the SIN first, with `reason_code`. |
 
 ### Till (`/v1/billing/cash`)
@@ -124,7 +125,7 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 
 **Cancelling an invoice.** `POST /v1/billing/sales/{sale_id}/cancel` takes an optional body `{"reason_code": <CANCELLATION_REASONS code>}`. An invoiced note requires it and is cancelled with `anulacionFactura` first, with the codes in force; if the SIN refuses, the note stays issued and nothing moves. An internal note needs no body.
 
-Error codes: `SIAT_REFUSED`, `SIAT_ISSUER_INCOMPLETE`, `CATALOG_NOT_SYNCED`, `LEGEND_NOT_FOUND`, `CANCELLATION_REASON_REQUIRED`, `PRODUCT_NOT_HOMOLOGATED`, `BUYER_REQUIRED`, `INSUFFICIENT_STOCK`, `PRODUCT_NOT_FOUND`, `DUPLICATE_LINE`, `DISCOUNTS_DISABLED`, `SALE_ALREADY_CANCELLED`, `SETTINGS_NOT_FOUND`, among others.
+Error codes: `SIAT_REFUSED`, `SIAT_ISSUER_INCOMPLETE`, `CATALOG_NOT_SYNCED`, `LEGEND_NOT_FOUND`, `CANCELLATION_REASON_REQUIRED`, `SALE_NOT_INVOICED`, `PRODUCT_NOT_HOMOLOGATED`, `BUYER_REQUIRED`, `INSUFFICIENT_STOCK`, `PRODUCT_NOT_FOUND`, `DUPLICATE_LINE`, `DISCOUNTS_DISABLED`, `SALE_ALREADY_CANCELLED`, `SETTINGS_NOT_FOUND`, among others.
 
 -----
 

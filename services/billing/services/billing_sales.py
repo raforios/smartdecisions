@@ -35,9 +35,9 @@ from schemas.billing import (
     SaleStatus,
     SettingsResponse
 )
-from schemas.billing_siat import SaleInvoice
+from schemas.billing_siat import InvoiceQrOut, SaleInvoice
 from services.billing_cash import require_sale_session
-from services.billing_invoicing import cancel_at_sin, issue_invoice, prepare_invoice
+from services.billing_invoicing import cancel_at_sin, issue_invoice, prepare_invoice, qr_svg
 from services.exceptions import (
     InvalidInputError,
     RegisterNotFoundError,
@@ -291,6 +291,32 @@ def get_sale(
     if stored is None:
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     return _sale_out(stored)
+
+
+def sale_qr(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    sale_id: str
+) -> InvoiceQrOut:
+    '''
+        The QR the invoice of a sale prints.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The pharmacy.
+            sale_id (str): Note whose invoice is printed.
+
+        Returns:
+            InvoiceQrOut: The QR as inline SVG.
+
+        Raises:
+            RegisterNotFoundError: No such note in this pharmacy.
+            InvalidInputError: SALE_NOT_INVOICED, an internal note.
+    '''
+    sale = get_sale(dynamodb_resource, owner, sale_id)
+    if sale.invoice is None:
+        raise InvalidInputError(detail = BillingError.SALE_NOT_INVOICED.value)
+    return InvoiceQrOut(sale_id = sale_id, svg = qr_svg(sale.invoice.qr_url))
 
 
 def list_sales(
