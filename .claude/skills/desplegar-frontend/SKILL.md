@@ -40,13 +40,15 @@ aws cloudfront create-invalidation --distribution-id E3P1IBW1V8N4P9 \
 ## Portal de SmartBilling — `portal/billing`
 
 Bucket `bearsoft-smartbilling-portal`, distribución `EWVWU4A03ZZ4Z`, perfil
-`deploy_ml`. Módulos ES sin estampado de versión: la invalidación es la que
-evita el código viejo.
+`deploy_ml`. Módulos ES sin estampado de versión: la invalidación limpia
+CloudFront, y `--cache-control no-cache` hace que el navegador revalide cada
+archivo (304 si no cambió). Sin esa cabecera, el 27-oct una caja siguió
+corriendo el `SettingsPage.js` anterior después de desplegar.
 
 ```bash
 cd portal/billing
 aws s3 sync . s3://bearsoft-smartbilling-portal/ --exclude README.md --exclude ".*" \
-    --profile deploy_ml --no-progress
+    --cache-control no-cache --profile deploy_ml --no-progress
 aws cloudfront create-invalidation --distribution-id EWVWU4A03ZZ4Z \
     --paths '/*' --profile deploy_ml --query 'Invalidation.Status' --output text
 ```
