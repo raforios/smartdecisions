@@ -425,6 +425,9 @@ _SPANISH_MARKERS = re.compile(
 # A comment may quote the Spanish rule it implements; the quote is evidence,
 # not prose. Only unquoted Spanish counts.
 _QUOTED = re.compile(r'"[^"]*"|\'[^\']*\'|`[^`]*`')
+# The SIN — Bolivia's tax office — is an acronym, not the preposition "sin";
+# matched without case, it made every invoicing docstring read as Spanish.
+_ACRONYMS = re.compile(r'\bSIN\b')
 # How many Spanish markers a line needs before it is called Spanish. One is a
 # borrowed noun ("la paz", "el alto"); three is a sentence.
 _SPANISH_THRESHOLD = 3
@@ -445,7 +448,7 @@ def _is_spanish(
         Returns:
             bool: True when it is Spanish.
     '''
-    stripped = _QUOTED.sub(' ', text)
+    stripped = _ACRONYMS.sub(' ', _QUOTED.sub(' ', text))
     return len(_SPANISH_MARKERS.findall(stripped)) >= threshold
 
 

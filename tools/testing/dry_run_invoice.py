@@ -36,6 +36,7 @@ from schemas.billing import (  # noqa: E402
     CufInput,
     InvoiceContext,
     InvoiceLine,
+    SIN_PAYMENT_CODES,
     PaymentMethod,
     SaleLineOut,
     SaleNoteOut,
@@ -196,7 +197,8 @@ def main(argument_list: list | None = None) -> int:
         point_of_sale = PHARMACY['point_of_sale'], invoice_number = 1,
         cuf = cuf, cufd = FAKE_CUFD,
         issued_at = issued_at.replace(microsecond = 0).isoformat(),
-        legend = LEGEND, currency_code = CURRENCY_BOB, exchange_rate = RATE_BOB
+        legend = LEGEND, currency_code = CURRENCY_BOB, exchange_rate = RATE_BOB,
+        payment_method_code = SIN_PAYMENT_CODES[sale.payment_method]
     )
     xml = build_invoice_xml(sale, context, lines)
     _report(3, 'XML armado contra el XSD del SIN', f'{len(xml)} bytes')
