@@ -41,6 +41,8 @@ export const ERRORS = {
     PAYMENT_COMBINATION_UNKNOWN: 'El SIN no tiene código para esa combinación de formas de pago.',
     CANCELLATION_DEADLINE_PASSED: 'Ya pasó el plazo para anular esta factura (día 9 del mes siguiente).',
     SALE_NOT_INVOICED: 'Esa venta es una nota interna: no tiene factura ni QR.',
+    BUYER_WITHOUT_EMAIL: 'El cliente no dio un correo: no hay a dónde enviar la factura.',
+    MAIL_NOT_SENT: 'El correo no salió. La factura es válida igual; vuelve a enviarla en un rato.',
     CANCELLATION_REASON_REQUIRED: 'Elige el motivo de la anulación: el SIN lo exige.',
     LEGEND_NOT_FOUND: 'El SIN no tiene leyendas para la actividad del producto: revisa sus códigos.',
     PURCHASE_NOT_FOUND: 'Esa nota de compra no existe.',
@@ -97,7 +99,7 @@ async function call(path, options = {}) {
 
     let payload = null;
     if ((response.headers.get('content-type') || '').includes('application/json')) {
-        try { payload = await response.json(); } catch (_) { /* cuerpo vacío */ }
+        try { payload = await response.json(); } catch (_) { /* empty body */ }
     }
     if (!response.ok) {
         const detail = payload?.detail;
@@ -143,6 +145,8 @@ export const BillingService = {
     listSales: (params) => call(`/sales${query(params)}`),
     getSale: (id) => call(`/sales/${encodeURIComponent(id)}`),
     saleQr: (id) => call(`/sales/${encodeURIComponent(id)}/qr`),
+    resendInvoice: (id) => call(`/sales/${encodeURIComponent(id)}/invoice/mail`,
+                                { method: 'POST' }),
     issueSale: (body) => call('/sales', { method: 'POST', body: JSON.stringify(body) }),
     cancelSale: (id, reasonCode = null) => call(`/sales/${encodeURIComponent(id)}/cancel`, {
         method: 'POST', body: JSON.stringify({ reason_code: reasonCode })

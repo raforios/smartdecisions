@@ -5,7 +5,7 @@
  * voided, and on voiding the units go back exactly to the batches they came
  * from. That is why the screen shows the status and not a form.
  */
-import { BillingService, errorText } from '../services/BillingService.js';
+import { BillingService, PAYMENT_LABELS, errorText } from '../services/BillingService.js';
 import { hasRole } from '../auth.js';
 import { invoiceQr, printTicket, ticketHtml } from './TicketPrinter.js';
 import { escapeHtml, money, notify, setBusy, stamp, todayIso } from '../ui.js';
@@ -19,6 +19,7 @@ function rowHtml(note) {
             ${note.invoice ? `data-invoice="${note.invoice.number}"` : ''}>
             <td><strong>${escapeHtml(note.number)}</strong>
                 ${note.invoice ? `<span class="muted">Factura ${note.invoice.number}</span>` : ''}
+                ${note.invoice?.emailed_at ? '<span class="chip">enviada</span>' : ''}
                 ${cancelled ? '<span class="chip chip-danger">anulada</span>' : ''}</td>
             <td>${stamp(note.created_at)}</td>
             <td>${note.buyer?.name ? escapeHtml(note.buyer.name)
@@ -26,13 +27,15 @@ function rowHtml(note) {
                 ${note.buyer?.document
                     ? `<span class="muted">${escapeHtml(note.buyer.document)}</span>` : ''}</td>
             <td>${note.payments?.length > 1 ? 'Combinado'
-                                            : escapeHtml(note.payment_method)}</td>
+                : escapeHtml(PAYMENT_LABELS[note.payment_method] || note.payment_method)}</td>
             <td class="num">${note.lines.length}</td>
             <td class="num">${money(note.total)}</td>
             <td class="num">${cancelled ? '—' : money(note.margin)}</td>
             <td>
                 <button class="btn btn-ghost btn-small view">Ver</button>
                 <button class="btn btn-ghost btn-small print">Imprimir</button>
+                ${note.invoice && note.buyer?.email
+                    ? '<button class="btn btn-ghost btn-small mail">Enviar</button>' : ''}
                 ${!cancelled && hasRole('ADMIN', 'MANAGER')
                     ? '<button class="btn btn-ghost btn-small cancel">Anular</button>' : ''}
             </td>
@@ -189,6 +192,22 @@ export async function mountSales(host) {
 
         if (event.target.classList.contains('print')) {
             printTicket(await BillingService.getSale(saleId), settings, settings.ticket_width);
+            return;
+        }
+
+        if (event.target.classList.contains('mail')) {
+            // The invoice goes to the address the buyer gave at the counter;
+            // sending again is how a failed or lost mail is fixed.
+            const done = setBusy(event.target, '…');
+            try {
+                const note = await BillingService.resendInvoice(saleId);
+                notify(`Factura ${note.invoice.number} enviada a ${note.buyer.email}.`, 'success');
+                await load(host);
+            } catch (error) {
+                notify(errorText(error, 'No se pudo enviar la factura.'), 'error');
+            } finally {
+                done();
+            }
             return;
         }
 
