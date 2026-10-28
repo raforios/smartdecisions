@@ -24,10 +24,13 @@ import uvicorn
 
 from routes.billing import router as billing_router
 from routes.billing_cash import router as billing_cash_router
+from routes.billing_customers import router as billing_customers_router
 from routes.billing_siat import router as billing_siat_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
+from services import billing_contingency
 from services.api_exceptions import setup_exception_handlers
+from services.db_connection import dynamodb_resource
 from services.security import require_roles
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
@@ -277,6 +280,7 @@ app.add_middleware(
 
 app.include_router(billing_router)
 app.include_router(billing_cash_router)
+app.include_router(billing_customers_router)
 app.include_router(billing_siat_router)
 
 
@@ -294,4 +298,33 @@ def run_local() -> None:
 if __name__ == '__main__':
     run_local()
 
-handler = Mangum(app)
+# The Lambda answers two kinds of caller. API Gateway sends HTTP events, which
+# Mangum turns into ASGI; EventBridge sends the contingency run, which has no
+# request at all and would make Mangum fail looking for one. The dispatch below
+# is the only place that has to know the difference — the same one QUOTES uses.
+_asgi_handler = Mangum(app)
+
+# What the scheduled event carries, from `ci/api/create_schedules.sh`.
+_CONTINGENCY_TASK = 'siat_contingency'
+
+
+def handler(
+    event: dict[str, Any],
+    context: Any
+) -> Any:
+    '''
+        Lambda entry point.
+
+        Args:
+            event (dict[str, Any]): Raw Lambda event.
+            context (Any): Lambda context, passed through to Mangum.
+
+        Returns:
+            Any: The HTTP response, or what the contingency run touched.
+    '''
+    if isinstance(event, dict) and event.get('task') == _CONTINGENCY_TASK:
+        done = billing_contingency.run_scheduled(dynamodb_resource)
+        message = f'Scheduled SIAT contingency run touched {len(done)} row(s).'
+        logger.info(message)
+        return {'touched': done}
+    return _asgi_handler(event, context)

@@ -18,6 +18,7 @@
 '''
 import base64
 import gzip
+from datetime import datetime
 
 from schemas.billing import CufInput
 
@@ -175,3 +176,17 @@ def mask_card(number: str) -> str:
     if len(digits) < 8:
         raise ValueError('A card number cannot have fewer than 8 digits.')
     return f'{digits[:4]}{"0" * (len(digits) - 8)}{digits[-4:]}'
+
+
+def siat_stamp(moment: datetime) -> str:
+    '''
+        A moment as every SIAT date field wants it: "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        local time, no zone.
+
+        Args:
+            moment (datetime): The moment.
+
+        Returns:
+            str: The stamp, with milliseconds.
+    '''
+    return moment.strftime('%Y-%m-%dT%H:%M:%S.') + f'{moment.microsecond // 1000:03d}'

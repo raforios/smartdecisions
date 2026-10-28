@@ -10,6 +10,7 @@
     units it took to exactly the batches they came from — that is why each line
     stores its allocations instead of just a quantity.
 '''
+from dataclasses import dataclass
 from typing import Any
 
 from boto3.resources.base import ServiceResource
@@ -25,7 +26,7 @@ from models.billing import (
 from schemas.billing import (
     Buyer,
     BillingError,
-    CARD_METHODS,
+    PaymentMethod,
     SaleAllocation,
     SaleLineIn,
     SaleLineOut,
@@ -35,15 +36,26 @@ from schemas.billing import (
     SaleStatus,
     SettingsResponse
 )
-from schemas.billing_siat import InvoiceQrOut, SaleInvoice
+from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice
 from services.billing_cash import require_sale_session
-from services.billing_invoicing import cancel_at_sin, issue_invoice, prepare_invoice, qr_svg
+from services.billing_customers import remember_customer
+from services.billing_payments import paid_by_card, primary_method, resolve_payments
+from services.billing_invoicing import (
+    InvoiceDraft,
+    InvoicePlan,
+    cancel_at_sin,
+    cancellation_deadline,
+    issue_invoice,
+    prepare_invoice,
+    qr_svg
+)
 from services.exceptions import (
     InvalidInputError,
     RegisterNotFoundError,
     ServiceUnavailableError
 )
 from services.logger_config import custom_logger as logger
+from services.utils import get_current_time_gmt
 from services.billing import (
     SortBounds,
     date_window,
@@ -62,6 +74,22 @@ from services.billing_stock import allocate, draw_down, give_back
 # Money is rounded where it is charged, never where it is added: totals come
 # from already-rounded line amounts, so the printed note adds up.
 MONEY_DECIMALS = 2
+
+
+@dataclass(frozen = True)
+class PricedSale:
+    '''
+        A sale priced against its batches, before anything moves: the lines,
+        the units each SKU takes from each batch, and the catalogue — which
+        the invoice reads for the SIN codes, so it is read once.
+    '''
+    lines: list[SaleLineOut]
+    consumption: dict[str, list[SaleAllocation]]
+    products: dict[str, dict[str, Any]]
+
+# The CI and the NIT in the SIN's catalogue of identity documents: the two the
+# norm asks to be numeric.
+NUMERIC_DOCUMENT_TYPES = (1, 5)
 
 
 def issue_sale(
@@ -97,45 +125,42 @@ def issue_sale(
     # touched a shelf.
     session_id = require_sale_session(dynamodb_resource, owner, created_by)
     _require_buyer(note, settings)
-    card = _masked_card(note)
     _reject_repeated_lines(note.lines)
 
-    products = products_by_sku(dynamodb_resource, owner)
-    lines, consumption = _price_lines(dynamodb_resource, owner, note, products,
-                                      settings.discounts_enabled)
+    priced = _price_lines(dynamodb_resource, owner, note, settings.discounts_enabled)
+    money = _totals(priced.lines)
+    payments = resolve_payments(note, money['total'])
+    card = _masked_card(note, [payment.method for payment in payments])
     # Also before any stock moves: a sale that cannot be invoiced is refused
     # with the shelf untouched.
-    plan = (prepare_invoice(dynamodb_resource, owner, settings, lines, products)
+    plan = (prepare_invoice(dynamodb_resource, owner, settings,
+                            InvoiceDraft(priced.lines, priced.products, payments))
             if settings.invoicing_enabled else None)
-    draw_down(dynamodb_resource, owner, consumption)
+    draw_down(dynamodb_resource, owner, priced.consumption)
 
     stamp = now_iso()
-    money = _totals(lines)
     item = SaleItem(
         owner = owner,
         sale_id = document_id(stamp),
         number = next_number(dynamodb_resource, owner,
                              SALE_COUNTER_KEY, settings.sale_series),
         status = SaleStatus.ISSUED.value,
-        payment_method = note.payment_method.value,
-        lines = [line.model_dump(mode = 'json') for line in lines],
+        payment_method = primary_method(payments).value,
+        payments = [payment.model_dump(mode = 'json') for payment in payments],
+        lines = [line.model_dump(mode = 'json') for line in priced.lines],
         created_by = created_by, created_at = stamp,
         buyer = note.buyer.model_dump(mode = 'json'), notes = note.notes,
         card_number = card, cash_session_id = session_id,
         **money
     )
     if plan is not None:
-        try:
-            item.invoice = issue_invoice(dynamodb_resource, owner, plan,
-                                         _sale_out(item.__dict__)).model_dump(mode = 'json')
-        except (InvalidInputError, ServiceUnavailableError):
-            # Refused or unreachable, the sale is not issued: its units go back.
-            give_back(dynamodb_resource, owner, consumption)
-            raise
+        _attach_invoice(dynamodb_resource, plan, item, priced.consumption)
     write_item(dynamodb_resource, SALES_TABLE, item.__dict__)
+    if plan is not None:
+        remember_customer(dynamodb_resource, owner, note.buyer, created_by)
 
     message = (f'Sale {item.number} issued by {created_by} for {owner}: '
-               f'{len(lines)} line(s), total {money["total"]}.')
+               f'{len(priced.lines)} line(s), total {money["total"]}.')
     logger.info(message)
     return _sale_out(item.__dict__)
 
@@ -144,9 +169,8 @@ def _price_lines(
     dynamodb_resource: ServiceResource,
     owner: str,
     note: SaleNoteIn,
-    products: dict[str, dict[str, Any]],
     discounts_enabled: bool
-) -> tuple[list[SaleLineOut], dict[str, list[SaleAllocation]]]:
+) -> PricedSale:
     '''
         Every line priced against the batches it will actually take.
 
@@ -158,17 +182,17 @@ def _price_lines(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The pharmacy.
             note (SaleNoteIn): What is being sold.
-            products (dict[str, dict[str, Any]]): The catalogue by SKU.
             discounts_enabled (bool): Whether this pharmacy allows discounts.
 
         Returns:
-            tuple[list[SaleLineOut], dict[str, list[SaleAllocation]]]: The
-                priced lines and the units each SKU takes from each batch.
+            PricedSale: The priced lines, the units each SKU takes from each
+                batch, and the catalogue they were priced against.
 
         Raises:
             RegisterNotFoundError: A SKU is not in the catalogue.
             InvalidInputError: The SKU is inactive or there is not enough stock.
     '''
+    products = products_by_sku(dynamodb_resource, owner)
     lots = _available_lots_by_sku(dynamodb_resource, owner)
 
     lines: list[SaleLineOut] = []
@@ -184,7 +208,7 @@ def _price_lines(
         consumption[line.sku] = allocations
         lines.append(_line_out(line, product['description'],
                                allocations, discounts_enabled))
-    return lines, consumption
+    return PricedSale(lines = lines, consumption = consumption, products = products)
 
 
 def _totals(lines: list[SaleLineOut]) -> dict[str, float]:
@@ -246,11 +270,8 @@ def cancel_sale(
     if stored['status'] == SaleStatus.CANCELLED.value:
         raise InvalidInputError(detail = BillingError.SALE_ALREADY_CANCELLED.value)
     if stored.get('invoice'):
-        if reason_code is None:
-            raise InvalidInputError(detail = BillingError.CANCELLATION_REASON_REQUIRED.value)
-        stored['invoice'] = cancel_at_sin(dynamodb_resource, owner,
-                                          SaleInvoice(**stored['invoice']),
-                                          reason_code).model_dump(mode = 'json')
+        stored['invoice'] = _cancel_invoice(dynamodb_resource, owner,
+                                            SaleInvoice(**stored['invoice']), reason_code)
 
     consumption = {
         line['sku']: [SaleAllocation(**allocation) for allocation in line['allocations']]
@@ -266,6 +287,76 @@ def cancel_sale(
     message = f'Sale {stored["number"]} cancelled by {cancelled_by} for {owner}.'
     logger.info(message)
     return _sale_out(stored)
+
+
+def _attach_invoice(
+    dynamodb_resource: ServiceResource,
+    plan: InvoicePlan,
+    item: SaleItem,
+    consumption: dict[str, list[SaleAllocation]]
+) -> None:
+    '''
+        Issues the invoice of a sale about to be stored, and keeps it with it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            plan (InvoicePlan): What `prepare_invoice` gathered.
+            item (SaleItem): The sale, still unwritten.
+            consumption (dict[str, list[SaleAllocation]]): The units it took,
+                to give back if the SIN refuses the invoice.
+
+        Raises:
+            InvalidInputError: The SIN refused the invoice.
+    '''
+    try:
+        issued = issue_invoice(dynamodb_resource, item.owner, plan, _sale_out(item.__dict__))
+    except (InvalidInputError, ServiceUnavailableError):
+        # Refused, the sale is not issued: its units go back.
+        give_back(dynamodb_resource, item.owner, consumption)
+        raise
+    item.invoice = issued.invoice.model_dump(mode = 'json')
+    item.invoice_xml = issued.xml
+
+
+def _cancel_invoice(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    invoice: SaleInvoice,
+    reason_code: int | None
+) -> dict[str, Any]:
+    '''
+        Cancels the invoice of a note, where the SIN holds it.
+
+        One issued offline is not at the SIN yet, and there is nothing to
+        cancel there until its package is validated. One the SIN observed was
+        never valid there, so it is cancelled here only.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The pharmacy.
+            invoice (SaleInvoice): The invoice of the note.
+            reason_code (int | None): Code of CANCELLATION_REASONS.
+
+        Returns:
+            dict[str, Any]: The invoice, cancelled, as the note stores it.
+
+        Raises:
+            InvalidInputError: No reason, an invoice still waiting for its
+                package, past the ninth of the following month, or the SIN
+                refused to cancel it.
+    '''
+    if reason_code is None:
+        raise InvalidInputError(detail = BillingError.CANCELLATION_REASON_REQUIRED.value)
+    if invoice.state == InvoiceState.OFFLINE:
+        raise InvalidInputError(detail = BillingError.INVOICE_NOT_YET_AT_SIN.value)
+    if get_current_time_gmt().date() > cancellation_deadline(invoice.issued_at):
+        raise InvalidInputError(detail = BillingError.CANCELLATION_DEADLINE_PASSED.value)
+    if invoice.state == InvoiceState.OBSERVED:
+        cancelled = invoice.model_copy(update = {'state': InvoiceState.CANCELLED,
+                                                 'cancellation_reason': reason_code})
+    else:
+        cancelled = cancel_at_sin(dynamodb_resource, owner, invoice, reason_code)
+    return cancelled.model_dump(mode = 'json')
 
 
 def get_sale(
@@ -386,9 +477,16 @@ def _require_buyer(
         raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
     if settings.invoicing_enabled and note.buyer.document_type is None:
         raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
+    # The norm: a CI or a NIT the SIN receives has to be a number.
+    if settings.invoicing_enabled and note.buyer.document_type in NUMERIC_DOCUMENT_TYPES \
+            and not note.buyer.document.strip().isdigit():
+        raise InvalidInputError(detail = BillingError.BUYER_DOCUMENT_NOT_NUMERIC.value)
 
 
-def _masked_card(note: SaleNoteIn) -> str | None:
+def _masked_card(
+    note: SaleNoteIn,
+    methods: list[PaymentMethod]
+) -> str | None:
     """
         The card number as it may be stored: masked, or nothing at all.
 
@@ -403,6 +501,7 @@ def _masked_card(note: SaleNoteIn) -> str | None:
 
         Args:
             note (SaleNoteIn): The sale as it arrived.
+            methods (list[PaymentMethod]): The methods it was paid with.
 
         Returns:
             str | None: The masked number, or None when there is none.
@@ -412,7 +511,7 @@ def _masked_card(note: SaleNoteIn) -> str | None:
                 number too short to be one.
     """
     raw = (note.card_number or '').strip()
-    is_card = note.payment_method in CARD_METHODS
+    is_card = paid_by_card(methods)
     if not raw:
         return None
     if not is_card:
@@ -535,8 +634,15 @@ def _sale_out(stored: dict[str, Any]) -> SaleNoteOut:
         Returns:
             SaleNoteOut: The note.
     '''
-    fields = {key: value for key, value in stored.items() if key != OWNER_KEY}
+    # The XML stays in the table: it is the legal document a package and an
+    # e-mail carry, not part of what a note answers.
+    fields = {key: value for key, value in stored.items()
+              if key not in (OWNER_KEY, 'invoice_xml')}
     fields['buyer'] = Buyer(**(fields.get('buyer') or {}))
+    # Notes issued before payments were combined paid their total one way.
+    fields['payments'] = fields.get('payments') or [
+        {'method': stored['payment_method'], 'amount': stored['total']}
+    ]
     fields['lines'] = [SaleLineOut(**line) for line in fields['lines']]
     return SaleNoteOut(
         **fields,

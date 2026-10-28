@@ -41,11 +41,11 @@ from schemas.billing_siat import (
     SiatCatalog,
     SiatCodesOut
 )
-from services import billing, billing_invoicing, billing_sales, utils
+from services import billing, billing_customers, billing_invoicing, billing_sales, utils
 from services import billing_siat_client as siat_client
 from services.billing_invoice_xml import validate_against_schema
 from services.billing_siat import build_cuf, check_digit, cuf_chain
-from services.exceptions import InvalidInputError, ServiceUnavailableError
+from services.exceptions import InvalidInputError
 from tests.test_billing import ( # pylint: disable=unused-import
     CASHIER,
     LATER,
@@ -60,6 +60,12 @@ CODES = SiatCodesOut(branch = 0, point_of_sale = 0, cuis = 'CUIS1',
                      cuis_valid_until = '2099-01-01T00:00:00-04:00', cufd = 'CUFD1',
                      control_code = 'A19E23EF34124CD', cufd_valid_until = '2099-01-01',
                      address = 'Calle 1')
+# A slice of the SIN's PAYMENT_METHODS, spelled as the pilot sent it on 27-oct.
+PAYMENT_CATALOGUE = [CatalogEntry(code = code, description = description) for code, description in (
+    ('1', 'EFECTIVO'), ('2', 'TARJETA'), ('5', 'OTROS'), ('7', 'TRANSFERENCIA BANCARIA'),
+    ('10', 'EFECTIVO-TARJETA'), ('13', 'EFECTIVO – TRANSFERENCIA BANCARIA'),
+    ('27', 'GIFT-CARD'), ('29', 'EFECTIVO - TARJETA - VALE'), ('35', 'EFECTIVO – GIFT CARD')
+)]
 BUYER = Buyer(name = 'Ana Quispe', document = '4567890', document_type = 1)
 
 
@@ -115,6 +121,11 @@ def _invoicing_shop(
             CatalogEntry(code = '', description = 'Leyenda de otra actividad.',
                          activity_code = '477300')
         ]).model_dump(mode = 'json')
+    })
+    billing.write_item(dynamodb, SETTINGS_TABLE, {
+        OWNER_KEY: OWNER, SETTING_SORT_KEY: f'siat#catalog#{SiatCatalog.PAYMENT_METHODS.name}',
+        **CatalogOut(catalog = SiatCatalog.PAYMENT_METHODS, synced_at = '2026-10-27',
+                     entries = PAYMENT_CATALOGUE).model_dump(mode = 'json')
     })
 
 
@@ -257,28 +268,6 @@ def test_a_refused_invoice_gives_the_units_back_and_issues_nothing(
     assert billing_sales.list_sales(dynamodb, OWNER).total == 0
 
 
-def test_an_unreachable_sin_gives_the_units_back(
-    dynamodb,
-    monkeypatch
-):
-    '''
-        Until contingency exists, no invoice means no sale.
-    '''
-    _invoicing_shop(dynamodb)
-    monkeypatch.setattr(billing_invoicing, 'current_codes', lambda *_: CODES)
-
-    def _down(*_):
-        raise ServiceUnavailableError(detail = BillingError.SIAT_UNREACHABLE.value)
-
-    monkeypatch.setattr(siat_client, 'send_invoice', _down)
-
-    with pytest.raises(ServiceUnavailableError):
-        _sell(dynamodb)
-
-    assert _stock(dynamodb) == 10
-    assert billing_sales.list_sales(dynamodb, OWNER).total == 0
-
-
 def test_no_legend_for_the_activity_is_refused(
     dynamodb,
     sent
@@ -333,7 +322,7 @@ def test_the_archive_travels_as_bytes_with_its_sha256(monkeypatch):
     ):
         calls.append(request)
 
-    monkeypatch.setattr(siat_client, '_invoke', _stub)
+    monkeypatch.setattr(siat_client, 'invoke', _stub)
     archive = gzip.compress(b'<factura/>')
 
     siat_client.send_invoice(siat_client.Emitter(nit = '1', branch = 0),
@@ -524,3 +513,64 @@ def test_an_internal_note_has_no_qr(
 
     assert refused.value.detail == BillingError.SALE_NOT_INVOICED.value
     assert not sent
+
+
+def test_an_invoice_remembers_its_buyer_and_an_internal_note_does_not(
+    dynamodb,
+    sent
+):
+    '''
+        The customers are those the shop invoiced.
+    '''
+    _invoicing_shop(dynamodb)
+    _sell(dynamodb, buyer = Buyer(name = 'Ana Quispe', document = '4567890',
+                                  document_type = 1, email = 'ana@correo.bo'))
+    settings = billing.get_settings(dynamodb, OWNER)
+    billing.save_settings(dynamodb, OWNER, BillingSettings(**{
+        **settings.model_dump(include = set(BillingSettings.model_fields)),
+        'invoicing_enabled': False
+    }))
+    _sell(dynamodb, buyer = Buyer(document = '9999999'))
+
+    customers = billing_customers.list_customers(dynamodb, OWNER).items
+    assert [(c.document, c.email) for c in customers] == [('4567890', 'ana@correo.bo')]
+    assert len(sent) == 1
+
+
+@pytest.mark.parametrize(('issued_at', 'last_day'), [
+    ('2026-10-27T09:36:00.761', '2026-11-09'),
+    ('2026-12-31T23:59:59.999', '2027-01-09'),
+    ('2027-01-01T00:00:00.000', '2027-02-09')
+])
+def test_an_invoice_can_be_cancelled_until_the_ninth_of_the_next_month(
+    issued_at,
+    last_day
+):
+    '''
+        The norm's deadline, across a year's end.
+    '''
+    assert billing_invoicing.cancellation_deadline(issued_at).isoformat() == last_day
+
+
+def test_past_the_deadline_the_sin_is_not_even_asked(
+    dynamodb,
+    sent,
+    cancelled_at_sin,
+    monkeypatch
+):
+    '''
+        After the ninth of the following month the invoice stays valid and
+        the note issued: a return then needs a credit note.
+    '''
+    _invoicing_shop(dynamodb)
+    note = _sell(dynamodb)
+    monkeypatch.setattr(billing_sales, 'cancellation_deadline',
+                        lambda _: datetime(2020, 1, 9).date())
+
+    with pytest.raises(InvalidInputError) as refused:
+        billing_sales.cancel_sale(dynamodb, OWNER, note.sale_id, CASHIER, 1)
+
+    assert refused.value.detail == BillingError.CANCELLATION_DEADLINE_PASSED.value
+    assert not cancelled_at_sin
+    assert billing_sales.get_sale(dynamodb, OWNER, note.sale_id).status == SaleStatus.ISSUED
+    assert len(sent) == 1

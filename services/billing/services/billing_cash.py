@@ -282,17 +282,36 @@ def method_totals(sales: list[Any]) -> list[MethodTotal]:
             sales (list[Any]): Issued sales.
 
         Returns:
-            list[MethodTotal]: One row per method used, in the enum's order.
+            list[MethodTotal]: One row per method used, in the enum's order;
+                `count` is how many sales used it.
     '''
     totals: dict[str, list[float]] = {}
     for sale in sales:
-        method = sale['payment_method'] if isinstance(sale, dict) \
-            else sale.payment_method.value
-        total = sale['total'] if isinstance(sale, dict) else sale.total
-        totals.setdefault(method, []).append(total)
+        for method, amount in _parts(sale):
+            totals.setdefault(method, []).append(amount)
     return [MethodTotal(payment_method = method, count = len(totals[method.value]),
                         total = _money(sum(totals[method.value])))
             for method in PaymentMethod if method.value in totals]
+
+
+def _parts(sale: Any) -> list[tuple[str, float]]:
+    '''
+        What each method paid of one sale. A combined payment counts in every
+        method it used, each with its own amount; a note issued before
+        payments were combined paid its total one way.
+
+        Args:
+            sale (Any): A stored item or a `SaleNoteOut`.
+
+        Returns:
+            list[tuple[str, float]]: (method, amount) pairs.
+    '''
+    if isinstance(sale, dict):
+        parts = sale.get('payments') or [{'method': sale['payment_method'],
+                                          'amount': sale['total']}]
+        return [(part['method'], part['amount']) for part in parts]
+    return [(part.method.value, part.amount) for part in sale.payments] or \
+        [(sale.payment_method.value, sale.total)]
 
 
 def _summary(

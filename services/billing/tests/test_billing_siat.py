@@ -192,7 +192,7 @@ def _stub_invoke(
         calls.append((service, operation, request))
         return answer
 
-    monkeypatch.setattr(siat_client, '_invoke', _stub)
+    monkeypatch.setattr(siat_client, 'invoke', _stub)
     return calls
 
 

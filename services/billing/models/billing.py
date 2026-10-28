@@ -1,7 +1,7 @@
 '''
     Billing: the DynamoDB items.
 
-    Seven tables, all partitioned by owner — the shop. The owner is part of every
+    Eight tables, all partitioned by owner — the shop. The owner is part of every
     key and never a filter applied afterwards: a shop that could read
     another's shelf would be reading its margins.
 
@@ -14,6 +14,7 @@
     | billing_settings     | owner     | setting_key           |
     | billing_cash_sessions| owner     | session_id (time-sorted) |
     | billing_cash_movements| owner    | movement_key = session_id#movement_id |
+    | billing_customers    | owner     | document              |
 
     `lot_key` puts every lot of one SKU together, so the batches to sell next
     come back with a single `begins_with` query instead of a scan. The sale and
@@ -33,7 +34,8 @@ ENV_VARS = load_and_validate_env_vars(
         'DYNAMODB_TABLE_NAME_BILLING_PURCHASES': str,
         'DYNAMODB_TABLE_NAME_BILLING_SETTINGS': str,
         'DYNAMODB_TABLE_NAME_BILLING_CASH_SESSIONS': str,
-        'DYNAMODB_TABLE_NAME_BILLING_CASH_MOVEMENTS': str
+        'DYNAMODB_TABLE_NAME_BILLING_CASH_MOVEMENTS': str,
+        'DYNAMODB_TABLE_NAME_BILLING_CUSTOMERS': str
     }
 )
 
@@ -44,6 +46,7 @@ PURCHASES_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_PURCHASES']
 SETTINGS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_SETTINGS']
 CASH_SESSIONS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_CASH_SESSIONS']
 CASH_MOVEMENTS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_CASH_MOVEMENTS']
+CUSTOMERS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_BILLING_CUSTOMERS']
 
 OWNER_KEY = 'owner'
 PRODUCT_SORT_KEY = 'sku'
@@ -53,6 +56,7 @@ PURCHASE_SORT_KEY = 'purchase_id'
 SETTING_SORT_KEY = 'setting_key'
 CASH_SESSION_SORT_KEY = 'session_id'
 CASH_MOVEMENT_SORT_KEY = 'movement_key'
+CUSTOMER_SORT_KEY = 'document'
 
 # The single settings row of a shop, and the two counters that number its
 # documents. Counters live beside the settings because they are the same kind
@@ -165,6 +169,10 @@ class SaleItem:
     # The invoice the sale became, when the shop invoices. Empty on an
     # internal note.
     invoice: dict[str, Any] | None = None
+    # The invoice's XML, as it went to the SIN or waits for its package.
+    invoice_xml: str | None = None
+    # The parts of a combined payment; one part for the whole total otherwise.
+    payments: list[dict[str, Any]] = field(default_factory = list)
 
 
 @dataclass

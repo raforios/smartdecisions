@@ -97,6 +97,13 @@ class BillingError(str, Enum):
     LEGEND_NOT_FOUND = 'LEGEND_NOT_FOUND'
     CANCELLATION_REASON_REQUIRED = 'CANCELLATION_REASON_REQUIRED'
     SALE_NOT_INVOICED = 'SALE_NOT_INVOICED'
+    CUSTOMER_NOT_FOUND = 'CUSTOMER_NOT_FOUND'
+    INVOICE_NOT_YET_AT_SIN = 'INVOICE_NOT_YET_AT_SIN'
+    CANCELLATION_DEADLINE_PASSED = 'CANCELLATION_DEADLINE_PASSED'
+    PAYMENTS_DO_NOT_ADD_UP = 'PAYMENTS_DO_NOT_ADD_UP'
+    PAYMENT_REPEATED = 'PAYMENT_REPEATED'
+    PAYMENT_COMBINATION_UNKNOWN = 'PAYMENT_COMBINATION_UNKNOWN'
+    BUYER_DOCUMENT_NOT_NUMERIC = 'BUYER_DOCUMENT_NOT_NUMERIC'
     CASH_SESSION_ALREADY_OPEN = 'CASH_SESSION_ALREADY_OPEN'
     CASH_SESSION_REQUIRED = 'CASH_SESSION_REQUIRED'
     CASH_SESSION_CLOSED = 'CASH_SESSION_CLOSED'
@@ -125,6 +132,14 @@ class PaymentMethod(str, Enum):
 CARD_METHODS: Final[frozenset] = frozenset({
     PaymentMethod.TARJETA, PaymentMethod.TARJETA_DEBITO, PaymentMethod.TARJETA_CREDITO
 })
+
+
+class Payment(BaseModel):
+    '''
+        One part of what the buyer paid: a sale may combine methods.
+    '''
+    method: PaymentMethod
+    amount: float = Field(..., gt = 0)
 
 
 # What each of them is called in the SIN's `codigoMetodoPago` parameter. Only
@@ -366,6 +381,10 @@ class Buyer(BaseModel):
                       'cada documento lo dice el catálogo que se sincroniza '
                       'con la autorización, y por eso no se nombra aquí.'
     )
+    # Where the invoice is sent. Checked by shape only: whether the mailbox
+    # exists is the mail service's answer, not ours.
+    email: str | None = Field(None, max_length = 254,
+                              pattern = r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
 class SaleLineIn(BaseModel):
@@ -417,6 +436,9 @@ class SaleNoteIn(BaseModel):
     '''
     buyer: Buyer = Field(default_factory = Buyer)
     payment_method: PaymentMethod = PaymentMethod.EFECTIVO
+    # Empty, the whole total goes by `payment_method`. Given, the parts add up
+    # to the total and `payment_method` is ignored.
+    payments: list[Payment] | None = Field(None, min_length = 1, max_length = 3)
     notes: str | None = Field(None, max_length = 300)
     lines: list[SaleLineIn] = Field(..., min_length = 1)
     card_number: str | None = Field(
@@ -436,7 +458,8 @@ class SaleNoteOut(BaseModel):
     number: str
     status: SaleStatus
     buyer: Buyer
-    payment_method: PaymentMethod
+    payment_method: PaymentMethod = Field(..., description = 'The one that paid the most.')
+    payments: list[Payment] = []
     notes: str | None = None
     card_number: str | None = Field(
         None, description = 'Masked, when the sale was paid by card.'
@@ -686,6 +709,11 @@ class InvoiceContext(BaseModel):
         None, max_length = 50,
         description = 'Only on a contingency invoice; empty online.'
     )
+    # 0 by default; 1 asks the SIN not to validate a NIT, which the norm
+    # requires on every NIT invoiced offline.
+    exception_code: int = Field(0, ge = 0, le = 1)
+    payment_method_code: int = Field(..., ge = 1,
+                                     description = 'codigoMetodoPago, combination included.')
 
 
 class InvoiceLine(BaseModel):

@@ -16,6 +16,7 @@ from moto import mock_aws
 from models.billing import (
     CASH_MOVEMENTS_TABLE,
     CASH_SESSIONS_TABLE,
+    CUSTOMERS_TABLE,
     LOTS_TABLE,
     PRODUCTS_TABLE,
     PURCHASES_TABLE,
@@ -61,7 +62,7 @@ LATER = TODAY + timedelta(days = 400)
 
 def _create_tables(resource):
     '''
-        The seven tables, with the same keys `create_dynamodb_tables.sh` gives
+        The eight tables, with the same keys `create_dynamodb_tables.sh` gives
         them in AWS.
 
         Args:
@@ -71,7 +72,8 @@ def _create_tables(resource):
                            (SALES_TABLE, 'sale_id'), (PURCHASES_TABLE, 'purchase_id'),
                            (SETTINGS_TABLE, 'setting_key'),
                            (CASH_SESSIONS_TABLE, 'session_id'),
-                           (CASH_MOVEMENTS_TABLE, 'movement_key')):
+                           (CASH_MOVEMENTS_TABLE, 'movement_key'),
+                           (CUSTOMERS_TABLE, 'document')):
         resource.create_table(
             TableName = name,
             KeySchema = [{'AttributeName': 'owner', 'KeyType': 'HASH'},
@@ -85,7 +87,7 @@ def _create_tables(resource):
 @pytest.fixture(name = 'dynamodb')
 def _dynamodb():
     '''
-        A mocked DynamoDB with the seven tables, one pharmacy set up and the
+        A mocked DynamoDB with the eight tables, one pharmacy set up and the
         cashier's till open: there is no selling without one.
 
         Returns:

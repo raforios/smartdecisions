@@ -201,6 +201,7 @@ def _context(**overrides):
         'legend': 'Ley N 453: Tienes derecho a recibir informacion.',
         'currency_code': 1,
         'exchange_rate': 1.0,
+        'payment_method_code': 1,
         **overrides
     })
 
@@ -322,7 +323,7 @@ def test_amounts_carry_exactly_two_decimals(dynamodb):
 #
 # What is testable without the authorization: which parameters each call sends
 # and how the answer maps to a DTO. The calls themselves cannot be proven right
-# from here, so `_invoke` is the seam that gets stubbed.
+# from here, so `invoke` is the seam that gets stubbed.
 
 class _Answer:
     '''A zeep response: attributes read off the wire.''' # pylint: disable=too-few-public-methods
@@ -361,7 +362,7 @@ def _captured(
         calls.append((service, operation, request))
         return answer
 
-    monkeypatch.setattr(siat_client, '_invoke', _stub)
+    monkeypatch.setattr(siat_client, 'invoke', _stub)
     return calls
 
 

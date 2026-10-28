@@ -84,6 +84,14 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `POST` | `/v1/billing/cash/sessions/{session_id}/close` | Closes a **till** against the cash counted. |
 | `GET` | `/v1/billing/cash/alerts` | The **tills** to close now. |
 
+### Customers (`/v1/billing/customers`)
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/v1/billing/customers` | Every **customer** the shop invoiced. |
+| `GET` | `/v1/billing/customers/{document}` | One **customer** by NIT or CI; the counter fills a known buyer with it. |
+| `PATCH` | `/v1/billing/customers/{document}` | Corrects a **customer**'s name, document type or e-mail (managers). |
+
 ### SIAT (`/v1/billing/siat`)
 
 | Method | Endpoint | Description |
@@ -91,6 +99,9 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/billing/siat/codes` | The **CUIS** and **CUFD** in force for the shop's branch and point of sale; asks the SIN only for the ones missing or expired. |
 | `POST` | `/v1/billing/siat/catalogs/sync` | Brings the 17 **SIN catalogues** and stores them (managers). |
 | `GET` | `/v1/billing/siat/catalogs/{catalog}` | One stored **catalogue** (`LEGENDS`, `PAYMENT_METHODS`, `UNITS_OF_MEASURE`...). |
+| `GET` | `/v1/billing/siat/contingency` | Whether the shop's point of sale is **issuing offline**, since when and how many invoices wait. |
+| `POST` | `/v1/billing/siat/contingency` | Enters **contingency** by hand with one of the events 1 to 4 (managers). |
+| `POST` | `/v1/billing/siat/contingency/recover` | Tries to **leave contingency** now: event, packages and validation (managers). |
 
 ### Health
 
@@ -114,6 +125,7 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 | `billing_purchases` | `owner` | `purchase_id` |
 | `billing_cash_sessions` | `owner` | `session_id` (starts with the opening time) |
 | `billing_cash_movements` | `owner` | `movement_key` = `session_id#movement` |
+| `billing_customers` | `owner` | `document` |
 | `billing_settings` | `owner` | `setting_key` |
 | `billing_parameters` | `code` | — |
 
@@ -123,9 +135,17 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 
 **Invoicing a sale.** With `invoicing_enabled` on in the settings, `POST /v1/billing/sales` turns every sale into an invoice sent with `recepcionFactura`. Before any stock moves it requires the buyer's document and document type, the shop's `municipality`, the three SIN codes on every product and a legend of the product's activity in the synced `LEGENDS`. Then it draws the stock down, takes the invoice number (`counter#invoice#<branch>#<point_of_sale>`), builds the CUF with the day's control code and the XML, and sends it. If the SIN refuses it or cannot be reached, the units go back and the sale is not issued. The accepted invoice is stored on the sale as `invoice` (`number`, `cuf`, `cufd`, `issued_at`, `legend`, `address`, `branch`, `point_of_sale`, `state`, `reception_code`, `siat_state`, `qr_url`, `cancellation_reason`); `qr_url` points at `SIAT_QR_URL`. Off, the sale is an internal note as before.
 
+**Customers.** Every accepted invoice remembers its buyer in `billing_customers` with one conditional update: a new document is created, a known one only gets the fields it had empty (`if_not_exists`), so an invoice never undoes a correction made with `PATCH`. The buyer carries an optional `email`, where the invoice will be sent.
+
+**Contingency.** An invoice that cannot reach the SIN (no answer or a timeout) is issued **offline** instead: emission type 2 in the CUF, the offline legend on the ticket, `codigoExcepcion` 1 for a NIT, and the point of sale enters contingency (`siat#contingency#<branch>#<point_of_sale>` in `billing_settings`) with the CUFD in force; the next sales go offline without trying the SIN. With the CUFD due and the SIN away, the last CUFD serves up to 72 hours. Every sale keeps its invoice XML in `invoice_xml`. The EventBridge rule `billing-siat-contingency` (`ci/api/create_schedules.sh`, every 5 minutes, `{"task": "siat_contingency"}`) checks each contingency once `BILLING_OFFLINE_RETRY_MINUTES` passed: when the SIN answers it asks for a new CUFD, registers the significant event, cancels any cut online sending the SIN did register, sends the offline invoices in packages of up to 500 (a TAR of the XMLs, GZIPped) and validates them; a package still pending (901) is kept as `siat#package#<reception_code>` and asked about on the next run. Invoices end `ACCEPTED`, or `OBSERVED` with the SIN's messages when the package comes back 904.
+
+**Combined payments.** A sale may send `payments` (up to three `{method, amount}`, each method once, adding up to the total) instead of a single `payment_method`; the note keeps both, `payment_method` being the part that paid the most. The invoice's `codigoMetodoPago` is the SIN's entry for that combination, found by its parts' names in the synced PAYMENT_METHODS catalogue (`services/billing_payments.py`); a combination the SIN does not have is refused before stock moves. A card number travels when any part is a card. Tills and reports count each part in its own method.
+
+**Cancellation deadline.** An invoice can be cancelled until the 9th of the month after its issue; later, `CANCELLATION_DEADLINE_PASSED` and the SIN is not asked.
+
 **Cancelling an invoice.** `POST /v1/billing/sales/{sale_id}/cancel` takes an optional body `{"reason_code": <CANCELLATION_REASONS code>}`. An invoiced note requires it and is cancelled with `anulacionFactura` first, with the codes in force; if the SIN refuses, the note stays issued and nothing moves. An internal note needs no body.
 
-Error codes: `SIAT_REFUSED`, `SIAT_ISSUER_INCOMPLETE`, `CATALOG_NOT_SYNCED`, `LEGEND_NOT_FOUND`, `CANCELLATION_REASON_REQUIRED`, `SALE_NOT_INVOICED`, `PRODUCT_NOT_HOMOLOGATED`, `BUYER_REQUIRED`, `INSUFFICIENT_STOCK`, `PRODUCT_NOT_FOUND`, `DUPLICATE_LINE`, `DISCOUNTS_DISABLED`, `SALE_ALREADY_CANCELLED`, `SETTINGS_NOT_FOUND`, among others.
+Error codes: `SIAT_REFUSED`, `SIAT_ISSUER_INCOMPLETE`, `CATALOG_NOT_SYNCED`, `LEGEND_NOT_FOUND`, `CANCELLATION_REASON_REQUIRED`, `CANCELLATION_DEADLINE_PASSED`, `PAYMENTS_DO_NOT_ADD_UP`, `PAYMENT_REPEATED`, `PAYMENT_COMBINATION_UNKNOWN`, `SALE_NOT_INVOICED`, `CUSTOMER_NOT_FOUND`, `INVOICE_NOT_YET_AT_SIN`, `BUYER_DOCUMENT_NOT_NUMERIC`, `PRODUCT_NOT_HOMOLOGATED`, `BUYER_REQUIRED`, `INSUFFICIENT_STOCK`, `PRODUCT_NOT_FOUND`, `DUPLICATE_LINE`, `DISCOUNTS_DISABLED`, `SALE_ALREADY_CANCELLED`, `SETTINGS_NOT_FOUND`, among others.
 
 -----
 
@@ -152,6 +172,7 @@ billing/
 │   ├── __init__.py
 │   ├── billing.py
 │   ├── billing_cash.py
+│   ├── billing_customers.py
 │   └── billing_siat.py
 ├── models/
 │   ├── __init__.py
@@ -160,11 +181,13 @@ billing/
 │   ├── __init__.py
 │   ├── billing.py
 │   ├── billing_cash.py
+│   ├── billing_customers.py
 │   └── billing_siat.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── billing.py
 │   ├── billing_cash.py
+│   ├── billing_customers.py
 │   ├── billing_siat.py
 │   └── health.py
 ├── services/
@@ -172,14 +195,18 @@ billing/
 │   ├── api_exceptions.py
 │   ├── billing.py
 │   ├── billing_cash.py
+│   ├── billing_contingency.py
+│   ├── billing_customers.py
 │   ├── billing_invoice_xml.py
 │   ├── billing_invoicing.py
+│   ├── billing_payments.py
 │   ├── billing_purchases.py
 │   ├── billing_reports.py
 │   ├── billing_sales.py
 │   ├── billing_siat.py
 │   ├── billing_siat_client.py
 │   ├── billing_siat_codes.py
+│   ├── billing_siat_packages.py
 │   ├── billing_stock.py
 │   ├── crud.py
 │   ├── db_connection.py

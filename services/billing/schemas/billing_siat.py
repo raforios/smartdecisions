@@ -100,12 +100,29 @@ class InvoiceState(str, Enum):
     '''
         Where an invoice stands with the tax office.
 
-        Only the accepted state exists today: a sale whose invoice the SIN
-        refuses or cannot receive is not issued at all. The offline states
-        arrive with contingency.
+        OFFLINE is an invoice issued while the SIN could not be reached: it is
+        valid on paper and waits for its package. OBSERVED is one the SIN
+        returned with errors in that package.
     '''
     ACCEPTED = 'ACCEPTED'
     CANCELLED = 'CANCELLED'
+    OFFLINE = 'OFFLINE'
+    OBSERVED = 'OBSERVED'
+
+
+class SignificantEvent(int, Enum):
+    '''
+        The SIN's significant events, by the code of its catalogue. The first
+        four are issued offline by this system; the last three need the
+        manual contingency invoices (CAFC).
+    '''
+    INTERNET_CUT = 1
+    SIN_UNREACHABLE = 2
+    ZONE_WITHOUT_INTERNET = 3
+    SALE_WITHOUT_INTERNET = 4
+    VIRUS_OR_SOFTWARE_FAILURE = 5
+    INFRASTRUCTURE_OR_HARDWARE_FAILURE = 6
+    POWER_CUT = 7
 
 
 class SaleInvoice(BaseModel):
@@ -127,6 +144,10 @@ class SaleInvoice(BaseModel):
     cancellation_reason: int | None = Field(
         None, description = 'Code of CANCELLATION_REASONS, once cancelled at the SIN.'
     )
+    emission_type: int = Field(1, description = '1 online, 2 offline: it changes the legend.')
+    package_reception_code: str | None = None
+    observations: list[str] = Field(default_factory = list,
+                                    description = 'What the SIN observed, verbatim.')
 
 
 class InvoiceQrOut(BaseModel):
@@ -152,3 +173,62 @@ class SaleCancellation(SaleCancelIn):
         Which note is cancelled, and why.
     '''
     sale_id: str = Field(..., min_length = 1, max_length = 120)
+
+
+class PackageReceipt(BaseModel):
+    '''
+        What the SIN answered about a package of offline invoices.
+
+        `observed` maps the position of a file in the package, from zero, to
+        the SIN's messages about it, verbatim.
+    '''
+    accepted: bool
+    reception_code: str | None = None
+    state: str | None = None
+    messages: list[str] = Field(default_factory = list)
+    observed: dict[int, list[str]] = Field(default_factory = dict)
+
+
+class ContingencyIn(BaseModel):
+    '''
+        A contingency entered by hand: the SIN cannot be reached and the shop
+        knows it before the system does — a point of sale with no internet.
+    '''
+    event: SignificantEvent = Field(..., le = SignificantEvent.SALE_WITHOUT_INTERNET,
+                                    description = 'Only the events issued offline (1 to 4).')
+
+
+class ContingencyOut(BaseModel):
+    '''
+        A point of sale issuing offline.
+    '''
+    branch: int
+    point_of_sale: int
+    event: SignificantEvent
+    started_at: str
+    cufd: str = Field(..., description = 'The CUFD the offline invoices carry.')
+    last_check_at: str | None = None
+    pending_invoices: int = 0
+
+
+class ContingencyStatus(BaseModel):
+    '''
+        Whether the shop's point of sale is offline, and since when.
+    '''
+    offline: bool
+    contingency: ContingencyOut | None = None
+
+
+class RecoveryOut(BaseModel):
+    '''
+        What one attempt to leave contingency did.
+    '''
+    recovered: bool = Field(..., description = 'False while the SIN still does not answer.')
+    event_reception_code: int | None = None
+    packages: list[PackageReceipt] = Field(default_factory = list)
+    invoices_sent: int = 0
+    invoices_observed: int = 0
+    uncertain_cancelled: int = Field(
+        0, description = 'Online sendings cut without answer that the SIN had '
+                         'registered, cancelled so the offline twin is the only one.'
+    )

@@ -16,7 +16,7 @@
     travel inside the Lambda package and are versioned with the code: the
     contract cannot change under us without a commit.
 
-    **Every call goes through one seam.** `_invoke` is the only place that
+    **Every call goes through one seam.** `invoke` is the only place that
     talks to `zeep`, which is what makes the parameter assembly testable
     without a WSDL and what stops nine operations from each inventing their
     own error handling.
@@ -153,10 +153,10 @@ def _client(service: str) -> Client:
     return _clients[service]
 
 
-def _invoke(
+def invoke(
     service: str,
     operation: str,
-    request: dict[str, Any]
+    request: dict[str, Any] | None
 ) -> Any:
     '''
         The single seam that talks to the SIAT.
@@ -168,7 +168,9 @@ def _invoke(
         Args:
             service (str): Service name, as `SERVICE_*` spells it.
             operation (str): Operation name, as the WSDL spells it.
-            request (dict[str, Any]): The request object's fields.
+            request (dict[str, Any] | None): The request object's fields;
+                None for an operation that takes none, like
+                `verificarComunicacion`.
 
         Returns:
             Any: The response as zeep returns it.
@@ -177,7 +179,8 @@ def _invoke(
             ServiceUnavailableError: The SIAT is unreachable or refused.
     '''
     try:
-        answer = getattr(_client(service).service, operation)(request)
+        call = getattr(_client(service).service, operation)
+        answer = call() if request is None else call(request)
     except (ZeepError, requests.exceptions.RequestException) as error:
         error_msg = f'SIAT operation {operation} failed: {error}'
         logger.error(error_msg)
@@ -190,7 +193,7 @@ def _invoke(
     return answer
 
 
-def _base_request(emitter: Emitter) -> dict[str, Any]:
+def base_request(emitter: Emitter) -> dict[str, Any]:
     '''
         The fields every SIAT request carries.
 
@@ -266,7 +269,7 @@ def request_cuis(emitter: Emitter) -> CuisResponse:
         Raises:
             ServiceUnavailableError: The SIAT is unreachable or refused.
     '''
-    answer = _accepted('cuis', _invoke(SERVICE_CODES, 'cuis', _base_request(emitter)),
+    answer = _accepted('cuis', invoke(SERVICE_CODES, 'cuis', base_request(emitter)),
                        tolerated = (CUIS_IN_FORCE,))
     return CuisResponse(
         cuis = str(answer.codigo),
@@ -294,8 +297,8 @@ def request_cufd(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable or refused.
     '''
-    answer = _accepted('cufd', _invoke(SERVICE_CODES, 'cufd', {
-        **_base_request(emitter), 'cuis': cuis
+    answer = _accepted('cufd', invoke(SERVICE_CODES, 'cufd', {
+        **base_request(emitter), 'cuis': cuis
     }))
     return CufdResponse(
         cufd = str(answer.codigo),
@@ -327,8 +330,8 @@ def verify_document(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable or refused.
     '''
-    answer = _invoke(SERVICE_CODES, 'verificarNit', {
-        **_base_request(emitter), 'cuis': cuis, 'nitParaVerificacion': document
+    answer = invoke(SERVICE_CODES, 'verificarNit', {
+        **base_request(emitter), 'cuis': cuis, 'nitParaVerificacion': document
     })
     return bool(getattr(answer, 'transaccion', False))
 
@@ -368,8 +371,8 @@ def send_invoice(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable.
     '''
-    answer = _invoke(SERVICE_INVOICE, 'recepcionFactura', {
-        **_base_request(emitter),
+    answer = invoke(SERVICE_INVOICE, 'recepcionFactura', {
+        **base_request(emitter),
         'cuis': submission.cuis,
         'cufd': submission.cufd,
         'codigoDocumentoSector': SECTOR_DOCUMENT_PURCHASE_SALE,
@@ -411,8 +414,8 @@ def cancel_invoice(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable.
     '''
-    answer = _invoke(SERVICE_INVOICE, 'anulacionFactura', {
-        **_base_request(emitter),
+    answer = invoke(SERVICE_INVOICE, 'anulacionFactura', {
+        **base_request(emitter),
         'cuis': cancellation.cuis,
         'cufd': cancellation.cufd,
         'cuf': cancellation.cuf,
@@ -444,13 +447,13 @@ def _receipt_from(answer: Any) -> SiatReceipt:
     ]
     return SiatReceipt(
         accepted = bool(getattr(answer, 'transaccion', False)),
-        reception_code = _text(getattr(answer, 'codigoRecepcion', None)),
-        state = _text(getattr(answer, 'codigoEstado', None)),
+        reception_code = text(getattr(answer, 'codigoRecepcion', None)),
+        state = text(getattr(answer, 'codigoEstado', None)),
         messages = messages
     )
 
 
-def _text(value: Any) -> str | None:
+def text(value: Any) -> str | None:
     '''
         One answer field as text, or nothing when it came back empty.
 
@@ -521,10 +524,10 @@ def sync_catalog(
             ServiceUnavailableError: The SIAT is unreachable.
             InvalidInputError: The tax office refused the request.
     '''
-    request = {**_base_request(emitter), 'cuis': cuis}
+    request = {**base_request(emitter), 'cuis': cuis}
     request.pop('codigoModalidad')
     operation = _SYNC_OPERATIONS[catalog]
-    answer = _accepted(operation, _invoke(SERVICE_SYNC, operation, request))
+    answer = _accepted(operation, invoke(SERVICE_SYNC, operation, request))
     return [_catalog_entry(row) for row in _catalog_rows(answer)]
 
 
@@ -564,5 +567,5 @@ def _catalog_entry(row: Any) -> CatalogEntry:
     return CatalogEntry(
         code = str(code),
         description = str(description),
-        activity_code = _text(getattr(row, 'codigoActividad', None))
+        activity_code = text(getattr(row, 'codigoActividad', None))
     )

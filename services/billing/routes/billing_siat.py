@@ -9,11 +9,22 @@ from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Request
 
 from controllers.billing_siat import (
+    contingency_status_controller,
     current_codes_controller,
     get_catalog_controller,
+    recover_controller,
+    start_contingency_controller,
     sync_catalogs_controller
 )
-from schemas.billing_siat import CatalogOut, CatalogsSyncResponse, SiatCatalog, SiatCodesOut
+from schemas.billing_siat import (
+    CatalogOut,
+    CatalogsSyncResponse,
+    ContingencyIn,
+    ContingencyStatus,
+    RecoveryOut,
+    SiatCatalog,
+    SiatCodesOut
+)
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
 from services.security import get_current_owner, get_current_user, require_roles
@@ -65,5 +76,52 @@ async def get_catalog_endpoint(
     ''' Endpoint for one stored catalogue. '''
     return await get_catalog_controller(
         dynamodb_resource = dynamodb_resource, owner = owner, catalog = catalog,
+        request = request, current_user = current_user
+    )
+
+
+@router.get('/contingency', response_model = ContingencyStatus)
+async def contingency_status_endpoint(
+    request: Request,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    owner: str = Depends(get_current_owner),
+    current_user: str = Depends(get_current_user)
+) -> ContingencyStatus:
+    ''' Endpoint for whether the point of sale is issuing offline. '''
+    return await contingency_status_controller(
+        dynamodb_resource = dynamodb_resource, owner = owner,
+        request = request, current_user = current_user
+    )
+
+
+@router.post('/contingency', response_model = ContingencyStatus)
+async def start_contingency_endpoint(
+    contingency: ContingencyIn,
+    request: Request,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    owner: str = Depends(require_roles(*MANAGERS)),
+    current_user: str = Depends(get_current_user)
+) -> ContingencyStatus:
+    ''' Endpoint to enter contingency by hand. '''
+    message = f'Shop {owner}: {current_user} enters contingency {contingency.event.name}.'
+    logger.info(message)
+    return await start_contingency_controller(
+        dynamodb_resource = dynamodb_resource, owner = owner, contingency = contingency,
+        request = request, current_user = current_user
+    )
+
+
+@router.post('/contingency/recover', response_model = RecoveryOut)
+async def recover_endpoint(
+    request: Request,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    owner: str = Depends(require_roles(*MANAGERS)),
+    current_user: str = Depends(get_current_user)
+) -> RecoveryOut:
+    ''' Endpoint to leave contingency now. '''
+    message = f'Shop {owner}: {current_user} asks to leave contingency.'
+    logger.info(message)
+    return await recover_controller(
+        dynamodb_resource = dynamodb_resource, owner = owner,
         request = request, current_user = current_user
     )

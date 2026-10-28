@@ -28,13 +28,12 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 from lxml import etree
 
 from schemas.billing import (
-    CARD_METHODS,
-    SIN_PAYMENT_CODES,
     BillingError,
     InvoiceContext,
     InvoiceLine,
     SaleNoteOut
 )
+from services.billing_payments import paid_by_card
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
 
@@ -159,7 +158,8 @@ def _card_for_xml(sale: SaleNoteOut) -> str | None:
         Returns:
             str | None: The digits, or None.
     '''
-    if sale.payment_method not in CARD_METHODS:
+    if not paid_by_card([payment.method for payment in sale.payments]
+                        or [sale.payment_method]):
         return None
     return sale.card_number or None
 
@@ -194,7 +194,7 @@ def _build_header(
     _put(header, 'numeroDocumento', sale.buyer.document)
     _put(header, 'complemento', None)
     _put(header, 'codigoCliente', sale.buyer.document)
-    _put(header, 'codigoMetodoPago', SIN_PAYMENT_CODES[sale.payment_method])
+    _put(header, 'codigoMetodoPago', context.payment_method_code)
     _put(header, 'numeroTarjeta', _card_for_xml(sale))
     _put(header, 'montoTotal', _amount(sale.total))
     _put(header, 'montoTotalSujetoIva', _amount(sale.total))
@@ -203,7 +203,7 @@ def _build_header(
     _put(header, 'montoTotalMoneda', _amount(sale.total))
     _put(header, 'montoGiftCard', None)
     _put(header, 'descuentoAdicional', None)
-    _put(header, 'codigoExcepcion', None)
+    _put(header, 'codigoExcepcion', context.exception_code)
     _put(header, 'cafc', context.cafc)
     _put(header, 'leyenda', context.legend)
     _put(header, 'usuario', sale.created_by)
