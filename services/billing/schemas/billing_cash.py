@@ -6,8 +6,8 @@
     cash that leaves it, and closes with the cash counted again. Nothing is
     deleted: an expense is cancelled with who and when.
 
-    Only cash is counted. QR and cards are not money in the drawer: their
-    totals are shown to reconcile them with the bank and the card terminal.
+    Only cash is counted. Transfers, mobile wallets and cards are not money
+    in the drawer: their totals are shown to reconcile them with the bank and the card terminal.
 '''
 from datetime import date, time as time_type
 from enum import Enum

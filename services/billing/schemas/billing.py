@@ -121,9 +121,15 @@ class PaymentMethod(str, Enum):
         Debit and credit are told apart for the shop's own reports; for the
         SIN both are a card. `TARJETA` stays for the notes issued before the
         distinction existed, which the reports show as a card with no detail.
+
+        A QR payment is told apart the same way: bank to bank is a transfer,
+        from an app to the shop's account (or back) is a mobile wallet. `QR`
+        stays for the notes issued before, which the SIN received as OTROS.
     '''
     EFECTIVO = 'EFECTIVO'
     QR = 'QR'
+    TRANSFERENCIA = 'TRANSFERENCIA'
+    BILLETERA_MOVIL = 'BILLETERA_MOVIL'
     TARJETA = 'TARJETA'
     TARJETA_DEBITO = 'TARJETA_DEBITO'
     TARJETA_CREDITO = 'TARJETA_CREDITO'
@@ -142,22 +148,25 @@ class Payment(BaseModel):
     amount: float = Field(..., gt = 0)
 
 
-# What each of them is called in the SIN's `codigoMetodoPago` parameter. Only
-# cash and card have a code of their own; QR travels as OTROS, which is what
-# the norm says to use when the method is not in the list
-# (`docs/siat/SIAT.md`). The full catalogue is synchronised from the SIN once
-# the authorization exists, and may add a code for QR — that is why the map
-# lives here and not inlined at the point of use.
+# What each of them is called in the SIN's `codigoMetodoPago` parameter, as a
+# single method; a combination is looked up by these in the synchronised
+# catalogue. The old `QR` travelled as OTROS, which the SIN does not combine
+# with anything — the reason transfer and wallet replaced it (Rafael,
+# 28-oct-2026).
 SIN_PAYMENT_CASH: int = 1
 SIN_PAYMENT_CARD: int = 2
 SIN_PAYMENT_OTHER: int = 5
+SIN_PAYMENT_TRANSFER: int = 7
+SIN_PAYMENT_WALLET: int = 32
 
 SIN_PAYMENT_CODES: dict = {
     PaymentMethod.EFECTIVO: SIN_PAYMENT_CASH,
     PaymentMethod.TARJETA: SIN_PAYMENT_CARD,
     PaymentMethod.TARJETA_DEBITO: SIN_PAYMENT_CARD,
     PaymentMethod.TARJETA_CREDITO: SIN_PAYMENT_CARD,
-    PaymentMethod.QR: SIN_PAYMENT_OTHER
+    PaymentMethod.QR: SIN_PAYMENT_OTHER,
+    PaymentMethod.TRANSFERENCIA: SIN_PAYMENT_TRANSFER,
+    PaymentMethod.BILLETERA_MOVIL: SIN_PAYMENT_WALLET
 }
 
 

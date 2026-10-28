@@ -27,6 +27,7 @@ from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import
 )
 
 CASH, CARD, QR = PaymentMethod.EFECTIVO, PaymentMethod.TARJETA_DEBITO, PaymentMethod.QR
+TRANSFER, WALLET = PaymentMethod.TRANSFERENCIA, PaymentMethod.BILLETERA_MOVIL
 
 
 def _note(
@@ -48,7 +49,9 @@ def _note(
 
 
 @pytest.mark.parametrize(('methods', 'code'), [
-    ([CASH], 1), ([CARD], 2), ([CASH, CARD], 10), ([CARD, CASH], 10)
+    ([CASH], 1), ([CARD], 2), ([CASH, CARD], 10), ([CARD, CASH], 10),
+    ([TRANSFER], 7), ([CASH, TRANSFER], 13), ([CARD, TRANSFER], 18),
+    ([WALLET], 32), ([CASH, WALLET], 37), ([WALLET, CARD], 42)
 ])
 def test_the_sin_code_of_a_payment_comes_from_its_catalogue(
     methods,
@@ -75,7 +78,8 @@ def test_the_catalogues_spellings_are_read_as_one():
 
 def test_a_combination_the_sin_does_not_have_is_refused():
     '''
-        Cash with QR: QR travels as OTROS, and the SIN has no EFECTIVO-OTROS.
+        Cash with the old QR: QR travelled as OTROS, and the SIN has no
+        EFECTIVO-OTROS.
     '''
     with pytest.raises(InvalidInputError) as refused:
         billing_payments.sin_payment_code(PAYMENT_CATALOGUE, [CASH, QR])

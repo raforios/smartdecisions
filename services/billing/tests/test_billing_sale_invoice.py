@@ -64,7 +64,9 @@ CODES = SiatCodesOut(branch = 0, point_of_sale = 0, cuis = 'CUIS1',
 PAYMENT_CATALOGUE = [CatalogEntry(code = code, description = description) for code, description in (
     ('1', 'EFECTIVO'), ('2', 'TARJETA'), ('5', 'OTROS'), ('7', 'TRANSFERENCIA BANCARIA'),
     ('10', 'EFECTIVO-TARJETA'), ('13', 'EFECTIVO – TRANSFERENCIA BANCARIA'),
-    ('27', 'GIFT-CARD'), ('29', 'EFECTIVO - TARJETA - VALE'), ('35', 'EFECTIVO – GIFT CARD')
+    ('18', 'TARJETA - TRANSFERENCIA BANCARIA'), ('27', 'GIFT-CARD'),
+    ('29', 'EFECTIVO - TARJETA - VALE'), ('32', 'BILLETERA MOVIL'), ('35', 'EFECTIVO – GIFT CARD'),
+    ('37', 'EFECTIVO - BILLETERA MOVIL'), ('42', 'TARJETA - BILLETERA MOVIL')
 )]
 BUYER = Buyer(name = 'Ana Quispe', document = '4567890', document_type = 1)
 

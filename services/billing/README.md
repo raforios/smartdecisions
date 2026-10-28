@@ -129,7 +129,7 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 | `billing_settings` | `owner` | `setting_key` |
 | `billing_parameters` | `code` | — |
 
-**A till:** `user_email`, `status` (`OPEN`, `CLOSED`), `business_day`, `opened_at`, `opening_cash` and, on closing, `closed_at`, `closed_by`, `counted_cash`, `expected_cash`, `difference`, `note`. **An expense:** `expense_type` (`SUPPLIER_PAYMENT`, `SERVICE_PAYMENT`, `PETTY_CASH`), `amount`, `concept`, `purchase_id`, `status` (`ACTIVE`, `CANCELLED`) and who created or cancelled it and when. Payment methods: `EFECTIVO`, `QR`, `TARJETA_DEBITO`, `TARJETA_CREDITO`. Till specification: `docs/cambios/billing-caja/spec.md`.
+**A till:** `user_email`, `status` (`OPEN`, `CLOSED`), `business_day`, `opened_at`, `opening_cash` and, on closing, `closed_at`, `closed_by`, `counted_cash`, `expected_cash`, `difference`, `note`. **An expense:** `expense_type` (`SUPPLIER_PAYMENT`, `SERVICE_PAYMENT`, `PETTY_CASH`), `amount`, `concept`, `purchase_id`, `status` (`ACTIVE`, `CANCELLED`) and who created or cancelled it and when. Payment methods: `EFECTIVO`, `TRANSFERENCIA` (bank to bank, SIN 7), `BILLETERA_MOVIL` (an app to the shop's account or back, SIN 32), `TARJETA_DEBITO`, `TARJETA_CREDITO`; `QR` (SIN 5, OTROS, which combines with nothing) and `TARJETA` remain only on old notes. Till specification: `docs/cambios/billing-caja/spec.md`.
 
 **SIAT codes and catalogues** live in `billing_settings`: `siat#codes#<branch>#<point_of_sale>` (CUIS, CUFD, control code, validity) and `siat#catalog#<catalogue>` (rows with `code`, `description`, `activity_code`).
 

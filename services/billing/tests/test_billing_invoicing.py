@@ -161,12 +161,14 @@ def test_a_card_number_on_a_cash_sale_is_refused(dynamodb):
 
 def test_every_payment_method_has_a_code_for_the_tax_office(dynamodb): # pylint: disable=unused-argument
     '''
-        Cash and card have their own; QR travels as OTROS, which is what the
-        norm says to use when the method is not in its list.
+        Cash, card, bank transfer and mobile wallet have their own; the old QR
+        travelled as OTROS.
     '''
     assert SIN_PAYMENT_CODES[PaymentMethod.EFECTIVO] == 1
     assert SIN_PAYMENT_CODES[PaymentMethod.TARJETA] == 2
     assert SIN_PAYMENT_CODES[PaymentMethod.QR] == 5
+    assert SIN_PAYMENT_CODES[PaymentMethod.TRANSFERENCIA] == 7
+    assert SIN_PAYMENT_CODES[PaymentMethod.BILLETERA_MOVIL] == 32
     assert set(SIN_PAYMENT_CODES) == set(PaymentMethod)
 
 
