@@ -36,9 +36,10 @@ from schemas.billing import (
     SaleStatus,
     SettingsResponse
 )
-from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice
+from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice, SiatCatalog
 from services.billing_cash import require_sale_session
 from services.billing_customers import remember_customer
+from services.billing_mail import Cancellation, send_cancellation, send_invoice
 from services.billing_payments import paid_by_card, primary_method, resolve_payments
 from services.billing_invoicing import (
     InvoiceDraft,
@@ -69,6 +70,7 @@ from services.billing import (
     write_item
 )
 from services.billing_siat import mask_card
+from services.billing_siat_codes import get_catalog
 from services.billing_stock import allocate, draw_down, give_back
 
 # Money is rounded where it is charged, never where it is added: totals come
@@ -158,6 +160,7 @@ def issue_sale(
     write_item(dynamodb_resource, SALES_TABLE, item.__dict__)
     if plan is not None:
         remember_customer(dynamodb_resource, owner, note.buyer, created_by)
+        _mail_invoice(dynamodb_resource, item.__dict__, settings)
 
     message = (f'Sale {item.number} issued by {created_by} for {owner}: '
                f'{len(priced.lines)} line(s), total {money["total"]}.')
@@ -283,10 +286,96 @@ def cancel_sale(
     stored['cancelled_at'] = now_iso()
     stored['cancelled_by'] = cancelled_by
     write_item(dynamodb_resource, SALES_TABLE, stored)
+    if stored.get('invoice'):
+        _mail_cancellation(dynamodb_resource, owner, stored)
 
     message = f'Sale {stored["number"]} cancelled by {cancelled_by} for {owner}.'
     logger.info(message)
     return _sale_out(stored)
+
+
+def resend_invoice(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    sale_id: str
+) -> SaleNoteOut:
+    '''
+        Mails the invoice of a sale to its buyer again: after a failed send,
+        or because the buyer asked for it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            sale_id (str): The sale.
+
+        Returns:
+            SaleNoteOut: The sale, with when the mail went out.
+
+        Raises:
+            RegisterNotFoundError: No such sale in this shop.
+            InvalidInputError: The sale has no invoice, or its buyer no email.
+            ServiceUnavailableError: SES did not take the mail.
+    '''
+    stored = _read_sale(dynamodb_resource, owner, sale_id)
+    if stored is None:
+        raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
+    if not stored.get('invoice'):
+        raise InvalidInputError(detail = BillingError.SALE_NOT_INVOICED.value)
+    if not (stored.get('buyer') or {}).get('email'):
+        raise InvalidInputError(detail = BillingError.BUYER_WITHOUT_EMAIL.value)
+    if not _mail_invoice(dynamodb_resource, stored, get_settings(dynamodb_resource, owner)):
+        raise ServiceUnavailableError(detail = BillingError.MAIL_NOT_SENT.value)
+    return _sale_out(stored)
+
+
+def _mail_invoice(
+    dynamodb_resource: ServiceResource,
+    stored: dict[str, Any],
+    settings: SettingsResponse
+) -> bool:
+    '''
+        Mails an invoice when its buyer gave an address, and keeps when it
+        went out. A failure leaves the sale as it was: the invoice is valid
+        anyway, and the sale shows it was not sent.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            stored (dict[str, Any]): The sale as stored, with its invoice.
+            settings (SettingsResponse): The shop.
+
+        Returns:
+            bool: Whether SES took the mail.
+    '''
+    if not (stored.get('buyer') or {}).get('email'):
+        return False
+    sent = send_invoice(_sale_out(stored), stored['invoice_xml'], settings)
+    if sent:
+        stored['invoice']['emailed_at'] = now_iso()
+        write_item(dynamodb_resource, SALES_TABLE, stored)
+    return sent
+
+
+def _mail_cancellation(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    stored: dict[str, Any]
+) -> None:
+    '''
+        Tells the buyer, when they gave an address, that their invoice was
+        cancelled and why, the reason named as the SIN's catalogue names it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            stored (dict[str, Any]): The cancelled sale as stored.
+    '''
+    if not (stored.get('buyer') or {}).get('email'):
+        return
+    code = str(stored['invoice'].get('cancellation_reason'))
+    reasons = {entry.code: entry.description for entry in get_catalog(
+        dynamodb_resource, owner, SiatCatalog.CANCELLATION_REASONS).entries}
+    send_cancellation(Cancellation(_sale_out(stored), reasons.get(code, code)),
+                      get_settings(dynamodb_resource, owner))
 
 
 def _attach_invoice(

@@ -29,6 +29,7 @@ from controllers.billing import (
     lots_controller,
     receive_purchase_controller,
     reprice_lot_controller,
+    resend_invoice_controller,
     sale_qr_controller,
     save_settings_controller,
     update_product_controller
@@ -408,6 +409,21 @@ async def sale_qr_endpoint(
 ) -> InvoiceQrOut:
     ''' Endpoint for the QR the invoice of a sale prints. '''
     return await sale_qr_controller(
+        dynamodb_resource = dynamodb_resource, owner = owner, sale_id = sale_id,
+        request = request, current_user = current_user
+    )
+
+
+@router.post('/sales/{sale_id}/invoice/mail', response_model = SaleNoteOut)
+async def resend_invoice_endpoint(
+    request: Request,
+    sale_id: str = Path(..., min_length = 1, max_length = 120),
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    owner: str = Depends(get_current_owner),
+    current_user: str = Depends(get_current_user)
+) -> SaleNoteOut:
+    ''' Endpoint to mail the invoice of a sale to its buyer again. '''
+    return await resend_invoice_controller(
         dynamodb_resource = dynamodb_resource, owner = owner, sale_id = sale_id,
         request = request, current_user = current_user
     )

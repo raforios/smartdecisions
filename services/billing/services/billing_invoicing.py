@@ -166,9 +166,9 @@ def prepare_invoice(
     '''
     if not settings.municipality:
         raise InvalidInputError(detail = BillingError.SIAT_ISSUER_INCOMPLETE.value)
-    invoice_lines = [detail for line in draft.lines
-                     for detail in _invoice_lines(line, draft.products[line.sku])]
-    require_homologated(invoice_lines)
+    details = [detail for line in draft.lines
+               for detail in invoice_lines(line, draft.products[line.sku])]
+    require_homologated(details)
     payment_code = sin_payment_code(
         get_catalog(dynamodb_resource, owner, SiatCatalog.PAYMENT_METHODS).entries,
         [payment.method for payment in draft.payments]
@@ -176,8 +176,8 @@ def prepare_invoice(
     emitter = emitter_for(dynamodb_resource, owner)
     codes, offline = _codes_for_sale(dynamodb_resource, owner, emitter)
     return InvoicePlan(
-        emitter = emitter, codes = codes, settings = settings, lines = invoice_lines,
-        legend = _legend(dynamodb_resource, owner, invoice_lines[0].sin_activity_code),
+        emitter = emitter, codes = codes, settings = settings, lines = details,
+        legend = _legend(dynamodb_resource, owner, details[0].sin_activity_code),
         payment_code = payment_code, offline = offline
     )
 
@@ -445,7 +445,7 @@ def _qr_url(
     return f'{ENV_VARS["SIAT_QR_URL"]}?{query}'
 
 
-def _invoice_lines(
+def invoice_lines(
     line: SaleLineOut,
     product: dict[str, Any]
 ) -> list[InvoiceLine]:

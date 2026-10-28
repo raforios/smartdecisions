@@ -100,6 +100,8 @@ class BillingError(str, Enum):
     CUSTOMER_NOT_FOUND = 'CUSTOMER_NOT_FOUND'
     INVOICE_NOT_YET_AT_SIN = 'INVOICE_NOT_YET_AT_SIN'
     CANCELLATION_DEADLINE_PASSED = 'CANCELLATION_DEADLINE_PASSED'
+    BUYER_WITHOUT_EMAIL = 'BUYER_WITHOUT_EMAIL'
+    MAIL_NOT_SENT = 'MAIL_NOT_SENT'
     PAYMENTS_DO_NOT_ADD_UP = 'PAYMENTS_DO_NOT_ADD_UP'
     PAYMENT_REPEATED = 'PAYMENT_REPEATED'
     PAYMENT_COMBINATION_UNKNOWN = 'PAYMENT_COMBINATION_UNKNOWN'
@@ -385,10 +387,8 @@ class Buyer(BaseModel):
                                     description = 'NIT or CI, as the buyer gives it.')
     document_type: int | None = Field(
         None, ge = 1, le = 5,
-        description = 'Código del tipo de documento según la paramétrica del '
-                      'SIN. El anexo sólo fija el rango 1 a 5; qué número es '
-                      'cada documento lo dice el catálogo que se sincroniza '
-                      'con la autorización, y por eso no se nombra aquí.'
+        description = 'Document type code of the SIN catalogue: the annex only '
+                      'fixes the range 1 to 5, the synced catalogue names each.'
     )
     # Where the invoice is sent. Checked by shape only: whether the mailbox
     # exists is the mail service's answer, not ours.

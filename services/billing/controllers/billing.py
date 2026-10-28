@@ -275,6 +275,21 @@ async def cancel_sale_controller(
 
 
 @handle_service_errors(SERVICE)
+@audit_event(SERVICE, 'SaleNote', 'MAIL')
+async def resend_invoice_controller(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    sale_id: str,
+    request: Request, # pylint: disable=unused-argument
+    current_user: str # pylint: disable=unused-argument
+) -> SaleNoteOut:
+    '''
+        Mails the invoice of a sale to its buyer again.
+    '''
+    return billing_sales.resend_invoice(dynamodb_resource, owner, sale_id)
+
+
+@handle_service_errors(SERVICE)
 async def list_sales_controller(
     dynamodb_resource: ServiceResource,
     owner: str,

@@ -9,3 +9,4 @@ requests
 lxml
 zeep
 segno
+fpdf2

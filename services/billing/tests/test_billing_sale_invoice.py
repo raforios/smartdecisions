@@ -303,7 +303,7 @@ def test_a_line_sold_at_two_prices_becomes_two_details():
         subtotal = 32, total = 27, cost = 15
     )
 
-    details = billing_invoicing._invoice_lines(line, {}) # pylint: disable=protected-access
+    details = billing_invoicing.invoice_lines(line, {})
 
     assert [(d.quantity, d.unit_price, d.discount, d.subtotal) for d in details] == [
         (2, 10, 5, 15), (1, 12, 0, 12)

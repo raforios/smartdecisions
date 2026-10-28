@@ -148,6 +148,8 @@ class SaleInvoice(BaseModel):
     package_reception_code: str | None = None
     observations: list[str] = Field(default_factory = list,
                                     description = 'What the SIN observed, verbatim.')
+    emailed_at: str | None = Field(None, description = 'When SES took the mail to the buyer; '
+                                                       'None when it was never sent.')
 
 
 class InvoiceQrOut(BaseModel):
