@@ -122,6 +122,9 @@ TABLES=(
     # se ordena por "caja#movimiento" para leer el turno entero de una vez.
     "billing_cash_sessions:owner:S:session_id:S"
     "billing_cash_movements:owner:S:movement_key:S"
+    # Clientes: uno por documento dentro de cada comercio, así el mostrador
+    # lo encuentra con un get_item por el NIT o CI que escribe la cajera.
+    "billing_customers:owner:S:document:S"
 
     # --- Análisis Financiero (FINANCE) ---
     # El catálogo de cuentas es uno solo, de BearSoft: clave simple, se lee

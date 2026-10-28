@@ -29,6 +29,11 @@ RULES=(
     # tarde. A las 19:00 de La Paz (23:00 UTC) ya está todo el día; la ventana
     # MARKET_SYNC_DAYS del servicio repara lo que un día fallido dejó.
     "mining-analysis-daily-market-sync|mining-handler-service|cron(0 23 * * ? *)|{\"task\":\"sync_market\"}|Sync diario de LBMA y LME para anticipar la cotización oficial"
+    # Contingencia del SIAT: cada 5 minutos se revisan los puntos de venta que
+    # emiten fuera de línea. La espera real antes de reintentar la decide el
+    # servicio (BILLING_OFFLINE_RETRY_MINUTES); el disparador sólo dice cada
+    # cuánto mirar. Sin contingencias abiertas no llama al SIN.
+    "billing-siat-contingency|billing-handler-service|rate(5 minutes)|{\"task\":\"siat_contingency\"}|Recuperación automática de la contingencia del SIAT en BILLING"
 )
 
 REGION="us-east-1"
