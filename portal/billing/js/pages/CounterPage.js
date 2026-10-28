@@ -23,6 +23,9 @@ import { escapeHtml, money, notify, setBusy } from '../ui.js';
 /** Debit and credit stay apart for the reports; for the SIN both are card. */
 const PAYMENT_METHODS = SALE_PAYMENT_METHODS.map((value) => [value, PAYMENT_LABELS[value]]);
 
+/** The option that opens one amount per method instead of a single method. */
+const COMBINED = 'COMBINED';
+
 /** Lines being sold, keyed by SKU so the same product cannot enter twice. */
 let basket = new Map();
 let catalogue = [];
@@ -38,6 +41,19 @@ function total() {
         discount += line.discount || 0;
     }
     return { subtotal, discount, total: Math.max(subtotal - discount, 0) };
+}
+
+/**
+ * How the sale is being paid: the parts typed when payments are combined, or
+ * the single method for the whole total.
+ */
+function paymentParts(host) {
+    if (host.querySelector('#payment-method').value !== COMBINED) {
+        return [{ method: host.querySelector('#payment-method').value, amount: total().total }];
+    }
+    return [...host.querySelectorAll('.payment-part')]
+        .map((input) => ({ method: input.dataset.method, amount: Number(input.value) || 0 }))
+        .filter((part) => part.amount > 0);
 }
 
 function renderBasket(host) {
@@ -74,6 +90,13 @@ function renderBasket(host) {
     host.querySelector('#sum-discount').textContent = money(sums.discount);
     host.querySelector('#sum-total').textContent = money(sums.total);
     host.querySelector('#charge').disabled = basket.size === 0 || !tillReady;
+    // The basket changed the total: what is left to assign changes with it.
+    const parts = host.querySelector('#combined-payments');
+    if (parts && !parts.hidden) {
+        const paid = paymentParts(host).reduce((sum, part) => sum + part.amount, 0);
+        host.querySelector('#payments-left').textContent =
+            `Falta asignar Bs ${money(Math.max(sums.total - paid, 0))}`;
+    }
 }
 
 /** Adds one unit of a SKU, or one more when it is already in the basket. */
@@ -127,9 +150,12 @@ async function charge(host) {
             buyer: {
                 name: host.querySelector('#buyer-name').value.trim() || null,
                 document: host.querySelector('#buyer-document').value.trim() || null,
-                document_type: Number(host.querySelector('#buyer-document-type').value) || null
+                document_type: Number(host.querySelector('#buyer-document-type').value) || null,
+                email: host.querySelector('#buyer-email').value.trim() || null
             },
-            payment_method: host.querySelector('#payment-method').value,
+            ...(host.querySelector('#payment-method').value === COMBINED
+                ? { payments: paymentParts(host) }
+                : { payment_method: host.querySelector('#payment-method').value }),
             card_number: host.querySelector('#card-number').value.trim() || null,
             notes: host.querySelector('#sale-notes').value.trim() || null,
             lines: [...basket.values()].map((line) => ({
@@ -140,14 +166,18 @@ async function charge(host) {
         });
 
         notify(sale.invoice
-            ? `Factura ${sale.invoice.number} emitida por Bs ${money(sale.total)}.`
+            ? `Factura ${sale.invoice.number} emitida${sale.invoice.state === 'OFFLINE'
+                ? ' fuera de línea' : ''} por Bs ${money(sale.total)}.`
             : `Nota ${sale.number} emitida por Bs ${money(sale.total)}.`, 'success');
+        if (sale.invoice) await renderContingency(host);
         printTicket(sale, settings, settings.ticket_width);
 
         basket = new Map();
         host.querySelector('#buyer-name').value = '';
         host.querySelector('#buyer-document').value = '';
+        host.querySelector('#buyer-email').value = '';
         host.querySelector('#card-number').value = '';
+        host.querySelectorAll('.payment-part').forEach((input) => { input.value = ''; });
         host.querySelector('#sale-notes').value = '';
         catalogue = (await BillingService.listProducts({ only_active: true })).items;
         renderBasket(host);
@@ -180,6 +210,53 @@ function renderTillBar(host, till) {
 }
 
 /**
+ * The notice of a point of sale issuing offline. The till keeps selling; the
+ * cashier only has to know that the invoices reach the SIN later.
+ */
+async function renderContingency(host) {
+    const bar = host.querySelector('#siat-bar');
+    try {
+        const status = await BillingService.contingency();
+        bar.innerHTML = status.offline ? `<div class="card form-error">
+            Sin conexión con Impuestos desde las ${
+                escapeHtml(status.contingency.started_at.slice(11, 16))}: las facturas se
+            emiten fuera de línea (${status.contingency.pending_invoices} pendiente(s)) y se
+            envían solas al SIN cuando vuelva la conexión.</div>` : '';
+    } catch (error) {
+        bar.innerHTML = '';
+        notify(errorText(error, 'No se pudo leer el estado de la conexión con el SIN.'), 'error');
+    }
+}
+
+/**
+ * A buyer the shop already invoiced fills in by their NIT or CI. Only empty
+ * fields are filled: what the cashier already typed is theirs to keep.
+ */
+async function fillKnownBuyer(host) {
+    const document = host.querySelector('#buyer-document').value.trim();
+    if (!document) return;
+    let customer;
+    try {
+        customer = await BillingService.getCustomer(document);
+    } catch (error) {
+        // A new buyer is the normal case, not an error: the invoice adds them.
+        if (error.code !== 'CUSTOMER_NOT_FOUND') {
+            notify(errorText(error, 'No se pudo buscar el cliente.'), 'error');
+        }
+        return;
+    }
+    const fill = (id, value) => {
+        const input = host.querySelector(id);
+        if (!input.value && value) input.value = value;
+    };
+    fill('#buyer-name', customer.name);
+    fill('#buyer-email', customer.email);
+    if (customer.document_type) {
+        host.querySelector('#buyer-document-type').value = String(customer.document_type);
+    }
+}
+
+/**
  * What changes at the counter when the shop invoices: the document type,
  * taken from the SIN's catalogue, and the line saying what the paper is.
  */
@@ -189,7 +266,11 @@ async function renderInvoicing(host) {
         ? 'Cada venta se envía al SIN como factura.'
         : 'Nota de venta interna: no es factura fiscal.';
     host.querySelector('#document-type-field').hidden = !invoicing;
+    host.querySelector('#email-field').hidden = !invoicing;
     if (!invoicing) return;
+    host.querySelector('#buyer-document').addEventListener('change',
+                                                          () => fillKnownBuyer(host));
+    await renderContingency(host);
     try {
         const { entries } = await BillingService.siatCatalog('IDENTITY_DOCUMENT_TYPES');
         host.querySelector('#buyer-document-type').innerHTML = entries.map((type) =>
@@ -214,6 +295,7 @@ export async function mountCounter(host) {
         </header>
 
         <div id="till-bar"></div>
+        <div id="siat-bar"></div>
 
         <div class="counter">
             <section class="card">
@@ -252,8 +334,20 @@ export async function mountCounter(host) {
                     <select id="payment-method">
                         ${PAYMENT_METHODS.map(([value, label]) =>
                             `<option value="${value}">${label}</option>`).join('')}
+                        <option value="${COMBINED}">Combinada…</option>
                     </select>
                 </label>
+                <!-- A sale may be paid in up to three ways; the parts must add
+                     up to the total, and the SIN invoices the combination. -->
+                <div id="combined-payments" hidden>
+                    ${PAYMENT_METHODS.map(([value, label]) => `
+                        <label class="field">
+                            <span>${label}</span>
+                            <input type="number" class="payment-part" data-method="${value}"
+                                   min="0" step="0.01" inputmode="decimal" placeholder="0,00">
+                        </label>`).join('')}
+                    <p class="muted small" id="payments-left"></p>
+                </div>
                 <!-- The card number only appears when paying by card: the rule
                      forbids sending it in any other case. It is masked on the
                      server and never stored in full. -->
@@ -275,6 +369,10 @@ export async function mountCounter(host) {
                 <label class="field" id="document-type-field" hidden>
                     <span>Tipo de documento</span>
                     <select id="buyer-document-type"></select>
+                </label>
+                <label class="field" id="email-field" hidden>
+                    <span>Correo (para enviar la factura)</span>
+                    <input type="email" id="buyer-email" maxlength="254">
                 </label>
                 <label class="field">
                     <span>Nota</span>
@@ -361,11 +459,18 @@ export async function mountCounter(host) {
     const cardField = host.querySelector('#card-field');
     const cardInput = host.querySelector('#card-number');
     const syncCardField = () => {
-        const isCard = method.value.startsWith('TARJETA');
+        const isCard = paymentParts(host).some((part) => part.method.startsWith('TARJETA'));
         cardField.hidden = !isCard;
         if (!isCard) cardInput.value = '';
+        const paid = paymentParts(host).reduce((sum, part) => sum + part.amount, 0);
+        const combined = method.value === COMBINED;
+        host.querySelector('#combined-payments').hidden = !combined;
+        host.querySelector('#payments-left').textContent = combined
+            ? `Falta asignar Bs ${money(Math.max(total().total - paid, 0))}` : '';
     };
     method.addEventListener('change', syncCardField);
+    host.querySelectorAll('.payment-part').forEach((input) =>
+        input.addEventListener('input', syncCardField));
     syncCardField();
 
     // With nominativity on, the document stops being optional, and the label

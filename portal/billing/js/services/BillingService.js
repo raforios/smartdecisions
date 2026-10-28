@@ -33,6 +33,13 @@ export const ERRORS = {
     SIAT_REFUSED: 'Impuestos Nacionales rechazó la factura: la venta no se registró.',
     SIAT_ISSUER_INCOMPLETE: 'Para facturar, completa el NIT y el municipio en Configuración.',
     CATALOG_NOT_SYNCED: 'Sincroniza los catálogos del SIN en Configuración antes de facturar.',
+    CUSTOMER_NOT_FOUND: 'Ese cliente no está registrado.',
+    INVOICE_NOT_YET_AT_SIN: 'Esa factura se emitió fuera de línea y todavía no llegó al SIN: se podrá anular cuando su paquete se valide.',
+    BUYER_DOCUMENT_NOT_NUMERIC: 'El CI o NIT sólo puede tener números.',
+    PAYMENTS_DO_NOT_ADD_UP: 'Los montos de las formas de pago no suman el total de la venta.',
+    PAYMENT_REPEATED: 'Una forma de pago aparece dos veces.',
+    PAYMENT_COMBINATION_UNKNOWN: 'El SIN no tiene código para esa combinación de formas de pago.',
+    CANCELLATION_DEADLINE_PASSED: 'Ya pasó el plazo para anular esta factura (día 9 del mes siguiente).',
     SALE_NOT_INVOICED: 'Esa venta es una nota interna: no tiene factura ni QR.',
     CANCELLATION_REASON_REQUIRED: 'Elige el motivo de la anulación: el SIN lo exige.',
     LEGEND_NOT_FOUND: 'El SIN no tiene leyendas para la actividad del producto: revisa sus códigos.',
@@ -137,7 +144,17 @@ export const BillingService = {
         method: 'POST', body: JSON.stringify({ reason_code: reasonCode })
     }),
 
+    listCustomers: () => call('/customers'),
+    getCustomer: (document) => call(`/customers/${encodeURIComponent(document)}`),
+    updateCustomer: (document, body) => call(`/customers/${encodeURIComponent(document)}`,
+                                             { method: 'PATCH', body: JSON.stringify(body) }),
+
     siatCodes: () => call('/siat/codes'),
+    contingency: () => call('/siat/contingency'),
+    startContingency: (event) => call('/siat/contingency', {
+        method: 'POST', body: JSON.stringify({ event })
+    }),
+    recoverContingency: () => call('/siat/contingency/recover', { method: 'POST' }),
     syncSiatCatalogs: () => call('/siat/catalogs/sync', { method: 'POST' }),
     siatCatalog: (name) => call(`/siat/catalogs/${encodeURIComponent(name)}`),
 

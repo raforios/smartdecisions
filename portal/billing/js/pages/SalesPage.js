@@ -25,7 +25,8 @@ function rowHtml(note) {
                                    : '<span class="muted">mostrador</span>'}
                 ${note.buyer?.document
                     ? `<span class="muted">${escapeHtml(note.buyer.document)}</span>` : ''}</td>
-            <td>${escapeHtml(note.payment_method)}</td>
+            <td>${note.payments?.length > 1 ? 'Combinado'
+                                            : escapeHtml(note.payment_method)}</td>
             <td class="num">${note.lines.length}</td>
             <td class="num">${money(note.total)}</td>
             <td class="num">${cancelled ? '—' : money(note.margin)}</td>

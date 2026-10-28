@@ -14,6 +14,15 @@
 import { BillingService, errorText } from '../services/BillingService.js';
 import { notify } from '../ui.js';
 
+// The third legend of the RND 102100000011: it says whether the invoice was
+// issued online or offline, and the SIN checks that it changes with the mode.
+const OFFLINE_EMISSION = 2;
+const ONLINE_LEGEND = '“Este documento es la Representación Gráfica de un Documento Fiscal '
+    + 'Digital emitido en una modalidad de facturación en línea”';
+const OFFLINE_LEGEND = '“Este documento es la Representación Gráfica de un Documento Fiscal '
+    + 'Digital emitido fuera de línea, verifique su envío con su proveedor o en la página web '
+    + 'www.impuestos.gob.bo”';
+
 const WIDTHS = {
     MM_58: { page: '58mm', body: '54mm', font: '10px', columns: [26, 5, 10] },
     MM_80: { page: '80mm', body: '72mm', font: '11px', columns: [34, 6, 14] }
@@ -155,7 +164,9 @@ export function ticketHtml(sale, settings, width = 'MM_80', qrSvg = '') {
             <td class="amount">${money(sale.total)}</td></tr>
     </table>
     <div class="rule"></div>
-    <div>Forma de pago: ${escape(sale.payment_method)}</div>
+    <div>Forma de pago: ${escape((sale.payments?.length > 1
+        ? sale.payments.map((part) => `${part.method} ${money(part.amount)}`)
+        : [sale.payment_method]).join(' · '))}</div>
     ${sale.notes ? `<div>${escape(sale.notes)}</div>` : ''}
     <div class="foot">
         ${settings.ticket_footer ? escape(settings.ticket_footer) : '¡Gracias por su compra!'}
@@ -299,8 +310,7 @@ function invoiceHtml(sale, { settings, size, qrSvg }) {
         <div class="rule"></div>
         <div>${escape(invoice.legend)}</div>
         <div class="rule"></div>
-        <div>“Este documento es la Representación Gráfica de un Documento Fiscal
-             Digital emitido en una modalidad de facturación en línea”</div>
+        <div>${invoice.emission_type === OFFLINE_EMISSION ? OFFLINE_LEGEND : ONLINE_LEGEND}</div>
         <!-- Drawn by the service from the link the invoice stored; it is
              our own SVG, so it goes in as markup. -->
         <div class="qr">${qrSvg}</div>

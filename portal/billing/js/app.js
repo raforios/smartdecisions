@@ -19,12 +19,14 @@ import { mountDashboard } from './pages/DashboardPage.js';
 import { mountSettings } from './pages/SettingsPage.js';
 import { mountCash } from './pages/CashPage.js';
 import { mountCashSessions } from './pages/CashSessionsPage.js';
+import { mountCustomers } from './pages/CustomersPage.js';
 
 const SECTIONS = {
     counter: mountCounter,
     cash: mountCash,
     tills: mountCashSessions,
     sales: mountSales,
+    customers: mountCustomers,
     catalog: mountCatalog,
     purchases: mountPurchases,
     dashboard: mountDashboard,

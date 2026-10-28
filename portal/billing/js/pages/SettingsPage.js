@@ -10,6 +10,69 @@ import { escapeHtml, notify, setBusy } from '../ui.js';
 
 const WIDTHS = [['MM_80', '80 mm'], ['MM_58', '58 mm']];
 
+/** The events this system issues offline: the first four of the SIN's catalogue. */
+const OFFLINE_EVENTS = ['1', '2', '3', '4'];
+
+async function paintContingency(host) {
+    const state = host.querySelector('#contingency-state');
+    try {
+        const status = await BillingService.contingency();
+        state.textContent = status.offline
+            ? `Fuera de línea desde ${status.contingency.started_at.replace('T', ' ').slice(0, 16)}`
+              + ` · ${status.contingency.pending_invoices} factura(s) esperan su envío.`
+              + ' El sistema reintenta solo.'
+            : 'En línea: cada factura se envía al SIN en el momento.';
+        host.querySelector('#contingency-start').disabled = status.offline;
+        host.querySelector('#contingency-recover').disabled = !status.offline;
+    } catch (error) {
+        state.textContent = errorText(error, 'No se pudo leer la conexión con el SIN.');
+    }
+}
+
+async function wireContingency(host) {
+    try {
+        const { entries } = await BillingService.siatCatalog('SIGNIFICANT_EVENTS');
+        host.querySelector('#contingency-event').innerHTML = entries
+            .filter((entry) => OFFLINE_EVENTS.includes(entry.code))
+            .map((entry) => `<option value="${escapeHtml(entry.code)}">${
+                escapeHtml(entry.description)}</option>`).join('');
+    } catch (error) {
+        // Without the catalogue there is nothing to choose; the status still shows.
+        if (error.code !== 'CATALOG_NOT_SYNCED') {
+            notify(errorText(error, 'No se pudieron leer los eventos del SIN.'), 'error');
+        }
+    }
+    host.querySelector('#contingency-start').addEventListener('click', async (event) => {
+        const done = setBusy(event.currentTarget, 'Pasando…');
+        try {
+            await BillingService.startContingency(
+                Number(host.querySelector('#contingency-event').value));
+            notify('Las facturas se emiten fuera de línea desde ahora.', 'success');
+        } catch (error) {
+            notify(errorText(error, 'No se pudo pasar a fuera de línea.'), 'error');
+        } finally {
+            done();
+            await paintContingency(host);
+        }
+    });
+    host.querySelector('#contingency-recover').addEventListener('click', async (event) => {
+        const done = setBusy(event.currentTarget, 'Reintentando…');
+        try {
+            const result = await BillingService.recoverContingency();
+            notify(result.recovered
+                ? `Conexión recuperada: ${result.invoices_sent} factura(s) enviadas al SIN.`
+                : 'El SIN todavía no responde; el sistema seguirá reintentando.',
+                result.recovered ? 'success' : 'info');
+        } catch (error) {
+            notify(errorText(error, 'No se pudo reintentar.'), 'error');
+        } finally {
+            done();
+            await paintContingency(host);
+        }
+    });
+    await paintContingency(host);
+}
+
 /**
  * Paints the settings and saves them.
  *
@@ -150,6 +213,25 @@ export async function mountSettings(host) {
                         Sincronizar catálogos del SIN
                     </button>
                 </div>
+                <!-- Contingency: the system enters it alone when the SIN does not
+                     answer, and leaves it alone; by hand only when the shop knows
+                     first, like a point of sale with no internet. -->
+                <h4>Conexión con el SIN</h4>
+                <p class="muted small" id="contingency-state">Consultando…</p>
+                <div class="field-row">
+                    <label class="field">
+                        <span>Motivo para emitir fuera de línea</span>
+                        <select id="contingency-event"></select>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="contingency-start" type="button">
+                        Emitir fuera de línea
+                    </button>
+                    <button class="btn btn-secondary" id="contingency-recover" type="button">
+                        Reintentar envío ahora
+                    </button>
+                </div>
                 <p class="muted small">
                     Trae del SIN las leyendas, los tipos de documento, las unidades y
                     los productos de tu actividad. Hazlo antes de la primera factura
@@ -197,6 +279,8 @@ export async function mountSettings(host) {
                 <button class="btn btn-primary btn-block" id="save">Guardar</button>
             </section>
         </div>`;
+
+    wireContingency(host);
 
     host.querySelector('#sync-catalogs').addEventListener('click', async (event) => {
         const done = setBusy(event.currentTarget, 'Sincronizando…');
