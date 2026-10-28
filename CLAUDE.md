@@ -197,6 +197,12 @@ como código estable en un `Enum` —`IngestError.EMPTY_UPLOAD`,
 La interpretación vive en el **frontend** o en la **capa de IA**. No hay
 catálogos de textos en el repositorio; lo parametrizable va a base de datos.
 
+**Única excepción: el documento que SmartBilling manda como parte del flujo**
+(Rafael, 28-oct-2026). El caso de uso exige que el backend genere y envíe un
+documento —la factura en PDF y el correo al comprador—, así que ese texto sí
+lo arma el backend, y todo lo que puede cambiar se lee de `billing_parameters`,
+nunca escrito en el código. Para lo demás la regla se mantiene como está.
+
 ---
 
 ## 7. Los tres servicios base se usan siempre
