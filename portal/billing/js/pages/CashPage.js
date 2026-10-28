@@ -6,8 +6,8 @@
  * the shift is shown, and the note comes prefilled with the difference so the
  * cashier only adds the reason.
  *
- * Only cash is counted: QR and cards are shown to reconcile them with the
- * bank and the POS.
+ * Only cash is counted: transfers, wallets and cards are shown to reconcile
+ * them with the bank and the POS.
  */
 import {
     BillingService,
@@ -59,7 +59,7 @@ export function tillSummaryHtml(till) {
         <div class="panel-grid">
             <section class="card">
                 <h3>Ingresos por medio de pago</h3>
-                <p class="muted small">QR y tarjetas no están en el cajón: se concilian
+                <p class="muted small">Transferencias, billeteras y tarjetas no están en el cajón: se concilian
                    con el banco y el POS.</p>
                 <div class="table-scroll"><table class="data-table">
                     <thead><tr><th>Medio</th><th class="num">Ventas</th>

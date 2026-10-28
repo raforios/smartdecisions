@@ -59,14 +59,18 @@ export const ERRORS = {
 /** What each payment method is called on screen. */
 export const PAYMENT_LABELS = {
     EFECTIVO: 'Efectivo',
-    QR: 'QR',
+    TRANSFERENCIA: 'Transferencia bancaria',
+    BILLETERA_MOVIL: 'Billetera móvil',
+    QR: 'QR sin detalle',
     TARJETA_DEBITO: 'Tarjeta de débito',
     TARJETA_CREDITO: 'Tarjeta de crédito',
     TARJETA: 'Tarjeta sin detalle'
 };
 
-/** The methods offered when selling: card without detail belongs to old notes. */
-export const SALE_PAYMENT_METHODS = ['EFECTIVO', 'QR', 'TARJETA_DEBITO', 'TARJETA_CREDITO'];
+/** The methods offered when selling: card and QR without detail belong to old notes. */
+export const SALE_PAYMENT_METHODS = [
+    'EFECTIVO', 'TRANSFERENCIA', 'BILLETERA_MOVIL', 'TARJETA_DEBITO', 'TARJETA_CREDITO'
+];
 
 /** What each expense type is called on screen. */
 export const EXPENSE_LABELS = {
