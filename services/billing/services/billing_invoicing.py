@@ -14,7 +14,7 @@
 '''
 import gzip
 import random
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import urlencode
 from dataclasses import dataclass
 from typing import Any, Final
@@ -100,6 +100,20 @@ class InvoiceDraft:
     lines: list[SaleLineOut]
     products: dict[str, dict[str, Any]]
     payments: list[Payment]
+    # Given, the invoice is issued offline with these codes: a transcribed
+    # paper invoice carries the CUFD in force when its contingency began.
+    codes: SiatCodesOut | None = None
+
+
+@dataclass(frozen = True)
+class ManualIssue:
+    '''
+        What a transcribed paper invoice brings from the paper: its number,
+        its moment and the CAFC it was printed under.
+    '''
+    number: int
+    issued_at: datetime
+    cafc: str
 
 
 @dataclass(frozen = True)
@@ -174,7 +188,8 @@ def prepare_invoice(
         [payment.method for payment in draft.payments]
     )
     emitter = emitter_for(dynamodb_resource, owner)
-    codes, offline = _codes_for_sale(dynamodb_resource, owner, emitter)
+    codes, offline = ((draft.codes, True) if draft.codes is not None
+                      else _codes_for_sale(dynamodb_resource, owner, emitter))
     return InvoicePlan(
         emitter = emitter, codes = codes, settings = settings, lines = details,
         legend = _legend(dynamodb_resource, owner, details[0].sin_activity_code),
@@ -242,6 +257,32 @@ def issue_invoice(
     }), xml = document.xml)
 
 
+def issue_manual_invoice(
+    plan: InvoicePlan,
+    sale: SaleNoteOut,
+    manual: ManualIssue
+) -> IssuedInvoice:
+    '''
+        Transcribes a paper contingency invoice: its own number and moment,
+        the CAFC, and the plan's codes; it waits offline for its package.
+
+        Args:
+            plan (InvoicePlan): What `prepare_invoice` gathered, with the
+                codes of the contingency.
+            sale (SaleNoteOut): The note, as it is about to be stored.
+            manual (ManualIssue): What the paper says.
+
+        Returns:
+            IssuedInvoice: The invoice, offline, and its XML.
+    '''
+    document = _build(plan, sale, manual.number, EMISSION_OFFLINE, manual)
+    message = f'Paper invoice {manual.number} ({manual.cafc}) transcribed as sale {sale.number}.'
+    logger.info(message)
+    return IssuedInvoice(invoice = _sale_invoice(plan, manual.number, document, {
+        'state': InvoiceState.OFFLINE, 'emission_type': EMISSION_OFFLINE, 'cafc': manual.cafc
+    }), xml = document.xml)
+
+
 def _codes_for_sale(
     dynamodb_resource: ServiceResource,
     owner: str,
@@ -284,7 +325,8 @@ def _build(
     plan: InvoicePlan,
     sale: SaleNoteOut,
     number: int,
-    emission_type: int
+    emission_type: int,
+    manual: ManualIssue | None = None
 ) -> _Document:
     '''
         The CUF and the XML of one invoice, online or offline.
@@ -294,12 +336,14 @@ def _build(
             sale (SaleNoteOut): The note.
             number (int): The invoice number.
             emission_type (int): 1 online, 2 offline; it goes into the CUF.
+            manual (ManualIssue | None): A transcribed paper invoice: its
+                moment and CAFC instead of now and none.
 
         Returns:
             _Document: The document.
     '''
     emitter = plan.emitter
-    now = get_current_time_gmt()
+    now = manual.issued_at if manual else get_current_time_gmt()
     # The CUF carries milliseconds and the XML carries the same moment: cut
     # once, so both say exactly the same instant.
     moment = now.replace(microsecond = now.microsecond // 1000 * 1000)
@@ -318,7 +362,8 @@ def _build(
         point_of_sale = emitter.point_of_sale, invoice_number = number,
         cuf = cuf, cufd = plan.codes.cufd, issued_at = issued_at, legend = plan.legend,
         currency_code = CURRENCY_BOLIVIANO, exchange_rate = EXCHANGE_RATE_BOLIVIANO,
-        exception_code = 1 if offline_nit else 0, payment_method_code = plan.payment_code
+        exception_code = 1 if offline_nit else 0, payment_method_code = plan.payment_code,
+        cafc = manual.cafc if manual else None
     ), plan.lines)
     return _Document(cuf = cuf, issued_at = issued_at, xml = xml)
 

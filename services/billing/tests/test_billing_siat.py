@@ -8,6 +8,7 @@
     pilot is exercised by hand, not by the suite.
 '''
 import asyncio
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -315,3 +316,42 @@ def test_every_siat_endpoint_returns_its_model_and_the_sync_is_audited(
                                 catalog = SiatCatalog.CURRENCIES), CatalogOut)
 
     assert audited == [('SiatCatalog', 'SYNC')]
+
+
+def test_the_cufd_in_force_at_a_past_moment_is_kept_after_it_is_replaced(
+    dynamodb,
+    tax_office # pylint: disable=unused-argument
+):
+    '''
+        A manual contingency invoice is transcribed with the CUFD that was in
+        force when the contingency began, though a new one came since.
+    '''
+    billing_siat_codes.current_codes(dynamodb, OWNER)
+    an_hour_ago = (utils.get_current_time_gmt() - timedelta(hours = 1)).isoformat()
+    _age_codes(dynamodb, cufd_obtained_at = (utils.get_current_time_gmt()
+                                             - timedelta(hours = 3)).isoformat())
+
+    billing_siat_codes.current_codes(dynamodb, OWNER, force_cufd = True)
+
+    assert billing_siat_codes.codes_at(dynamodb, OWNER, an_hour_ago).cufd == 'CUFD1-CUIS1'
+    now = utils.get_current_time_gmt().isoformat()
+    assert billing_siat_codes.codes_at(dynamodb, OWNER, now).cufd == 'CUFD2-CUIS1'
+
+
+def test_no_cufd_is_kept_for_a_moment_before_the_days_kept(
+    dynamodb,
+    tax_office # pylint: disable=unused-argument
+):
+    '''
+        Older than the days the history keeps, or before any CUFD: there is
+        nothing to transcribe with.
+    '''
+    billing_siat_codes.current_codes(dynamodb, OWNER)
+    month_ago = utils.get_current_time_gmt() - timedelta(days = 30)
+    _age_codes(dynamodb, cufd_obtained_at = month_ago.isoformat())
+
+    billing_siat_codes.current_codes(dynamodb, OWNER, force_cufd = True)
+
+    later = (month_ago + timedelta(hours = 1)).isoformat()
+    assert billing_siat_codes.codes_at(dynamodb, OWNER, later) is None
+    assert billing_siat_codes.codes_at(dynamodb, OWNER, LONG_AGO) is None

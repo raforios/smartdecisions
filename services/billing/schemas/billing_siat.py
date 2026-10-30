@@ -150,6 +150,7 @@ class SaleInvoice(BaseModel):
                                     description = 'What the SIN observed, verbatim.')
     emailed_at: str | None = Field(None, description = 'When SES took the mail to the buyer; '
                                                        'None when it was never sent.')
+    cafc: str | None = Field(None, description = 'Only on a transcribed paper contingency invoice.')
 
 
 class InvoiceQrOut(BaseModel):

@@ -26,7 +26,6 @@ from models.billing import (
 from schemas.billing import (
     Buyer,
     BillingError,
-    PaymentMethod,
     SaleAllocation,
     SaleLineIn,
     SaleLineOut,
@@ -36,17 +35,20 @@ from schemas.billing import (
     SaleStatus,
     SettingsResponse
 )
-from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice, SiatCatalog
+from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice, SiatCatalog, SiatCodesOut
 from services.billing_cash import require_sale_session
 from services.billing_customers import remember_customer
+from services.billing_sale_checks import masked_card, reject_repeated_lines, require_buyer
 from services.billing_mail import Cancellation, send_cancellation, send_invoice
-from services.billing_payments import paid_by_card, primary_method, resolve_payments
+from services.billing_payments import primary_method, resolve_payments
 from services.billing_invoicing import (
     InvoiceDraft,
     InvoicePlan,
+    ManualIssue,
     cancel_at_sin,
     cancellation_deadline,
     issue_invoice,
+    issue_manual_invoice,
     prepare_invoice,
     qr_svg
 )
@@ -69,7 +71,6 @@ from services.billing import (
     read_partition,
     write_item
 )
-from services.billing_siat import mask_card
 from services.billing_siat_codes import get_catalog
 from services.billing_stock import allocate, draw_down, give_back
 
@@ -89,16 +90,26 @@ class PricedSale:
     consumption: dict[str, list[SaleAllocation]]
     products: dict[str, dict[str, Any]]
 
-# The CI and the NIT in the SIN's catalogue of identity documents: the two the
-# norm asks to be numeric.
-NUMERIC_DOCUMENT_TYPES = (1, 5)
+
+@dataclass(frozen = True)
+class PaperSale:
+    '''
+        A sale made on a paper contingency invoice, being transcribed: it
+        takes no till (its cash was counted when the till closed), it charges
+        what the paper says, and its invoice carries the paper's number,
+        moment and CAFC with the contingency's codes.
+    '''
+    issue: ManualIssue
+    codes: SiatCodesOut
+    prices: dict[str, float]
 
 
 def issue_sale(
     dynamodb_resource: ServiceResource,
     owner: str,
     note: SaleNoteIn,
-    created_by: str
+    created_by: str,
+    paper: PaperSale | None = None
 ) -> SaleNoteOut:
     '''
         Registers a sale over the counter and takes the units out of stock.
@@ -108,6 +119,8 @@ def issue_sale(
             owner (str): The pharmacy.
             note (SaleNoteIn): What is being sold.
             created_by (str): Who is at the till.
+            paper (PaperSale | None): A paper contingency invoice being
+                transcribed, instead of a sale at the till.
 
         Returns:
             SaleNoteOut: The issued note, ready to print.
@@ -125,18 +138,21 @@ def issue_sale(
     settings = get_settings(dynamodb_resource, owner)
     # Before any stock moves: a sale refused for want of a till must not have
     # touched a shelf.
-    session_id = require_sale_session(dynamodb_resource, owner, created_by)
-    _require_buyer(note, settings)
-    _reject_repeated_lines(note.lines)
+    session_id = None if paper else require_sale_session(dynamodb_resource, owner, created_by)
+    require_buyer(note, settings)
+    reject_repeated_lines(note.lines)
 
     priced = _price_lines(dynamodb_resource, owner, note, settings.discounts_enabled)
+    if paper:
+        priced = _at_paper_prices(priced, paper.prices)
     money = _totals(priced.lines)
     payments = resolve_payments(note, money['total'])
-    card = _masked_card(note, [payment.method for payment in payments])
+    card = masked_card(note, [payment.method for payment in payments])
     # Also before any stock moves: a sale that cannot be invoiced is refused
     # with the shelf untouched.
     plan = (prepare_invoice(dynamodb_resource, owner, settings,
-                            InvoiceDraft(priced.lines, priced.products, payments))
+                            InvoiceDraft(priced.lines, priced.products, payments,
+                                         paper.codes if paper else None))
             if settings.invoicing_enabled else None)
     draw_down(dynamodb_resource, owner, priced.consumption)
 
@@ -156,11 +172,14 @@ def issue_sale(
         **money
     )
     if plan is not None:
-        _attach_invoice(dynamodb_resource, plan, item, priced.consumption)
+        _attach_invoice(dynamodb_resource, plan, item, priced.consumption,
+                        paper.issue if paper else None)
     write_item(dynamodb_resource, SALES_TABLE, item.__dict__)
     if plan is not None:
         remember_customer(dynamodb_resource, owner, note.buyer, created_by)
-        _mail_invoice(dynamodb_resource, item.__dict__, settings)
+        # The buyer of a paper invoice already holds it.
+        if paper is None:
+            _mail_invoice(dynamodb_resource, item.__dict__, settings)
 
     message = (f'Sale {item.number} issued by {created_by} for {owner}: '
                f'{len(priced.lines)} line(s), total {money["total"]}.')
@@ -212,6 +231,34 @@ def _price_lines(
         lines.append(_line_out(line, product['description'],
                                allocations, discounts_enabled))
     return PricedSale(lines = lines, consumption = consumption, products = products)
+
+
+def _at_paper_prices(
+    priced: PricedSale,
+    prices: dict[str, float]
+) -> PricedSale:
+    '''
+        The lines charged at what the paper invoice says, whatever the lots
+        say now; the units still leave the lots they were allocated from.
+
+        Args:
+            priced (PricedSale): The lines priced against the lots.
+            prices (dict[str, float]): The paper's unit price per SKU.
+
+        Returns:
+            PricedSale: The same units, at the paper's prices.
+    '''
+    lines = []
+    for line in priced.lines:
+        price = prices[line.sku]
+        allocations = [allocation.model_copy(update = {
+            'unit_price': price, 'amount': round(allocation.quantity * price, MONEY_DECIMALS)
+        }) for allocation in line.allocations]
+        subtotal = round(sum(allocation.amount for allocation in allocations), MONEY_DECIMALS)
+        lines.append(line.model_copy(update = {'allocations': allocations,
+                                               'subtotal': subtotal, 'total': subtotal}))
+    return PricedSale(lines = lines, consumption = priced.consumption,
+                      products = priced.products)
 
 
 def _totals(lines: list[SaleLineOut]) -> dict[str, float]:
@@ -382,7 +429,8 @@ def _attach_invoice(
     dynamodb_resource: ServiceResource,
     plan: InvoicePlan,
     item: SaleItem,
-    consumption: dict[str, list[SaleAllocation]]
+    consumption: dict[str, list[SaleAllocation]],
+    manual: ManualIssue | None = None
 ) -> None:
     '''
         Issues the invoice of a sale about to be stored, and keeps it with it.
@@ -393,12 +441,15 @@ def _attach_invoice(
             item (SaleItem): The sale, still unwritten.
             consumption (dict[str, list[SaleAllocation]]): The units it took,
                 to give back if the SIN refuses the invoice.
+            manual (ManualIssue | None): A paper invoice being transcribed.
 
         Raises:
             InvalidInputError: The SIN refused the invoice.
     '''
     try:
-        issued = issue_invoice(dynamodb_resource, item.owner, plan, _sale_out(item.__dict__))
+        issued = (issue_manual_invoice(plan, _sale_out(item.__dict__), manual) if manual
+                  else issue_invoice(dynamodb_resource, item.owner, plan,
+                                     _sale_out(item.__dict__)))
     except (InvalidInputError, ServiceUnavailableError):
         # Refused, the sale is not issued: its units go back.
         give_back(dynamodb_resource, item.owner, consumption)
@@ -531,102 +582,6 @@ def list_sales(
     charged = round(sum(item.total for item in items
                         if item.status == SaleStatus.ISSUED), MONEY_DECIMALS)
     return SaleNotesResponse(items = items, total = len(items), total_amount = charged)
-
-
-def _require_buyer(
-    note: SaleNoteIn,
-    settings: SettingsResponse
-) -> None:
-    """
-        Refuses a sale with no buyer document where the pharmacy needs one.
-
-        Phase II of the Bolivian norm requires every invoice to be nominative
-        whatever the amount, and it is explicit about what that means: the
-        DOCUMENT NUMBER, not the name or business name (`docs/siat/SIAT.md`).
-        So the document is demanded and the name is not — asking for both
-        would refuse a sale the norm accepts, over a field the buyer is not
-        obliged to give.
-
-        It is a setting and not a constant because a pharmacy still issuing
-        internal notes has to keep working until it is authorised. Invoicing
-        demands it too, and also the document type: the XSD has no empty
-        `codigoTipoDocumentoIdentidad`.
-
-        Args:
-            note (SaleNoteIn): What is being sold, with its buyer.
-            settings (SettingsResponse): Whether this pharmacy must name the
-                buyer, and whether it invoices.
-
-        Raises:
-            InvalidInputError: BUYER_REQUIRED when the document is missing.
-    """
-    if not (settings.buyer_required or settings.invoicing_enabled):
-        return
-    if not (note.buyer and (note.buyer.document or '').strip()):
-        raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
-    if settings.invoicing_enabled and note.buyer.document_type is None:
-        raise InvalidInputError(detail = BillingError.BUYER_REQUIRED.value)
-    # The norm: a CI or a NIT the SIN receives has to be a number.
-    if settings.invoicing_enabled and note.buyer.document_type in NUMERIC_DOCUMENT_TYPES \
-            and not note.buyer.document.strip().isdigit():
-        raise InvalidInputError(detail = BillingError.BUYER_DOCUMENT_NOT_NUMERIC.value)
-
-
-def _masked_card(
-    note: SaleNoteIn,
-    methods: list[PaymentMethod]
-) -> str | None:
-    """
-        The card number as it may be stored: masked, or nothing at all.
-
-        Two rules of the norm, both in `docs/siat/SIAT.md`. A card number may
-        only travel when the payment method IS a card — sending one with a
-        cash sale is an error the tax office reports. And when it does travel
-        it goes with the middle digits zeroed, first and last four in clear.
-
-        Masking here, at the boundary, is deliberate: the full number never
-        reaches the table, the log or the printed note, so there is no copy of
-        it to leak later.
-
-        Args:
-            note (SaleNoteIn): The sale as it arrived.
-            methods (list[PaymentMethod]): The methods it was paid with.
-
-        Returns:
-            str | None: The masked number, or None when there is none.
-
-        Raises:
-            InvalidInputError: A card number without a card payment, or a
-                number too short to be one.
-    """
-    raw = (note.card_number or '').strip()
-    is_card = paid_by_card(methods)
-    if not raw:
-        return None
-    if not is_card:
-        raise InvalidInputError(detail = BillingError.CARD_WITHOUT_CARD_PAYMENT.value)
-    try:
-        return mask_card(raw)
-    except ValueError as error:
-        raise InvalidInputError(
-            detail = BillingError.INVALID_CARD_NUMBER.value
-        ) from error
-
-
-def _reject_repeated_lines(lines: list[SaleLineIn]) -> None:
-    '''
-        A SKU twice in one note is a mistake at the till, not two sales: the
-        second line would be priced against the batches the first already took.
-
-        Args:
-            lines (list[SaleLineIn]): Lines as sent.
-
-        Raises:
-            InvalidInputError: The same SKU appears more than once.
-    '''
-    seen = {line.sku for line in lines}
-    if len(seen) != len(lines):
-        raise InvalidInputError(detail = BillingError.DUPLICATE_LINE.value)
 
 
 def _line_out(

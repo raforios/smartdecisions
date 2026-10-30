@@ -25,6 +25,7 @@ import uvicorn
 from routes.billing import router as billing_router
 from routes.billing_cash import router as billing_cash_router
 from routes.billing_customers import router as billing_customers_router
+from routes.billing_manual import router as billing_manual_router
 from routes.billing_siat import router as billing_siat_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
@@ -281,6 +282,7 @@ app.add_middleware(
 app.include_router(billing_router)
 app.include_router(billing_cash_router)
 app.include_router(billing_customers_router)
+app.include_router(billing_manual_router)
 app.include_router(billing_siat_router)
 
 

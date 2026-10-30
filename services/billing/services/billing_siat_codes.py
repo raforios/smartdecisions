@@ -7,9 +7,14 @@
     a day; asking the tax office on every invoice would make each sale wait on
     a service we do not control.
 
+    The CUFDs replaced in the last days are kept beside the one in force:
+    manual contingency invoices are transcribed with the CUFD that was in
+    force when the contingency began, which may have been replaced since.
+
     | setting_key                          | What                         |
     |--------------------------------------|------------------------------|
-    | siat#codes#<branch>#<point_of_sale>  | CUIS and CUFD in force       |
+    | siat#codes#<branch>#<point_of_sale>  | CUIS and CUFD in force, and  |
+    |                                      | the CUFDs of the last days   |
     | siat#catalog#<catalogue>             | One synchronised catalogue   |
 '''
 from datetime import datetime, timedelta
@@ -31,13 +36,19 @@ from services.billing import from_dynamo, get_settings, now_iso, write_item
 from services.billing_siat_client import Emitter
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
+from services.utils import get_current_time_gmt, load_parameters
 
 CODES_PREFIX = 'siat#codes#'
 CATALOG_PREFIX = 'siat#catalog#'
 
 # How long the norm stretches a CUFD when the SIN cannot issue the next one.
 CUFD_STRETCH_HOURS: Final[int] = 72
+
+PARAMETERS = load_parameters({'BILLING_CUFD_HISTORY_DAYS': int})
+
+# The fields of one CUFD, kept together in the history.
+_CUFD_FIELDS: Final[tuple[str, ...]] = ('cufd', 'control_code', 'cufd_valid_until', 'address',
+                                        'cufd_obtained_at')
 
 
 def emitter_for(
@@ -136,6 +147,7 @@ def current_codes(
     emitter = emitter_for(dynamodb_resource, owner)
     key = _codes_key(emitter)
     stored = _stored(dynamodb_resource, owner, key)
+    previous = _cufd_entry(stored)
 
     renewed = False
     if _expired(stored.get('cuis_valid_until')):
@@ -145,14 +157,17 @@ def current_codes(
     if force_cufd or _expired(stored.get('cufd_valid_until')) or not stored.get('cufd'):
         cufd = siat_client.request_cufd(emitter, stored['cuis'])
         stored.update(cufd = cufd.cufd, control_code = cufd.control_code,
-                      cufd_valid_until = cufd.valid_until, address = cufd.address)
+                      cufd_valid_until = cufd.valid_until, address = cufd.address,
+                      cufd_obtained_at = now_iso(),
+                      cufd_history = _recent(stored.get('cufd_history', []) + previous))
         renewed = True
 
     codes = _codes_out(emitter, stored)
     if renewed:
         write_item(dynamodb_resource, SETTINGS_TABLE, {
-            OWNER_KEY: owner, SETTING_SORT_KEY: key,
-            **codes.model_dump(), 'updated_at': now_iso()
+            OWNER_KEY: owner, SETTING_SORT_KEY: key, **codes.model_dump(),
+            'cufd_obtained_at': stored.get('cufd_obtained_at'),
+            'cufd_history': stored.get('cufd_history', []), 'updated_at': now_iso()
         })
         message = f'SIAT codes renewed for {owner} at {key}.'
         logger.info(message)
@@ -184,6 +199,55 @@ def last_codes(
     stretched = (_moment(stored['cufd_valid_until'])
                  + timedelta(hours = CUFD_STRETCH_HOURS)).isoformat()
     return None if _expired(stretched) else _codes_out(emitter, stored)
+
+
+def codes_at(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    moment: str
+) -> SiatCodesOut | None:
+    '''
+        The codes as they were at a past moment: the CUIS in force and the
+        CUFD the shop was issuing with then — the latest obtained before it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            moment (str): ISO 8601, with its offset.
+
+        Returns:
+            SiatCodesOut | None: The codes, or None when no CUFD kept covers
+                that moment.
+    '''
+    emitter = emitter_for(dynamodb_resource, owner)
+    stored = _stored(dynamodb_resource, owner, _codes_key(emitter))
+    when = _moment(moment)
+    earlier = [entry for entry in stored.get('cufd_history', []) + _cufd_entry(stored)
+               if entry.get('cufd_obtained_at') and _moment(entry['cufd_obtained_at']) <= when]
+    if not earlier:
+        return None
+    entry = max(earlier, key = lambda one: _moment(one['cufd_obtained_at']))
+    if when > _moment(entry['cufd_valid_until']) + timedelta(hours = CUFD_STRETCH_HOURS):
+        return None
+    return _codes_out(emitter, {**stored, **entry})
+
+
+def _cufd_entry(stored: dict[str, Any]) -> list[dict[str, Any]]:
+    '''
+        The CUFD of a codes item, as one history entry; none when it has
+        no CUFD.
+    '''
+    return [{field: stored.get(field) for field in _CUFD_FIELDS}] if stored.get('cufd') else []
+
+
+def _recent(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    '''
+        The history entries obtained within the days kept; one with no
+        obtaining moment, stored before the history existed, is dropped.
+    '''
+    since = get_current_time_gmt() - timedelta(days = PARAMETERS['BILLING_CUFD_HISTORY_DAYS'])
+    return [entry for entry in history
+            if entry.get('cufd_obtained_at') and _moment(entry['cufd_obtained_at']) >= since]
 
 
 def _stored(

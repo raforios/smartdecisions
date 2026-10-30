@@ -230,21 +230,13 @@ def recover(
         logger.info(message)
         return RecoveryOut(recovered = False)
 
-    codes = current_codes(dynamodb_resource, owner, force_cufd = True)
-    if record.get('event_reception_code') is None:
-        event = packages.EventRegistration(
-            cuis = codes.cuis, cufd = codes.cufd, cufd_event = record['cufd'],
-            event_code = int(record['event']),
-            description = _event_description(dynamodb_resource, owner, record['event']),
-            started_at = record['started_at'], ended_at = siat_stamp(get_current_time_gmt())
-        )
-        record['event_reception_code'] = packages.register_event(emitter, event)
-        write_item(dynamodb_resource, SETTINGS_TABLE, record)
+    codes = register_event_once(dynamodb_resource, owner, record,
+                                siat_stamp(get_current_time_gmt()))
 
     uncertain_cancelled = _settle_uncertain(emitter, codes, record)
     sales = _offline_sales(dynamodb_resource, owner, record)
     receipts = [
-        _send_batch(dynamodb_resource, owner, (emitter, codes, record),
+        send_batch(dynamodb_resource, owner, (emitter, codes, record),
                     sales[start:start + packages.MAX_PACKAGE_INVOICES])
         for start in range(0, len(sales), packages.MAX_PACKAGE_INVOICES)
     ]
@@ -259,6 +251,47 @@ def recover(
                        packages = receipts, invoices_sent = len(sales),
                        invoices_observed = sum(len(receipt.observed) for receipt in receipts),
                        uncertain_cancelled = uncertain_cancelled)
+
+
+def register_event_once(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    record: dict[str, Any],
+    ended_at: str
+) -> SiatCodesOut:
+    '''
+        The first steps of every sending, in the SIN's order: a new CUFD,
+        then the event with the CUFD the invoices were issued with. The
+        event's reception code is stored as soon as the SIN gives it, so a
+        sending cut halfway does not register the same event twice.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            record (dict[str, Any]): The contingency, automatic or manual;
+                it gains `event_reception_code`.
+            ended_at (str): When the event ended, as the SIAT stamps it.
+
+        Returns:
+            SiatCodesOut: The codes in force, the packages go with them.
+
+        Raises:
+            RegisterNotFoundError: The SIGNIFICANT_EVENTS catalogue was never
+                synchronised.
+            InvalidInputError: The SIN refused the event.
+    '''
+    codes = current_codes(dynamodb_resource, owner, force_cufd = True)
+    if record.get('event_reception_code') is None:
+        event = packages.EventRegistration(
+            cuis = codes.cuis, cufd = codes.cufd, cufd_event = record['cufd'],
+            event_code = int(record['event']),
+            description = event_description(dynamodb_resource, owner, record['event']),
+            started_at = record['started_at'], ended_at = ended_at
+        )
+        record['event_reception_code'] = packages.register_event(
+            emitter_for(dynamodb_resource, owner), event)
+        write_item(dynamodb_resource, SETTINGS_TABLE, record)
+    return codes
 
 
 def run_scheduled(dynamodb_resource: ServiceResource) -> list[str]:
@@ -322,7 +355,7 @@ def settle_package(
     return receipt
 
 
-def _send_batch(
+def send_batch(
     dynamodb_resource: ServiceResource,
     owner: str,
     context: tuple[Emitter, SiatCodesOut, dict[str, Any]],
@@ -346,7 +379,7 @@ def _send_batch(
         cuis = codes.cuis, cufd = codes.cufd,
         event_reception_code = int(record['event_reception_code']),
         invoices = [(f'{sale["invoice"]["number"]}.xml', sale['invoice_xml']) for sale in batch],
-        sent_at = siat_stamp(get_current_time_gmt())
+        sent_at = siat_stamp(get_current_time_gmt()), cafc = record.get('cafc')
     ))
     if not received.reception_code:
         error_msg = f'SIAT refused a package of {owner}: {received.messages or "no messages"}'
@@ -446,15 +479,18 @@ def _offline_sales(
     rows = read_partition(dynamodb_resource, SALES_TABLE, owner, bounds = SortBounds(
         sort_key = SALE_SORT_KEY, between = date_window(since, None)
     ))
+    # A transcribed paper invoice goes with its own manual contingency, even
+    # when it carries the same CUFD.
     offline = [row for row in rows if (row.get('invoice') or {}).get('state') ==
-               InvoiceState.OFFLINE.value and row['invoice'].get('cufd') == record['cufd']]
+               InvoiceState.OFFLINE.value and row['invoice'].get('cufd') == record['cufd']
+               and not row['invoice'].get('cafc')]
     # By invoice number, not by sale identifier: two sales of the same instant
     # sort by the random half of their identifier, and a package goes in the
     # order the invoices were numbered.
     return sorted(offline, key = lambda row: int(row['invoice']['number']))
 
 
-def _event_description(
+def event_description(
     dynamodb_resource: ServiceResource,
     owner: str,
     event: int

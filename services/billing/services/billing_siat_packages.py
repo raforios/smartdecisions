@@ -71,6 +71,8 @@ class PackageSubmission:
     event_reception_code: int
     invoices: list[tuple[str, str]]
     sent_at: str
+    # Only on transcribed paper invoices: one package, one CAFC.
+    cafc: str | None = None
 
 
 def verify_communication() -> bool:
@@ -173,7 +175,8 @@ def send_package(
         'fechaEnvio': package.sent_at,
         'hashArchivo': hashlib.sha256(archive).hexdigest(),
         'cantidadFacturas': len(package.invoices),
-        'codigoEvento': package.event_reception_code
+        'codigoEvento': package.event_reception_code,
+        **({'cafc': package.cafc} if package.cafc else {})
     })
     return _package_receipt(answer)
 
