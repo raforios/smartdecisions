@@ -7,6 +7,8 @@
 > decisiones vigentes y lo último que se hizo. Se lee al iniciar cada sesión.
 > `GUIA_SMARTDECISIONS.md` es la guía interna para presentar el producto
 > (guion de la demo incluido); no se entrega a nadie de afuera.
+> `SMARTBILLING.md` es el documento hermano de SmartBilling: su estado, las
+> decisiones vigentes y lo que falta para retomarlo.
 >
 > **Procedimientos paso a paso** viven en `.claude/skills/`, no aquí:
 > `/verificar-servicio`, `/desplegar-frontend`, `/revisar-logs`,
