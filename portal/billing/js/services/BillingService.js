@@ -41,6 +41,16 @@ export const ERRORS = {
     PAYMENT_COMBINATION_UNKNOWN: 'El SIN no tiene código para esa combinación de formas de pago.',
     CANCELLATION_DEADLINE_PASSED: 'Ya pasó el plazo para anular esta factura (día 9 del mes siguiente).',
     SALE_NOT_INVOICED: 'Esa venta es una nota interna: no tiene factura ni QR.',
+    CAFC_ALREADY_REGISTERED: 'Ese CAFC ya está registrado.',
+    CAFC_NOT_FOUND: 'Ese CAFC no está registrado: regístralo primero.',
+    NUMBER_OUTSIDE_CAFC: 'Ese número no está dentro del rango del CAFC.',
+    NUMBER_ALREADY_TRANSCRIBED: 'Esa factura de papel ya se transcribió.',
+    MANUAL_CONTINGENCY_NOT_FOUND: 'Esa contingencia no existe.',
+    MANUAL_CONTINGENCY_SENT: 'Esa contingencia ya se envió al SIN: no admite más facturas.',
+    ISSUED_OUTSIDE_EVENT: 'La fecha de la factura está fuera del inicio y el fin de la contingencia.',
+    CUFD_NOT_KEPT: 'No hay un CUFD guardado para el inicio de esa contingencia: el sistema guarda los de los últimos 7 días.',
+    INVOICING_DISABLED: 'La facturación está apagada: enciéndela en Configuración.',
+    NOTHING_TO_SEND: 'Esa contingencia no tiene facturas transcritas.',
     BUYER_WITHOUT_EMAIL: 'El cliente no dio un correo: no hay a dónde enviar la factura.',
     MAIL_NOT_SENT: 'El correo no salió. La factura es válida igual; vuelve a enviarla en un rato.',
     CANCELLATION_REASON_REQUIRED: 'Elige el motivo de la anulación: el SIN lo exige.',
@@ -163,6 +173,19 @@ export const BillingService = {
         method: 'POST', body: JSON.stringify({ event })
     }),
     recoverContingency: () => call('/siat/contingency/recover', { method: 'POST' }),
+    listCafcs: () => call('/siat/cafc'),
+    registerCafc: (body) => call('/siat/cafc', { method: 'POST', body: JSON.stringify(body) }),
+    listManualContingencies: () => call('/siat/manual-contingencies'),
+    openManualContingency: (body) => call('/siat/manual-contingencies', {
+        method: 'POST', body: JSON.stringify(body)
+    }),
+    transcribeInvoice: (id, body) => call(
+        `/siat/manual-contingencies/${encodeURIComponent(id)}/invoices`,
+        { method: 'POST', body: JSON.stringify(body) }
+    ),
+    sendManualContingency: (id) => call(
+        `/siat/manual-contingencies/${encodeURIComponent(id)}/send`, { method: 'POST' }
+    ),
     syncSiatCatalogs: () => call('/siat/catalogs/sync', { method: 'POST' }),
     siatCatalog: (name) => call(`/siat/catalogs/${encodeURIComponent(name)}`),
 

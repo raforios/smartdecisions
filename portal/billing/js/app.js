@@ -20,6 +20,7 @@ import { mountSettings } from './pages/SettingsPage.js';
 import { mountCash } from './pages/CashPage.js';
 import { mountCashSessions } from './pages/CashSessionsPage.js';
 import { mountCustomers } from './pages/CustomersPage.js';
+import { mountManualInvoices } from './pages/ManualInvoicesPage.js';
 
 const SECTIONS = {
     counter: mountCounter,
@@ -27,6 +28,7 @@ const SECTIONS = {
     tills: mountCashSessions,
     sales: mountSales,
     customers: mountCustomers,
+    manual: mountManualInvoices,
     catalog: mountCatalog,
     purchases: mountPurchases,
     dashboard: mountDashboard,
