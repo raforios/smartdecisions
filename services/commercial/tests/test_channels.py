@@ -77,10 +77,10 @@ def world_fixture():
         objects[kwargs['file_key']] = kwargs['data']
         return kwargs['file_key']
 
-    def _read_frame(
+    def _read_frame( # pylint: disable=unused-argument
         file_key: str,
-        *args, # pylint: disable=unused-argument
-        **kwargs # pylint: disable=unused-argument
+        *args,
+        **kwargs
     ) -> pd.DataFrame:
         return read_file(objects[str(file_key)], str(file_key))
 
