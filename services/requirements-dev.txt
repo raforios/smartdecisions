@@ -1,0 +1,5 @@
+# Tools to test and lint the services locally. Never packaged into a Lambda:
+# each service's requirements.txt lists only what it imports (22-oct-2026).
+pytest
+pylint
+moto[dynamodb]

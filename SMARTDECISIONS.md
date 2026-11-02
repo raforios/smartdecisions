@@ -1,16 +1,44 @@
-# SMARTDECISIONS
+# SmartDecisions
 
-> **Documento único del producto:** qué es, cómo está construido, qué está
-> **terminado**, cuál es el **estado actual** y qué queda **pendiente**. Se lee
-> primero al abrir una sesión. No es un diario: lo que ya vive en el código va
-> como puntero.
->
-> Lo que no vive aquí: las reglas técnicas en `CLAUDE.md` y `.claude/rules/`;
-> los procedimientos en `.claude/skills/`; cómo presentarlo (guion, pantallas,
-> preguntas) en `GUIA_SMARTDECISIONS.md`, guía interna; el contrato de
-> columnas en el código que lo valida.
->
-> **Última actualización: 2026-10-05**
+## Definicón
+
+> Es un sistema de Inteligencia de Negocios orientado a empresas desde pequeñas hasta grandes; pensando en que muchas de estas tienen sistemas ERP que les permiten el control de todos sus procesos y otras empreas que tengan los registros de su información en archivos y planillas Excel. 
+
+> Las empresas pueden tener mucha información registrada en sus archivos o sistemas ERP o apenas lo necesario para que puedan sobrevivir y controlar sus compras, ventas, inventarios y clientes, lo más básico cuando son empresas comerciales.
+
+> Estas son las consideraciones base para presentar un sistema de inteligencia de negocios que sea útil que en simples pasos les parmita ver su salud financiera, clientes, inventarios, ventas, distribución, todos los elementos que juegan en la parte comercial y decisional
+
+---
+
+## Consumo de información
+
+El `SmartDecisions` tiene como base de consumo de información, más no es limitativa pudiendo ser ampliada en caso de que sea necesario los siguientes datos:
+
+1. **INVENTARIO - STOCK:** Se puede integrar vía API con el ERP o cargar mediante un archivo, el propósito es tener en vivo el inventrio actualizado a "hoy" (valorado, en bolivianos y dólares al tipo de cambio oficial y en USDT). Por otro lado; si se tiene habilitado el módulo de ventas ver en vivo como se va moviendo ese inventario de manera "real" independiente del ERP o de los registros de ventas que tiene el cliente.
+
+2. **VENTAS:** Se puede integrar vía API con el ERP o cargar mediante un archivo, ver las ventas organizadas por periodos, mensuales, anuales o las diarias actualizadas al último día que se tiene información. Podríamos tener en combinación con las **RUTAS** y el **INVENTARIO** un estimado en "vivo" de lo que hoy se está vendiendo. También aplican los tipos de cambios oficial y USDT.
+
+3. **COMPRAS:** Se puede integrar vía API con el ERP o cargar mediante un archivo, el propósito es tener las compras y/o importaciones que se hicieron para que nuestro **INVENTARIO** esté actualizado, ver cuánto nos costó esa última compra respecto a las anteriores, diferencias y márgenes todo lo que comercialmente es importante para un analista comercial y financiero. También aplican los tipos de cambios oficial y USDT.
+
+4. **CUENTAS POR COBRAR:** Se puede integrar vía API con el ERP o cargar mediante un archivo, el propósito es tener los cobros registrados para todos los clientes que tienen deudas con nosotros y el flujo y segumiento que tengamos de cada uno de esos clientes y sus cuentas. También aplican los tipos de cambios oficial y USDT.
+
+5. **RUTAS:** Se puede integrar vía API con el ERP o cargar mediante un archivo. Las rutas que están definidas para los vendedores que son los que consumen el **INVENTARIO** y realizan **VENTAS** que ya mencióne en el punto 2. Estas rutas deben tener planificaciones cargadas previamente, también se pueden crear planificaciones y luego asignarlas a los vendedores y distribuidores. Pueden existir rutas "sobre la marcha" que se van creando en vivo y se deben registrar los datos que se van adquiriendo del cliente, la venta además de la ubicación. También es importante las distancias para los factores externos como combustibles y otros que podríamos requerir que y estén relacionados con esa parte.
+
+6. **PARÁMETROS:** Clientes, ubicaciones, configuraciones todos los datos que necesitemos en el `SmartDecisions` para que funcione correcatmente deberían de poder ser ingresados mediante formularios que nos permitan configurar y cargar los datos que faltan y que no vienen del API de integración con el ERP o los archivos, acá también serían otros factores que podrían ser requeridos para ver margenes y todo lo que es decisional
+
+---
+
+## Salida de la inforamción
+
+El `SmartDecisions` a partir de la información consumida debe generar lo siguiente:
+
+1. **REPORTES:** La mayoría o todos ya los tenemos ahora, sólo que no están en los lugares correctos divididos acorde su área, de manera que sean intuitivos para buscar porque no están modularizados y la estructura que tenemos es desorganizada
+
+2. **KPI'S:** La mayoría de estos ya los tenemos ahora, sólo que no están en los lugares correectos que sean intuitivos para buscar porque no están modularizados y la estructura que tenemos es desorganizada
+
+3. **MAPAS:** Ya los tenemos y las funcionalidades como optimización, comparación, en vivo, histórico y todas herramientas que sean necesarias para que esos mapas sean útiles
+
+4. **INTEGRACIÓN CON IA:** Cada reporte, KPI o segmeento que necesite una explicación debería estar integrado con IA los prompts deberían ser parametrizables deberíamos tener un CRUD de prompts para irlos modificando de manera que se puedan ir ajustando, esto en la para te **PARÁMETROS**
 
 ---
 
@@ -21,302 +49,152 @@ código existente la contradice, se avisa — no se propaga.** Todo el código d
 AI, ANALYTICS, INGEST, MINING_ANALYSIS, OPTIMIZATION, QUOTES y BILLING lo
 escribió Claude: no hay "código heredado" que sirva de excusa.
 
----
-
-## 1. El producto
-
-**En una frase:** SaaS de BearSoft que convierte **los archivos que la empresa
-ya tiene** —ventas, cobros, stock, visitas, objetivos— en decisiones
-comerciales: qué ofrecer a cada cliente, cuánto se va a vender, a quién estás
-por perder, cuánto ganas de verdad, cuánto te deben y en qué orden recorrer la
-ruta. **Sin ERP nuevo, sin instalación y sin proyecto de integración.**
-
-**Concepto diferenciador:** `Afinidad × Drop Size = Oportunidad Comercial Real`.
-
-**Mercado:** gerencias comerciales de distribuidoras y consumo masivo en
-Bolivia. Segundo vertical: mineras y comercializadoras (cotizaciones), hoy con
-poca prioridad comercial (Rafael, 04-oct).
-
-**Marca:** empresa **BearSoft**, productos **SmartDecisions** y
-**SmartBilling** (servicio BILLING).
-
-### Los archivos de origen y para qué sirven
-
-Definido por Rafael el 01-oct y el 04-oct. **Se tiene presente en cada cambio.**
-
-| Archivo | Qué es |
-|---|---|
-| `data/DetalleVentas.xlsx` | Datos de ejemplo cedidos. Base de **Comercial Illimani** vía `tools/build_sample_dataset.py` |
-| `base 2025.xlsx` | Datos de otra empresa. Base de **Distribuidora Andina** vía `tools/convert_sales_export.py` |
-| `PRE- CIERRE…` y `LPZ CIERRE…` | **Modelos** de indicadores y tableros de una tercera empresa (Cumplimiento salió de ahí). No son requisitos |
-| Las plantillas | La definición de BearSoft de lo mínimo que el producto necesita |
-
-**Las dos empresas de prueba son inventadas y deben estar completas.** No hay
-clientes reales en producción: lo desplegado es la demo. Si a un dataset de
-prueba le falta un dato, **se fabrica** de forma verosímil y se carga; no se
-diseña el producto alrededor del hueco. Ninguna regla, nombre ni cifra de esos
-archivos entra al código como si fuera del producto.
-
-### Módulos
-
-| Módulo | Pregunta |
-|---|---|
-| Resumen Comercial | ¿Cómo vamos, de quién dependemos, cuánto ganamos? |
-| Fuente de volumen | ¿De qué productos y clientes sale la venta? |
-| Oportunidades | ¿Qué le ofrezco a cada cliente y cuánto vale? |
-| Pronóstico | ¿Cuánto voy a vender? |
-| Segmentación / Salud de Cartera | ¿Quiénes valen más y a quién estoy por perder? |
-| Cuentas por cobrar | ¿Cuánto me deben, qué tan vencido, cuánto recupero? |
-| Cumplimiento de objetivos | ¿Cumplió cada cliente, en lo facturado y en lo cobrado? |
-| Stock del día | ¿Cuánto me dura, qué quiebra, cuánto capital quieto? |
-| Rutas | ¿En qué orden visito, dónde está cada vendedor, se cumplió el plan? |
-| Factores externos y tipo de cambio | ¿Cuánto vale el dólar —oficial y USDT— y qué factores mueven mi costo? |
-| Minerales | Cotización oficial, anticipada y escenario de venta |
-| Interpretación (IA) | ¿Qué significa esto? — sobre cualquiera de las anteriores |
+**RESPETA ESTE ARCHIVO ANTE TODO DEJA DE INFERIR**
 
 ---
 
-## 2. Descripción técnica
+## Descripción técnica
 
 Microservicios Python (FastAPI + Mangum sobre Lambda), cinco capas, DynamoDB.
 Frontends Vanilla JS sin build sobre S3 + CloudFront: `portal/demo/`
 (SmartDecisions) y `portal/billing/` (SmartBilling). **Una sola entrada de API:
-`api.bearsoft.com.bo/v1/<servicio>/…`** (ver §6, Infraestructura).
+`api.bearsoft.com.bo/v1/<servicio>/…`**, y en el código una sola variable,
+`API_URL` (ver Infraestructura).
 
 | Grupo | Servicios |
 |---|---|
-| **Base** (obligatorios para todo producto) | AUTH (JWT con `client` y rol), EVENTS (auditoría y uso), FILES (S3) |
-| **SmartDecisions** | INGEST, ANALYTICS, OPTIMIZATION, QUOTES, AI, MINING_ANALYSIS |
+| **Base** (todo producto los usa) | AUTH (JWT con `client` y rol), EVENTS (auditoría y uso), FILES (S3), ML_FUNCTIONS (cálculos: pronósticos, proyecciones, clasificaciones, rutas; no guarda nada), y AI (explicaciones con Bedrock) |
+| **SmartDecisions** | COMMERCIAL (cargas, análisis y rutas; une INGEST, ANALYTICS y OPTIMIZATION desde el 23-oct), FINANCE (Análisis Financiero) y MINING_ANALYSIS (cotizaciones de minerales y «vender hoy o esperar») |
+| **Independiente** | QUOTES (tipo de cambio y factores externos): ni base ni de un solo producto; lo usan SmartDecisions y SmartBilling (Rafael, 26-oct) |
 | **SmartBilling** | BILLING |
-| **Capacitación** | ML_FUNCTIONS |
 
-**FORMS, LOCALIZATION, TRADE, CMS y MINING_SUMMIT no se tocan** sin pedido
-explícito: son de clientes.
+**FORMS, LOCALIZATION, TRADE, CMS y MINING_SUMMIT no se tocan**: son de
+clientes y quedan fuera de toda revisión.
 
 **Límites que condicionan el diseño:** Lambda 250 MB sin comprimir (sin
 scikit-learn, osmnx, Prophet ni mlxtend); API Gateway 29 s y 10 MB (los
 archivos suben a S3 por FILES); DynamoDB 400 KB por ítem; OSRM público con
 límite de tasa.
 
-**Contrato de datos:** la fuente de verdad es el código —`SALES_COLUMNS`,
-`COLLECTION_COLUMNS`, `STOCK_COLUMNS`, `VISIT_COLUMNS` y objetivos en
-`services/ingest/schemas/`—, de donde se derivan el validador, el mapeador de
-cabeceras y las **cinco plantillas** (`tools/build_sales_template.py`). Ventas
-crea el dataset; los otros cuatro se enganchan a él. Todo entra por **tres
-puertas** con el mismo validador: archivo, API JSON del ERP y `from-s3`.
-
-**Datos de prueba:**
-
-| Empresa (`client` del JWT) | Ingresa | Dataset | Contenido |
-|---|---|---|---|
-| Comercial Illimani S.R.L. | `gerente@raforios.com` | `70ce5398…` | 22.008 ventas, oct-2024 → sep-2026, cobros (4.903), stock (159), visitas (913), objetivos (6.384) |
-| Distribuidora Andina S.R.L. | `gerente@bearsoft.com.bo` | `9118b2f2…` | 5.079 ventas, mar → sep-2026, cobros (603), stock (256), visitas (411), objetivos (1.925) |
-
-Las fechas terminan el 30-sep-2026 a propósito: cruzan la flotación del
-27-jun-2026 y la cartera se ve actual. Rehacer los datos de una empresa:
-`tools/complete_demo_dataset.py --end-date` y
-`tools/load_second_owner.py ... --replace`. Rutas del día de la demo:
-`tools/seed_demo_routes.py --date ... --yes --reset`.
-
-Usuarios y roles por empresa: memoria `reference_test_companies_users`.
-Completar un archivo de ventas con los otros cuatro:
-`python -m tools.complete_demo_dataset ventas.xlsx --out-dir …`; cargarlo:
-`tools/load_second_owner.py`.
-
-**Cómo verificar:** `/verificar-servicio <nombre>` (tests, Pylint 10.00,
-firmas, type hints, hardcode, tamaño, idioma de comentarios, EVENTS, S3
-directo, duplicados entre servicios, cobertura de endpoints).
-
 ---
+### Datos Técnicos adicionales
 
-## 3. Finalizado
-
-| Pieza | Fecha | Dónde mirar |
-|---|---|---|
-| Los nueve análisis comerciales, Cartera y Cuentas por cobrar | 17-sep | `services/analytics/` |
-| Rutas: plan → visita → venta → cierre, geocercas, stock transaccional; pantalla del vendedor | 21/22-sep | `services/optimization/`, `portal/demo/routes/` |
-| Usuarios por empresa y roles (`client` en el JWT; MANAGER, SELLER, REQUESTER) | 21/30-sep | `security.py` de cada servicio |
-| EVENTS en todos los servicios (auditoría y uso); lectura sólo ADMIN y escritura con token reenviado | 23-sep / 03-oct | `CLAUDE.md` §7, `_caller_authorization` en `utils.py` |
-| Maestro de clientes en INGEST, tres puertas, nunca sobrescribe | 27-sep | `services/ingest/services/clients.py` |
-| Dos canales de carga para todos los contratos, modo APPEND idempotente | 28-sep | `prepare_rows` / `validate_rows` en INGEST |
-| Un archivo por contrato (cinco plantillas) | 28-sep | `tools/build_sales_template.py` |
-| INGEST pasa por FILES; patrón FILES para DynamoDB | 28-sep | `services/ingest/services/utils.py` |
-| Rutas: Histórico y Planes separados por fecha, repetir ruta, alta de cliente en la calle, Optimizar con dos mapas | 28-sep | `localization.py`, `localization_sources.py` |
-| Factores fechados y lectura en dólares a la cotización de cada día | 29-sep | QUOTES `factors`, `exchange-rates/at`; `_scoped_dataframe` en ANALYTICS |
-| Cumplimiento de objetivos (reproduce el libro modelo a 4 decimales) | 29-sep | `services/analytics/services/objectives.py` |
-| Maestro de vendedores y un plan por vendedor | 01-oct | `ingest_sellers`, `POST /plan/{id}/by-seller` |
-| Oportunidades de 118 s a 14 s | 01-oct | `opportunities` en ANALYTICS |
-| Aislamiento por dueño también en ANALYTICS y OPTIMIZATION | 03-oct | `get_dataset_metadata` |
-| Dominio único `api.bearsoft.com.bo`, `/health`, `/docs` por servicio, CI ordenado | 03-oct | `ci/api/README.md` |
-| Prueba completa del vendedor en producción | 03-oct | plan `PRUEBA-BEARSOFT-2026-10-03` |
-| **Las dos empresas de prueba completas** (costo, cobros, stock, visitas, objetivos) | 04/05-oct | `tools/complete_demo_dataset.py` |
-| Guía interna única para presentar, con las dos empresas | 05-oct | `GUIA_SMARTDECISIONS.md` |
-| Tablas y datos documentados por servicio (sección «Datos que guarda») | 05-oct | `README.md` de cada servicio |
-| **SmartBilling** (BILLING): mostrador, ventas, catálogo con lotes, recepción, tablero, configuración; FEFO; impresión térmica | 23-sep | `services/billing/`, `portal/billing/` |
-| SIAT sin trámite: CUF, módulo 11, XML validado contra el XSD, nominatividad, enmascarado de tarjeta, simulación | 29/30-sep | `billing_siat.py`, `billing_invoice_xml.py`, `tools/billing/dry_run_invoice.py` |
-| SIAT piloto: WSDL dentro del servicio y **comunicación exitosa** con el token | 04-oct | `services/billing/wsdl/LEEME.md` |
-
----
-
-## 4. Estado actual
-
-**Desplegado:** los once servicios desde el 03-oct (comprobar con
-`aws lambda list-functions --profile deploy_ml`). Frontends al día.
-
-**Esperando el despliegue de backend (Rafael):**
-
-- **BILLING — arqueo de caja** (`docs/cambios/billing-caja/`): caja por
-  usuario y por día, egresos, cierre con diferencia, cierre del gerente,
-  alerta de fin de día (hora por comercio en la configuración), débito y
-  crédito separados en los reportes. Las tablas `billing_cash_sessions` y
-  `billing_cash_movements` ya están creadas y en el `.env`. **El portal se
-  publica después del backend**: antes, el Mostrador pediría una caja que el
-  servicio desplegado no conoce.
-
-**Revisión del 04/05-oct en el portal**, con las dos empresas: los nueve
-análisis, las ocho secciones de Rutas y Cotizaciones (hoy Minerales) abren sin errores de JS.
-El Cumplimiento de Illimani (24 meses) tarda mucho en llegar con conexión
-lenta: el servicio responde en 1,1 s; lo que pesa es la respuesta.
-
-**SmartBilling:** corregido el error «Cannot read properties of null» de
-RECEPCIÓN y TABLERO (una sección que terminaba de cargar después de cambiar
-de sección pintaba su error encima de la nueva; `portal/billing/js/app.js`).
-Ronda nueva de funcionalidades definida el 04-oct (ver §5).
-
----
-
-## 5. Pendiente
-
-En orden.
-
-1. **Probar la caja de BILLING de punta a punta.**
-2. **Rutas: inicio y fin abiertos, ruta libre, punto de partida opcional** —
-   **en producción** desde el 06-oct, con las rutas de demo sembradas.
-3. **Factores externos y tipo de cambio** —
-   `docs/cambios/smartdecisions-tipo-cambio-factores/` (spec aprobado, plan en
-   cuatro fases). Fases 1 a 3 **en producción** desde el 06-oct: USDT (primera lectura
-   Bs 11,86); vista «Efecto del tipo de cambio» en Análisis comercial
-   (Andina: +48,4 % en Bs y −10,8 % en USD, margen 22,4 % → −5,1 % a
-   reposición, 46 productos sin cubrir); y el módulo propio
-   `portal/demo/factores/` (dólar oficial con su banco de modelos, oficial
-   contra USDT día por día, CRUD de factores), con Cotizaciones renombrado
-   «Minerales». El USDT se rellena desde el 27/06 con
-   `tools/backfill_usdt.py` (registro público de Binance P2P). **Fase 4 en
-   curso:** `tools/seed_demo_factors.py` (diésel, rendimiento, arancel,
-   inflación desde oct-2024) escrito; falta definir de dónde salen los km del
-   costo de distribución, y el simulador con diésel.
-4. **SmartBilling, ronda del 04-oct**, por cambios con `intent.md`, `spec.md`
-   y `plan.md` en `docs/cambios/` (plantilla en `docs/cambios/_plantilla/`):
-   - `billing-proveedores-pedidos`: catálogo de proveedores, producto con
-     varios proveedores (código y costos con historia), pedidos con recepción
-     parcial; la recepción sin pedido se permite.
-   - `billing-caja`: **programado el 05-oct**, falta desplegar (ver §4).
-   - `billing-sucursales`: inventario por sucursal y traspasos — simple, dos
-     sucursales que se pasan mercadería.
-5. **SIAT:** pedir CUIS y CUFD reales en el piloto; agregar el WSDL de
-   `FacturacionOperaciones` cuando se haga contingencia y el de
-   `ServicioFacturacionDocumentoAjuste` para notas de crédito y débito.
-6. **Cobertura de endpoints:** OPTIMIZATION 32, BILLING 16, MINING_ANALYSIS 10
-   y AI 1 sin prueba (`endpoint-coverage` sale como TODO).
-7. **Maestro de productos**, con la misma regla que clientes y vendedores.
-8. **Sección "Usuarios"** para que un MANAGER administre a su gente, y panel
-   del ADMIN (usuarios, roles de IA, uso por cuenta). Cuando el sistema esté
-   listo para pruebas, no antes (01-oct).
-9. **Sugerencia sin decidir:** reemplazar OSRM público antes de tener
-   clientes pagando.
-10. **Postergado:** oro y plata en la cotización anticipada (la LBMA bloquea la
-   lectura automática desde el 30-sep; cotizaciones tiene baja prioridad);
-   alinear los modelos de AI a `TypedDict`; alinear
-   `mining_analysis/services/utils.py` al boilerplate; corregir
-   `portal/billing/README.md`, que todavía dice `supplies`.
-
-**Lo que falta para vender, no para demostrar:** control de suscripción,
-retención de datos y persistencia de lo que produce la capa de IA.
-
----
-
-## 6. Decisiones vigentes
-
-### Negocio
-
-- **Las empresas de prueba son el escenario ideal**, completas; los datos que
-  falten se fabrican (04-oct).
-- **Degradación elegante, no ceros.** Sin un dato opcional, la sección se
-  declara no disponible y la UI la oculta. **Un costo en cero es un costo no
-  informado.**
-- **Aceptación parcial:** las filas inválidas se apartan con su motivo y el
-  resto entra. Coordenada 0 = sin dato.
-- **Catálogos maestros (clientes, vendedores; productos después).** Las
-  plantillas no cambian; los campos de la transacción se validan completos y
-  los de un catálogo sólo se comprueba que existan, y si no, se dan de alta.
-- **Un objetivo se mide dos veces**, contra lo facturado y contra lo cobrado.
-  El cobro cuenta en el mes de la factura que salda —única lectura bajo la cual
-  `facturado = cobrado + deuda`— y **una venta al contado está cobrada al
-  momento**. Los cortes del semáforo y el valor del punto van en la política
-  comercial por propietario; el producto no declara nombres de cluster.
-- **SmartDecisions no reserva stock del ERP:** reporta
-  `disponible = existencia − comprometido`.
-- **La cotización oficial de una quincena es el promedio de la anterior**; el
-  BCB publica el viernes una cotización que rige hasta el lunes; el tipo de
-  cambio flota desde el 27-jun-2026 (antes, régimen fijo).
-- **El Ministerio de Minería recibe el boletín en PDF y PNG** a cambio de los
-  datos de cotizaciones.
-- **Un factor es una cifra y si cuenta o no**, con historia fechada; un cálculo
-  usa el estado de **su propia fecha**. Un monto en dólares se convierte a la
-  cotización de su propio día.
-
-### Técnicas
-
-- **El backend devuelve datos y códigos, nunca texto de cara al usuario.**
-- **Nada configurable vive en el código**; las variables son requeridas.
-- **INGEST es la única puerta de entrada de datos y el único dueño de los
-  maestros.** Quien necesite un cliente lo pide a INGEST por HTTP.
-- **El dueño es parte de la consulta**: el `client` del token (o el email si
-  no lo tiene). En OPTIMIZATION también es clave de partición. Un recurso
-  ajeno responde igual que uno inexistente.
-- **Un archivo se identifica por su contenido.** Misma huella y mismo dueño =
-  el mismo dataset.
-- **La cuenta por cobrar vive al nivel de factura**; cobro sin venta es
-  incidencia con código.
-- **Pronóstico: suavizado exponencial con tendencia amortiguada**, ajustado por
-  backtest, publicando su error y el del modelo ingenuo.
-- **La capa de IA recibe la respuesta del backend tal cual**; los roles viven
-  versionados en DynamoDB.
+- **El backend devuelve datos y códigos, nunca texto de cara al usuario.** El
+  portal traduce cada código (también los de AI) en su catálogo.
+- **El `.env` es configuración** (entorno, Lambda, tablas, URLs, timeouts),
+  nunca valores de cálculo. **Cada servicio guarda sus parámetros en sus
+  tablas:** `<servicio>_parameters` (iguales para todas las empresas, bloque
+  SERVICE PARAMETERS de `utils.py`, definidos en `docs/parametros.md`) y la
+  tabla de cada empresa. Ningún servicio depende de otro para arrancar
+  (Rafael, 24-oct-2026).
+- **Un cálculo común vive una sola vez, en ML_FUNCTIONS**: las proyecciones de
+  FINANCE, COMMERCIAL, QUOTES y MINING_ANALYSIS, la segmentación, la afinidad
+  (Apriori) y el algoritmo de rutas de COMMERCIAL.
+- **Los seis servicios con el boilerplate común** (COMMERCIAL, MINING_ANALYSIS,
+  BILLING, FINANCE, QUOTES y AI) tienen las mismas funciones en `utils.py`;
+  los bloques estándar van al final.
+- **El uso y la auditoría se envían a EVENTS antes de responder** (se esperan,
+  no se dejan en segundo plano): el Lambda se congela al contestar. AUTH, FILES
+  y ML_FUNCTIONS no reportan.
+- **COMMERCIAL es la única puerta de entrada de datos comerciales y el dueño de
+  los maestros** de clientes y vendedores.
+- **La capa de IA recibe la respuesta del backend tal cual.** Una pantalla
+  existe para AI si tiene un texto activo en `ai_prompts` (rol, contexto,
+  misión y reglas, versionados); se editan en Parámetros › Prompts de la IA,
+  sin desplegar. Modelo: Claude Haiku 4.5 (`us.` en Bedrock).
+- **AUTH:** el alta de usuarios es sólo para `ADMIN`; contraseñas con `bcrypt`
+  directo, compatible con los hashes viejos de passlib.
 - **Sin versiones fijadas en `requirements.txt`**; el Lambda no tiene pyarrow
   (comparar `Enum` por `.value`).
 - **Los timestamps de un dispositivo se normalizan a `TARGET_TIMEZONE`** antes
   de decidir el día.
 - **No se crean carpetas nuevas dentro de un microservicio** sin pedido.
-  Excepciones autorizadas: `scripts/` en MINING_ANALYSIS y `wsdl/` en BILLING
-  (04-oct: tiene que viajar en el ZIP).
+  Excepciones autorizadas: `wsdl/` en BILLING (04-oct: tiene que viajar en el
+  ZIP) y `scripts/` en MINING_ANALYSIS, que se retira cuando la carga
+  quincenal corra con `tools/etl_minerals/`.
+- **La carga quincenal de minerales es independiente del API**
+  (`tools/etl_minerals/`, 19-oct): su propio `.env` y dependencias; carga el
+  Excel en el MySQL local y lo publica en DynamoDB. El catálogo de minerales es
+  la tabla `t_minerals`, no una lista en el código.
 - **Los WSDL del SIAT se leen de disco**, nunca se bajan en el arranque.
-- **Los tests de los servicios base no importan módulos que validen entorno**
-  (GitHub Actions corre sin `.env`).
+- **CI de GitHub:** pylint 10.0 sin `--rcfile` y pytest sin `.env` sobre AUTH,
+  EVENTS, FILES, ML_FUNCTIONS y AI; sus tests puros no importan módulos que
+  validen entorno.
 - **Tipos con sintaxis moderna** (`list[str]`, `str | None`), en todo el código
-  propio, boilerplate incluido (07-oct). Lo vigila el chequeo `modern-typing`;
+  propio, boilerplate incluido. Lo vigila el chequeo `modern-typing`;
   `pyupgrade` vive sólo en `SmartBear/.venv`. Archivos de hasta 800 líneas.
 - **`tools/` cumple las mismas reglas que los servicios** (Pylint 10.00 por
   herramienta, firmas, tipos, idioma); `verify_service.py --all` la revisa.
-  Las herramientas de INGEST arrancan con `tools/ingest_env.py`.
+  Qué hay en cada carpeta de `tools/` y para qué sirve: `tools/README.md`.
+
+---
 
 ### Infraestructura
 
 - **Sin RDS por presupuesto.** Todo servicio nuevo: DynamoDB + Lambda + S3.
 - **Un solo EVENTS para pruebas y producción** hasta pasar de 10 clientes
-  reales (03-oct).
+  reales.
 - **Un dominio para toda la API**, `bearsoft-gateway` (HTTP API, formato 2.0),
   una ruta `ANY /v1/<prefijo>/{proxy+}` por servicio. Costo adicional USD 0.
-- **Despliegue ordenado con `ci/api/start.sh`**: tablas → base → INGEST y
-  QUOTES → ANALYTICS, OPTIMIZATION, MINING_ANALYSIS, AI → BILLING → tareas →
-  dominio. El CORS de cada API vive en su `deploy.config`.
+  Todos los servicios propios y el portal llaman `{API_URL}/v1/<servicio>/…`
+  (desde el 21-oct-2026; ninguno conserva una `*_SERVICE_URL`).
+- **Despliegue ordenado con `services/ci/api/start.sh`**: tablas → AUTH, EVENTS,
+  FILES, ML_FUNCTIONS, AI → QUOTES → COMMERCIAL, MINING_ANALYSIS, FINANCE →
+  BILLING → tareas → dominio. El CORS de cada API vive en su `deploy.config`.
 - **Las tablas se crean con `create_dynamodb_tables.sh`.**
 - **El `.env` viaja entero a las variables del Lambda: ningún valor lleva coma
-  ni llave.**
+  ni llave.** El `.dockerignore` de cada servicio excluye `.env` del paquete.
 - **Los deploys de backend los hace Rafael; los de frontend, Claude.**
-- **Frontends:** SmartDecisions con `python3 -m tools.deploy_demo_portal --yes`;
+- **Frontends:** SmartDecisions con `python3 -m tools.deploy.deploy_demo_portal --yes`;
   SmartBilling en `bearsoft-smartbilling-portal` + CloudFront `EWVWU4A03ZZ4Z`
-  (`aws s3 sync portal/billing/ … --delete --exclude README.md` e
+  (`aws s3 sync portal/billing/ … --delete --exclude README.md --cache-control no-cache` e
   invalidación).
 - **Gotchas:** con red lenta `aws s3 cp` puede devolver 0 sin subir (comprobar
   `CodeSize`); el CORS de un API ya creado no se actualiza desde el script;
-  `GET /v1/ingest/history` no existe (el listado es `/v1/ingest/datasets`).
+  el listado de cargas es `/v1/commercial/datasets`; la salud de ML_FUNCTIONS está en `/v1/common/health`.
+---
+
+## Reglas de negocio "a mano alzada" (pueden ajustarse y mejorarse)
+
+1. Comienza con una planificación de las ventas un FORECAST, esa planificación nos lleva a hacer un pedido a nuestros proveedores, ese pedido puede ser vigente para un mes o un trismestre eso dependerá de cada empresa. Ese pedido y el costo de tenerlo en mis almacenes se calculó al tipo de cambio del día que estoy haciendo el pedido que estoy pagando por esos productos.
+
+2. Cuando llegan a mis almacenes ya tienen un costo unitario donde les han sumado todo lo que implica desde pedir hasta traer (transporte, fletes, aduana, etc) ese precio por cada producto es el que me da el costo unitario. A ese costo unitario yo le añado los demás valores que cada empresa debe tener entre los más comunes impuestos, utilidad o margen e incluso el costo de dejarlos en las tiendas y los clientes que consumen esos productos.
+
+3. Ese precio el día que se lo fija, tiene un valor en dólares a ese mismo día de ahí en más y durante la vigencia de todos los lotes de mi pedido o del precio, el costo del producto debería ser el mismo, muchas veces los van ajustando para no perder, pero cada venta que hago tiene un valor al día de la venta.
+
+4. Los créditos que doy y todo eso se calcula al día que estoy dando el crédito o estoy vendiendo, eso ya es historia, lo que pasó desde que pedí los productos, hasta que los vendí ya sea al contado a crédito, no va a cambiar porque se hizo en un momento donde el tipo de cambio vigente era XX 
+
+5. Asumo y si no es así es una regla que nosotros como SmartDecisions podemos implementar, es que cada agrupamiento sea mensual, el diario no sirve para esta parte, sería más para el SamrtBilling (NO significa que no debemos recibir los datos diarios), el agrupamiento por ventas debería ser mensual y entonces sabemos cuánto vendimos en el mes en cuestión al tipo de cambio de ese último día del mes y cuál es la diferencia con hoy que consulto, nuestras importanciones e inventarios sabemos cuanto tenemos hoy al tipo de cambio de hoy y eso es lo que tenemos lo que ya fue no va a cambiar, podemos ver respecto del día que se asignó el precio al inventario a hoy cómo cambio, para ver si quizá debmos hacer un ajuste de precios para no perder porque el costo de pedir XX cantidad de productos a YY precio hace un mes puede incidir en la cantidad del pedido de este mes y en el precio a futuro
+
+6. Por eso te pedí que reorganicemos la estrucutra incluso de la navegación porque por un lado van nuestras ventas que son diarias pero el SmartDecisions debería evaluar por mes y sólo si alguien pide evaluar el detalle de un mes específico ingresar a ese mes, pero eso sigue siendo una fotografía nada se puede hacer ya porque eso trasncurrió así la unica comparación es saber cuánto en dolares vendí al útimo día del mes que analizamos versus hoy, esa diferencia nos puede dar un dato importante
+
+7. La parte de compras es casi similar compramos a un precio hace uno o tres o seis meses para tener mucho stock, pero nuestro precio fue uno ese moemnto y ahora podría ser otro y debería darnos la información de esa diferencia porque sí podemos ajustar nuestros precios sabiendo el pasado y viendo como afecta el presente para que las futuras ventas que hagamos no jueguen en nuestra contra.
+
+8. Lo que se vendío a crédito que son nuestras cuentas por cobrar no varían con el tipo de cambio ya te repetí varias veces que si dimos mil de credito cobramos los mil, acá no tiene nada que ver el tipo de cambio porque nuestras ventas son en bolivianos, para eso vemos todos los otros factores explicados antes para que el precio en bolivianos no juegue en nuestra contra, acá el tipo de cambio sólo nos sirve para ver la devaluación de lo que dimos de crédito versus lo que terminamos cobrando, para tomar decisiones sobre los plazos de los créditos o cosas así que cada empresa definirá
+
+9. Si revisamos un mes en particular debe verse el cálculo a ese mes y como es a hoy, pero los reportes iniciales que son la suma de todo es a hoy, porque ese hoy es el que nos dice qué tenemos y qué está pasando y el pasado nos dice qué debemos corregir en el presente. Así que todas las vistas de los dashboards son a hoy pero si veo algo en particular es a ese momento, por eso te decía que los cálculos son en bolivianos y solo transformamos a dólares o USDT de la fecha cuando el reporte lo amerita y para un general es usando el valor vigente actual, para un mes específico los valores vigentes ese mes comaprados con hoy.
+
+En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas iniciales el estado actual es a hoy, los cáculos y sumas es en Bolivianos y luego se transforma con el tipo de cambio de hoy, si hay un requerimiento especifico de un periodo de tiempo se usa el tipo de cambio de ese periodo y se muestra al final la relación con hoy, lo pasado es como estaba no se actualiza no cambia, sólo se compara con hoy
+
+---
+
+## Último estado
+
+> Lo escribe Claude cada vez que se detiene esperando algo. Sólo hechos
+> comprobados; el detalle vive en `docs/cambios/smartdecisions/plan.md`.
+
+**30-oct-2026.**
+
+- **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
+  (26-oct), FINANCE y MINING_ANALYSIS (26-oct), ML_FUNCTIONS (25-oct). El
+  servicio genérico de parámetros ya no existe en AWS, ni las tablas
+  `parameters_values` y `commercial_routes`.
+- **Reunión del 28-oct:** hecha. Rafael está ordenando el feedback en un
+  documento propio.
+- **Rumbo nuevo (Rafael, 29/30-oct):** un producto de captura de datos por
+  chat (Telegram primero, WhatsApp después), flexible para varios rubros, que
+  sería la fuente de datos de SmartDecisions y hará variar un poco este
+  producto. Por ahora es idea: Rafael pasará sus especificaciones y se diseña
+  el plan. Material en `idea/`.
+- **SmartBilling, en pausa desde el 30-oct** (todo desplegado); su estado y
+  lo que falta para retomarlo no van aquí: los productos no se mezclan.
