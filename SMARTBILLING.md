@@ -47,9 +47,6 @@ SmartDecisions.
   el portal desplegados y comprobados el 3-nov; **falta probarlo en el
   piloto**.
 - Pruebas de controlador de todos los endpoints de BILLING.
-
-## Hecho, sin desplegar (3-nov-2026)
-
 - **Reversión de la anulación** de una factura o de una nota de
   crédito-débito, una sola vez, hasta el día 9 del mes siguiente a la
   emisión; lo revertido no se vuelve a anular y el comprador recibe el aviso
@@ -57,8 +54,8 @@ SmartDecisions.
   nota devuelve sus unidades y su efectivo vuelve a salir de la caja. Sólo
   con la caja de la operación abierta. Una venta con devoluciones vigentes no
   se anula: primero se anulan sus notas. Botón «Revertir anulación» en
-  Ventas. Probado contra el SIN simulado; falta desplegar BILLING y el
-  portal, y la prueba en el piloto (en pausa).
+  Ventas. Probado contra el SIN simulado; BILLING y el portal desplegados
+  y comprobados el 3-nov; falta la prueba en el piloto (en pausa).
 
 ## Estado actual
 
