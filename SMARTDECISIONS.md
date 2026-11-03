@@ -109,9 +109,9 @@ límite de tasa.
 - **Los timestamps de un dispositivo se normalizan a `TARGET_TIMEZONE`** antes
   de decidir el día.
 - **No se crean carpetas nuevas dentro de un microservicio** sin pedido.
-  Excepciones autorizadas: `wsdl/` en BILLING (04-oct: tiene que viajar en el
-  ZIP) y `scripts/` en MINING_ANALYSIS, que se retira cuando la carga
-  quincenal corra con `tools/etl_minerals/`.
+  Excepción autorizada: `wsdl/` en BILLING (04-oct: tiene que viajar en el
+  ZIP). El `scripts/` de MINING_ANALYSIS se retiró el 2-nov, con todo su
+  MySQL: el servicio sólo lee DynamoDB.
 - **La carga quincenal de minerales es independiente del API**
   (`tools/etl_minerals/`, 19-oct): su propio `.env` y dependencias; carga el
   Excel en el MySQL local y lo publica en DynamoDB. El catálogo de minerales es

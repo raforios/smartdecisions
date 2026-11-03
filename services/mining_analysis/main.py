@@ -110,7 +110,7 @@ def root() -> dict[str, Any]:
         'Last Update': date.today().isoformat(),
         'Application': 'Python - FastAPI',
         'Database': 'AWS DynamoDB',
-        'Owner': f'Ministerio de Minería y Metalurgia {copyright_symbol} {today.year}',
+        'Owner': f'BearSoft {copyright_symbol} {today.year}',
         'Architecture': 'Spec-Driven Development'
     }
     return output
