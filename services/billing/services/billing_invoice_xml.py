@@ -210,6 +210,32 @@ def _build_header(
     _put(header, 'codigoDocumentoSector', SECTOR_DOCUMENT)
 
 
+def put_detail_figures(
+    detail: Element,
+    line: InvoiceLine
+) -> None:
+    '''
+        Writes the figures every `detalle` of the SIN opens with, in the order
+        its XSDs declare them: the invoice's and the credit note's share these
+        nine and differ only in what follows.
+
+        Args:
+            detail (Element): The `detalle` element.
+            line (InvoiceLine): The line, with its SIN codes.
+    '''
+    _put(detail, 'actividadEconomica', line.sin_activity_code)
+    _put(detail, 'codigoProductoSin', line.sin_product_code)
+    _put(detail, 'codigoProducto', line.sku)
+    _put(detail, 'descripcion', line.description)
+    _put(detail, 'cantidad', _amount(line.quantity))
+    _put(detail, 'unidadMedida', line.sin_unit_code)
+    _put(detail, 'precioUnitario', _amount(line.unit_price))
+    # Zero and not nil: a line with no discount has a discount OF zero, not
+    # an unknown one. The SIN's own example XML sends it that way.
+    _put(detail, 'montoDescuento', _amount(line.discount))
+    _put(detail, 'subTotal', _amount(line.subtotal))
+
+
 def _build_detail(
     root: Element,
     lines: list[InvoiceLine]
@@ -223,17 +249,7 @@ def _build_detail(
     '''
     for line in lines:
         detail = SubElement(root, 'detalle')
-        _put(detail, 'actividadEconomica', line.sin_activity_code)
-        _put(detail, 'codigoProductoSin', line.sin_product_code)
-        _put(detail, 'codigoProducto', line.sku)
-        _put(detail, 'descripcion', line.description)
-        _put(detail, 'cantidad', _amount(line.quantity))
-        _put(detail, 'unidadMedida', line.sin_unit_code)
-        _put(detail, 'precioUnitario', _amount(line.unit_price))
-        # Zero and not nil: a line with no discount has a discount OF zero, not
-        # an unknown one. The SIN's own example XML sends it that way.
-        _put(detail, 'montoDescuento', _amount(line.discount))
-        _put(detail, 'subTotal', _amount(line.subtotal))
+        put_detail_figures(detail, line)
         _put(detail, 'numeroSerie', None)
         _put(detail, 'numeroImei', None)
 

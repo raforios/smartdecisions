@@ -71,6 +71,15 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/billing/sales/{sale_id}/qr` | The invoice's **QR** as inline SVG (drawn with `segno` from the stored `qr_url`); `SALE_NOT_INVOICED` for an internal note. |
 | `POST` | `/v1/billing/sales/{sale_id}/cancel` | Voids a **note** and returns its units to their batches; an invoice is cancelled at the SIN first, with `reason_code`. |
 
+### Returns (`/v1/billing/sales/{sale_id}/returns`)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/billing/sales/{sale_id}/returns` | Takes back all or part of an accepted **invoice** with a **Nota de Crédito-Débito**. |
+| `GET` | `/v1/billing/sales/{sale_id}/returns` | The **notes** of a sale. |
+| `GET` | `/v1/billing/sales/{sale_id}/returns/{credit_note_id}/qr` | The note's **QR** as inline SVG. |
+| `POST` | `/v1/billing/sales/{sale_id}/returns/{credit_note_id}/cancel` | Cancels a **note** at the SIN, with `reason_code`, and undoes its return. |
+
 ### Till (`/v1/billing/cash`)
 
 | Method | Endpoint | Description |
@@ -129,7 +138,7 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 | `billing_settings` | `owner` | `setting_key` |
 | `billing_parameters` | `code` | — |
 
-**A till:** `user_email`, `status` (`OPEN`, `CLOSED`), `business_day`, `opened_at`, `opening_cash` and, on closing, `closed_at`, `closed_by`, `counted_cash`, `expected_cash`, `difference`, `note`. **An expense:** `expense_type` (`SUPPLIER_PAYMENT`, `SERVICE_PAYMENT`, `PETTY_CASH`), `amount`, `concept`, `purchase_id`, `status` (`ACTIVE`, `CANCELLED`) and who created or cancelled it and when. Payment methods: `EFECTIVO`, `TRANSFERENCIA` (bank to bank, SIN 7), `BILLETERA_MOVIL` (an app to the shop's account or back, SIN 32), `TARJETA_DEBITO`, `TARJETA_CREDITO`; `QR` (SIN 5, OTROS, which combines with nothing) and `TARJETA` remain only on old notes. Till rules: one test per rule in `tests/test_billing_cash.py`.
+**A till:** `user_email`, `status` (`OPEN`, `CLOSED`), `business_day`, `opened_at`, `opening_cash` and, on closing, `closed_at`, `closed_by`, `counted_cash`, `expected_cash`, `difference`, `note`. **An expense:** `expense_type` (`SUPPLIER_PAYMENT`, `SERVICE_PAYMENT`, `PETTY_CASH`, and `REFUND`, which only a return writes and only cancelling its note voids), `amount`, `concept`, `purchase_id`, `status` (`ACTIVE`, `CANCELLED`) and who created or cancelled it and when. Payment methods: `EFECTIVO`, `TRANSFERENCIA` (bank to bank, SIN 7), `BILLETERA_MOVIL` (an app to the shop's account or back, SIN 32), `TARJETA_DEBITO`, `TARJETA_CREDITO`; `QR` (SIN 5, OTROS, which combines with nothing) and `TARJETA` remain only on old notes. Till rules: one test per rule in `tests/test_billing_cash.py`.
 
 **SIAT codes and catalogues** live in `billing_settings`: `siat#codes#<branch>#<point_of_sale>` (CUIS, CUFD, control code, validity) and `siat#catalog#<catalogue>` (rows with `code`, `description`, `activity_code`).
 
@@ -146,6 +155,8 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 **Manual contingency invoices (CAFC).** For events 5–7 (software or hardware failure, power cut) the shop issues paper invoices printed under a CAFC. `POST /v1/billing/siat/cafc` registers a CAFC with its range; `POST /siat/manual-contingencies` opens one (CAFC, event, start, end) and keeps the CUFD in force at its start, read from the CUFD history (`billing_siat_codes.codes_at`, `BILLING_CUFD_HISTORY_DAYS`); `POST /siat/manual-contingencies/{id}/invoices` transcribes a paper invoice as a sale with the paper's number, moment, prices and CAFC — it takes stock and no till; `POST /siat/manual-contingencies/{id}/send` gets a new CUFD, registers the event with the old CUFD and sends the packages with the CAFC (`services/billing_manual.py`). The automatic contingency never takes a transcribed invoice. Managers only. Error codes in `schemas/billing_manual.py` (`ManualError`).
 
 **Cancellation deadline.** An invoice can be cancelled until the 9th of the month after its issue; later, `CANCELLATION_DEADLINE_PASSED` and the SIN is not asked.
+
+**Returns (Nota de Crédito-Débito).** `POST /v1/billing/sales/{sale_id}/returns` with `{"lines": [{"sku", "quantity"}]}` takes back what the buyer returns of an accepted invoice (`services/billing_returns.py`). Before the SIN is asked it refuses a cancelled sale, an internal note, an invoice not accepted, more than 18 months after the invoice, a SKU not sold or more units than are left to return, and a till of the caller without the cash. Then it takes the note number (`counter#credit_note#<branch>#<point_of_sale>`), builds the CUF (invoice type 3, sector document 24) and the XML against `docs/siat/notaComputarizadaCreditoDebito.xsd` (original details with `codigoDetalleTransaccion` 1, returned ones with 2) and sends it with `recepcionDocumentoAjuste`, online only. Accepted, the units go back to the batches they left (last taken first), the money goes back by each means in proportion to what it paid, and the cash part leaves the caller's till as a `REFUND`. The note is stored inside its sale (`credit_notes`, with its XML), mailed with its PDF (`services/billing_credit_note_pdf.py`, the SIN's graphic format) when the buyer gave an email, and counted by the dashboard, which reads each sale net of its returns. Cancelling it (`anulacionDocumentoAjuste`, until the ninth of the next month, while the refund's till is open) takes the units again and voids the refund. Error codes in `schemas/billing_returns.py` (`ReturnError`).
 
 **Cancelling an invoice.** `POST /v1/billing/sales/{sale_id}/cancel` takes an optional body `{"reason_code": <CANCELLATION_REASONS code>}`. An invoiced note requires it and is cancelled with `anulacionFactura` first, with the codes in force; if the SIN refuses, the note stays issued and nothing moves. An internal note needs no body.
 
@@ -177,6 +188,8 @@ billing/
 │   ├── billing.py
 │   ├── billing_cash.py
 │   ├── billing_customers.py
+│   ├── billing_manual.py
+│   ├── billing_returns.py
 │   └── billing_siat.py
 ├── models/
 │   ├── __init__.py
@@ -186,12 +199,16 @@ billing/
 │   ├── billing.py
 │   ├── billing_cash.py
 │   ├── billing_customers.py
+│   ├── billing_manual.py
+│   ├── billing_returns.py
 │   └── billing_siat.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── billing.py
 │   ├── billing_cash.py
 │   ├── billing_customers.py
+│   ├── billing_manual.py
+│   ├── billing_returns.py
 │   ├── billing_siat.py
 │   └── health.py
 ├── services/
@@ -200,13 +217,20 @@ billing/
 │   ├── billing.py
 │   ├── billing_cash.py
 │   ├── billing_contingency.py
+│   ├── billing_credit_note_pdf.py
+│   ├── billing_credit_note_xml.py
 │   ├── billing_customers.py
+│   ├── billing_invoice_pdf.py
 │   ├── billing_invoice_xml.py
 │   ├── billing_invoicing.py
+│   ├── billing_mail.py
+│   ├── billing_manual.py
 │   ├── billing_payments.py
 │   ├── billing_purchases.py
 │   ├── billing_reports.py
+│   ├── billing_returns.py
 │   ├── billing_sales.py
+│   ├── billing_sale_checks.py
 │   ├── billing_siat.py
 │   ├── billing_siat_client.py
 │   ├── billing_siat_codes.py

@@ -20,13 +20,23 @@ from models.billing import OWNER_KEY, SALES_TABLE, SALE_SORT_KEY, SETTINGS_TABLE
 from schemas.billing import Buyer, SaleNoteOut
 from schemas.billing_manual import (
     CafcIn,
+    CafcOut,
+    CafcsResponse,
+    ManualContingenciesResponse,
+    ManualContingencyOut,
     ManualContingencyIn,
     ManualError,
     ManualInvoiceIn,
     ManualLineIn,
     ManualTranscription
 )
-from schemas.billing_siat import CatalogEntry, CatalogOut, InvoiceState, SiatCatalog
+from schemas.billing_siat import (
+    CatalogEntry,
+    CatalogOut,
+    InvoiceState,
+    RecoveryOut,
+    SiatCatalog
+)
 from services import billing, billing_contingency, billing_manual, utils
 from services import billing_siat_packages as packages
 from services.exceptions import InvalidInputError, RegisterNotFoundError
@@ -299,3 +309,52 @@ def test_the_package_request_carries_the_cafc_only_when_it_has_one(monkeypatch):
 
     assert sent_requests[0]['cafc'] == CAFC
     assert 'cafc' not in sent_requests[1]
+
+
+def test_the_cafc_and_contingency_controllers_return_their_models(
+    paper_shop,
+    tax_office # pylint: disable=unused-argument
+):
+    '''
+        Register a CAFC, open a contingency, list both and send it: each
+        controller answers its model, and the refusals keep their codes.
+    '''
+    def _call(
+        controller,
+        **arguments
+    ):
+        return asyncio.run(controller(dynamodb_resource = paper_shop, owner = OWNER,
+                                      request = None, current_user = CASHIER, **arguments))
+
+    with patch.object(utils, '_audit_payload', lambda *_: {}), \
+            patch.object(utils, 'send_audit_event', AsyncMock()):
+        cafc = _call(controllers.register_cafc_controller,
+                     cafc = CafcIn(cafc = 'CAFC-PILOTO-2', first_number = 1, last_number = 10))
+        assert isinstance(cafc, CafcOut)
+        cafcs = _call(controllers.list_cafcs_controller)
+        assert isinstance(cafcs, CafcsResponse)
+        assert {item.cafc for item in cafcs.items} == {CAFC, 'CAFC-PILOTO-2'}
+
+        opened = _call(controllers.open_manual_contingency_controller,
+                       contingency = ManualContingencyIn(cafc = CAFC, event = 7,
+                                                         started_at = STARTED, ended_at = ENDED))
+        assert isinstance(opened, ManualContingencyOut)
+        listed = _call(controllers.list_manual_contingencies_controller)
+        assert isinstance(listed, ManualContingenciesResponse)
+        assert [item.contingency_id for item in listed.items] == [opened.contingency_id]
+
+        with pytest.raises(InvalidInputError) as empty:
+            _call(controllers.send_manual_contingency_controller,
+                  contingency_id = opened.contingency_id)
+        assert empty.value.detail == ManualError.NOTHING_TO_SEND.value
+
+        billing_manual.transcribe_invoice(paper_shop, OWNER, opened.contingency_id,
+                                          _paper(), CASHIER)
+        sent = _call(controllers.send_manual_contingency_controller,
+                     contingency_id = opened.contingency_id)
+        assert isinstance(sent, RecoveryOut) and sent.invoices_sent == 1
+
+        with pytest.raises(RegisterNotFoundError):
+            _call(controllers.open_manual_contingency_controller,
+                  contingency = ManualContingencyIn(cafc = 'OTRO', event = 7,
+                                                    started_at = STARTED, ended_at = ENDED))

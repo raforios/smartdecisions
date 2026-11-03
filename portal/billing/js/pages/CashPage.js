@@ -12,6 +12,7 @@
 import {
     BillingService,
     EXPENSE_LABELS,
+    MANUAL_EXPENSE_TYPES,
     PAYMENT_LABELS,
     currentTillOrNull,
     errorText
@@ -183,6 +184,8 @@ function movementsHtml(till) {
                 <td class="num">${money(row.amount)}</td>
                 <td>${row.status === 'CANCELLED'
                     ? `<span class="chip chip-muted">Anulado por ${escapeHtml(row.cancelled_by)}</span>`
+                    : row.expense_type === 'REFUND'
+                    ? '<span class="chip chip-muted">Por nota de crédito-débito</span>'
                     : `<button class="link-danger cancel-expense"
                                data-id="${escapeHtml(row.movement_id)}">Anular</button>`}</td>
             </tr>`).join('')}</tbody>
@@ -215,8 +218,8 @@ export async function mountCash(host) {
                por banco no va aquí.</p>
             <div class="field-row">
                 <label class="field"><span>Tipo</span>
-                    <select id="expense-type">${Object.entries(EXPENSE_LABELS).map(
-                        ([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+                    <select id="expense-type">${MANUAL_EXPENSE_TYPES.map((value) =>
+                        `<option value="${value}">${EXPENSE_LABELS[value]}</option>`).join('')}
                     </select></label>
                 <label class="field"><span>Monto (Bs)</span>
                     <input type="number" id="expense-amount" min="0.01" step="0.01"></label>

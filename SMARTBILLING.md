@@ -34,15 +34,39 @@ SmartDecisions.
 - Facturas manuales de contingencia (CAFC): registro del CAFC, transcripción y
   envío; historial de CUFD de 7 días. **Desplegado, sin probar en el piloto.**
 
+## Desplegado el 3-nov-2026, sin probar en el piloto
+
+- **Devoluciones con Nota de Crédito-Débito** (documento sector 24): botón
+  «Devolución» en Ventas sobre una factura aceptada; la nota va al SIN sólo
+  en línea y, aceptada, todo vuelve al estado inicial (las unidades a sus
+  lotes, el efectivo sale de la caja como «Devolución al cliente», el resto
+  de los medios en proporción). El comprador la recibe impresa y por correo
+  como la factura (formato gráfico del SIN). Se anula hasta el día 9 del mes
+  siguiente mientras la caja de la devolución esté abierta. El tablero cuenta
+  cada venta neta de lo devuelto. Probado contra el SIN simulado; BILLING y
+  el portal desplegados y comprobados el 3-nov; **falta probarlo en el
+  piloto**.
+- Pruebas de controlador de todos los endpoints de BILLING.
+
 ## Estado actual
 
-**En pausa desde el 30-oct-2026** (Rafael): todo lo hecho está desplegado; no
-se avanza hasta tener lo que falta, para no gastar tiempo sin avances.
+**Retomado el 3-nov-2026** como fase 12.0 del plan único (terminar
+SmartBilling), con el NIT y el CAFC de Rafael. Estuvo en pausa desde el
+30-oct.
+
+**Pruebas con el SIN en pausa desde el 3-nov** (Rafael): no se prueba nada
+más en el piloto hasta que Rafael vuelva del SIN (4-nov) con el CAFC, lo de
+«PROCESO MASIVO» en la solicitud y lo demás que haga falta. Lo que necesite
+más información del SIN no se programa hasta tenerla. La reversión de la
+anulación (factura y nota) está aprobada en su versión mínima: una sola vez,
+hasta el día 9 del mes siguiente, con el stock disponible y la caja de la
+venta o de la devolución abierta; aviso al comprador por correo.
 
 - **Correo:** el dominio está verificado en SES, pero la cuenta sigue en
   sandbox: a un comprador real todavía no le llega. La solicitud de producción
-  vive en el caso de AWS Support 179319997000226, reabierto el 29-oct. No hay
-  que cerrarlo hasta que AWS decida.
+  fue el caso de AWS Support 179319997000226 (reabierto el 29-oct), que el
+  3-nov figura cerrado y denegado (`ReviewDetails` DENIED); hay que revisarlo
+  y volver a pedirla.
 - **Datos de prueba:** THE PHARMA queda con la facturación apagada y el
   producto CONS-TI dado de baja después de cada prueba.
 
@@ -51,10 +75,12 @@ se avanza hasta tener lo que falta, para no gastar tiempo sin avances.
 1. **CAFC del piloto** con el NIT de Rafael. Antes de pedirlo afuera, releer todos
    los manuales y PDFs que ya tenemos. Rafael irá al SIN la semana del 2-nov.
    Con el CAFC, probar la transcripción y el envío en el piloto.
-2. **Notas de crédito-débito:** no empezadas.
+2. **Notas de crédito-débito:** hechas y desplegadas; falta la prueba en el
+   piloto (en pausa).
 3. **Pruebas de certificación fase I** del SIN (`docs/siat/SIAT.md`, sección
    de la fase I).
-4. **SES:** esperar la respuesta de AWS en el caso reabierto.
+4. **SES:** el caso de AWS quedó cerrado sin avance (Rafael, 3-nov);
+   revisarlo en la consola y volver a pedir la salida del sandbox.
 5. **Ideas aprobadas, sin fecha:** factura por WhatsApp, Libro de Ventas del
    SIN para el contador, aviso de CUFD y certificado por vencer.
 6. **Proveedores y pedidos** (Rafael, 04-oct, nunca programado): «puede

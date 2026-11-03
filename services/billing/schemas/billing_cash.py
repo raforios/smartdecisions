@@ -32,6 +32,8 @@ class ExpenseType(str, Enum):
     SUPPLIER_PAYMENT = 'SUPPLIER_PAYMENT'
     SERVICE_PAYMENT = 'SERVICE_PAYMENT'
     PETTY_CASH = 'PETTY_CASH'
+    # Only a return accepted by the SIN writes it (`billing_returns.py`).
+    REFUND = 'REFUND'
 
 
 class MovementStatus(str, Enum):

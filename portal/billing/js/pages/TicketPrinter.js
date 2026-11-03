@@ -251,14 +251,7 @@ function invoiceRows(line) {
 function invoiceHtml(sale, { settings, size, qrSvg }) {
     const invoice = sale.invoice;
     const place = invoice.branch ? `Sucursal N° ${invoice.branch}` : 'Casa Matriz';
-    const body = sale.lines.flatMap(invoiceRows).map((row) => `
-        <tr><td colspan="3" class="item">${escape(row.sku)} - ${escape(row.name)}</td></tr>
-        <tr>
-            <td class="qty">${money(row.quantity)} x ${money(row.price)}${
-                row.discount ? ` - ${money(row.discount)}` : ''}</td>
-            <td></td>
-            <td class="amount">${money(row.amount)}</td>
-        </tr>`).join('');
+    const body = detailRows(sale.lines);
 
     return `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8">
@@ -319,6 +312,115 @@ function invoiceHtml(sale, { settings, size, qrSvg }) {
 }
 
 /**
+ * The rows of one block of details, as the invoice prints them.
+ *
+ * @param {object[]} lines Sold or returned lines, with their allocations.
+ * @returns {string} Table rows.
+ */
+function detailRows(lines) {
+    return lines.flatMap(invoiceRows).map((row) => `
+        <tr><td colspan="3" class="item">${escape(row.sku)} - ${escape(row.name)}</td></tr>
+        <tr>
+            <td class="qty">${money(row.quantity)} x ${money(row.price)}${
+                row.discount ? ` - ${money(row.discount)}` : ''}</td>
+            <td></td>
+            <td class="amount">${money(row.amount)}</td>
+        </tr>`).join('');
+}
+
+/**
+ * A Nota de Crédito-Débito on the roll, in the SIN's own format
+ * (docs/siat/notaCreditoDebito_formato_grafico.pdf): the invoice it adjusts,
+ * the original sale, what came back and the 13 % of it.
+ *
+ * @param {object} sale Sale with its `invoice`.
+ * @param {object} note The note, as the service returned it.
+ * @param {object} paper The shop's `settings`, the roll `width` and the
+ *     `qrSvg` the service drew.
+ * @returns {string} A complete document.
+ */
+export function creditNoteHtml(sale, note, { settings, width = 'MM_80', qrSvg = '' }) {
+    const size = WIDTHS[width] || WIDTHS.MM_80;
+    const invoice = sale.invoice;
+    const place = invoice.branch ? `Sucursal N° ${invoice.branch}` : 'Casa Matriz';
+    return `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<title>Nota de crédito-débito ${note.number}</title>
+<style>${styles(size)}</style></head>
+<body>
+    <div class="center">
+        <div class="name">NOTA CRÉDITO - DÉBITO</div>
+        <div class="name">${escape(settings.trade_name)}</div>
+        <div>${place}</div>
+        <div>No. Punto de Venta ${invoice.point_of_sale}</div>
+        <div>${escape(invoice.address)}</div>
+        ${settings.phone ? `<div>Teléfono: ${escape(settings.phone)}</div>` : ''}
+        ${settings.municipality ? `<div>${escape(settings.municipality)}</div>` : ''}
+    </div>
+    <div class="rule"></div>
+    <div class="center">
+        <div><strong>NIT</strong> ${escape(settings.document)}</div>
+        <div><strong>NOTA N°</strong> ${note.number}</div>
+        <div><strong>CÓD. AUTORIZACIÓN</strong></div>
+        <div class="code">${escape(note.cuf)}</div>
+    </div>
+    <div class="rule"></div>
+    <div>FECHA DE EMISIÓN: ${stamp(note.issued_at)}</div>
+    <div>NOMBRE/RAZÓN SOCIAL: ${escape(sale.buyer?.name || 'S/N')}</div>
+    <div>NIT/CI/CEX: ${escape(sale.buyer?.document)}</div>
+    <div>COD. CLIENTE: ${escape(sale.buyer?.document)}</div>
+    <div>N° FACTURA: ${invoice.number}</div>
+    <div>FECHA FACTURA: ${stamp(invoice.issued_at)}</div>
+    <div>N° AUTORIZACIÓN/CUF:</div>
+    <div class="code small">${escape(invoice.cuf)}</div>
+    ${note.state === 'CANCELLED' ? '<div class="void">ANULADA</div>' : ''}
+    <div class="rule"></div>
+    <div class="center"><strong>DATOS FACTURA ORIGINAL</strong></div>
+    <table>${detailRows(sale.lines)}</table>
+    <table class="totals"><tr class="grand"><td colspan="2">MONTO TOTAL ORIGINAL Bs</td>
+        <td class="amount">${money(sale.total)}</td></tr></table>
+    <div class="rule"></div>
+    <div class="center"><strong>DATOS DE LA DEVOLUCIÓN O RESCISIÓN</strong></div>
+    <table>${detailRows(note.lines)}</table>
+    <table class="totals">
+        <tr class="grand"><td colspan="2">MONTO TOTAL DEVUELTO Bs</td>
+            <td class="amount">${money(note.amount_returned)}</td></tr>
+    </table>
+    <div>${amountInWords(note.amount_returned)}</div>
+    <table class="totals">
+        <tr class="grand"><td colspan="2">MONTO EFECTIVO DÉBITO-CRÉDITO Bs</td>
+            <td class="amount">${money(note.tax_credit)}</td></tr>
+    </table>
+    <div class="rule"></div>
+    <div class="foot small">
+        <div>ESTA FACTURA CONTRIBUYE AL DESARROLLO DEL PAÍS, EL USO ILÍCITO SERÁ
+             SANCIONADO PENALMENTE DE ACUERDO A LEY</div>
+        <div class="rule"></div>
+        <div>${escape(invoice.legend)}</div>
+        <div class="rule"></div>
+        <div>${ONLINE_LEGEND}</div>
+        <div class="qr">${qrSvg}</div>
+    </div>
+</body></html>`;
+}
+
+/**
+ * The QR of a note, as the service draws it. Said aloud when it fails: a
+ * note printed without it is not a valid representation.
+ *
+ * @param {object} note The note.
+ * @returns {Promise<string>} Inline SVG, or ''.
+ */
+export async function creditNoteQr(note) {
+    try {
+        return (await BillingService.returnQr(note.sale_id, note.credit_note_id)).svg;
+    } catch (error) {
+        notify(errorText(error, 'No se pudo dibujar el QR de la nota.'), 'error');
+        return '';
+    }
+}
+
+/**
  * The QR of an invoice, as the service draws it; empty for an internal note.
  * A QR that cannot be fetched is said aloud: an invoice printed without it
  * is not a valid representation.
@@ -339,22 +441,42 @@ export async function invoiceQr(sale) {
 /**
  * Sends the note to the printer without leaving the page.
  *
- * A hidden iframe instead of `window.open`: a pop-up blocker eats the second
- * sale of the day, and the cashier never finds out why nothing printed.
- *
  * @param {object} sale Nota de venta.
  * @param {object} settings Shop parameters.
  * @param {string} width MM_58 or MM_80.
  */
 export async function printTicket(sale, settings, width) {
-    const qrSvg = await invoiceQr(sale);
+    printHtml(ticketHtml(sale, settings, width, await invoiceQr(sale)));
+}
+
+/**
+ * Sends a Nota de Crédito-Débito to the printer.
+ *
+ * @param {object} sale Sale with the invoice the note adjusts.
+ * @param {object} note The note.
+ * @param {object} settings Shop parameters.
+ * @param {string} width MM_58 or MM_80.
+ */
+export async function printCreditNote(sale, note, settings, width) {
+    printHtml(creditNoteHtml(sale, note, { settings, width, qrSvg: await creditNoteQr(note) }));
+}
+
+/**
+ * Prints a document from a hidden iframe.
+ *
+ * A hidden iframe instead of `window.open`: a pop-up blocker eats the second
+ * sale of the day, and the cashier never finds out why nothing printed.
+ *
+ * @param {string} html A complete document.
+ */
+function printHtml(html) {
     const frame = document.createElement('iframe');
     frame.setAttribute('aria-hidden', 'true');
     frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
     document.body.appendChild(frame);
 
     frame.contentDocument.open();
-    frame.contentDocument.write(ticketHtml(sale, settings, width, qrSvg));
+    frame.contentDocument.write(html);
     frame.contentDocument.close();
 
     // The roll has no page count to wait for, but the fonts do: printing

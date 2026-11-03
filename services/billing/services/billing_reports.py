@@ -7,14 +7,15 @@
     out of.
 
     Every figure comes from what is already stored — the notes and the lots —
-    so nothing here has its own truth to keep in sync.
+    so nothing here has its own truth to keep in sync. A sale counts for what
+    the buyer kept: a Nota de Crédito-Débito undoes its part of it.
 '''
 from datetime import date as date_type, datetime, timedelta
 from typing import Any
 
 from boto3.resources.base import ServiceResource
 
-from models.billing import LOTS_TABLE
+from models.billing import LOTS_TABLE, SALES_TABLE, SALE_SORT_KEY
 from schemas.billing import (
     ExpiringLot,
     LowStockProduct,
@@ -23,9 +24,10 @@ from schemas.billing import (
     TopProduct
 )
 from services.utils import load_parameters
-from services.billing import products_by_sku, read_partition
+from services.billing import SortBounds, date_window, products_by_sku, read_partition
 from services.billing_cash import method_totals
-from services.billing_sales import list_sales
+from services.billing_returns import net_of_returns
+from services.billing_sales import _sale_out
 
 ENV_VARS = load_parameters({
     'BILLING_EXPIRY_ALERT_DAYS': int,
@@ -66,8 +68,11 @@ def dashboard(
     start = date_from or reference
     end = date_to or reference
 
-    sales = list_sales(dynamodb_resource, owner, start.isoformat(), end.isoformat())
-    issued = [note for note in sales.items if note.status == SaleStatus.ISSUED]
+    stored = read_partition(dynamodb_resource, SALES_TABLE, owner, bounds = SortBounds(
+        sort_key = SALE_SORT_KEY, between = date_window(start.isoformat(), end.isoformat())))
+    # What the buyers kept: a return undoes its part of the sale.
+    kept = [net_of_returns(row) for row in stored if row['status'] == SaleStatus.ISSUED.value]
+    issued = [_sale_out(row) for row in kept if row is not None]
 
     products = products_by_sku(dynamodb_resource, owner)
     lots = read_partition(dynamodb_resource, LOTS_TABLE, owner)
@@ -76,7 +81,7 @@ def dashboard(
     return BillingDashboard(
         date_from = start,
         date_to = end,
-        cancelled_count = len(sales.items) - len(issued),
+        cancelled_count = sum(row['status'] == SaleStatus.CANCELLED.value for row in stored),
         stock_value_at_cost = _stock_value(lots),
         expiry_alert_days = EXPIRY_ALERT_DAYS,
         expiring_soon = expiring,

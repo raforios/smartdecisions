@@ -131,6 +131,20 @@ def _invoicing_shop(
     })
 
 
+def _stop_invoicing(dynamodb) -> None:
+    '''
+        Turns invoicing off, keeping the rest of the shop's settings.
+
+        Args:
+            dynamodb: The resource.
+    '''
+    settings = billing.get_settings(dynamodb, OWNER)
+    billing.save_settings(dynamodb, OWNER, BillingSettings(**{
+        **settings.model_dump(include = set(BillingSettings.model_fields)),
+        'invoicing_enabled': False
+    }))
+
+
 def _sell(
     dynamodb,
     buyer = BUYER
@@ -203,11 +217,7 @@ def test_a_shop_that_does_not_invoice_never_calls_the_sin(
         The default: internal notes, as before the switch existed.
     '''
     _invoicing_shop(dynamodb)
-    settings = billing.get_settings(dynamodb, OWNER)
-    billing.save_settings(dynamodb, OWNER, BillingSettings(**{
-        **settings.model_dump(include = set(BillingSettings.model_fields)),
-        'invoicing_enabled': False
-    }))
+    _stop_invoicing(dynamodb)
 
     note = _sell(dynamodb, buyer = Buyer())
 
@@ -457,11 +467,7 @@ def test_the_cancel_controller_returns_the_note(
         an internal note needs no reason.
     '''
     _invoicing_shop(dynamodb)
-    settings = billing.get_settings(dynamodb, OWNER)
-    billing.save_settings(dynamodb, OWNER, BillingSettings(**{
-        **settings.model_dump(include = set(BillingSettings.model_fields)),
-        'invoicing_enabled': False
-    }))
+    _stop_invoicing(dynamodb)
     note = _sell(dynamodb, buyer = Buyer())
 
     with patch.object(utils, '_audit_payload', lambda *_: {}), \
@@ -503,11 +509,7 @@ def test_an_internal_note_has_no_qr(
         Only an invoice is checked at the SIN.
     '''
     _invoicing_shop(dynamodb)
-    settings = billing.get_settings(dynamodb, OWNER)
-    billing.save_settings(dynamodb, OWNER, BillingSettings(**{
-        **settings.model_dump(include = set(BillingSettings.model_fields)),
-        'invoicing_enabled': False
-    }))
+    _stop_invoicing(dynamodb)
     note = _sell(dynamodb, buyer = Buyer())
 
     with pytest.raises(InvalidInputError) as refused:
@@ -527,11 +529,7 @@ def test_an_invoice_remembers_its_buyer_and_an_internal_note_does_not(
     _invoicing_shop(dynamodb)
     _sell(dynamodb, buyer = Buyer(name = 'Ana Quispe', document = '4567890',
                                   document_type = 1, email = 'ana@correo.bo'))
-    settings = billing.get_settings(dynamodb, OWNER)
-    billing.save_settings(dynamodb, OWNER, BillingSettings(**{
-        **settings.model_dump(include = set(BillingSettings.model_fields)),
-        'invoicing_enabled': False
-    }))
+    _stop_invoicing(dynamodb)
     _sell(dynamodb, buyer = Buyer(document = '9999999'))
 
     customers = billing_customers.list_customers(dynamodb, OWNER).items

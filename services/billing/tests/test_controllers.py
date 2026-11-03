@@ -10,7 +10,31 @@ from unittest.mock import patch
 
 import pytest
 
+from controllers import billing as billing_controllers
 from controllers import billing_cash as controllers
+from schemas.billing import (
+    BillingDashboard,
+    BillingError,
+    BillingSettings,
+    DateWindow,
+    LotEdit,
+    LotQuery,
+    LotsResponse,
+    ProductEdit,
+    ProductIn,
+    ProductOut,
+    ProductPatch,
+    ProductsResponse,
+    PurchaseLineIn,
+    PurchaseNoteIn,
+    PurchaseNoteOut,
+    PurchaseNotesResponse,
+    SaleLineIn,
+    SaleNoteIn,
+    SaleNoteOut,
+    SaleNotesResponse,
+    SettingsResponse
+)
 from schemas.billing_cash import (
     CashAlertsResponse,
     CashCloseIn,
@@ -26,8 +50,23 @@ from schemas.billing_cash import (
     TillQuery,
     TillRef
 )
+from schemas.billing_siat import InvoiceQrOut
 from services import utils
-from tests.test_billing import OWNER, _dynamodb # pylint: disable=unused-import
+from services.exceptions import InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError
+from tests.test_billing import ( # pylint: disable=unused-import
+    CASHIER,
+    LATER,
+    OWNER,
+    _dynamodb,
+    _receive,
+    _register,
+    _sell
+)
+from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import
+    BUYER,
+    _invoicing_shop,
+    _sent
+)
 
 SELLER = 'vendedor@farmacia.bo'
 
@@ -63,19 +102,21 @@ def _audited():
 
 def _call(
     controller,
+    current_user = SELLER,
     **arguments
 ):
     '''
-        Runs a controller as the endpoint would, as SELLER in the demo shop.
+        Runs a controller as the endpoint would, in the demo shop.
 
         Args:
             controller: The async controller.
+            current_user (str): Who calls; SELLER unless the till matters.
             **arguments: Its specific arguments.
 
         Returns:
             Any: What it returned.
     '''
-    return asyncio.run(controller(owner = OWNER, request = None, current_user = SELLER,
+    return asyncio.run(controller(owner = OWNER, request = None, current_user = current_user,
                                   **arguments))
 
 
@@ -120,3 +161,129 @@ def test_every_till_action_is_audited_and_returns_its_model(
 
     assert audited == [('CashSession', 'OPEN'), ('CashSession', 'EXPENSE'),
                        ('CashSession', 'CANCEL_EXPENSE'), ('CashSession', 'CLOSE')]
+
+
+# --- settings and dashboard --------------------------------------------------
+
+def test_settings_are_saved_audited_and_read_back(
+    dynamodb,
+    audited
+):
+    '''Saving is audited and answers the settings with their counters; reading is not.'''
+    before = _call(billing_controllers.get_settings_controller, dynamodb_resource = dynamodb)
+    assert before.trade_name == 'Farmacia Demo'
+    saved = _call(billing_controllers.save_settings_controller, dynamodb_resource = dynamodb,
+                  settings = BillingSettings(trade_name = 'Farmacia Central', sale_series = 'B'))
+    assert isinstance(saved, SettingsResponse)
+
+    read = _call(billing_controllers.get_settings_controller, dynamodb_resource = dynamodb)
+    assert (read.trade_name, read.sale_series) == ('Farmacia Central', 'B')
+    assert audited == [('Settings', 'UPSERT')]
+
+
+def test_the_dashboard_returns_its_model(dynamodb):
+    '''Today's sale is on the dashboard of today.'''
+    _register(dynamodb)
+    _receive(dynamodb, [PurchaseLineIn(sku = 'PARA500', quantity = 10, unit_cost = 3.0,
+                                       sale_price = 6.0, expiry_date = LATER)])
+    _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 2)])
+    board = _call(billing_controllers.dashboard_controller, dynamodb_resource = dynamodb,
+                  window = DateWindow())
+    assert isinstance(board, BillingDashboard)
+    assert (board.sales_count, board.sales_amount) == (1, 12.0)
+
+
+# --- catalogue, lots and purchases ---------------------------------------------
+
+def test_the_catalogue_endpoints_return_their_models(
+    dynamodb,
+    audited
+):
+    '''
+        Register, edit, receive, list and re-price a SKU: the changes are
+        audited, a repeated SKU and an unknown one answer with their codes.
+    '''
+    created = _call(billing_controllers.create_product_controller, dynamodb_resource = dynamodb,
+                    product = ProductIn(sku = 'PARA500', description = 'Paracetamol 500 mg',
+                                        laboratory = 'Lab Demo'))
+    assert isinstance(created, ProductOut)
+    with pytest.raises(RegisterAlreadyExistsError) as repeated:
+        _call(billing_controllers.create_product_controller, dynamodb_resource = dynamodb,
+              product = ProductIn(sku = 'PARA500', description = 'Otro', laboratory = 'Lab'))
+    assert repeated.value.detail == BillingError.SKU_ALREADY_EXISTS.value
+
+    edited = _call(billing_controllers.update_product_controller, dynamodb_resource = dynamodb,
+                   edit = ProductEdit(sku = 'PARA500', patch = ProductPatch(min_stock = 5)))
+    assert edited.min_stock == 5
+
+    received = _call(billing_controllers.receive_purchase_controller,
+                     dynamodb_resource = dynamodb, note = PurchaseNoteIn(
+                         supplier_name = 'Droguería Demo', lines = [PurchaseLineIn(
+                             sku = 'PARA500', quantity = 10, unit_cost = 3.0,
+                             sale_price = 6.0, expiry_date = LATER)]))
+    assert isinstance(received, PurchaseNoteOut)
+    one = _call(billing_controllers.get_purchase_controller, dynamodb_resource = dynamodb,
+                purchase_id = received.purchase_id)
+    assert one.purchase_id == received.purchase_id
+    purchases = _call(billing_controllers.list_purchases_controller,
+                      dynamodb_resource = dynamodb, window = DateWindow())
+    assert isinstance(purchases, PurchaseNotesResponse) and purchases.total == 1
+
+    listed = _call(billing_controllers.list_products_controller, dynamodb_resource = dynamodb,
+                   only_active = True)
+    assert isinstance(listed, ProductsResponse)
+    assert listed.items[0].available_quantity == 10
+    product = _call(billing_controllers.get_product_controller, dynamodb_resource = dynamodb,
+                    sku = 'PARA500')
+    assert product.sale_price == 6.0
+
+    lots = _call(billing_controllers.lots_controller, dynamodb_resource = dynamodb,
+                 query = LotQuery(sku = 'PARA500'))
+    assert isinstance(lots, LotsResponse)
+    repriced = _call(billing_controllers.reprice_lot_controller, dynamodb_resource = dynamodb,
+                     edit = LotEdit(sku = 'PARA500', lot_id = lots.items[0].lot_id,
+                                    sale_price = 6.5))
+    assert repriced.items[0].sale_price == 6.5
+
+    with pytest.raises(RegisterNotFoundError) as unknown:
+        _call(billing_controllers.get_product_controller, dynamodb_resource = dynamodb,
+              sku = 'NADA')
+    assert unknown.value.detail == BillingError.PRODUCT_NOT_FOUND.value
+    assert audited == [('Product', 'CREATE'), ('Product', 'UPDATE'),
+                       ('PurchaseNote', 'CREATE'), ('Lot', 'REPRICE')]
+
+
+# --- sales -----------------------------------------------------------------------
+
+def test_a_sale_is_issued_audited_listed_and_its_qr_printed(
+    dynamodb,
+    audited,
+    sent
+):
+    '''
+        The sale path of the counter: issue an invoiced sale, read it, list it
+        and print its QR; a sale beyond the stock charges nothing.
+    '''
+    _invoicing_shop(dynamodb)
+    note = _call(billing_controllers.issue_sale_controller, current_user = CASHIER,
+                 dynamodb_resource = dynamodb, note = SaleNoteIn(
+                     lines = [SaleLineIn(sku = 'CONS1', quantity = 2)], buyer = BUYER))
+    assert isinstance(note, SaleNoteOut)
+    assert note.invoice is not None and len(sent) == 1
+
+    one = _call(billing_controllers.get_sale_controller, dynamodb_resource = dynamodb,
+                sale_id = note.sale_id)
+    assert one.sale_id == note.sale_id
+    listed = _call(billing_controllers.list_sales_controller, dynamodb_resource = dynamodb,
+                   window = DateWindow())
+    assert isinstance(listed, SaleNotesResponse) and listed.total == 1
+    qr = _call(billing_controllers.sale_qr_controller, dynamodb_resource = dynamodb,
+               sale_id = note.sale_id)
+    assert isinstance(qr, InvoiceQrOut) and qr.svg.startswith('<svg')
+
+    with pytest.raises(InvalidInputError) as refused:
+        _call(billing_controllers.issue_sale_controller, current_user = CASHIER,
+              dynamodb_resource = dynamodb, note = SaleNoteIn(
+                  lines = [SaleLineIn(sku = 'CONS1', quantity = 99)], buyer = BUYER))
+    assert refused.value.detail == BillingError.INSUFFICIENT_STOCK.value
+    assert audited == [('SaleNote', 'ISSUE')]

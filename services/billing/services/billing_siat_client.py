@@ -22,7 +22,7 @@
     own error handling.
 
     References, all in `docs/siat/SIAT.md`: Solicitud CUIS, Solicitud CUFD,
-    Verifica NIT, Recepción de factura, Anulación.
+    Verifica NIT, Recepción de factura, Anulación, Nota de Crédito-Débito.
 '''
 import hashlib
 import os
@@ -43,6 +43,7 @@ from schemas.billing import (
     CufdResponse,
     SiatReceipt
 )
+from schemas.billing_returns import INVOICE_TYPE_ADJUSTMENT, SECTOR_DOCUMENT_CREDIT_DEBIT
 from schemas.billing_siat import CatalogEntry, SiatCatalog
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, ServiceUnavailableError
@@ -74,6 +75,7 @@ MODALITY: Final[int] = 2
 SERVICE_CODES = 'codigos'
 SERVICE_INVOICE = 'facturacion'
 SERVICE_SYNC = 'sincronizacion'
+SERVICE_ADJUSTMENT = 'ajuste'
 
 # Asked for a CUIS while one is in force, the SIN answers `transaccion` false
 # with this message AND the CUIS in force (checked on the pilot, 26-oct): it is
@@ -385,6 +387,41 @@ def send_invoice(
     return _receipt_from(answer)
 
 
+def send_credit_note(
+    emitter: Emitter,
+    submission: InvoiceSubmission
+) -> SiatReceipt:
+    '''
+        Hands one Nota de Crédito-Débito to the adjustment service.
+
+        Same envelope as an invoice, with the sector document and invoice type
+        of an adjustment. The service only takes them online: a note is never
+        issued offline.
+
+        Args:
+            emitter (Emitter): Who is issuing.
+            submission (InvoiceSubmission): The codes in force and the document.
+
+        Returns:
+            SiatReceipt: What the tax office answered.
+
+        Raises:
+            ServiceUnavailableError: The SIAT is unreachable.
+    '''
+    answer = invoke(SERVICE_ADJUSTMENT, 'recepcionDocumentoAjuste', {
+        **base_request(emitter),
+        'cuis': submission.cuis,
+        'cufd': submission.cufd,
+        'codigoDocumentoSector': SECTOR_DOCUMENT_CREDIT_DEBIT,
+        'codigoEmision': EMISSION_ONLINE,
+        'tipoFacturaDocumento': INVOICE_TYPE_ADJUSTMENT,
+        'archivo': submission.archive,
+        'fechaEnvio': submission.sent_at,
+        'hashArchivo': hashlib.sha256(submission.archive).hexdigest()
+    })
+    return _receipt_from(answer)
+
+
 @dataclass(frozen = True)
 class InvoiceCancellation:
     '''
@@ -422,6 +459,37 @@ def cancel_invoice(
         'codigoDocumentoSector': SECTOR_DOCUMENT_PURCHASE_SALE,
         'codigoEmision': EMISSION_ONLINE,
         'tipoFacturaDocumento': INVOICE_WITH_TAX_CREDIT,
+        'codigoMotivo': cancellation.reason_code
+    })
+    return _receipt_from(answer)
+
+
+def cancel_credit_note(
+    emitter: Emitter,
+    cancellation: InvoiceCancellation
+) -> SiatReceipt:
+    '''
+        Cancels a Nota de Crédito-Débito already accepted.
+
+        Args:
+            emitter (Emitter): Who is issuing.
+            cancellation (InvoiceCancellation): The codes, the note's CUF and
+                the reason.
+
+        Returns:
+            SiatReceipt: What the tax office answered.
+
+        Raises:
+            ServiceUnavailableError: The SIAT is unreachable.
+    '''
+    answer = invoke(SERVICE_ADJUSTMENT, 'anulacionDocumentoAjuste', {
+        **base_request(emitter),
+        'cuis': cancellation.cuis,
+        'cufd': cancellation.cufd,
+        'cuf': cancellation.cuf,
+        'codigoDocumentoSector': SECTOR_DOCUMENT_CREDIT_DEBIT,
+        'codigoEmision': EMISSION_ONLINE,
+        'tipoFacturaDocumento': INVOICE_TYPE_ADJUSTMENT,
         'codigoMotivo': cancellation.reason_code
     })
     return _receipt_from(answer)

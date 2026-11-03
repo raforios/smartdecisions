@@ -28,6 +28,7 @@ from models.billing import (
     movement_key
 )
 from schemas.billing import BillingError, MethodTotal, PaymentMethod, SaleStatus
+from schemas.billing_returns import ReturnError
 from schemas.billing_cash import (
     CashAlert,
     CashAlertsResponse,
@@ -37,6 +38,7 @@ from schemas.billing_cash import (
     CashSessionsResponse,
     CashSessionStatus,
     ExpenseIn,
+    ExpenseType,
     ExpenseOut,
     ExpenseTotal,
     MovementStatus
@@ -487,13 +489,118 @@ def add_expense(
 
         Raises:
             RegisterNotFoundError: Not this user's till.
-            InvalidInputError: Closed or expired till, or more than the drawer
-                holds.
+            InvalidInputError: Closed or expired till, more than the drawer
+                holds, or a REFUND, which only a return writes.
     '''
+    if expense.expense_type is ExpenseType.REFUND:
+        raise InvalidInputError(detail = ReturnError.REFUND_ONLY_BY_RETURN.value)
     stored = _own_open_session(dynamodb_resource, owner, user_email, session_id)
     if expense.amount > _summary(dynamodb_resource, owner, stored).expected_cash:
         raise InvalidInputError(detail = BillingError.EXPENSE_EXCEEDS_CASH.value)
+    write_movement(dynamodb_resource, owner, user_email, session_id, expense)
 
+    message = f'Expense of {expense.amount} out of till {session_id} by {user_email}.'
+    logger.info(message)
+    return _summary(dynamodb_resource, owner, stored)
+
+
+def expected_cash(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    session_id: str
+) -> float:
+    '''
+        The cash a till should hold right now.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            session_id (str): The till.
+
+        Returns:
+            float: Opening cash plus cash sales minus what left.
+    '''
+    stored = _read_session(dynamodb_resource, owner, session_id)
+    return _summary(dynamodb_resource, owner, stored).expected_cash
+
+
+def require_till_open(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    session_id: str
+) -> None:
+    '''
+        Refuses a till that is no longer open: what it counted is frozen.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            session_id (str): The till.
+
+        Raises:
+            InvalidInputError: REFUND_TILL_CLOSED.
+    '''
+    stored = _read_session(dynamodb_resource, owner, session_id)
+    if stored is None or stored['status'] != CashSessionStatus.OPEN.value:
+        raise InvalidInputError(detail = ReturnError.REFUND_TILL_CLOSED.value)
+
+
+def void_movement(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    session_id: str,
+    movement_id: str,
+    user_email: str
+) -> None:
+    '''
+        Voids a movement the system wrote, such as a refund whose note was
+        cancelled, while its till is open. It stays on record and stops
+        counting, as a cancelled expense does.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            session_id (str): The till.
+            movement_id (str): The movement.
+            user_email (str): Who voids it.
+
+        Raises:
+            InvalidInputError: The till is closed.
+            RegisterNotFoundError: No such active movement.
+    '''
+    require_till_open(dynamodb_resource, owner, session_id)
+    movement = next((row for row in _session_movements(dynamodb_resource, owner, session_id)
+                     if row['movement_id'] == movement_id
+                     and row['status'] == MovementStatus.ACTIVE.value), None)
+    if movement is None:
+        raise RegisterNotFoundError(detail = BillingError.EXPENSE_NOT_FOUND.value)
+    movement.update(status = MovementStatus.CANCELLED.value,
+                    cancelled_by = user_email, cancelled_at = _stamp())
+    write_item(dynamodb_resource, CASH_MOVEMENTS_TABLE, movement)
+    message = f'Movement {movement_id} of till {session_id} voided by {user_email}.'
+    logger.info(message)
+
+
+def write_movement(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    user_email: str,
+    session_id: str,
+    expense: ExpenseIn
+) -> str:
+    '''
+        Writes one movement of cash leaving a till.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            user_email (str): Who takes the cash out.
+            session_id (str): The till.
+            expense (ExpenseIn): What left and why.
+
+        Returns:
+            str: The movement identifier.
+    '''
     movement_id = new_id()
     item = CashMovementItem(
         owner = owner, movement_key = movement_key(session_id, f'{_stamp()}#{movement_id}'),
@@ -503,10 +610,7 @@ def add_expense(
         created_by = user_email, created_at = _stamp(), purchase_id = expense.purchase_id
     )
     write_item(dynamodb_resource, CASH_MOVEMENTS_TABLE, item.__dict__)
-
-    message = f'Expense of {item.amount} out of till {session_id} by {user_email}.'
-    logger.info(message)
-    return _summary(dynamodb_resource, owner, stored)
+    return movement_id
 
 
 def cancel_expense(
@@ -532,7 +636,8 @@ def cancel_expense(
 
         Raises:
             RegisterNotFoundError: Not this user's till, or no such expense.
-            InvalidInputError: Closed or expired till.
+            InvalidInputError: Closed or expired till, or a REFUND: the money
+                went back with a note the SIN accepted.
     '''
     stored = _own_open_session(dynamodb_resource, owner, user_email, session_id)
     movement = next((row for row in _session_movements(dynamodb_resource, owner, session_id)
@@ -540,6 +645,8 @@ def cancel_expense(
                      and row['status'] == MovementStatus.ACTIVE.value), None)
     if movement is None:
         raise RegisterNotFoundError(detail = BillingError.EXPENSE_NOT_FOUND.value)
+    if movement['expense_type'] == ExpenseType.REFUND.value:
+        raise InvalidInputError(detail = ReturnError.REFUND_ONLY_BY_RETURN.value)
 
     movement.update(status = MovementStatus.CANCELLED.value,
                     cancelled_by = user_email, cancelled_at = _stamp())

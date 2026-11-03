@@ -1,6 +1,8 @@
 '''
     The mail the buyer receives: the invoice, with its PDF and its XML, and
-    the notice when it is cancelled.
+    the notice when it is cancelled; and the same for a Nota de
+    Crédito-Débito, which reaches the buyer by the same means as the invoice
+    it adjusts (Rafael, 3-nov-2026).
 
     It goes out through Amazon SES from BearSoft's own domain, because
     SmartBilling is BearSoft's service and not the shop's mail (Rafael,
@@ -19,6 +21,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from schemas.billing import BillingSettings, SaleNoteOut
+from schemas.billing_returns import CreditNoteOut
+from services.billing_credit_note_pdf import credit_note_pdf
 from services.billing_invoice_pdf import invoice_pdf
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
@@ -28,7 +32,9 @@ ENV_VARS = load_and_validate_env_vars({'MAIL_SENDER': str, 'MAIL_REGION': str})
 
 TEXTS = load_parameters({code: str for code in (
     'BILLING_MAIL_SENDER_NAME', 'BILLING_MAIL_INVOICE_SUBJECT', 'BILLING_MAIL_INVOICE_BODY',
-    'BILLING_MAIL_CANCEL_SUBJECT', 'BILLING_MAIL_CANCEL_BODY', 'BILLING_MAIL_ANONYMOUS'
+    'BILLING_MAIL_CANCEL_SUBJECT', 'BILLING_MAIL_CANCEL_BODY', 'BILLING_MAIL_ANONYMOUS',
+    'BILLING_MAIL_NOTE_SUBJECT', 'BILLING_MAIL_NOTE_BODY', 'BILLING_MAIL_NOTE_CANCEL_SUBJECT',
+    'BILLING_MAIL_NOTE_CANCEL_BODY'
 )})
 
 
@@ -93,6 +99,71 @@ def send_cancellation(
                                                                    settings.trade_name))
     mail.set_content(TEXTS['BILLING_MAIL_CANCEL_BODY'] % (
         _greeting(sale), settings.trade_name, invoice.number, invoice.cuf, cancellation.reason
+    ))
+    return _send(mail, sale)
+
+
+@dataclass(frozen = True)
+class CreditNoteMail:
+    '''
+        A note and the sale whose invoice it adjusts: the mail names both.
+    '''
+    sale: SaleNoteOut
+    note: CreditNoteOut
+
+
+def send_credit_note(
+    mail_of: CreditNoteMail,
+    xml: str,
+    settings: BillingSettings
+) -> bool:
+    '''
+        Mails a Nota de Crédito-Débito to the buyer, with its PDF and its XML.
+
+        Args:
+            mail_of (CreditNoteMail): The note and its sale; the buyer has an email.
+            xml (str): The note's XML, the legal document.
+            settings (BillingSettings): The shop that issued it.
+
+        Returns:
+            bool: Whether SES took the mail.
+    '''
+    sale, note = mail_of.sale, mail_of.note
+    mail = _message(sale, TEXTS['BILLING_MAIL_NOTE_SUBJECT'] % (note.number,
+                                                                 settings.trade_name))
+    mail.set_content(TEXTS['BILLING_MAIL_NOTE_BODY'] % (
+        _greeting(sale), note.number, settings.trade_name, sale.invoice.number, note.cuf,
+        note.qr_url
+    ))
+    name = f'nota-credito-debito-{note.number}'
+    mail.add_attachment(credit_note_pdf(sale, note, settings), maintype = 'application',
+                        subtype = 'pdf', filename = f'{name}.pdf')
+    mail.add_attachment(xml.encode('utf-8'), maintype = 'application', subtype = 'xml',
+                        filename = f'{name}.xml')
+    return _send(mail, sale)
+
+
+def send_credit_note_cancellation(
+    mail_of: CreditNoteMail,
+    reason: str,
+    settings: BillingSettings
+) -> bool:
+    '''
+        Tells the buyer a note was cancelled, with its number, CUF and reason.
+
+        Args:
+            mail_of (CreditNoteMail): The cancelled note and its sale.
+            reason (str): The reason, as the SIN's catalogue names it.
+            settings (BillingSettings): The shop that cancelled it.
+
+        Returns:
+            bool: Whether SES took the mail.
+    '''
+    sale, note = mail_of.sale, mail_of.note
+    mail = _message(sale, TEXTS['BILLING_MAIL_NOTE_CANCEL_SUBJECT'] % (note.number,
+                                                                        settings.trade_name))
+    mail.set_content(TEXTS['BILLING_MAIL_NOTE_CANCEL_BODY'] % (
+        _greeting(sale), settings.trade_name, note.number, note.cuf, reason
     ))
     return _send(mail, sale)
 

@@ -173,6 +173,9 @@ class SaleItem:
     invoice_xml: str | None = None
     # The parts of a combined payment; one part for the whole total otherwise.
     payments: list[dict[str, Any]] = field(default_factory = list)
+    # The Notas de Crédito-Débito that returned part of it, each with its XML
+    # (`billing_returns.py`).
+    credit_notes: list[dict[str, Any]] = field(default_factory = list)
 
 
 @dataclass

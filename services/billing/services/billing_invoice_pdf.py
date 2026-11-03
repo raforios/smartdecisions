@@ -20,7 +20,7 @@ from typing import Final
 import segno
 from fpdf import FPDF
 
-from schemas.billing import BillingSettings, SaleNoteOut, SaleStatus
+from schemas.billing import BillingSettings, SaleLineOut, SaleNoteOut, SaleStatus
 from services.billing_invoicing import QR_ERROR_CORRECTION, invoice_lines
 from services.utils import load_parameters
 
@@ -176,6 +176,26 @@ class _Roll(FPDF):
         self.ln(LINE_HEIGHT)
 
 
+def print_details(
+    roll: _Roll,
+    lines: list[SaleLineOut]
+) -> None:
+    '''
+        The lines on the roll, one per price, as the SIN reads them: shared by
+        the invoice and the Nota de Crédito-Débito.
+
+        Args:
+            roll (_Roll): The roll.
+            lines (list[SaleLineOut]): Sold or returned lines.
+    '''
+    for line in lines:
+        for detail in invoice_lines(line, {}):
+            roll.line_of(f'{detail.sku} - {detail.description}')
+            discount = f' - {_money(detail.discount)}' if detail.discount else ''
+            roll.pair(f'{_money(detail.quantity)} x {_money(detail.unit_price)}{discount}',
+                      _money(detail.subtotal))
+
+
 def _draw(
     roll: _Roll,
     sale: SaleNoteOut,
@@ -205,12 +225,7 @@ def _draw(
     _buyer(roll, sale)
     roll.rule()
     roll.line_of(TEXTS['BILLING_PDF_DETAIL'], 'C', 'B')
-    for line in sale.lines:
-        for detail in invoice_lines(line, {}):
-            roll.line_of(f'{detail.sku} - {detail.description}')
-            discount = f' - {_money(detail.discount)}' if detail.discount else ''
-            roll.pair(f'{_money(detail.quantity)} x {_money(detail.unit_price)}{discount}',
-                      _money(detail.subtotal))
+    print_details(roll, sale.lines)
     roll.rule()
     _totals(roll, sale.total)
     roll.rule()

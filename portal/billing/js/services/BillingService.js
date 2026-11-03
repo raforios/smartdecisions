@@ -65,7 +65,16 @@ export const ERRORS = {
     CASH_SESSION_NOT_FOUND: 'No hay una caja abierta.',
     CLOSING_NOTE_REQUIRED: 'Para cerrar la caja de otra persona escribe una observación.',
     EXPENSE_EXCEEDS_CASH: 'El egreso supera el efectivo que hay en la caja.',
-    EXPENSE_NOT_FOUND: 'Ese egreso no existe o ya estaba anulado.'
+    EXPENSE_NOT_FOUND: 'Ese egreso no existe o ya estaba anulado.',
+    SALE_CANCELLED: 'Esa venta está anulada: no admite devoluciones.',
+    INVOICE_NOT_ACCEPTED: 'La factura todavía no está aceptada por el SIN: se podrá devolver cuando lo esté.',
+    RETURN_DEADLINE_PASSED: 'Pasaron 18 meses desde la factura: el SIN ya no admite la devolución.',
+    RETURN_EXCEEDS_SOLD: 'Se devuelven más unidades de las que quedan por devolver.',
+    SKU_NOT_IN_SALE: 'Ese producto no está en la venta.',
+    REFUND_ONLY_BY_RETURN: 'La devolución al cliente sólo la registra una nota de crédito-débito.',
+    REFUND_TILL_CLOSED: 'La caja de la que salió la devolución ya está cerrada: la nota no se puede anular.',
+    CREDIT_NOTE_NOT_FOUND: 'Esa nota de crédito-débito no existe.',
+    CREDIT_NOTE_CANCELLED: 'Esa nota de crédito-débito ya estaba anulada.'
 };
 
 /** What each payment method is called on screen. */
@@ -88,8 +97,12 @@ export const SALE_PAYMENT_METHODS = [
 export const EXPENSE_LABELS = {
     SUPPLIER_PAYMENT: 'Pago a proveedor',
     SERVICE_PAYMENT: 'Pago de servicio',
-    PETTY_CASH: 'Caja chica'
+    PETTY_CASH: 'Caja chica',
+    REFUND: 'Devolución al cliente'
 };
+
+/** The expenses typed at the till; a refund is only written by a return. */
+export const MANUAL_EXPENSE_TYPES = ['SUPPLIER_PAYMENT', 'SERVICE_PAYMENT', 'PETTY_CASH'];
 
 /** The sentence for an error, or the fallback when the code is unknown. */
 export function errorText(error, fallback) {
@@ -161,6 +174,18 @@ export const BillingService = {
     cancelSale: (id, reasonCode = null) => call(`/sales/${encodeURIComponent(id)}/cancel`, {
         method: 'POST', body: JSON.stringify({ reason_code: reasonCode })
     }),
+
+    listReturns: (id) => call(`/sales/${encodeURIComponent(id)}/returns`),
+    returnSale: (id, lines) => call(`/sales/${encodeURIComponent(id)}/returns`, {
+        method: 'POST', body: JSON.stringify({ lines })
+    }),
+    returnQr: (id, noteId) => call(
+        `/sales/${encodeURIComponent(id)}/returns/${encodeURIComponent(noteId)}/qr`
+    ),
+    cancelReturn: (id, noteId, reasonCode) => call(
+        `/sales/${encodeURIComponent(id)}/returns/${encodeURIComponent(noteId)}/cancel`,
+        { method: 'POST', body: JSON.stringify({ reason_code: reasonCode }) }
+    ),
 
     listCustomers: () => call('/customers'),
     getCustomer: (document) => call(`/customers/${encodeURIComponent(document)}`),
