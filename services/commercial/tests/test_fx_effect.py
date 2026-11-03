@@ -1,6 +1,5 @@
 '''
-    Tests for the exchange-rate effect, one per case of
-    `docs/cambios/smartdecisions-tipo-cambio-factores/spec.md`.
+    Tests for the exchange-rate effect, one per case.
 
     The function under test is pure: it receives the sales in bolivianos, the
     rate of each row's own day and today's rate. Reaching QUOTES is the

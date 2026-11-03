@@ -1,7 +1,6 @@
 '''
     Controller-level tests for the cash tills: each endpoint returns its model
-    assembled, and every change is audited (case 16 of
-    `docs/cambios/billing-caja/spec.md`).
+    assembled, and every change is audited.
 
     `request` is None, so no usage log leaves; the audit hook is replaced by a
     recorder.

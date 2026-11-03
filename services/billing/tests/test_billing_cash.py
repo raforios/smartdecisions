@@ -1,6 +1,5 @@
 '''
-    Tests for the cash tills, one per case of
-    `docs/cambios/billing-caja/spec.md`.
+    Tests for the cash tills, one per rule of the till.
 
     The shared fixture opens a till for CASHIER at zero, so these tests open
     their own tills for other users, or close that one first.

@@ -93,7 +93,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `finance_business_models` | `client` | — | Each client's business model |
 | `finance_parameters` | `code` | — | The service's business values |
 
-The chart of accounts and the rates are seeded from the approved contract (`docs/cambios/smartdecisions/contrato.md`):
+The chart of accounts and the rates are seeded from the approved contract (`docs/smartdecisions/contrato.md`):
 
 ```shell
 python -m tools.seeds.seed_finance          # dry run
