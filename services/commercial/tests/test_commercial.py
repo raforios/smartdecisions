@@ -151,6 +151,22 @@ def test_a_sale_without_price_or_total_is_rejected() -> None:
     assert list(result.accepted['order_id']) == ['P-002']
 
 
+def test_the_means_of_payment_is_a_closed_option() -> None:
+    '''
+        Written any way, a known means reads as its code; an unknown one is
+        set aside instead of splitting the analysis in two.
+    '''
+    dataframe = pd.DataFrame([
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-001', 'Producto': 'Galleta',
+         'Cantidad': 2, 'Precio Unitario': 5.0, 'Medio de Pago': 'billetera móvil'},
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-002', 'Producto': 'Galleta',
+         'Cantidad': 1, 'Precio Unitario': 5.0, 'Medio de Pago': 'Cheque'},
+    ])
+    result = parse_and_validate_partial(_to_xlsx_bytes(dataframe), 'medio.xlsx')
+    assert list(result.accepted['payment_method']) == ['BILLETERA_MOVIL']
+    assert [issue.column for issue in result.issues] == ['payment_method']
+
+
 def test_missing_required_column_is_reported() -> None:
     '''
         Removing a required column raises a column-level error.

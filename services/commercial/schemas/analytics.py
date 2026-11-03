@@ -604,6 +604,7 @@ class CommercialSummaryBlock(BaseModel):
     by_channel: list[DistRow] = []
     by_region: list[DistRow] = []
     by_seller: list[DistRow] = []
+    by_payment_method: list[DistRow] = []
     monthly_trend: list[TrendPoint] = []
 
 

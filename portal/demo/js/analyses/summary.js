@@ -102,6 +102,17 @@
         A.horizontalBar('chartTopProductos', data.top_products, sales);
         A.horizontalBar('chartTopClientes', data.best_clients, sales);
         A.horizontalBar('chartVendedor', (data.by_seller || []).slice(0, 10), sales);
+        // Which means the buyers use most, by what each one collected.
+        const paid = data.by_payment_method || [];
+        A.makeChart('chartMedioPago', {
+            type: 'doughnut',
+            data: {
+                labels: paid.map((row) => A.PAYMENT_METHODS[row.label] || A.dimensionLabel(row.label)),
+                datasets: [{ data: paid.map((row) => A.chartAmount(row.amount)),
+                             backgroundColor: A.BRAND }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'right' } } }
+        });
         // Bottom products: same bars as the top ten, so the two read alike.
         A.horizontalBar('chartBottomProductos', data.bottom_products, sales);
 

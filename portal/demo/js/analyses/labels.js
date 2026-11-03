@@ -162,6 +162,15 @@
         if (texts[level]) node.classList.add(`level-${String(level).toLowerCase()}`);
     }
 
+    // The means of payment as the sales contract codes them.
+    const PAYMENT_METHODS = {
+        EFECTIVO: 'Efectivo',
+        QR: 'QR',
+        TARJETA: 'Tarjeta',
+        TRANSFERENCIA: 'Transferencia bancaria',
+        BILLETERA_MOVIL: 'Billetera móvil'
+    };
+
     // A dimension the source file left blank still needs a row label.
     function dimensionLabel(value) {
         return value ? String(value) : 'Sin especificar';
@@ -181,7 +190,7 @@
 
     Object.assign(A, {
         ABC_DESCRIPTIONS, CONCENTRATION_LEVELS, FORECAST_METHODS, MARGIN_ALERT_REASONS,
-        VOLUME_LEVELS, dimensionLabel, errorText, kpiHint, kpiLabel, otherMethod,
+        PAYMENT_METHODS, VOLUME_LEVELS, dimensionLabel, errorText, kpiHint, kpiLabel, otherMethod,
         riskReasonText, setLevelReading
     });
 })(window.SD_ANALYSIS = window.SD_ANALYSIS || {});

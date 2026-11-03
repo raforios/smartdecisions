@@ -60,6 +60,7 @@ class SaleRowSchema(BaseModel):
     unit_cost: float | None = Field(None, ge = 0)
     total_amount: float | None = Field(None, ge = 0)
     payment_terms: str | None = Field(None, max_length = 16)
+    payment_method: str | None = Field(None, max_length = 32)
     credit_days: int | None = Field(None, ge = 0)
     due_date: datetime.date | None = None
     collector: str | None = Field(None, max_length = 150)

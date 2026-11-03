@@ -92,6 +92,7 @@ def _sample_rows(count: int) -> list[dict[str, Any]]:
             # conditions coexist in the same file and that the term of a cash
             # sale is zero.
             'Condicion Venta': 'CREDITO' if index % 3 else 'CONTADO',
+            'Medio de Pago': ('EFECTIVO', 'QR', 'TARJETA')[index % 3],
             'Plazo Dias': (15, 30, 60)[index % 3] if index % 3 else 0,
             'Fecha Vencimiento': '',
             'Responsable Cobro': client[6],

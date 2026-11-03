@@ -196,5 +196,6 @@ def build_commercial_summary(dataframe: pd.DataFrame) -> CommercialSummaryBlock:
         by_channel = _distribution(dataframe, 'channel'),
         by_region = _distribution(dataframe, 'region'),
         by_seller = _distribution(dataframe, 'seller'),
+        by_payment_method = _distribution(dataframe, 'payment_method'),
         monthly_trend = _monthly_trend(dataframe)
     )

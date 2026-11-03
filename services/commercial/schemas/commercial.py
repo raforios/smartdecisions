@@ -54,6 +54,12 @@ class SalesColumn:
     filled_by_service: bool = False
 
 
+# The means of payment a sale accepts: the ones SmartBilling's till records,
+# cards as one.
+PAYMENT_METHODS: tuple[str, ...] = (
+    'EFECTIVO', 'QR', 'TARJETA', 'TRANSFERENCIA', 'BILLETERA_MOVIL'
+)
+
 # Order is the contract order: the template presents its columns like this.
 SALES_COLUMNS: tuple[SalesColumn, ...] = (
     SalesColumn('date', 'Fecha', True, 'datetime64[ns]', template_required = True),
@@ -91,6 +97,11 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
     SalesColumn('payment_terms', 'Condicion Venta', False, 'object',
                 rules = ValueRules(max_length = 16,
                                    allowed = ('CONTADO', 'CREDITO'))),
+    # How the buyer paid (Rafael, 3-nov-2026): the means the shop's till
+    # already knows, to see which one is used most. Closed options, so a typo
+    # does not split one means in two.
+    SalesColumn('payment_method', 'Medio de Pago', False, 'object',
+                rules = ValueRules(max_length = 32, allowed = PAYMENT_METHODS)),
     SalesColumn('credit_days', 'Plazo Dias', False, 'Int64',
                 rules = ValueRules(minimum = 0.0)),
     SalesColumn('due_date', 'Fecha Vencimiento', False, 'datetime64[ns]'),
@@ -351,7 +362,7 @@ PRICE_COLUMNS: tuple[str, str] = ('unit_price', 'total_amount')
 # the product's, not the sale's, and belongs to the product master.
 REDUCED_COLUMNS: tuple[str, ...] = (
     'date', 'order_id', 'pos_name', 'seller', 'product_name', 'quantity', 'unit_price',
-    'unit_cost', 'total_amount', 'payment_terms'
+    'unit_cost', 'total_amount', 'payment_terms', 'payment_method'
 )
 REDUCED_TEMPLATE_COLUMNS: tuple[SalesColumn, ...] = tuple(
     column for column in TEMPLATE_COLUMNS if column.canonical in REDUCED_COLUMNS
