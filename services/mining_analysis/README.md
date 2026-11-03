@@ -14,7 +14,6 @@ The **Mining-Analysis-Service** centralizes mineral price information. Its key f
   * **Price Projection:** Each mineral's series projected by ML-Functions (`/v1/prediction/forecast/compare`), with its confidence.
   * **Royalties:** The Art. 227 scales per mineral.
   * **Sell Today or Wait:** Compares both ends in bolivianos with the projected dollar from QUOTES.
-  * **Switchable Persistence:** DynamoDB on AWS or MySQL locally, according to `PERSISTENCE_BACKEND`.
 
 -----
 
@@ -23,9 +22,8 @@ The **Mining-Analysis-Service** centralizes mineral price information. Its key f
   * **Language:** Python 3.14 🐍
   * **Web Framework:** FastAPI ✨
   * **ASGI Server:** Uvicorn 🚀
-  * **Database:** AWS DynamoDB (`boto3`) on AWS; MySQL (SQLAlchemy) locally
+  * **Database:** AWS DynamoDB (`boto3`)
   * **Data Validation:** Pydantic V2
-  * **Data Processing:** pandas 🐼
   * **Reports:** PDF and PNG over the official templates
   * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
 
@@ -74,7 +72,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 
 ## 🗄️ Stored Data
 
-On DynamoDB (models in `models/mining_analysis_dyb.py` and `models/market_prices.py`):
+On DynamoDB (models in `models/mining_analysis.py` and `models/market_prices.py`):
 
 | Table | Partition key | Sort key | What it holds |
 |---|---|---|---|
@@ -84,7 +82,7 @@ On DynamoDB (models in `models/mining_analysis_dyb.py` and `models/market_prices
 | `mining_royalty_rules` | `mineral_id` | — | Royalty rate: `slope`, `intercept`, `min_rate`, `max_rate`, `internal_factor`, `legal_basis`, `updated_at` |
 | `mining_analysis_parameters` | `code` | — | The service's business values |
 
-The sort key is what reads "this mineral between these two dates" in a single query. The relational data (departments, municipalities, companies, royalty transactions and payments) lives in the local MySQL, in `models/mining_analysis.py`, and is used only by the `*_sql.py` modules.
+The sort key is what reads "this mineral between these two dates" in a single query. The item definitions live in `models/mining_analysis.py`.
 
 -----
 
@@ -103,56 +101,13 @@ python -m tools.seeds.seed_service_parameters mining_analysis --yes
 
 -----
 
-## ☁️ Switchable Persistence
+## 🧰 Fortnightly Load
 
-The service runs on **MySQL or DynamoDB**, according to `PERSISTENCE_BACKEND` in `.env`:
-
-| Value | What it uses |
-|---|---|
-| `sql` | The relational engine of `DB_HOST` / `DATABASE`. |
-| `dynamodb` | The DynamoDB tables above. |
-
-**On AWS it must be `dynamodb`:** there is no RDS. To work locally against the Docker MySQL, set it to `sql`. The test suite is pinned to the SQL path by `tests/conftest.py`, so it does not depend on `.env` and never touches AWS.
-
------
-
-## 🧰 Operational Scripts
-
-They live in `scripts/` and run as modules, so they keep the service's `PYTHONPATH`. **The ones that write require `--yes`**; without it they print the plan and exit without touching anything.
-
-#### The fortnightly routine, in order
-
-Used together every 15 days, when the Ministry PDF arrives:
-
-**1. `audit_decimals.py` — before loading.** Read-only. The official PDF publishes two decimals (`WÓLFRAM 64205.75`); retyping them into the consolidated Excel sometimes drops them. It walks every `Diario` sheet, checks the average in the Excel against the arithmetic mean of the days, and lists the cells to verify against the PDF.
-
-```shell
-python -m scripts.audit_decimals                       # uses data/cotizaciones_mineras_bolivia.xlsx
-python -m scripts.audit_decimals --source /path.xlsx --tolerance 0.01
-```
-
-**2. `ingest_pdf_xlsx.py` — the load.** Reads the `{Mes} Q{1|2} - Diario` sheets of the consolidated Excel and inserts them into `t_mining_prices`. Idempotent: dates already stored are skipped.
-
-```shell
-python -m scripts.ingest_pdf_xlsx --source /path/cotizaciones_mineras_bolivia.xlsx --yes
-```
-
-**3. `migrate_to_dynamodb.py` — publishing.** The load writes to the relational database and the deployed service reads DynamoDB, so the new fortnight has to be pushed. Idempotent: every write is a put by key, using as partition the same numeric id the SQL path exposes (`str(row.id)`).
-
-```shell
-python -m scripts.migrate_to_dynamodb            # reports what it would copy
-python -m scripts.migrate_to_dynamodb --yes      # copies and verifies
-```
-
-`cli_support.py` is not run: it is the shared scaffolding (opens and closes the database session, aborts if the source file is missing).
-
-#### Loading against MySQL, then publishing
-
-```bash
-PERSISTENCE_BACKEND=sql python main.py          # 1. the service against MySQL, without editing .env
-                                                # 2. upload the xlsx from Streamlit (http://localhost:3020)
-python -m scripts.migrate_to_dynamodb --yes     # 3. push the new fortnight to DynamoDB
-```
+The service only reads. The fortnightly quotations are loaded by
+`tools/etl_minerals/` (audit, load into its own MySQL, publish to DynamoDB),
+which is independent of the API and imports nothing from this service. Steps
+and environment: `tools/etl_minerals/README.md`, or the `/quincena-minerales`
+skill.
 
 #### Pointing Streamlit at the deployed service
 
@@ -163,7 +118,7 @@ export API_BASE_URL="https://api.bearsoft.com.bo/v1/mining-analysis"
 streamlit run app.py
 ```
 
-Against AWS the reads work (`/prices`, the daily and fortnightly reports, the PDF and the PNG); the fortnightly load runs locally, as above.
+Against AWS the reads work (`/prices`, the daily and fortnightly reports, the PDF and the PNG).
 
 -----
 
@@ -180,8 +135,7 @@ mining_analysis/
 ├── models/
 │   ├── __init__.py
 │   ├── market_prices.py
-│   ├── mining_analysis.py
-│   └── mining_analysis_dyb.py
+│   └── mining_analysis.py
 ├── routes/
 │   ├── __init__.py
 │   ├── market.py
@@ -192,18 +146,11 @@ mining_analysis/
 │   ├── health.py
 │   ├── market.py
 │   └── mining_analysis.py
-├── scripts/
-│   ├── __init__.py
-│   ├── audit_decimals.py
-│   ├── cli_support.py
-│   ├── ingest_pdf_xlsx.py
-│   └── migrate_to_dynamodb.py
 ├── services/
 │   ├── __init__.py
 │   ├── api_exceptions.py
 │   ├── crud.py
 │   ├── db_connection.py
-│   ├── db_connection_sql.py
 │   ├── environment.py
 │   ├── exceptions.py
 │   ├── logger_config.py
@@ -241,7 +188,7 @@ To run the service locally:
 pip install -r requirements.txt
 ```
 
-2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, `PERSISTENCE_BACKEND`, the MySQL connection (`DB_*`, `DATABASE`), the tables `DYNAMODB_TABLE_NAME_*` and the market sources (`LBMA_PRICES_URL`, `WESTMETALL_*`, `MARKET_SOURCE_TIMEOUT_SECONDS`).
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, the tables `DYNAMODB_TABLE_NAME_*` and the market sources (`LBMA_PRICES_URL`, `WESTMETALL_*`, `MARKET_SOURCE_TIMEOUT_SECONDS`).
 
 3.  **Start the API server:**
 

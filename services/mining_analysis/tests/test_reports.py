@@ -1,23 +1,26 @@
 '''
-    Unit tests for the official daily and biweekly mineral report services.
+    Unit tests for the official daily and biweekly mineral report services,
+    run against a simulated DynamoDB (moto).
 '''
 import asyncio
 from datetime import date
 
 import pytest
+from moto import mock_aws
 
-from models.mining_analysis import Mineral, MiningPrice
+from models.mining_analysis import MiningPriceItem
+from services import prices_dyb
 from services.reports_renderer import _format_price
 from services.mining_analysis import OFFICIAL_MINERALS
 from services.official_reports import (
     biweekly_period_bounds,
-    ensure_official_minerals,
     get_biweekly_history_service,
     get_biweekly_report_service,
     get_daily_report_service,
     normalize_name,
     prev_biweekly_period,
 )
+from tests.dynamo_helpers import build_quotation_tables, seed_official_catalog
 
 
 def _run(coro):
@@ -25,20 +28,26 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _seed_catalog(session) -> dict:
-    '''Inserts the official catalog and returns {normalized_name: mineral_id}.'''
-    ensure_official_minerals(session)
-    return {normalize_name(m.name): m.id for m in session.query(Mineral).all()}
+@pytest.fixture(name = 'store')
+def _store():
+    '''Yields a simulated DynamoDB with the two quotation tables.'''
+    with mock_aws():
+        yield build_quotation_tables()
+
+
+def _seed_catalog(resource) -> dict:
+    '''Writes the official catalog and returns {normalized_name: mineral_id}.'''
+    return seed_official_catalog(resource)
 
 
 def _add_price(
-    session,
-    mineral_id: int,
+    resource,
+    mineral_id: str,
     day: date,
     low: float,
     high: float = None
 ):
-    session.add(MiningPrice(
+    prices_dyb.put_price(resource, MiningPriceItem(
         mineral_id = mineral_id,
         date = day,
         price_low = low,
@@ -81,18 +90,17 @@ def test_prev_biweekly_period(
 
 # --- biweekly average -------------------------------------------------------
 
-def test_biweekly_average_partial_days(db_session):
+def test_biweekly_average_partial_days(store):
     '''
     Bismuto has prices on days 1, 8 and 15. The average must divide by 3.
     '''
-    ids = _seed_catalog(db_session)
+    ids = _seed_catalog(store)
     bismuto_id = ids[normalize_name('Bismuto')]
-    _add_price(db_session, bismuto_id, date(2026, 4, 1), 13.2)
-    _add_price(db_session, bismuto_id, date(2026, 4, 8), 13.3)
-    _add_price(db_session, bismuto_id, date(2026, 4, 15), 13.3)
-    db_session.commit()
+    _add_price(store, bismuto_id, date(2026, 4, 1), 13.2)
+    _add_price(store, bismuto_id, date(2026, 4, 8), 13.3)
+    _add_price(store, bismuto_id, date(2026, 4, 15), 13.3)
 
-    result = _run(get_biweekly_report_service(None, (2026, 4, 1), db = db_session))
+    result = _run(get_biweekly_report_service(store, (2026, 4, 1)))
     row = next(r for r in result['rows'] if r['mineral'] == 'Bismuto')
 
     assert row['sample_size'] == 3
@@ -102,18 +110,17 @@ def test_biweekly_average_partial_days(db_session):
     assert row['is_fallback'] is False
 
 
-def test_biweekly_average_falls_back_to_prior_period(db_session):
+def test_biweekly_average_falls_back_to_prior_period(store):
     '''
     Estaño has data only in the first half of April; the second-half request
     must reuse that average and flag is_fallback = True.
     '''
-    ids = _seed_catalog(db_session)
+    ids = _seed_catalog(store)
     estano_id = ids[normalize_name('Estaño')]
-    _add_price(db_session, estano_id, date(2026, 4, 5), 21.0)
-    _add_price(db_session, estano_id, date(2026, 4, 10), 22.0)
-    db_session.commit()
+    _add_price(store, estano_id, date(2026, 4, 5), 21.0)
+    _add_price(store, estano_id, date(2026, 4, 10), 22.0)
 
-    result = _run(get_biweekly_report_service(None, (2026, 4, 2), db = db_session))
+    result = _run(get_biweekly_report_service(store, (2026, 4, 2)))
     row = next(r for r in result['rows'] if r['mineral'] == 'Estaño')
 
     assert row['is_fallback'] is True
@@ -122,13 +129,13 @@ def test_biweekly_average_falls_back_to_prior_period(db_session):
     assert row['period_end'] == date(2026, 4, 15)
 
 
-def test_biweekly_average_no_data_anywhere(db_session):
+def test_biweekly_average_no_data_anywhere(store):
     '''
     With an empty price table, every row must be zero-valued and flagged.
     '''
-    _seed_catalog(db_session)
+    _seed_catalog(store)
 
-    result = _run(get_biweekly_report_service(None, (2026, 4, 1), db = db_session))
+    result = _run(get_biweekly_report_service(store, (2026, 4, 1)))
 
     assert len(result['rows']) == len(OFFICIAL_MINERALS)
     assert all(r['avg_price_low'] == 0.0 for r in result['rows'])
@@ -136,29 +143,28 @@ def test_biweekly_average_no_data_anywhere(db_session):
     assert all(r['is_fallback'] is True for r in result['rows'])
 
 
-def test_biweekly_invalid_half_raises(db_session):
+def test_biweekly_invalid_half_raises(store):
     '''
     half must be 1 or 2; anything else is an InvalidInputError surfaced as
     HTTPException by the @handle_service_errors decorator.
     '''
-    _seed_catalog(db_session)
+    _seed_catalog(store)
     with pytest.raises(Exception):
-        _run(get_biweekly_report_service(None, (2026, 4, 3), db = db_session))
+        _run(get_biweekly_report_service(store, (2026, 4, 3)))
 
 
 # --- daily report ----------------------------------------------------------
 
-def test_daily_report_returns_latest_on_date(db_session):
+def test_daily_report_returns_latest_on_date(store):
     '''
     When a price exists exactly on ref_date, is_fallback must be False.
     '''
-    ids = _seed_catalog(db_session)
+    ids = _seed_catalog(store)
     plata_id = ids[normalize_name('Plata')]
-    _add_price(db_session, plata_id, date(2026, 5, 10), 73.5, 74.5)
-    _add_price(db_session, plata_id, date(2026, 5, 11), 75.0, 76.0)
-    db_session.commit()
+    _add_price(store, plata_id, date(2026, 5, 10), 73.5, 74.5)
+    _add_price(store, plata_id, date(2026, 5, 11), 75.0, 76.0)
 
-    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
+    result = _run(get_daily_report_service(store, date(2026, 5, 11)))
     row = next(r for r in result['rows'] if r['mineral'] == 'Plata')
 
     assert row['price_date'] == date(2026, 5, 11)
@@ -167,65 +173,49 @@ def test_daily_report_returns_latest_on_date(db_session):
     assert row['is_fallback'] is False
 
 
-def test_daily_report_falls_back_to_prior_date(db_session):
+def test_daily_report_falls_back_to_prior_date(store):
     '''
     When ref_date has no record, the most recent prior row is returned with
     is_fallback = True.
     '''
-    ids = _seed_catalog(db_session)
+    ids = _seed_catalog(store)
     oro_id = ids[normalize_name('Oro')]
-    _add_price(db_session, oro_id, date(2026, 5, 8), 4700)
-    db_session.commit()
+    _add_price(store, oro_id, date(2026, 5, 8), 4700)
 
-    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
+    result = _run(get_daily_report_service(store, date(2026, 5, 11)))
     row = next(r for r in result['rows'] if r['mineral'] == 'Oro')
 
     assert row['price_date'] == date(2026, 5, 8)
     assert row['is_fallback'] is True
 
 
-def test_daily_report_no_data_marks_all_fallback(db_session):
+def test_daily_report_no_data_marks_all_fallback(store):
     '''
     Without any t_mining_prices row, every mineral must still appear and be
     flagged is_fallback = True.
     '''
-    _seed_catalog(db_session)
+    _seed_catalog(store)
 
-    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
+    result = _run(get_daily_report_service(store, date(2026, 5, 11)))
 
     assert len(result['rows']) == len(OFFICIAL_MINERALS)
     assert all(r['is_fallback'] for r in result['rows'])
     assert all(r['price_low'] == 0.0 for r in result['rows'])
 
 
-# --- catalog seed ----------------------------------------------------------
-
-def test_ensure_official_minerals_is_idempotent(db_session):
-    '''
-    First invocation seeds all 9; the second adds none.
-    '''
-    first = ensure_official_minerals(db_session)
-    second = ensure_official_minerals(db_session)
-    assert first == len(OFFICIAL_MINERALS)
-    assert second == 0
-    names = {m.name for m in db_session.query(Mineral).all()}
-    assert names == {m['name'] for m in OFFICIAL_MINERALS}
-
-
 # --- change_pct on the daily report ---------------------------------------
 
-def test_daily_report_includes_previous_price_and_change_pct(db_session):
+def test_daily_report_includes_previous_price_and_change_pct(store):
     '''
     The daily report must report the immediately preceding row's price and
     the variation %, computed against the most recent prior day with data.
     '''
-    ids = _seed_catalog(db_session)
+    ids = _seed_catalog(store)
     estano_id = ids[normalize_name('Estaño')]
-    _add_price(db_session, estano_id, date(2026, 5, 10), 20.0)
-    _add_price(db_session, estano_id, date(2026, 5, 11), 22.0)
-    db_session.commit()
+    _add_price(store, estano_id, date(2026, 5, 10), 20.0)
+    _add_price(store, estano_id, date(2026, 5, 11), 22.0)
 
-    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
+    result = _run(get_daily_report_service(store, date(2026, 5, 11)))
     row = next(r for r in result['rows'] if r['mineral'] == 'Estaño')
 
     assert row['previous_price_low'] == pytest.approx(20.0)
@@ -233,17 +223,16 @@ def test_daily_report_includes_previous_price_and_change_pct(db_session):
     assert row['change_pct'] == pytest.approx(10.0)
 
 
-def test_daily_report_change_pct_zero_when_no_history(db_session):
+def test_daily_report_change_pct_zero_when_no_history(store):
     '''
     With a single price in storage, change_pct collapses to 0.0 instead of
     raising or returning a misleading negative value.
     '''
-    ids = _seed_catalog(db_session)
+    ids = _seed_catalog(store)
     plata_id = ids[normalize_name('Plata')]
-    _add_price(db_session, plata_id, date(2026, 5, 11), 75.0)
-    db_session.commit()
+    _add_price(store, plata_id, date(2026, 5, 11), 75.0)
 
-    result = _run(get_daily_report_service(None, date(2026, 5, 11), db = db_session))
+    result = _run(get_daily_report_service(store, date(2026, 5, 11)))
     row = next(r for r in result['rows'] if r['mineral'] == 'Plata')
 
     assert row['previous_price_low'] == 0.0
@@ -253,31 +242,30 @@ def test_daily_report_change_pct_zero_when_no_history(db_session):
 
 # --- biweekly history -----------------------------------------------------
 
-def test_biweekly_history_lists_only_periods_with_data(db_session):
+def test_biweekly_history_lists_only_periods_with_data(store):
     '''
     Only biweekly periods that actually have data should appear in the list.
     Fully-fallback rows are excluded.
     '''
-    ids = _seed_catalog(db_session)
+    ids = _seed_catalog(store)
     estano_id = ids[normalize_name('Estaño')]
-    _add_price(db_session, estano_id, date(2026, 4, 3), 21.0)
-    _add_price(db_session, estano_id, date(2026, 4, 20), 22.0)
-    db_session.commit()
+    _add_price(store, estano_id, date(2026, 4, 3), 21.0)
+    _add_price(store, estano_id, date(2026, 4, 20), 22.0)
 
-    result = _run(get_biweekly_history_service(None, db = db_session))
+    result = _run(get_biweekly_history_service(store))
     keys = [(p['year'], p['month'], p['half']) for p in result['periods']]
     assert keys == [(2026, 4, 1), (2026, 4, 2)]
     assert result['period_from'] == date(2026, 4, 3)
     assert result['period_to'] == date(2026, 4, 20)
 
 
-def test_biweekly_history_empty_when_no_data(db_session):
+def test_biweekly_history_empty_when_no_data(store):
     '''
     With no price rows at all, the history endpoint returns an empty list
     instead of raising.
     '''
-    _seed_catalog(db_session)
-    result = _run(get_biweekly_history_service(None, db = db_session))
+    _seed_catalog(store)
+    result = _run(get_biweekly_history_service(store))
     assert result['periods'] == []
 
 

@@ -1,18 +1,13 @@
 '''
-    Tests for the quotations store, the layer that lets the service run on a
-    relational database or on DynamoDB.
-
-    The point of these tests is equivalence: the same quotations must produce
-    the same average whichever backend answers. A discrepancy here would mean
-    the published bulletin changes depending on where the data is stored, which
-    is the failure mode this layer exists to prevent.
+    Tests for the quotations store, the layer that answers the business
+    questions (averages, latest quotations, date bounds) on top of DynamoDB.
 '''
 from datetime import date
 from unittest.mock import patch
 
 import pytest
 
-from models.mining_analysis_dyb import MineralItem, MiningPriceItem
+from models.mining_analysis import MineralItem, MiningPriceItem
 from services import prices_dyb, prices_store
 
 
@@ -55,8 +50,7 @@ def _dynamo_backend():
         ]
         return sorted(found, key = lambda item: item.date, reverse = descending)
 
-    with patch.object(prices_store, 'uses_dynamodb', lambda: True), \
-         patch('services.prices_dyb.query_prices', _query):
+    with patch('services.prices_dyb.query_prices', _query):
         yield
 
 
@@ -88,53 +82,6 @@ def test_dynamodb_empty_window_returns_none(
 ):
     '''A period with no quotations reports nothing, never a zero.'''
     assert prices_store.average_low(None, '7', (date(2026, 7, 1), date(2026, 7, 15))) is None
-
-
-def test_sql_backend_is_the_default():
-    '''
-        Without PERSISTENCE_BACKEND the service keeps using the relational
-        models, so an existing deployment does not change behaviour.
-    '''
-    assert prices_store.BACKEND == prices_store.SQL_BACKEND
-    assert prices_store.uses_dynamodb() is False
-
-
-def test_both_backends_agree_on_the_same_quotations(
-    db_session, # pylint: disable=unused-argument
-    dynamo_backend # pylint: disable=unused-argument
-):
-    '''
-        The equivalence that matters: relational and DynamoDB must return the
-        same average for the same data.
-    '''
-    window = (date(2026, 8, 16), date(2026, 8, 31))
-    dynamo_average, dynamo_days = prices_store.average_low(None, '7', window)
-
-    with patch.object(prices_store, 'uses_dynamodb', lambda: False):
-        _seed_relational(db_session)
-        sql_result = prices_store.average_low(None, '7', window, db = db_session)
-
-    assert sql_result is not None
-    sql_average, sql_days = sql_result
-    assert sql_days == dynamo_days
-    assert sql_average == pytest.approx(dynamo_average)
-
-
-def _seed_relational(db_session) -> None:
-    '''
-        Writes the same quotations into the relational test database.
-
-        Args:
-            db_session: Session provided by the test fixtures.
-    '''
-    from models.mining_analysis import Mineral, MiningPrice # pylint: disable=import-outside-toplevel
-
-    mineral = db_session.get(Mineral, 7)
-    if mineral is None:
-        db_session.add(Mineral(id = 7, name = 'Bismuto', unit = 'LF'))
-    for day, price in QUOTES:
-        db_session.add(MiningPrice(mineral_id = 7, date = day, price_low = price))
-    db_session.commit()
 
 
 def test_batch_write_sends_every_quotation_once():
@@ -262,15 +209,13 @@ def test_date_bounds_spans_the_stored_history():
         MiningPriceItem(mineral_id = '1', date = date(2026, 4, 1), price_low = 22.0)
     ]
 
-    with patch.object(prices_store, 'uses_dynamodb', lambda: True), \
-         patch('services.prices_dyb.scan_prices', lambda resource: items):
+    with patch('services.prices_dyb.scan_prices', lambda resource: items):
         assert prices_store.date_bounds(None) == (date(2026, 4, 1), date(2026, 8, 27))
 
 
 def test_date_bounds_of_an_empty_table_is_undefined():
     '''With nothing stored there is no range to report, and None says so.'''
-    with patch.object(prices_store, 'uses_dynamodb', lambda: True), \
-         patch('services.prices_dyb.scan_prices', lambda resource: []):
+    with patch('services.prices_dyb.scan_prices', lambda resource: []):
         assert prices_store.date_bounds(None) == (None, None)
 
 

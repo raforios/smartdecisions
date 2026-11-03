@@ -24,12 +24,10 @@ from routes.public_reports import router as public_reports_router
 from schemas.health import TableHealth, TablesHealthResponse, TableState
 from services.api_exceptions import setup_exception_handlers
 from services.security import require_roles
-from services.db_connection_sql import ENGINE, Base
 from services.logger_config import custom_logger as logger
 from services.environment import load_and_validate_env_vars
 
 from services.market_sources import scheduled_sync
-from services.prices_store import uses_dynamodb
 
 # Environment variable configuration
 ENV_VARS = load_and_validate_env_vars(
@@ -59,31 +57,14 @@ OPENAPI_URL = f'{DOCS_BASE}/openapi.json'
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     '''
-        Handles the startup and shutdown events.
-
-        Ensures the relational schema exists, but only when the service is
-        actually configured to run on it. On DynamoDB there is no schema to
-        create and no relational database to reach: doing this unconditionally
-        would kill startup in an environment where no RDS is even deployed.
+        Handles startup/shutdown. DynamoDB tables are managed outside the app
+        lifecycle (via dynamodb.sh / IaC); we only log readiness here.
     '''
-    if uses_dynamodb():
-        message = 'Application startup: quotations run on DynamoDB, no schema to verify.'
-        logger.info(message)
-        yield
-        return
-
-    message = 'Application startup: Verifying Mining Analysis database schema.'
+    message = 'Mining Analysis startup: DynamoDB-backed service ready.'
     logger.info(message)
-    try:
-        Base.metadata.create_all(bind = ENGINE)
-        logger.info('Mining database schema verified successfully.')
-    except Exception as e:
-        error_msg = f'Database initialization failed: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise RuntimeError('Critical failure: Database not reachable.') from e
-
     yield
-    logger.info('Application shutdown: Releasing Mining Service resources.')
+    message = 'Mining Analysis shutdown: closing resources.'
+    logger.info(message)
 
 APP_CONFIG = {
     'root_path': ROOT_PATH_NORMALIZED,
@@ -128,7 +109,7 @@ def root() -> dict[str, Any]:
         'Server Date Time': today.isoformat(),
         'Last Update': date.today().isoformat(),
         'Application': 'Python - FastAPI',
-        'Database': 'MySQL - Normalized  transactional Database',
+        'Database': 'AWS DynamoDB',
         'Owner': f'Ministerio de Minería y Metalurgia {copyright_symbol} {today.year}',
         'Architecture': 'Spec-Driven Development'
     }

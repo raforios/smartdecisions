@@ -6,8 +6,5 @@ python-jose[cryptography]
 python-dotenv
 boto3
 requests
-openpyxl
-sqlalchemy
-pymysql
 Pillow
 fpdf2

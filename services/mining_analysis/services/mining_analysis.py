@@ -4,7 +4,6 @@
 import unicodedata
 from typing import Any
 from boto3.resources.base import ServiceResource
-from sqlalchemy.orm import Session
 from services.utils import load_parameters
 from services.prices_store import all_quotations
 
@@ -44,8 +43,7 @@ OFFICIAL_MINERALS: tuple[dict[str, str], ...] = (
 )
 
 async def get_all_prices_service(
-    dynamodb_resource: ServiceResource | None,
-    db: Session | None = None
+    dynamodb_resource: ServiceResource | None
 ) -> list[dict[str, Any]]:
     '''
     Retrieves every quotation with the metadata of its mineral.
@@ -56,7 +54,6 @@ async def get_all_prices_service(
     that catalogue anyway.
 
     Args:
-        db (Session): Database session; ignored when running on DynamoDB.
 
     Returns:
         list[dict[str, Any]]: Rows matching MiningPriceResponseSchema.
@@ -65,7 +62,7 @@ async def get_all_prices_service(
         normalize_name(entry['name']): entry for entry in OFFICIAL_MINERALS
     }
     rows: list[dict[str, Any]] = []
-    for record in all_quotations(dynamodb_resource, db = db):
+    for record in all_quotations(dynamodb_resource):
         entry = catalog.get(normalize_name(record.mineral_name), {})
         rows.append({
             'date': record.date,

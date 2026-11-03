@@ -37,7 +37,6 @@ from typing import Any
 
 import requests
 from boto3.resources.base import ServiceResource
-from sqlalchemy.orm import Session
 
 from schemas.market import MarketError
 from schemas.mining_analysis import (
@@ -453,8 +452,7 @@ def _official_block(
     mineral_id: str | None,
     projection: Projection,
     reference: date_type,
-    dynamodb_resource: ServiceResource | None = None,
-    db: Session | None = None
+    dynamodb_resource: ServiceResource | None = None
 ) -> dict[str, Any]:
     '''
     Builds the official-quotation view of one mineral.
@@ -463,7 +461,6 @@ def _official_block(
         mineral_id (str | None): Mineral identifier, None when uncatalogued.
         projection (Projection): The daily projection already computed.
         reference (date): Today, which decides which period is in force.
-        db (Session | None): Relational session; ignored on DynamoDB.
 
     Returns:
         dict[str, Any]: `official_current`, `official_forecast` and the change
@@ -492,7 +489,7 @@ def _official_block(
     observed = {
         record.date: record.price_low
         for record in prices_in_window(
-            dynamodb_resource, mineral_id, (read_from, horizon_end), db = db
+            dynamodb_resource, mineral_id, (read_from, horizon_end)
         )
         if record.price_low is not None
     }
@@ -527,7 +524,6 @@ async def get_price_forecast_service(
     dynamodb_resource: ServiceResource | None,
     days_ahead: int = 30,
     method: ForecastMethod = ForecastMethod.DAMPED_TREND,
-    db: Session | None = None,
     auth_token: str = ''
 ) -> dict[str, Any]:
     '''
@@ -540,7 +536,6 @@ async def get_price_forecast_service(
     no number rather than wondering where it went.
 
     Args:
-        db (Session): Database session; ignored when running on DynamoDB.
         days_ahead (int): How many days to project.
         method (ForecastMethod): Requested projection method.
         auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
@@ -548,7 +543,7 @@ async def get_price_forecast_service(
     Returns:
         dict[str, Any]: Payload matching PriceForecastResponse shape.
     '''
-    mineral_ids = resolve_mineral_id_map(dynamodb_resource, db = db)
+    mineral_ids = resolve_mineral_id_map(dynamodb_resource)
     minerals: list[dict[str, Any]] = []
     observed_dates: list[date_type] = []
     # One reference for every mineral, so the whole payload agrees on which
@@ -559,7 +554,7 @@ async def get_price_forecast_service(
         mineral_id = mineral_ids.get(normalize_name(catalog['name']))
         history = (
             prices_in_window(
-                dynamodb_resource, mineral_id, (_HISTORY_FLOOR, date_type.max), db = db
+                dynamodb_resource, mineral_id, (_HISTORY_FLOOR, date_type.max)
             )
             if mineral_id is not None else []
         )
@@ -574,8 +569,7 @@ async def get_price_forecast_service(
                 reference = reference,
                 auth_token = auth_token
             ),
-            dynamodb_resource = dynamodb_resource,
-            db = db
+            dynamodb_resource = dynamodb_resource
         ))
 
     message = f'Price forecast built for {len(minerals)} minerals, {days_ahead} day(s).'
@@ -610,15 +604,13 @@ class ForecastRequest:
 
 def _forecast_row(
     request: ForecastRequest,
-    dynamodb_resource: ServiceResource | None = None,
-    db: Session | None = None
+    dynamodb_resource: ServiceResource | None = None
 ) -> dict[str, Any]:
     '''
     Builds one mineral's entry of the forecast payload.
 
     Args:
         request (ForecastRequest): Catalogue entry, history and horizon.
-        db (Session | None): Relational session; ignored on DynamoDB.
 
     Returns:
         dict[str, Any]: The mineral's row, daily projection and official
@@ -650,7 +642,6 @@ def _forecast_row(
             request.mineral_id,
             result,
             request.reference or get_current_time_gmt().date(),
-            dynamodb_resource = dynamodb_resource,
-            db = db
+            dynamodb_resource = dynamodb_resource
         ),
     }

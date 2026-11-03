@@ -22,7 +22,3 @@ Dockerfile*
 deploy.config
 dynamodb.sh
 README.md
-
-# --- Own to this service ---
-# Tools run by hand from a computer; the Lambda never imports them.
-scripts/

@@ -4,67 +4,39 @@
 
     They run against DynamoDB (moto), which is what the deployment serves:
     the route resolves the resource through GET_DB_DEPENDENCY and hands it
-    down, exactly as in production. The relational branch of the same reports
-    is covered by `test_reports.py`.
+    down, exactly as in production.
 '''
 from datetime import date
 
-import boto3
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from moto import mock_aws
 
-from models.mining_analysis_dyb import MineralItem, MiningPriceItem
+from models.mining_analysis import MiningPriceItem
 from routes.public_reports import router as public_reports_router
-from services import prices_dyb, prices_store
+from services import prices_dyb
 from services.db_connection import GET_DB_DEPENDENCY
-from services.mining_analysis import OFFICIAL_MINERALS
+from services.mining_analysis import normalize_name
+from tests.dynamo_helpers import build_quotation_tables, seed_official_catalog
 
 # Two days of tin, the pair the assertions below read: 21.0 then 22.0.
 TIN_PRICES = ((date(2026, 4, 10), 21.0), (date(2026, 4, 11), 22.0))
 
 
 @pytest.fixture(name = 'public_client')
-def _public_client(monkeypatch):
+def _public_client():
     '''
         A client for the public router backed by a mocked DynamoDB holding the
         official catalogue and two tin quotations.
 
-        Args:
-            monkeypatch: Pins the store to the DynamoDB backend, whatever
-                .env says, so the suite never depends on deployment config.
-
         Returns:
             TestClient: Ready to hit the public endpoints anonymously.
     '''
-    monkeypatch.setattr(prices_store, 'BACKEND', prices_store.DYNAMODB_BACKEND)
     with mock_aws():
-        resource = boto3.resource('dynamodb', region_name = 'us-east-1')
-        resource.create_table(
-            TableName = prices_dyb.MINERALS_TABLE,
-            KeySchema = [{'AttributeName': 'mineral_id', 'KeyType': 'HASH'}],
-            AttributeDefinitions = [{'AttributeName': 'mineral_id', 'AttributeType': 'S'}],
-            BillingMode = 'PAY_PER_REQUEST'
-        )
-        resource.create_table(
-            TableName = prices_dyb.PRICES_TABLE,
-            KeySchema = [{'AttributeName': 'mineral_id', 'KeyType': 'HASH'},
-                         {'AttributeName': 'date', 'KeyType': 'RANGE'}],
-            AttributeDefinitions = [{'AttributeName': 'mineral_id', 'AttributeType': 'S'},
-                                    {'AttributeName': 'date', 'AttributeType': 'S'}],
-            BillingMode = 'PAY_PER_REQUEST'
-        )
-        for index, catalog in enumerate(OFFICIAL_MINERALS, start = 1):
-            prices_dyb.put_mineral(resource, MineralItem(
-                mineral_id = str(index), name = catalog['name'], unit = catalog['unit'],
-                chemical_symbol = catalog['chemical_symbol'], quoted_in = catalog['quoted_in']
-            ))
-        # Keyed by symbol rather than searched: a bare next() inside this
-        # generator fixture would raise StopIteration where pytest reads it.
-        catalogue_ids = {catalog['chemical_symbol']: str(index)
-                         for index, catalog in enumerate(OFFICIAL_MINERALS, start = 1)}
-        tin_id = catalogue_ids['Sn']
+        resource = build_quotation_tables()
+        catalogue_ids = seed_official_catalog(resource)
+        tin_id = catalogue_ids[normalize_name('Estaño')]
         prices_dyb.put_prices_batch(resource, [
             MiningPriceItem(mineral_id = tin_id, date = day, price_low = price, price_high = price)
             for day, price in TIN_PRICES

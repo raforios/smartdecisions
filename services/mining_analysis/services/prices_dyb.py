@@ -29,7 +29,7 @@ from models.market_prices import (
     MarketPriceItem,
     RoyaltyRuleItem
 )
-from models.mining_analysis_dyb import (
+from models.mining_analysis import (
     MINERALS_TABLE_KEY,
     PRICES_PARTITION_KEY,
     PRICES_SORT_KEY,

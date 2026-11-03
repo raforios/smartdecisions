@@ -14,9 +14,7 @@ from datetime import date
 from typing import Any
 
 from boto3.resources.base import ServiceResource
-from sqlalchemy.orm import Session
 
-from models.mining_analysis import Mineral
 from schemas.market import MarketError
 from schemas.mining_analysis import MiningResult, MiningStatus
 from services.utils import load_parameters
@@ -109,8 +107,7 @@ def prev_biweekly_period(
 
 
 def resolve_mineral_id_map(
-    dynamodb_resource: ServiceResource | None,
-    db: Session | None = None
+    dynamodb_resource: ServiceResource | None
 ) -> dict[str, str]:
     '''
     Builds {normalized_name: mineral_id} for the official catalog. Minerals
@@ -119,7 +116,7 @@ def resolve_mineral_id_map(
     '''
     return {
         normalize_name(record.name): record.mineral_id
-        for record in list_minerals(dynamodb_resource, db = db)
+        for record in list_minerals(dynamodb_resource)
     }
 
 
@@ -148,8 +145,7 @@ def _empty_daily_row(
 @handle_service_errors('MINING_ANALYSIS')
 async def get_daily_report_service(
     dynamodb_resource: ServiceResource | None,
-    ref_date: date,
-    db: Session | None = None
+    ref_date: date
 ) -> dict[str, Any]:
     '''
     Builds the daily mineral report (template Minerales_01).
@@ -159,13 +155,12 @@ async def get_daily_report_service(
     ref_date itself and an older record was used.
 
     Args:
-        db (Session): Database session.
         ref_date (date): Reference date for the report (typically "today").
 
     Returns:
         dict[str, Any]: Payload matching DailyReportResponse shape.
     '''
-    mineral_ids = resolve_mineral_id_map(dynamodb_resource, db = db)
+    mineral_ids = resolve_mineral_id_map(dynamodb_resource)
     rows: list[dict[str, Any]] = []
 
     for catalog in OFFICIAL_MINERALS:
@@ -176,7 +171,7 @@ async def get_daily_report_service(
             continue
 
         # Through the store, so the report reads the same on either backend.
-        latest_two = latest_prices_before(dynamodb_resource, str(mineral_id), ref_date, 2, db = db)
+        latest_two = latest_prices_before(dynamodb_resource, str(mineral_id), ref_date, 2)
         if not latest_two:
             rows.append(_empty_daily_row(catalog, ref_date))
             continue
@@ -216,8 +211,7 @@ async def get_daily_report_service(
 def _compute_biweekly_average(
     dynamodb_resource: ServiceResource | None,
     mineral_id: int,
-    window: tuple[date, date],
-    db: Session | None = None
+    window: tuple[date, date]
 ) -> tuple[float, int] | None:
     '''
     Returns (avg_price_low, sample_size) for the mineral within the window,
@@ -230,7 +224,7 @@ def _compute_biweekly_average(
     # Delegated to the store so the same rule holds on either backend: the
     # relational one aggregates with SQL, DynamoDB reads the partition and
     # averages in Python. This function no longer knows which is active.
-    return average_low(dynamodb_resource, str(mineral_id), window, db = db)
+    return average_low(dynamodb_resource, str(mineral_id), window)
 
 
 # How far back the report looks for the last published quotation of a mineral,
@@ -274,15 +268,13 @@ class _BiweeklyAverage:
 def _average_with_fallback(
     dynamodb_resource: ServiceResource | None,
     mineral_id: str | None,
-    period: tuple[int, int, int],
-    db: Session | None = None
+    period: tuple[int, int, int]
 ) -> _BiweeklyAverage:
     '''
     Returns the mineral's average for the requested period, or the most recent
     earlier one when that period has no data.
 
     Args:
-        db (Session): Database session.
         mineral_id (str | None): Mineral identifier, None when the catalogue
             has no such mineral.
         period (tuple[int, int, int]): Requested (year, month, half).
@@ -296,7 +288,7 @@ def _average_with_fallback(
     if mineral_id is None:
         return _BiweeklyAverage(0.0, 0, start, end, is_fallback = True)
 
-    calc = _compute_biweekly_average(dynamodb_resource, mineral_id, (start, end), db = db)
+    calc = _compute_biweekly_average(dynamodb_resource, mineral_id, (start, end))
     if calc is not None:
         return _BiweeklyAverage(calc[0], calc[1], start, end, is_fallback = False)
 
@@ -305,7 +297,7 @@ def _average_with_fallback(
         current = prev_biweekly_period(*current)
         past_start, past_end = biweekly_period_bounds(*current)
         calc = _compute_biweekly_average(
-            dynamodb_resource, mineral_id, (past_start, past_end), db = db
+            dynamodb_resource, mineral_id, (past_start, past_end)
         )
         if calc is not None:
             return _BiweeklyAverage(
@@ -318,8 +310,7 @@ def _average_with_fallback(
 @handle_service_errors('MINING_ANALYSIS')
 async def get_biweekly_report_service(
     dynamodb_resource: ServiceResource | None,
-    period: tuple[int, int, int],
-    db: Session | None = None
+    period: tuple[int, int, int]
 ) -> dict[str, Any]:
     '''
     Builds the biweekly official report (template Minerales_02).
@@ -332,7 +323,6 @@ async def get_biweekly_report_service(
     at 24 periods (~1 year) to avoid pathological scans.
 
     Args:
-        db (Session): Database session.
         year (int): Calendar year of the report.
         month (int): Month (1-12) of the report.
         half (int): 1 for days 1-15, 2 for 16-end.
@@ -342,7 +332,7 @@ async def get_biweekly_report_service(
     '''
     year, month, half = period
     period_start, period_end = biweekly_period_bounds(year, month, half)
-    mineral_ids = resolve_mineral_id_map(dynamodb_resource, db = db)
+    mineral_ids = resolve_mineral_id_map(dynamodb_resource)
     rows: list[dict[str, Any]] = [
         {
             'mineral': catalog['name'],
@@ -352,8 +342,7 @@ async def get_biweekly_report_service(
             **_average_with_fallback(
                 dynamodb_resource,
                 mineral_ids.get(normalize_name(catalog['name'])),
-                (year, month, half),
-                db = db
+                (year, month, half)
             ).as_row()
         }
         for catalog in OFFICIAL_MINERALS
@@ -401,8 +390,7 @@ def _iter_biweekly_periods(
 async def get_biweekly_history_service(
     dynamodb_resource: ServiceResource | None,
     period_from: date | None = None,
-    period_to: date | None = None,
-    db: Session | None = None
+    period_to: date | None = None
 ) -> dict[str, Any]:
     '''
     Returns every biweekly period inside the requested window that has at
@@ -413,7 +401,6 @@ async def get_biweekly_history_service(
     full history.
 
     Args:
-        db (Session): Database session.
         period_from (date | None): Inclusive lower bound. Defaults to the
             earliest cotización in storage.
         period_to (date | None): Inclusive upper bound. Defaults to the
@@ -422,7 +409,7 @@ async def get_biweekly_history_service(
     Returns:
         dict[str, Any]: Payload matching BiweeklyHistoryResponse shape.
     '''
-    oldest, newest = date_bounds(dynamodb_resource, db = db)
+    oldest, newest = date_bounds(dynamodb_resource)
     if oldest is None:
         today = date.today()
         return {
@@ -441,7 +428,7 @@ async def get_biweekly_history_service(
     periods: list[dict[str, Any]] = []
     for year, month, half in _iter_biweekly_periods(period_from, period_to):
         snapshot = await get_biweekly_report_service(
-            dynamodb_resource, (year, month, half), db = db
+            dynamodb_resource, (year, month, half)
         )
         # Skip purely-fallback snapshots — they carry no information about
         # the requested period itself, only about a recovered prior one.
@@ -463,28 +450,3 @@ async def get_biweekly_history_service(
         'period_to': period_to,
         'periods': periods,
     }
-
-
-def ensure_official_minerals(db: Session) -> int:
-    '''
-    Idempotent seed: inserts any official mineral missing from t_minerals.
-
-    Returns the number of rows actually inserted. Existing rows are left
-    untouched to preserve any operator-curated metadata.
-    '''
-    existing = {normalize_name(r.name) for r in db.query(Mineral.name).all()}
-    inserted = 0
-    for catalog in OFFICIAL_MINERALS:
-        if normalize_name(catalog['name']) in existing:
-            continue
-        db.add(Mineral(
-            name = catalog['name'],
-            unit = catalog['unit'],
-            chemical_symbol = catalog['chemical_symbol'],
-            quoted_in = catalog['quoted_in'],
-            method = None,
-        ))
-        inserted += 1
-    if inserted:
-        db.commit()
-    return inserted
