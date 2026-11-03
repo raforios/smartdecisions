@@ -195,30 +195,6 @@ def test_latest_prices_before_of_an_unknown_mineral_is_empty(
     assert prices_store.latest_prices_before(None, '999', date(2026, 8, 27), 2) == []
 
 
-def test_date_bounds_spans_the_stored_history():
-    '''
-        The history screen asks storage how far back it can go.
-
-        DynamoDB has no MIN/MAX, so the reduction happens in Python; the test
-        pins that it reduces over everything and not over one partition.
-    '''
-    items = [
-        MiningPriceItem(mineral_id = '7', date = day, price_low = price)
-        for day, price in QUOTES
-    ] + [
-        MiningPriceItem(mineral_id = '1', date = date(2026, 4, 1), price_low = 22.0)
-    ]
-
-    with patch('services.prices_dyb.scan_prices', lambda resource: items):
-        assert prices_store.date_bounds(None) == (date(2026, 4, 1), date(2026, 8, 27))
-
-
-def test_date_bounds_of_an_empty_table_is_undefined():
-    '''With nothing stored there is no range to report, and None says so.'''
-    with patch('services.prices_dyb.scan_prices', lambda resource: []):
-        assert prices_store.date_bounds(None) == (None, None)
-
-
 def test_all_quotations_carries_the_mineral_name(
     dynamo_backend # pylint: disable=unused-argument
 ):

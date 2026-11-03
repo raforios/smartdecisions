@@ -19,7 +19,6 @@ import uvicorn
 # Router of this microservice
 from routes.mining_analysis import router as mining_router
 from routes.market import router as market_router
-from routes.public_reports import router as public_reports_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
 from services.api_exceptions import setup_exception_handlers
@@ -245,8 +244,7 @@ app.add_middleware(
     allow_headers = ['*'],
 )
 
-# Router registration. The public one goes first so it shows up first in /docs.
-app.include_router(public_reports_router)
+# Router registration.
 app.include_router(mining_router)
 app.include_router(market_router)
 

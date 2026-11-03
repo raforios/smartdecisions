@@ -142,28 +142,6 @@ def latest_prices_before(
     ][:limit]
 
 
-def date_bounds(
-    dynamodb_resource: ServiceResource
-) -> tuple[date_type | None, date_type | None]:
-    '''
-        Returns the first and last dates with a stored quotation.
-
-        The biweekly history uses them to know which periods exist at all.
-        DynamoDB has no aggregates, so the whole table is scanned and reduced
-        here. That is acceptable because the table holds one item per mineral
-        per day and the history screen is not a hot path.
-
-        Args:
-            dynamodb_resource (ServiceResource): Resource the route resolved.
-
-        Returns:
-            tuple[date | None, date | None]: Oldest and newest dates, or
-                (None, None) when nothing is stored.
-    '''
-    dates = [item.date for item in prices_dyb.scan_prices(dynamodb_resource)]
-    return (min(dates), max(dates)) if dates else (None, None)
-
-
 @dataclass(frozen = True)
 class QuotationRecord:
     '''

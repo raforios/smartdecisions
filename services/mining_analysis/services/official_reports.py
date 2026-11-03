@@ -8,7 +8,6 @@
     the same over the relational store and over DynamoDB.
 '''
 import calendar
-from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -23,7 +22,6 @@ from services.logger_config import custom_logger as logger
 from services.mining_analysis import CHANGE_DECIMALS, OFFICIAL_MINERALS, normalize_name
 from services.prices_store import (
     average_low,
-    date_bounds,
     latest_prices_before,
     list_minerals
 )
@@ -357,96 +355,4 @@ async def get_biweekly_report_service(
         'period_start': period_start,
         'period_end': period_end,
         'rows': rows,
-    }
-
-
-def _iter_biweekly_periods(
-    period_from: date,
-    period_to: date
-) -> Iterator[tuple[int, int, int]]:
-    '''
-    Yields (year, month, half) tuples covering every biweekly period between
-    `period_from` and `period_to` (inclusive) in chronological order.
-    '''
-    year, month = period_from.year, period_from.month
-    half = 1 if period_from.day <= 15 else 2
-    end_year, end_month = period_to.year, period_to.month
-    end_half = 1 if period_to.day <= 15 else 2
-
-    while (year, month, half) <= (end_year, end_month, end_half):
-        yield year, month, half
-        if half == 1:
-            half = 2
-        else:
-            half = 1
-            if month == 12:
-                month = 1
-                year += 1
-            else:
-                month += 1
-
-
-@handle_service_errors('MINING_ANALYSIS')
-async def get_biweekly_history_service(
-    dynamodb_resource: ServiceResource | None,
-    period_from: date | None = None,
-    period_to: date | None = None
-) -> dict[str, Any]:
-    '''
-    Returns every biweekly period inside the requested window that has at
-    least one cotización for any official mineral.
-
-    When `period_from`/`period_to` are omitted, the bounds are derived from
-    the MIN/MAX dates in t_mining_prices so the caller automatically sees the
-    full history.
-
-    Args:
-        period_from (date | None): Inclusive lower bound. Defaults to the
-            earliest cotización in storage.
-        period_to (date | None): Inclusive upper bound. Defaults to the
-            latest cotización in storage.
-
-    Returns:
-        dict[str, Any]: Payload matching BiweeklyHistoryResponse shape.
-    '''
-    oldest, newest = date_bounds(dynamodb_resource)
-    if oldest is None:
-        today = date.today()
-        return {
-            'status': MiningStatus.SUCCESS,
-            'result': MiningResult.BIWEEKLY_HISTORY_GENERATED,
-            'period_from': period_from or today,
-            'period_to': period_to or today,
-            'periods': [],
-        }
-
-    period_from = period_from or oldest
-    period_to = period_to or newest
-    if period_from > period_to:
-        raise InvalidInputError(detail = 'period_from must be <= period_to.')
-
-    periods: list[dict[str, Any]] = []
-    for year, month, half in _iter_biweekly_periods(period_from, period_to):
-        snapshot = await get_biweekly_report_service(
-            dynamodb_resource, (year, month, half)
-        )
-        # Skip purely-fallback snapshots — they carry no information about
-        # the requested period itself, only about a recovered prior one.
-        if all(row['is_fallback'] for row in snapshot['rows']):
-            continue
-        periods.append({
-            'year': year,
-            'month': month,
-            'half': half,
-            'period_start': snapshot['period_start'],
-            'period_end': snapshot['period_end'],
-            'rows': snapshot['rows'],
-        })
-
-    return {
-        'status': MiningStatus.SUCCESS,
-        'result': MiningResult.BIWEEKLY_HISTORY_GENERATED,
-        'period_from': period_from,
-        'period_to': period_to,
-        'periods': periods,
     }

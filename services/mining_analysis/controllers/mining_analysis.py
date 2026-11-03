@@ -13,7 +13,6 @@ from services.mining_analysis import (
 from services.official_reports import (
     get_daily_report_service,
     get_biweekly_report_service,
-    get_biweekly_history_service,
 )
 from schemas.mining_analysis import (
     ForecastMethod,
@@ -21,7 +20,6 @@ from schemas.mining_analysis import (
     MiningPriceResponseSchema,
     DailyReportResponse,
     BiweeklyReportResponse,
-    BiweeklyHistoryResponse,
 )
 
 @handle_service_errors('MINING_ANALYSIS')
@@ -73,25 +71,6 @@ async def get_biweekly_report_controller(
         dynamodb_resource, (year, month, half)
     )
     return BiweeklyReportResponse(**result)
-
-@handle_service_errors('MINING_ANALYSIS')
-async def get_biweekly_history_controller(
-    dynamodb_resource: ServiceResource,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str,
-    period_from: date = None,
-    period_to: date = None,
-) -> BiweeklyHistoryResponse:
-    '''
-    Orchestrates the biweekly history endpoint.
-    '''
-    message = (f'User: {current_user} requesting biweekly history '
-               f'{period_from} → {period_to}.')
-    logger.info(message)
-    result = await get_biweekly_history_service(
-        dynamodb_resource, period_from = period_from, period_to = period_to,
-    )
-    return BiweeklyHistoryResponse(**result)
 
 @handle_service_errors('MINING_ANALYSIS')
 async def get_price_forecast_controller(

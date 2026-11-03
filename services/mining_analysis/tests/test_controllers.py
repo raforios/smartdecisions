@@ -31,7 +31,6 @@ from schemas.market import (
     SaleScenarioRequest
 )
 from schemas.mining_analysis import (
-    BiweeklyHistoryResponse,
     BiweeklyReportResponse,
     DailyReportResponse,
     ForecastMethod,
@@ -107,14 +106,6 @@ def test_biweekly_report_controller_returns_its_model(store):
         year = 2026, month = 4, half = 1
     ))
     assert isinstance(response, BiweeklyReportResponse)
-
-
-def test_biweekly_history_controller_returns_its_model(store):
-    '''The fortnightly history answers a fully built BiweeklyHistoryResponse.'''
-    response = _run(controllers.get_biweekly_history_controller(
-        dynamodb_resource = store, request = None, current_user = 'tester'
-    ))
-    assert isinstance(response, BiweeklyHistoryResponse)
 
 
 def test_price_forecast_controller_returns_its_model(store):

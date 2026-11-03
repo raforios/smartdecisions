@@ -9,7 +9,6 @@ The **mining analysis** service of SmartDecisions. It stores and serves the offi
 The **Mining-Analysis-Service** centralizes mineral price information. Its key features:
 
   * **Official Quotations:** The fortnightly quotations per mineral and the daily (**Minerales_01**) and fortnightly (**Minerales_02**) reports, falling back to the latest available data.
-  * **Public Reports:** The same reports without JWT, as JSON, PDF and PNG, for the institutional website.
   * **Market Prices:** Daily sync of the LBMA fixings (via Westmetall) and LME cash, and the estimate of the official quotation of the current fortnight.
   * **Price Projection:** Each mineral's series projected by ML-Functions (`/v1/prediction/forecast/compare`), with its confidence.
   * **Royalties:** The Art. 227 scales per mineral.
@@ -24,14 +23,13 @@ The **Mining-Analysis-Service** centralizes mineral price information. Its key f
   * **ASGI Server:** Uvicorn 🚀
   * **Database:** AWS DynamoDB (`boto3`)
   * **Data Validation:** Pydantic V2
-  * **Reports:** PDF and PNG over the official templates
   * **Cloud Platform:** AWS Lambda (`Mangum`) behind `api.bearsoft.com.bo`
 
 -----
 
 ## 🚀 API Endpoints
 
-The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>` except the public reports, meant for `mineria.gob.bo` and other anonymous consumers; the default CORS regex already covers `*.mineria.gob.bo`, `*.bearsoft.com.bo`, `*.cloudfront.net` and `localhost`, and other domains go in `CORS_ALLOWED_ORIGINS` (CSV list) or `CORS_ALLOWED_ORIGIN_REGEX`.
+The API **endpoints**, grouped by feature. All of them require `Authorization: Bearer <jwt>`. The PNG and PDF of the reports are drawn by the Streamlit app from `/reports/daily` and `/reports/biweekly`. The default CORS regex already covers `*.mineria.gob.bo`, `*.bearsoft.com.bo`, `*.cloudfront.net` and `localhost`, and other domains go in `CORS_ALLOWED_ORIGINS` (CSV list) or `CORS_ALLOWED_ORIGIN_REGEX`.
 
 ### Quotations, Projection and Market
 
@@ -46,18 +44,6 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/mining-analysis/market/prices/{mineral_id}` | A mineral's daily **market series**. |
 | `GET` | `/v1/mining-analysis/royalty-rules` | The **royalty scales** in force (Art. 227). |
 | `POST` | `/v1/mining-analysis/sale-scenario` | **Sell today or wait**: compares both ends in bolivianos. `ADMIN` only. |
-
-### Public Reports (no JWT)
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/v1/mining-analysis/public/reports/daily?date=YYYY-MM-DD` | Same as `/reports/daily`, anonymous. |
-| `GET` | `/v1/mining-analysis/public/reports/biweekly?year=&month=&half=` | Same as `/reports/biweekly`, anonymous. |
-| `GET` | `/v1/mining-analysis/public/reports/biweekly/history?from=YYYY-MM-DD&to=YYYY-MM-DD` | Historical series of the **fortnights** with data, in chronological order; `from` and `to` are optional. |
-| `GET` | `/v1/mining-analysis/public/reports/daily/png` | Daily **report** rendered as PNG (template **Minerales_01**). |
-| `GET` | `/v1/mining-analysis/public/reports/daily/pdf` | Daily **report** rendered as PDF (template **Minerales_01**). |
-| `GET` | `/v1/mining-analysis/public/reports/biweekly/png` | Fortnightly **report** rendered as PNG (template **Minerales_02**). |
-| `GET` | `/v1/mining-analysis/public/reports/biweekly/pdf` | Fortnightly **report** rendered as PDF (template **Minerales_02**). |
 
 ### Health
 
@@ -117,7 +103,7 @@ export API_BASE_URL="https://api.bearsoft.com.bo/v1/mining-analysis"
 streamlit run app.py
 ```
 
-Against AWS the reads work (`/prices`, the daily and fortnightly reports, the PDF and the PNG).
+Against AWS the reads work (`/prices` and the daily and fortnightly reports).
 
 -----
 
@@ -125,8 +111,6 @@ Against AWS the reads work (`/prices`, the daily and fortnightly reports, the PD
 
 ```txt
 mining_analysis/
-├── assets/
-│   └── templates/
 ├── controllers/
 │   ├── __init__.py
 │   ├── market.py
@@ -138,8 +122,7 @@ mining_analysis/
 ├── routes/
 │   ├── __init__.py
 │   ├── market.py
-│   ├── mining_analysis.py
-│   └── public_reports.py
+│   └── mining_analysis.py
 ├── schemas/
 │   ├── __init__.py
 │   ├── health.py
@@ -160,7 +143,6 @@ mining_analysis/
 │   ├── price_forecast.py
 │   ├── prices_dyb.py
 │   ├── prices_store.py
-│   ├── reports_renderer.py
 │   ├── royalty_rules.py
 │   ├── sale_scenario.py
 │   ├── security.py

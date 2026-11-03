@@ -32,7 +32,6 @@ class MiningResult(str, Enum):
     TRANSACTIONS_RETRIEVED = 'TRANSACTIONS_RETRIEVED'
     DAILY_REPORT_GENERATED = 'DAILY_REPORT_GENERATED'
     BIWEEKLY_REPORT_GENERATED = 'BIWEEKLY_REPORT_GENERATED'
-    BIWEEKLY_HISTORY_GENERATED = 'BIWEEKLY_HISTORY_GENERATED'
     PRICE_FORECAST_GENERATED = 'PRICE_FORECAST_GENERATED'
 
 
@@ -138,32 +137,6 @@ class BiweeklyReportResponse(BaseModel):
     period_start: date
     period_end: date
     rows: list[BiweeklyMineralPriceRow]
-
-
-class BiweeklyPeriodSummary(BaseModel):
-    '''
-    One element of the biweekly history series: identifies the period and
-    carries the per-mineral averages computed for it.
-    '''
-    year: int
-    month: int
-    half: int
-    period_start: date
-    period_end: date
-    rows: list[BiweeklyMineralPriceRow]
-
-
-class BiweeklyHistoryResponse(BaseModel):
-    '''
-    Aggregated response listing every biweekly period that has at least one
-    cotización in the requested range. Ordered chronologically (oldest first)
-    so the front-end can plot the line chart without sorting.
-    '''
-    status: MiningStatus = MiningStatus.SUCCESS
-    result: MiningResult = MiningResult.BIWEEKLY_HISTORY_GENERATED
-    period_from: date
-    period_to: date
-    periods: list[BiweeklyPeriodSummary]
 
 
 # --- Price forecasting ---

@@ -59,12 +59,8 @@ sigue mostrando la anterior.
 ## Verificación
 
 El paso 3 ya compara los conteos de MySQL y DynamoDB. Después, el boletín,
-que es lo que se entrega:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  'https://api.bearsoft.com.bo/v1/mining-analysis/public/reports/biweekly?year=2026&month=9&half=1'
-```
+que es lo que se entrega: se genera en Streamlit (PDF y PNG de la quincena),
+que lee `/v1/mining-analysis/reports/biweekly` con token.
 
 ## Reglas de negocio que no se negocian
 

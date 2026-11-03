@@ -10,11 +10,9 @@ from moto import mock_aws
 
 from models.mining_analysis import MiningPriceItem
 from services import prices_dyb
-from services.reports_renderer import _format_price
 from services.mining_analysis import OFFICIAL_MINERALS
 from services.official_reports import (
     biweekly_period_bounds,
-    get_biweekly_history_service,
     get_biweekly_report_service,
     get_daily_report_service,
     normalize_name,
@@ -238,56 +236,3 @@ def test_daily_report_change_pct_zero_when_no_history(store):
     assert row['previous_price_low'] == 0.0
     assert row['previous_price_date'] is None
     assert row['change_pct'] == 0.0
-
-
-# --- biweekly history -----------------------------------------------------
-
-def test_biweekly_history_lists_only_periods_with_data(store):
-    '''
-    Only biweekly periods that actually have data should appear in the list.
-    Fully-fallback rows are excluded.
-    '''
-    ids = _seed_catalog(store)
-    estano_id = ids[normalize_name('Estaño')]
-    _add_price(store, estano_id, date(2026, 4, 3), 21.0)
-    _add_price(store, estano_id, date(2026, 4, 20), 22.0)
-
-    result = _run(get_biweekly_history_service(store))
-    keys = [(p['year'], p['month'], p['half']) for p in result['periods']]
-    assert keys == [(2026, 4, 1), (2026, 4, 2)]
-    assert result['period_from'] == date(2026, 4, 3)
-    assert result['period_to'] == date(2026, 4, 20)
-
-
-def test_biweekly_history_empty_when_no_data(store):
-    '''
-    With no price rows at all, the history endpoint returns an empty list
-    instead of raising.
-    '''
-    _seed_catalog(store)
-    result = _run(get_biweekly_history_service(store))
-    assert result['periods'] == []
-
-
-# --- price rendering --------------------------------------------------------
-
-def test_price_rounds_half_up_not_toward_the_even_float():
-    '''
-        A bulletin cannot round a half down. 12.825 is the real Bismuto average
-        for the first half of September; plain float formatting renders 12.82
-        because the binary float behind it is 12.8249999….
-    '''
-    assert _format_price(12.825) == '12.83'
-    assert _format_price(0.735) == '0.74'
-    assert _format_price(12.8249) == '12.82'
-
-
-def test_integer_like_quotes_keep_no_decimals():
-    '''Antimonio and Wolfram are published without decimals.'''
-    assert _format_price(27000.0) == '27,000'
-    assert _format_price(116355.0) == '116,355'
-
-
-def test_missing_price_renders_a_dash():
-    '''A mineral with no quote shows an em dash, never a zero.'''
-    assert _format_price(None) == '—'

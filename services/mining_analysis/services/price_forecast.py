@@ -292,8 +292,7 @@ def official_round(value: float) -> float:
 
     Never with float formatting: the price is stored with four decimals and
     `f'{12.825:.2f}'` yields 12.82, because the binary float behind that literal
-    is 12.8249999…. A published quotation cannot round a half down, and
-    `reports_renderer` already rounds this way for the same reason.
+    is 12.8249999…. A published quotation cannot round a half down.
 
     Args:
         value (float): Average to round.
