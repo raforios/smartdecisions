@@ -1,9 +1,9 @@
 '''
-    Shared DynamoDB (moto) helpers for the quotation tests.
+    Shared DynamoDB (moto) helpers for the quotation and market tests.
 
-    The two quotation tables are provisioned the way the deploy does, and the
-    official catalogue is seeded with the ids 1..n in OFFICIAL_MINERALS order,
-    so every test only declares the prices it needs.
+    The tables are provisioned the way the deploy does, and the official
+    catalogue is seeded with the ids 1..n in OFFICIAL_MINERALS order, so every
+    test only declares the prices it needs.
 '''
 import boto3
 from boto3.resources.base import ServiceResource
@@ -41,6 +41,30 @@ def build_quotation_tables() -> ServiceResource:
         ],
         BillingMode = 'PAY_PER_REQUEST'
     )
+    return resource
+
+
+def build_market_tables(resource: ServiceResource) -> ServiceResource:
+    '''
+        Adds the market prices and royalty rules tables to a mocked resource.
+
+        Must be called inside an active ``moto.mock_aws()`` context.
+
+        Args:
+            resource (ServiceResource): The mocked DynamoDB resource.
+
+        Returns:
+            ServiceResource: The same resource, with both tables.
+    '''
+    for name in (prices_dyb.MARKET_TABLE, prices_dyb.RULES_TABLE):
+        schema = [{'AttributeName': 'mineral_id', 'KeyType': 'HASH'}]
+        definitions = [{'AttributeName': 'mineral_id', 'AttributeType': 'S'}]
+        if name == prices_dyb.MARKET_TABLE:
+            schema.append({'AttributeName': 'date', 'KeyType': 'RANGE'})
+            definitions.append({'AttributeName': 'date', 'AttributeType': 'S'})
+        resource.create_table(TableName = name, KeySchema = schema,
+                              AttributeDefinitions = definitions,
+                              BillingMode = 'PAY_PER_REQUEST')
     return resource
 
 

@@ -2,7 +2,7 @@
     User Schema (Request/Response)
 '''
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from schemas.role import Role
 
 class UserRequest(BaseModel):
@@ -54,11 +54,8 @@ class UserResponse(BaseModel):
         None, description = 'The sign-in before the last one: "your last session" next time.')
     login_count: int = Field(0, description = 'How many times the user has signed in.')
 
-    class Config: # pylint: disable=too-few-public-methods
-        '''
-            User Response - Config Class - To get form attributes
-        '''
-        from_attributes = True
+    # Built from the DynamoDB item's attributes, not only from a dict.
+    model_config = ConfigDict(from_attributes = True)
 
 class InternalUser(UserResponse): # pylint: disable=too-few-public-methods
     '''

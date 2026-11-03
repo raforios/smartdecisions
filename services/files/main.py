@@ -28,7 +28,6 @@ ENV_VARS = load_and_validate_env_vars(
     },
     optional_env_vars = {
         'APP_ENV': str,
-        'ROOT_PATH': str,
         'CORS_ALLOWED_ORIGINS': str,
         'CORS_ALLOWED_ORIGIN_REGEX': str
     }
@@ -38,8 +37,6 @@ UVICORN_HOST = ENV_VARS['HOST']
 UVICORN_PORT = ENV_VARS['PORT']
 APP_ENV = ENV_VARS['APP_ENV']
 
-ROOT_PATH_VALUE = ENV_VARS.get('ROOT_PATH', '').strip('/')
-ROOT_PATH_NORMALIZED = f'/{ROOT_PATH_VALUE}' if ROOT_PATH_VALUE else ''
 # The docs live under the service's own prefix too: api.bearsoft.com.bo only
 # routes /v1/<service>/... to this Lambda, so /docs is unreachable through it.
 DOCS_BASE = '/v1/s3'
@@ -63,7 +60,6 @@ CORS_ALLOWED_ORIGIN_REGEX = ENV_VARS.get('CORS_ALLOWED_ORIGIN_REGEX') or DEFAULT
 
 
 APP_CONFIG = {
-    'root_path': ROOT_PATH_NORMALIZED,
     'title': 'AWS S3 Bucket File Management Service',
     'description': 'Managing data files stored in AWS S3 buckets',
     'version': '1.0.0',
@@ -74,7 +70,6 @@ APP_CONFIG = {
 
     # Disable automatic documentation routes to use manual routing below
     # Swagger's "Try it out" calls the host it was opened on, not a stage prefix.
-    'root_path_in_servers': False,
     'docs_url': None,
     'redoc_url': None,
     'openapi_url': None

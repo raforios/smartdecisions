@@ -17,14 +17,13 @@ from schemas.market import (
     MarketPricesResponse,
     MarketSyncResult,
     MarketWindow,
-    RoyaltyRuleSchema,
     RoyaltyRulesResponse,
     SaleScenario,
     SaleScenarioRequest
 )
 from services.market_sources import sync_market_prices
 from services.official_estimate import estimate_all, market_series
-from services.royalty_rules import ensure_rules, save_rule, to_rule_schema
+from services.royalty_rules import ensure_rules, to_rule_schema
 from services.sale_scenario import rate_forecast, sale_scenario
 from services.utils import audit_event, handle_service_errors
 
@@ -83,20 +82,6 @@ async def list_rules_controller(
     return RoyaltyRulesResponse(
         rules = [to_rule_schema(rule) for rule in ensure_rules(dynamodb_resource)]
     )
-
-
-@handle_service_errors('MINING_ANALYSIS')
-@audit_event('MINING_ANALYSIS', 'RoyaltyRule', 'UPSERT')
-async def save_rule_controller(
-    dynamodb_resource: ServiceResource,
-    rule: RoyaltyRuleSchema,
-    request: Request, # pylint: disable=unused-argument
-    current_user: str # pylint: disable=unused-argument
-) -> RoyaltyRuleSchema:
-    '''
-        Creates or replaces one scale.
-    '''
-    return to_rule_schema(save_rule(dynamodb_resource, rule))
 
 
 @handle_service_errors('MINING_ANALYSIS')

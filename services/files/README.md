@@ -107,7 +107,7 @@ To run the service locally:
 pip install -r requirements.txt
 ```
 
-2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH` and `ML_DATA_BUCKET_NAME`. It uses the real S3 bucket of the active AWS profile.
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, and `ML_DATA_BUCKET_NAME`. It uses the real S3 bucket of the active AWS profile.
 
 3.  **Start the API server:**
 

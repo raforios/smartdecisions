@@ -12,7 +12,6 @@ from controllers.market import (
     list_rules_controller,
     market_series_controller,
     preview_sale_scenario_controller,
-    save_rule_controller,
     sync_market_controller
 )
 from schemas.market import (
@@ -20,7 +19,6 @@ from schemas.market import (
     MarketPricesResponse,
     MarketSyncResult,
     MarketWindow,
-    RoyaltyRuleSchema,
     RoyaltyRulesResponse,
     SaleScenario,
     SaleScenarioRequest
@@ -153,29 +151,6 @@ async def list_rules_endpoint(
     logger.info(message)
     return await list_rules_controller(
         dynamodb_resource = dynamodb_resource,
-        request = request, current_user = current_user
-    )
-
-
-@router.put(
-    '/royalty-rules',
-    response_model = RoyaltyRuleSchema,
-    status_code = status.HTTP_200_OK,
-    summary = 'Create or replace the scale of one mineral'
-)
-async def save_rule_endpoint(
-    request: Request,
-    rule: RoyaltyRuleSchema,
-    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    current_user: str = Depends(require_roles(*RULE_EDITORS))
-) -> RoyaltyRuleSchema:
-    '''
-        Endpoint to edit a royalty scale.
-    '''
-    message = f'User: {current_user}. Saving royalty rule of mineral {rule.mineral_id}.'
-    logger.info(message)
-    return await save_rule_controller(
-        dynamodb_resource = dynamodb_resource, rule = rule,
         request = request, current_user = current_user
     )
 

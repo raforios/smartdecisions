@@ -91,30 +91,6 @@ def rules_by_mineral(dynamodb_resource: ServiceResource) -> dict[str, RoyaltyRul
     return {rule.mineral_id: rule for rule in ensure_rules(dynamodb_resource)}
 
 
-def save_rule(
-    dynamodb_resource: ServiceResource,
-    rule: RoyaltyRuleSchema
-) -> RoyaltyRuleItem:
-    '''
-        Creates or replaces one scale from the API.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            rule (RoyaltyRuleSchema): The scale as edited.
-
-        Returns:
-            RoyaltyRuleItem: What was stored.
-    '''
-    item = RoyaltyRuleItem(
-        mineral_id = rule.mineral_id, slope = rule.slope, intercept = rule.intercept,
-        min_rate = rule.min_rate, max_rate = rule.max_rate,
-        internal_factor = rule.internal_factor, legal_basis = rule.legal_basis,
-        updated_at = get_current_time_gmt().isoformat(timespec = 'seconds')
-    )
-    put_royalty_rule(dynamodb_resource, item)
-    return item
-
-
 def rule_for(
     dynamodb_resource: ServiceResource,
     mineral_id: str

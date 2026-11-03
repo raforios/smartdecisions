@@ -59,7 +59,10 @@ async def read_data_from_s3(
                     raise pd.errors.EmptyDataError(f'{file_key} has no content.')
                 df: pd.DataFrame
                 if file_extension == '.csv':
-                    df = pd.read_csv(StringIO(file_content.decode('utf-8')), delimiter = delimiter)
+                    # Sniffing the separator (delimiter None) is only done by the
+                    # python engine; saying so keeps pandas from warning about it.
+                    df = pd.read_csv(StringIO(file_content.decode('utf-8')), delimiter = delimiter,
+                                     engine = 'python' if delimiter is None else 'c')
                 else:
                     df = pd.read_excel(BytesIO(file_content))
 

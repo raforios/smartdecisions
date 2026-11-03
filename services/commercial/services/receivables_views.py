@@ -324,7 +324,7 @@ def build_collection_curve(
         payments.get('payment_date'), errors = 'coerce'
     )
     invoiced = book.set_index('order_id')[['date', 'amount']]
-    payments = payments.join(invoiced, on = 'order_id', rsuffix = '_invoice')
+    payments = payments.join(invoiced, on = 'order_id', suffixes = ('', '_invoice'))
     payments = payments.loc[payments['date'].notna() & payments['payment_date'].notna()]
     if payments.empty:
         return []

@@ -141,7 +141,7 @@ To run the service locally:
 pip install -r requirements.txt
 ```
 
-2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH` and the tables `DYNAMODB_TABLE_NAME_AUDIT` and `DYNAMODB_TABLE_NAME_USAGE`.
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, and the tables `DYNAMODB_TABLE_NAME_AUDIT` and `DYNAMODB_TABLE_NAME_USAGE`.
 
 3.  **Start the API server:**
 

@@ -22,6 +22,7 @@ from schemas.market import (
 from services import market_sources, official_estimate, prices_dyb, royalty_rules, utils
 from services.exceptions import InvalidInputError, RegisterNotFoundError, ServiceUnavailableError
 from services.prices_store import MineralRecord
+from tests.dynamo_helpers import build_market_tables
 
 CATALOGUE = [
     MineralRecord('1', 'Estaño'), MineralRecord('4', 'Cobre'), MineralRecord('5', 'Antimonio'),
@@ -44,16 +45,7 @@ def dynamodb_fixture():
         way a route hands it over, so the test exercises the real contract.
     '''
     with mock_aws():
-        resource = boto3.resource('dynamodb', region_name = 'us-east-1')
-        for name in (prices_dyb.MARKET_TABLE, prices_dyb.RULES_TABLE):
-            schema = [{'AttributeName': 'mineral_id', 'KeyType': 'HASH'}]
-            definitions = [{'AttributeName': 'mineral_id', 'AttributeType': 'S'}]
-            if name == prices_dyb.MARKET_TABLE:
-                schema.append({'AttributeName': 'date', 'KeyType': 'RANGE'})
-                definitions.append({'AttributeName': 'date', 'AttributeType': 'S'})
-            resource.create_table(TableName = name, KeySchema = schema,
-                                  AttributeDefinitions = definitions,
-                                  BillingMode = 'PAY_PER_REQUEST')
+        resource = build_market_tables(boto3.resource('dynamodb', region_name = 'us-east-1'))
         yield resource
 
 
@@ -193,16 +185,13 @@ def test_default_rules_reproduce_the_ministry_report():
         assert basis is RateBasis.CAP
 
 
-def test_ensure_rules_seeds_once_and_keeps_edits(dynamodb):
-    '''An empty table gets the seed; an edited rule survives later reads.'''
+def test_ensure_rules_seeds_once(dynamodb):
+    '''An empty table gets the seed once; later reads return what is stored.'''
     seeded = royalty_rules.ensure_rules(dynamodb)
     assert len(seeded) == 9
-    royalty_rules.save_rule(dynamodb, RoyaltyRuleSchema(
-        mineral_id = '4', slope = 3.0, intercept = -1.0, min_rate = 1.0, max_rate = 5.0,
-        internal_factor = 0.6, legal_basis = 'prueba'
-    ))
     again = royalty_rules.rules_by_mineral(dynamodb)
-    assert len(again) == 9 and again['4'].slope == 3.0 and again['4'].legal_basis == 'prueba'
+    assert len(again) == 9
+    assert {rule.mineral_id for rule in seeded} == set(again)
     with pytest.raises(RegisterNotFoundError):
         royalty_rules.rule_for(dynamodb, '99')
 

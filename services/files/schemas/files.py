@@ -3,7 +3,7 @@
 '''
 
 import os
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class BaseS3FileModel(BaseModel):
     '''
@@ -34,11 +34,8 @@ class FileUploadData(BaseS3FileModel):
     file_content: bytes
     content_type: str = Field(..., description = 'MIME type of the file (e.g., "text/csv").')
 
-    class Config: # pylint: disable=too-few-public-methods
-        '''
-            FileUploadData - Config Class - To get form attributes
-        '''
-        arbitrary_types_allowed = True
+    # The raw bytes of the file travel as they are, with no Pydantic type.
+    model_config = ConfigDict(arbitrary_types_allowed = True)
 
 class ListFilesRequest(BaseModel):
     '''

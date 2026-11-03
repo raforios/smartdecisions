@@ -45,7 +45,6 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/mining-analysis/market/estimate` | The **official quotation** each mineral is heading to, estimated from the fortnight's market. |
 | `GET` | `/v1/mining-analysis/market/prices/{mineral_id}` | A mineral's daily **market series**. |
 | `GET` | `/v1/mining-analysis/royalty-rules` | The **royalty scales** in force (Art. 227). |
-| `PUT` | `/v1/mining-analysis/royalty-rules` | Creates or replaces a mineral's **royalty scale**. |
 | `POST` | `/v1/mining-analysis/sale-scenario` | **Sell today or wait**: compares both ends in bolivianos. `ADMIN` only. |
 
 ### Public Reports (no JWT)
@@ -188,7 +187,7 @@ To run the service locally:
 pip install -r requirements.txt
 ```
 
-2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `ROOT_PATH`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, the tables `DYNAMODB_TABLE_NAME_*` and the market sources (`LBMA_PRICES_URL`, `WESTMETALL_*`, `MARKET_SOURCE_TIMEOUT_SECONDS`).
+2.  **Configure the environment:** Create the `.env` file with `HOST`, `PORT`, `APP_ENV`, `SECRET_KEY`, `ALGORITHM`, `TARGET_TIMEZONE`, `API_URL`, `REQUEST_TIMEOUT_SECONDS`, the tables `DYNAMODB_TABLE_NAME_*` and the market sources (`LBMA_PRICES_URL`, `WESTMETALL_*`, `MARKET_SOURCE_TIMEOUT_SECONDS`).
 
 3.  **Start the API server:**
 
