@@ -30,6 +30,7 @@ from schemas.billing import (
     BillingError,
     BillingSettings,
     ProductIn,
+    ProductPatch,
     PurchaseLineIn,
     PurchaseNoteIn,
     SaleLineIn,
@@ -211,6 +212,23 @@ def test_a_product_below_its_minimum_is_flagged(dynamodb):
 
     assert product.available_quantity == 5
     assert product.below_minimum is True
+
+
+def test_the_suggested_price_is_the_products_and_can_change(dynamodb):
+    '''The supplier's price lives on the product, apart from what each lot charges.'''
+    billing.create_product(dynamodb, OWNER, ProductIn(
+        sku = 'IBU400', description = 'Ibuprofeno 400 mg', laboratory = 'Lab Demo',
+        suggested_price = 4.5
+    ))
+    _receive(dynamodb, [PurchaseLineIn(sku = 'IBU400', quantity = 5,
+                                       unit_cost = 2.0, sale_price = 4.0)])
+
+    changed = billing.update_product(dynamodb, OWNER, 'IBU400',
+                                     ProductPatch(suggested_price = 5.0))
+
+    assert changed.suggested_price == 5.0
+    product = billing.get_product(dynamodb, OWNER, 'IBU400')
+    assert (product.suggested_price, product.sale_price) == (5.0, 4.0)
 
 
 # --- FEFO --------------------------------------------------------------------

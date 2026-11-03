@@ -203,6 +203,9 @@ class ProductIn(BaseModel):
     unit: str = Field('UND', min_length = 1, max_length = 20)
     barcode: str | None = Field(None, max_length = 60)
     min_stock: float = Field(0, ge = 0)
+    suggested_price: float | None = Field(
+        None, ge = 0, description = "The distributor's or supplier's suggested price."
+    )
     requires_prescription: bool = False
     is_active: bool = True
     # Homologation before the SIN. Without these three codes the electronic
@@ -230,6 +233,7 @@ class ProductPatch(BaseModel):
     unit: str | None = Field(None, min_length = 1, max_length = 20)
     barcode: str | None = Field(None, max_length = 60)
     min_stock: float | None = Field(None, ge = 0)
+    suggested_price: float | None = Field(None, ge = 0)
     requires_prescription: bool | None = None
     is_active: bool | None = None
     sin_activity_code: str | None = Field(None, max_length = 20)
@@ -251,6 +255,7 @@ class ProductOut(BaseModel):
     unit: str
     barcode: str | None = None
     min_stock: float
+    suggested_price: float | None = None
     requires_prescription: bool
     is_active: bool
     sin_activity_code: str | None = None

@@ -95,6 +95,9 @@ class ProductItem:
     unit: str = 'UND'
     barcode: str | None = None
     min_stock: float = 0
+    # The supplier's suggested price is the product's; what the shop charges
+    # is each lot's `sale_price` (Rafael, 3-nov-2026).
+    suggested_price: float | None = None
     requires_prescription: bool = False
     is_active: bool = True
     # Homologation before the SIN: economic activity, product code and unit of

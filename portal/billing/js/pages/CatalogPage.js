@@ -44,7 +44,9 @@ function rowHtml(product) {
                 ${product.below_minimum
                     ? `<span class="muted">mín. ${money(product.min_stock, 0)}</span>` : ''}
             </td>
-            <td class="num">${money(product.sale_price)}</td>
+            <td class="num">${money(product.sale_price)}
+                ${product.suggested_price != null
+                    ? `<span class="muted">sugerido ${money(product.suggested_price)}</span>` : ''}</td>
             <td>${product.next_expiry ? expiryChip(product.next_expiry)
                                       : '<span class="muted">—</span>'}</td>
             <td>${product.is_active ? '' : '<span class="chip chip-muted">de baja</span>'}</td>
@@ -68,9 +70,21 @@ function render(host, term) {
 
 async function showLots(host, sku, holder) {
     holder.innerHTML = '<p class="muted small">Cargando lotes…</p>';
+    const product = products.find((one) => one.sku === sku);
+    // The supplier's suggested price is the product's; each lot keeps the
+    // price the shop actually charges.
+    const suggested = `
+        <div class="field-row">
+            <label class="field"><span>Precio sugerido por el proveedor</span>
+                <input type="number" class="suggested" min="0" step="any"
+                       value="${product?.suggested_price ?? ''}"></label>
+            <div class="field" style="align-self: end">
+                <button class="btn btn-ghost btn-small save-suggested">Guardar</button>
+            </div>
+        </div>`;
     try {
         const lots = await BillingService.lots(sku, { only_available: false });
-        holder.innerHTML = lots.items.length ? `
+        holder.innerHTML = suggested + (lots.items.length ? `
             <table class="data-table">
                 <thead>
                     <tr><th>Lote</th><th>Vence</th><th class="num">Quedan</th>
@@ -96,7 +110,7 @@ async function showLots(host, sku, holder) {
             </table>
             <p class="muted small">El costo no se edita: es lo que se pagó, y
                reescribirlo cambiaría el margen de cada venta ya hecha.</p>`
-            : '<p class="muted small">Este producto todavía no tiene lotes. Se crean al recibir una compra.</p>';
+            : '<p class="muted small">Este producto todavía no tiene lotes. Se crean al recibir una compra.</p>');
     } catch (error) {
         holder.innerHTML = `<p class="muted small">${
             escapeHtml(errorText(error, 'No se pudieron leer los lotes.'))}</p>`;
@@ -156,6 +170,8 @@ export async function mountCatalog(host) {
                     <input type="text" id="barcode" maxlength="60"></label>
                 <label class="field"><span>Stock mínimo</span>
                     <input type="number" id="min_stock" min="0" step="any" value="0"></label>
+                <label class="field"><span>Precio sugerido por el proveedor</span>
+                    <input type="number" id="suggested_price" min="0" step="any"></label>
             </div>
             <button class="btn btn-primary" id="create">Registrar</button>
             <button class="btn btn-ghost" id="cancel">Cancelar</button>
@@ -188,7 +204,9 @@ export async function mountCatalog(host) {
                 description: field('description'),
                 laboratory: field('laboratory'),
                 barcode: field('barcode') || null,
-                min_stock: Number(host.querySelector('#min_stock').value) || 0
+                min_stock: Number(host.querySelector('#min_stock').value) || 0,
+                suggested_price: field('suggested_price') === ''
+                    ? null : Number(field('suggested_price'))
             });
             notify(`${field('description')} registrado.`, 'success');
             await mountCatalog(host);
@@ -208,6 +226,28 @@ export async function mountCatalog(host) {
             if (!lots.hidden && !lots.dataset.loaded) {
                 await showLots(host, row.dataset.sku, lots.querySelector('td'));
                 lots.dataset.loaded = '1';
+            }
+            return;
+        }
+
+        const save = event.target.closest('.save-suggested');
+        if (save) {
+            const sku = save.closest('.lots-row').previousElementSibling.dataset.sku;
+            const value = save.closest('td').querySelector('.suggested').value;
+            if (value === '' || Number(value) < 0) {
+                notify('Indica un precio sugerido de cero o más.', 'error');
+                return;
+            }
+            const done = setBusy(save, '…');
+            try {
+                await BillingService.updateProduct(sku, { suggested_price: Number(value) });
+                notify('Precio sugerido guardado.', 'success');
+                products = (await BillingService.listProducts()).items;
+                render(host, host.querySelector('#filter').value);
+            } catch (error) {
+                notify(errorText(error, 'No se pudo guardar el precio sugerido.'), 'error');
+            } finally {
+                done();
             }
             return;
         }

@@ -8,7 +8,7 @@ The **billing** service of BearSoft (SmartBilling). It records what a shop buys 
 
 The **Billing-Service** is a shop's counter system. Its key features:
 
-  * **Catalogue and Batches:** Every product is sold by batch; cost, price and expiry belong to the batch, and the catalogue shows the price of the batch that sells next.
+  * **Catalogue and Batches:** Every product is sold by batch; cost, price and expiry belong to the batch, and the catalogue shows the price of the batch that sells next. The product keeps the distributor's or supplier's `suggested_price`, apart from what each batch charges.
   * **FEFO Sales:** First expiring, first out; a batch with no date sells last. A line can span two batches and each charges its own price: the line keeps which units came from which batch.
   * **Voiding:** A voided note returns its units exactly to the batches they came from, with their cost and expiry.
   * **Purchases:** Supplier delivery notes, which create or top up batches.
