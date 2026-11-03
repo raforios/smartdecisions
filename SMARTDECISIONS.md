@@ -183,10 +183,14 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
 > Lo escribe Claude cada vez que se detiene esperando algo. Sólo hechos
 > comprobados; el detalle vive en `docs/smartdecisions/plan.md`.
 
-**30-oct-2026.**
+**3-nov-2026.**
 
+- **MINING_ANALYSIS desplegado el 3-nov** (comprobado en AWS) con lo último:
+  sin los reportes públicos ni `PUT /royalty-rules`. Los otros 9 servicios
+  tienen cambios sin desplegar (cobertura de endpoints y limpieza); Rafael
+  los despliega más adelante.
 - **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
-  (26-oct), FINANCE y MINING_ANALYSIS (26-oct), ML_FUNCTIONS (25-oct). El
+  (26-oct), FINANCE (26-oct), ML_FUNCTIONS (25-oct). El
   servicio genérico de parámetros ya no existe en AWS, ni las tablas
   `parameters_values` y `commercial_routes`.
 - **Reunión del 28-oct:** hecha. Rafael está ordenando el feedback en un

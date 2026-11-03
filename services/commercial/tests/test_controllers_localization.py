@@ -6,6 +6,8 @@
     that arrive grouped in `PlannedPointRef`.
 '''
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 from moto import mock_aws
@@ -14,14 +16,17 @@ from controllers import daily_stock as daily_stock_controllers
 from main import app
 from schemas.commercial import StockDayItem
 from schemas.localization import LocalizationError, PlannedRouteStatusEnum
+from schemas.route_optimization import RouteOptimizationError
 from services import daily_stock, localization
 from services.exceptions import ResourceNotFoundError
 from services import localization_executed as executed
 from services import localization_stats
+from services import route_optimization as optimizer
 from services.utils import get_current_time_gmt
 from services.db_connection import GET_DB_DEPENDENCY
 from services.security import get_current_payload
 from tests.dynamo_helpers import build_resource
+from tests.test_route_optimization import CROSSED, _straight_line_trip
 
 OWNER = 'yo@miempresa.com'
 BASE = '/v1/commercial/routes/planned'
@@ -519,3 +524,58 @@ def test_seller_is_kept_to_field_work(client):
     act_as('seller')
     mine = client.get(EXECUTED, params = {'seller': 'juan@acme.com'})
     assert [route['seller'] for route in mine.json()] == ['ana@acme.com']
+
+
+# ---------------------------------------------------------------------------
+# Optimizing and repeating a plan
+# ---------------------------------------------------------------------------
+def _crossed_plan(client: TestClient) -> dict:
+    '''
+        Creates a plan whose stops are loaded in the worst order.
+    '''
+    response = client.post(BASE, json = {
+        'route_name': 'Cruzada', 'route_code': 'R-X',
+        'points': [{'point_name': name, 'secuencial': index + 1,
+                    'latitude': lat, 'longitude': lon}
+                   for index, (name, lat, lon) in enumerate(CROSSED)]
+    })
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_optimization_proposes_both_orders_and_refuses_two_stops(client):
+    '''
+        GET .../optimization answers the built study; a route with one
+        possible order is refused with its code.
+    '''
+    plan = _crossed_plan(client)
+    with patch.object(optimizer, 'road_trip', _straight_line_trip):
+        study = client.get(f'{BASE}/{plan["id"]}/optimization')
+    assert study.status_code == 200, study.text
+    assert study.json()['already_optimal'] is False
+    assert study.json()['optimized']['distance_metres'] < study.json()['current']['distance_metres']
+
+    short = _create(client)
+    refused = client.get(f'{BASE}/{short["id"]}/optimization')
+    assert refused.status_code == 400
+    assert refused.json()['detail'] == RouteOptimizationError.NOT_ENOUGH_STOPS.value
+
+
+def test_repeat_creates_a_new_plan_and_an_unknown_route_is_404(client):
+    '''
+        POST .../repeat answers the new plan, IN CREATION and with the stops
+        copied; repeating a route that does not exist is 404.
+    '''
+    plan = _create(client)
+    repeated = client.post(f'{BASE}/{plan["id"]}/repeat',
+                           json = {'plan_date': '2026-11-10', 'seller': 'Juan'})
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()['id'] != plan['id']
+    assert repeated.json()['status'] == PlannedRouteStatusEnum.IN_CREATION.value
+    assert repeated.json()['seller'] == 'Juan'
+    assert [stop['point_name'] for stop in repeated.json()['points']] == ['Tienda 1', 'Tienda 2']
+
+    missing = client.post(f'{BASE}/20260101T080000-deadbeef/repeat',
+                          json = {'plan_date': '2026-11-10'})
+    assert missing.status_code == 404
+    assert missing.json()['detail'] == LocalizationError.ROUTE_NOT_FOUND.value

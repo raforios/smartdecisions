@@ -90,5 +90,12 @@ Any]]` como contrato entre capas es una corrección ya hecha una vez.
   modelo armado. Los servicios pasaron a devolver DTOs mientras los controllers
   seguían expandiéndolos con `**`, y eso revienta sólo al correr el endpoint: la
   suite quedaba verde y la API devolvía 500.
+- **Las pruebas necesarias, no más** (Rafael, 3-nov-2026): cada endpoint
+  tiene las que cubren lo que hace —su camino normal y sus rechazos—, sin
+  duplicar lo que ya prueba el servicio ni sumar casos por volumen. Muchas
+  pruebas de más sólo cuestan tiempo y tokens.
+- **Un módulo no se entrega con pruebas pendientes** (Rafael, 3-nov-2026):
+  ningún endpoint sin cobertura al cerrarlo, nada anotado «para después».
+  Lo que el chequeo `endpoint-coverage` marca se resuelve antes de entregar.
 - **Verifica que un test nuevo falla contra el código roto** antes de darlo por
   bueno. Un test que pasa en ambos casos no prueba nada.
