@@ -25,7 +25,8 @@ function rowHtml(note) {
             <td><strong>${escapeHtml(note.number)}</strong>
                 ${note.invoice ? `<span class="muted">Factura ${note.invoice.number}</span>` : ''}
                 ${note.invoice?.emailed_at ? '<span class="chip">enviada</span>' : ''}
-                ${cancelled ? '<span class="chip chip-danger">anulada</span>' : ''}</td>
+                ${cancelled ? '<span class="chip chip-danger">anulada</span>' : ''}
+                ${note.invoice?.reverted_at ? '<span class="chip">anulación revertida</span>' : ''}</td>
             <td>${stamp(note.created_at)}</td>
             <td>${note.buyer?.name ? escapeHtml(note.buyer.name)
                                    : '<span class="muted">mostrador</span>'}
@@ -43,8 +44,12 @@ function rowHtml(note) {
                     ? '<button class="btn btn-ghost btn-small mail">Enviar</button>' : ''}
                 ${!cancelled && note.invoice?.state === 'ACCEPTED' && hasRole('ADMIN', 'MANAGER')
                     ? '<button class="btn btn-ghost btn-small return">Devolución</button>' : ''}
-                ${!cancelled && hasRole('ADMIN', 'MANAGER')
+                ${!cancelled && !note.invoice?.reverted_at && hasRole('ADMIN', 'MANAGER')
                     ? '<button class="btn btn-ghost btn-small cancel">Anular</button>' : ''}
+                ${cancelled && note.invoice?.cancelled_at_sin && !note.invoice.reverted_at
+                    && hasRole('ADMIN', 'MANAGER')
+                    ? '<button class="btn btn-ghost btn-small revert">Revertir anulación</button>'
+                    : ''}
             </td>
         </tr>`;
 }
@@ -154,12 +159,16 @@ async function showReturns(host, sale) {
                     <td><strong>${note.number}</strong>
                         ${note.emailed_at ? '<span class="chip">enviada</span>' : ''}
                         ${note.state === 'CANCELLED'
-                            ? '<span class="chip chip-danger">anulada</span>' : ''}</td>
+                            ? '<span class="chip chip-danger">anulada</span>' : ''}
+                        ${note.reverted_at ? '<span class="chip">anulación revertida</span>' : ''}</td>
                     <td>${stamp(note.created_at)}</td>
                     <td class="num">${money(note.amount_returned)}</td>
                     <td><button class="btn btn-ghost btn-small print-note">Imprimir</button>
-                        ${note.state === 'ACCEPTED'
+                        ${note.state === 'ACCEPTED' && !note.reverted_at
                             ? '<button class="btn btn-ghost btn-small cancel-note">Anular</button>'
+                            : ''}
+                        ${note.state === 'CANCELLED' && !note.reverted_at
+                            ? '<button class="btn btn-ghost btn-small revert-note">Revertir anulación</button>'
                             : ''}</td>
                 </tr>`).join('')}</tbody>
         </table>` : '<p class="muted small">Esta factura no tiene devoluciones.</p>';
@@ -224,6 +233,12 @@ function wireReturnPanel(host) {
         }
         if (event.target.classList.contains('cancel-note')) {
             await openNoteCancel(host, note);
+            return;
+        }
+        if (event.target.classList.contains('revert-note')) {
+            await revert(event.target, `la nota de crédito-débito ${note.number}`,
+                         () => BillingService.revertReturn(sale.sale_id, note.credit_note_id),
+                         refresh);
         }
     });
 
@@ -245,6 +260,32 @@ function wireReturnPanel(host) {
             done();
         }
     });
+}
+
+/**
+ * Reverts the cancellation of an invoice or a note at the SIN, once asked:
+ * the SIN allows it only once and the document can never be cancelled again.
+ *
+ * @param {HTMLElement} button The button pressed.
+ * @param {string} name How the question names the document.
+ * @param {Function} request The call that reverts it.
+ * @param {Function} after What to repaint once it is valid again.
+ */
+async function revert(button, name, request, after) {
+    if (!window.confirm(`¿Revertir la anulación de ${name}? Vuelve a ser válida, se avisa al `
+                        + 'cliente y ya no se podrá anular de nuevo.')) {
+        return;
+    }
+    const done = setBusy(button, '…');
+    try {
+        await request();
+        notify(`La anulación de ${name} se revirtió en el SIN.`, 'success');
+        await after();
+    } catch (error) {
+        notify(errorText(error, 'No se pudo revertir la anulación.'), 'error');
+    } finally {
+        done();
+    }
 }
 
 /**
@@ -412,6 +453,12 @@ export async function mountSales(host) {
 
         if (event.target.classList.contains('return')) {
             await showReturns(host, await BillingService.getSale(saleId));
+            return;
+        }
+
+        if (event.target.classList.contains('revert')) {
+            await revert(event.target, `la factura ${row.dataset.invoice}`,
+                         () => BillingService.revertSale(saleId), () => load(host));
             return;
         }
 

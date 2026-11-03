@@ -449,7 +449,8 @@ def cancel_at_sin(
     logger.info(message)
     return invoice.model_copy(update = {'state': InvoiceState.CANCELLED,
                                         'cancellation_reason': reason_code,
-                                        'siat_state': receipt.state})
+                                        'siat_state': receipt.state,
+                                        'cancelled_at_sin': True})
 
 
 def qr_svg(url: str) -> str:

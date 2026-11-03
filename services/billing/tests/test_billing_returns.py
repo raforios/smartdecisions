@@ -132,6 +132,22 @@ def _cancel(
         sale_id = note.sale_id, credit_note_id = note.credit_note_id, reason_code = 1), CASHIER)
 
 
+def _mailed_sale(dynamodb):
+    '''
+        An invoiced sale to a buyer who gave an address, in a shop that knows
+        the SIN's cancellation reasons, as every notice names one.
+    '''
+    _invoicing_shop(dynamodb)
+    billing.write_item(dynamodb, SETTINGS_TABLE, {
+        OWNER_KEY: OWNER,
+        SETTING_SORT_KEY: f'siat#catalog#{SiatCatalog.CANCELLATION_REASONS.name}',
+        **CatalogOut(catalog = SiatCatalog.CANCELLATION_REASONS, synced_at = '2026-11-03',
+                     entries = [CatalogEntry(code = '1', description = 'FACTURA MAL EMITIDA')]
+                     ).model_dump(mode = 'json')
+    })
+    return _sell(dynamodb, MAILED_BUYER)
+
+
 def _refunds_in_till(dynamodb) -> list:
     '''The refunds the cashier's till holds.'''
     till = billing_cash.current_session(dynamodb, OWNER, CASHIER)
@@ -395,15 +411,7 @@ def test_a_buyer_with_an_address_gets_the_note_as_they_got_the_invoice(
         The note goes with its PDF and the very XML the SIN received, the note
         keeps when; its cancellation is notified with the SIN's reason.
     '''
-    _invoicing_shop(dynamodb)
-    billing.write_item(dynamodb, SETTINGS_TABLE, {
-        OWNER_KEY: OWNER,
-        SETTING_SORT_KEY: f'siat#catalog#{SiatCatalog.CANCELLATION_REASONS.name}',
-        **CatalogOut(catalog = SiatCatalog.CANCELLATION_REASONS, synced_at = '2026-11-03',
-                     entries = [CatalogEntry(code = '1', description = 'FACTURA MAL EMITIDA')]
-                     ).model_dump(mode = 'json')
-    })
-    sale = _sell(dynamodb, MAILED_BUYER)
+    sale = _mailed_sale(dynamodb)
 
     note = _return(dynamodb, sale.sale_id)
 

@@ -151,6 +151,12 @@ class SaleInvoice(BaseModel):
     emailed_at: str | None = Field(None, description = 'When SES took the mail to the buyer; '
                                                        'None when it was never sent.')
     cafc: str | None = Field(None, description = 'Only on a transcribed paper contingency invoice.')
+    cancelled_at_sin: bool = Field(False, description = 'Cancelled by the SIN, not only here: '
+                                                        'only such a cancellation can be reverted.')
+    reverted_at: str | None = Field(
+        None, description = 'When the SIN reverted its cancellation; never cancelled again.'
+    )
+    reverted_by: str | None = None
 
 
 class InvoiceQrOut(BaseModel):

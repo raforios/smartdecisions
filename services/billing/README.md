@@ -80,6 +80,13 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/billing/sales/{sale_id}/returns/{credit_note_id}/qr` | The note's **QR** as inline SVG. |
 | `POST` | `/v1/billing/sales/{sale_id}/returns/{credit_note_id}/cancel` | Cancels a **note** at the SIN, with `reason_code`, and undoes its return. |
 
+### Reversals (`/v1/billing/sales/{sale_id}/...revert-cancellation`)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/billing/sales/{sale_id}/revert-cancellation` | Makes a **cancelled invoice** valid again, once. |
+| `POST` | `/v1/billing/sales/{sale_id}/returns/{credit_note_id}/revert-cancellation` | Makes a **cancelled note** valid again, once. |
+
 ### Till (`/v1/billing/cash`)
 
 | Method | Endpoint | Description |
@@ -158,6 +165,8 @@ Every table is partitioned by **owner** (the shop, taken from the token); the ow
 
 **Returns (Nota de Crédito-Débito).** `POST /v1/billing/sales/{sale_id}/returns` with `{"lines": [{"sku", "quantity"}]}` takes back what the buyer returns of an accepted invoice (`services/billing_returns.py`). Before the SIN is asked it refuses a cancelled sale, an internal note, an invoice not accepted, more than 18 months after the invoice, a SKU not sold or more units than are left to return, and a till of the caller without the cash. Then it takes the note number (`counter#credit_note#<branch>#<point_of_sale>`), builds the CUF (invoice type 3, sector document 24) and the XML against `docs/siat/notaComputarizadaCreditoDebito.xsd` (original details with `codigoDetalleTransaccion` 1, returned ones with 2) and sends it with `recepcionDocumentoAjuste`, online only. Accepted, the units go back to the batches they left (last taken first), the money goes back by each means in proportion to what it paid, and the cash part leaves the caller's till as a `REFUND`. The note is stored inside its sale (`credit_notes`, with its XML), mailed with its PDF (`services/billing_credit_note_pdf.py`, the SIN's graphic format) when the buyer gave an email, and counted by the dashboard, which reads each sale net of its returns. Cancelling it (`anulacionDocumentoAjuste`, until the ninth of the next month, while the refund's till is open) takes the units again and voids the refund. Error codes in `schemas/billing_returns.py` (`ReturnError`).
 
+**Reverting a cancellation.** The SIN lets a cancelled invoice or note become valid again once, until the ninth of the month after its issue, and a reverted document can never be cancelled again (`services/billing_reversals.py`, `reversionAnulacionFactura` and `reversionAnulacionDocumentoAjuste`). Before the SIN is asked it refuses a document not cancelled, reverted already, past the deadline, an invoice cancelled only here (one the SIN had observed), or a till already closed (the sale's, or the refund's). A sale takes its units off the shelf again before the SIN is asked and gets them back if it refuses; accepted, it is issued again and counts in its till. A note must still fit what the sale sold next to the returns in force and its till must hold the cash; accepted, its units come back to the shelf and its refund leaves the till as a new `REFUND`. The buyer with an email is told. A sale with returns in force is not cancelled (`SALE_HAS_RETURNS`): its notes are cancelled first. Error codes in `schemas/billing_reversals.py` (`ReversalError`).
+
 **Cancelling an invoice.** `POST /v1/billing/sales/{sale_id}/cancel` takes an optional body `{"reason_code": <CANCELLATION_REASONS code>}`. An invoiced note requires it and is cancelled with `anulacionFactura` first, with the codes in force; if the SIN refuses, the note stays issued and nothing moves. An internal note needs no body.
 
 Error codes: `SIAT_REFUSED`, `BUYER_WITHOUT_EMAIL`, `MAIL_NOT_SENT`, `SIAT_ISSUER_INCOMPLETE`, `CATALOG_NOT_SYNCED`, `LEGEND_NOT_FOUND`, `CANCELLATION_REASON_REQUIRED`, `CANCELLATION_DEADLINE_PASSED`, `PAYMENTS_DO_NOT_ADD_UP`, `PAYMENT_REPEATED`, `PAYMENT_COMBINATION_UNKNOWN`, `SALE_NOT_INVOICED`, `CUSTOMER_NOT_FOUND`, `INVOICE_NOT_YET_AT_SIN`, `BUYER_DOCUMENT_NOT_NUMERIC`, `PRODUCT_NOT_HOMOLOGATED`, `BUYER_REQUIRED`, `INSUFFICIENT_STOCK`, `PRODUCT_NOT_FOUND`, `DUPLICATE_LINE`, `DISCOUNTS_DISABLED`, `SALE_ALREADY_CANCELLED`, `SETTINGS_NOT_FOUND`, among others.
@@ -190,6 +199,7 @@ billing/
 │   ├── billing_customers.py
 │   ├── billing_manual.py
 │   ├── billing_returns.py
+│   ├── billing_reversals.py
 │   └── billing_siat.py
 ├── models/
 │   ├── __init__.py
@@ -201,6 +211,7 @@ billing/
 │   ├── billing_customers.py
 │   ├── billing_manual.py
 │   ├── billing_returns.py
+│   ├── billing_reversals.py
 │   └── billing_siat.py
 ├── schemas/
 │   ├── __init__.py
@@ -209,6 +220,7 @@ billing/
 │   ├── billing_customers.py
 │   ├── billing_manual.py
 │   ├── billing_returns.py
+│   ├── billing_reversals.py
 │   ├── billing_siat.py
 │   └── health.py
 ├── services/
@@ -229,6 +241,7 @@ billing/
 │   ├── billing_purchases.py
 │   ├── billing_reports.py
 │   ├── billing_returns.py
+│   ├── billing_reversals.py
 │   ├── billing_sales.py
 │   ├── billing_sale_checks.py
 │   ├── billing_siat.py

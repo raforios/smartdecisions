@@ -495,6 +495,53 @@ def cancel_credit_note(
     return _receipt_from(answer)
 
 
+@dataclass(frozen = True)
+class DocumentReversal:
+    '''
+        One cancelled document whose cancellation is reverted: the codes in
+        force today and its CUF. `credit_note` picks the adjustment service
+        over the invoicing one.
+    '''
+    cuis: str
+    cufd: str
+    cuf: str
+    credit_note: bool = False
+
+
+def revert_cancellation(
+    emitter: Emitter,
+    reversal: DocumentReversal
+) -> SiatReceipt:
+    '''
+        Makes a cancelled invoice or note valid again at the SIN.
+
+        Args:
+            emitter (Emitter): Who is issuing.
+            reversal (DocumentReversal): The codes, the CUF and which document.
+
+        Returns:
+            SiatReceipt: What the tax office answered.
+
+        Raises:
+            ServiceUnavailableError: The SIAT is unreachable.
+    '''
+    service, operation, sector, invoice_type = (
+        (SERVICE_ADJUSTMENT, 'reversionAnulacionDocumentoAjuste',
+         SECTOR_DOCUMENT_CREDIT_DEBIT, INVOICE_TYPE_ADJUSTMENT) if reversal.credit_note
+        else (SERVICE_INVOICE, 'reversionAnulacionFactura',
+              SECTOR_DOCUMENT_PURCHASE_SALE, INVOICE_WITH_TAX_CREDIT))
+    answer = invoke(service, operation, {
+        **base_request(emitter),
+        'cuis': reversal.cuis,
+        'cufd': reversal.cufd,
+        'cuf': reversal.cuf,
+        'codigoDocumentoSector': sector,
+        'codigoEmision': EMISSION_ONLINE,
+        'tipoFacturaDocumento': invoice_type
+    })
+    return _receipt_from(answer)
+
+
 def _receipt_from(answer: Any) -> SiatReceipt:
     '''
         The tax office's answer as a DTO.

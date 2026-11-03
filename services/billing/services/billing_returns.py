@@ -49,6 +49,7 @@ from schemas.billing_returns import (
     ReturnError,
     SaleReturn
 )
+from schemas.billing_reversals import ReversalError
 from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice, SiatCatalog, SiatCodesOut
 from services import billing_siat_client as siat_client
 from services.billing import (
@@ -612,23 +613,17 @@ def cancel_credit_note(
 
         Raises:
             RegisterNotFoundError: No such sale or note in this shop.
-            InvalidInputError: Already cancelled, past the ninth of the next
-                month, the refund's till is closed, the units are no longer on
-                the shelf, or the SIN refused.
+            InvalidInputError: Already cancelled, once reverted, past the
+                ninth of the next month, the refund's till is closed, the units
+                are no longer on the shelf, or the SIN refused.
             ServiceUnavailableError: The SIAT is unreachable; nothing changed.
     '''
     stored = _read_sale(dynamodb_resource, owner, cancellation.sale_id)
-    if stored is None:
-        raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
-    position, note = next(((index, CreditNoteOut(**{key: value for key, value in item.items()
-                                                    if key != 'xml'}))
-                           for index, item in enumerate(stored.get('credit_notes') or [])
-                           if item['credit_note_id'] == cancellation.credit_note_id),
-                          (None, None))
-    if note is None:
-        raise RegisterNotFoundError(detail = ReturnError.CREDIT_NOTE_NOT_FOUND.value)
+    position, note = find_note(stored, cancellation.credit_note_id)
     if note.state != InvoiceState.ACCEPTED:
         raise InvalidInputError(detail = ReturnError.CREDIT_NOTE_CANCELLED.value)
+    if note.reverted_at:
+        raise InvalidInputError(detail = ReversalError.CANCELLATION_REVERTED.value)
     if get_current_time_gmt().date() > cancellation_deadline(note.issued_at):
         raise InvalidInputError(detail = BillingError.CANCELLATION_DEADLINE_PASSED.value)
     if note.refund_session_id:
@@ -670,6 +665,32 @@ def cancel_credit_note(
     message = f'Credit note {note.number} of sale {stored["number"]} cancelled for {owner}.'
     logger.info(message)
     return cancelled
+
+
+def find_note(
+    stored: dict[str, Any] | None,
+    credit_note_id: str
+) -> tuple[int, CreditNoteOut]:
+    '''
+        One note of a sale, and where it sits in `credit_notes`.
+
+        Args:
+            stored (dict[str, Any] | None): The sale as stored.
+            credit_note_id (str): The note.
+
+        Returns:
+            tuple[int, CreditNoteOut]: Its position and the note, without its XML.
+
+        Raises:
+            RegisterNotFoundError: No such sale or note in this shop.
+    '''
+    if stored is None:
+        raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
+    for index, item in enumerate(stored.get('credit_notes') or []):
+        if item['credit_note_id'] == credit_note_id:
+            return index, CreditNoteOut(**{key: value for key, value in item.items()
+                                           if key != 'xml'})
+    raise RegisterNotFoundError(detail = ReturnError.CREDIT_NOTE_NOT_FOUND.value)
 
 
 def _cancellation_request(

@@ -72,9 +72,15 @@ export const ERRORS = {
     RETURN_EXCEEDS_SOLD: 'Se devuelven más unidades de las que quedan por devolver.',
     SKU_NOT_IN_SALE: 'Ese producto no está en la venta.',
     REFUND_ONLY_BY_RETURN: 'La devolución al cliente sólo la registra una nota de crédito-débito.',
-    REFUND_TILL_CLOSED: 'La caja de la que salió la devolución ya está cerrada: la nota no se puede anular.',
+    REFUND_TILL_CLOSED: 'La caja de esa operación ya está cerrada: lo que contó no se puede cambiar.',
     CREDIT_NOTE_NOT_FOUND: 'Esa nota de crédito-débito no existe.',
-    CREDIT_NOTE_CANCELLED: 'Esa nota de crédito-débito ya estaba anulada.'
+    CREDIT_NOTE_CANCELLED: 'Esa nota de crédito-débito ya estaba anulada.',
+    SALE_HAS_RETURNS: 'La venta tiene devoluciones vigentes: anula primero sus notas de crédito-débito.',
+    DOCUMENT_NOT_CANCELLED: 'Ese documento no está anulado.',
+    NOT_CANCELLED_AT_SIN: 'Esa factura se anuló sólo aquí, no en Impuestos Nacionales: no se puede revertir.',
+    ALREADY_REVERTED: 'La anulación de ese documento ya se revirtió una vez.',
+    REVERSAL_DEADLINE_PASSED: 'La anulación se puede revertir hasta el día 9 del mes siguiente a la emisión.',
+    CANCELLATION_REVERTED: 'Ese documento tuvo su anulación revertida: no se puede volver a anular.'
 };
 
 /** What each payment method is called on screen. */
@@ -185,6 +191,13 @@ export const BillingService = {
     cancelReturn: (id, noteId, reasonCode) => call(
         `/sales/${encodeURIComponent(id)}/returns/${encodeURIComponent(noteId)}/cancel`,
         { method: 'POST', body: JSON.stringify({ reason_code: reasonCode }) }
+    ),
+
+    revertSale: (id) => call(`/sales/${encodeURIComponent(id)}/revert-cancellation`,
+                             { method: 'POST' }),
+    revertReturn: (id, noteId) => call(
+        `/sales/${encodeURIComponent(id)}/returns/${encodeURIComponent(noteId)}/revert-cancellation`,
+        { method: 'POST' }
     ),
 
     listCustomers: () => call('/customers'),

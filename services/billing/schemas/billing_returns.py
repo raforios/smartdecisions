@@ -43,6 +43,7 @@ class ReturnError(str, Enum):
     REFUND_TILL_CLOSED = 'REFUND_TILL_CLOSED'
     CREDIT_NOTE_NOT_FOUND = 'CREDIT_NOTE_NOT_FOUND'
     CREDIT_NOTE_CANCELLED = 'CREDIT_NOTE_CANCELLED'
+    SALE_HAS_RETURNS = 'SALE_HAS_RETURNS'
 
 
 class ReturnLineIn(BaseModel):
@@ -114,6 +115,10 @@ class CreditNoteOut(BaseModel):
     qr_url: str = Field(..., description = 'Link the printed QR carries, to check it at the SIN.')
     emailed_at: str | None = Field(None, description = 'When SES took the mail to the buyer; '
                                                        'None when it was never sent.')
+    reverted_at: str | None = Field(
+        None, description = 'When the SIN reverted its cancellation; never cancelled again.'
+    )
+    reverted_by: str | None = None
 
 
 class CreditNoteRef(BaseModel):

@@ -48,6 +48,18 @@ SmartDecisions.
   piloto**.
 - Pruebas de controlador de todos los endpoints de BILLING.
 
+## Hecho, sin desplegar (3-nov-2026)
+
+- **Reversión de la anulación** de una factura o de una nota de
+  crédito-débito, una sola vez, hasta el día 9 del mes siguiente a la
+  emisión; lo revertido no se vuelve a anular y el comprador recibe el aviso
+  por correo. La venta vuelve a sacar sus unidades y a contar en su caja; la
+  nota devuelve sus unidades y su efectivo vuelve a salir de la caja. Sólo
+  con la caja de la operación abierta. Una venta con devoluciones vigentes no
+  se anula: primero se anulan sus notas. Botón «Revertir anulación» en
+  Ventas. Probado contra el SIN simulado; falta desplegar BILLING y el
+  portal, y la prueba en el piloto (en pausa).
+
 ## Estado actual
 
 **Retomado el 3-nov-2026** como fase 12.0 del plan único (terminar
@@ -65,8 +77,13 @@ venta o de la devolución abierta; aviso al comprador por correo.
 - **Correo:** el dominio está verificado en SES, pero la cuenta sigue en
   sandbox: a un comprador real todavía no le llega. La solicitud de producción
   fue el caso de AWS Support 179319997000226 (reabierto el 29-oct), que el
-  3-nov figura cerrado y denegado (`ReviewDetails` DENIED); hay que revisarlo
-  y volver a pedirla.
+  3-nov figura denegado (`ReviewDetails` DENIED) aunque el caso dice
+  «Reabierto»: el 28-oct se respondió lo que AWS pidió y el caso se cerró
+  dos minutos después; desde la reapertura AWS no volvió a escribir. Hay que
+  pedirla de nuevo. Una solicitud nueva por API responde ConflictException
+  (el caso sigue abierto), así que el 3-nov se respondió en el mismo caso
+  pidiendo otra revisión, con la información completa (incluye la nota de
+  crédito-débito). No cerrar el caso hasta que AWS decida.
 - **Datos de prueba:** THE PHARMA queda con la facturación apagada y el
   producto CONS-TI dado de baja después de cada prueba.
 

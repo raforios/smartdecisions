@@ -2,7 +2,8 @@
     The mail the buyer receives: the invoice, with its PDF and its XML, and
     the notice when it is cancelled; and the same for a Nota de
     Crédito-Débito, which reaches the buyer by the same means as the invoice
-    it adjusts (Rafael, 3-nov-2026).
+    it adjusts (Rafael, 3-nov-2026). A reverted cancellation is told too: the
+    SIN requires every reversal to be notified to the buyer.
 
     It goes out through Amazon SES from BearSoft's own domain, because
     SmartBilling is BearSoft's service and not the shop's mail (Rafael,
@@ -34,7 +35,8 @@ TEXTS = load_parameters({code: str for code in (
     'BILLING_MAIL_SENDER_NAME', 'BILLING_MAIL_INVOICE_SUBJECT', 'BILLING_MAIL_INVOICE_BODY',
     'BILLING_MAIL_CANCEL_SUBJECT', 'BILLING_MAIL_CANCEL_BODY', 'BILLING_MAIL_ANONYMOUS',
     'BILLING_MAIL_NOTE_SUBJECT', 'BILLING_MAIL_NOTE_BODY', 'BILLING_MAIL_NOTE_CANCEL_SUBJECT',
-    'BILLING_MAIL_NOTE_CANCEL_BODY'
+    'BILLING_MAIL_NOTE_CANCEL_BODY', 'BILLING_MAIL_REVERSAL_SUBJECT', 'BILLING_MAIL_REVERSAL_BODY',
+    'BILLING_MAIL_KIND_INVOICE', 'BILLING_MAIL_KIND_NOTE'
 )})
 
 
@@ -166,6 +168,41 @@ def send_credit_note_cancellation(
         _greeting(sale), settings.trade_name, note.number, note.cuf, reason
     ))
     return _send(mail, sale)
+
+
+@dataclass(frozen = True)
+class ReversalMail:
+    '''
+        The document whose cancellation was reverted, and its sale: an
+        invoice, or a note when `credit_note` is True.
+    '''
+    sale: SaleNoteOut
+    number: int
+    cuf: str
+    credit_note: bool = False
+
+
+def send_reversal(
+    mail_of: ReversalMail,
+    settings: BillingSettings
+) -> bool:
+    '''
+        Tells the buyer a cancelled invoice or note is valid again.
+
+        Args:
+            mail_of (ReversalMail): The document and its sale.
+            settings (BillingSettings): The shop that reverted it.
+
+        Returns:
+            bool: Whether SES took the mail.
+    '''
+    kind = TEXTS['BILLING_MAIL_KIND_NOTE' if mail_of.credit_note else 'BILLING_MAIL_KIND_INVOICE']
+    mail = _message(mail_of.sale, TEXTS['BILLING_MAIL_REVERSAL_SUBJECT'] % (
+        kind, mail_of.number, settings.trade_name))
+    mail.set_content(TEXTS['BILLING_MAIL_REVERSAL_BODY'] % (
+        _greeting(mail_of.sale), settings.trade_name, kind, mail_of.number, mail_of.cuf
+    ))
+    return _send(mail, mail_of.sale)
 
 
 def _message(

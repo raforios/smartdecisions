@@ -36,6 +36,8 @@ from schemas.billing import (
     SettingsResponse
 )
 from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice, SiatCatalog, SiatCodesOut
+from schemas.billing_returns import ReturnError
+from schemas.billing_reversals import ReversalError
 from services.billing_cash import require_sale_session
 from services.billing_customers import remember_customer
 from services.billing_sale_checks import masked_card, reject_repeated_lines, require_buyer
@@ -309,7 +311,8 @@ def cancel_sale(
 
         Raises:
             RegisterNotFoundError: No such note in this pharmacy.
-            InvalidInputError: The note was already cancelled, an invoice came
+            InvalidInputError: The note was already cancelled, it has returns
+                in force, its cancellation was once reverted, an invoice came
                 with no reason, or the SIN refused to cancel it.
             ServiceUnavailableError: The note is an invoice and the SIAT is
                 unreachable.
@@ -319,6 +322,13 @@ def cancel_sale(
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     if stored['status'] == SaleStatus.CANCELLED.value:
         raise InvalidInputError(detail = BillingError.SALE_ALREADY_CANCELLED.value)
+    # Its lines would give back units a note already gave back: the returns
+    # are cancelled first.
+    if any(note['state'] == InvoiceState.ACCEPTED.value
+           for note in stored.get('credit_notes') or []):
+        raise InvalidInputError(detail = ReturnError.SALE_HAS_RETURNS.value)
+    if (stored.get('invoice') or {}).get('reverted_at'):
+        raise InvalidInputError(detail = ReversalError.CANCELLATION_REVERTED.value)
     if stored.get('invoice'):
         stored['invoice'] = _cancel_invoice(dynamodb_resource, owner,
                                             SaleInvoice(**stored['invoice']), reason_code)
@@ -363,11 +373,7 @@ def resend_invoice(
             InvalidInputError: The sale has no invoice, or its buyer no email.
             ServiceUnavailableError: SES did not take the mail.
     '''
-    stored = _read_sale(dynamodb_resource, owner, sale_id)
-    if stored is None:
-        raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
-    if not stored.get('invoice'):
-        raise InvalidInputError(detail = BillingError.SALE_NOT_INVOICED.value)
+    stored = read_invoiced_sale(dynamodb_resource, owner, sale_id)
     if not (stored.get('buyer') or {}).get('email'):
         raise InvalidInputError(detail = BillingError.BUYER_WITHOUT_EMAIL.value)
     if not _mail_invoice(dynamodb_resource, stored, get_settings(dynamodb_resource, owner)):
@@ -644,6 +650,34 @@ def _available_lots_by_sku(
         if row.get('quantity_remaining', 0) > 0:
             grouped.setdefault(row['sku'], []).append(row)
     return grouped
+
+
+def read_invoiced_sale(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    sale_id: str
+) -> dict[str, Any]:
+    '''
+        A sale that carries an invoice, as stored.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            sale_id (str): The sale.
+
+        Returns:
+            dict[str, Any]: The sale.
+
+        Raises:
+            RegisterNotFoundError: No such sale in this shop.
+            InvalidInputError: SALE_NOT_INVOICED.
+    '''
+    stored = _read_sale(dynamodb_resource, owner, sale_id)
+    if stored is None:
+        raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
+    if not stored.get('invoice'):
+        raise InvalidInputError(detail = BillingError.SALE_NOT_INVOICED.value)
+    return stored
 
 
 def _read_sale(
