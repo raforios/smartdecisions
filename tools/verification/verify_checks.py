@@ -123,6 +123,66 @@ def check_imports(service: Path) -> tuple[bool, str]:
     return False, failure[-1] if failure else 'import failed'
 
 
+_TEST_CALL = re.compile(
+    r'client\.(get|post|put|patch|delete)\(\s*(f?\'[^\']*\'|[A-Z_]+\b)'
+)
+_TEST_CONSTANT = re.compile(r'^([A-Z_]+) = \'([^\']*)\'$', re.MULTILINE)
+_ROUTE = re.compile(
+    r'@router\.(get|post|put|patch|delete)\(\s*\'([^\']*)\''
+    r'(?:(?!@router).)*?\nasync def (\w+_endpoint)\(',
+    re.DOTALL
+)
+
+
+def _called_urls(tests: Path) -> set[tuple[str, str]]:
+    '''
+        The (method, path) pairs the tests request through a TestClient.
+
+        A module constant such as `BASE = '/v1/x/routes'` is resolved where a
+        call or an f-string uses it; any other placeholder stands for one path
+        segment, and the query string is dropped.
+
+        Args:
+            tests (Path): The service's tests directory.
+
+        Returns:
+            set[tuple[str, str]]: Upper-case method and path of every call.
+    '''
+    called: set[tuple[str, str]] = set()
+    for path in sorted(tests.rglob('*.py')):
+        source = path.read_text(encoding = 'utf-8')
+        constants = dict(_TEST_CONSTANT.findall(source))
+        for method, target in _TEST_CALL.findall(source):
+            url = constants.get(target, '') if target.isupper() else target.lstrip('f')[1:-1]
+            for name, value in constants.items():
+                url = url.replace('{' + name + '}', value)
+            url = re.sub(r'\{[^}]*\}', 'segment', url).split('?')[0]
+            if url:
+                called.add((method.upper(), url))
+    return called
+
+
+def _route_is_called(
+    method: str,
+    route: str,
+    called: set[tuple[str, str]]
+) -> bool:
+    '''
+        Whether a test requests this route, its path parameters taken as any
+        one segment.
+
+        Args:
+            method (str): Upper-case HTTP method of the route.
+            route (str): Full path, router prefix included.
+            called (set[tuple[str, str]]): What `_called_urls` found.
+
+        Returns:
+            bool: True when some call matches method and path.
+    '''
+    pattern = re.compile(re.sub(r'\\\{[^}]*\\\}', '[^/]+', re.escape(route)) + '/?')
+    return any(verb == method and pattern.fullmatch(url) for verb, url in called)
+
+
 def check_endpoint_coverage(service: Path) -> tuple[bool, str]:
     '''
         Every endpoint is exercised by a test.
@@ -133,7 +193,9 @@ def check_endpoint_coverage(service: Path) -> tuple[bool, str]:
         calls in a test is an endpoint whose first caller is the client.
 
         It looks for the controller each route delegates to, which is what a
-        controller test invokes. A route that calls none is reported too.
+        controller test invokes, and for a TestClient call to the route's own
+        URL, which is how the endpoint-level tests reach it. A route that is
+        found by neither is reported.
 
         Args:
             service (Path): Service directory.
@@ -150,16 +212,22 @@ def check_endpoint_coverage(service: Path) -> tuple[bool, str]:
     exercised = '\n'.join(
         path.read_text(encoding = 'utf-8') for path in sorted(tests.rglob('*.py'))
     )
+    called = _called_urls(tests)
     uncovered: list[str] = []
     for path in sorted(routes.glob('*.py')):
         source = path.read_text(encoding = 'utf-8')
+        prefix = re.search(r'APIRouter\(\s*prefix\s*=\s*\'([^\']*)\'', source)
+        urls = {endpoint: (method.upper(), (prefix.group(1) if prefix else '') + route)
+                for method, route, endpoint in _ROUTE.findall(source)}
         for endpoint, body in re.findall(
             r'async def (\w+_endpoint)\(((?:.|\n)*?)(?=\n@router|\nasync def |\Z)', source
         ):
             controllers = re.findall(r'await (\w+_controller)\(', body)
-            if not any(name in exercised for name in controllers) \
-                    and endpoint not in exercised:
-                uncovered.append(f'{path.name}:{endpoint}')
+            if any(name in exercised for name in controllers) or endpoint in exercised:
+                continue
+            if endpoint in urls and _route_is_called(*urls[endpoint], called):
+                continue
+            uncovered.append(f'{path.name}:{endpoint}')
 
     if uncovered:
         shown = ', '.join(uncovered[:3])
