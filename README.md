@@ -26,7 +26,7 @@ productos.
 | [`CLAUDE.md`](CLAUDE.md) | Reglas técnicas del proyecto: arquitectura, configuración, datos y protocolo de trabajo. Es la fuente única. |
 | [`SMARTDECISIONS.md`](SMARTDECISIONS.md) | Estado del producto, decisiones vigentes y lo último que se hizo. |
 | [`docs/parametros.md`](docs/parametros.md) | Definición única de los valores de negocio de cada servicio. |
-| [`docs/cambios/`](docs/cambios) | Planes de trabajo por producto. |
+| [`docs/smartdecisions/`](docs/smartdecisions) | El plan único de trabajo y el contrato de datos de SmartDecisions. |
 | [`docs/siat/`](docs/siat) | Anexo técnico de facturación del SIAT (Impuestos Nacionales). |
 | `.claude/rules/`, `.claude/skills/`, `.claude/agents/` | Estándares de código, procedimientos y revisiones automáticas. |
 | `services/<servicio>/README.md` | Documentación técnica de cada microservicio, en inglés. |

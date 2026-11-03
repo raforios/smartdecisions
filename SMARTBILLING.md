@@ -16,7 +16,7 @@ SmartDecisions.
   `bearsoft-smartbilling-portal`, CloudFront `EWVWU4A03ZZ4Z`).
 - **SIN:** facturación electrónica en línea, modalidad computarizada, contra el
   ambiente piloto. Sistema autorizado "sistema.SmartBilling", estado EN
-  PRUEBAS, con nuestro NIT 4746720010.
+  PRUEBAS, con el NIT de Rafael, 4746720010.
 
 ## Finalizado (desplegado y probado en vivo contra el piloto)
 
@@ -48,7 +48,7 @@ se avanza hasta tener lo que falta, para no gastar tiempo sin avances.
 
 ## Pendiente para retomar
 
-1. **CAFC del piloto** con nuestro NIT. Antes de pedirlo afuera, releer todos
+1. **CAFC del piloto** con el NIT de Rafael. Antes de pedirlo afuera, releer todos
    los manuales y PDFs que ya tenemos. Rafael irá al SIN la semana del 2-nov.
    Con el CAFC, probar la transcripción y el envío en el piloto.
 2. **Notas de crédito-débito:** no empezadas.
@@ -57,6 +57,25 @@ se avanza hasta tener lo que falta, para no gastar tiempo sin avances.
 4. **SES:** esperar la respuesta de AWS en el caso reabierto.
 5. **Ideas aprobadas, sin fecha:** factura por WhatsApp, Libro de Ventas del
    SIN para el contador, aviso de CUFD y certificado por vencer.
+6. **Proveedores y pedidos** (Rafael, 04-oct, nunca programado): «puede
+   recibir por partes y quedar pendientes»; recibir sin pedido previo: «sí»;
+   producto–proveedor: «debemos mantener el registro de todo». Rafael, 2-nov:
+   «esto debemos terminar». También lo usa el chat (`idea/plan_chat.md`, 6.2).
+7. **Traspaso entre sucursales** (Rafael, 04-oct): «algunas empresas tienen 2
+   sucursales y pueden tener exceso de inventario en una y desean llevar a la
+   otra para tener disponibilidad, no lo compliques».
+8. **Lo común a todos los rubros** (plan de rubros, 10-oct): marca y
+   categoría en el producto («Laboratorio» pasa a ser marca; «Requiere
+   receta» queda como rasgo de farmacia) y el vendedor en la venta.
+9. **SmartBilling → SmartDecisions:** cada venta del mostrador entra al
+   análisis. Es la fase 12.1 del plan único.
+10. **Máscaras por rubro, sin fecha:** farmacia (la de hoy), comida rápida en
+    sala (mesas, combos, comanda; la producción queda fuera) y los demás
+    rubros (ferretería, librería, minimercado, ropa), cada uno definido con
+    Rafael antes de programarse.
+
+El orden de trabajo vive en el plan único,
+`docs/smartdecisions/plan.md` (fase 12).
 
 ## Decisiones vigentes
 

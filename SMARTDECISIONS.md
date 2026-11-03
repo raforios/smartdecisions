@@ -181,7 +181,7 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
 ## Último estado
 
 > Lo escribe Claude cada vez que se detiene esperando algo. Sólo hechos
-> comprobados; el detalle vive en `docs/cambios/smartdecisions/plan.md`.
+> comprobados; el detalle vive en `docs/smartdecisions/plan.md`.
 
 **30-oct-2026.**
 

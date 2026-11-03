@@ -1,44 +1,29 @@
 '''
     Quotations store: the single door the business logic uses to reach the
-    minerals and their prices, whichever database is configured.
+    minerals and their prices.
 
     Why this layer exists. DynamoDB has no AVG, no COUNT(DISTINCT) and no JOIN,
     so a CRUD that only exposed get/query would push those operations back into
-    the services, leaving one version of the same business rule per engine. The
-    functions here are phrased as questions the business asks — "the average of
-    this mineral between these two dates" — and each backend answers them its
-    own way: the relational one with SQL aggregates, the DynamoDB one by reading
-    the partition and aggregating in Python. The caller never knows which is
-    active.
+    the services. The functions here are phrased as questions the business asks
+    — "the average of this mineral between these two dates" — and answer them
+    by reading the partition and aggregating in Python.
 
-    Selected with PERSISTENCE_BACKEND in the .env: 'sql' (default, the relational
-    models untouched) or 'dynamodb'. Royalties and the rest of the service are
-    not covered here and keep running on the relational side.
+    The relational backend was removed on 02-11-2026: the fortnightly load runs
+    from `tools/etl_minerals/`, which owns its own MySQL, and the service only
+    reads DynamoDB.
 '''
 from dataclasses import dataclass
 from datetime import date as date_type
 
 from boto3.resources.base import ServiceResource
-from sqlalchemy.orm import Session
 
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
-
-
-# Required: which engine holds the data is a deployment decision that must
-# be stated, not guessed.
-ENV_VARS = load_and_validate_env_vars({
-    'PERSISTENCE_BACKEND': str,
-})
-BACKEND = ENV_VARS['PERSISTENCE_BACKEND'].strip().lower()
-DYNAMODB_BACKEND = 'dynamodb'
-SQL_BACKEND = 'sql'
+from services import prices_dyb
 
 
 @dataclass(frozen = True)
 class MineralRecord:
     '''
-        A mineral of the catalogue, independent of the storage engine.
+        A mineral of the catalogue.
 
         Only what the business actually reads from storage: the identifier and
         the name. Unit, chemical symbol and market live in OFFICIAL_MINERALS,
@@ -50,245 +35,133 @@ class MineralRecord:
 
 @dataclass(frozen = True)
 class PriceRecord:
-    '''One daily quotation, independent of the storage engine.'''
+    '''One daily quotation.'''
     mineral_id: str
     date: date_type
     price_low: float | None = None
     price_high: float | None = None
 
 
-def uses_dynamodb() -> bool:
-    '''
-        Whether the quotations run on DynamoDB.
-
-        Returns:
-            bool: True when PERSISTENCE_BACKEND selects DynamoDB.
-    '''
-    return BACKEND == DYNAMODB_BACKEND
-
-
-def list_minerals(
-    dynamodb_resource: ServiceResource | None = None,
-    db: Session | None = None
-) -> list[MineralRecord]:
+def list_minerals(dynamodb_resource: ServiceResource) -> list[MineralRecord]:
     '''
         Returns the mineral catalogue.
 
         Args:
-            dynamodb_resource (ServiceResource | None): Resource the route
-                resolved; ignored on the relational backend.
-            db (Session | None): Relational session; ignored on DynamoDB.
+            dynamodb_resource (ServiceResource): Resource the route resolved.
 
         Returns:
             list[MineralRecord]: Every mineral on record.
     '''
-    if uses_dynamodb():
-        from services import prices_dyb # pylint: disable=import-outside-toplevel
-        return [
-            MineralRecord(mineral_id = item.mineral_id, name = item.name)
-            for item in prices_dyb.list_minerals(dynamodb_resource)
-        ]
-
-    from models.mining_analysis import Mineral # pylint: disable=import-outside-toplevel
     return [
-        MineralRecord(mineral_id = str(row.id), name = row.name)
-        for row in db.query(Mineral.id, Mineral.name).all()
+        MineralRecord(mineral_id = item.mineral_id, name = item.name)
+        for item in prices_dyb.list_minerals(dynamodb_resource)
     ]
 
 
 def prices_in_window(
-    dynamodb_resource: ServiceResource | None,
+    dynamodb_resource: ServiceResource,
     mineral_id: str,
-    window: tuple[date_type, date_type],
-    db: Session | None = None
+    window: tuple[date_type, date_type]
 ) -> list[PriceRecord]:
     '''
         Returns the quotations of one mineral inside a date window.
 
         Args:
+            dynamodb_resource (ServiceResource): Resource the route resolved.
             mineral_id (str): Mineral identifier.
             window (tuple[date, date]): First and last date, inclusive.
-            dynamodb_resource (ServiceResource | None): Resource the route
-                resolved; ignored on the relational backend.
-            db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             list[PriceRecord]: Quotations with a price, ordered by date.
     '''
-    if uses_dynamodb():
-        from services import prices_dyb # pylint: disable=import-outside-toplevel
-        start, end = window
-        items = prices_dyb.query_prices(dynamodb_resource, mineral_id, {'from': start, 'to': end})
-        return [
-            PriceRecord(item.mineral_id, item.date, item.price_low, item.price_high)
-            for item in items if item.price_low is not None
-        ]
-
-    from models.mining_analysis import MiningPrice # pylint: disable=import-outside-toplevel
-    rows = (
-        db.query(MiningPrice)
-        .filter(
-            MiningPrice.mineral_id == int(mineral_id),
-            MiningPrice.date >= start,
-            MiningPrice.date <= end,
-            MiningPrice.price_low.isnot(None)
-        )
-        .order_by(MiningPrice.date)
-        .all()
-    )
+    start, end = window
+    items = prices_dyb.query_prices(dynamodb_resource, mineral_id, {'from': start, 'to': end})
     return [
-        PriceRecord(
-            str(row.mineral_id), row.date,
-            None if row.price_low is None else float(row.price_low),
-            None if row.price_high is None else float(row.price_high)
-        )
-        for row in rows
+        PriceRecord(item.mineral_id, item.date, item.price_low, item.price_high)
+        for item in items if item.price_low is not None
     ]
 
 
 def average_low(
-    dynamodb_resource: ServiceResource | None,
+    dynamodb_resource: ServiceResource,
     mineral_id: str,
-    window: tuple[date_type, date_type],
-    db: Session | None = None
+    window: tuple[date_type, date_type]
 ) -> tuple[float, int] | None:
     '''
         Returns the mean of price_low over the days with data in the window.
 
         The mean divides by the number of distinct days that actually carry a
         price, matching the published rule "se aplica el promedio para ese
-        número de días".
+        número de días". DynamoDB cannot average, so the partition is read and
+        aggregated here.
 
         Args:
+            dynamodb_resource (ServiceResource): Resource the route resolved.
             mineral_id (str): Mineral identifier.
             window (tuple[date, date]): First and last date, inclusive.
-            dynamodb_resource (ServiceResource | None): Resource the route
-                resolved; ignored on the relational backend.
-            db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             tuple[float, int] | None: (average, days with data), or None when the
                 window holds no data.
     '''
-    start, end = window
-    if uses_dynamodb():
-        # DynamoDB cannot average: read the partition and aggregate here.
-        prices = prices_in_window(dynamodb_resource, mineral_id, window)
-        by_day = {price.date: price.price_low for price in prices}
-        if not by_day:
-            return None
-        return sum(by_day.values()) / len(by_day), len(by_day)
-
-    from sqlalchemy import func # pylint: disable=import-outside-toplevel
-    from models.mining_analysis import MiningPrice # pylint: disable=import-outside-toplevel
-    result = (
-        db.query(
-            func.avg(MiningPrice.price_low).label('avg_low'),
-            # pylint reads SQLAlchemy's generic function factory as not callable.
-            func.count(func.distinct(MiningPrice.date)).label('days') # pylint: disable=not-callable
-        )
-        .filter(
-            MiningPrice.mineral_id == int(mineral_id),
-            MiningPrice.date >= start,
-            MiningPrice.date <= end,
-            MiningPrice.price_low.isnot(None)
-        )
-        .one()
-    )
-    if not result.days or result.avg_low is None:
+    prices = prices_in_window(dynamodb_resource, mineral_id, window)
+    by_day = {price.date: price.price_low for price in prices}
+    if not by_day:
         return None
-    return float(result.avg_low), int(result.days)
+    return sum(by_day.values()) / len(by_day), len(by_day)
 
 
 def latest_prices_before(
-    dynamodb_resource: ServiceResource | None,
+    dynamodb_resource: ServiceResource,
     mineral_id: str,
     ref_date: date_type,
-    limit: int = 2,
-    db: Session | None = None
+    limit: int = 2
 ) -> list[PriceRecord]:
     '''
         Returns the most recent quotations of one mineral up to a date.
 
         The daily report needs the last quotation and the one before it, to
-        report the change between them. On the relational side that is an
-        ORDER BY ... LIMIT; DynamoDB cannot order by anything but the sort key,
+        report the change between them. DynamoDB orders only by the sort key,
         which here is exactly the date, so the query walks the partition
         backwards and stops at the limit.
 
         Args:
+            dynamodb_resource (ServiceResource): Resource the route resolved.
             mineral_id (str): Mineral identifier.
             ref_date (date): Latest date to consider, inclusive.
             limit (int): How many quotations to return, newest first.
-            dynamodb_resource (ServiceResource | None): Resource the route
-                resolved; ignored on the relational backend.
-            db (Session | None): Relational session; ignored on DynamoDB.
 
         Returns:
             list[PriceRecord]: Quotations newest first, at most `limit` of them.
     '''
-    if uses_dynamodb():
-        from services import prices_dyb # pylint: disable=import-outside-toplevel
-        items = prices_dyb.query_prices(dynamodb_resource, mineral_id,
-                                        {'to': ref_date}, descending = True)
-        return [
-            PriceRecord(item.mineral_id, item.date, item.price_low, item.price_high)
-            for item in items
-        ][:limit]
-
-    from models.mining_analysis import MiningPrice # pylint: disable=import-outside-toplevel
-    rows = (
-        db.query(MiningPrice)
-        .filter(
-            MiningPrice.mineral_id == int(mineral_id),
-            MiningPrice.date <= ref_date
-        )
-        .order_by(MiningPrice.date.desc())
-        .limit(limit)
-        .all()
-    )
+    items = prices_dyb.query_prices(dynamodb_resource, mineral_id,
+                                    {'to': ref_date}, descending = True)
     return [
-        PriceRecord(
-            str(row.mineral_id), row.date,
-            None if row.price_low is None else float(row.price_low),
-            None if row.price_high is None else float(row.price_high)
-        )
-        for row in rows
-    ]
+        PriceRecord(item.mineral_id, item.date, item.price_low, item.price_high)
+        for item in items
+    ][:limit]
 
 
 def date_bounds(
-    dynamodb_resource: ServiceResource | None = None,
-    db: Session | None = None
+    dynamodb_resource: ServiceResource
 ) -> tuple[date_type | None, date_type | None]:
     '''
         Returns the first and last dates with a stored quotation.
 
-        The biweekly history uses them to know which periods exist at all. SQL
-        answers with MIN/MAX; DynamoDB has no aggregates, so the whole table is
-        scanned and reduced here. That is acceptable because the table holds one
-        item per mineral per day and the history screen is not a hot path.
+        The biweekly history uses them to know which periods exist at all.
+        DynamoDB has no aggregates, so the whole table is scanned and reduced
+        here. That is acceptable because the table holds one item per mineral
+        per day and the history screen is not a hot path.
 
         Args:
-            dynamodb_resource (ServiceResource | None): Resource the route
-                resolved; ignored on the relational backend.
-            db (Session | None): Relational session; ignored on DynamoDB.
+            dynamodb_resource (ServiceResource): Resource the route resolved.
 
         Returns:
             tuple[date | None, date | None]: Oldest and newest dates, or
                 (None, None) when nothing is stored.
     '''
-    if uses_dynamodb():
-        from services import prices_dyb # pylint: disable=import-outside-toplevel
-        dates = [item.date for item in prices_dyb.scan_prices(dynamodb_resource)]
-        return (min(dates), max(dates)) if dates else (None, None)
-
-    from models.mining_analysis import MiningPrice # pylint: disable=import-outside-toplevel
-    from sqlalchemy import func # pylint: disable=import-outside-toplevel
-    bounds = db.query(
-        func.min(MiningPrice.date), func.max(MiningPrice.date)
-    ).one()
-    return bounds[0], bounds[1]
+    dates = [item.date for item in prices_dyb.scan_prices(dynamodb_resource)]
+    return (min(dates), max(dates)) if dates else (None, None)
 
 
 @dataclass(frozen = True)
@@ -296,8 +169,8 @@ class QuotationRecord:
     '''
     One quotation together with the mineral it belongs to.
 
-    The full-catalogue endpoint publishes both, and on DynamoDB there is no join
-    to lean on: the name comes from the catalogue table and the rest of the
+    The full-catalogue endpoint publishes both, and DynamoDB has no join to
+    lean on: the name comes from the catalogue table and the rest of the
     metadata from OFFICIAL_MINERALS, the published catalogue the bulletins are
     built from.
     '''
@@ -308,66 +181,28 @@ class QuotationRecord:
     price_high: float | None = None
 
 
-def all_quotations(
-    dynamodb_resource: ServiceResource | None = None,
-    db: Session | None = None
-) -> list[QuotationRecord]:
+def all_quotations(dynamodb_resource: ServiceResource) -> list[QuotationRecord]:
     '''
         Returns every stored quotation with its mineral.
 
-        SQL joins; DynamoDB scans the table and resolves the names against the
-        catalogue read once. It is the one access pattern the table was not
-        keyed for, which is why it belongs to a full export and not to a screen
-        that refreshes.
+        Scans the table and resolves the names against the catalogue read
+        once. It is the one access pattern the table was not keyed for, which
+        is why it belongs to a full export and not to a screen that refreshes.
 
         Args:
-            dynamodb_resource (ServiceResource | None): Resource the route
-                resolved; ignored on the relational backend.
-            db (Session | None): Relational session; ignored on DynamoDB.
+            dynamodb_resource (ServiceResource): Resource the route resolved.
 
         Returns:
             list[QuotationRecord]: Quotations ordered by date, then mineral.
     '''
-    if uses_dynamodb():
-        from services import prices_dyb # pylint: disable=import-outside-toplevel
-        names = {item.mineral_id: item.name for item in prices_dyb.list_minerals(dynamodb_resource)}
-        return sorted(
-            (
-                QuotationRecord(
-                    item.mineral_id, names.get(item.mineral_id, ''),
-                    item.date, item.price_low, item.price_high
-                )
-                for item in prices_dyb.scan_prices(dynamodb_resource)
-            ),
-            key = lambda record: (record.date, record.mineral_name)
-        )
-
-    from models.mining_analysis import ( # pylint: disable=import-outside-toplevel
-        Mineral,
-        MiningPrice
+    names = {item.mineral_id: item.name for item in prices_dyb.list_minerals(dynamodb_resource)}
+    return sorted(
+        (
+            QuotationRecord(
+                item.mineral_id, names.get(item.mineral_id, ''),
+                item.date, item.price_low, item.price_high
+            )
+            for item in prices_dyb.scan_prices(dynamodb_resource)
+        ),
+        key = lambda record: (record.date, record.mineral_name)
     )
-    rows = (
-        db.query(MiningPrice)
-        .join(Mineral, Mineral.id == MiningPrice.mineral_id)
-        .order_by(MiningPrice.date, Mineral.name)
-        .all()
-    )
-    return [
-        QuotationRecord(
-            str(row.mineral_id), row.mineral.name, row.date,
-            None if row.price_low is None else float(row.price_low),
-            None if row.price_high is None else float(row.price_high)
-        )
-        for row in rows
-    ]
-
-
-def log_active_backend() -> None:
-    '''
-        Records which backend the quotations are being served from.
-
-        Called at startup so a deployment states its persistence engine in the
-        logs instead of leaving it to be guessed from a failure.
-    '''
-    message = f'Quotations store running on the "{BACKEND}" backend.'
-    logger.info(message)

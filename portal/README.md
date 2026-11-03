@@ -1,37 +1,50 @@
-# Portal — BearSoft / SmartDecisions
+# Portal — BearSoft
 
-Sitios estáticos del portal. **HTML5 + CSS3 + JavaScript vanilla**, cero
-dependencias, cero build step.
+Static sites. **HTML5 + CSS3 + Vanilla JavaScript**: no framework, no
+dependencies, no build step. Each site calls the API at
+`api.bearsoft.com.bo/v1/<service>/…` and signs in against AUTH.
 
-## Estructura
+## Layout
 
 ```
 portal/
-├── page/     # Landing OFICIAL de la empresa (BearSoft) → bearsoft.com.bo
-│              #   incluye la sección de producto SmartDecisions (data-driven,
-│              #   contenido en page/js/content.json). Ver page/DEPLOY.md.
-├── demo/     # App demo de SmartDecisions (login + módulos) → smartdecisions.bearsoft.com.bo
-├── assets/   # Imágenes/íconos compartidos (referenciados por la demo vía ../assets/)
+├── page/      BearSoft landing, with the SmartDecisions product section
+│              (content in page/js/content.json)      → bearsoft.com.bo
+├── demo/      SmartDecisions app: sign-in, Financial Analysis, Commercial,
+│              Minerals and Settings                  → smartdecisions.bearsoft.com.bo
+├── billing/   SmartBilling app: counter, till, sales, catalog, receiving,
+│              customers and SIN invoicing            → smartbilling.bearsoft.com.bo
+│              (see billing/README.md)
+├── raforios/  Rafael Ríos Bascón's personal site
 └── README.md
 ```
 
-> Hay **un solo landing**: `page/`. El antiguo landing de producto en la raíz
-> (`portal/index.html`) se eliminó porque su contenido ya está —y más completo—
-> en la sección SmartDecisions del landing de BearSoft (`page/`).
+There is one landing: `page/`. Shared images live inside each site; there is
+no common `assets/` folder.
 
-## Desarrollo local
+## Local development
 
 ```bash
-cd app/portal/page   # o app/portal/demo
+cd app/portal/demo   # or page, billing
 python3 -m http.server 8080
-# Abrir http://localhost:8080
+# open http://localhost:8080
 ```
 
-## Despliegue
+## Deployment
 
-- **Landing** (`page/`): ver `page/DEPLOY.md`. Bucket `bearsoft.com.bo` (S3 static
-  website) — lo despliega Rafael en su propio S3.
-- **Demo** (`demo/`): bucket `bearsoft-smartdecisions-landing` + CloudFront
-  `EXP60FDO0MJVI` (perfil `deploy_ml`, us-east-1). Ver `page/DEPLOY.md`.
+Claude publishes every frontend; Rafael deploys the backend (`CLAUDE.md` §10).
+All sites live on S3 + CloudFront, profile `deploy_ml`, `us-east-1`.
 
-Alternativas equivalentes en costo $0: GitHub Pages, Cloudflare Pages, Netlify.
+| Site | Bucket | CloudFront | How |
+|---|---|---|---|
+| `page/` | `bearsoft.com.bo` | `E3P1IBW1V8N4P9` | `aws s3 sync` + invalidation |
+| `demo/` | `bearsoft-smartdecisions-landing` | `EXP60FDO0MJVI` | `python3 -m tools.deploy.deploy_demo_portal --yes` (stamps each asset with its content hash) |
+| `billing/` | `bearsoft-smartbilling-portal` | `EWVWU4A03ZZ4Z` | `aws s3 sync portal/billing/ … --delete --exclude README.md --cache-control no-cache` + invalidation |
+
+The step-by-step procedure, with the check that what is published matches
+the local files, is the `/desplegar-frontend` skill.
+
+## Testing
+
+No automated tests: Rafael and Claude test every screen by hand in the
+browser (Rafael, 2-nov-2026).

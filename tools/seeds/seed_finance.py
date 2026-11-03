@@ -1,8 +1,8 @@
 '''
     Seeds the chart of accounts and the law parameters of FINANCE.
 
-    Both come **from the approved contract** (`docs/cambios/smartdecisions/
-    contrato.md`) and not from a list written here: the contract is the single
+    Both come **from the approved contract** (`docs/smartdecisions/contrato.md`)
+    and not from a list written here: the contract is the single
     definition Rafael reviews, and a copy in code would drift from it the day
     an account is added. A bold row of a catalog table is a group; the rest
     are its accounts. The type is the first digit of the code, an account

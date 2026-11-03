@@ -16,8 +16,8 @@ qué buscar, qué es grave y qué no se reporta.
 - **Servicios base:** `Depends` de `security.py` en cada endpoint,
   `@handle_service_errors` en todo controlador y `@audit_event` en los que
   cambian algo (§7).
-- **Especificación:** si el cambio tiene `docs/cambios/<cambio>/`, el código
-  cumple `spec.md` y respeta las restricciones de `intent.md`.
+- **Plan:** el código cumple lo que dice su fase en el plan único
+  (`docs/smartdecisions/plan.md`).
 
 ## Qué es grave
 
