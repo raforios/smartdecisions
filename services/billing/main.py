@@ -132,7 +132,7 @@ def root() -> dict[str, Any]:
         'Server Date Time': today.isoformat(),
         'Last Update': date.today().isoformat(),
         'Application': 'Python - FastAPI',
-        'Database': 'MySQL transactional Database',
+        'Database': 'AWS DynamoDB',
         'Owner': f'BearSoft {copyright_symbol} {today.year}',
     }
     return output
