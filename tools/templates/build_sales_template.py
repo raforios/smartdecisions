@@ -87,9 +87,6 @@ def _sample_rows(count: int) -> list[dict[str, Any]]:
             'Cantidad': quantity,
             'Precio Unitario': product[3],
             'Costo Unitario': product[4],
-            # A tenth above the price applied: the sample shows the shop
-            # selling below what the supplier suggests.
-            'Precio Sugerido': round(product[3] * 1.1, 2),
             'Monto Total': round(quantity * product[3], 2),
             # Credit is alternated on purpose, so it is visible that both
             # conditions coexist in the same file and that the term of a cash

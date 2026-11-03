@@ -215,7 +215,7 @@ FILES bucket, prefix `commercial/`. Each file is a CSV with the **fields** of it
 
 #### Sales — `commercial/normalized/<uuid>.csv`
 
-Two templates: `ventas`, the reduced one and the official one (date, invoice, client, seller, product, quantity, price, cost, suggested price, total and payment terms), and `ventas_completa`, with every column. Both load through the same contract.
+Two templates: `ventas`, the reduced one and the official one (date, invoice, client, seller, product, quantity, price, cost, total and payment terms), and `ventas_completa`, with every column. Both load through the same contract.
 
 | Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
@@ -236,7 +236,6 @@ Two templates: `ventas`, the reduced one and the official one (date, invoice, cl
 | Cantidad | `quantity` | number | yes | > 0 |
 | Precio Unitario | `unit_price` | number | this or the total | ≥ 0 |
 | Costo Unitario | `unit_cost` | number | no | ≥ 0 |
-| Precio Sugerido | `suggested_price` | number | no | ≥ 0; the distributor's or supplier's suggested price |
 | Monto Total | `total_amount` | number | this or the price | ≥ 0; derived from the price when empty |
 | Condicion Venta | `payment_terms` | text | no | up to 16 chars; one of: CONTADO, CREDITO |
 | Plazo Dias | `credit_days` | integer | no | ≥ 0 |

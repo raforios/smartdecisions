@@ -83,11 +83,6 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(minimum = 0.0)),
     SalesColumn('unit_cost', 'Costo Unitario', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
-    # The price the distributor or supplier suggests, next to the one the shop
-    # applied: the margin it would give against the one it gave (Rafael,
-    # 3-nov-2026).
-    SalesColumn('suggested_price', 'Precio Sugerido', False, 'float64',
-                rules = ValueRules(minimum = 0.0)),
     SalesColumn('total_amount', 'Monto Total', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
     # --- Credit: what is known at the moment of the sale --------------------
@@ -351,11 +346,12 @@ PRICE_COLUMNS: tuple[str, str] = ('unit_price', 'total_amount')
 
 # The reduced model: what a shop records without asking for more —the moment,
 # who sold, what, how many, at what price and cost, and how it was paid— with
-# the client optional (`idea/plan_chat.md`, 6.9). The cost and the suggested
-# price stay because the margin depends on them (Rafael, 3-nov-2026).
+# the client optional (`idea/plan_chat.md`, 6.9). The cost stays because the
+# margin depends on it (Rafael, 3-nov-2026); the supplier's suggested price is
+# the product's, not the sale's, and belongs to the product master.
 REDUCED_COLUMNS: tuple[str, ...] = (
     'date', 'order_id', 'pos_name', 'seller', 'product_name', 'quantity', 'unit_price',
-    'unit_cost', 'suggested_price', 'total_amount', 'payment_terms'
+    'unit_cost', 'total_amount', 'payment_terms'
 )
 REDUCED_TEMPLATE_COLUMNS: tuple[SalesColumn, ...] = tuple(
     column for column in TEMPLATE_COLUMNS if column.canonical in REDUCED_COLUMNS

@@ -151,23 +151,6 @@ def test_a_sale_without_price_or_total_is_rejected() -> None:
     assert list(result.accepted['order_id']) == ['P-002']
 
 
-def test_the_suggested_price_is_kept_and_never_negative() -> None:
-    '''
-        The supplier's suggested price travels with the sale, so the margin
-        it would give can be read next to the one the shop applied.
-    '''
-    dataframe = pd.DataFrame([
-        {'Fecha': '2026-01-12', 'Nro Factura': 'P-001', 'Producto': 'Galleta',
-         'Cantidad': 2, 'Precio Unitario': 5.0, 'Precio Sugerido': 5.5},
-        {'Fecha': '2026-01-12', 'Nro Factura': 'P-002', 'Producto': 'Galleta',
-         'Cantidad': 1, 'Precio Unitario': 5.0, 'Precio Sugerido': -1},
-    ])
-    result = parse_and_validate_partial(_to_xlsx_bytes(dataframe), 'sugerido.xlsx')
-    assert list(result.accepted['suggested_price']) == [5.5]
-    assert [(issue.column, issue.rule_code.value) for issue in result.issues] == [
-        ('suggested_price', 'BELOW_MINIMUM')]
-
-
 def test_missing_required_column_is_reported() -> None:
     '''
         Removing a required column raises a column-level error.

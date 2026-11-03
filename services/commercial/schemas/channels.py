@@ -58,7 +58,6 @@ class SaleRowSchema(BaseModel):
     category: str | None = Field(None, max_length = 100)
     unit_price: float | None = Field(None, ge = 0)
     unit_cost: float | None = Field(None, ge = 0)
-    suggested_price: float | None = Field(None, ge = 0)
     total_amount: float | None = Field(None, ge = 0)
     payment_terms: str | None = Field(None, max_length = 16)
     credit_days: int | None = Field(None, ge = 0)
@@ -122,7 +121,6 @@ class StockRowSchema(BaseModel):
     in_transit: float | None = Field(None, ge = 0)
     warehouse: str | None = Field(None, max_length = 64)
     unit_cost: float | None = Field(None, ge = 0)
-    suggested_price: float | None = Field(None, ge = 0)
     unit_price: float = Field(..., ge = 0, description = 'What one unit sells for.')
 
 
