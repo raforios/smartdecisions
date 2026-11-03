@@ -2,7 +2,7 @@
 name: quincena-minerales
 description: La rutina de cada 15 días para cargar las cotizaciones de minerales del Ministerio — auditar el re-tipeo del PDF, cargar el Excel y publicar a DynamoDB. Úsala cuando llegue el archivo nuevo de cotizaciones.
 argument-hint: [ruta-del-xlsx]
-allowed-tools: Bash(cd *), Bash(python3 -m scripts.*), Bash(python3 *), Bash(aws dynamodb *), Read
+allowed-tools: Bash(cd *), Bash(python -m tools.etl_minerals.*), Bash(python3 *), Bash(aws dynamodb *), Read
 ---
 
 Ejecuta la carga quincenal de cotizaciones. Fuente por defecto:
@@ -17,12 +17,15 @@ ahí se pierden decimales: por eso el primer paso es auditar, no cargar.
 
 ## Los tres pasos, en orden
 
-Todo desde `services/mining_analysis/`.
+Todo desde la raíz del repositorio (`app/`), con `tools/etl_minerals/`: es
+independiente del API, tiene su propio `.env` y su propio MySQL (contenedor
+`mining_db`, puerto 3310). El servicio MINING_ANALYSIS sólo lee DynamoDB
+desde el 2-nov-2026. Entorno y detalle: `tools/etl_minerals/README.md`.
 
 ### 1. Auditar antes de cargar
 
 ```bash
-python3 -m scripts.audit_decimals --source ../../../data/cotizaciones_mineras_bolivia.xlsx
+python -m tools.etl_minerals.audit_decimals --source ../data/cotizaciones_mineras_bolivia.xlsx
 ```
 
 Sólo lee. Cruza el promedio que trae el Excel contra el promedio aritmético de
@@ -33,27 +36,21 @@ perdidos al copiar del PDF.
 verificarlas contra el PDF original; cargar sin revisar propaga el error al
 boletín que se le entrega al Ministerio.
 
-### 2. Cargar
+### 2. Cargar en el MySQL de la herramienta
 
 ```bash
-PERSISTENCE_BACKEND=sql python3 -m scripts.ingest_pdf_xlsx \
-    --source ../../../data/cotizaciones_mineras_bolivia.xlsx        # simulación
-PERSISTENCE_BACKEND=sql python3 -m scripts.ingest_pdf_xlsx \
-    --source ../../../data/cotizaciones_mineras_bolivia.xlsx --yes  # escribe
+python -m tools.etl_minerals.ingest_pdf_xlsx --source ../data/cotizaciones_mineras_bolivia.xlsx        # simulación
+python -m tools.etl_minerals.ingest_pdf_xlsx --source ../data/cotizaciones_mineras_bolivia.xlsx --yes  # escribe
 ```
 
 Idempotente: omite las fechas que ya tienen registro, así que volver a correrlo
 sobre el mismo archivo no duplica nada.
 
-**Va contra MySQL local a propósito.** El ETL escribe sólo en el relacional; el
-servicio desplegado lee de DynamoDB. Es la opción (a) que se acordó hasta que la
-escritura pase por `prices_store`.
-
 ### 3. Publicar a la nube
 
 ```bash
-python3 -m scripts.migrate_to_dynamodb          # informa qué copiaría
-python3 -m scripts.migrate_to_dynamodb --yes    # copia y verifica
+python -m tools.etl_minerals.migrate_to_dynamodb          # informa qué copiaría
+python -m tools.etl_minerals.migrate_to_dynamodb --yes    # copia y verifica los conteos
 ```
 
 Sin este paso la quincena queda sólo en tu máquina y el servicio desplegado
@@ -61,27 +58,8 @@ sigue mostrando la anterior.
 
 ## Verificación
 
-Compara los dos caminos: deben dar lo mismo.
-
-```python
-python3 - <<'PY'
-import asyncio, importlib, os
-from datetime import date
-from scripts.cli_support import database_session
-
-def leer(backend, sesion):
-    os.environ['PERSISTENCE_BACKEND'] = backend
-    import services.prices_store as ps; importlib.reload(ps)
-    return {m.name: [(p.date, p.price_low) for p in
-                     ps.prices_in_window(m.mineral_id, date(2026,1,1), date.today(), sesion)]
-            for m in ps.list_minerals(sesion)}
-
-with database_session() as sesion:
-    print('idénticos:', leer('sql', sesion) == leer('dynamodb', sesion))
-PY
-```
-
-Y el boletín, que es lo que se entrega:
+El paso 3 ya compara los conteos de MySQL y DynamoDB. Después, el boletín,
+que es lo que se entrega:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' \

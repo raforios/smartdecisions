@@ -40,9 +40,10 @@ puede tener varios archivos, pero uno principal con ese nombre que concentre a
 los demás.
 
 **No se crean carpetas nuevas dentro de un microservicio.** Ni `locales/`, ni
-`config/`, ni `scripts/`, ni ninguna otra. `scripts/` existe sólo en
-`mining_analysis` por la carga quincenal manual, que no tiene alternativa. Si
-algo parece no caber en las cinco capas, para y pregunta.
+`config/`, ni `scripts/`, ni ninguna otra. Lo que corre a mano desde una
+computadora va en `tools/`, como la carga quincenal de minerales
+(`tools/etl_minerals/`). Si algo parece no caber en las cinco capas, para y
+pregunta.
 
 ## El andamiaje
 
