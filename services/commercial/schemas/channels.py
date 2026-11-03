@@ -45,7 +45,7 @@ class SaleRowSchema(BaseModel):
     """
     date: datetime.date
     order_id: str = Field(..., min_length = 1, max_length = 64)
-    pos_name: str = Field(..., min_length = 1, max_length = 150)
+    pos_name: str | None = Field(None, max_length = 150)
     product_name: str = Field(..., min_length = 1, max_length = 150)
     quantity: float = Field(..., gt = 0)
     zone: str | None = Field(None, max_length = 100)
@@ -58,6 +58,7 @@ class SaleRowSchema(BaseModel):
     category: str | None = Field(None, max_length = 100)
     unit_price: float | None = Field(None, ge = 0)
     unit_cost: float | None = Field(None, ge = 0)
+    suggested_price: float | None = Field(None, ge = 0)
     total_amount: float | None = Field(None, ge = 0)
     payment_terms: str | None = Field(None, max_length = 16)
     credit_days: int | None = Field(None, ge = 0)
@@ -101,7 +102,7 @@ class ObjectiveRowSchema(BaseModel):
         date here would invite a caller to send the first of the month and a
         second caller the last.
     """
-    pos_name: str = Field(..., min_length = 1, max_length = 150)
+    pos_name: str | None = Field(None, max_length = 150)
     period: str = Field(..., pattern = r'^\d{4}-(0[1-9]|1[0-2])$',
                         description = "The month, as 'YYYY-MM'.")
     target_amount: float = Field(..., ge = 0)
@@ -121,6 +122,7 @@ class StockRowSchema(BaseModel):
     in_transit: float | None = Field(None, ge = 0)
     warehouse: str | None = Field(None, max_length = 64)
     unit_cost: float | None = Field(None, ge = 0)
+    suggested_price: float | None = Field(None, ge = 0)
     unit_price: float = Field(..., ge = 0, description = 'What one unit sells for.')
 
 
@@ -144,7 +146,7 @@ class VisitRowSchema(BaseModel):
     visit_date: datetime.date
     visit_time: str | None = Field(None, max_length = 8)
     seller: str = Field(..., min_length = 1, max_length = 128)
-    pos_name: str = Field(..., min_length = 1, max_length = 150)
+    pos_name: str | None = Field(None, max_length = 150)
     latitude: float | None = Field(None, ge = -90.0, le = 90.0)
     longitude: float | None = Field(None, ge = -180.0, le = 180.0)
     outcome: str | None = Field(None, max_length = 16)

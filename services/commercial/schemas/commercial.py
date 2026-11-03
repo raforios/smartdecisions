@@ -61,7 +61,9 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(max_length = 64), template_required = True),
     SalesColumn('pos_id', 'Cliente ID', True, 'object',
                 rules = ValueRules(max_length = 64), filled_by_service = True),
-    SalesColumn('pos_name', 'Cliente', False, 'object', template_required = True),
+    # Optional since 3-nov-2026 (Rafael): a counter sale has no client, and
+    # it is counted under the counter client instead of being rejected.
+    SalesColumn('pos_name', 'Cliente', False, 'object'),
     SalesColumn('zone', 'Zona', False, 'object'),
     SalesColumn('city', 'Ciudad', False, 'object'),
     SalesColumn('region', 'Region', False, 'object'),
@@ -80,6 +82,11 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
     SalesColumn('unit_price', 'Precio Unitario', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
     SalesColumn('unit_cost', 'Costo Unitario', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
+    # The price the distributor or supplier suggests, next to the one the shop
+    # applied: the margin it would give against the one it gave (Rafael,
+    # 3-nov-2026).
+    SalesColumn('suggested_price', 'Precio Sugerido', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
     SalesColumn('total_amount', 'Monto Total', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
@@ -215,7 +222,9 @@ VISIT_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(max_length = 128), template_required = True),
     SalesColumn('pos_id', 'Cliente ID', True, 'object',
                 rules = ValueRules(max_length = 64), filled_by_service = True),
-    SalesColumn('pos_name', 'Cliente', False, 'object', template_required = True),
+    # Optional since 3-nov-2026 (Rafael): a counter sale has no client, and
+    # it is counted under the counter client instead of being rejected.
+    SalesColumn('pos_name', 'Cliente', False, 'object'),
     SalesColumn('latitude', 'Latitud', False, 'float64',
                 rules = ValueRules(value_range = (-90.0, 90.0))),
     SalesColumn('longitude', 'Longitud', False, 'float64',
@@ -297,7 +306,10 @@ CLIENT_SALES_ATTRIBUTES: tuple[str, ...] = (
 # of the templates the client downloads — not sheets inside one workbook. The
 # four-sheet book was our own invention: it made the service read S3 by itself,
 # because a reader that returns one flat table could not serve it.
+# The reduced sales template is the official one (Rafael, 29-oct and
+# 2-nov-2026); the full one is kept for the client that has the data.
 SALES_TEMPLATE: str = 'ventas'
+SALES_FULL_TEMPLATE: str = 'ventas_completa'
 COLLECTIONS_TEMPLATE: str = 'cobros'
 STOCK_TEMPLATE: str = 'stock'
 VISITS_TEMPLATE: str = 'visitas'
@@ -311,13 +323,14 @@ class TemplateName(str, Enum):
         The templates a client can download, one per contract.
     '''
     SALES = SALES_TEMPLATE
+    SALES_FULL = SALES_FULL_TEMPLATE
     COLLECTIONS = COLLECTIONS_TEMPLATE
     STOCK = STOCK_TEMPLATE
     VISITS = VISITS_TEMPLATE
     OBJECTIVES = OBJECTIVES_TEMPLATE
     PURCHASES = PURCHASES_TEMPLATE
 
-TEMPLATE_VERSION: str = 'v4'
+TEMPLATE_VERSION: str = 'v5'
 
 REQUIRED_COLUMNS: tuple[str, ...] = tuple(
     column.canonical for column in SALES_COLUMNS if column.required
@@ -331,6 +344,25 @@ TEMPLATE_COLUMNS: tuple[SalesColumn, ...] = tuple(
     column for column in SALES_COLUMNS if not column.filled_by_service
 )
 TEMPLATE_HEADERS: tuple[str, ...] = tuple(column.header for column in TEMPLATE_COLUMNS)
+
+# A sale carries income with one of these two; the total is derived from the
+# price when it is missing (Rafael, 3-nov-2026).
+PRICE_COLUMNS: tuple[str, str] = ('unit_price', 'total_amount')
+
+# The reduced model: what a shop records without asking for more —the moment,
+# who sold, what, how many, at what price and cost, and how it was paid— with
+# the client optional (`idea/plan_chat.md`, 6.9). The cost and the suggested
+# price stay because the margin depends on them (Rafael, 3-nov-2026).
+REDUCED_COLUMNS: tuple[str, ...] = (
+    'date', 'order_id', 'pos_name', 'seller', 'product_name', 'quantity', 'unit_price',
+    'unit_cost', 'suggested_price', 'total_amount', 'payment_terms'
+)
+REDUCED_TEMPLATE_COLUMNS: tuple[SalesColumn, ...] = tuple(
+    column for column in TEMPLATE_COLUMNS if column.canonical in REDUCED_COLUMNS
+)
+REDUCED_TEMPLATE_HEADERS: tuple[str, ...] = tuple(
+    column.header for column in REDUCED_TEMPLATE_COLUMNS
+)
 
 
 class ValidationRule(str, Enum):

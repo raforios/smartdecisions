@@ -34,6 +34,7 @@ from services.load_contract import (
 )
 from services.load_files import read_file
 from services.logger_config import custom_logger as logger
+from services.utils import load_parameters
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +69,10 @@ _ID_COLUMNS = ('order_id', 'pos_id', 'product_id')
 # names is a collision nobody will see.
 _ID_DIGEST_LENGTH: Final[int] = 8
 _ID_DIGEST_MARK: Final[str] = '~'
+
+# The client every sale without one is counted under: a counter sale names
+# no buyer. Its name is what the reports show, so it is a parameter.
+COUNTER_CLIENT: Final[str] = load_parameters({'COUNTER_CLIENT_NAME': str})['COUNTER_CLIENT_NAME']
 
 
 def _id_limit(column: str) -> int:
@@ -304,6 +309,27 @@ def _fill_from_name(
     return dataframe
 
 
+def _fill_counter_client(dataframe: pd.DataFrame) -> pd.DataFrame:
+    '''
+        Names the counter client on every row that came without one.
+
+        A shop sells over the counter to people it never asks for a name
+        (Rafael, 3-nov-2026): those sales still count, all under one client,
+        instead of being rejected for a column the shop cannot fill in.
+
+        Args:
+            dataframe (pd.DataFrame): Frame with canonical column names.
+
+        Returns:
+            pd.DataFrame: Same frame with `pos_name` filled.
+    '''
+    if 'pos_name' not in dataframe.columns:
+        dataframe['pos_name'] = pd.NA
+    blank = dataframe['pos_name'].isna() | (dataframe['pos_name'].astype(str).str.strip() == '')
+    dataframe.loc[blank, 'pos_name'] = COUNTER_CLIENT
+    return dataframe
+
+
 def _fill_ids_from_names(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
         Uses the client/product NAME as its identifier when no explicit code is
@@ -494,7 +520,7 @@ def prepare_rows(frame: pd.DataFrame) -> pd.DataFrame:
         Returns:
             pd.DataFrame: The same rows with ids filled and coordinates clean.
     '''
-    return sanitize_geo(_fill_ids_from_names(frame))
+    return sanitize_geo(_fill_ids_from_names(_fill_counter_client(frame)))
 
 
 def parse_and_validate(

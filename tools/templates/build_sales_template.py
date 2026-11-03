@@ -1,5 +1,5 @@
 '''
-    Builds and publishes the four templates the client downloads.
+    Builds and publishes the templates the client downloads.
 
     It is generated **from the contract** and not by hand: `TEMPLATE_COLUMNS` in
     `schemas/commercial.py` is the single source of truth about which columns exist,
@@ -32,6 +32,8 @@ COMMERCIAL_PATH = Path(__file__).resolve().parents[2] / 'services' / 'commercial
 sys.path.insert(0, str(COMMERCIAL_PATH))
 
 BUCKET = 'ml-data-file-handler'
+# How the rules sheet marks the price and the total: one of the two is required.
+PRICE_RULE = 'Precio o monto (una de las dos)'
 PROFILE = 'deploy_ml'
 
 # Sample rows: enough for the format of each column to be understood —the date
@@ -85,6 +87,9 @@ def _sample_rows(count: int) -> list[dict[str, Any]]:
             'Cantidad': quantity,
             'Precio Unitario': product[3],
             'Costo Unitario': product[4],
+            # A tenth above the price applied: the sample shows the shop
+            # selling below what the supplier suggests.
+            'Precio Sugerido': round(product[3] * 1.1, 2),
             'Monto Total': round(quantity * product[3], 2),
             # Credit is alternated on purpose, so it is visible that both
             # conditions coexist in the same file and that the term of a cash
@@ -275,7 +280,8 @@ def _sample_visits(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _contracts() -> list[tuple[str, Any, Any, Any]]:
     """
-        The five contracts a client fills in, each one its own template.
+        The contracts a client fills in, each one its own template; sales
+        twice, reduced (the official one) and full.
 
         One file per contract and not one workbook with four sheets: the sheets
         were our own idea, and they are what stopped the service from reading
@@ -290,7 +296,9 @@ def _contracts() -> list[tuple[str, Any, Any, Any]]:
     # The module, not its eighteen names: each imported name counted as a local.
     import schemas.commercial as contract # pylint: disable=import-outside-toplevel
     return [
-        (contract.SALES_TEMPLATE, contract.TEMPLATE_COLUMNS, contract.TEMPLATE_HEADERS,
+        (contract.SALES_TEMPLATE, contract.REDUCED_TEMPLATE_COLUMNS,
+         contract.REDUCED_TEMPLATE_HEADERS, lambda sample: sample),
+        (contract.SALES_FULL_TEMPLATE, contract.TEMPLATE_COLUMNS, contract.TEMPLATE_HEADERS,
          lambda sample: sample),
         (contract.COLLECTIONS_TEMPLATE, contract.COLLECTION_COLUMNS,
          contract.COLLECTION_HEADERS, _sample_collections),
@@ -316,10 +324,13 @@ def _guide(columns: Any) -> pd.DataFrame:
         Returns:
             pd.DataFrame: One row per column the client fills in.
     """
+    import schemas.commercial as contract # pylint: disable=import-outside-toplevel
+    price_columns = contract.PRICE_COLUMNS
     return pd.DataFrame([
         {
             'Columna': column.header,
-            'Obligatoria': 'Sí' if column.template_required else 'No',
+            'Obligatoria': ('Sí' if column.template_required
+                            else PRICE_RULE if column.canonical in price_columns else 'No'),
             'Formato': _human_type(column.dtype),
             'Valores admitidos': (
                 ' / '.join(column.rules.allowed) if column.rules.allowed else ''

@@ -158,10 +158,10 @@ def test_sales_credit_columns_are_normalized_and_validated():
     '''
     good = pd.DataFrame([
         {'Fecha': '2026-03-10', 'Nro Factura': 'F-1', 'Cliente': 'Tienda',
-         'Producto': 'Galleta', 'Cantidad': 2, 'Condicion Venta': 'Crédito',
+         'Producto': 'Galleta', 'Cantidad': 2, 'Precio Unitario': 5.0, 'Condicion Venta': 'Crédito',
          'Plazo Dias': 30, 'Responsable Cobro': 'Juan Pérez'},
         {'Fecha': '2026-03-11', 'Nro Factura': 'F-2', 'Cliente': 'Market',
-         'Producto': 'Leche', 'Cantidad': 1, 'Condicion Venta': 'contado',
+         'Producto': 'Leche', 'Cantidad': 1, 'Precio Unitario': 5.0, 'Condicion Venta': 'contado',
          'Plazo Dias': 0, 'Responsable Cobro': 'Juan Pérez'},
     ]).to_csv(index = False).encode('utf-8')
 

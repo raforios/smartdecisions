@@ -25,6 +25,7 @@ from schemas.commercial import (
     COLLECTION_COLUMNS,
     OBJECTIVE_COLUMNS,
     OPTIONAL_COLUMNS,
+    PRICE_COLUMNS,
     REQUIRED_COLUMNS,
     PURCHASE_COLUMNS,
     SALES_COLUMNS,
@@ -294,6 +295,27 @@ def _rule_code(check_name: str | None) -> ValidationRule:
     return ValidationRule.INVALID_VALUE
 
 
+def _unpriced_issues(dataframe: pd.DataFrame) -> list[ValidationIssue]:
+    '''
+        The sales rows with neither a unit price nor a total: without one of
+        them a sale has no income to analyse (Rafael, 3-nov-2026). Either is
+        enough; the total is derived from the price when it is missing.
+
+        Args:
+            dataframe (pd.DataFrame): Canonical sales rows, before validation.
+
+        Returns:
+            list[ValidationIssue]: One REQUIRED_VALUE on `unit_price` per row.
+    '''
+    priced = pd.Series(False, index = dataframe.index)
+    for column in PRICE_COLUMNS:
+        if column in dataframe.columns:
+            priced |= pd.to_numeric(dataframe[column], errors = 'coerce').notna()
+    return [ValidationIssue(row = int(index) + 2, column = PRICE_COLUMNS[0], value = None,
+                            rule_code = ValidationRule.REQUIRED_VALUE)
+            for index in dataframe.index[~priced]]
+
+
 def validate(
     dataframe: pd.DataFrame,
     schema: pa.DataFrameSchema | None = None
@@ -322,36 +344,52 @@ def validate(
         return ValidationResult(frame = dataframe, issues = issues)
 
     contract = schema if schema is not None else SCHEMA
+    issues.extend(_unpriced_issues(dataframe) if contract is SCHEMA else [])
     try:
-        return ValidationResult(frame = contract.validate(dataframe, lazy = True), issues = [])
+        # The contract runs whole even with unpriced rows, so one pass
+        # reports every issue of the file.
+        validated = contract.validate(dataframe, lazy = True)
+        return ValidationResult(frame = dataframe if issues else validated, issues = issues)
     except SchemaErrors as schema_errors:
-        failure_cases = schema_errors.failure_cases
-        for _, failure in failure_cases.iterrows():
-            row_idx = failure.get('index')
-            row_number = int(row_idx) + 2 if pd.notna(row_idx) else 0
-            check_name = failure.get('check') or 'unknown'
-            raw_failure_value = failure.get('failure_case')
-            # Schema-level checks (e.g. missing/extra column) carry the
-            # offending column name in `failure_case`, not in `column`.
-            if check_name in ('column_in_dataframe', 'column_in_schema'):
-                column_name = str(raw_failure_value)
-                value_repr = None
-            else:
-                column_name = str(failure.get('column') or '(global)')
-                value_repr = None if pd.isna(raw_failure_value) else str(raw_failure_value)
-            issues.append(ValidationIssue(
-                row = row_number,
-                column = column_name,
-                value = value_repr,
-                rule_code = _rule_code(str(check_name))
-            ))
-
+        issues.extend(_schema_issues(schema_errors))
         message = (
             f'Validation of "{contract.description}" found {len(issues)} issue(s) '
-            f'across {failure_cases["column"].nunique()} column(s).'
+            f'across {schema_errors.failure_cases["column"].nunique()} column(s).'
         )
         logger.info(message)
         return ValidationResult(frame = dataframe, issues = issues)
+
+
+def _schema_issues(schema_errors: SchemaErrors) -> list[ValidationIssue]:
+    '''
+        The issues pandera found, one per failing cell or column.
+
+        Args:
+            schema_errors (SchemaErrors): What the lazy validation raised.
+
+        Returns:
+            list[ValidationIssue]: The issues, with Excel row numbers.
+    '''
+    issues: list[ValidationIssue] = []
+    for _, failure in schema_errors.failure_cases.iterrows():
+        row_idx = failure.get('index')
+        check_name = failure.get('check') or 'unknown'
+        raw_failure_value = failure.get('failure_case')
+        # Schema-level checks (e.g. missing/extra column) carry the
+        # offending column name in `failure_case`, not in `column`.
+        if check_name in ('column_in_dataframe', 'column_in_schema'):
+            column_name = str(raw_failure_value)
+            value_repr = None
+        else:
+            column_name = str(failure.get('column') or '(global)')
+            value_repr = None if pd.isna(raw_failure_value) else str(raw_failure_value)
+        issues.append(ValidationIssue(
+            row = int(row_idx) + 2 if pd.notna(row_idx) else 0,
+            column = column_name,
+            value = value_repr,
+            rule_code = _rule_code(str(check_name))
+        ))
+    return issues
 
 
 def unknown_value_issues(

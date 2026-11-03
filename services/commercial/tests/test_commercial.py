@@ -11,6 +11,7 @@ import pytest
 
 from schemas.commercial import ValidationRule
 from services.commercial import (
+    COUNTER_CLIENT,
     _coerce_dates,
     _derive_id,
     _id_limit,
@@ -105,12 +106,66 @@ def test_valid_minimum_required_columns() -> None:
     '''
     dataframe = pd.DataFrame([
         {'order_id': 'P-001', 'date': '2026-01-12', 'pos_id': 'PDV-1',
-         'product_id': 'SKU-A', 'quantity': 5},
+         'product_id': 'SKU-A', 'quantity': 5, 'unit_price': 10.0},
     ])
     result = parse_and_validate(_to_xlsx_bytes(dataframe), 'min.xlsx')
     assert not result.issues
     assert result.summary.total_rows == 1
     assert result.summary.valid_rows == 1
+
+
+def test_a_counter_sale_without_client_counts_under_the_counter_client() -> None:
+    '''
+        A sale with no client is not rejected: it is the counter's.
+    '''
+    dataframe = pd.DataFrame([
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-001', 'Producto': 'Galleta',
+         'Cantidad': 2, 'Precio Unitario': 5.0},
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-002', 'Cliente': 'Tienda Rosa',
+         'Producto': 'Galleta', 'Cantidad': 1, 'Precio Unitario': 5.0},
+    ])
+    result = parse_and_validate(_to_xlsx_bytes(dataframe), 'mostrador.xlsx')
+    assert not result.issues
+    assert list(result.accepted['pos_name']) == [COUNTER_CLIENT, 'Tienda Rosa']
+    assert list(result.accepted['pos_id']) == [COUNTER_CLIENT, 'Tienda Rosa']
+
+
+def test_a_sale_without_price_or_total_is_rejected() -> None:
+    '''
+        Without a unit price or a total a sale carries no income: the row is
+        set aside with its code and the rest is kept.
+    '''
+    dataframe = pd.DataFrame([
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-001', 'Cliente': 'Tienda',
+         'Producto': 'Galleta', 'Cantidad': 2},
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-002', 'Cliente': 'Tienda',
+         'Producto': 'Galleta', 'Cantidad': 1, 'Monto Total': 5.0},
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-003', 'Cliente': 'Tienda',
+         'Producto': 'Galleta', 'Cantidad': -1, 'Monto Total': 5.0},
+    ])
+    result = parse_and_validate_partial(_to_xlsx_bytes(dataframe), 'sin_precio.xlsx')
+    # The unpriced row does not hide what else the file has wrong.
+    assert sorted((issue.row, issue.column, issue.rule_code.value)
+                  for issue in result.issues) == [
+        (2, 'unit_price', 'REQUIRED_VALUE'), (4, 'quantity', 'BELOW_MINIMUM')]
+    assert list(result.accepted['order_id']) == ['P-002']
+
+
+def test_the_suggested_price_is_kept_and_never_negative() -> None:
+    '''
+        The supplier's suggested price travels with the sale, so the margin
+        it would give can be read next to the one the shop applied.
+    '''
+    dataframe = pd.DataFrame([
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-001', 'Producto': 'Galleta',
+         'Cantidad': 2, 'Precio Unitario': 5.0, 'Precio Sugerido': 5.5},
+        {'Fecha': '2026-01-12', 'Nro Factura': 'P-002', 'Producto': 'Galleta',
+         'Cantidad': 1, 'Precio Unitario': 5.0, 'Precio Sugerido': -1},
+    ])
+    result = parse_and_validate_partial(_to_xlsx_bytes(dataframe), 'sugerido.xlsx')
+    assert list(result.accepted['suggested_price']) == [5.5]
+    assert [(issue.column, issue.rule_code.value) for issue in result.issues] == [
+        ('suggested_price', 'BELOW_MINIMUM')]
 
 
 def test_missing_required_column_is_reported() -> None:
@@ -311,7 +366,8 @@ def test_the_pipeline_accepts_a_file_whose_names_run_long():
                    'SINDAN ORGANIC S.R.L.',
         'Producto': 'ML-2007 - PAPEL ALUM. 30CM X 7,5M  - (CX 97108) - '
                     '(PQ 97104) (CX 25 UND)',
-        'Cantidad': 20
+        'Cantidad': 20,
+        'Monto Total': 250.0
     }])
     buffer = BytesIO()
     raw.to_excel(buffer, index = False)

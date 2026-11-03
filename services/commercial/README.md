@@ -215,12 +215,14 @@ FILES bucket, prefix `commercial/`. Each file is a CSV with the **fields** of it
 
 #### Sales — `commercial/normalized/<uuid>.csv`
 
+Two templates: `ventas`, the reduced one and the official one (date, invoice, client, seller, product, quantity, price, cost, suggested price, total and payment terms), and `ventas_completa`, with every column. Both load through the same contract.
+
 | Template header | Field | Type | Required | Rule |
 |---|---|---|---|---|
 | Fecha | `date` | date | yes |  |
 | Nro Factura | `order_id` | text | yes | up to 64 chars |
 | Cliente ID | `pos_id` | text | derived by the service | up to 64 chars |
-| Cliente | `pos_name` | text | yes |  |
+| Cliente | `pos_name` | text | no | empty: the counter client (`COUNTER_CLIENT_NAME`) |
 | Zona | `zone` | text | no |  |
 | Ciudad | `city` | text | no |  |
 | Region | `region` | text | no |  |
@@ -232,9 +234,10 @@ FILES bucket, prefix `commercial/`. Each file is a CSV with the **fields** of it
 | Producto | `product_name` | text | yes |  |
 | Categoria | `category` | text | no |  |
 | Cantidad | `quantity` | number | yes | > 0 |
-| Precio Unitario | `unit_price` | number | no | ≥ 0 |
+| Precio Unitario | `unit_price` | number | this or the total | ≥ 0 |
 | Costo Unitario | `unit_cost` | number | no | ≥ 0 |
-| Monto Total | `total_amount` | number | no | ≥ 0 |
+| Precio Sugerido | `suggested_price` | number | no | ≥ 0; the distributor's or supplier's suggested price |
+| Monto Total | `total_amount` | number | this or the price | ≥ 0; derived from the price when empty |
 | Condicion Venta | `payment_terms` | text | no | up to 16 chars; one of: CONTADO, CREDITO |
 | Plazo Dias | `credit_days` | integer | no | ≥ 0 |
 | Fecha Vencimiento | `due_date` | date | no |  |
