@@ -48,63 +48,15 @@ pasa las dos cosas. Por eso existe esta skill aparte de `/verificar-servicio`.
 Identificadores, comentarios y docstrings. Sin excepciones y sin mezclas.
 
 ```bash
-python3 - <<'PY'
-import re, subprocess
-from pathlib import Path
-
-# Marcadores inequívocos del castellano. Se excluyen a propósito 'no', 'es',
-# 'la', 'el', 'un', 'sin', 'con' y 'a': existen en inglés o coinciden con
-# palabras inglesas, y con ellas el barrido marcaba comentarios correctos.
-SPANISH = re.compile(
-    r'\b(que|los|las|del|por|para|como|cuando|cada|toda|todos|hay|pero|porque|'
-    r'acá|así|sólo|según|entre|desde|hasta|esto|esta|este|estos|sus|cuál|'
-    r'está|están|más|aquí|qué|dónde|archivo|cliente|producto|venta|ventas|'
-    r'cobro|cobros|fecha|días|monto|saldo|crédito|plazo|factura|facturas|'
-    r'tramo|tramos|política|almacén|demanda|cobertura)\b', re.I)
-
-# Los diez servicios propios. Todo lo demás es de un cliente y queda fuera
-# del barrido: se reporta, no se corrige.
-OURS = ('ai', 'auth', 'billing', 'commercial', 'events', 'files', 'finance',
-        'mining_analysis', 'ml_functions', 'quotes')
-
-
-def is_ours(path: Path) -> bool:
-    '''True cuando la ruta pertenece a un servicio de SmartDecisions.'''
-    parts = path.parts
-    if 'services' not in parts:
-        return True                       # tools/, portal/: son del producto
-    index = parts.index('services')
-    return len(parts) > index + 1 and parts[index + 1] in OURS
-
-
-changed = subprocess.run(['git', 'diff', '--name-only'], capture_output = True,
-                         text = True).stdout.split()
-untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard'],
-                           capture_output = True, text = True).stdout.split()
-total = 0
-for name in sorted(set(changed + untracked)):
-    path = Path(name)
-    if path.suffix not in ('.py', '.js', '.css', '.html') or not path.exists() \
-            or not is_ours(path):
-        continue
-    for number, line in enumerate(path.read_text(encoding = 'utf-8').splitlines(), 1):
-        stripped = line.strip()
-        if path.suffix == '.py':
-            body = stripped.lstrip('#').strip() if stripped.startswith('#') else (
-                stripped.strip("'").strip('"') if stripped.startswith(("'''", '"""')) else '')
-        else:
-            # El portal también es código: //, /* */, el * de un bloque y <!-- -->.
-            body = re.sub(r'^(//|/\*\*?|\*/?|<!--)\s*|\s*(\*/|-->)$', '', stripped) \
-                if stripped.startswith(('//', '/*', '*', '<!--')) else ''
-        # Lo que va entre comillas puede ser un valor del contrato citado a
-        # propósito ('CREDITO', 'Crédito'): no es documentación en castellano.
-        outside = re.sub(r"'[^']*'|\"[^\"]*\"", '', body)
-        if outside and len(SPANISH.findall(outside)) >= 2:
-            print(f'{name}:{number}  {body[:72]}')
-            total += 1
-print(f'\ncomentarios en castellano: {total}')
-PY
+../.venv/bin/python tools/verification/language_gate.py
 ```
+
+El script (`tools/verification/language_gate.py`) barre lo que cambió en el
+árbol de trabajo de los diez servicios propios, `tools/` y `portal/`:
+comentarios y docstrings en castellano, y **códigos en castellano** (miembros
+de `Enum` y opciones cerradas `allowed`; desde el 4-nov-2026). El mismo
+script corre solo en el hook `Stop` al terminar cada turno, y bloquea el
+cierre mientras haya hallazgos.
 
 Cero resultados, **sin excepciones, el boilerplate y el portal incluidos**.
 Todo `portal/` lo escribió Claude (Rafael, 08-oct): un comentario en castellano

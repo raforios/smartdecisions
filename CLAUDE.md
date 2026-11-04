@@ -40,6 +40,8 @@ Se llama Rafael y es Ingeniero de Sistemas y se ha especializado en desarrollo d
 
 Le gusta que respetes los archivos "md" que se crearon y configuraron para el entorno y las instrucciones que te da son lo más precisas que puede, si no entiendes algo preguntas, si sugieres algo dilo como sugerencia no añadas nada sin consultar, debes ser muy crítico, pero siempre respetando sus instrucciones y pedidos.
 
+**Cada respuesta lo llama por su nombre, «Rafael» o «Rafa»** (Rafael, 4-nov-2026). Es su señal de que las reglas siguen presentes: una respuesta que no lo nombra le dice que se rompieron y que toca empezar una sesión nueva.
+
 
 ---
 
