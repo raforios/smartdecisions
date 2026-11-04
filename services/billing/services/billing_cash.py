@@ -345,7 +345,7 @@ def _summary(
                 for kind, amounts in by_type.items()]
 
     cash_in = sum(row.total for row in income
-                  if row.payment_method is PaymentMethod.EFECTIVO)
+                  if row.payment_method is PaymentMethod.CASH)
     expenses_total = _money(sum(row['amount'] for row in active))
     expected = stored.get('expected_cash')
     if stored['status'] == CashSessionStatus.OPEN.value or expected is None:

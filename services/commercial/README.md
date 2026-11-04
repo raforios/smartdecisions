@@ -237,8 +237,8 @@ Two templates: `ventas`, the reduced one and the official one (date, invoice, cl
 | Precio Unitario | `unit_price` | number | this or the total | ≥ 0 |
 | Costo Unitario | `unit_cost` | number | no | ≥ 0 |
 | Monto Total | `total_amount` | number | this or the price | ≥ 0; derived from the price when empty |
-| Condicion Venta | `payment_terms` | text | no | up to 16 chars; one of: CONTADO, CREDITO |
-| Medio de Pago | `payment_method` | text | no | one of: EFECTIVO, QR, TARJETA, TRANSFERENCIA, BILLETERA_MOVIL |
+| Condicion Venta | `payment_terms` | text | no | up to 16 chars; codes CASH, CREDIT (the template writes Contado, Crédito) |
+| Medio de Pago | `payment_method` | text | no | codes CASH, QR, CARD, BANK_TRANSFER, MOBILE_WALLET (the template writes Efectivo, QR, Tarjeta, Transferencia, Billetera móvil) |
 | Plazo Dias | `credit_days` | integer | no | ≥ 0 |
 | Fecha Vencimiento | `due_date` | date | no |  |
 | Responsable Cobro | `collector` | text | no |  |
@@ -291,7 +291,7 @@ Two templates: `ventas`, the reduced one and the official one (date, invoice, cl
 | Cliente | `pos_name` | text | yes |  |
 | Latitud | `latitude` | number | no | between -90 and 90 |
 | Longitud | `longitude` | number | no | between -180 and 180 |
-| Resultado | `outcome` | text | no | up to 16 chars; one of: VENTA, SIN_VENTA, CERRADO, NO_ENCONTRADO |
+| Resultado | `outcome` | text | no | up to 16 chars; codes SALE, NO_SALE, CLOSED, NOT_FOUND (the template writes Venta, Sin venta, Cerrado, No encontrado) |
 | Nro Factura | `order_id` | text | no | up to 64 chars |
 
 #### Objectives — `commercial/objectives/<uuid>.csv`

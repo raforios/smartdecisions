@@ -17,7 +17,7 @@ def _sale(
     client: str,
     date: str,
     amount: float,
-    terms: str = 'CREDITO'
+    terms: str = 'CREDIT'
 ) -> dict:
     '''
         One sales line of an invoice.
@@ -27,7 +27,7 @@ def _sale(
             client (str): Client name.
             date (str): Invoice date.
             amount (float): Line amount.
-            terms (str): CONTADO or CREDITO.
+            terms (str): CASH or CREDIT.
 
         Returns:
             dict: A normalized sales row with its credit columns.
@@ -59,7 +59,7 @@ def _payment(
     '''
     return {
         'order_id': order, 'payment_date': pd.Timestamp(date),
-        'paid_amount': amount, 'payment_method': 'EFECTIVO',
+        'paid_amount': amount, 'payment_method': 'CASH',
         'collector': 'Juan Pérez'
     }
 
@@ -178,7 +178,7 @@ def test_cash_only_dataset_reports_a_code_instead_of_an_empty_dashboard():
         A file with no credit sales is not a book with zero debt: the view says
         it cannot be built, with its code.
     '''
-    sales = pd.DataFrame([_sale('F-1', 'Tienda', '2026-03-01', 500.0, terms = 'CONTADO')])
+    sales = pd.DataFrame([_sale('F-1', 'Tienda', '2026-03-01', 500.0, terms = 'CASH')])
 
     block = build_receivables(sales, None)
 

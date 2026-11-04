@@ -26,8 +26,8 @@ from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import
     _sent
 )
 
-CASH, CARD, QR = PaymentMethod.EFECTIVO, PaymentMethod.TARJETA_DEBITO, PaymentMethod.QR
-TRANSFER, WALLET = PaymentMethod.TRANSFERENCIA, PaymentMethod.BILLETERA_MOVIL
+CASH, CARD = PaymentMethod.CASH, PaymentMethod.DEBIT_CARD
+TRANSFER, WALLET = PaymentMethod.BANK_TRANSFER, PaymentMethod.MOBILE_WALLET
 
 
 def _note(
@@ -78,11 +78,11 @@ def test_the_catalogues_spellings_are_read_as_one():
 
 def test_a_combination_the_sin_does_not_have_is_refused():
     '''
-        Cash with the old QR: QR travelled as OTROS, and the SIN has no
-        EFECTIVO-OTROS.
+        A bank transfer with a mobile wallet: the SIN's catalogue has no
+        TRANSFERENCIA BANCARIA-BILLETERA MOVIL.
     '''
     with pytest.raises(InvalidInputError) as refused:
-        billing_payments.sin_payment_code(PAYMENT_CATALOGUE, [CASH, QR])
+        billing_payments.sin_payment_code(PAYMENT_CATALOGUE, [TRANSFER, WALLET])
 
     assert refused.value.detail == BillingError.PAYMENT_COMBINATION_UNKNOWN.value
 
@@ -146,7 +146,7 @@ def test_an_impossible_combination_is_refused_before_stock_moves(
 
     with pytest.raises(InvalidInputError):
         billing_sales.issue_sale(dynamodb, OWNER, _note(
-            [Payment(method = CASH, amount = 100), Payment(method = QR, amount = 100)]
+            [Payment(method = TRANSFER, amount = 100), Payment(method = WALLET, amount = 100)]
         ), CASHIER)
 
     assert not sent
@@ -161,7 +161,7 @@ def test_the_till_counts_each_part_in_its_own_method(dynamodb):
     _receive(dynamodb, [PurchaseLineIn(sku = 'CONS1', quantity = 10, unit_cost = 50.0,
                                        sale_price = 100.0, expiry_date = LATER)])
     billing_sales.issue_sale(dynamodb, OWNER, _note(
-        [Payment(method = CASH, amount = 30), Payment(method = QR, amount = 170)]
+        [Payment(method = CASH, amount = 30), Payment(method = WALLET, amount = 170)]
     ), CASHIER)
     billing_sales.issue_sale(dynamodb, OWNER, _note(None, payment_method = CASH), CASHIER)
 
@@ -169,4 +169,4 @@ def test_the_till_counts_each_part_in_its_own_method(dynamodb):
               for row in billing_cash.method_totals(billing_sales.list_sales(dynamodb,
                                                                             OWNER).items)}
 
-    assert totals == {CASH: (2, 230), QR: (1, 170)}
+    assert totals == {CASH: (2, 230), WALLET: (1, 170)}

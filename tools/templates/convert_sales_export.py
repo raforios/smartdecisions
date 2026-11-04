@@ -110,8 +110,8 @@ ZONE_ALIASES = (
 
 # A sale settled in cash against one settled on credit. The export reports
 # both amounts per row; whichever carries the money is the condition.
-CASH_TERMS = 'CONTADO'
-CREDIT_TERMS = 'CREDITO'
+CASH_TERMS = 'Contado'
+CREDIT_TERMS = 'Crédito'
 
 
 def _stable_fraction(

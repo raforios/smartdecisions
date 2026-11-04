@@ -138,7 +138,7 @@ class ManualInvoiceIn(BaseModel):
     issued_at: datetime = Field(..., description = 'With its offset; as written on paper.')
     buyer: Buyer
     lines: list[ManualLineIn] = Field(..., min_length = 1)
-    payment_method: PaymentMethod = PaymentMethod.EFECTIVO
+    payment_method: PaymentMethod = PaymentMethod.CASH
     payments: list[Payment] | None = Field(None, min_length = 1, max_length = 3)
     card_number: str | None = Field(None, max_length = 30)
 

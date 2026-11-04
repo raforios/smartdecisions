@@ -76,10 +76,10 @@ class VisitOutcome(str, Enum):
         What came of a visit. Same vocabulary as the `Resultado` column of the
         Visitas sheet INGEST validates, so history and live data agree.
     '''
-    SALE = 'VENTA'
-    NO_SALE = 'SIN_VENTA'
-    CLOSED = 'CERRADO'
-    NOT_FOUND = 'NO_ENCONTRADO'
+    SALE = 'SALE'
+    NO_SALE = 'NO_SALE'
+    CLOSED = 'CLOSED'
+    NOT_FOUND = 'NOT_FOUND'
 
 
 class PointBase(BaseModel):

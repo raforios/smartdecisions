@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const { qs, toast } = window.SD_UI;
     const M = window.SD_MONEY;
     const BASE = `${window.SD_CONFIG.API_URL}/v1/commercial`;
-    const TERMS = { CREDITO: 'Crédito', CONTADO: 'Contado' };
+    const TERMS = { CREDIT: 'Crédito', CASH: 'Contado' };
     const ERRORS = { CLIENT_NOT_FOUND: 'Ese cliente no está en tus datos de ventas.' };
     const state = { datasetId: null, card: null, currency: 'BOB', chart: null };
 

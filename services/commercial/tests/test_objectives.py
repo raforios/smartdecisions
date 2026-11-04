@@ -159,14 +159,14 @@ def test_without_payments_everything_invoiced_reads_as_debt():
 
 def test_a_cash_sale_is_collected_when_it_is_made():
     '''
-        A CONTADO invoice was paid at the counter and never appears in the
+        A CASH invoice was paid at the counter and never appears in the
         collections file. Reading it as debt put Distribuidora Andina's whole
         cash sales (Bs 994.287) into the debt column, against a receivables
         block that rightly did not count them.
     '''
     sales = pd.DataFrame([
-        {**_sale('ABEL', 'SILVER', 'F1', 1000.0), 'payment_terms': 'CONTADO'},
-        {**_sale('ABEL', 'SILVER', 'F2', 500.0), 'payment_terms': 'CREDITO'}
+        {**_sale('ABEL', 'SILVER', 'F1', 1000.0), 'payment_terms': 'CASH'},
+        {**_sale('ABEL', 'SILVER', 'F2', 500.0), 'payment_terms': 'CREDIT'}
     ])
     objectives = pd.DataFrame([
         {'pos_id': 'ABEL', 'period': '2025-01', 'target_amount': 1500.0}

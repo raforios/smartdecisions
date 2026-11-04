@@ -118,28 +118,22 @@ class BillingError(str, Enum):
 
 class PaymentMethod(str, Enum):
     '''
-        How the buyer paid.
+        How the buyer paid. English codes; the portal names them in Spanish
+        (CLAUDE.md §1).
 
         Debit and credit are told apart for the shop's own reports; for the
-        SIN both are a card. `TARJETA` stays for the notes issued before the
-        distinction existed, which the reports show as a card with no detail.
-
-        A QR payment is told apart the same way: bank to bank is a transfer,
-        from an app to the shop's account (or back) is a mobile wallet. `QR`
-        stays for the notes issued before, which the SIN received as OTROS.
+        SIN both are a card. A QR payment is told apart the same way: bank to
+        bank is a transfer, from an app to the shop's account (or back) is a
+        mobile wallet.
     '''
-    EFECTIVO = 'EFECTIVO'
-    QR = 'QR'
-    TRANSFERENCIA = 'TRANSFERENCIA'
-    BILLETERA_MOVIL = 'BILLETERA_MOVIL'
-    TARJETA = 'TARJETA'
-    TARJETA_DEBITO = 'TARJETA_DEBITO'
-    TARJETA_CREDITO = 'TARJETA_CREDITO'
+    CASH = 'CASH'
+    BANK_TRANSFER = 'BANK_TRANSFER'
+    MOBILE_WALLET = 'MOBILE_WALLET'
+    DEBIT_CARD = 'DEBIT_CARD'
+    CREDIT_CARD = 'CREDIT_CARD'
 
 
-CARD_METHODS: Final[frozenset] = frozenset({
-    PaymentMethod.TARJETA, PaymentMethod.TARJETA_DEBITO, PaymentMethod.TARJETA_CREDITO
-})
+CARD_METHODS: Final[frozenset] = frozenset({PaymentMethod.DEBIT_CARD, PaymentMethod.CREDIT_CARD})
 
 
 class Payment(BaseModel):
@@ -157,18 +151,15 @@ class Payment(BaseModel):
 # 28-oct-2026).
 SIN_PAYMENT_CASH: int = 1
 SIN_PAYMENT_CARD: int = 2
-SIN_PAYMENT_OTHER: int = 5
 SIN_PAYMENT_TRANSFER: int = 7
 SIN_PAYMENT_WALLET: int = 32
 
 SIN_PAYMENT_CODES: dict = {
-    PaymentMethod.EFECTIVO: SIN_PAYMENT_CASH,
-    PaymentMethod.TARJETA: SIN_PAYMENT_CARD,
-    PaymentMethod.TARJETA_DEBITO: SIN_PAYMENT_CARD,
-    PaymentMethod.TARJETA_CREDITO: SIN_PAYMENT_CARD,
-    PaymentMethod.QR: SIN_PAYMENT_OTHER,
-    PaymentMethod.TRANSFERENCIA: SIN_PAYMENT_TRANSFER,
-    PaymentMethod.BILLETERA_MOVIL: SIN_PAYMENT_WALLET
+    PaymentMethod.CASH: SIN_PAYMENT_CASH,
+    PaymentMethod.DEBIT_CARD: SIN_PAYMENT_CARD,
+    PaymentMethod.CREDIT_CARD: SIN_PAYMENT_CARD,
+    PaymentMethod.BANK_TRANSFER: SIN_PAYMENT_TRANSFER,
+    PaymentMethod.MOBILE_WALLET: SIN_PAYMENT_WALLET
 }
 
 
@@ -449,7 +440,7 @@ class SaleNoteIn(BaseModel):
         A sale over the counter.
     '''
     buyer: Buyer = Field(default_factory = Buyer)
-    payment_method: PaymentMethod = PaymentMethod.EFECTIVO
+    payment_method: PaymentMethod = PaymentMethod.CASH
     # Empty, the whole total goes by `payment_method`. Given, the parts add up
     # to the total and `payment_method` is ignored.
     payments: list[Payment] | None = Field(None, min_length = 1, max_length = 3)

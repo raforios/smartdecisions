@@ -493,7 +493,7 @@ def return_sale(
     amount = round(sum(line.total for line in lines), MONEY_DECIMALS)
     refunds = _refunds(stored, amount)
     cash = round(sum(refund.amount for refund in refunds
-                     if refund.method is PaymentMethod.EFECTIVO), MONEY_DECIMALS)
+                     if refund.method is PaymentMethod.CASH), MONEY_DECIMALS)
     # Before the SIN: a return the drawer cannot pay must not reach it.
     session_id = require_sale_session(dynamodb_resource, owner, returned_by)
     if cash > expected_cash(dynamodb_resource, owner, session_id):

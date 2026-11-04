@@ -224,12 +224,43 @@ def _parse_dates(dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe
 
 
+def _spelled(value: object) -> str:
+    '''
+        A value as codes are compared: uppercase, no accents, trimmed, words
+        joined by underscore ('sin venta' and 'Sin-Venta' both read SIN_VENTA).
+    '''
+    return normalize_header(value).upper().replace(' ', '_')
+
+
+def _option_codes() -> dict[str, dict[str, str]]:
+    '''
+        Per option column, every way of writing a code that reads as that
+        code: the code itself, as an ERP posts it, and the Spanish word the
+        template shows the client.
+
+        Returns:
+            dict[str, dict[str, str]]: {column: {spelling: code}}.
+    '''
+    codes: dict[str, dict[str, str]] = {}
+    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS \
+            + PURCHASE_COLUMNS:
+        rules = column.rules
+        if rules.allowed is not None:
+            codes.setdefault(column.canonical, {}).update(
+                {_spelled(code): code for code in rules.allowed}
+                | {_spelled(label): code for label, code in zip(rules.labels or (), rules.allowed)})
+    return codes
+
+
+_OPTION_CODES: Final[dict[str, dict[str, str]]] = _option_codes()
+
+
 def _normalize_options(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
-        Brings closed-option columns to the contract's spelling: uppercase, no
-        accents, trimmed, and words joined by underscore the way the codes are
-        written ('sin venta' and 'Sin-Venta' both read SIN_VENTA). A blank
-        stays blank so the column remains optional.
+        Brings closed-option columns to the contract's codes: 'Crédito',
+        'credito' and 'CREDIT' all read CREDIT. What matches no code keeps its
+        normalized spelling, for the validator to reject. A blank stays blank
+        so the column remains optional.
 
         Args:
             dataframe (pd.DataFrame): Mapped DataFrame.
@@ -240,9 +271,10 @@ def _normalize_options(dataframe: pd.DataFrame) -> pd.DataFrame:
     for column in _OPTION_COLUMNS:
         if column not in dataframe.columns:
             continue
+        codes = _OPTION_CODES[column]
         dataframe[column] = dataframe[column].map(
-            lambda value: pd.NA if pd.isna(value) or not str(value).strip()
-            else normalize_header(value).upper().replace(' ', '_')
+            lambda value, codes = codes: pd.NA if pd.isna(value) or not str(value).strip()
+            else codes.get(_spelled(value), _spelled(value))
         )
     return dataframe
 

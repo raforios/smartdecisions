@@ -53,10 +53,10 @@ def test_distribution_and_trend():
 
 def test_the_means_of_payment_used_most_comes_first():
     '''Each means with what it collected and its share, the largest first.'''
-    frame = _sales_frame().assign(payment_method = ['QR', 'QR', 'EFECTIVO'])
+    frame = _sales_frame().assign(payment_method = ['QR', 'QR', 'CASH'])
     summary = build_commercial_summary(frame)
     assert [(row.label, row.percentage) for row in summary.by_payment_method] == [
-        ('QR', 89.7), ('EFECTIVO', 10.3)]
+        ('QR', 89.7), ('CASH', 10.3)]
 
 
 def test_missing_optional_columns_do_not_break():

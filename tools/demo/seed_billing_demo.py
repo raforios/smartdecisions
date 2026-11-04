@@ -79,11 +79,11 @@ SETTINGS = {
 
 # (sku, units, discount) — sample sales, so the dashboard does not open empty.
 SALES = (
-    ((('PARA500', 2, 0), ('VITC-1G', 1, 0)), 'EFECTIVO', 'Juan Pérez', '9876543'),
-    ((('IBU400', 1, 0),), 'QR', None, None),
-    ((('AMOX500', 1, 5.0), ('SUERO-1L', 1, 0)), 'TARJETA', 'Clínica del Sur', '1029384756'),
-    ((('BARBIJO-N95', 10, 0),), 'EFECTIVO', None, None),
-    ((('LORA10', 2, 0), ('OMEP20', 1, 0)), 'QR', 'María Quispe', '6543210'),
+    ((('PARA500', 2, 0), ('VITC-1G', 1, 0)), 'CASH', 'Juan Pérez', '9876543'),
+    ((('IBU400', 1, 0),), 'MOBILE_WALLET', None, None),
+    ((('AMOX500', 1, 5.0), ('SUERO-1L', 1, 0)), 'DEBIT_CARD', 'Clínica del Sur', '1029384756'),
+    ((('BARBIJO-N95', 10, 0),), 'CASH', None, None),
+    ((('LORA10', 2, 0), ('OMEP20', 1, 0)), 'BANK_TRANSFER', 'María Quispe', '6543210'),
 )
 
 

@@ -162,7 +162,7 @@ def _sell(
         Returns:
             SaleNoteOut: The issued note.
     '''
-    note = SaleNoteIn(lines = lines, payment_method = PaymentMethod.EFECTIVO,
+    note = SaleNoteIn(lines = lines, payment_method = PaymentMethod.CASH,
                       buyer = buyer or Buyer())
     return billing_sales.issue_sale(resource, OWNER, note, CASHIER)
 

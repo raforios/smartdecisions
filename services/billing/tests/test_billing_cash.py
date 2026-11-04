@@ -65,7 +65,7 @@ def _sell_as(
     resource,
     user,
     quantity,
-    method = PaymentMethod.EFECTIVO
+    method = PaymentMethod.CASH
 ):
     '''
         Sells units of the stocked SKU as the given user.
@@ -189,20 +189,20 @@ def test_a_sale_belongs_to_the_open_till(dynamodb):
 
 
 def test_the_summary_splits_every_payment_method(dynamodb):
-    '''Case 6: 100 cash, 50 QR, 30 debit, 20 credit.'''
+    '''Case 6: 100 cash, 50 mobile wallet, 30 debit, 20 credit.'''
     _stock(dynamodb)
     till = _open(dynamodb)
-    for quantity, method in ((10, PaymentMethod.EFECTIVO), (5, PaymentMethod.QR),
-                             (3, PaymentMethod.TARJETA_DEBITO),
-                             (2, PaymentMethod.TARJETA_CREDITO)):
+    for quantity, method in ((10, PaymentMethod.CASH), (5, PaymentMethod.MOBILE_WALLET),
+                             (3, PaymentMethod.DEBIT_CARD),
+                             (2, PaymentMethod.CREDIT_CARD)):
         _sell_as(dynamodb, SELLER, quantity, method)
 
     summary = billing_cash.get_session(dynamodb, OWNER, Viewer(SELLER, False),
                                        till.session_id)
     income = {row.payment_method: row.total for row in summary.income}
 
-    assert income == {PaymentMethod.EFECTIVO: 100, PaymentMethod.QR: 50,
-                      PaymentMethod.TARJETA_DEBITO: 30, PaymentMethod.TARJETA_CREDITO: 20}
+    assert income == {PaymentMethod.CASH: 100, PaymentMethod.MOBILE_WALLET: 50,
+                      PaymentMethod.DEBIT_CARD: 30, PaymentMethod.CREDIT_CARD: 20}
     assert summary.income_total == 200
     assert summary.expected_cash == 300
 
@@ -389,14 +389,14 @@ def test_the_alert_lists_open_tills_after_the_hour(
     assert not billing_cash.cash_alerts(dynamodb, OWNER, Viewer(MANAGER, True)).items
 
 
-def test_the_daily_report_splits_methods_and_old_cards(dynamodb):
-    '''Case 22: two cash, one QR, one debit and an old "card" note.'''
+def test_the_daily_report_splits_methods(dynamodb):
+    '''Case 22: two cash, one transfer, one debit and one credit card.'''
     _stock(dynamodb)
-    for method in (PaymentMethod.EFECTIVO, PaymentMethod.EFECTIVO, PaymentMethod.QR,
-                   PaymentMethod.TARJETA_DEBITO, PaymentMethod.TARJETA):
+    for method in (PaymentMethod.CASH, PaymentMethod.CASH, PaymentMethod.BANK_TRANSFER,
+                   PaymentMethod.DEBIT_CARD, PaymentMethod.CREDIT_CARD):
         _sell_as(dynamodb, CASHIER, 1, method)
 
     report = billing_reports.dashboard(dynamodb, OWNER)
     counts = {row.payment_method: row.count for row in report.sales_by_method}
-    assert counts == {PaymentMethod.EFECTIVO: 2, PaymentMethod.QR: 1,
-                      PaymentMethod.TARJETA_DEBITO: 1, PaymentMethod.TARJETA: 1}
+    assert counts == {PaymentMethod.CASH: 2, PaymentMethod.BANK_TRANSFER: 1,
+                      PaymentMethod.DEBIT_CARD: 1, PaymentMethod.CREDIT_CARD: 1}

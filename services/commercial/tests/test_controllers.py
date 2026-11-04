@@ -65,7 +65,7 @@ def _sales_frame() -> pd.DataFrame:
             'total_amount': round((3 + index % 5) * 8.5, 2),
             # Credit on two out of three invoices, with different terms, so
             # the book has several aging buckets and not just one.
-            'payment_terms': 'CONTADO' if index % 3 == 0 else 'CREDITO',
+            'payment_terms': 'CASH' if index % 3 == 0 else 'CREDIT',
             'credit_days': [0, 15, 60][index % 3],
             'due_date': pd.NaT,
             'collector': ['Ana', 'Juan'][index % 2],
@@ -83,7 +83,7 @@ def _collections_frame() -> pd.DataFrame:
             pd.DataFrame: Payment rows as ingest hands them over.
     '''
     sales = _sales_frame()
-    credit = sales.loc[sales['payment_terms'] == 'CREDITO']
+    credit = sales.loc[sales['payment_terms'] == 'CREDIT']
     invoices = credit.groupby('order_id').agg(
         date = ('date', 'min'), amount = ('total_amount', 'sum')
     ).reset_index()
@@ -92,7 +92,7 @@ def _collections_frame() -> pd.DataFrame:
         'order_id': paid['order_id'].values,
         'payment_date': paid['date'] + pd.Timedelta(days = 20),
         'paid_amount': paid['amount'].values,
-        'payment_method': 'EFECTIVO',
+        'payment_method': 'CASH',
         'collector': 'Ana'
     })
 

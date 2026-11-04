@@ -151,7 +151,7 @@ def test_a_sale_on_a_visit_draws_from_the_stock_or_is_not_recorded(dynamodb):
 
     route, point = executed.register_executed_point(dynamodb, OWNER, ExecutedPointCreateSchema(
         executed_route_id = route['id'], timestamp = stamp.isoformat(),
-        latitude = -16.5, longitude = -68.1, client_id = 'PDV-1', outcome = 'VENTA',
+        latitude = -16.5, longitude = -68.1, client_id = 'PDV-1', outcome = 'SALE',
         items = [SaleItemSchema(sku = 'A', quantity = 2)]
     ))
     assert point['items'] == [{'sku': 'A', 'quantity': 2.0}]
@@ -160,7 +160,7 @@ def test_a_sale_on_a_visit_draws_from_the_stock_or_is_not_recorded(dynamodb):
     with pytest.raises(InvalidInputError) as failure:
         executed.register_executed_point(dynamodb, OWNER, ExecutedPointCreateSchema(
             executed_route_id = route['id'], timestamp = stamp.replace(hour = 11).isoformat(),
-            latitude = -16.5, longitude = -68.1, client_id = 'PDV-2', outcome = 'VENTA',
+            latitude = -16.5, longitude = -68.1, client_id = 'PDV-2', outcome = 'SALE',
             items = [SaleItemSchema(sku = 'A', quantity = 2)]
         ))
     assert failure.value.detail == StockError.INSUFFICIENT_STOCK.value

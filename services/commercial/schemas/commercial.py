@@ -22,10 +22,14 @@ class ValueRules:
     minimum: float | None = None
     exclusive_minimum: float | None = None
     value_range: tuple[float, float] | None = None
-    # Accepted values of a closed-option column. It exists because a badly
+    # Accepted codes of a closed-option column. It exists because a badly
     # typed payment condition must not pass as cash by omission: that would
     # change the receivable balance without anybody noticing.
     allowed: tuple[str, ...] | None = None
+    # How the client writes each code in the template, in the same order: the
+    # codes are English, the template is Spanish (CLAUDE.md §1), and this is
+    # the mapper between them.
+    labels: tuple[str, ...] | None = None
 
 
 @dataclass(frozen = True)
@@ -56,8 +60,9 @@ class SalesColumn:
 
 # The means of payment a sale accepts: the ones SmartBilling's till records,
 # cards as one.
-PAYMENT_METHODS: tuple[str, ...] = (
-    'EFECTIVO', 'QR', 'TARJETA', 'TRANSFERENCIA', 'BILLETERA_MOVIL'
+PAYMENT_METHODS: tuple[str, ...] = ('CASH', 'QR', 'CARD', 'BANK_TRANSFER', 'MOBILE_WALLET')
+PAYMENT_METHOD_LABELS: tuple[str, ...] = (
+    'Efectivo', 'QR', 'Tarjeta', 'Transferencia', 'Billetera móvil'
 )
 
 # Order is the contract order: the template presents its columns like this.
@@ -95,13 +100,14 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
     # Optional. Without them the receivables analysis is not offered; with them
     # it turns on without the client loading anything separately.
     SalesColumn('payment_terms', 'Condicion Venta', False, 'object',
-                rules = ValueRules(max_length = 16,
-                                   allowed = ('CONTADO', 'CREDITO'))),
+                rules = ValueRules(max_length = 16, allowed = ('CASH', 'CREDIT'),
+                                   labels = ('Contado', 'Crédito'))),
     # How the buyer paid (Rafael, 3-nov-2026): the means the shop's till
     # already knows, to see which one is used most. Closed options, so a typo
     # does not split one means in two.
     SalesColumn('payment_method', 'Medio de Pago', False, 'object',
-                rules = ValueRules(max_length = 32, allowed = PAYMENT_METHODS)),
+                rules = ValueRules(max_length = 32, allowed = PAYMENT_METHODS,
+                                   labels = PAYMENT_METHOD_LABELS)),
     SalesColumn('credit_days', 'Plazo Dias', False, 'Int64',
                 rules = ValueRules(minimum = 0.0)),
     SalesColumn('due_date', 'Fecha Vencimiento', False, 'datetime64[ns]'),
@@ -237,8 +243,9 @@ VISIT_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(value_range = (-180.0, 180.0))),
     SalesColumn('outcome', 'Resultado', False, 'object',
                 rules = ValueRules(max_length = 16,
-                                   allowed = ('VENTA', 'SIN_VENTA', 'CERRADO',
-                                              'NO_ENCONTRADO'))),
+                                   allowed = ('SALE', 'NO_SALE', 'CLOSED', 'NOT_FOUND'),
+                                   labels = ('Venta', 'Sin venta', 'Cerrado',
+                                             'No encontrado'))),
     SalesColumn('order_id', 'Nro Factura', False, 'object',
                 rules = ValueRules(max_length = 64)),
 )

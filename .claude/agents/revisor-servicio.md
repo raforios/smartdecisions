@@ -38,6 +38,7 @@ Si algo falla, por cada `FAIL`:
   - `getenv` → `load_and_validate_env_vars` en el módulo que usa el valor
   - `modern-typing` → `list[...]`, `X | None`; `pyupgrade --py314-plus` desde `SmartBear/.venv`
   - `log-vars` → `message` en INFO, `error_msg` en WARNING/ERROR
+  - `code-language` → código en inglés; la palabra en castellano del cliente va en `labels` (mapeador)
   - `pylint` → pegar el primer mensaje literal; un `disable` sólo con motivo
   - `tests` → pegar la línea de resumen y el primer fallo
 

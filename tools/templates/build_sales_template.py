@@ -91,8 +91,8 @@ def _sample_rows(count: int) -> list[dict[str, Any]]:
             # Credit is alternated on purpose, so it is visible that both
             # conditions coexist in the same file and that the term of a cash
             # sale is zero.
-            'Condicion Venta': 'CREDITO' if index % 3 else 'CONTADO',
-            'Medio de Pago': ('EFECTIVO', 'QR', 'TARJETA')[index % 3],
+            'Condicion Venta': 'Crédito' if index % 3 else 'Contado',
+            'Medio de Pago': ('Efectivo', 'QR', 'Tarjeta')[index % 3],
             'Plazo Dias': (15, 30, 60)[index % 3] if index % 3 else 0,
             'Fecha Vencimiento': '',
             'Responsable Cobro': client[6],
@@ -144,7 +144,7 @@ def _sample_collections(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         Returns:
             list[dict[str, Any]]: Rows of the collections sheet.
     '''
-    credit = [row for row in rows if row['Condicion Venta'] == 'CREDITO']
+    credit = [row for row in rows if row['Condicion Venta'] == 'Crédito']
     payments: list[dict[str, Any]] = []
 
     for position, sale in enumerate(credit):
@@ -155,13 +155,13 @@ def _sample_collections(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             # balance.
             payments.append({
                 'Nro Factura': sale['Nro Factura'], 'Fecha Cobro': due,
-                'Monto Cobrado': round(total / 2, 2), 'Medio': 'TRANSFERENCIA',
+                'Monto Cobrado': round(total / 2, 2), 'Medio': 'Transferencia',
                 'Responsable Cobro': sale['Responsable Cobro'],
             })
             payments.append({
                 'Nro Factura': sale['Nro Factura'],
                 'Fecha Cobro': due + timedelta(days = 15),
-                'Monto Cobrado': round(total / 4, 2), 'Medio': 'EFECTIVO',
+                'Monto Cobrado': round(total / 4, 2), 'Medio': 'Efectivo',
                 'Responsable Cobro': sale['Responsable Cobro'],
             })
             continue
@@ -169,7 +169,7 @@ def _sample_collections(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             # Cobrada completa y a tiempo.
             payments.append({
                 'Nro Factura': sale['Nro Factura'], 'Fecha Cobro': due,
-                'Monto Cobrado': total, 'Medio': 'TRANSFERENCIA',
+                'Monto Cobrado': total, 'Medio': 'Transferencia',
                 'Responsable Cobro': sale['Responsable Cobro'],
             })
         # The rest carry no payment: they are the example's open balance.
@@ -270,7 +270,7 @@ def _sample_visits(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             'Cliente': row['Cliente'],
             'Latitud': row['Latitud'],
             'Longitud': row['Longitud'],
-            'Resultado': 'VENTA' if sold else 'SIN_VENTA',
+            'Resultado': 'Venta' if sold else 'Sin venta',
             'Nro Factura': row['Nro Factura'] if sold else '',
         })
     return visits
@@ -331,7 +331,8 @@ def _guide(columns: Any) -> pd.DataFrame:
                             else PRICE_RULE if column.canonical in price_columns else 'No'),
             'Formato': _human_type(column.dtype),
             'Valores admitidos': (
-                ' / '.join(column.rules.allowed) if column.rules.allowed else ''
+                ' / '.join(column.rules.labels or column.rules.allowed)
+                if column.rules.allowed else ''
             ),
         }
         for column in columns

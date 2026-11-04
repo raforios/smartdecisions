@@ -130,7 +130,7 @@ def test_the_outcome_is_a_closed_list():
     result = parse_and_validate(good, 'visitas.csv', _sales_frame())
     assert not result.issues
     assert result.summary.with_outcome == 1
-    assert list(result.accepted['outcome']) == ['VENTA']
+    assert list(result.accepted['outcome']) == ['SALE']
 
     bad = _visits_csv([
         {'Fecha': '2026-03-10', 'Vendedor': 'Mario', 'Cliente': 'Tienda Norte',

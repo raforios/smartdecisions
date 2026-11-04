@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const average = scores.length
             ? scores.reduce((sum, score) => sum + score.match_percentage, 0) / scores.length : 0;
         const sales = (state.full.executed_routes || []).reduce((sum, route) =>
-            sum + route.points.filter((point) => point.outcome === 'VENTA').length, 0);
+            sum + route.points.filter((point) => point.outcome === 'SALE').length, 0);
         qs('#compareSummary').innerHTML =
             metric('Paradas planificadas', String(state.full.planned_route.points.length)) +
             metric('Ejecuciones', String(scores.length)) +
@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isVisit = Boolean(point.client_id);
                 compareMap.marker(point.latitude, point.longitude,
                     isVisit ? index + 1 : '·',
-                    point.outcome === 'VENTA' ? T.PIN_COLORS.sale : T.PIN_COLORS.point,
+                    point.outcome === 'SALE' ? T.PIN_COLORS.sale : T.PIN_COLORS.point,
                     `<strong>${T.escapeHtml(T.formatStamp(point.timestamp))}</strong><br>` +
                     `${T.escapeHtml(point.client_id || 'posición')}` +
                     (point.outcome ? ` · ${T.escapeHtml(T.OUTCOME_LABELS[point.outcome] || point.outcome)}` : '') +

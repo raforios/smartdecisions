@@ -16,6 +16,7 @@
         modern-typing  `list[str]`, `str | None`: no List/Dict/Optional/Union
                      from typing, boilerplate and tests included
         log-vars     WARNING/ERROR logs use `error_msg`, INFO uses `message`
+        code-language  Enum members and closed options in English
         events       every controller reports usage to EVENTS, and every
                      write is audited
 
@@ -28,6 +29,7 @@
         python tools/verification/verify_service.py --all
         python tools/verification/verify_service.py --tools
 '''
+import ast
 import os
 import re
 import subprocess
@@ -59,6 +61,58 @@ from verify_checks import (
 )
 
 
+
+# Spanish words that turn up in business codes. A code the backend stores or
+# returns is English (CLAUDE.md §1); the Spanish the client writes is mapped.
+# The SIN is the tax office's acronym, not the preposition, so it is not here.
+SPANISH_CODE_WORDS = frozenset({
+    'EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'BILLETERA', 'MOVIL', 'CONTADO', 'CREDITO',
+    'DEBITO', 'VENTA', 'VENTAS', 'COMPRA', 'COMPRAS', 'CERRADO', 'ABIERTO', 'ENCONTRADO',
+    'PENDIENTE', 'ANULADO', 'ANULADA', 'ACTIVO', 'INACTIVO', 'PAGADO', 'COBRADO', 'CLIENTE',
+    'PRODUCTO', 'PROVEEDOR', 'FACTURA', 'NOTA', 'CAJA', 'GASTO', 'INGRESO', 'EGRESO',
+    'DEVOLUCION', 'VENDEDOR', 'ALTA', 'BAJA', 'MEDIA', 'OTRO', 'OTROS'
+})
+
+
+def _codes_in(tree: ast.AST) -> list[tuple[int, str]]:
+    '''
+        The codes a module declares: the names and values of every Enum
+        member, and every value offered as `allowed`.
+    '''
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and any(
+                'Enum' in ast.unparse(base) for base in node.bases):
+            for item in node.body:
+                if isinstance(item, ast.Assign) and isinstance(item.value, ast.Constant):
+                    found += [(item.lineno, target.id) for target in item.targets
+                              if isinstance(target, ast.Name)]
+                    found.append((item.lineno, str(item.value.value)))
+        if isinstance(node, ast.keyword) and node.arg == 'allowed' \
+                and isinstance(node.value, (ast.Tuple, ast.List)):
+            found += [(element.lineno, str(element.value)) for element in node.value.elts
+                      if isinstance(element, ast.Constant)]
+    return found
+
+
+def check_code_language(service: Path) -> tuple[bool, str]:
+    '''
+        Codes in English: Enum members and closed options.
+
+        `CLAUDE.md` §1. On 4-nov-2026 the means of payment went in as
+        EFECTIVO and TARJETA, copying older codes that broke the same rule;
+        comment-language never looked at values, so nothing went red.
+    '''
+    hits = []
+    for path in sorted(service.rglob('*.py')):
+        if '__pycache__' in path.parts or 'tests' in path.parts:
+            continue
+        for number, code in _codes_in(ast.parse(path.read_text())):
+            if SPANISH_CODE_WORDS & set(code.upper().split('_')):
+                hits.append(f'{path.relative_to(service)}:{number} {code}')
+    return not hits, ', '.join(hits[:5]) if hits else 'none'
+
+
 CHECKS = (
     ('tests', check_tests),
     ('imports', check_imports),
@@ -74,6 +128,7 @@ CHECKS = (
     ('modern-typing', check_modern_typing),
     ('log-vars', check_log_vars),
     ('comment-language', check_comment_language),
+    ('code-language', check_code_language),
     ('cross-duplicates', check_cross_service_duplicates),
     ('direct-s3', check_direct_s3),
     ('foreign-tables', check_foreign_tables),

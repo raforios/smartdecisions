@@ -111,8 +111,8 @@ CREDIT_LIMIT = 'credit_limit'
 PAID_AMOUNT = 'paid_amount'
 PAYMENT_DATE = 'payment_date'
 
-CREDIT = 'CREDITO'
-CASH = 'CONTADO'
+CREDIT = 'CREDIT'
+CASH = 'CASH'
 
 # The aging scale, in the order the buckets are reported. CURRENT is not an
 # overdue bucket: it is what has not fallen due yet.

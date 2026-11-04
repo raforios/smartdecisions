@@ -244,7 +244,7 @@ def test_executed_route_full_day_through_the_api(client):
     visit = client.post(f'{EXECUTED}/points', json = {
         'executed_route_id': route_id, 'timestamp': _now_iso(9),
         'latitude': -16.51, 'longitude': -68.11,
-        'client_id': 'PDV-2', 'outcome': 'VENTA', 'order_id': 'F-0001'
+        'client_id': 'PDV-2', 'outcome': 'SALE', 'order_id': 'F-0001'
     })
     assert visit.status_code == 201, visit.text
     assert visit.json()['executed_route_id'] == route_id
@@ -270,7 +270,7 @@ def test_executed_route_full_day_through_the_api(client):
     detail = client.get(f'{EXECUTED}/{route_id}')
     assert detail.status_code == 200
     assert detail.json()['points_count'] == 1
-    assert detail.json()['points'][0]['outcome'] == 'VENTA'
+    assert detail.json()['points'][0]['outcome'] == 'SALE'
 
     listed = client.get(EXECUTED, params = {'seller': 'Ana'})
     assert listed.status_code == 200
@@ -314,7 +314,7 @@ def test_comparison_and_statistics_endpoints(client):
     }).json()
     client.post(f'{EXECUTED}/points', json = {
         'executed_route_id': started['id'], 'timestamp': _now_iso(9),
-        'latitude': -16.51, 'longitude': -68.11, 'client_id': 'PDV-2', 'outcome': 'VENTA'
+        'latitude': -16.51, 'longitude': -68.11, 'client_id': 'PDV-2', 'outcome': 'SALE'
     })
 
     scored = client.get(f'/v1/commercial/statistics/route-comparisons/{plan["id"]}')
@@ -337,7 +337,7 @@ def test_comparison_and_statistics_endpoints(client):
     visited = client.get('/v1/commercial/statistics/sellers/Ana/points-visited')
     assert visited.status_code == 200, visited.text
     assert visited.json()['total_points_visited'] == 1
-    assert visited.json()['points_details'][0]['outcome'] == 'VENTA'
+    assert visited.json()['points_details'][0]['outcome'] == 'SALE'
 
     today = _now_iso(9)[:10]
     day = client.get(f'/v1/commercial/statistics/day/{today}')
@@ -393,7 +393,7 @@ def test_daily_stock_load_sale_on_visit_and_remaining(client):
     }).json()
     sold = client.post(f'{EXECUTED}/points', json = {
         'executed_route_id': started['id'], 'timestamp': _now_iso(10),
-        'latitude': -16.5, 'longitude': -68.1, 'client_id': 'PDV-1', 'outcome': 'VENTA',
+        'latitude': -16.5, 'longitude': -68.1, 'client_id': 'PDV-1', 'outcome': 'SALE',
         'order_id': 'F-0001', 'items': [{'sku': 'A', 'quantity': 2}, {'sku': 'B', 'quantity': 1}]
     })
     assert sold.status_code == 201, sold.text
@@ -406,7 +406,7 @@ def test_daily_stock_load_sale_on_visit_and_remaining(client):
 
     refused = client.post(f'{EXECUTED}/points', json = {
         'executed_route_id': started['id'], 'timestamp': _now_iso(11),
-        'latitude': -16.5, 'longitude': -68.1, 'client_id': 'PDV-2', 'outcome': 'VENTA',
+        'latitude': -16.5, 'longitude': -68.1, 'client_id': 'PDV-2', 'outcome': 'SALE',
         'items': [{'sku': 'A', 'quantity': 2}]
     })
     assert refused.status_code == 400

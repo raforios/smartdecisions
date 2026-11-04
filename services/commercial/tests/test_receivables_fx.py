@@ -26,8 +26,8 @@ def _sales() -> pd.DataFrame:
         Returns:
             pd.DataFrame: Normalized sales rows.
     '''
-    rows = [('A', '2026-08-05', 100.0, 'CREDITO'), ('B', '2026-08-10', 50.0, 'CREDITO'),
-            ('C', '2026-08-12', 30.0, 'CONTADO')]
+    rows = [('A', '2026-08-05', 100.0, 'CREDIT'), ('B', '2026-08-10', 50.0, 'CREDIT'),
+            ('C', '2026-08-12', 30.0, 'CASH')]
     return pd.DataFrame([{'order_id': order, 'pos_id': 'X', 'pos_name': 'X',
                           'date': pd.Timestamp(day), 'total_amount': amount,
                           'payment_terms': terms} for order, day, amount, terms in rows])
@@ -71,6 +71,6 @@ def test_what_is_still_open_is_measured_against_today(monkeypatch):
 
 def test_a_dataset_without_credit_has_no_devaluation():
     '''Only cash sales: there is no credit for the rate to erode.'''
-    cash = _sales().assign(payment_terms = 'CONTADO')
+    cash = _sales().assign(payment_terms = 'CASH')
 
     assert build_credit_devaluation(cash, None, 'Bearer t', TODAY) is None

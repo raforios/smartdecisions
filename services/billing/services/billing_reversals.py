@@ -237,7 +237,7 @@ def revert_credit_note_cancellation(
     _check_revertible(note.state, note.reverted_at, note.issued_at)
     _check_note_fits(stored, note)
     cash = round(sum(refund.amount for refund in note.refunds
-                     if refund.method is PaymentMethod.EFECTIVO), MONEY_DECIMALS)
+                     if refund.method is PaymentMethod.CASH), MONEY_DECIMALS)
     if note.refund_session_id:
         require_till_open(dynamodb_resource, owner, note.refund_session_id)
         if cash > expected_cash(dynamodb_resource, owner, note.refund_session_id):

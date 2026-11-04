@@ -152,7 +152,7 @@ def test_a_payments_file_is_read_whole_whatever_its_sheet_is_called():
 
 def test_sales_credit_columns_are_normalized_and_validated():
     '''
-        'Crédito' with an accent, lowercase 'contado' and 'CREDITO' are the same
+        'Crédito' with an accent, lowercase 'contado' and 'CREDIT' are the same
         thing: the contract accepts them and stores them in its own spelling. A
         condition that does not exist cannot pass as cash by omission.
     '''
@@ -167,7 +167,7 @@ def test_sales_credit_columns_are_normalized_and_validated():
 
     result = parse_sales(good, 'ventas.csv')
     assert not result.issues
-    assert list(result.accepted['payment_terms']) == ['CREDITO', 'CONTADO']
+    assert list(result.accepted['payment_terms']) == ['CREDIT', 'CASH']
     assert list(result.accepted['credit_days']) == [30, 0]
 
     bad = pd.DataFrame([

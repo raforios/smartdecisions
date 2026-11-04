@@ -54,7 +54,7 @@
         'IN CREATION': 'En creación', ACTIVE: 'Activo', INACTIVE: 'Inactivo'
     };
     const OUTCOME_LABELS = {
-        VENTA: 'Venta', SIN_VENTA: 'Sin venta', CERRADO: 'Cerrado', NO_ENCONTRADO: 'No encontrado'
+        SALE: 'Venta', NO_SALE: 'Sin venta', CLOSED: 'Cerrado', NOT_FOUND: 'No encontrado'
     };
 
     function errorText(error, fallback) {

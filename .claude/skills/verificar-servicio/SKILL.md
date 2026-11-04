@@ -38,6 +38,7 @@ cubre, y cómo se corrige cada cosa:
 | `getenv` | sólo `load_and_validate_env_vars` | mover al módulo que usa el valor |
 | `modern-typing` | `list[str]`, `str \| None`; nada de `List`, `Dict`, `Optional`, `Union` de `typing` (boilerplate y tests incluidos) | `pyupgrade --py314-plus` desde `SmartBear/.venv` |
 | `log-vars` | `message` en INFO, `error_msg` en WARNING/ERROR | renombrar |
+| `code-language` | Miembros de `Enum` y opciones cerradas (`allowed`) en inglés: lo que el backend guarda o devuelve es código; el castellano del cliente se mapea (`labels`) | renombrar el código y mapear la palabra del cliente |
 
 **Antes de escribir una función nueva paralela a otra** (un contrato más, un
 proceso más): extraer lo común de la existente y parametrizarlo; el nuevo se

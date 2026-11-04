@@ -15,6 +15,7 @@ import {
     PAYMENT_LABELS,
     SALE_PAYMENT_METHODS,
     currentTillOrNull,
+    isCard,
     errorText
 } from '../services/BillingService.js';
 import { printTicket } from './TicketPrinter.js';
@@ -459,9 +460,9 @@ export async function mountCounter(host) {
     const cardField = host.querySelector('#card-field');
     const cardInput = host.querySelector('#card-number');
     const syncCardField = () => {
-        const isCard = paymentParts(host).some((part) => part.method.startsWith('TARJETA'));
-        cardField.hidden = !isCard;
-        if (!isCard) cardInput.value = '';
+        const withCard = paymentParts(host).some((part) => isCard(part.method));
+        cardField.hidden = !withCard;
+        if (!withCard) cardInput.value = '';
         const paid = paymentParts(host).reduce((sum, part) => sum + part.amount, 0);
         const combined = method.value === COMBINED;
         host.querySelector('#combined-payments').hidden = !combined;

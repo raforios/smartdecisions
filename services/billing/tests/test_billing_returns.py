@@ -266,13 +266,13 @@ def test_eighteen_months_after_the_invoice_it_is_too_late(
 
 def test_a_combined_payment_is_refunded_by_each_means():
     '''Each means gets back its share; the last takes the rounding.'''
-    stored = {'total': 300.0, 'payments': [{'method': 'EFECTIVO', 'amount': 100.0},
-                                           {'method': 'TRANSFERENCIA', 'amount': 200.0}]}
+    stored = {'total': 300.0, 'payments': [{'method': 'CASH', 'amount': 100.0},
+                                           {'method': 'BANK_TRANSFER', 'amount': 200.0}]}
 
     refunds = billing_returns._refunds(stored, 100.0) # pylint: disable=protected-access
 
     assert [(refund.method.value, refund.amount) for refund in refunds] == [
-        ('EFECTIVO', 33.33), ('TRANSFERENCIA', 66.67)]
+        ('CASH', 33.33), ('BANK_TRANSFER', 66.67)]
 
 
 def test_a_refund_is_written_only_by_a_return(
@@ -468,7 +468,7 @@ def test_the_dashboard_counts_what_the_buyer_kept(
     assert after.sales_cost == before.sales_cost / 2
     assert [(row.sku, row.quantity) for row in after.top_products] == [('CONS1', 1)]
     assert [(row.payment_method.value, row.total) for row in after.sales_by_method] == [
-        ('EFECTIVO', 100.0)]
+        ('CASH', 100.0)]
 
     _return(dynamodb, sale.sale_id)
     emptied = billing_reports.dashboard(dynamodb, OWNER)

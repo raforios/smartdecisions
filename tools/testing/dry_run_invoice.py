@@ -122,7 +122,7 @@ def _sale(lines: list[InvoiceLine]) -> SaleNoteOut:
         status = SaleStatus.ISSUED,
         buyer = Buyer(name = 'Ana Quispe Mamani', document = '4567890',
                       document_type = 1),
-        payment_method = PaymentMethod.EFECTIVO,
+        payment_method = PaymentMethod.CASH,
         created_by = 'cajera@farmacia.demo',
         created_at = datetime.now().isoformat(),
         lines = [

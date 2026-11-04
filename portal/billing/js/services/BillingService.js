@@ -85,19 +85,19 @@ export const ERRORS = {
 
 /** What each payment method is called on screen. */
 export const PAYMENT_LABELS = {
-    EFECTIVO: 'Efectivo',
-    TRANSFERENCIA: 'Transferencia bancaria',
-    BILLETERA_MOVIL: 'Billetera móvil',
-    QR: 'QR sin detalle',
-    TARJETA_DEBITO: 'Tarjeta de débito',
-    TARJETA_CREDITO: 'Tarjeta de crédito',
-    TARJETA: 'Tarjeta sin detalle'
+    CASH: 'Efectivo',
+    BANK_TRANSFER: 'Transferencia bancaria',
+    MOBILE_WALLET: 'Billetera móvil',
+    DEBIT_CARD: 'Tarjeta de débito',
+    CREDIT_CARD: 'Tarjeta de crédito'
 };
 
-/** The methods offered when selling: card and QR without detail belong to old notes. */
-export const SALE_PAYMENT_METHODS = [
-    'EFECTIVO', 'TRANSFERENCIA', 'BILLETERA_MOVIL', 'TARJETA_DEBITO', 'TARJETA_CREDITO'
-];
+/** The methods offered when selling. */
+export const SALE_PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'MOBILE_WALLET', 'DEBIT_CARD',
+                                     'CREDIT_CARD'];
+
+/** Whether a method is a card, which carries the card number. */
+export const isCard = (method) => method === 'DEBIT_CARD' || method === 'CREDIT_CARD';
 
 /** What each expense type is called on screen. */
 export const EXPENSE_LABELS = {

@@ -11,6 +11,7 @@ import {
     BillingService,
     PAYMENT_LABELS,
     SALE_PAYMENT_METHODS,
+    isCard,
     errorText
 } from '../services/BillingService.js';
 import { escapeHtml, notify, setBusy, stamp } from '../ui.js';
@@ -129,7 +130,7 @@ function transcriptionBody(host) {
             unit_price: Number(row.querySelector('.line-price').value)
         })).filter((line) => line.sku),
         payment_method: method,
-        card_number: method.startsWith('TARJETA') ? value('#paper-card') || null : null
+        card_number: isCard(method) ? value('#paper-card') || null : null
     };
 }
 
@@ -173,7 +174,7 @@ function wireForms(host) {
         host.querySelector('#manual-lines').insertAdjacentHTML('beforeend', lineHtml());
     });
     host.querySelector('#paper-method').addEventListener('change', (event) => {
-        host.querySelector('#paper-card-field').hidden = !event.target.value.startsWith('TARJETA');
+        host.querySelector('#paper-card-field').hidden = !isCard(event.target.value);
     });
     host.querySelector('#transcribe-back').addEventListener('click', () => {
         host.querySelector('#transcribe-panel').hidden = true;

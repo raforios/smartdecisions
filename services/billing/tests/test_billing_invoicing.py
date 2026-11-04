@@ -131,7 +131,7 @@ def test_a_card_number_is_stored_masked_and_never_whole(dynamodb):
 
     note = billing_sales.issue_sale(dynamodb, OWNER, SaleNoteIn(
         lines = [SaleLineIn(sku = 'PARA500', quantity = 1)],
-        payment_method = PaymentMethod.TARJETA,
+        payment_method = PaymentMethod.DEBIT_CARD,
         card_number = '4797123456787896'
     ), CASHIER)
 
@@ -152,7 +152,7 @@ def test_a_card_number_on_a_cash_sale_is_refused(dynamodb):
     with pytest.raises(InvalidInputError) as refused:
         billing_sales.issue_sale(dynamodb, OWNER, SaleNoteIn(
             lines = [SaleLineIn(sku = 'PARA500', quantity = 1)],
-            payment_method = PaymentMethod.EFECTIVO,
+            payment_method = PaymentMethod.CASH,
             card_number = '4797123456787896'
         ), CASHIER)
 
@@ -161,14 +161,13 @@ def test_a_card_number_on_a_cash_sale_is_refused(dynamodb):
 
 def test_every_payment_method_has_a_code_for_the_tax_office(dynamodb): # pylint: disable=unused-argument
     '''
-        Cash, card, bank transfer and mobile wallet have their own; the old QR
-        travelled as OTROS.
+        Cash, both cards, bank transfer and mobile wallet each have theirs.
     '''
-    assert SIN_PAYMENT_CODES[PaymentMethod.EFECTIVO] == 1
-    assert SIN_PAYMENT_CODES[PaymentMethod.TARJETA] == 2
-    assert SIN_PAYMENT_CODES[PaymentMethod.QR] == 5
-    assert SIN_PAYMENT_CODES[PaymentMethod.TRANSFERENCIA] == 7
-    assert SIN_PAYMENT_CODES[PaymentMethod.BILLETERA_MOVIL] == 32
+    assert SIN_PAYMENT_CODES[PaymentMethod.CASH] == 1
+    assert SIN_PAYMENT_CODES[PaymentMethod.DEBIT_CARD] == 2
+    assert SIN_PAYMENT_CODES[PaymentMethod.CREDIT_CARD] == 2
+    assert SIN_PAYMENT_CODES[PaymentMethod.BANK_TRANSFER] == 7
+    assert SIN_PAYMENT_CODES[PaymentMethod.MOBILE_WALLET] == 32
     assert set(SIN_PAYMENT_CODES) == set(PaymentMethod)
 
 
@@ -250,7 +249,7 @@ def _issued_sale(
                                        sale_price = 6.0, expiry_date = LATER)])
     note = SaleNoteIn(**{
         'lines': [SaleLineIn(sku = 'PARA500', quantity = 2)],
-        'payment_method': PaymentMethod.EFECTIVO,
+        'payment_method': PaymentMethod.CASH,
         'buyer': Buyer(name = 'Ana Quispe', document = '4567890', document_type = 1),
         **note_overrides
     })
@@ -277,7 +276,7 @@ def test_a_card_sale_carries_the_masked_number_and_a_cash_sale_does_not(dynamodb
         The norm reports a card number on a non-card sale as an error, so the
         element stays empty there. On a card sale it travels masked.
     '''
-    card_sale = _issued_sale(dynamodb, payment_method = PaymentMethod.TARJETA,
+    card_sale = _issued_sale(dynamodb, payment_method = PaymentMethod.DEBIT_CARD,
                              card_number = '4797123456787896')
     xml = build_invoice_xml(card_sale, _context(), [_invoice_line()])
 

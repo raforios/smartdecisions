@@ -164,11 +164,11 @@
 
     // The means of payment as the sales contract codes them.
     const PAYMENT_METHODS = {
-        EFECTIVO: 'Efectivo',
+        CASH: 'Efectivo',
         QR: 'QR',
-        TARJETA: 'Tarjeta',
-        TRANSFERENCIA: 'Transferencia bancaria',
-        BILLETERA_MOVIL: 'Billetera móvil'
+        CARD: 'Tarjeta',
+        BANK_TRANSFER: 'Transferencia bancaria',
+        MOBILE_WALLET: 'Billetera móvil'
     };
 
     // A dimension the source file left blank still needs a row label.

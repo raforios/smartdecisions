@@ -223,7 +223,7 @@ def test_register_executed_point_appends_and_moves_last_position(
         latitude = -16.51, longitude = -68.11,
         client_id = 'PDV-2', outcome = VisitOutcome.SALE, order_id = 'F-0001'
     ))
-    assert point['outcome'] == 'VENTA'
+    assert point['outcome'] == 'SALE'
     assert route['points'][-1]['id'] == point['id']
     assert (route['last_latitude'], route['last_longitude']) == (-16.51, -68.11)
     assert route['last_timestamp'] == _today_at(9)

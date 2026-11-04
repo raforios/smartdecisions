@@ -163,7 +163,7 @@ def test_the_means_of_payment_is_a_closed_option() -> None:
          'Cantidad': 1, 'Precio Unitario': 5.0, 'Medio de Pago': 'Cheque'},
     ])
     result = parse_and_validate_partial(_to_xlsx_bytes(dataframe), 'medio.xlsx')
-    assert list(result.accepted['payment_method']) == ['BILLETERA_MOVIL']
+    assert list(result.accepted['payment_method']) == ['MOBILE_WALLET']
     assert [issue.column for issue in result.issues] == ['payment_method']
 
 
