@@ -189,12 +189,15 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   reportes públicos ni `PUT /royalty-rules`), los cinco base (AUTH,
   EVENTS, FILES, ML_FUNCTIONS y AI) y QUOTES. COMMERCIAL, FINANCE y BILLING
   se despliegan al cerrar la fase 12 (Rafael); BILLING se adelantó el 3-nov.
-- **En curso: fase 12.0** (terminar SmartBilling), con el CAFC y el NIT de
-  Rafael. Hechas y desplegadas el 3-nov las pruebas de controlador de
-  BILLING y la Nota de Crédito-Débito (backend y portal). Las pruebas con el
-  SIN quedan en pausa: **falta revisar la información que Rafael traiga del
-  SIN** (CAFC, «PROCESO MASIVO», fase I) antes de seguir con lo que dependa
-  de ella. El estado vive en `SMARTBILLING.md`.
+- **En curso: fase 12.1** (modelo reducido y puentes; 12.0 espera la
+  información del SIN que trae Rafael). Hecho al 4-nov: modelo reducido en
+  COMMERCIAL (Cliente opcional, Precio o Monto obligatorio, plantilla
+  reducida oficial), «Medio de Pago», precio sugerido en el producto de
+  BILLING, códigos en inglés en COMMERCIAL y BILLING, chequeo
+  `code-language` y dos hooks (verificación antes de cada commit y barrido
+  de idioma al terminar cada turno). **Retomar en sesión nueva:** primero la
+  revisión de código (SOLID, DRY, clean code) de los commits del 3 y 4-nov;
+  después el maestro de productos por SKU. Detalle en el plan único.
 - **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
   (26-oct), FINANCE (26-oct), ML_FUNCTIONS (25-oct). El
   servicio genérico de parámetros ya no existe en AWS, ni las tablas
