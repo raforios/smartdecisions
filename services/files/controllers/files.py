@@ -3,6 +3,7 @@
 '''
 from schemas.files import (
     FileDeleteResponse,
+    FileDownloadResponse,
     FileReadResponse,
     FileUploadData,
     FileUploadResponse,
@@ -64,3 +65,14 @@ async def create_presigned_upload_url(
         Signs a direct upload.
     '''
     return await files.presigned_upload_url(request, current_user)
+
+
+async def create_download_url(
+    bucket_name: str,
+    file_key: str,
+    current_user: str
+) -> FileDownloadResponse:
+    '''
+        Signs a direct download.
+    '''
+    return await files.download_url(bucket_name, file_key, current_user)

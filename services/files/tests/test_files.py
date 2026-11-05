@@ -315,3 +315,25 @@ def test_files_works_only_on_its_buckets_and_decides_the_type(
             bucket_name = 'b', file_name = 'page.html', file_content = b'<html>',
             content_type = 'text/csv'), 'acme'))
     assert [kind for kind, _ in s3.calls] == ['sign']
+
+
+def test_a_large_file_reaches_its_caller_through_a_short_lived_url(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''
+        FILES signs a GET of the object instead of returning its rows, so the
+        size of the file has no ceiling; the bucket and the extension are
+        checked as for every other operation.
+    '''
+    s3 = _RecordingS3()
+    monkeypatch.setattr(files, 's3_client', s3)
+
+    signed = asyncio.run(files.download_url('b', 'commercial/normalized/ventas.csv', 'acme'))
+
+    assert signed.url == 'https://signed' and signed.file_key == 'commercial/normalized/ventas.csv'
+    assert s3.calls[-1][1]['ClientMethod'] == 'get_object'
+    assert signed.expires_in == files.ENV_VARS['DOWNLOAD_URL_SECONDS']
+    with pytest.raises(ForbiddenError):
+        asyncio.run(files.download_url('other-bucket', 'a.csv', 'acme'))
+    with pytest.raises(InvalidInputError):
+        asyncio.run(files.download_url('b', 'run.exe', 'acme'))

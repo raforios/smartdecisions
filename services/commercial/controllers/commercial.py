@@ -7,6 +7,7 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from controllers.common import (
+    caller_token,
     template_key,
     native_numbers,
     store_frame,
@@ -308,26 +309,24 @@ async def get_dataset_status_controller(
 @handle_service_errors('COMMERCIAL', with_log = False)
 async def download_template_controller(
     contract: str,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str # pylint: disable=unused-argument
 ) -> bytes:
     '''
         Reads one contract's template from the default bucket so the route can
         return it. Decorated with `with_log = False`: the event is still shipped
-        to EVENTS, but the binary file body is not logged.
-
-        This is the one object read straight from the bucket and not through
-        FILES, and the rule in `CLAUDE.md` §9 names the case: it is a STATIC
-        file the client downloads, identical for everyone, and putting a parse
-        and a second hop in front of it would only make it slower.
+        to EVENTS, but the binary file body is not logged. The template comes
+        as a file, through a URL FILES signs (`CLAUDE.md` §9).
 
         Args:
             contract (str): Which template — ventas, cobros, stock or visitas.
+            request (Request): Incoming request, for the caller's token.
+            current_user (str): Authenticated caller, used by the decorators.
 
         Returns:
             bytes: Raw .xlsx content of the stored template.
     '''
-    return download_template_bytes(template_key(contract))
+    return download_template_bytes(template_key(contract), caller_token(request))
 
 
 @handle_service_errors('COMMERCIAL')

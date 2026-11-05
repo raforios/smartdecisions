@@ -117,7 +117,7 @@ def _dataset(monkeypatch) -> str:
         controllers, 'get_dataset_metadata',
         lambda **_: {'file_s3_key': 'ingest/normalized/test.csv', 'status': 'validated'}
     )
-    monkeypatch.setattr(controllers, 'load_dataframe', lambda *_: _sales_frame())
+    monkeypatch.setattr(controllers, 'read_stored_frame', lambda *_: _sales_frame())
     return 'test-dataset-id'
 
 
@@ -182,7 +182,7 @@ def test_receivables_returns_a_full_response(
         }
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe',
+        controllers, 'read_stored_frame',
         lambda key, _token: _collections_frame() if 'collections' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
@@ -531,7 +531,7 @@ def test_objectives_returns_a_full_response(
             return _objectives_frame()
         return _collections_frame() if 'collections' in key else _sales_frame()
 
-    monkeypatch.setattr(controllers, 'load_dataframe', _load)
+    monkeypatch.setattr(controllers, 'read_stored_frame', _load)
     monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
     _flat_rate(monkeypatch)
 
@@ -635,7 +635,7 @@ def test_stock_returns_a_full_response(
                      'stock_s3_key': 'ingest/stock/test.csv', 'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe',
+        controllers, 'read_stored_frame',
         lambda key, _token: _stock_frame() if 'stock' in key else _sales_frame()
     )
     with_stock = _call(controllers.stock_controller, dataset)
@@ -776,7 +776,7 @@ def test_receivables_carry_every_amount_in_three_currencies(
                      'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe',
+        controllers, 'read_stored_frame',
         lambda key, _token: _collections_frame() if 'collections' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_credit_policy', lambda **_: None)
@@ -814,7 +814,7 @@ def test_attainment_carries_every_amount_in_three_currencies(
                      'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe',
+        controllers, 'read_stored_frame',
         lambda key, _token: _objectives_frame() if 'objectives' in key else _sales_frame()
     )
     monkeypatch.setattr(controllers, 'get_commercial_policy', lambda **_: None)
@@ -849,7 +849,7 @@ def test_stock_carries_every_amount_in_three_currencies(
                      'stock_s3_key': 'ingest/stock/test.csv', 'status': 'validated'}
     )
     monkeypatch.setattr(
-        controllers, 'load_dataframe',
+        controllers, 'read_stored_frame',
         lambda key, _token: _stock_frame() if 'stock' in key else _sales_frame()
     )
     _flat_rate(monkeypatch)

@@ -12,6 +12,7 @@ import pandas as pd
 from schemas.files import (
     ALLOWED_TYPES,
     FileDeleteResponse,
+    FileDownloadResponse,
     FileReadResponse,
     FilesError,
     FilesResult,
@@ -25,7 +26,7 @@ from services.exceptions import ForbiddenError, InvalidInputError
 from services.logger_config import custom_logger as logger
 from services.utils import handle_aws_operation
 
-ENV_VARS = load_and_validate_env_vars({'ALLOWED_BUCKETS': str})
+ENV_VARS = load_and_validate_env_vars({'ALLOWED_BUCKETS': str, 'DOWNLOAD_URL_SECONDS': int})
 # The only buckets FILES works on: the caller names one of them, never any
 # other the Lambda's role happens to reach.
 ALLOWED_BUCKETS: frozenset[str] = frozenset(ENV_VARS['ALLOWED_BUCKETS'].split())
@@ -291,3 +292,36 @@ async def presigned_upload_url(
                f'{request.bucket_name} ({content_type}).')
     logger.info(message)
     return PresignedUrlResponse(presigned_url = url, file_key = request.file_key)
+
+
+@handle_aws_operation
+async def download_url(
+    bucket_name: str,
+    file_key: str,
+    current_user: str
+) -> FileDownloadResponse:
+    '''
+        A short-lived URL to fetch one object as it is stored: a file too
+        large to come back as rows, or one that must stay a file (a template).
+
+        Args:
+            bucket_name (str): The bucket.
+            file_key (str): The object key.
+            current_user (str): Who asks, for the log.
+
+        Returns:
+            FileDownloadResponse: The URL, the key and how long it lives.
+
+        Raises:
+            ForbiddenError: BUCKET_NOT_ALLOWED.
+            InvalidInputError: UNSUPPORTED_FORMAT.
+    '''
+    require_bucket(bucket_name)
+    require_allowed(extension = extension_of(file_key))
+    seconds = ENV_VARS['DOWNLOAD_URL_SECONDS']
+    url = s3_client.generate_presigned_url(
+        ClientMethod = 'get_object', Params = {'Bucket': bucket_name, 'Key': file_key},
+        ExpiresIn = seconds)
+    message = f'{current_user} got a download URL for {file_key} in {bucket_name}.'
+    logger.info(message)
+    return FileDownloadResponse(url = url, file_key = file_key, expires_in = seconds)

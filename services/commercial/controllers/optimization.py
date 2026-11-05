@@ -3,7 +3,6 @@
     one plan per seller. The clusters and the stop order are asked of
     ML_FUNCTIONS; the street geometry, of OSRM.
 '''
-import pandas as pd
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
@@ -22,8 +21,9 @@ from services.optimization import (
     scope_to_period
 )
 from services.analytics_utils import get_dataset_metadata
+from services.commercial_utils import read_stored_frame
 from services.localization_sources import SalesSource, plans_by_seller
-from services.utils import audit_event, handle_service_errors, read_file_rows
+from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')
@@ -48,7 +48,7 @@ async def route_plan_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    dataframe = pd.DataFrame(read_file_rows(metadata['file_s3_key'], caller_token(request)))
+    dataframe = read_stored_frame(metadata['file_s3_key'], caller_token(request))
     dataframe = scope_to_period(dataframe, params)
 
     sellers = available_sellers(dataframe)
@@ -91,7 +91,7 @@ async def plans_by_seller_controller(
     )
     auth_token = caller_token(request)
     dataframe = scope_to_period(
-        pd.DataFrame(read_file_rows(metadata['file_s3_key'], auth_token)),
+        read_stored_frame(metadata['file_s3_key'], auth_token),
         body.model_dump(include = {'date_from', 'date_to'})
     )
     return plans_by_seller(

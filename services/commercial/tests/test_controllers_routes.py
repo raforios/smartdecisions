@@ -63,8 +63,7 @@ def _dataset():
     '''
     with patch.object(controllers, 'get_dataset_metadata',
                       lambda **_: {'file_s3_key': 'k', 'status': 'validated'}), \
-         patch.object(controllers, 'read_file_rows',
-                      lambda *_: _sales_frame().to_dict(orient = 'records')):
+         patch.object(controllers, 'read_stored_frame', lambda *_: _sales_frame()):
         yield 'test-dataset-id'
 
 

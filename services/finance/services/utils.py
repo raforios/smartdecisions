@@ -580,9 +580,10 @@ def _handle_files_service(
             - read:   file_key, delimiter   -> the parsed rows
             - create: file_key, data, content_type -> the stored object key
             - delete: file_key              -> None
+            - download: file_key            -> a short-lived URL of the object
 
         Args:
-            action (str): One of read, create, delete.
+            action (str): One of read, create, delete, download.
             auth_token (str): The caller's Authorization header, as received.
             **kwargs (Any): The arguments of the action.
 
@@ -613,6 +614,11 @@ def _handle_files_service(
                 data = {'bucket_name': BUCKET_NAME,
                         'file_path': folder or DEFAULT_BUCKET_PATH}
             )
+        elif action == 'download':
+            response = req.get(
+                f'{API_URL}/v1/s3/download-url/{BUCKET_NAME}/{file_key}',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS
+            )
         elif action == 'delete':
             response = req.delete(
                 f'{API_URL}/v1/s3/delete',
@@ -638,6 +644,8 @@ def _handle_files_service(
     if action == 'create':
         payload = response.json() if response.content else {}
         return payload.get('file_key') or file_key
+    if action == 'download':
+        return response.json()['url']
     return None
 
 
@@ -715,6 +723,41 @@ def delete_stored_file(
     message = f'Deleted {file_key} through FILES.'
     logger.info(message)
 
+
+
+def download_file_bytes(
+    file_key: str,
+    auth_token: str
+) -> bytes:
+    '''
+        A stored file as it is, fetched through a short-lived URL FILES signs.
+
+        For what cannot come back as rows: a file too large for the 6 MB a
+        Lambda can answer, or one that must stay a file (a template). FILES
+        still decides who may fetch what; the bytes go from the bucket to this
+        service without crossing FILES.
+
+        Args:
+            file_key (str): Object key inside the bucket.
+            auth_token (str): The caller's Authorization header.
+
+        Returns:
+            bytes: The object.
+
+        Raises:
+            ServiceUnavailableError: FILES refused, or the bucket did not answer.
+    '''
+    url = _handle_files_service('download', auth_token, file_key = file_key)
+    try:
+        response = req.get(url, timeout = FILES_TIMEOUT_SECONDS)
+        response.raise_for_status()
+    except req.exceptions.RequestException as error:
+        error_msg = f'Could not fetch {file_key} through its download URL: {error}'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.UNREACHABLE.value) from error
+    message = f'Fetched {file_key} ({len(response.content)} bytes) through FILES.'
+    logger.info(message)
+    return response.content
 
 # ---------------------------------------------------------------------------
 # SERVICE PARAMETERS: the standard block for a service with business values

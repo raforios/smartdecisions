@@ -56,6 +56,7 @@ from services.currency import (
     rates_per_row
 )
 from services.fx_effect import build_fx_effect
+from services.commercial_utils import read_stored_frame
 from services.analytics_utils import (
     apply_date_range,
     get_commercial_policy,
@@ -64,7 +65,6 @@ from services.analytics_utils import (
     get_latest_run_for_dataset,
     HISTORY_DEFAULT_LIMIT,
     list_runs_for_owner,
-    load_dataframe,
     persist_run
 )
 from services.utils import load_parameters
@@ -189,7 +189,8 @@ def scoped_dataframe(
     # (`with_month_close_factors`). The currency a screen asks for only picks what a
     # chart draws, so it never reaches this.
     return apply_date_range(
-        dataframe = load_dataframe(metadata['file_s3_key'], (params or {}).get('auth_token') or ''),
+        dataframe = read_stored_frame(metadata['file_s3_key'],
+                                      (params or {}).get('auth_token') or ''),
         date_from = options.get('date_from'),
         date_to = options.get('date_to')
     )
@@ -268,7 +269,7 @@ def payments_of(
             Any: The payments DataFrame, or None when none were loaded.
     '''
     key = metadata.get('collections_s3_key')
-    return load_dataframe(key, auth_token) if key else None
+    return read_stored_frame(key, auth_token) if key else None
 
 
 @handle_service_errors('COMMERCIAL')
@@ -382,7 +383,7 @@ async def objectives_controller(
     objectives_key = metadata.get('objectives_s3_key')
 
     objectives, available = select_objective_periods(
-        (load_dataframe(objectives_key, (params or {}).get('auth_token') or '')
+        (read_stored_frame(objectives_key, (params or {}).get('auth_token') or '')
          if objectives_key else None),
         (params or {}).get('date_from'),
         (params or {}).get('date_to')
@@ -434,7 +435,7 @@ async def stock_controller(
 
     block = build_stock(
         sales = dataframe,
-        stock = (load_dataframe(stock_key, (params or {}).get('auth_token') or '')
+        stock = (read_stored_frame(stock_key, (params or {}).get('auth_token') or '')
                  if stock_key else None)
     )
     # The photo is what the stock is worth now: today's rate.
@@ -731,6 +732,6 @@ async def stock_history_controller(
     today = get_current_time_gmt().date().isoformat()
     rates = ReferenceRates(usd = current_rate(PARALLEL_FALLBACK_CURRENCY, token, today),
                            usdt = current_rate(PARALLEL_CURRENCY, token, today))
-    photos = build_stock_history(load_dataframe(stock_key, token), token, rates)
+    photos = build_stock_history(read_stored_frame(stock_key, token), token, rates)
     return StockHistoryResponse(dataset_id = dataset_id, available = bool(photos),
                                 rates = rates, photos = photos)

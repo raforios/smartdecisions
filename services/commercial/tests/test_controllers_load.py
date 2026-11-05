@@ -490,11 +490,11 @@ def test_the_template_info_controller_returns_its_model():
 
 def test_the_template_download_controller_serves_the_stored_file():
     '''
-        The one documented direct-S3 read in the product: a static file FILES
-        cannot hand back as a file. It has to reach the caller as bytes.
+        A static file comes back as a file, through the URL FILES signs: it
+        has to reach the caller as bytes.
     '''
     with patch.object(controllers, 'download_template_bytes',
-                      lambda key: f'contenido de {key}'.encode()):
+                      lambda key, _token: f'contenido de {key}'.encode()):
         content = asyncio.run(controllers.download_template_controller(
             contract = 'ventas', request = None,
             current_user = 'tester@bearsoft.com.bo'

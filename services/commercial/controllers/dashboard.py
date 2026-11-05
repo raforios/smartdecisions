@@ -10,11 +10,11 @@ from fastapi import Request
 from controllers.analytics import at_month_close, payments_of, scoped_dataframe
 from controllers.purchases import purchase_figures
 from schemas.dashboard import DashboardResponse
+from services.commercial_utils import read_stored_frame
 from services.analytics_utils import (
     get_commercial_policy,
     get_credit_policy,
-    get_dataset_metadata,
-    load_dataframe
+    get_dataset_metadata
 )
 from services.currency import in_three_currencies
 from services.dashboard import (
@@ -49,7 +49,7 @@ def _companion(
             Any: The DataFrame, or None.
     '''
     s3_key = metadata.get(key)
-    return load_dataframe(s3_key, auth_token) if s3_key else None
+    return read_stored_frame(s3_key, auth_token) if s3_key else None
 
 
 @handle_service_errors('COMMERCIAL')

@@ -9,7 +9,8 @@ from fastapi import Request
 from schemas.analytics import ReferenceRates
 from schemas.dashboard import PurchaseFigures
 from schemas.purchases import PurchasesResponse, PurchasesUnavailable
-from services.analytics_utils import get_dataset_metadata, load_dataframe
+from services.commercial_utils import read_stored_frame
+from services.analytics_utils import get_dataset_metadata
 from services.currency import PARALLEL_CURRENCY, PARALLEL_FALLBACK_CURRENCY, current_rate
 from services.purchases import (
     build_purchase_rows,
@@ -50,8 +51,8 @@ def _prices_of(
             dict[str, float]: Bolivianos per product.
     '''
     stock_key = metadata.get('stock_s3_key')
-    return latest_prices(load_dataframe(metadata['file_s3_key'], auth_token),
-                         load_dataframe(stock_key, auth_token) if stock_key else None)
+    return latest_prices(read_stored_frame(metadata['file_s3_key'], auth_token),
+                         read_stored_frame(stock_key, auth_token) if stock_key else None)
 
 
 def _cost_moves(rows: list) -> tuple[int, int]:
@@ -86,7 +87,7 @@ def purchase_figures(
     if not key:
         return PurchaseFigures()
     rates = todays_rates(auth_token)
-    costed = with_costs_in_bolivianos(load_dataframe(key, auth_token), auth_token, rates)
+    costed = with_costs_in_bolivianos(read_stored_frame(key, auth_token), auth_token, rates)
     if costed.empty:
         return PurchaseFigures()
     rows = build_purchase_rows(costed, {}, rates)
@@ -117,7 +118,7 @@ async def purchases_controller(
                                  reason_code = PurchasesUnavailable.NO_PURCHASES.value)
     token = (params or {}).get('auth_token') or ''
     rates = todays_rates(token)
-    costed = with_costs_in_bolivianos(load_dataframe(key, token), token, rates)
+    costed = with_costs_in_bolivianos(read_stored_frame(key, token), token, rates)
     rows = build_purchase_rows(costed, _prices_of(metadata, token), rates)
     month, amount = last_month_amount(costed, token, get_current_time_gmt().date().isoformat())
     up, down = _cost_moves(rows)

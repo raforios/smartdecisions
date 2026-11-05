@@ -363,7 +363,6 @@ def check_cross_service_duplicates(service: Path) -> tuple[bool, str]:
 # returns rows— and `CLAUDE.md` §9 names exactly that case.
 _S3_ALLOWED: dict[str, tuple[str, ...]] = {
     'files': ('services/files.py',),
-    'commercial': ('services/commercial_utils.py',),
 }
 
 

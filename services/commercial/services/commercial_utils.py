@@ -14,22 +14,21 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-import boto3
 import pandas as pd
 from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
 from models.commercial import IngestDataset
-from schemas.files import FilesError
 from schemas.commercial import IngestError
 from services.crud import create_item, get_item_by_key
 from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
-from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
+from services.exceptions import ResourceNotFoundError
+from services.load_files import read_dataframe
 from services.logger_config import custom_logger as logger
 from services.utils import (
     get_current_time_gmt,
-    read_file_rows,
+    download_file_bytes,
     store_file
 )
 
@@ -37,43 +36,29 @@ from services.utils import (
 ENV_VARS = {
     **load_and_validate_env_vars({
         'DYNAMODB_TABLE_NAME_INGEST_DATASETS': str,
-        'BUCKET_NAME': str
     }),
     **load_parameters({
         'HISTORY_DEFAULT_LIMIT': int
     })
 }
 DATASETS_TABLE = ENV_VARS['DYNAMODB_TABLE_NAME_INGEST_DATASETS']
-BUCKET_NAME = ENV_VARS['BUCKET_NAME']
 
-# The ONLY direct S3 access left, and the exception the rule names in
-# `CLAUDE.md` §9: the templates are static objects, identical for every client,
-# and FILES cannot hand back a file AS a file —its reader parses and returns
-# rows—. Everything the client sends or the service stores goes through FILES.
-_s3_client = boto3.client('s3')
-
-
-def download_template_bytes(file_key: str) -> bytes:
+def download_template_bytes(
+    file_key: str,
+    auth_token: str
+) -> bytes:
     '''
-        Reads one static template straight from the bucket.
+        One static template, byte for byte, fetched through FILES like every
+        other object of the bucket (`CLAUDE.md` §9).
 
         Args:
             file_key (str): S3 object key of the template.
+            auth_token (str): The caller's Authorization header.
 
         Returns:
             bytes: The template, byte for byte.
-
-        Raises:
-            ServiceUnavailableError: If the object cannot be read.
     '''
-    try:
-        return _s3_client.get_object(Bucket = BUCKET_NAME, Key = file_key)['Body'].read()
-    except Exception as error:
-        error_msg = f'Failed to read the template s3://{BUCKET_NAME}/{file_key}: {error}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = FilesError.UNREACHABLE.value
-        ) from error
+    return download_file_bytes(file_key, auth_token)
 
 
 # ---------------------------------------------------------------------------
@@ -401,25 +386,21 @@ def get_owned_dataset(
 
 def read_stored_frame(
     file_key: str,
-    auth_token: str,
-    delimiter: str = ','
+    auth_token: str
 ) -> pd.DataFrame:
     '''
-        An object of the bucket as a frame, read through FILES.
-
-        The conversation with FILES lives in the boilerplate
-        (`services/utils.py`), which is the model any new DynamoDB service
-        copies; here it is only turned into the frame this service works with.
+        An object of the bucket as a frame. FILES signs a short-lived URL and
+        the file comes from the bucket as it is, read here: a stored sales
+        dataset is larger than the 6 MB a Lambda can answer as rows.
 
         Args:
-            file_key (str): S3 object key.
+            file_key (str): S3 object key; its extension picks the reader.
             auth_token (str): The caller's Authorization header.
-            delimiter (str): Field separator, for a CSV.
 
         Returns:
             pd.DataFrame: The rows the file holds.
     '''
-    return pd.DataFrame(read_file_rows(file_key, auth_token, delimiter))
+    return read_dataframe(download_file_bytes(file_key, auth_token), file_key)
 
 
 def upload_bytes(

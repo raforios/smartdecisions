@@ -136,3 +136,14 @@ class FileDeleteResponse(BaseModel):
         A file deleted.
     '''
     message: FilesResult = Field(..., description = 'DELETED.')
+
+
+class FileDownloadResponse(BaseModel):
+    '''
+        Where to fetch one object directly from the bucket, for a while.
+        The file travels from S3 to the caller and not through FILES, so its
+        size has no ceiling; FILES only decides who may fetch what.
+    '''
+    url: str = Field(..., description = 'Pre-signed URL to GET the object.')
+    file_key: str = Field(..., description = 'The object key.')
+    expires_in: int = Field(..., description = 'Seconds the URL is valid.')

@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
 from controllers.files import (
+    create_download_url,
     read_data_from_s3,
     upload_s3_file,
     delete_s3_file,
@@ -12,6 +13,7 @@ from controllers.files import (
 )
 from schemas.files import (
     FileDeleteResponse,
+    FileDownloadResponse,
     FileReadResponse,
     FileUploadData,
     FileUploadResponse,
@@ -181,3 +183,30 @@ async def get_presigned_upload_url_route(
                f'in bucket {request.bucket_name}.')
     logger.info(message)
     return await create_presigned_upload_url(request, current_user)
+
+
+@router.get(
+    '/download-url/{bucket_name}/{file_key:path}',
+    response_model = FileDownloadResponse
+)
+async def get_download_url_route(
+    bucket_name: str,
+    file_key: str,
+    current_user: str = Depends(get_current_user)
+) -> FileDownloadResponse:
+    '''
+        A short-lived URL to fetch one object directly from the bucket: the
+        way a file too large to come back as rows, or one that must stay a
+        file, reaches its caller.
+
+        Args:
+            bucket_name (str): S3 bucket name.
+            file_key (str): The object key.
+            current_user (str): The authenticated user.
+
+        Returns:
+            FileDownloadResponse: The URL, the key and how long it lives.
+    '''
+    message = f'User: {current_user} asking a download URL for {file_key} in {bucket_name}.'
+    logger.info(message)
+    return await create_download_url(bucket_name, file_key, current_user)

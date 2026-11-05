@@ -218,11 +218,12 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   compras (contrato v7, plantillas publicadas), por archivo y por API. Datos
   de prueba recargados con SKU, un dataset por empresa: Andina 5.079 ventas
   con todos sus complementos; Illimani 9.000 ventas (ver el tope de FILES).
-- **Tope de FILES (5-nov, sin resolver):** COMMERCIAL lee por FILES el
-  archivo de ventas y el dataset guardado; FILES devuelve las filas en JSON y
-  la respuesta de un Lambda no pasa de 6 MB (≈ 9.000 a 13.000 ventas). Una
-  carga mayor, agregar ventas a un dataset grande o colgarle complementos
-  falla con FILES_SERVICE_REJECTED.
+- **Tope de FILES (5-nov), resuelto en código:** FILES entrega también una
+  URL firmada de descarga (`GET /v1/s3/download-url/...`, Rafael eligió que
+  FILES siga siendo el único que toca el bucket); el bloque estándar FILES
+  suma `download_file_bytes` y COMMERCIAL lee así sus archivos guardados y
+  las plantillas (ya no tiene cliente S3 propio). Falta desplegar FILES y
+  COMMERCIAL y recargar Illimani con sus 22.008 ventas.
 - **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
   (26-oct), FINANCE (26-oct), ML_FUNCTIONS (25-oct). El
   servicio genérico de parámetros ya no existe en AWS, ni las tablas

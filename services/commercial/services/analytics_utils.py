@@ -26,7 +26,7 @@ from services.exceptions import (
 )
 from services.logger_config import custom_logger as logger
 from services.commercial_utils import owned_items
-from services.utils import get_current_time_gmt, read_file_rows
+from services.utils import get_current_time_gmt
 
 
 ENV_VARS = {
@@ -550,25 +550,6 @@ def get_dataset_metadata(
         logger.warning(error_msg)
         raise InvalidInputError(detail = AnalyticsError.DATASET_NOT_VALIDATED.value)
     return item
-
-
-def load_dataframe(
-    file_key: str,
-    auth_token: str
-) -> pd.DataFrame:
-    '''
-        A file INGEST stored, read through FILES (`CLAUDE.md` §9: FILES is
-        who touches the bucket), which answers its rows already parsed.
-
-        Args:
-            file_key (str): Object key of the file in the bucket.
-            auth_token (str): The caller's Authorization header, forwarded so
-                FILES authorizes the real user.
-
-        Returns:
-            pd.DataFrame: The rows of the file.
-    '''
-    return pd.DataFrame(read_file_rows(file_key, auth_token))
 
 
 # ---------------------------------------------------------------------------
