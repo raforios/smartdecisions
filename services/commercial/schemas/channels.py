@@ -46,6 +46,10 @@ class SaleRowSchema(BaseModel):
     date: datetime.date
     order_id: str = Field(..., min_length = 1, max_length = 64)
     pos_name: str | None = Field(None, max_length = 150)
+    product_id: str | None = Field(
+        None, min_length = 1, max_length = 64,
+        description = 'SKU of the producer, distributor or supplier; the product name stands '
+                      'for it when absent, as in the file.')
     product_name: str = Field(..., min_length = 1, max_length = 150)
     quantity: float = Field(..., gt = 0)
     zone: str | None = Field(None, max_length = 100)
@@ -116,6 +120,10 @@ class StockRowSchema(BaseModel):
         already committed and holds no reservations of its own.
     '''
     snapshot_date: datetime.date
+    product_id: str | None = Field(
+        None, min_length = 1, max_length = 64,
+        description = 'SKU of the producer, distributor or supplier; the product name stands '
+                      'for it when absent, as in the file.')
     product_name: str = Field(..., min_length = 1, max_length = 150)
     on_hand: float = Field(..., ge = 0)
     committed: float | None = Field(None, ge = 0)
@@ -132,6 +140,10 @@ class PurchaseRowSchema(BaseModel):
     '''
     purchase_date: datetime.date
     supplier: str = Field(..., min_length = 1, max_length = 128)
+    product_id: str | None = Field(
+        None, min_length = 1, max_length = 64,
+        description = 'SKU of the producer, distributor or supplier; the product name stands '
+                      'for it when absent, as in the file.')
     product_name: str = Field(..., min_length = 1, max_length = 150)
     quantity: float = Field(..., gt = 0)
     unit_cost: float = Field(..., ge = 0)

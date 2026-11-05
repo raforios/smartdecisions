@@ -144,3 +144,24 @@ def test_another_owners_product_does_not_exist(resource):
         sku = 'SKU-1', description = 'Leche')], ProductSource.API)
     with pytest.raises(ResourceNotFoundError):
         master.get_product(resource, OWNER, 'SKU-1')
+
+
+def test_the_api_door_carries_the_sku_as_the_file_does():
+    '''
+        A pushed line with a SKU is known by it; one without is known by its
+        name, exactly as a file row.
+    '''
+    # pylint: disable=import-outside-toplevel
+    from controllers.common import rows_frame
+    from schemas.channels import SaleRowSchema
+    from services.commercial import prepare_rows as prepare_sales_rows
+
+    frame = prepare_sales_rows(rows_frame([
+        SaleRowSchema(date = '2026-11-01', order_id = 'F-1', product_id = 'SKU-1',
+                      product_name = 'Leche 1 L', quantity = 2),
+        SaleRowSchema(date = '2026-11-01', order_id = 'F-2', product_name = 'Galleta',
+                      quantity = 1)
+    ]))
+
+    assert list(frame['product_id']) == ['SKU-1', 'Galleta']
+    assert [p.sku for p in master.products_from_frame(frame)] == ['SKU-1']

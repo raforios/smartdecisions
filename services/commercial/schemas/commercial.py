@@ -188,8 +188,9 @@ OBJECTIVE_HEADERS: tuple[str, ...] = tuple(
 STOCK_COLUMNS: tuple[SalesColumn, ...] = (
     SalesColumn('snapshot_date', 'Fecha', True, 'datetime64[ns]',
                 template_required = True),
-    SalesColumn('product_id', 'Producto ID', True, 'object',
-                rules = ValueRules(max_length = 64), filled_by_service = True),
+    # The supplier's SKU, as in sales (Rafael, 5-nov-2026): stock and
+    # purchases marry the sales by it; without it, by the product name.
+    SalesColumn('product_id', 'SKU', True, 'object', rules = ValueRules(max_length = 64)),
     SalesColumn('product_name', 'Producto', False, 'object', template_required = True),
     SalesColumn('on_hand', 'Existencia', True, 'float64',
                 rules = ValueRules(minimum = 0.0), template_required = True),
@@ -220,8 +221,9 @@ PURCHASE_COLUMNS: tuple[SalesColumn, ...] = (
                 template_required = True),
     SalesColumn('supplier', 'Proveedor', True, 'object',
                 rules = ValueRules(max_length = 128), template_required = True),
-    SalesColumn('product_id', 'Producto ID', True, 'object',
-                rules = ValueRules(max_length = 64), filled_by_service = True),
+    # The supplier's SKU, as in sales (Rafael, 5-nov-2026): stock and
+    # purchases marry the sales by it; without it, by the product name.
+    SalesColumn('product_id', 'SKU', True, 'object', rules = ValueRules(max_length = 64)),
     SalesColumn('product_name', 'Producto', False, 'object', template_required = True),
     SalesColumn('quantity', 'Cantidad', True, 'float64',
                 rules = ValueRules(exclusive_minimum = 0.0), template_required = True),
@@ -357,7 +359,7 @@ class TemplateName(str, Enum):
     OBJECTIVES = OBJECTIVES_TEMPLATE
     PURCHASES = PURCHASES_TEMPLATE
 
-TEMPLATE_VERSION: str = 'v6'
+TEMPLATE_VERSION: str = 'v7'
 
 REQUIRED_COLUMNS: tuple[str, ...] = tuple(
     column.canonical for column in SALES_COLUMNS if column.required

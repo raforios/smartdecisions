@@ -82,6 +82,7 @@ def _sample_rows(count: int) -> list[dict[str, Any]]:
             'Vendedor': client[6],
             'Latitud': client[7],
             'Longitud': client[8],
+            'SKU': product[0],
             'Producto': product[1],
             'Categoria': product[2],
             'Cantidad': quantity,
@@ -203,6 +204,7 @@ def _sample_stock(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         quantity = float(row['Cantidad'])
         seen[product] = {
             'Fecha': last_day,
+            'SKU': row['SKU'],
             'Producto': product,
             # Twenty days of cover at the pace of this example, so the numbers
             # read as a warehouse and not as a random figure.
@@ -238,10 +240,11 @@ def _sample_purchases(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen[product] = row
         quantity = round(float(row['Cantidad']) * 30, 0)
         purchases.append({'Fecha': first_day, 'Proveedor': 'Distribuidora Andina',
-                          'Producto': product, 'Cantidad': quantity,
+                          'SKU': row['SKU'], 'Producto': product, 'Cantidad': quantity,
                           'Costo Unitario': row['Costo Unitario'], 'Moneda': 'BOB'})
         purchases.append({'Fecha': first_day + timedelta(days = 30),
-                          'Proveedor': 'Importadora del Sur', 'Producto': product,
+                          'Proveedor': 'Importadora del Sur', 'SKU': row['SKU'],
+                          'Producto': product,
                           'Cantidad': quantity,
                           'Costo Unitario': round(float(row['Costo Unitario']) / 6.96, 2),
                           'Moneda': 'USD'})
