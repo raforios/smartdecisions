@@ -8,6 +8,7 @@
 '''
 import pandas as pd
 
+from schemas.closed_options import PaymentTerms
 from schemas.client import (
     ClientListRow,
     ClientMonth,
@@ -21,7 +22,7 @@ from services.analytics_utils import (
 )
 from services.currency import money_row, money_sums
 from services.receivables import (
-    CREDIT, CREDIT_DAYS, CREDIT_LIMIT, DUE_DATE, PAID_AMOUNT, PAYMENT_DATE, TERMS,
+    CREDIT_DAYS, CREDIT_LIMIT, DUE_DATE, PAID_AMOUNT, PAYMENT_DATE, TERMS,
     build_receivables, invoice_frame, resolve_policy
 )
 
@@ -187,7 +188,7 @@ def build_timeline(
                 amount = round(float(payment[PAID_AMOUNT]), AMOUNT_DECIMALS)))
     invoices = invoices.assign(due = _due_dates(invoices, default_term))
     for _, invoice in invoices.iterrows():
-        credit = str(invoice['terms']).upper() == CREDIT
+        credit = str(invoice['terms']).upper() == PaymentTerms.CREDIT.value
         collected = float(paid.get(invoice[ORDER], 0.0)) if credit else float(invoice['amount'])
         entries.append(TimelineEntry(
             date = invoice['date'].date().isoformat(), kind = TimelineKind.INVOICE,

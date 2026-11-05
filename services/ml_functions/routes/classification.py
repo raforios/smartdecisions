@@ -1,7 +1,6 @@
 '''
     Classification: routes handler
 '''
-from typing import Any
 
 from fastapi import APIRouter, Depends
 from services.security import get_current_user
@@ -25,6 +24,7 @@ from schemas.classification import (
     ComputeGradientLogisticRequest,
     ComputeGradientLogisticResponse,
     GradientDescentLogisticRequest,
+    GradientDescentLogisticResponse,
     PredictLogisticRequest,
     PredictLogisticResponse
 )
@@ -33,6 +33,7 @@ router = APIRouter(prefix = '/v1/classification', tags = ['ML Classification'])
 
 @router.post(
     '/sigmoid-batch',
+    response_model = list[float],
     summary = 'Calculate sigmoid function for a batch of values',
     description = '''Calculates the sigmoid function for each value in a batch
         and returns the results. This is useful for testing the sigmoid service.'''
@@ -51,9 +52,7 @@ async def sigmoid_batch_algorithm(
                             (dependency-injected).
 
     Returns:
-        float | numpy.ndarray: The result of the sigmoid calculation.
-                                     Returns a float if a single value was passed,
-                                     or a NumPy array if a list was passed.
+        list[float]: The sigmoid of each value, in order.
 
     Raises:
         UnauthorizedError: If authentication fails.
@@ -65,6 +64,7 @@ async def sigmoid_batch_algorithm(
 
 @router.post(
     '/cost-logistic',
+    response_model = float,
     summary = 'Compute logistic regression cost',
     description = '''Calculates the cost (J) for a given logistic regression
         model (x, y, w, b).'''
@@ -107,7 +107,7 @@ async def compute_cost_logistic_route(
 async def compute_gradient_logistic_route(
     request: ComputeGradientLogisticRequest,
     current_user: str = Depends(get_current_user)
-) -> dict[str, Any]:
+) -> ComputeGradientLogisticResponse:
     '''
     Calculates the gradient for logistic regression based on provided data, weights, and bias.
 
@@ -135,6 +135,7 @@ async def compute_gradient_logistic_route(
 
 @router.post(
     '/train-logistic-regression',
+    response_model = GradientDescentLogisticResponse,
     summary = 'Train logistic regression model using gradient descent',
     description = '''Performs batch gradient descent to train a logistic regression
         model and returns the final parameters (w, b) and training history.'''
@@ -142,7 +143,7 @@ async def compute_gradient_logistic_route(
 async def train_logistic_regression_route(
     request: GradientDescentLogisticRequest,
     current_user: str = Depends(get_current_user)
-) -> dict[str, Any]:
+) -> GradientDescentLogisticResponse:
     '''
     Performs logistic regression gradient descent to find optimal parameters (w, b).
 
@@ -159,7 +160,7 @@ async def train_logistic_regression_route(
                             (dependency-injected).
 
     Returns:
-        dict: A dictionary containing the final w, b, and the history of cost
+        GradientDescentLogisticResponse: The final w, b, and the history of cost
               and parameters.
 
     Raises:

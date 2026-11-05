@@ -27,7 +27,7 @@ from models.billing import (
     CashSessionItem,
     movement_key
 )
-from schemas.billing import BillingError, MethodTotal, PaymentMethod, SaleStatus
+from schemas.billing import BillingError, PaymentMethod, SaleStatus
 from schemas.billing_returns import ReturnError
 from schemas.billing_cash import (
     CashAlert,
@@ -44,14 +44,16 @@ from schemas.billing_cash import (
     MovementStatus
 )
 from services.billing import (
-    SortBounds,
+    MONEY_DECIMALS,
     date_window,
     from_dynamo,
     get_settings,
     new_id,
     read_partition,
+    SortBounds,
     write_item
 )
+from services.billing_payments import method_totals
 from services.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError,
@@ -60,7 +62,6 @@ from services.exceptions import (
 from services.logger_config import custom_logger as logger
 from services.utils import get_current_time_gmt
 
-MONEY_DECIMALS = 2
 
 
 @dataclass(frozen = True)
@@ -275,47 +276,6 @@ def _session_movements(
                                      begins_with = movement_key(session_id, '')))
 
 
-def method_totals(sales: list[Any]) -> list[MethodTotal]:
-    '''
-        What each payment method brought in. Works on stored items and on
-        `SaleNoteOut`, so the till and the daily report count the same way.
-
-        Args:
-            sales (list[Any]): Issued sales.
-
-        Returns:
-            list[MethodTotal]: One row per method used, in the enum's order;
-                `count` is how many sales used it.
-    '''
-    totals: dict[str, list[float]] = {}
-    for sale in sales:
-        for method, amount in _parts(sale):
-            totals.setdefault(method, []).append(amount)
-    return [MethodTotal(payment_method = method, count = len(totals[method.value]),
-                        total = _money(sum(totals[method.value])))
-            for method in PaymentMethod if method.value in totals]
-
-
-def _parts(sale: Any) -> list[tuple[str, float]]:
-    '''
-        What each method paid of one sale. A combined payment counts in every
-        method it used, each with its own amount; a note issued before
-        payments were combined paid its total one way.
-
-        Args:
-            sale (Any): A stored item or a `SaleNoteOut`.
-
-        Returns:
-            list[tuple[str, float]]: (method, amount) pairs.
-    '''
-    if isinstance(sale, dict):
-        parts = sale.get('payments') or [{'method': sale['payment_method'],
-                                          'amount': sale['total']}]
-        return [(part['method'], part['amount']) for part in parts]
-    return [(part.method.value, part.amount) for part in sale.payments] or \
-        [(sale.payment_method.value, sale.total)]
-
-
 def _summary(
     dynamodb_resource: ServiceResource,
     owner: str,
@@ -522,6 +482,29 @@ def expected_cash(
     '''
     stored = _read_session(dynamodb_resource, owner, session_id)
     return _summary(dynamodb_resource, owner, stored).expected_cash
+
+
+def require_cash(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    session_id: str,
+    amount: float
+) -> None:
+    '''
+        Refuses cash a till does not hold: a refund the drawer cannot pay
+        must not reach the SIN.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            session_id (str): The till.
+            amount (float): The cash that would leave it.
+
+        Raises:
+            InvalidInputError: EXPENSE_EXCEEDS_CASH.
+    '''
+    if amount > expected_cash(dynamodb_resource, owner, session_id):
+        raise InvalidInputError(detail = BillingError.EXPENSE_EXCEEDS_CASH.value)
 
 
 def require_till_open(

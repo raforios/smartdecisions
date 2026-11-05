@@ -167,7 +167,7 @@
         CASH: 'Efectivo',
         QR: 'QR',
         CARD: 'Tarjeta',
-        BANK_TRANSFER: 'Transferencia bancaria',
+        BANK_TRANSFER: 'Transferencia',
         MOBILE_WALLET: 'Billetera móvil'
     };
 

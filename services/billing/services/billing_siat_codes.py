@@ -41,10 +41,10 @@ from services.utils import get_current_time_gmt, load_parameters
 CODES_PREFIX = 'siat#codes#'
 CATALOG_PREFIX = 'siat#catalog#'
 
-# How long the norm stretches a CUFD when the SIN cannot issue the next one.
-CUFD_STRETCH_HOURS: Final[int] = 72
-
-PARAMETERS = load_parameters({'BILLING_CUFD_HISTORY_DAYS': int})
+# BILLING_CUFD_STRETCH_HOURS: how long the norm stretches a CUFD when the SIN
+# cannot issue the next one.
+PARAMETERS = load_parameters({'BILLING_CUFD_HISTORY_DAYS': int,
+                              'BILLING_CUFD_STRETCH_HOURS': int})
 
 # The fields of one CUFD, kept together in the history.
 _CUFD_FIELDS: Final[tuple[str, ...]] = ('cufd', 'control_code', 'cufd_valid_until', 'address',
@@ -197,7 +197,7 @@ def last_codes(
     if not stored.get('cufd') or not stored.get('cufd_valid_until'):
         return None
     stretched = (_moment(stored['cufd_valid_until'])
-                 + timedelta(hours = CUFD_STRETCH_HOURS)).isoformat()
+                 + timedelta(hours = PARAMETERS['BILLING_CUFD_STRETCH_HOURS'])).isoformat()
     return None if _expired(stretched) else _codes_out(emitter, stored)
 
 
@@ -227,7 +227,8 @@ def codes_at(
     if not earlier:
         return None
     entry = max(earlier, key = lambda one: _moment(one['cufd_obtained_at']))
-    if when > _moment(entry['cufd_valid_until']) + timedelta(hours = CUFD_STRETCH_HOURS):
+    stretch = timedelta(hours = PARAMETERS['BILLING_CUFD_STRETCH_HOURS'])
+    if when > _moment(entry['cufd_valid_until']) + stretch:
         return None
     return _codes_out(emitter, {**stored, **entry})
 
@@ -236,6 +237,9 @@ def _cufd_entry(stored: dict[str, Any]) -> list[dict[str, Any]]:
     '''
         The CUFD of a codes item, as one history entry; none when it has
         no CUFD.
+
+        Args:
+            stored (dict[str, Any]): The codes as stored.
     '''
     return [{field: stored.get(field) for field in _CUFD_FIELDS}] if stored.get('cufd') else []
 
@@ -244,6 +248,9 @@ def _recent(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
     '''
         The history entries obtained within the days kept; one with no
         obtaining moment, stored before the history existed, is dropped.
+
+        Args:
+            history (list[dict[str, Any]]): The replaced CUFDs.
     '''
     since = get_current_time_gmt() - timedelta(days = PARAMETERS['BILLING_CUFD_HISTORY_DAYS'])
     return [entry for entry in history

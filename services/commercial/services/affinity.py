@@ -144,6 +144,9 @@ def _compute_drop_size(dataframe: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
 def _build_product_name_index(dataframe: pd.DataFrame) -> dict[str, str]:
     '''
         Builds a stable product_id → product_name map for the UI layer.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
     '''
     if 'product_name' not in dataframe.columns:
         return {}
@@ -157,6 +160,9 @@ def _build_product_name_index(dataframe: pd.DataFrame) -> dict[str, str]:
 def _build_pdv_name_index(dataframe: pd.DataFrame) -> dict[str, str]:
     '''
         Builds a stable pos_id → pos_name map for the UI layer.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
     '''
     if 'pos_name' not in dataframe.columns:
         return {}
@@ -170,6 +176,9 @@ def _build_pdv_name_index(dataframe: pd.DataFrame) -> dict[str, str]:
 def _index_pdv_products(dataframe: pd.DataFrame) -> dict[str, set]:
     '''
         Maps each pos_id to the set of product SKUs it already buys.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
     '''
     return (
         dataframe.assign(product_id = dataframe['product_id'].astype(str))
@@ -186,6 +195,10 @@ def _drop_size_for(
     '''
         Returns (expected units, expected amount) for a recommended product.
         The amount is None when the source provided no pricing.
+
+        Args:
+            consequent_id (str): The product the rule recommends.
+            data (_EngineData): The indexes built over the sales.
     '''
     drop_units = float(data.avg_units.get(consequent_id, 0.0) or 0.0)
     raw_amount = data.avg_amount.get(consequent_id)
@@ -208,6 +221,13 @@ def _build_candidate(
         Materializes a single opportunity dict for a (PdV, recommended
         product) pair, scoring it by monetary impact when prices exist and
         falling back to volume otherwise.
+
+        Args:
+            basket (_PdvBasket): What the point of sale already buys.
+            rule (dict[str, Any]): The association rule.
+            consequent_id (str): The product the rule recommends.
+            antecedents (set): The products that trigger the rule.
+            data (_EngineData): The indexes built over the sales.
     '''
     drop_units, drop_amount = _drop_size_for(consequent_id, data)
     ranking_weight = drop_amount if drop_amount is not None else drop_units
@@ -247,6 +267,10 @@ def _candidates_for_pdv(
         once per rule for every PdV, and `iterrows()` builds a Series per row.
         With 11 180 rules and 274 PdVs that was 118 s on the Lambda, past the
         29 s API Gateway limit, so the screen answered "Service Unavailable".
+
+        Args:
+            basket (_PdvBasket): What the point of sale already buys.
+            data (_EngineData): The indexes built over the sales.
     '''
     candidates: list[dict[str, Any]] = []
     for rule in data.rules:
@@ -270,6 +294,10 @@ def _dedupe_and_rank(
         Collapses duplicate (pdv, product) candidates keeping the highest
         score — a product can be the consequent of several rules for the same
         PdV — then returns the top N by opportunity score.
+
+        Args:
+            candidates (list[dict[str, Any]]): Every opportunity found, repeats included.
+            top_n (int): How many to keep.
     '''
     deduped: dict[str, Opportunity] = {}
     for candidate in candidates:
@@ -293,6 +321,11 @@ def _collect_opportunities(
     '''
         Iterates over every PdV, builds and ranks its candidates and returns
         the flattened opportunity list.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
+            data (_EngineData): The indexes built over the sales.
+            top_n_per_pdv (int): How many per point of sale.
     '''
     opportunities: list[Opportunity] = []
     for pdv_id, products_bought in _index_pdv_products(dataframe).items():
@@ -315,6 +348,11 @@ def _build_summary(
     '''
         Aggregates the run-level statistics returned alongside the
         opportunities.
+
+        Args:
+            opportunities (list[Opportunity]): The opportunities kept.
+            rules_count (int): How many rules the mining found.
+            parameters (dict[str, Any]): The parameters the mining ran with.
     '''
     amounts = [
         opp.expected_drop_size_amount

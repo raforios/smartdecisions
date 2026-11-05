@@ -120,6 +120,10 @@ def _day_bounds(
     '''
         Sort-key bounds for a date range: "YYYYMMDD" sorts before every key of
         that day and "YYYYMMDD~" after every key of that day.
+
+        Args:
+            date_from (str | None): First day, ISO date.
+            date_to (str | None): Last day, ISO date.
     '''
     bounds: dict[str, str] = {}
     if date_from:
@@ -272,6 +276,10 @@ def _save_executed_route(
 ) -> ExecutedRouteItem:
     '''
         Writes a route back after a change (full replace of the item).
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            item (ExecutedRouteItem): The item as it is written.
     '''
     table = dynamodb_resource.Table(EXECUTED_ROUTES_TABLE)
     table.put_item(Item = to_dynamo(item))
@@ -281,6 +289,9 @@ def _save_executed_route(
 def _assert_open(route: ExecutedRouteItem) -> None:
     '''
         Raises if the route was already closed.
+
+        Args:
+            route (ExecutedRouteItem): The route as stored.
     '''
     if route.get('end_time'):
         error_msg = f'Executed route {route["id"]} is already closed.'
@@ -296,6 +307,11 @@ def _active_plan(
     '''
         The planned route a seller wants to run: it must exist for this owner
         and be ACTIVE.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): The owner of the data.
+            planned_route_id (str): The planned route.
     '''
     plan = get_planned_route(dynamodb_resource, owner_email, planned_route_id)
     if plan['status'] != PlannedRouteStatusEnum.ACTIVE.value:
@@ -314,6 +330,12 @@ def _assert_within(
     '''
         Raises `code` when `position` is farther than `limit_m` metres from `stop`.
         A plan without stops cannot be geofenced.
+
+        Args:
+            stop (dict[str, Any] | None): The stop of the plan.
+            position (tuple[float, float]): Where the seller is.
+            limit_m (float): The distance allowed, in metres.
+            code (LocalizationError): The error code when it is farther.
     '''
     if stop is None:
         raise RegisterNotFoundError(detail = LocalizationError.START_POINT_NOT_FOUND.value)

@@ -22,6 +22,7 @@ from schemas.billing import LotOut, LotPricePatch, LotsResponse, BillingError, S
 from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
 from services.billing import (
+    MONEY_DECIMALS,
     SortBounds,
     expiry_order,
     from_dynamo,
@@ -153,7 +154,7 @@ def allocate(
             lot_id = lot['lot_id'], lot_code = lot.get('lot_code'),
             expiry_date = lot.get('expiry_date'), quantity = units,
             unit_price = lot['sale_price'], unit_cost = lot['unit_cost'],
-            amount = round(units * lot['sale_price'], 2)
+            amount = round(units * lot['sale_price'], MONEY_DECIMALS)
         ))
         pending -= units
 

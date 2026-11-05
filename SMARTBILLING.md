@@ -71,18 +71,10 @@ anulación (factura y nota) está aprobada en su versión mínima: una sola vez,
 hasta el día 9 del mes siguiente, con el stock disponible y la caja de la
 venta o de la devolución abierta; aviso al comprador por correo.
 
-- **Correo:** el dominio está verificado en SES, pero la cuenta sigue en
-  sandbox: a un comprador real todavía no le llega. La solicitud de producción
-  fue el caso de AWS Support 179319997000226 (reabierto el 29-oct), que el
-  3-nov figura denegado (`ReviewDetails` DENIED) aunque el caso dice
-  «Reabierto»: el 28-oct se respondió lo que AWS pidió y el caso se cerró
-  dos minutos después; desde la reapertura AWS no volvió a escribir. Hay que
-  pedirla de nuevo. Una solicitud nueva por API responde ConflictException
-  (el caso sigue abierto), así que el 3-nov se respondió en el mismo caso
-  pidiendo otra revisión, con la información completa (incluye la nota de
-  crédito-débito). No cerrar el caso hasta que AWS decida.
-- **Datos de prueba:** THE PHARMA queda con la facturación apagada y el
-  producto CONS-TI dado de baja después de cada prueba.
+- **Correo:** el dominio está verificado en SES y la cuenta salió del
+  sandbox el 5-nov-2026 (caso 179319997000226; comprobado en AWS:
+  `ProductionAccessEnabled`, 50.000 correos al día, 14 por segundo): el
+  correo ya le llega a un comprador real.
 
 ## Pendiente para retomar
 
@@ -93,9 +85,7 @@ venta o de la devolución abierta; aviso al comprador por correo.
    piloto (en pausa).
 3. **Pruebas de certificación fase I** del SIN (`docs/siat/SIAT.md`, sección
    de la fase I).
-4. **SES:** el caso de AWS quedó cerrado sin avance (Rafael, 3-nov);
-   revisarlo en la consola y volver a pedir la salida del sandbox.
-5. **Ideas aprobadas, sin fecha:** factura por WhatsApp, Libro de Ventas del
+4. **Ideas aprobadas, sin fecha:** factura por WhatsApp, Libro de Ventas del
    SIN para el contador, aviso de CUFD y certificado por vencer.
 6. **Proveedores y pedidos** (Rafael, 04-oct, nunca programado): «puede
    recibir por partes y quedar pendientes»; recibir sin pedido previo: «sí»;

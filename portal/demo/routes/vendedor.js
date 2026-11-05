@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- geolocation ----------
     const MAX_ACCURACY = window.SD_CONFIG.GPS_MAX_ACCURACY_METERS;
+    // The visit outcome code of a sale (VisitOutcome.SALE in the backend).
+    const SALE = 'SALE';
 
     /**
      * A fresh, precise fix or nothing. The device says how good the reading
@@ -200,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function paintSummary() {
         const points = state.route.points || [];
         const visits = points.filter((point) => point.client_id).length;
-        const sales = points.filter((point) => point.outcome === 'SALE').length;
+        const sales = points.filter((point) => point.outcome === SALE).length;
         const planned = state.plan ? state.plan.points.length : 0;
         qs('#routeSummary').innerHTML =
             metric('Desde', T.formatStamp(state.route.start_time)) +
@@ -230,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const row = document.createElement('div');
                 row.className = 'seller-stop is-done';
                 row.innerHTML =
-                    `<span class="stop-pin" style="background:${point.outcome === 'SALE' ? T.PIN_COLORS.sale : T.PIN_COLORS.point}">${index + 1}</span>` +
+                    `<span class="stop-pin" style="background:${point.outcome === SALE ? T.PIN_COLORS.sale : T.PIN_COLORS.point}">${index + 1}</span>` +
                     `<span class="seller-stop-name">${T.escapeHtml(point.client_id)}` +
                     `<small>${T.escapeHtml(T.OUTCOME_LABELS[point.outcome] || 'visitado')} · ${T.escapeHtml(T.formatStamp(point.timestamp))}</small></span>`;
                 list.appendChild(row);
@@ -249,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.visiting = client;
         qs('#visitTitle').textContent = client ? `Visita a ${client}` : 'Visita fuera del plan';
         qs('#visitClient').value = client;
-        qs('#visitOutcome').value = 'SALE';
+        qs('#visitOutcome').value = SALE;
         qs('#visitOrder').value = '';
         qs('#itemRows').innerHTML = '';
         addItemRow();
@@ -273,7 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     function toggleSaleFields() {
-        const selling = qs('#visitOutcome').value === 'SALE';
+        const selling = qs('#visitOutcome').value === SALE;
         qs('#orderField').hidden = !selling;
         qs('#itemsField').hidden = !selling;
     }
@@ -339,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const outcome = qs('#visitOutcome').value;
-        const items = outcome === 'SALE' ? readItems() : [];
+        const items = outcome === SALE ? readItems() : [];
         const done = setButtonBusy(qs('#visitSaveButton'), 'Guardando…');
         try {
             const here = await locate();
@@ -348,11 +350,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 executed_route_id: state.route.id, timestamp: T.nowIso(),
                 latitude: here.lat, longitude: here.lon,
                 client_id: clientId, outcome,
-                order_id: outcome === 'SALE' ? (qs('#visitOrder').value.trim() || null) : null,
+                order_id: outcome === SALE ? (qs('#visitOrder').value.trim() || null) : null,
                 items
             });
             toast(isNew ? 'Cliente nuevo y visita registrados.'
-                        : (outcome === 'SALE' ? 'Venta registrada.' : 'Visita registrada.'),
+                        : (outcome === SALE ? 'Venta registrada.' : 'Visita registrada.'),
                   'success');
             await refreshRoute();
             hideVisit();

@@ -154,6 +154,10 @@ def _save_planned_route(
 ) -> PlannedRouteItem:
     '''
         Writes a route back after a change (full replace of the item).
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            item (PlannedRouteItem): The item as it is written.
     '''
     table = dynamodb_resource.Table(PLANNED_ROUTES_TABLE)
     table.put_item(Item = to_dynamo(item))
@@ -202,13 +206,18 @@ def to_route_response(route: PlannedRouteItem) -> PlannedRouteResponseSchema:
     )
 
 
-def _assert_route_code_free(
+def assert_route_code_free(
     routes: list[PlannedRouteItem],
     route_code: str,
     exclude_id: str | None = None
 ) -> None:
     '''
         Raises if another route of the same owner already carries `route_code`.
+
+        Args:
+            routes (list[PlannedRouteItem]): The routes of the owner.
+            route_code (str): The code wanted.
+            exclude_id (str | None): The route being edited, which may keep its code.
     '''
     for route in routes:
         if route['route_code'] == route_code and route['id'] != exclude_id:
@@ -222,6 +231,9 @@ def _assert_route_code_free(
 def _assert_in_creation(route: PlannedRouteItem) -> None:
     '''
         Raises unless the route is still being built.
+
+        Args:
+            route (PlannedRouteItem): The route as stored.
     '''
     if route['status'] != PlannedRouteStatusEnum.IN_CREATION.value:
         error_msg = f'Route {route["id"]} is {route["status"]}; only IN CREATION allows this.'
@@ -229,13 +241,18 @@ def _assert_in_creation(route: PlannedRouteItem) -> None:
         raise InvalidInputError(detail = LocalizationError.ROUTE_NOT_IN_CREATION.value)
 
 
-def _assert_sequence_free(
+def assert_sequence_free(
     points: list[PlannedPointItem],
     secuencial: int,
     exclude_id: str | None = None
 ) -> None:
     '''
         Raises if another stop of the route already has that visiting order.
+
+        Args:
+            points (list[PlannedPointItem]): The points of the route.
+            secuencial (int): The position wanted.
+            exclude_id (str | None): The point being edited, which may keep its position.
     '''
     for point in points:
         if point['secuencial'] == secuencial and point['id'] != exclude_id:
@@ -252,6 +269,10 @@ def _find_point(
 ) -> PlannedPointItem:
     '''
         Returns the stop with `point_id` or raises.
+
+        Args:
+            route (PlannedRouteItem): The route as stored.
+            point_id (str): The point.
     '''
     for point in route.get('points', []):
         if point['id'] == point_id:
@@ -330,12 +351,12 @@ def create_planned_route(
         Returns:
             PlannedRouteItem: The stored route.
     '''
-    _assert_route_code_free(
+    assert_route_code_free(
         list_planned_routes(dynamodb_resource, owner_email), route_data.route_code
     )
     points: list[PlannedPointItem] = []
     for point in route_data.points:
-        _assert_sequence_free(points, point.secuencial)
+        assert_sequence_free(points, point.secuencial)
         points.append(build_point_item(point))
     item = build_route_item(
         owner_email = owner_email,
@@ -442,7 +463,7 @@ def update_planned_route(
     if not changes:
         return route
     if 'route_code' in changes and changes['route_code'] != route['route_code']:
-        _assert_route_code_free(
+        assert_route_code_free(
             list_planned_routes(dynamodb_resource, owner_email),
             changes['route_code'],
             exclude_id = route_id
@@ -534,7 +555,7 @@ def add_planned_point(
     '''
     route = get_planned_route(dynamodb_resource, owner_email, route_id)
     _assert_in_creation(route)
-    _assert_sequence_free(route.get('points', []), point_data.secuencial)
+    assert_sequence_free(route.get('points', []), point_data.secuencial)
     point = build_point_item(point_data)
     route['points'] = sorted(
         route.get('points', []) + [point], key = lambda stop: stop['secuencial']
@@ -570,7 +591,7 @@ def update_planned_point(
     point = _find_point(route, point_id)
     changes = point_data.model_dump(exclude_unset = True)
     if 'secuencial' in changes and changes['secuencial'] != point['secuencial']:
-        _assert_sequence_free(route['points'], changes['secuencial'], exclude_id = point_id)
+        assert_sequence_free(route['points'], changes['secuencial'], exclude_id = point_id)
     point.update(changes)
     route['points'] = sorted(route['points'], key = lambda stop: stop['secuencial'])
     _save_planned_route(dynamodb_resource, route)

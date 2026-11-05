@@ -7,7 +7,7 @@ import pandas as pd
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
-from controllers.analytics import _at_month_close, _payments_of, _scoped_dataframe
+from controllers.analytics import at_month_close, payments_of, scoped_dataframe
 from schemas.analytics import AnalyticsError
 from schemas.client import ClientCardResponse, ClientListResponse
 from services.analytics_utils import ORDER, get_credit_policy, get_dataset_metadata
@@ -56,7 +56,7 @@ async def client_list_controller(
     '''
         Every client of the dataset, the largest first, to open its card.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, _ = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     clients = [row.model_dump() for row in build_client_list(dataframe)]
     return _today_rates(ClientListResponse, {'dataset_id': dataset_id, 'clients': clients},
                         params)
@@ -74,7 +74,7 @@ async def client_card_controller(
         Everything about one client, and the timeline of its invoices and
         payments. A client not in the dataset answers CLIENT_NOT_FOUND.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, _ = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     rows = client_rows(dataframe, client_id)
     if rows.empty:
         error_msg = f'Client {client_id} is not in dataset {dataset_id}.'
@@ -82,7 +82,7 @@ async def client_card_controller(
         raise ResourceNotFoundError(detail = AnalyticsError.CLIENT_NOT_FOUND.value)
     metadata = get_dataset_metadata(dynamodb_resource = dynamodb_resource,
                                     dataset_id = dataset_id, owner_email = current_user)
-    payments = _payments_of(metadata, (params or {}).get('auth_token') or '')
+    payments = payments_of(metadata, (params or {}).get('auth_token') or '')
     if payments is not None and ORDER in rows.columns:
         payments = payments.loc[payments[ORDER].isin(rows[ORDER])]
     policy = get_credit_policy(dynamodb_resource = dynamodb_resource,
@@ -91,7 +91,7 @@ async def client_card_controller(
     as_of = pd.to_datetime(dataframe['date'], errors = 'coerce').max()
     return _today_rates(ClientCardResponse, {
         'dataset_id': dataset_id, 'client_id': client_id,
-        **build_profile(_at_month_close(rows, params), as_of),
+        **build_profile(at_month_close(rows, params), as_of),
         'receivable': build_client_receivable(rows, payments, policy, timeline).model_dump(),
         'timeline': [entry.model_dump() for entry in timeline]
     }, params)

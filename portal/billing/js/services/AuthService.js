@@ -10,6 +10,14 @@ import { resolveBases, request } from './apiClient.js';
 
 const BASES = resolveBases({ remote: AUTH_URL, local: AUTH_URL_LOCAL });
 
+/** What AUTH answers when it refuses a sign-in, in words. */
+const LOGIN_ERRORS = {
+    INVALID_CREDENTIALS: 'Correo o contraseña incorrectos.',
+    USER_INACTIVE: 'Tu usuario está inactivo. Pide al Administrador que lo active.',
+    STORAGE_UNAVAILABLE: 'El servicio de autenticación no responde. Intenta de nuevo en unos minutos.',
+    TOKEN_NOT_ISSUED: 'El servicio de autenticación no responde. Intenta de nuevo en unos minutos.'
+};
+
 /**
  * Asks AUTH for the token and stores it.
  *
@@ -25,7 +33,7 @@ export async function login(email, password) {
     });
     if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(payload?.detail || `Error ${response.status} al iniciar sesión.`);
+        throw new Error(LOGIN_ERRORS[payload?.detail] || `Error ${response.status} al iniciar sesión.`);
     }
     const data = await response.json();
     localStorage.setItem(STORAGE_TOKEN_KEY, data.access_token);

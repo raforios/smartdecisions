@@ -1,126 +1,71 @@
 '''
     Classification controller
 '''
-
-import numpy as np
+from services import training
+from services.classification import association_rules, rank_tiers
 from services.logger_config import custom_logger as logger
 from services.utils import handle_operation
-from services.machine_learning import (
-    sigmoid,
-    compute_cost_logistic,
-    compute_gradient_logistic,
-    gradient_descent_logistic,
-    predict_logistic
-)
-from services.classification import association_rules, rank_tiers
 from schemas.classification import (
     AssociationRule,
     AssociationRulesRequest,
     AssociationRulesResponse,
-    TiersRequest,
-    TiersResponse,
-    SigmoidBatchRequest,
     ComputeCostLogisticRequest,
     ComputeGradientLogisticRequest,
+    ComputeGradientLogisticResponse,
     GradientDescentLogisticRequest,
+    GradientDescentLogisticResponse,
     PredictLogisticRequest,
-    PredictLogisticResponse
+    PredictLogisticResponse,
+    SigmoidBatchRequest,
+    TiersRequest,
+    TiersResponse
 )
 
-@handle_operation(exc_type = (ValueError, TypeError))
-async def calculating_sigmoid(
-    request_body: SigmoidBatchRequest
-) -> list[float]:
-    '''
-    Calculates the sigmoid function for a given input value or array of values.
-    '''
-    response = sigmoid(np.array(request_body.z_values)).tolist()
-    message = 'Batch sigmoid calculation completed.'
-    logger.info(message)
-    return response
 
 @handle_operation(exc_type = (ValueError, TypeError))
-async def calculating_cost_logistic(
-    request_body: ComputeCostLogisticRequest
-) -> float:
+async def calculating_sigmoid(request_body: SigmoidBatchRequest) -> list[float]:
     '''
-    Calculates the logistic regression cost using the compute_cost_logistic.
+        The sigmoid of each value.
     '''
-    cost = compute_cost_logistic(
-        np.array(request_body.x_matrix),
-        np.array(request_body.y),
-        np.array(request_body.w),
-        request_body.b
-    )
-    message = f'Logistic cost calculated: {cost}'
-    logger.info(message)
-    return float(cost)
+    return training.sigmoid_batch(request_body)
+
+
+@handle_operation(exc_type = (ValueError, TypeError))
+async def calculating_cost_logistic(request_body: ComputeCostLogisticRequest) -> float:
+    '''
+        The log loss of a logistic model.
+    '''
+    return training.logistic_cost(request_body)
+
 
 @handle_operation(exc_type = (ValueError, TypeError))
 async def calculating_gradient_logistic(
     request_body: ComputeGradientLogisticRequest
-) -> dict:
+) -> ComputeGradientLogisticResponse:
     '''
-    Calculates the logistic regression gradient using the compute_gradient_logistic.
+        The gradient of the log loss of a logistic model.
     '''
-    dj_dw, dj_db = compute_gradient_logistic(
-        np.array(request_body.x_matrix),
-        np.array(request_body.y),
-        np.array(request_body.w),
-        request_body.b
-    )
-    message = f'Logistic gradient calculated: dj_db = {dj_db}, dj_dw = {dj_dw.tolist()}'
-    logger.info(message)
+    return training.logistic_gradient(request_body)
 
-    return {"dj_db": float(dj_db), "dj_dw": dj_dw.tolist()}
 
 @handle_operation(exc_type = (ValueError, TypeError))
 async def performing_gradient_descent_logistic(
     request_body: GradientDescentLogisticRequest
-) -> dict:
+) -> GradientDescentLogisticResponse:
     '''
-    Performs logistic regression gradient descent to find optimal parameters (w, b).
+        Fits a logistic model by gradient descent.
     '''
-    w_final, b_final, j_history, p_history = gradient_descent_logistic(
-        np.array(request_body.x_matrix),
-        np.array(request_body.y),
-        np.array(request_body.w_in),
-        request_body.b_in,
-        {'alpha': request_body.alpha, 'num_iters': request_body.num_iters}
-    )
+    return training.train_logistic(request_body)
 
-    p_history_serializable = []
-    for w_val, b_val in p_history:
-        p_history_serializable.append([w_val.tolist(), float(b_val)])
-
-    response_data = {
-        'w': w_final.tolist(),
-        'b': float(b_final),
-        'J_history': [float(cost) for cost in j_history],
-        'p_history': p_history_serializable
-    }
-    message = f'Logistic gradient descent completed. Final w: {w_final.tolist()}, b: {b_final}'
-    logger.info(message)
-    return response_data
 
 @handle_operation(exc_type = (ValueError, TypeError))
 async def predicting_logistic_classification(
     request_body: PredictLogisticRequest
 ) -> PredictLogisticResponse:
     '''
-    Performs logistic regression prediction using predict_logistic.
+        The class of each example under a trained logistic model.
     '''
-    predictions_np = predict_logistic(
-        np.array(request_body.x_matrix),
-        np.array(request_body.w),
-        request_body.b
-    )
-    predictions_list = predictions_np.tolist()
-
-    message = f'Logistic prediction completed. Predicted labels: {predictions_list}'
-    logger.info(message)
-
-    return PredictLogisticResponse(predictions = predictions_list)
+    return training.predict_classes(request_body)
 
 
 @handle_operation(exc_type = (ValueError, TypeError))

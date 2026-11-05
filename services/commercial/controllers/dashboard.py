@@ -7,7 +7,7 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
-from controllers.analytics import _at_month_close, _payments_of, _scoped_dataframe
+from controllers.analytics import at_month_close, payments_of, scoped_dataframe
 from controllers.purchases import purchase_figures
 from schemas.dashboard import DashboardResponse
 from services.analytics_utils import (
@@ -63,18 +63,18 @@ async def dashboard_controller(
     '''
         The most salient figure of each area. Read-only: nothing is persisted.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, _ = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(dynamodb_resource = dynamodb_resource,
                                     dataset_id = dataset_id, owner_email = current_user)
     token = (params or {}).get('auth_token') or ''
-    payments = _payments_of(metadata, token)
+    payments = payments_of(metadata, token)
     objectives, _ = select_objective_periods(_companion(metadata, 'objectives_s3_key', token),
                                              None, None)
     attainment = None if objectives is None else build_objectives(
         sales = dataframe, objectives = objectives, collections = payments,
         stored_policy = get_commercial_policy(dynamodb_resource = dynamodb_resource,
                                               owner_email = current_user))
-    closed = _at_month_close(dataframe, params)
+    closed = at_month_close(dataframe, params)
     receivables = build_receivables(
         sales = dataframe, collections = payments,
         stored_policy = get_credit_policy(dynamodb_resource = dynamodb_resource,

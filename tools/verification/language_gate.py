@@ -24,7 +24,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from verify_service import SPANISH_CODE_WORDS, _codes_in  # pylint: disable=wrong-import-position
+# pylint: disable=wrong-import-position
+from verify_checks import PRODUCT_SERVICES
+from verify_service import SPANISH_CODE_WORDS, codes_in
+# pylint: enable=wrong-import-position
 
 # Unmistakable Spanish markers. 'no', 'es', 'la', 'el', 'un', 'sin', 'con' and
 # 'a' are left out on purpose: they exist in English or match English words.
@@ -38,8 +41,6 @@ SPANISH = re.compile(
 QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 COMMENT_MARK = re.compile(r'^(//|/\*\*?|\*/?|<!--)\s*|\s*(\*/|-->)$')
 
-OWN_SERVICES = ('ai', 'auth', 'billing', 'commercial', 'events', 'files', 'finance',
-                'mining_analysis', 'ml_functions', 'quotes')
 SWEPT = ('.py', '.js', '.css', '.html')
 
 
@@ -47,12 +48,32 @@ def _is_own(path: Path) -> bool:
     '''
         Whether a path belongs to BearSoft: tools/, portal/ and the ten own
         services; the clients' services are reported, never swept here.
+
+        Args:
+            path (Path): Path relative to the repository root.
+
+        Returns:
+            bool: True when it is BearSoft's.
     '''
     parts = path.parts
     if 'services' not in parts:
         return True
     index = parts.index('services')
-    return len(parts) > index + 1 and parts[index + 1] in OWN_SERVICES
+    return len(parts) > index + 1 and parts[index + 1] in PRODUCT_SERVICES
+
+
+def _git(*args: str) -> list[str]:
+    '''
+        The words a git command prints, run at the repository root.
+
+        Args:
+            *args (str): The git arguments.
+
+        Returns:
+            list[str]: Its output, split on whitespace.
+    '''
+    return subprocess.run(['git', *args], cwd = ROOT, capture_output = True, text = True,
+                          check = True).stdout.split()
 
 
 def changed_files() -> list[Path]:
@@ -62,10 +83,8 @@ def changed_files() -> list[Path]:
         Returns:
             list[Path]: Paths relative to the repository root.
     '''
-    run = lambda *args: subprocess.run(['git', *args], cwd = ROOT, capture_output = True,  # pylint: disable=unnecessary-lambda-assignment
-                                       text = True, check = True).stdout.split()
-    names = set(run('diff', '--name-only', 'HEAD')) | set(run('ls-files', '--others',
-                                                              '--exclude-standard'))
+    names = set(_git('diff', '--name-only', 'HEAD')) | set(_git('ls-files', '--others',
+                                                                '--exclude-standard'))
     return sorted(Path(name) for name in names
                   if Path(name).suffix in SWEPT and (ROOT / name).exists()
                   and _is_own(Path(name)))
@@ -77,6 +96,13 @@ def _comment_body(
 ) -> str:
     '''
         The prose of a line when it is a comment or a docstring line.
+
+        Args:
+            path (Path): The file, whose suffix says how it comments.
+            stripped (str): The line, trimmed.
+
+        Returns:
+            str: The prose; empty when the line is code.
     '''
     if path.suffix == '.py':
         if stripped.startswith('#'):
@@ -100,7 +126,7 @@ def findings() -> list[str]:
             if body and len(SPANISH.findall(body)) >= 2:
                 found.append(f'{path}:{number}  comment: {line.strip()[:70]}')
         if path.suffix == '.py' and 'services' in path.parts and 'tests' not in path.parts:
-            for number, code in _codes_in(ast.parse(source)):
+            for number, code in codes_in(ast.parse(source)):
                 if SPANISH_CODE_WORDS & set(code.upper().split('_')):
                     found.append(f'{path}:{number}  code: {code}')
     return found

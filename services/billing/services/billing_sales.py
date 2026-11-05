@@ -62,15 +62,19 @@ from services.exceptions import (
 from services.logger_config import custom_logger as logger
 from services.utils import get_current_time_gmt
 from services.billing import (
-    SortBounds,
+    MONEY_DECIMALS,
+    accepted_notes,
+    buyer_email,
     date_window,
     document_id,
     from_dynamo,
     get_settings,
-    products_by_sku,
     next_number,
     now_iso,
+    products_by_sku,
     read_partition,
+    SortBounds,
+    stored_payments,
     write_item
 )
 from services.billing_siat_codes import get_catalog
@@ -78,7 +82,6 @@ from services.billing_stock import allocate, draw_down, give_back
 
 # Money is rounded where it is charged, never where it is added: totals come
 # from already-rounded line amounts, so the printed note adds up.
-MONEY_DECIMALS = 2
 
 
 @dataclass(frozen = True)
@@ -186,7 +189,7 @@ def issue_sale(
     message = (f'Sale {item.number} issued by {created_by} for {owner}: '
                f'{len(priced.lines)} line(s), total {money["total"]}.')
     logger.info(message)
-    return _sale_out(item.__dict__)
+    return sale_out(item.__dict__)
 
 
 def _price_lines(
@@ -317,15 +320,14 @@ def cancel_sale(
             ServiceUnavailableError: The note is an invoice and the SIAT is
                 unreachable.
     '''
-    stored = _read_sale(dynamodb_resource, owner, sale_id)
+    stored = read_sale(dynamodb_resource, owner, sale_id)
     if stored is None:
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     if stored['status'] == SaleStatus.CANCELLED.value:
         raise InvalidInputError(detail = BillingError.SALE_ALREADY_CANCELLED.value)
     # Its lines would give back units a note already gave back: the returns
     # are cancelled first.
-    if any(note['state'] == InvoiceState.ACCEPTED.value
-           for note in stored.get('credit_notes') or []):
+    if accepted_notes(stored):
         raise InvalidInputError(detail = ReturnError.SALE_HAS_RETURNS.value)
     if (stored.get('invoice') or {}).get('reverted_at'):
         raise InvalidInputError(detail = ReversalError.CANCELLATION_REVERTED.value)
@@ -348,7 +350,7 @@ def cancel_sale(
 
     message = f'Sale {stored["number"]} cancelled by {cancelled_by} for {owner}.'
     logger.info(message)
-    return _sale_out(stored)
+    return sale_out(stored)
 
 
 def resend_invoice(
@@ -374,11 +376,11 @@ def resend_invoice(
             ServiceUnavailableError: SES did not take the mail.
     '''
     stored = read_invoiced_sale(dynamodb_resource, owner, sale_id)
-    if not (stored.get('buyer') or {}).get('email'):
+    if not buyer_email(stored):
         raise InvalidInputError(detail = BillingError.BUYER_WITHOUT_EMAIL.value)
     if not _mail_invoice(dynamodb_resource, stored, get_settings(dynamodb_resource, owner)):
         raise ServiceUnavailableError(detail = BillingError.MAIL_NOT_SENT.value)
-    return _sale_out(stored)
+    return sale_out(stored)
 
 
 def _mail_invoice(
@@ -399,9 +401,9 @@ def _mail_invoice(
         Returns:
             bool: Whether SES took the mail.
     '''
-    if not (stored.get('buyer') or {}).get('email'):
+    if not buyer_email(stored):
         return False
-    sent = send_invoice(_sale_out(stored), stored['invoice_xml'], settings)
+    sent = send_invoice(sale_out(stored), stored['invoice_xml'], settings)
     if sent:
         stored['invoice']['emailed_at'] = now_iso()
         write_item(dynamodb_resource, SALES_TABLE, stored)
@@ -422,12 +424,12 @@ def _mail_cancellation(
             owner (str): The shop.
             stored (dict[str, Any]): The cancelled sale as stored.
     '''
-    if not (stored.get('buyer') or {}).get('email'):
+    if not buyer_email(stored):
         return
     code = str(stored['invoice'].get('cancellation_reason'))
     reasons = {entry.code: entry.description for entry in get_catalog(
         dynamodb_resource, owner, SiatCatalog.CANCELLATION_REASONS).entries}
-    send_cancellation(Cancellation(_sale_out(stored), reasons.get(code, code)),
+    send_cancellation(Cancellation(sale_out(stored), reasons.get(code, code)),
                       get_settings(dynamodb_resource, owner))
 
 
@@ -453,9 +455,9 @@ def _attach_invoice(
             InvalidInputError: The SIN refused the invoice.
     '''
     try:
-        issued = (issue_manual_invoice(plan, _sale_out(item.__dict__), manual) if manual
+        issued = (issue_manual_invoice(plan, sale_out(item.__dict__), manual) if manual
                   else issue_invoice(dynamodb_resource, item.owner, plan,
-                                     _sale_out(item.__dict__)))
+                                     sale_out(item.__dict__)))
     except (InvalidInputError, ServiceUnavailableError):
         # Refused, the sale is not issued: its units go back.
         give_back(dynamodb_resource, item.owner, consumption)
@@ -524,10 +526,10 @@ def get_sale(
         Raises:
             RegisterNotFoundError: No such note in this pharmacy.
     '''
-    stored = _read_sale(dynamodb_resource, owner, sale_id)
+    stored = read_sale(dynamodb_resource, owner, sale_id)
     if stored is None:
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
-    return _sale_out(stored)
+    return sale_out(stored)
 
 
 def sale_qr(
@@ -556,14 +558,15 @@ def sale_qr(
     return InvoiceQrOut(sale_id = sale_id, svg = qr_svg(sale.invoice.qr_url))
 
 
-def list_sales(
+def stored_sales(
     dynamodb_resource: ServiceResource,
     owner: str,
     date_from: str | None = None,
-    date_to: str | None = None
-) -> SaleNotesResponse:
+    date_to: str | None = None,
+    newest_first: bool = True
+) -> list[dict[str, Any]]:
     '''
-        The notes of a window, newest first.
+        The sales of a window as stored.
 
         The identifier starts with the issue timestamp, so a day is a bounded
         Query on the sort key and not a filter over everything the pharmacy
@@ -574,17 +577,39 @@ def list_sales(
             owner (str): The pharmacy.
             date_from (str | None): First day, ISO date.
             date_to (str | None): Last day, ISO date.
+            newest_first (bool): Newest first, as a list shows them; oldest
+                first otherwise.
+
+        Returns:
+            list[dict[str, Any]]: The sales, with their notes and invoices.
+    '''
+    return read_partition(
+        dynamodb_resource, SALES_TABLE, owner,
+        bounds = SortBounds(sort_key = SALE_SORT_KEY,
+                            between = date_window(date_from, date_to)),
+        descending = newest_first
+    )
+
+
+def list_sales(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    date_from: str | None = None,
+    date_to: str | None = None
+) -> SaleNotesResponse:
+    '''
+        The notes of a window, newest first (`stored_sales`).
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The pharmacy.
+            date_from (str | None): First day, ISO date.
+            date_to (str | None): Last day, ISO date.
 
         Returns:
             SaleNotesResponse: Notes and what they add up to.
     '''
-    stored = read_partition(
-        dynamodb_resource, SALES_TABLE, owner,
-        bounds = SortBounds(sort_key = SALE_SORT_KEY,
-                            between = date_window(date_from, date_to)),
-        descending = True
-    )
-    items = [_sale_out(row) for row in stored]
+    items = [sale_out(row) for row in stored_sales(dynamodb_resource, owner, date_from, date_to)]
     charged = round(sum(item.total for item in items
                         if item.status == SaleStatus.ISSUED), MONEY_DECIMALS)
     return SaleNotesResponse(items = items, total = len(items), total_amount = charged)
@@ -672,7 +697,7 @@ def read_invoiced_sale(
             RegisterNotFoundError: No such sale in this shop.
             InvalidInputError: SALE_NOT_INVOICED.
     '''
-    stored = _read_sale(dynamodb_resource, owner, sale_id)
+    stored = read_sale(dynamodb_resource, owner, sale_id)
     if stored is None:
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     if not stored.get('invoice'):
@@ -680,7 +705,7 @@ def read_invoiced_sale(
     return stored
 
 
-def _read_sale(
+def read_sale(
     dynamodb_resource: ServiceResource,
     owner: str,
     sale_id: str
@@ -702,7 +727,7 @@ def _read_sale(
     return from_dynamo(response.get('Item'))
 
 
-def _sale_out(stored: dict[str, Any]) -> SaleNoteOut:
+def sale_out(stored: dict[str, Any]) -> SaleNoteOut:
     '''
         A stored note as the API returns it.
 
@@ -717,10 +742,7 @@ def _sale_out(stored: dict[str, Any]) -> SaleNoteOut:
     fields = {key: value for key, value in stored.items()
               if key not in (OWNER_KEY, 'invoice_xml')}
     fields['buyer'] = Buyer(**(fields.get('buyer') or {}))
-    # Notes issued before payments were combined paid their total one way.
-    fields['payments'] = fields.get('payments') or [
-        {'method': stored['payment_method'], 'amount': stored['total']}
-    ]
+    fields['payments'] = stored_payments(stored)
     fields['lines'] = [SaleLineOut(**line) for line in fields['lines']]
     return SaleNoteOut(
         **fields,

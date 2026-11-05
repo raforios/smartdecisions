@@ -154,7 +154,9 @@ def _build_filter_expression(
 
 
 def _find_usable_index(
-    table, filters: dict[str, Any], partition_attribute: str | None
+    table,
+    filters: dict[str, Any],
+    partition_attribute: str | None
 ) -> dict[str, str] | None:
     '''
         Looks for a secondary index that can answer this query as a Query

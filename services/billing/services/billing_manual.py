@@ -282,6 +282,11 @@ def _open_contingency(
     '''
         A manual contingency still taking transcriptions.
 
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            contingency_id (str): The contingency.
+
         Raises:
             RegisterNotFoundError: No such contingency in this shop.
             InvalidInputError: It was sent already.
@@ -303,6 +308,11 @@ def _contingency_codes(
 ) -> SiatCodesOut:
     '''
         The codes a manual contingency kept, for the shop's point of sale.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            record (dict[str, Any]): The contingency as stored.
     '''
     emitter = emitter_for(dynamodb_resource, owner)
     return SiatCodesOut(branch = emitter.branch, point_of_sale = emitter.point_of_sale or 0,
@@ -316,6 +326,11 @@ def _cafc_record(
 ) -> dict[str, Any] | None:
     '''
         A stored CAFC, or None.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            cafc (str): The CAFC code.
     '''
     return from_dynamo(dynamodb_resource.Table(SETTINGS_TABLE).get_item(
         Key = {OWNER_KEY: owner, SETTING_SORT_KEY: f'{CAFC_PREFIX}{cafc}'}
@@ -329,6 +344,11 @@ def _settings_with_prefix(
 ) -> list[dict[str, Any]]:
     '''
         The shop's settings rows under one prefix, in key order.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            prefix (str): The sort-key prefix.
     '''
     table = dynamodb_resource.Table(SETTINGS_TABLE)
     condition = Key(OWNER_KEY).eq(owner) & Key(SETTING_SORT_KEY).begins_with(prefix)
@@ -350,6 +370,11 @@ def _sales_by_number(
     '''
         The transcribed sales, by invoice number: a package goes in the order
         the paper invoices were numbered.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            sale_ids (list[str]): The sales.
     '''
     table = dynamodb_resource.Table(SALES_TABLE)
     sales = [from_dynamo(table.get_item(Key = {OWNER_KEY: owner, SALE_SORT_KEY: sale_id}
@@ -361,6 +386,9 @@ def _sales_by_number(
 def _contingency_out(record: dict[str, Any]) -> ManualContingencyOut:
     '''
         A stored manual contingency as the DTO.
+
+        Args:
+            record (dict[str, Any]): The contingency as stored.
     '''
     return ManualContingencyOut(contingency_id = record[SETTING_SORT_KEY][len(MANUAL_PREFIX):],
                                 **{field: record.get(field) for field in (
@@ -372,6 +400,9 @@ def _contingency_out(record: dict[str, Any]) -> ManualContingencyOut:
 def _local(moment: datetime) -> datetime:
     '''
         A moment in the service's zone, the one every SIAT stamp is written in.
+
+        Args:
+            moment (datetime): A moment in any timezone.
     '''
     zone = get_current_time_gmt().tzinfo
     return (moment.replace(tzinfo = zone) if moment.tzinfo is None
@@ -381,5 +412,8 @@ def _local(moment: datetime) -> datetime:
 def _stamped(stamp: str) -> datetime:
     '''
         A SIAT stamp, which carries no zone, as a moment in the service's zone.
+
+        Args:
+            stamp (str): A SIN timestamp.
     '''
     return _local(datetime.fromisoformat(stamp))

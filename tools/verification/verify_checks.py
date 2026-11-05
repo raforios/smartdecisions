@@ -33,7 +33,7 @@ SPLIT_AT = 800
 LINT_TARGETS = ('services', 'controllers', 'routes', 'schemas', 'tests')
 
 
-def _own_files(service: Path) -> list[Path]:
+def own_files(service: Path) -> list[Path]:
     '''
         The service's own Python files: no boilerplate, no tests, no venv.
 
@@ -264,7 +264,7 @@ def check_signatures(service: Path) -> tuple[bool, str]:
 def check_size(service: Path) -> tuple[bool, str]:
     '''No own file at or above the split threshold.'''
     sizes = sorted(
-        ((sum(1 for _ in path.open()), path) for path in _own_files(service)), reverse = True
+        ((sum(1 for _ in path.open()), path) for path in own_files(service)), reverse = True
     )
     if not sizes:
         return True, 'no files'
@@ -286,7 +286,7 @@ def _body_signature(node: ast.AST) -> str:
 def check_duplicates(service: Path) -> tuple[bool, str]:
     '''No two functions with the same body (four lines or more).'''
     seen = defaultdict(list)
-    for path in _own_files(service):
+    for path in own_files(service):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
@@ -320,7 +320,7 @@ def _service_bodies(service: Path) -> tuple[tuple[str, str], ...]:
             tuple[tuple[str, str], ...]: Pairs of body dump and where it lives.
     '''
     bodies = []
-    for path in _own_files(service):
+    for path in own_files(service):
         # `main.py` is the service shell —health check, CORS, the scheduled
         # entry point— and it is identical on purpose: that is the uniformity
         # rule, not duplication.
@@ -362,7 +362,7 @@ def check_cross_service_duplicates(service: Path) -> tuple[bool, str]:
 # template: FILES cannot hand a file back AS a file —its reader parses and
 # returns rows— and `CLAUDE.md` §9 names exactly that case.
 _S3_ALLOWED: dict[str, tuple[str, ...]] = {
-    'files': ('controllers/files.py',),
+    'files': ('services/files.py',),
     'commercial': ('services/commercial_utils.py',),
 }
 
@@ -378,7 +378,7 @@ def check_direct_s3(service: Path) -> tuple[bool, str]:
     '''
     allowed = _S3_ALLOWED.get(service.name, ())
     hits = []
-    for path in _own_files(service):
+    for path in own_files(service):
         where = str(path.relative_to(service))
         if where in allowed:
             continue
@@ -446,7 +446,7 @@ def check_foreign_tables(service: Path) -> tuple[bool, str]:
 def check_except_pass(service: Path) -> tuple[bool, str]:
     '''No silent except.'''
     hits = []
-    for path in _own_files(service):
+    for path in own_files(service):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler) and len(node.body) == 1 \
@@ -492,7 +492,7 @@ _SPANISH_MARKERS = re.compile(
 )
 # A comment may quote the Spanish rule it implements; the quote is evidence,
 # not prose. Only unquoted Spanish counts.
-_QUOTED = re.compile(r'"[^"]*"|\'[^\']*\'|`[^`]*`')
+_QUOTED = re.compile(r'"[^"]*"|\'[^\']*\'|`[^`]*`|«[^»]*»', re.DOTALL)
 # The SIN — Bolivia's tax office — is an acronym, not the preposition "sin";
 # matched without case, it made every invoicing docstring read as Spanish.
 _ACRONYMS = re.compile(r'\bSIN\b')
@@ -500,6 +500,17 @@ _ACRONYMS = re.compile(r'\bSIN\b')
 # borrowed noun ("la paz", "el alto"); three is a sentence.
 _SPANISH_THRESHOLD = 3
 _DOCSTRING_THRESHOLD = 4
+# Words that exist only in Spanish: one of them is enough. The markers above
+# share words with English or with a borrowed name; these do not, and
+# "Endpoint para eliminar un usuario." passed the threshold of three on
+# 4-nov-2026 with only two of them.
+_SPANISH_ONLY = re.compile(
+    r'\b(para|porque|cuando|también|según|aunque|desde|hasta|pero|entre|hacia|'
+    r'está|están|sólo|más|así|acá|allá|nunca|siempre|entonces|además|debe|'
+    r'puede|tiene|hay|cada|donde|esta|este|esto|estos|estas|una|unos|unas|'
+    r'los|las|que|como|eliminar|usuario|usuarios|nuevo|nueva|cuál|qué|dónde|aquí)\b',
+    re.IGNORECASE
+)
 
 
 def _is_spanish(
@@ -517,7 +528,8 @@ def _is_spanish(
             bool: True when it is Spanish.
     '''
     stripped = _ACRONYMS.sub(' ', _QUOTED.sub(' ', text))
-    return len(_SPANISH_MARKERS.findall(stripped)) >= threshold
+    return (len(_SPANISH_MARKERS.findall(stripped)) >= threshold
+            or bool(_SPANISH_ONLY.search(stripped)))
 
 
 def check_comment_language(service: Path) -> tuple[bool, str]:
@@ -574,7 +586,7 @@ def check_comment_language(service: Path) -> tuple[bool, str]:
 def check_getenv(service: Path) -> tuple[bool, str]:
     '''Configuration only through load_and_validate_env_vars.'''
     hits = []
-    for path in _own_files(service):
+    for path in own_files(service):
         for number, line in enumerate(path.read_text().splitlines(), 1):
             if re.search(r'os\.(getenv|environ)', line) and not line.lstrip().startswith('#'):
                 hits.append(f'{path.relative_to(service)}:{number}')
@@ -606,7 +618,7 @@ def check_modern_typing(service: Path) -> tuple[bool, str]:
 def check_log_vars(service: Path) -> tuple[bool, str]:
     '''`logger.warning/error(error_msg)` and `logger.info(message)`.'''
     hits = []
-    for path in _own_files(service):
+    for path in own_files(service):
         for number, line in enumerate(path.read_text().splitlines(), 1):
             match = re.search(r'logger\.(info|warning|error|debug)\((\w+)\)', line)
             if not match:
@@ -625,7 +637,7 @@ def check_type_hints(service: Path) -> tuple[bool, str]:
         return is the response model, and QUOTES writes it.
     '''
     hits = []
-    for path in _own_files(service):
+    for path in own_files(service):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

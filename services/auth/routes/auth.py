@@ -2,7 +2,7 @@
     Auth: routes handler
 '''
 from fastapi import APIRouter, Depends, status
-from schemas.auth import LoginRequest, SignupResponse, Token
+from schemas.auth import AuthError, LoginRequest, SignupResponse, Token
 from schemas.users import UserRequest
 from controllers.users import (
     authenticate_user,
@@ -12,9 +12,7 @@ from controllers.users import (
 )
 from services.logger_config import custom_logger as logger
 from services.jwt_token import create_access_token
-from services.exceptions import (
-    UnauthorizedError,
-)
+from services.exceptions import UnauthorizedError
 
 router = APIRouter(prefix = '/v1/auth', tags = ['Authentication'])
 
@@ -30,10 +28,8 @@ async def login(request: LoginRequest) -> Token:
     user = await authenticate_user(request.email, request.password)
     if not user:
         error_msg = f'Invalid credentials for: {request.email}'
-        logger.error(error_msg)
-        raise UnauthorizedError(
-            detail = 'Incorrect email or password.'
-        )
+        logger.warning(error_msg)
+        raise UnauthorizedError(detail = AuthError.INVALID_CREDENTIALS.value)
 
     # `client` groups every user of one customer: downstream services key
     # their data by it, so a manager and their sellers see the same routes,
@@ -59,7 +55,4 @@ async def signup(user_data: UserRequest) -> SignupResponse:
     '''
         Sign-up route for creating a new user and storing their credentials securely.
     '''
-    response = await create_user(user_data)
-    message = f'User {user_data.email} created successfully'
-    logger.info(message)
-    return SignupResponse(user_email = response['user_email'], message = response['message'])
+    return await create_user(user_data)

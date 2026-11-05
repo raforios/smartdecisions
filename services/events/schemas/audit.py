@@ -22,7 +22,7 @@ class AuditRecordCreateSchema(BaseModel):
 
 class AuditRecordResponseSchema(AuditRecordCreateSchema):
     '''
-        ydantic schema for the audit record response.
+        Pydantic schema for the audit record response.
     '''
     id: str
     timestamp: str
@@ -45,6 +45,15 @@ class AuditRecordQuerySchema(BaseModel):
     limit: int = Field(100, ge = 1, le = 100)
     last_evaluated_key: str | None = Field(None,
                 description = 'The last evaluated key for pagination.')
+
+
+class AuditRecordsPage(BaseModel):
+    '''
+        One page of the listing: the records and the cursor to the next page.
+    '''
+    records: list[AuditRecordResponseSchema]
+    last_evaluated_key: str | None = Field(None,
+                description = 'Stringified JSON key to ask for the next page; None at the end.')
 
 
 # Who may READ the logs. They hold every user's e-mail, IP and the bodies of

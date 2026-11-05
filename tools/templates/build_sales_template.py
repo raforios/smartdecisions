@@ -331,8 +331,7 @@ def _guide(columns: Any) -> pd.DataFrame:
                             else PRICE_RULE if column.canonical in price_columns else 'No'),
             'Formato': _human_type(column.dtype),
             'Valores admitidos': (
-                ' / '.join(column.rules.labels or column.rules.allowed)
-                if column.rules.allowed else ''
+                ' / '.join(column.rules.template_words().values())
             ),
         }
         for column in columns

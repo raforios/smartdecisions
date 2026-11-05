@@ -41,6 +41,11 @@ def biweekly_period_bounds(
     '''
     Returns (period_start, period_end) for the requested half of the month.
     Half 1 covers days 1-15, half 2 covers day 16 through month end.
+
+    Args:
+        year (int): The year.
+        month (int): The month, 1 to 12.
+        half (int): The fortnight, 1 or 2.
     '''
     if half not in (1, 2):
         error_msg = f'half must be 1 (days 1-15) or 2 (16-end), got {half}.'
@@ -96,6 +101,11 @@ def prev_biweekly_period(
     '''
     Returns (prev_year, prev_month, prev_half) — the period immediately before
     the requested one. Wraps to December of the previous year when needed.
+
+    Args:
+        year (int): The year.
+        month (int): The month, 1 to 12.
+        half (int): The fortnight, 1 or 2.
     '''
     if half == 2:
         return year, month, 1
@@ -111,6 +121,9 @@ def resolve_mineral_id_map(
     Builds {normalized_name: mineral_id} for the official catalog. Minerals
     missing from the catalog are simply absent from the map; callers must
     handle that case by emitting a fallback row.
+
+    Args:
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
     '''
     return {
         normalize_name(record.name): record.mineral_id
@@ -124,6 +137,10 @@ def _empty_daily_row(
 ) -> dict[str, Any]:
     '''
     Returns a placeholder row used when no price exists for the mineral at all.
+
+    Args:
+        catalog (dict[str, str]): The mineral catalogue.
+        ref_date (date): The day of the report.
     '''
     return {
         'mineral': catalog['name'],
@@ -154,6 +171,7 @@ async def get_daily_report_service(
 
     Args:
         ref_date (date): Reference date for the report (typically "today").
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
 
     Returns:
         dict[str, Any]: Payload matching DailyReportResponse shape.
@@ -218,6 +236,11 @@ def _compute_biweekly_average(
     sample_size is the number of distinct days with a non-null price_low; the
     mean divides by that exact count, matching the spec "se aplica el promedio
     para ese número de días".
+
+    Args:
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
+        mineral_id (int): The mineral.
+        window (tuple[date, date]): The days the average covers.
     '''
     # Delegated to the store so the same rule holds on either backend: the
     # relational one aggregates with SQL, DynamoDB reads the partition and
@@ -226,8 +249,8 @@ def _compute_biweekly_average(
 
 
 # How far back the report looks for the last published quotation of a mineral,
-# in biweekly periods. Two years is generous for "el del periodo anterior que se
-# tenga" and still bounds the search on a mineral that was never quoted.
+# in biweekly periods. Two years is generous for the rule's "the latest previous
+# period available" and still bounds the search on a mineral never quoted.
 _MAX_FALLBACK_PERIODS: int = ENV_VARS['MAX_FALLBACK_PERIODS']
 
 
@@ -276,6 +299,7 @@ def _average_with_fallback(
         mineral_id (str | None): Mineral identifier, None when the catalogue
             has no such mineral.
         period (tuple[int, int, int]): Requested (year, month, half).
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
 
     Returns:
         _BiweeklyAverage: The figure and the window it actually came from.
@@ -324,6 +348,8 @@ async def get_biweekly_report_service(
         year (int): Calendar year of the report.
         month (int): Month (1-12) of the report.
         half (int): 1 for days 1-15, 2 for 16-end.
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
+        period (tuple[int, int, int]): The fortnight asked for.
 
     Returns:
         dict[str, Any]: Payload matching BiweeklyReportResponse shape.

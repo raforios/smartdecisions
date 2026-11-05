@@ -147,7 +147,7 @@ def _summary_from_item(summary: dict[str, Any]) -> AnalyticsSummary:
     return AnalyticsSummary.model_validate(summary)
 
 
-def _scoped_dataframe(
+def scoped_dataframe(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
     owner_email: str,
@@ -217,7 +217,7 @@ def _at_todays_rate(
     )
 
 
-def _at_month_close(
+def at_month_close(
     dataframe: Any,
     params: dict[str, Any] | None
 ) -> Any:
@@ -253,7 +253,7 @@ def _caller_token(request: Request | None) -> dict[str, Any]:
     return {'auth_token': header} if header else {}
 
 
-def _payments_of(
+def payments_of(
     metadata: dict[str, Any],
     auth_token: str
 ) -> Any:
@@ -287,8 +287,8 @@ async def commercial_summary_controller(
     '''
     # Counted in bolivianos, every month's sales also at its closing official dollar
     # and USDT: the engines group the three side by side.
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
-    dataframe = _at_month_close(dataframe, params)
+    dataframe, period = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe = at_month_close(dataframe, params)
     summary = build_commercial_summary(dataframe)
     return CommercialSummaryResponse(
         dataset_id = dataset_id,
@@ -328,13 +328,13 @@ async def receivables_controller(
     '''
     # Counted in bolivianos: the currency of the request only moves charts,
     # and the screen draws them from the three amounts every field carries.
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, period = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
         owner_email = current_user
     )
-    payments = _payments_of(metadata, (params or {}).get('auth_token') or '')
+    payments = payments_of(metadata, (params or {}).get('auth_token') or '')
     block = build_receivables(
         sales = dataframe,
         collections = payments,
@@ -373,7 +373,7 @@ async def objectives_controller(
         Read-only: everything is derived on the fly, so nothing is persisted
         as a run.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, period = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -390,7 +390,7 @@ async def objectives_controller(
     block = build_objectives(
         sales = dataframe,
         objectives = objectives,
-        collections = _payments_of(metadata, (params or {}).get('auth_token') or ''),
+        collections = payments_of(metadata, (params or {}).get('auth_token') or ''),
         stored_policy = get_commercial_policy(
             dynamodb_resource = dynamodb_resource,
             owner_email = current_user
@@ -424,7 +424,7 @@ async def stock_controller(
         Read-only, and deliberately so: `available` reflects what the client's
         ERP already committed. Nothing here reserves or promises stock.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, period = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     metadata = get_dataset_metadata(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -459,8 +459,8 @@ async def portfolio_controller(
         coverage, churn, month-by-month client movement and the actionable list
         of clients at risk of being lost. Read-only.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
-    dataframe = _at_month_close(dataframe, params)
+    dataframe, period = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe = at_month_close(dataframe, params)
     return PortfolioResponse(
         dataset_id = dataset_id,
         period = period,
@@ -480,9 +480,9 @@ async def forecast_controller(
         Loads the normalized dataset and builds the demand forecast with the
         requested method / horizon / grouping. Read-only.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, _ = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     result = build_forecast(
-        dataframe = _at_month_close(dataframe, params),
+        dataframe = at_month_close(dataframe, params),
         auth_token = (params or {}).get('auth_token') or '',
         months_ahead = params.get('months_ahead', 3),
         method = params.get('method', 'linear'),
@@ -504,9 +504,9 @@ async def segmentation_controller(
         Loads the normalized dataset and builds the customer value segmentation
         (Alto/Medio/Bajo). Read-only.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, _ = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     result = build_segmentation(
-        _at_month_close(dataframe, params), (params or {}).get('auth_token') or '')
+        at_month_close(dataframe, params), (params or {}).get('auth_token') or '')
     return SegmentationResponse(dataset_id = dataset_id, **result.model_dump())
 
 
@@ -527,7 +527,7 @@ async def run_analytics_controller(
           4. Persist the run.
           5. Return the public response.
     '''
-    dataframe, _ = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, _ = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
 
     parameters = _engine_parameters()
     opportunities, summary = compute_opportunities(
@@ -689,7 +689,7 @@ async def fx_effect_controller(
         and the rates come from QUOTES: each row's own day, and today's, unless
         the user asks to simulate another.
     '''
-    dataframe, period = _scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
+    dataframe, period = scoped_dataframe(dynamodb_resource, dataset_id, current_user, params)
     source = params.get('source') or 'USD'
     auth_token = params.get('auth_token')
     rates, _ = rates_per_row(dataframe, source, auth_token)

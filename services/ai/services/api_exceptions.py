@@ -23,7 +23,8 @@ def setup_exception_handlers(app):
     '''
     @app.exception_handler(RegisterNotFoundError)
     async def register_not_found_exception_handler(
-        request: Request, exc: RegisterNotFoundError
+        request: Request,
+        exc: RegisterNotFoundError
     ) -> JSONResponse:
         '''
             Handles RegisterNotFoundError, returning a 404 Not Found response.
@@ -37,7 +38,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(ResourceNotFoundError)
     async def resource_not_found_exception_handler(
-        request: Request, exc: ResourceNotFoundError
+        request: Request,
+        exc: ResourceNotFoundError
     ) -> JSONResponse:
         '''
             Handles ResourceNotFoundError, returning a 404 Not Found response.
@@ -51,7 +53,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(RegisterAlreadyExistsError)
     async def register_already_exists_exception_handler(
-        request: Request, exc: RegisterAlreadyExistsError
+        request: Request,
+        exc: RegisterAlreadyExistsError
     ) -> JSONResponse:
         '''
             Handles RegisterAlreadyExistsError, returning a 409 Conflict response.
@@ -65,7 +68,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(InvalidInputError)
     async def invalid_input_exception_handler(
-        request: Request, exc: InvalidInputError
+        request: Request,
+        exc: InvalidInputError
     ) -> JSONResponse:
         '''
             Handles InvalidInputError, returning a 400 Bad Request response.
@@ -79,7 +83,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(UnauthorizedError)
     async def unauthorized_exception_handler(
-        request: Request, exc: UnauthorizedError
+        request: Request,
+        exc: UnauthorizedError
     ) -> JSONResponse:
         '''
             Handles UnauthorizedError, returning a 401 Unauthorized response.
@@ -94,7 +99,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(ForbiddenError)
     async def forbidden_exception_handler(
-        request: Request, exc: ForbiddenError
+        request: Request,
+        exc: ForbiddenError
     ) -> JSONResponse:
         '''
             Handles ForbiddenError, returning a 403 Forbidden response.
@@ -109,7 +115,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(ServiceUnavailableError)
     async def service_unavailable_exception_handler(
-        request: Request, exc: ServiceUnavailableError
+        request: Request,
+        exc: ServiceUnavailableError
     ) -> JSONResponse:
         '''
             Handles ServiceUnavailableError, returning a 503 Service Unavailable response.
@@ -124,7 +131,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(RuntimeError)
     async def runtime_error_handler(
-        request: Request, exc: RuntimeError
+        request: Request,
+        exc: RuntimeError
     ) -> JSONResponse:
         '''
             Handles RuntimeError (typically wrapped from upstream service or
@@ -142,7 +150,8 @@ def setup_exception_handlers(app):
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(
-        request: Request, exc: Exception
+        request: Request,
+        exc: Exception
     ) -> JSONResponse:
         '''
             Handles any unhandled exceptions, returning a generic 500 Internal Server Error.

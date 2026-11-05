@@ -14,6 +14,25 @@ class AuthError(str, Enum):
     WRONG_PASSWORD = 'WRONG_PASSWORD'
     SAME_PASSWORD = 'SAME_PASSWORD'
     MANAGER_REQUIRED = 'MANAGER_REQUIRED'
+    ADMIN_REQUIRED = 'ADMIN_REQUIRED'
+    TOKEN_MISSING = 'TOKEN_MISSING'
+    # Expired, forged, or naming a user that no longer exists: the caller
+    # learns only that the token does not open the door.
+    TOKEN_INVALID = 'TOKEN_INVALID'
+    TOKEN_NOT_ISSUED = 'TOKEN_NOT_ISSUED'
+    INVALID_CREDENTIALS = 'INVALID_CREDENTIALS'
+    USER_INACTIVE = 'USER_INACTIVE'
+    EMAIL_TAKEN = 'EMAIL_TAKEN'
+    USER_NOT_FOUND = 'USER_NOT_FOUND'
+    STORAGE_UNAVAILABLE = 'STORAGE_UNAVAILABLE'
+
+
+class AuthResult(str, Enum):
+    '''
+        What an account request did, as a code for the portal to word.
+    '''
+    USER_CREATED = 'USER_CREATED'
+    USER_DELETED = 'USER_DELETED'
 
 class LoginRequest(BaseModel):
     '''
@@ -30,8 +49,7 @@ class SignupResponse(BaseModel):
     '''
     user_email: EmailStr = Field(...,
                     description = 'Email of the newly registered user.')
-    message: str = Field(...,
-                    description = 'Confirmation message for successful signup.')
+    message: AuthResult = Field(..., description = 'What was done, as a code.')
 
 class Token(BaseModel):
     '''

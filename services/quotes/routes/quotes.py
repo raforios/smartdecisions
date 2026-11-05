@@ -179,7 +179,9 @@ async def get_bench_endpoint(
                           description = 'Código ISO 4217.'),
     current_user: str = Depends(get_current_owner)
 ) -> ModelBench:
-    ''' Endpoint que compara modelos de proyección. '''
+    '''
+        Compares the projection models over the same horizon.
+    '''
     message = (f'User: {current_user}. Requested a {days_ahead}-day '
                f'{currency} model bench.')
     logger.info(message)

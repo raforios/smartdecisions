@@ -65,6 +65,9 @@ Series = dict[date_type, float]
 def _get(url: str) -> str:
     '''
         Reads a source, or SOURCE_UNAVAILABLE.
+
+        Args:
+            url (str): The page to read.
     '''
     try:
         response = requests.get(
@@ -263,6 +266,7 @@ def _missing_rows(
             source (MarketSource): Where the values come from.
             series (Series): The source values by date.
             window (tuple[date, date]): First and last day, inclusive.
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
 
         Returns:
             tuple[list[MarketPriceItem], int, int]: rows to write, days already

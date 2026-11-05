@@ -100,6 +100,7 @@ def rule_for(
 
         Args:
             mineral_id (str): Catalogue id.
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
 
         Returns:
             RoyaltyRuleItem: The rule.

@@ -25,6 +25,7 @@ from schemas.billing import BillingSettings, SaleNoteOut
 from schemas.billing_returns import CreditNoteOut
 from services.billing_credit_note_pdf import credit_note_pdf
 from services.billing_invoice_pdf import invoice_pdf
+from services.billing_siat_client import CREDIT_NOTE_DOCUMENT, SiatDocument
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 from services.utils import load_parameters
@@ -173,13 +174,12 @@ def send_credit_note_cancellation(
 @dataclass(frozen = True)
 class ReversalMail:
     '''
-        The document whose cancellation was reverted, and its sale: an
-        invoice, or a note when `credit_note` is True.
+        The document whose cancellation was reverted, and its sale.
     '''
     sale: SaleNoteOut
     number: int
     cuf: str
-    credit_note: bool = False
+    document: SiatDocument
 
 
 def send_reversal(
@@ -196,7 +196,8 @@ def send_reversal(
         Returns:
             bool: Whether SES took the mail.
     '''
-    kind = TEXTS['BILLING_MAIL_KIND_NOTE' if mail_of.credit_note else 'BILLING_MAIL_KIND_INVOICE']
+    kind = TEXTS['BILLING_MAIL_KIND_NOTE' if mail_of.document is CREDIT_NOTE_DOCUMENT
+                 else 'BILLING_MAIL_KIND_INVOICE']
     mail = _message(mail_of.sale, TEXTS['BILLING_MAIL_REVERSAL_SUBJECT'] % (
         kind, mail_of.number, settings.trade_name))
     mail.set_content(TEXTS['BILLING_MAIL_REVERSAL_BODY'] % (
@@ -211,6 +212,10 @@ def _message(
 ) -> EmailMessage:
     '''
         A mail from BearSoft to the sale's buyer.
+
+        Args:
+            sale (SaleNoteOut): The sale, with its buyer.
+            subject (str): The subject line.
     '''
     mail = EmailMessage()
     mail['From'] = formataddr((TEXTS['BILLING_MAIL_SENDER_NAME'], ENV_VARS['MAIL_SENDER']))
@@ -222,6 +227,9 @@ def _message(
 def _greeting(sale: SaleNoteOut) -> str:
     '''
         The buyer's name, or how the mail greets one who gave none.
+
+        Args:
+            sale (SaleNoteOut): The sale, with its buyer.
     '''
     return sale.buyer.name or TEXTS['BILLING_MAIL_ANONYMOUS']
 
@@ -232,6 +240,10 @@ def _send(
 ) -> bool:
     '''
         Hands a mail to SES.
+
+        Args:
+            mail (EmailMessage): The message.
+            sale (SaleNoteOut): The sale, for the log.
     '''
     try:
         boto3.client('sesv2', region_name = ENV_VARS['MAIL_REGION']).send_email(

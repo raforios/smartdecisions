@@ -43,11 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const companies = () => [...new Set(state.users.map((user) => user.client).filter(Boolean))]
         .sort((left, right) => left.localeCompare(right));
 
-    /** What AUTH answered, in words: it sends English sentences, not codes. */
+    // What AUTH answers when it refuses, in words.
+    const FAILURES = {
+        COMPANY_NOT_FOUND: 'Esa empresa no existe: créala en Empresas.',
+        COMPANY_INACTIVE: 'Esa empresa está inactiva.',
+        EMAIL_TAKEN: 'Ese correo ya está registrado.',
+        USER_NOT_FOUND: 'El usuario ya no existe.',
+        ADMIN_REQUIRED: 'Sólo el Administrador administra los usuarios.'
+    };
+
+    /** What AUTH answered, in words: its codes first, then the HTTP status. */
     function failure(error, fallback) {
         const code = error && (error.code || error.message);
-        if (code === 'COMPANY_NOT_FOUND') return 'Esa empresa no existe: créala en Empresas.';
-        if (code === 'COMPANY_INACTIVE') return 'Esa empresa está inactiva.';
+        if (FAILURES[code]) return FAILURES[code];
         if (error && error.status === 409) return 'Ese correo ya está registrado.';
         if (error && error.status === 404) return 'El usuario ya no existe.';
         if (error && error.status === 422) return 'Revisa los datos: nombre y apellido de 3 a 30 letras, contraseña de 8 o más.';

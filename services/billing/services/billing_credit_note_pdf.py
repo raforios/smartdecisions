@@ -15,19 +15,18 @@ from schemas.billing_siat import InvoiceState
 from services.billing_credit_note_xml import as_sold_line
 from services.billing_invoice_pdf import (
     HEADING_SIZE,
-    LINE_HEIGHT,
     MEASURING_HEIGHT,
-    QR_WIDTH,
     ROLL_MARGIN,
-    ROLL_WIDTH,
     SMALL_SIZE,
     TEXTS as INVOICE_TEXTS,
-    _money,
-    _qr_png,
-    _Roll,
-    _stamp,
+    Roll,
     amount_in_words,
-    print_details
+    money_text,
+    print_buyer,
+    print_closing,
+    print_details,
+    print_issuer,
+    stamp_text
 )
 from services.utils import load_parameters
 
@@ -55,57 +54,50 @@ def credit_note_pdf(
         Returns:
             bytes: The PDF.
     '''
-    measuring = _Roll(MEASURING_HEIGHT)
+    measuring = Roll(MEASURING_HEIGHT)
     _draw(measuring, sale, note, settings)
-    roll = _Roll(measuring.get_y() + ROLL_MARGIN)
+    roll = Roll(measuring.get_y() + ROLL_MARGIN)
     _draw(roll, sale, note, settings)
     return bytes(roll.output())
 
 
 def _issuer(
-    roll: _Roll,
+    roll: Roll,
     sale: SaleNoteOut,
     note: CreditNoteOut,
     settings: BillingSettings
 ) -> None:
     '''
         The title, the shop and the note's number and CUF.
+
+        Args:
+            roll (Roll): The roll.
+            sale (SaleNoteOut): The sale, with the invoice the note adjusts.
+            note (CreditNoteOut): The note.
+            settings (BillingSettings): The shop that issued it.
     '''
-    invoice = sale.invoice
     roll.line_of(TEXTS['BILLING_PDF_NOTE_TITLE'], 'C', 'B', HEADING_SIZE)
-    roll.line_of(settings.trade_name, 'C', 'B', HEADING_SIZE)
-    roll.line_of(INVOICE_TEXTS['BILLING_PDF_BRANCH'] % invoice.branch if invoice.branch
-                 else INVOICE_TEXTS['BILLING_PDF_HEAD_OFFICE'], 'C')
-    roll.line_of(INVOICE_TEXTS['BILLING_PDF_POINT_OF_SALE'] % invoice.point_of_sale, 'C')
-    roll.line_of(invoice.address, 'C')
-    if settings.phone:
-        roll.line_of(INVOICE_TEXTS['BILLING_PDF_PHONE'] % settings.phone, 'C')
-    if settings.municipality:
-        roll.line_of(settings.municipality, 'C')
-    roll.rule()
-    roll.line_of(f'{INVOICE_TEXTS["BILLING_PDF_NIT"]} {settings.document}', 'C', 'B')
-    roll.line_of(f'{TEXTS["BILLING_PDF_NOTE_NUMBER"]} {note.number}', 'C', 'B')
-    roll.line_of(INVOICE_TEXTS['BILLING_PDF_CUF'], 'C', 'B')
-    roll.line_of(note.cuf, 'C', size = SMALL_SIZE)
+    print_issuer(roll, sale.invoice, settings,
+                 f'{TEXTS["BILLING_PDF_NOTE_NUMBER"]} {note.number}', note.cuf)
 
 
 def _buyer(
-    roll: _Roll,
+    roll: Roll,
     sale: SaleNoteOut,
     note: CreditNoteOut
 ) -> None:
     '''
         When, to whom, and which invoice the note adjusts.
+
+        Args:
+            roll (Roll): The roll.
+            sale (SaleNoteOut): The sale, with its buyer and invoice.
+            note (CreditNoteOut): The note.
     '''
-    buyer = sale.buyer
-    document = buyer.document or ''
-    roll.line_of(f'{INVOICE_TEXTS["BILLING_PDF_ISSUED_AT"]} {_stamp(note.issued_at)}')
-    roll.line_of(f'{INVOICE_TEXTS["BILLING_PDF_BUYER_NAME"]} '
-                 f'{buyer.name or INVOICE_TEXTS["BILLING_PDF_ANONYMOUS"]}')
-    roll.line_of(f'{INVOICE_TEXTS["BILLING_PDF_BUYER_DOCUMENT"]} {document}')
-    roll.line_of(f'{INVOICE_TEXTS["BILLING_PDF_BUYER_CODE"]} {document}')
+    roll.line_of(f'{INVOICE_TEXTS["BILLING_PDF_ISSUED_AT"]} {stamp_text(note.issued_at)}')
+    print_buyer(roll, sale.buyer)
     roll.line_of(f'{TEXTS["BILLING_PDF_NOTE_INVOICE_NUMBER"]} {sale.invoice.number}')
-    roll.line_of(f'{TEXTS["BILLING_PDF_NOTE_INVOICE_DATE"]} {_stamp(sale.invoice.issued_at)}')
+    roll.line_of(f'{TEXTS["BILLING_PDF_NOTE_INVOICE_DATE"]} {stamp_text(sale.invoice.issued_at)}')
     roll.line_of(TEXTS['BILLING_PDF_NOTE_INVOICE_CUF'])
     roll.line_of(sale.invoice.cuf, size = SMALL_SIZE)
     if note.state == InvoiceState.CANCELLED:
@@ -113,43 +105,50 @@ def _buyer(
 
 
 def _details(
-    roll: _Roll,
+    roll: Roll,
     heading: str,
     lines: list[SaleLineOut]
 ) -> None:
     '''
         One block of details, one per price, as the invoice prints them.
+
+        Args:
+            roll (Roll): The roll.
+            heading (str): The block's title.
+            lines (list[SaleLineOut]): Sold or returned lines.
     '''
     roll.line_of(heading, 'C', 'B')
     print_details(roll, lines)
 
 
 def _draw(
-    roll: _Roll,
+    roll: Roll,
     sale: SaleNoteOut,
     note: CreditNoteOut,
     settings: BillingSettings
 ) -> None:
     '''
         Lays the note on the roll, top to bottom, as the SIN's format does.
+
+        Args:
+            roll (Roll): The roll.
+            sale (SaleNoteOut): The sale, with the invoice the note adjusts.
+            note (CreditNoteOut): The note.
+            settings (BillingSettings): The shop that issued it.
     '''
     _issuer(roll, sale, note, settings)
     roll.rule()
     _buyer(roll, sale, note)
     roll.rule()
     _details(roll, TEXTS['BILLING_PDF_NOTE_ORIGINAL'], sale.lines)
-    roll.pair(TEXTS['BILLING_PDF_NOTE_ORIGINAL_TOTAL'], _money(sale.total), 'B')
+    roll.pair(TEXTS['BILLING_PDF_NOTE_ORIGINAL_TOTAL'], money_text(sale.total), 'B')
     roll.rule()
     _details(roll, TEXTS['BILLING_PDF_NOTE_RETURNED'],
              [as_sold_line(line) for line in note.lines])
-    roll.pair(TEXTS['BILLING_PDF_NOTE_RETURNED_TOTAL'], _money(note.amount_returned), 'B')
+    roll.pair(TEXTS['BILLING_PDF_NOTE_RETURNED_TOTAL'], money_text(note.amount_returned), 'B')
     roll.line_of(amount_in_words(note.amount_returned))
-    roll.pair(TEXTS['BILLING_PDF_NOTE_TAX_CREDIT'], _money(note.tax_credit), 'B')
+    roll.pair(TEXTS['BILLING_PDF_NOTE_TAX_CREDIT'], money_text(note.tax_credit), 'B')
     roll.rule()
-    roll.line_of(INVOICE_TEXTS['BILLING_PDF_LAW'], 'C', size = SMALL_SIZE)
-    roll.rule()
-    roll.line_of(sale.invoice.legend, 'C', size = SMALL_SIZE)
-    roll.rule()
-    roll.line_of(INVOICE_TEXTS['BILLING_PDF_ONLINE_LEGEND'], 'C', size = SMALL_SIZE)
-    roll.ln(LINE_HEIGHT / 2)
-    roll.image(_qr_png(note.qr_url), x = (ROLL_WIDTH - QR_WIDTH) / 2, w = QR_WIDTH)
+    # A note is only issued online.
+    print_closing(roll, sale.invoice.legend, INVOICE_TEXTS['BILLING_PDF_ONLINE_LEGEND'],
+                  note.qr_url)

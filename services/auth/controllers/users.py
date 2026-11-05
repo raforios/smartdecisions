@@ -1,270 +1,139 @@
 '''
-    User and Auth Controller
+    Users controller: who is calling, what they may do, and the hand-off to
+    `services/users.py`, where the rules live.
 '''
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from services.utils import get_current_time_gmt
-from services.dynamodb import (
-    create_user_item,
-    get_user_by_email,
-    update_user_item,
-    delete_user_item,
-    scan_all_users
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from schemas.auth import AuthError, SignupResponse
+from schemas.role import Role
+from schemas.users import (
+    InternalUser,
+    PasswordChangeRequest,
+    UserRequest,
+    UserResponse,
+    UserUpdateRequest
 )
-from services.companies import check_company_for_user
-from services.security import hash_password, verify_password
-from services.sessions import company_members, login_update
+from services import users
+from services.dynamodb import get_user_by_email
+from services.exceptions import ForbiddenError, UnauthorizedError
 from services.jwt_token import decode_access_token
 from services.logger_config import custom_logger as logger
-from services.exceptions import (
-    UnauthorizedError,
-    InvalidInputError,
-    ForbiddenError,
-    RegisterAlreadyExistsError,
-    ServiceUnavailableError
-)
-from schemas.auth import AuthError
-from schemas.users import (
-    UserRequest,
-    UserUpdateRequest,
-    UserResponse,
-    InternalUser,
-    PasswordChangeRequest
-)
-from schemas.role import Role
+
 
 async def get_user_payload(
     token: HTTPAuthorizationCredentials = Depends(HTTPBearer())
 ) -> dict[str, Any]:
     '''
-        Function to extract and decode the JWT token payload.
+        The claims of the caller's token.
+
+        Args:
+            token (HTTPAuthorizationCredentials): The bearer token.
+
+        Returns:
+            dict[str, Any]: The claims.
+
+        Raises:
+            UnauthorizedError: TOKEN_MISSING or TOKEN_INVALID.
     '''
     if not token:
-        logger.warning('No token provided for protected route.')
-        raise UnauthorizedError(detail = 'Authentication token missing.')
-
+        logger.warning('No token provided for a protected route.')
+        raise UnauthorizedError(detail = AuthError.TOKEN_MISSING.value)
     payload = decode_access_token(token.credentials)
     if not payload:
-        logger.warning('Invalid or expired token detected.')
-        raise UnauthorizedError(
-            detail = 'Invalid or expired token.'
-        )
-
+        logger.warning('Invalid or expired token.')
+        raise UnauthorizedError(detail = AuthError.TOKEN_INVALID.value)
     return payload
 
-async def get_current_user(payload: dict[str, Any] = Depends(get_user_payload)) -> UserResponse:
-    '''
-        Function to get the full User object from the JWT token.
-    '''
-    email: str = payload.get('email')
-    if not email:
-        logger.error('JWT payload missing "email" subject.')
-        raise UnauthorizedError(
-            detail = 'Could not validate credentials: Token sub (email) missing.'
-        )
 
-    user_item = get_user_by_email(email)
-    if user_item is None:
-        error_msg = f'Authenticated user {email} not found in DB.'
+async def get_current_user(
+    payload: dict[str, Any] = Depends(get_user_payload)
+) -> UserResponse:
+    '''
+        The caller, read from the users table.
+
+        Args:
+            payload (dict[str, Any]): The claims of the caller's token.
+
+        Returns:
+            UserResponse: The caller.
+
+        Raises:
+            UnauthorizedError: TOKEN_INVALID, also for a user that no longer
+                exists: the caller learns only that the token is no good.
+    '''
+    email = payload.get('email')
+    stored = get_user_by_email(email) if email else None
+    if stored is None:
+        error_msg = f'Token without a known user: {email}.'
         logger.error(error_msg)
-        raise UnauthorizedError(
-            detail = error_msg
-        )
+        raise UnauthorizedError(detail = AuthError.TOKEN_INVALID.value)
+    return UserResponse(**stored)
 
-    return UserResponse(**user_item)
 
 async def get_current_active_user(
     current_user: UserResponse = Depends(get_current_user)
 ) -> UserResponse:
     '''
-        Function to check if the authenticated user is active.
+        The caller, when their account is active.
+
+        Args:
+            current_user (UserResponse): The caller.
+
+        Returns:
+            UserResponse: The caller.
+
+        Raises:
+            ForbiddenError: USER_INACTIVE.
     '''
     if not current_user.status:
         error_msg = f'Inactive user {current_user.email} attempted access.'
         logger.warning(error_msg)
-        raise InvalidInputError(
-            detail = 'Inactive user'
-        )
-
+        raise ForbiddenError(detail = AuthError.USER_INACTIVE.value)
     return current_user
+
 
 async def get_current_admin_user(
     current_user: UserResponse = Depends(get_current_active_user)
 ) -> UserResponse:
     '''
-        Ensures the authenticated active user has the ADMIN role. Guards the
-        user-management endpoints (list/read/update/delete) so only
-        administrators can manage users; prevents privilege escalation such as a
-        non-admin promoting itself to ADMIN.
+        The caller, when they are an ADMIN. Guards the user management, so a
+        non-admin cannot promote itself.
+
+        Args:
+            current_user (UserResponse): The active caller.
+
+        Returns:
+            UserResponse: The caller.
+
+        Raises:
+            ForbiddenError: ADMIN_REQUIRED.
     '''
     if current_user.role != Role.ADMIN:
-        error_msg = (f'Forbidden: user {current_user.email} with role '
-                     f'{current_user.role} attempted a user-management operation.')
+        error_msg = (f'Forbidden: {current_user.email} ({current_user.role}) attempted a '
+                     'user-management operation.')
         logger.warning(error_msg)
-        raise ForbiddenError(
-            detail = 'Administrator role required for this operation.'
-        )
-
+        raise ForbiddenError(detail = AuthError.ADMIN_REQUIRED.value)
     return current_user
-
-async def authenticate_user(
-    email: str, password: str
-) -> InternalUser | None:
-    '''
-        Function to authenticate a user by verifying their credentials against DynamoDB.
-    '''
-    user_item = get_user_by_email(email)
-    if not user_item or not verify_password(password, user_item['hashed_password']):
-        error_msg = f'Authentication failed for user {email}.'
-        logger.warning(error_msg)
-        return None
-
-    return InternalUser(**user_item)
-
-async def create_user(user_data: UserRequest) -> dict[str, Any]:
-    '''
-        Create User
-    '''
-    existing_user = get_user_by_email(user_data.email)
-    if existing_user:
-        error_msg = f'Registration failed: User with email {user_data.email} already exists.'
-        logger.warning(error_msg)
-        raise RegisterAlreadyExistsError(detail = 'Email already registered')
-
-    hashed_pw = hash_password(user_data.password)
-    timestamp = get_current_time_gmt()
-    current_time = timestamp.isoformat()
-
-    new_user_item = {
-        'email': user_data.email,
-        'first_name': user_data.first_name,
-        'last_name': user_data.last_name,
-        'hashed_password': hashed_pw,
-        'role': Role.REQUESTER.value,
-        'status': True,
-        'date_register': current_time,
-        'date_update': current_time
-    }
-    created_item = create_user_item(new_user_item)
-    message = f'User {created_item['email']} registered successfully in DynamoDB.'
-    logger.info(message)
-    return {'user_email': created_item['email'], 'message': 'User created successfully'}
-
-async def read_users() -> list[UserResponse]:
-    '''
-        Read all users from database.
-    '''
-    user_items = scan_all_users()
-    return [UserResponse(**item) for item in user_items]
-
-async def read_user_by_email(email: str) -> UserResponse | None:
-    '''
-        Read user by email.
-    '''
-    user_item = get_user_by_email(email)
-    if user_item:
-        return UserResponse(**user_item)
-    return None
-
-def build_user_update_params(user_update_data: UserUpdateRequest) -> tuple[str, dict, dict]:
-    '''
-        Helper function that builds DynamoDB update expressions and attribute values
-        from a UserUpdateRequest object.
-    '''
-    update_expression_parts = []
-    expression_attribute_values = {}
-    expression_attribute_names = {}
-
-    update_fields_map = {
-        'first_name': 'first_name',
-        'last_name': 'last_name',
-        'client': 'client'
-    }
-
-    data_to_update = user_update_data.model_dump(exclude_unset = True)
-
-    for field, value in data_to_update.items():
-        if field == 'password':
-            hashed_pw = hash_password(value)
-            update_expression_parts.append('hashed_password = :hashed_password')
-            expression_attribute_values[':hashed_password'] = hashed_pw
-        elif field == 'status':
-            update_expression_parts.append('#status_alias = :status')
-            expression_attribute_values[':status'] = value
-            expression_attribute_names['#status_alias'] = 'status'
-        elif field == 'role':
-            # Persist enum value so DynamoDB receives a primitive string.
-            update_expression_parts.append('#role_alias = :role')
-            expression_attribute_values[':role'] = value.value if hasattr(value, 'value') else value
-            expression_attribute_names['#role_alias'] = 'role'
-        elif field in update_fields_map:
-            db_field = update_fields_map[field]
-            update_expression_parts.append(f'{db_field} = :{field}')
-            expression_attribute_values[f':{field}'] = value
-
-    if not update_expression_parts:
-        return None, None, None
-
-    update_expression_parts.append('date_update = :date_update')
-    expression_attribute_values[':date_update'] = datetime.now(timezone.utc).isoformat()
-
-    final_update_expression = 'SET ' + ', '.join(update_expression_parts)
-    return final_update_expression, expression_attribute_values, \
-           (expression_attribute_names if expression_attribute_names else None)
-
-async def update_user(
-    email: str,
-    user_update_data: UserUpdateRequest
-) -> UserResponse | None:
-    '''
-        Update user.
-    '''
-    current_user_item = get_user_by_email(email)
-    if not current_user_item:
-        error_msg = f'Update failed: User {email} not found.'
-        logger.warning(error_msg)
-        return None
-
-    # The company is chosen from the companies table, never typed freely
-    # (Rafael, 21-oct-2026): it must exist and be active.
-    if user_update_data.client is not None:
-        check_company_for_user(user_update_data.client)
-
-    final_update_expression, expression_attribute_values, expression_attribute_names = \
-        build_user_update_params(user_update_data)
-
-    if not final_update_expression:
-        message = f'No update data provided for user {email}.'
-        logger.info(message)
-        return UserResponse(**current_user_item)
-
-    updated_item = update_user_item(
-        email,
-        final_update_expression,
-        expression_attribute_values,
-        expression_attribute_names
-    )
-
-    if updated_item:
-        return UserResponse(**updated_item)
-    return None
-
-async def delete_user(email: str) -> bool:
-    '''
-        Delete user
-    '''
-    return delete_user_item(email)
 
 
 async def get_current_manager_user(
     current_user: UserResponse = Depends(get_current_active_user)
 ) -> UserResponse:
     '''
-        Ensures the authenticated active user runs an account (MANAGER) or the
-        platform (ADMIN): the people who may see who else uses it.
+        The caller, when they run an account (MANAGER) or the platform
+        (ADMIN): the people who may see who else uses it.
+
+        Args:
+            current_user (UserResponse): The active caller.
+
+        Returns:
+            UserResponse: The caller.
+
+        Raises:
+            ForbiddenError: MANAGER_REQUIRED.
     '''
     if current_user.role not in (Role.MANAGER, Role.ADMIN):
         error_msg = (f'Forbidden: {current_user.email} ({current_user.role}) '
@@ -273,47 +142,122 @@ async def get_current_manager_user(
         raise ForbiddenError(detail = AuthError.MANAGER_REQUIRED.value)
     return current_user
 
+
+async def authenticate_user(
+    email: str,
+    password: str
+) -> InternalUser | None:
+    '''
+        The user whose credentials these are, or None.
+
+        Args:
+            email (str): The e-mail given.
+            password (str): The password given.
+
+        Returns:
+            InternalUser | None: The user.
+    '''
+    return users.authenticate_user(email, password)
+
+
+async def create_user(user_data: UserRequest) -> SignupResponse:
+    '''
+        Registers a user.
+
+        Args:
+            user_data (UserRequest): The new user.
+
+        Returns:
+            SignupResponse: The e-mail and USER_CREATED.
+    '''
+    return users.create_user(user_data)
+
+
+async def read_users() -> list[UserResponse]:
+    '''
+        Every user of the platform.
+
+        Returns:
+            list[UserResponse]: The users.
+    '''
+    return users.read_users()
+
+
+async def read_user_by_email(email: str) -> UserResponse | None:
+    '''
+        One user, or None.
+
+        Args:
+            email (str): The user.
+
+        Returns:
+            UserResponse | None: The user.
+    '''
+    return users.read_user_by_email(email)
+
+
+async def update_user(
+    email: str,
+    user_update_data: UserUpdateRequest
+) -> UserResponse | None:
+    '''
+        Changes a user's profile.
+
+        Args:
+            email (str): The user.
+            user_update_data (UserUpdateRequest): What changes.
+
+        Returns:
+            UserResponse | None: The user as it is now, or None.
+    '''
+    return users.update_user(email, user_update_data)
+
+
+async def delete_user(email: str) -> bool:
+    '''
+        Deletes a user.
+
+        Args:
+            email (str): The user.
+
+        Returns:
+            bool: Whether there was such a user.
+    '''
+    return users.delete_user(email)
+
+
 def record_login(user: InternalUser) -> None:
     '''
-        Records a sign-in on the user: last and previous sign-in and the count.
-        A failure is logged and does not stop the sign-in: the record serves
-        the welcome page, the access does not depend on it.
+        Records a sign-in on the user.
+
+        Args:
+            user (InternalUser): Who signed in.
     '''
-    stored = {'last_login': user.last_login.isoformat() if user.last_login else None}
-    expression, values = login_update(stored, get_current_time_gmt())
-    try:
-        update_user_item(user.email, expression, values)
-    except ServiceUnavailableError as error:
-        error_msg = f'Could not record the sign-in of {user.email}: {error.detail}'
-        logger.error(error_msg)
+    users.record_login(user)
+
 
 async def read_company_users(viewer: UserResponse) -> list[UserResponse]:
     '''
-        The users of the viewer's account; every user for an administrator.
+        The users of the viewer's account.
+
+        Args:
+            viewer (UserResponse): Who asks.
+
+        Returns:
+            list[UserResponse]: The users they may see.
     '''
-    visible = company_members(scan_all_users(), viewer.email, viewer.client,
-                              viewer.role == Role.ADMIN)
-    message = f'{viewer.email} listed {len(visible)} account user(s).'
-    logger.info(message)
-    return [UserResponse(**item) for item in visible]
+    return users.read_company_users(viewer)
+
 
 async def change_password(
     user: UserResponse,
     request: PasswordChangeRequest
 ) -> None:
     '''
-        Changes a user's own password once the current one is proven.
+        Changes a user's own password.
+
+        Args:
+            user (UserResponse): Who changes it.
+            request (PasswordChangeRequest): The current and the new password.
     '''
-    stored = get_user_by_email(user.email)
-    if not stored or not verify_password(request.current_password, stored['hashed_password']):
-        error_msg = f'Password change refused for {user.email}: wrong current password.'
-        logger.warning(error_msg)
-        # 400, not 401: the session is valid, only the proof failed.
-        raise InvalidInputError(detail = AuthError.WRONG_PASSWORD.value)
-    if request.new_password == request.current_password:
-        error_msg = f'Password change refused for {user.email}: same password.'
-        logger.warning(error_msg)
-        raise InvalidInputError(detail = AuthError.SAME_PASSWORD.value)
-    await update_user(user.email, UserUpdateRequest(password = request.new_password))
-    message = f'User {user.email} changed their password.'
-    logger.info(message)
+    users.change_password(user, request)

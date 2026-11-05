@@ -220,6 +220,11 @@ class _Sums:
         entries: list[EntrySchema],
         catalog: dict[str, dict]
     ) -> None:
+        '''
+            Args:
+                entries (list[EntrySchema]): The journal entries of the period.
+                catalog (dict[str, dict]): The chart of accounts.
+        '''
         self.entries = entries
         self.catalog = catalog
 

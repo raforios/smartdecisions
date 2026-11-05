@@ -9,12 +9,13 @@
 import pandas as pd
 
 from schemas.analytics import Money
+from schemas.closed_options import PaymentTerms
 from schemas.receivables import CreditDevaluation
 from services.analytics_utils import AMOUNT_DECIMALS, DATE, ORDER
 from services.currency import (
     PARALLEL_CURRENCY, PARALLEL_FALLBACK_CURRENCY, current_rate, rates_per_row
 )
-from services.receivables import CREDIT, PAID_AMOUNT, PAYMENT_DATE, TERMS, invoice_frame
+from services.receivables import PAID_AMOUNT, PAYMENT_DATE, TERMS, invoice_frame, terms_are
 
 
 def _dollars(
@@ -127,7 +128,7 @@ def build_credit_devaluation(
     invoices = invoice_frame(sales) if TERMS in sales.columns else None
     if invoices is None:
         return None
-    credit = invoices.loc[invoices['terms'].astype(str).str.upper() == CREDIT]
+    credit = invoices.loc[terms_are(invoices['terms'], PaymentTerms.CREDIT)]
     if credit.empty:
         return None
 

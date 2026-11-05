@@ -53,8 +53,8 @@ from schemas.localization import (
 from services.utils import load_parameters
 from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from services.localization import (
-    _assert_route_code_free,
-    _assert_sequence_free,
+    assert_route_code_free,
+    assert_sequence_free,
     build_point_item,
     build_route_item,
     create_planned_route,
@@ -207,10 +207,10 @@ def bulk_create_planned_routes(
     existing = list_planned_routes(dynamodb_resource, owner_email)
     items: list[PlannedRouteItem] = []
     for route in routes:
-        _assert_route_code_free(existing, route.route_code)
+        assert_route_code_free(existing, route.route_code)
         points: list[PlannedPointItem] = []
         for point in route.points:
-            _assert_sequence_free(points, point.secuencial)
+            assert_sequence_free(points, point.secuencial)
             points.append(build_point_item(point))
         items.append(build_route_item(
             owner_email = owner_email,

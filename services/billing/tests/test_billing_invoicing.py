@@ -454,6 +454,32 @@ def test_a_refused_document_comes_back_as_not_accepted(monkeypatch):
     assert receipt.messages == ['1004: CUFD no vigente']
 
 
+def test_each_document_goes_to_its_own_service_and_operation(monkeypatch):
+    '''
+        An invoice and a note share the envelope and nothing else: the
+        service, the operation, the sector and the type are the document's.
+    '''
+    calls = _captured(monkeypatch, _Answer(transaccion = True, codigoEstado = '908'))
+    submission = siat_client.InvoiceSubmission(cuis = 'C', cufd = 'D', archive = b'H4sI',
+                                               sent_at = '2026-10-26T10:00:00.000')
+    cancellation = siat_client.InvoiceCancellation(cuis = 'C', cufd = 'D', cuf = 'F',
+                                                   reason_code = 1)
+
+    siat_client.send_invoice(EMITTER, submission)
+    siat_client.send_credit_note(EMITTER, submission)
+    siat_client.cancel_invoice(EMITTER, cancellation)
+    siat_client.cancel_credit_note(EMITTER, cancellation)
+
+    assert [(service, operation, request['codigoDocumentoSector'],
+             request['tipoFacturaDocumento']) for service, operation, request in calls] == [
+        ('facturacion', 'recepcionFactura', 1, 1),
+        ('ajuste', 'recepcionDocumentoAjuste', 24, 3),
+        ('facturacion', 'anulacionFactura', 1, 1),
+        ('ajuste', 'anulacionDocumentoAjuste', 24, 3)
+    ]
+    assert 'hashArchivo' in calls[1][2] and calls[3][2]['codigoMotivo'] == 1
+
+
 def test_a_missing_wsdl_is_reported_and_not_downloaded(monkeypatch):
     '''
         The WSDL is read from disk on purpose: fetching it would be a network

@@ -42,7 +42,7 @@ from schemas.billing_siat import (
     SignificantEvent
 )
 from services import billing_siat_client as siat_client
-from services.billing import take_counter
+from services.billing import MONEY_DECIMALS, take_counter
 from services.billing_contingency import active_contingency, enter_contingency
 from services.billing_invoice_xml import build_invoice_xml, require_homologated
 from services.billing_payments import sin_payment_code
@@ -52,7 +52,7 @@ from services.billing_siat_codes import current_codes, emitter_for, get_catalog,
 from services.environment import load_and_validate_env_vars
 from services.exceptions import InvalidInputError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
+from services.utils import get_current_time_gmt, load_parameters
 
 # Where the SIN checks an invoice from its QR. It changes with the SIN's
 # environment, so it is configuration and not a constant.
@@ -69,7 +69,7 @@ EXCHANGE_RATE_BOLIVIANO: Final[float] = 1.0
 
 # Day of the month after the issue up to which an invoice may be cancelled,
 # fixed by the norm.
-CANCELLATION_LAST_DAY: Final[int] = 9
+PARAMETERS = load_parameters({'BILLING_CANCELLATION_LAST_DAY': int})
 
 # The NIT in the SIN's catalogue of identity documents. Invoiced offline, the
 # SIN cannot have validated it, and the norm asks for the exception code 1.
@@ -79,7 +79,6 @@ DOCUMENT_TYPE_NIT: Final[int] = 5
 # and one per branch and point of sale: each issues its own CUFD.
 INVOICE_COUNTER_PREFIX = 'counter#invoice#'
 
-MONEY_DECIMALS = 2
 
 # Medium error correction: the roll is thermal paper, and a smudged corner
 # must still scan. The SIN asks for at least 3 x 3 cm; the ticket sizes it.
@@ -391,7 +390,7 @@ def _sale_invoice(
                        issued_at = document.issued_at, legend = plan.legend,
                        address = plan.codes.address, branch = emitter.branch,
                        point_of_sale = emitter.point_of_sale or 0,
-                       qr_url = _qr_url(emitter.nit, document.cuf, number), **outcome)
+                       qr_url = sin_qr_url(emitter.nit, document.cuf, number), **outcome)
 
 
 def cancellation_deadline(issued_at: str) -> date:
@@ -408,7 +407,7 @@ def cancellation_deadline(issued_at: str) -> date:
     '''
     issued = date.fromisoformat(issued_at[:10])
     following = date(issued.year + issued.month // 12, issued.month % 12 + 1, 1)
-    return following.replace(day = CANCELLATION_LAST_DAY)
+    return following.replace(day = PARAMETERS['BILLING_CANCELLATION_LAST_DAY'])
 
 
 def cancel_at_sin(
@@ -471,7 +470,7 @@ def qr_svg(url: str) -> str:
     )
 
 
-def _qr_url(
+def sin_qr_url(
     nit: str,
     cuf: str,
     number: int

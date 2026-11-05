@@ -51,7 +51,7 @@ function rowHtml(product) {
                                       : '<span class="muted">—</span>'}</td>
             <td>${product.is_active ? '' : '<span class="chip chip-muted">de baja</span>'}</td>
         </tr>
-        <tr class="lots-row" hidden><td colspan="5"></td></tr>`;
+        <tr class="lots-row" data-sku="${escapeHtml(product.sku)}" hidden><td colspan="5"></td></tr>`;
 }
 
 function render(host, term) {
@@ -232,7 +232,7 @@ export async function mountCatalog(host) {
 
         const save = event.target.closest('.save-suggested');
         if (save) {
-            const sku = save.closest('.lots-row').previousElementSibling.dataset.sku;
+            const sku = save.closest('.lots-row').dataset.sku;
             const value = save.closest('td').querySelector('.suggested').value;
             if (value === '' || Number(value) < 0) {
                 notify('Indica un precio sugerido de cero o más.', 'error');
@@ -255,7 +255,7 @@ export async function mountCatalog(host) {
         const button = event.target.closest('.reprice');
         if (!button) return;
         const lotRow = button.closest('tr');
-        const sku = button.closest('.lots-row').previousElementSibling.dataset.sku;
+        const sku = button.closest('.lots-row').dataset.sku;
         const price = Number(lotRow.querySelector('.price').value);
         if (!(price > 0)) {
             notify('El precio tiene que ser mayor que cero.', 'error');

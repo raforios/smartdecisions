@@ -34,6 +34,10 @@ def _detect_decimal(
         ';'-delimited file may still use '.' decimals (e.g. an ERP export) or ','
         decimals (Excel es-locale). When the delimiter is ',' the decimal must be
         '.'; otherwise we compare how often digits are separated by ',' vs '.'.
+
+        Args:
+            sample (str): The first lines of the file.
+            delimiter (str): The column separator already detected.
     '''
     if delimiter == ',':
         return '.'
@@ -47,6 +51,9 @@ def _read_csv(file_bytes: bytes) -> pd.DataFrame:
         Reads a CSV robustly: strips the BOM, auto-detects the delimiter (comma,
         semicolon, tab or pipe) and the decimal separator from the data, and
         skips the odd malformed line instead of failing the whole file.
+
+        Args:
+            file_bytes (bytes): The file as uploaded.
     '''
     sample = file_bytes[:65536].decode('utf-8-sig', errors = 'replace')
     try:

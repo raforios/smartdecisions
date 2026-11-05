@@ -19,7 +19,6 @@ from boto3.resources.base import ServiceResource
 from models.billing import SALES_TABLE
 from schemas.billing import (
     BillingError,
-    PaymentMethod,
     SaleAllocation,
     SaleNoteOut,
     SaleStatus,
@@ -30,13 +29,18 @@ from schemas.billing_returns import CreditNoteOut, CreditNoteRef, ReturnError
 from schemas.billing_reversals import ReversalError
 from schemas.billing_siat import InvoiceState, SaleInvoice
 from services import billing_siat_client as siat_client
-from services.billing import get_settings, now_iso, write_item
-from services.billing_cash import expected_cash, require_till_open, write_movement
+from services.billing import buyer_email, get_settings, now_iso, write_item
+from services.billing_cash import require_cash, require_till_open, write_movement
 from services.billing_invoicing import cancellation_deadline
 from services.billing_mail import ReversalMail, send_reversal
-from services.billing_returns import MONEY_DECIMALS, _returned_so_far, find_note
-from services.billing_sales import _read_sale, _sale_out, read_invoiced_sale
-from services.billing_siat_client import DocumentReversal
+from services.billing_returns import cash_of, find_note, returned_so_far
+from services.billing_sales import read_invoiced_sale, read_sale, sale_out
+from services.billing_siat_client import (
+    CREDIT_NOTE_DOCUMENT,
+    INVOICE_DOCUMENT,
+    DocumentReversal,
+    SiatDocument
+)
 from services.billing_siat_codes import current_codes, emitter_for
 from services.billing_stock import draw_down, give_back
 from services.exceptions import InvalidInputError, ServiceUnavailableError
@@ -74,7 +78,7 @@ def _ask_sin(
     owner: str,
     cuf: str,
     number: int,
-    credit_note: bool = False
+    document: SiatDocument
 ) -> SiatReceipt:
     '''
         Asks the SIN to revert one cancellation, with the codes in force today.
@@ -84,7 +88,7 @@ def _ask_sin(
             owner (str): The shop.
             cuf (str): The document's CUF.
             number (int): Its number, for the log.
-            credit_note (bool): A note rather than an invoice.
+            document (SiatDocument): An invoice or a note.
 
         Returns:
             SiatReceipt: The SIN's answer, accepted.
@@ -96,8 +100,7 @@ def _ask_sin(
     codes = current_codes(dynamodb_resource, owner)
     receipt = siat_client.revert_cancellation(
         emitter_for(dynamodb_resource, owner),
-        DocumentReversal(cuis = codes.cuis, cufd = codes.cufd, cuf = cuf,
-                         credit_note = credit_note)
+        DocumentReversal(cuis = codes.cuis, cufd = codes.cufd, cuf = cuf, document = document)
     )
     if not receipt.accepted:
         error_msg = (f'SIAT refused to revert the cancellation of document {number} for '
@@ -116,8 +119,14 @@ def _tell_buyer(
     '''
         Mails the reversal when the buyer gave an address; a failure is
         logged by the mail and leaves the document valid anyway.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            stored (dict[str, Any]): The sale as stored.
+            mail_of (ReversalMail): The reverted document and its sale.
     '''
-    if (stored.get('buyer') or {}).get('email'):
+    if buyer_email(stored):
         send_reversal(mail_of, get_settings(dynamodb_resource, owner))
 
 
@@ -163,7 +172,8 @@ def revert_sale_cancellation(
     # can no longer serve must not become valid again.
     draw_down(dynamodb_resource, owner, consumption)
     try:
-        receipt = _ask_sin(dynamodb_resource, owner, invoice.cuf, invoice.number)
+        receipt = _ask_sin(dynamodb_resource, owner, invoice.cuf, invoice.number,
+                           INVOICE_DOCUMENT)
     except (InvalidInputError, ServiceUnavailableError):
         give_back(dynamodb_resource, owner, consumption)
         raise
@@ -175,11 +185,11 @@ def revert_sale_cancellation(
     stored.update(status = SaleStatus.ISSUED.value, cancelled_at = None, cancelled_by = None)
     write_item(dynamodb_resource, SALES_TABLE, stored)
     _tell_buyer(dynamodb_resource, owner, stored,
-                ReversalMail(_sale_out(stored), invoice.number, invoice.cuf))
+                ReversalMail(sale_out(stored), invoice.number, invoice.cuf, INVOICE_DOCUMENT))
 
     message = f'Cancellation of sale {stored["number"]} reverted by {reverted_by} for {owner}.'
     logger.info(message)
-    return _sale_out(stored)
+    return sale_out(stored)
 
 
 def _check_note_fits(
@@ -190,13 +200,17 @@ def _check_note_fits(
         Refuses a note whose units, added to the returns in force, would be
         more than the sale sold: a new return may have taken them since.
 
+        Args:
+            stored (dict[str, Any]): The sale as stored.
+            note (CreditNoteOut): The cancelled note to revert.
+
         Raises:
             InvalidInputError: RETURN_EXCEEDS_SOLD.
     '''
     sold: dict[str, float] = {}
     for line in stored['lines']:
         sold[line['sku']] = sold.get(line['sku'], 0) + line['quantity']
-    returned = _returned_so_far(stored)
+    returned = returned_so_far(stored)
     for line in note.lines:
         already = sum(allocation.quantity for allocation in returned.get(line.sku, []))
         if already + line.quantity > sold.get(line.sku, 0):
@@ -230,20 +244,19 @@ def revert_credit_note_cancellation(
                 cash, or the SIN refused.
             ServiceUnavailableError: The SIAT is unreachable; nothing changed.
     '''
-    stored = _read_sale(dynamodb_resource, owner, ref.sale_id)
+    stored = read_sale(dynamodb_resource, owner, ref.sale_id)
     position, note = find_note(stored, ref.credit_note_id)
     if stored['status'] != SaleStatus.ISSUED.value:
         raise InvalidInputError(detail = ReturnError.SALE_CANCELLED.value)
     _check_revertible(note.state, note.reverted_at, note.issued_at)
     _check_note_fits(stored, note)
-    cash = round(sum(refund.amount for refund in note.refunds
-                     if refund.method is PaymentMethod.CASH), MONEY_DECIMALS)
+    cash = cash_of(note.refunds)
     if note.refund_session_id:
         require_till_open(dynamodb_resource, owner, note.refund_session_id)
-        if cash > expected_cash(dynamodb_resource, owner, note.refund_session_id):
-            raise InvalidInputError(detail = BillingError.EXPENSE_EXCEEDS_CASH.value)
+        require_cash(dynamodb_resource, owner, note.refund_session_id, cash)
 
-    receipt = _ask_sin(dynamodb_resource, owner, note.cuf, note.number, credit_note = True)
+    receipt = _ask_sin(dynamodb_resource, owner, note.cuf, note.number,
+                       CREDIT_NOTE_DOCUMENT)
 
     give_back(dynamodb_resource, owner, {line.sku: line.allocations for line in note.lines})
     movement_id = (write_movement(dynamodb_resource, owner, reverted_by, note.refund_session_id,
@@ -258,7 +271,8 @@ def revert_credit_note_cancellation(
     stored['credit_notes'][position].update(reverted.model_dump(mode = 'json'))
     write_item(dynamodb_resource, SALES_TABLE, stored)
     _tell_buyer(dynamodb_resource, owner, stored,
-                ReversalMail(_sale_out(stored), note.number, note.cuf, credit_note = True))
+                ReversalMail(sale_out(stored), note.number, note.cuf,
+                             CREDIT_NOTE_DOCUMENT))
 
     message = (f'Cancellation of credit note {note.number} of sale {stored["number"]} '
                f'reverted by {reverted_by} for {owner}.')

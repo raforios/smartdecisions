@@ -20,7 +20,8 @@ from typing import Final
 import segno
 from fpdf import FPDF
 
-from schemas.billing import BillingSettings, SaleLineOut, SaleNoteOut, SaleStatus
+from schemas.billing import BillingSettings, Buyer, SaleLineOut, SaleNoteOut, SaleStatus
+from schemas.billing_siat import SaleInvoice
 from services.billing_invoicing import QR_ERROR_CORRECTION, invoice_lines
 from services.utils import load_parameters
 
@@ -86,9 +87,9 @@ def invoice_pdf(
         Returns:
             bytes: The PDF.
     '''
-    measuring = _Roll(MEASURING_HEIGHT)
+    measuring = Roll(MEASURING_HEIGHT)
     _draw(measuring, sale, settings)
-    roll = _Roll(measuring.get_y() + ROLL_MARGIN)
+    roll = Roll(measuring.get_y() + ROLL_MARGIN)
     _draw(roll, sale, settings)
     return bytes(roll.output())
 
@@ -124,7 +125,7 @@ def latin1(text: str) -> str:
     return ''.join(char if ord(char) < 256 else _base_letter(char) for char in folded)
 
 
-class _Roll(FPDF):
+class Roll(FPDF):
     '''
         One page of the till's roll.
     '''
@@ -132,6 +133,10 @@ class _Roll(FPDF):
         self,
         height: float
     ) -> None:
+        '''
+            Args:
+                height (float): The roll length, in millimetres.
+        '''
         super().__init__(unit = 'mm', format = (ROLL_WIDTH, height))
         self.set_margins(ROLL_MARGIN, ROLL_MARGIN, ROLL_MARGIN)
         self.set_auto_page_break(False)
@@ -146,6 +151,12 @@ class _Roll(FPDF):
     ) -> None:
         '''
             A paragraph across the roll, wrapped as needed.
+
+            Args:
+                text (str): What is printed.
+                align (str): L, C or R.
+                style (str): '' or 'B' for bold.
+                size (float): Font size, in points.
         '''
         self.set_font(FONT, style, size)
         self.multi_cell(0, LINE_HEIGHT, latin1(text), align = align,
@@ -159,6 +170,11 @@ class _Roll(FPDF):
     ) -> None:
         '''
             A label on the left and its figure on the right, on one line.
+
+            Args:
+                label (str): The left-hand text.
+                amount (str): The right-hand text.
+                style (str): '' or 'B' for bold.
         '''
         self.set_font(FONT, style, BODY_SIZE)
         self.cell(0, LINE_HEIGHT, latin1(label))
@@ -177,7 +193,7 @@ class _Roll(FPDF):
 
 
 def print_details(
-    roll: _Roll,
+    roll: Roll,
     lines: list[SaleLineOut]
 ) -> None:
     '''
@@ -185,28 +201,36 @@ def print_details(
         the invoice and the Nota de Crédito-Débito.
 
         Args:
-            roll (_Roll): The roll.
+            roll (Roll): The roll.
             lines (list[SaleLineOut]): Sold or returned lines.
     '''
     for line in lines:
         for detail in invoice_lines(line, {}):
             roll.line_of(f'{detail.sku} - {detail.description}')
-            discount = f' - {_money(detail.discount)}' if detail.discount else ''
-            roll.pair(f'{_money(detail.quantity)} x {_money(detail.unit_price)}{discount}',
-                      _money(detail.subtotal))
+            discount = f' - {money_text(detail.discount)}' if detail.discount else ''
+            roll.pair(f'{money_text(detail.quantity)} x {money_text(detail.unit_price)}{discount}',
+                      money_text(detail.subtotal))
 
 
-def _draw(
-    roll: _Roll,
-    sale: SaleNoteOut,
-    settings: BillingSettings
+def print_issuer(
+    roll: Roll,
+    invoice: SaleInvoice,
+    settings: BillingSettings,
+    number_line: str,
+    cuf: str
 ) -> None:
     '''
-        Lays the invoice on the roll, top to bottom, as the till prints it.
+        The shop, where it issues from, and the document's number and CUF:
+        shared by the invoice and the Nota de Crédito-Débito.
+
+        Args:
+            roll (Roll): The roll.
+            invoice (SaleInvoice): The invoice, for its branch, point of sale
+                and address.
+            settings (BillingSettings): The shop.
+            number_line (str): The document's number, with its label.
+            cuf (str): The document's CUF.
     '''
-    invoice = sale.invoice
-    roll.line_of(TEXTS['BILLING_PDF_TITLE'], 'C', 'B', HEADING_SIZE)
-    roll.line_of(TEXTS['BILLING_PDF_SUBTITLE'], 'C')
     roll.line_of(settings.trade_name, 'C', 'B', HEADING_SIZE)
     roll.line_of(TEXTS['BILLING_PDF_BRANCH'] % invoice.branch if invoice.branch
                  else TEXTS['BILLING_PDF_HEAD_OFFICE'], 'C')
@@ -218,9 +242,72 @@ def _draw(
         roll.line_of(settings.municipality, 'C')
     roll.rule()
     roll.line_of(f'{TEXTS["BILLING_PDF_NIT"]} {settings.document}', 'C', 'B')
-    roll.line_of(f'{TEXTS["BILLING_PDF_NUMBER"]} {invoice.number}', 'C', 'B')
+    roll.line_of(number_line, 'C', 'B')
     roll.line_of(TEXTS['BILLING_PDF_CUF'], 'C', 'B')
-    roll.line_of(invoice.cuf, 'C', size = SMALL_SIZE)
+    roll.line_of(cuf, 'C', size = SMALL_SIZE)
+
+
+def print_buyer(
+    roll: Roll,
+    buyer: Buyer
+) -> None:
+    '''
+        Who the document is made out to: name, document and client code.
+
+        Args:
+            roll (Roll): The roll.
+            buyer (Buyer): The buyer, anonymous when they gave no name.
+    '''
+    document = buyer.document or ''
+    roll.line_of(f'{TEXTS["BILLING_PDF_BUYER_NAME"]} '
+                 f'{buyer.name or TEXTS["BILLING_PDF_ANONYMOUS"]}')
+    roll.line_of(f'{TEXTS["BILLING_PDF_BUYER_DOCUMENT"]} {document}')
+    roll.line_of(f'{TEXTS["BILLING_PDF_BUYER_CODE"]} {document}')
+
+
+def print_closing(
+    roll: Roll,
+    legend: str,
+    emission_legend: str,
+    qr_url: str
+) -> None:
+    '''
+        What every fiscal document closes with: the law, the SIN's legend,
+        how it was issued and the QR.
+
+        Args:
+            roll (Roll): The roll.
+            legend (str): The SIN's legend the invoice drew.
+            emission_legend (str): Online or offline representation.
+            qr_url (str): The SIN's link the QR carries.
+    '''
+    roll.line_of(TEXTS['BILLING_PDF_LAW'], 'C', size = SMALL_SIZE)
+    roll.rule()
+    roll.line_of(legend, 'C', size = SMALL_SIZE)
+    roll.rule()
+    roll.line_of(emission_legend, 'C', size = SMALL_SIZE)
+    roll.ln(LINE_HEIGHT / 2)
+    roll.image(qr_png(qr_url), x = (ROLL_WIDTH - QR_WIDTH) / 2, w = QR_WIDTH)
+
+
+def _draw(
+    roll: Roll,
+    sale: SaleNoteOut,
+    settings: BillingSettings
+) -> None:
+    '''
+        Lays the invoice on the roll, top to bottom, as the till prints it.
+
+        Args:
+            roll (Roll): The roll.
+            sale (SaleNoteOut): The sale, with its invoice.
+            settings (BillingSettings): The shop that issued it.
+    '''
+    invoice = sale.invoice
+    roll.line_of(TEXTS['BILLING_PDF_TITLE'], 'C', 'B', HEADING_SIZE)
+    roll.line_of(TEXTS['BILLING_PDF_SUBTITLE'], 'C')
+    print_issuer(roll, invoice, settings,
+                 f'{TEXTS["BILLING_PDF_NUMBER"]} {invoice.number}', invoice.cuf)
     roll.rule()
     _buyer(roll, sale)
     roll.rule()
@@ -229,54 +316,55 @@ def _draw(
     roll.rule()
     _totals(roll, sale.total)
     roll.rule()
-    roll.line_of(TEXTS['BILLING_PDF_LAW'], 'C', size = SMALL_SIZE)
-    roll.rule()
-    roll.line_of(invoice.legend, 'C', size = SMALL_SIZE)
-    roll.rule()
-    roll.line_of(TEXTS['BILLING_PDF_OFFLINE_LEGEND'] if invoice.emission_type == OFFLINE_EMISSION
-                 else TEXTS['BILLING_PDF_ONLINE_LEGEND'], 'C', size = SMALL_SIZE)
-    roll.ln(LINE_HEIGHT / 2)
-    roll.image(_qr_png(invoice.qr_url), x = (ROLL_WIDTH - QR_WIDTH) / 2, w = QR_WIDTH)
+    print_closing(roll, invoice.legend,
+                  TEXTS['BILLING_PDF_OFFLINE_LEGEND'] if invoice.emission_type == OFFLINE_EMISSION
+                  else TEXTS['BILLING_PDF_ONLINE_LEGEND'], invoice.qr_url)
 
 
 def _buyer(
-    roll: _Roll,
+    roll: Roll,
     sale: SaleNoteOut
 ) -> None:
     '''
         Who the invoice is made out to, and when.
+
+        Args:
+            roll (Roll): The roll.
+            sale (SaleNoteOut): The sale, with its buyer and invoice.
     '''
-    buyer = sale.buyer
-    roll.line_of(f'{TEXTS["BILLING_PDF_BUYER_NAME"]} '
-                 f'{buyer.name if buyer and buyer.name else TEXTS["BILLING_PDF_ANONYMOUS"]}')
-    document = buyer.document if buyer and buyer.document else ''
-    roll.line_of(f'{TEXTS["BILLING_PDF_BUYER_DOCUMENT"]} {document}')
-    roll.line_of(f'{TEXTS["BILLING_PDF_BUYER_CODE"]} {document}')
-    roll.line_of(f'{TEXTS["BILLING_PDF_ISSUED_AT"]} {_stamp(sale.invoice.issued_at)}')
+    print_buyer(roll, sale.buyer)
+    roll.line_of(f'{TEXTS["BILLING_PDF_ISSUED_AT"]} {stamp_text(sale.invoice.issued_at)}')
     if sale.status == SaleStatus.CANCELLED:
         roll.line_of(TEXTS['BILLING_PDF_CANCELLED'], 'C', 'B', HEADING_SIZE)
 
 
 def _totals(
-    roll: _Roll,
+    roll: Roll,
     total: float
 ) -> None:
     '''
         The totals block, as the till prints it: no gift card and the
         discount already inside each line.
+
+        Args:
+            roll (Roll): The roll.
+            total (float): The amount charged.
     '''
     for code in ('BILLING_PDF_SUBTOTAL', 'BILLING_PDF_DISCOUNT', 'BILLING_PDF_TOTAL',
                  'BILLING_PDF_GIFT_CARD'):
-        roll.pair(TEXTS[code], _money(0 if code in ('BILLING_PDF_DISCOUNT',
+        roll.pair(TEXTS[code], money_text(0 if code in ('BILLING_PDF_DISCOUNT',
                                                     'BILLING_PDF_GIFT_CARD') else total))
-    roll.pair(TEXTS['BILLING_PDF_TO_PAY'], _money(total), 'B')
-    roll.pair(TEXTS['BILLING_PDF_TAX_BASE'], _money(total))
+    roll.pair(TEXTS['BILLING_PDF_TO_PAY'], money_text(total), 'B')
+    roll.pair(TEXTS['BILLING_PDF_TAX_BASE'], money_text(total))
     roll.line_of(amount_in_words(total))
 
 
-def _qr_png(url: str) -> io.BytesIO:
+def qr_png(url: str) -> io.BytesIO:
     '''
         The invoice's QR, as the picture the PDF embeds.
+
+        Args:
+            url (str): The SIN's link the QR carries.
     '''
     picture = io.BytesIO()
     segno.make(url, error = QR_ERROR_CORRECTION).save(picture, kind = 'png', scale = 8,
@@ -285,16 +373,22 @@ def _qr_png(url: str) -> io.BytesIO:
     return picture
 
 
-def _money(value: float) -> str:
+def money_text(value: float) -> str:
     '''
         An amount as Bolivia writes it: 1.234,50.
+
+        Args:
+            value (float): An amount.
     '''
     return f'{value:,.2f}'.replace(',', '_').replace('.', ',').replace('_', '.')
 
 
-def _stamp(iso: str) -> str:
+def stamp_text(iso: str) -> str:
     '''
         The issue moment as the till prints it: 28/10/2026 10:53.
+
+        Args:
+            iso (str): An ISO timestamp.
     '''
     date, _, rest = iso.partition('T')
     year, month, day = date.split('-')
@@ -304,6 +398,9 @@ def _stamp(iso: str) -> str:
 def _base_letter(char: str) -> str:
     '''
         A character outside Latin-1 as its base letter, or '?' without one.
+
+        Args:
+            char (str): One character.
     '''
     base = unicodedata.normalize('NFKD', char)[:1]
     return base if base and ord(base) < 256 else '?'
@@ -312,6 +409,9 @@ def _base_letter(char: str) -> str:
 def _below_thousand(number: int) -> str:
     '''
         A number below a thousand, in words.
+
+        Args:
+            number (int): A number from 0 to 999.
     '''
     if number == _ONE_HUNDRED:
         return 'cien'
@@ -324,6 +424,9 @@ def _below_thousand(number: int) -> str:
 def _in_words(number: int) -> str:
     '''
         A whole number in words, up to the hundreds of millions.
+
+        Args:
+            number (int): A whole number.
     '''
     if number == 0:
         return 'cero'

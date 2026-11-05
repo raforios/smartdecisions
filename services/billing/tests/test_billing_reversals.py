@@ -85,8 +85,8 @@ def test_a_reverted_invoice_is_a_sale_again_and_never_cancelled_again(
     reverted = billing_reversals.revert_sale_cancellation(dynamodb, OWNER, cancelled.sale_id,
                                                           CASHIER)
 
-    assert [(item.cuf, item.credit_note) for item in reversals] == [(cancelled.invoice.cuf,
-                                                                     False)]
+    assert [(item.cuf, item.document) for item in reversals] == [
+        (cancelled.invoice.cuf, siat_client.INVOICE_DOCUMENT)]
     assert reverted.status is SaleStatus.ISSUED
     assert (reverted.invoice.state, reverted.invoice.reverted_by) == (InvoiceState.ACCEPTED,
                                                                       CASHIER)
@@ -172,7 +172,8 @@ def test_a_reverted_note_returns_again_and_is_never_cancelled_again(
         dynamodb, OWNER, CreditNoteRef(sale_id = sale.sale_id,
                                        credit_note_id = note.credit_note_id), CASHIER)
 
-    assert [(item.cuf, item.credit_note) for item in reversals] == [(note.cuf, True)]
+    assert [(item.cuf, item.document) for item in reversals] == [
+        (note.cuf, siat_client.CREDIT_NOTE_DOCUMENT)]
     assert (reverted.state, reverted.reverted_by) == (InvoiceState.ACCEPTED, CASHIER)
     assert _stock(dynamodb) == 9
     assert sorted(movement.status.value for movement in _refunds_in_till(dynamodb)) == \
@@ -234,9 +235,9 @@ def test_the_reversal_goes_to_the_service_of_its_document(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(siat_client, 'invoke', _stub)
     emitter = siat_client.Emitter(nit = '1', branch = 0)
-    for credit_note in (False, True):
+    for document in (siat_client.INVOICE_DOCUMENT, siat_client.CREDIT_NOTE_DOCUMENT):
         siat_client.revert_cancellation(emitter, siat_client.DocumentReversal(
-            cuis = 'C', cufd = 'D', cuf = 'F', credit_note = credit_note))
+            cuis = 'C', cufd = 'D', cuf = 'F', document = document))
 
     assert calls == [('facturacion', 'reversionAnulacionFactura', 1, 'F'),
                      ('ajuste', 'reversionAnulacionDocumentoAjuste', 24, 'F')]

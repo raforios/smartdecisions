@@ -59,6 +59,9 @@ def rank_tiers(
 def _count_singletons(transactions: list[frozenset]) -> dict[frozenset, int]:
     '''
         How many transactions hold each single item.
+
+        Args:
+            transactions (list[frozenset]): The baskets.
     '''
     counts: dict[frozenset, int] = {}
     for items in transactions:
@@ -75,6 +78,10 @@ def _generate_candidates(
     '''
         Candidate itemsets of `size` from the frequent ones a size smaller,
         pruned by the Apriori property: every subset must be frequent.
+
+        Args:
+            previous_frequent (list[frozenset]): The frequent itemsets one size smaller.
+            size (int): The size of the candidates.
     '''
     frequent = set(previous_frequent)
     candidates: set[frozenset] = set()
@@ -93,6 +100,10 @@ def _count_supersets(
 ) -> dict[frozenset, int]:
     '''
         How many transactions hold each candidate itemset.
+
+        Args:
+            transactions (list[frozenset]): The baskets.
+            candidates (set[frozenset]): The itemsets to count.
     '''
     counts: dict[frozenset, int] = dict.fromkeys(candidates, 0)
     for items in transactions:
@@ -145,6 +156,11 @@ def _rules_of(
     '''
         Every antecedent -> consequent split of one frequent itemset whose
         lift reaches `min_lift`.
+
+        Args:
+            itemset (frozenset): A frequent itemset.
+            supports (dict[frozenset, float]): The support of every frequent itemset.
+            min_lift (float): The lowest lift kept.
     '''
     rules: list[Rule] = []
     support = supports[itemset]

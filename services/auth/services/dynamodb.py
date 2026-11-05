@@ -1,213 +1,200 @@
 '''
-    Database connection service (DynamoDB)
-'''
-from typing import Any
-import boto3
-from botocore.exceptions import ClientError
+    The users table (DynamoDB).
 
-from services.logger_config import custom_logger as logger
-from services.exceptions import RegisterAlreadyExistsError, ServiceUnavailableError
+    Every call goes through `_guarded`: a failure of the table is logged here
+    with what DynamoDB said, and the caller receives only the code
+    STORAGE_UNAVAILABLE —the table's own words are for the log, not for the
+    client.
+'''
+from collections.abc import Callable
+from typing import Any
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+
+from schemas.auth import AuthError
 from services.environment import load_and_validate_env_vars
+from services.exceptions import RegisterAlreadyExistsError, ServiceUnavailableError
+from services.logger_config import custom_logger as logger
 
 dynamodb = boto3.resource('dynamodb')
 
 ENV_VARS = load_and_validate_env_vars({'TABLE_NAME': str})
 TABLE_NAME = ENV_VARS['TABLE_NAME']
 
+
 def get_table() -> Any:
     '''
-        Returns a reference to the DynamoDB table.
-    '''
-    if not TABLE_NAME:
-        error_msg = 'TABLE_NAME is not configured in environment or .env.'
-        logger.critical(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = error_msg
-        )
+        The users table.
 
+        Returns:
+            Any: The DynamoDB table.
+    '''
+    return dynamodb.Table(TABLE_NAME)
+
+
+def _guarded(
+    action: str,
+    call: Callable[[], Any]
+) -> Any:
+    '''
+        Runs one call to the table, turning a failure of DynamoDB into
+        STORAGE_UNAVAILABLE.
+
+        Args:
+            action (str): What was being done, for the log.
+            call (Callable[[], Any]): The call.
+
+        Returns:
+            Any: What the call returned.
+
+        Raises:
+            ServiceUnavailableError: STORAGE_UNAVAILABLE.
+    '''
     try:
-        table = dynamodb.Table(TABLE_NAME)
-        message = f'DynamoDB table "{TABLE_NAME}" accessed successfully.'
-        logger.info(message)
-        return table
-    except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code')
-        error_msg = f'Error accessing DynamoDB table: {TABLE_NAME}: {error_code
-                } {e.response.get('Error', {}).get('Message')}'
+        return call()
+    except (ClientError, BotoCoreError) as error:
+        error_msg = f'DynamoDB failed while {action} in {TABLE_NAME}: {error}'
         logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = f'Database initialization error: {error_msg}'
-        ) from e
-    except Exception as e:
-        error_msg = f'Unexpected error when getting DynamoDB table {
-            TABLE_NAME}: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'Unexpected database initialization error.'
-        ) from e
+        raise ServiceUnavailableError(detail = AuthError.STORAGE_UNAVAILABLE.value) from error
+
 
 def create_user_item(user_data: dict[str, Any]) -> dict[str, Any]:
     '''
-        Create a new user item in the DynamoDB table.
-        user_data must contain 'email' (Partition Key), 'hashed_password', etc.
+        Stores a new user; its e-mail is the key and must be new.
+
+        Args:
+            user_data (dict[str, Any]): The user, its e-mail as the key.
+
+        Returns:
+            dict[str, Any]: The user as stored.
+
+        Raises:
+            RegisterAlreadyExistsError: EMAIL_TAKEN.
+            ServiceUnavailableError: STORAGE_UNAVAILABLE.
     '''
-    table = get_table()
-    user_email = user_data.get('email', 'N/A')
+    email = user_data['email']
+
+    def _put() -> None:
+        get_table().put_item(Item = user_data,
+                             ConditionExpression = 'attribute_not_exists(email)')
+
     try:
-        table.put_item(
-            Item = user_data,
-            ConditionExpression = 'attribute_not_exists(email)'
-        )
-        message = f'User "{user_email}" created successfully in DynamoDB.'
-        logger.info(message)
-        return user_data
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            error_msg = f'User with email "{user_email}" already exists.'
+        _guarded(f'creating {email}', _put)
+    except ServiceUnavailableError as error:
+        cause = error.__cause__
+        # The check in the service cannot see two sign-ups of one e-mail at
+        # once; the condition can.
+        if isinstance(cause, ClientError) \
+                and cause.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            error_msg = f'User "{email}" already exists.'
             logger.warning(error_msg)
-            # Same answer as the check in the controller: this branch is the
-            # race that check cannot see, two sign-ups of one e-mail at once.
-            raise RegisterAlreadyExistsError(detail = 'Email already registered') from e
-        error_msg = f'Error creating user "{user_email}" in DynamoDB: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail=f'Database write error: {e.response['Error']['Message']}'
-        ) from e
-    except Exception as e:
-        log_msg = f'Unexpected error creating user \'{user_email}\' in DynamoDB: {e}'
-        logger.critical(log_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail='Unexpected database write error.'
-        ) from e
+            raise RegisterAlreadyExistsError(detail = AuthError.EMAIL_TAKEN.value) from cause
+        raise
+    message = f'User "{email}" created in DynamoDB.'
+    logger.info(message)
+    return user_data
+
 
 def get_user_by_email(email: str) -> dict[str, Any] | None:
     '''
-        Gets a user from the DynamoDB table by their email (Partition Key).
+        One user as stored, or None.
+
+        Args:
+            email (str): The user.
+
+        Returns:
+            dict[str, Any] | None: The item.
+
+        Raises:
+            ServiceUnavailableError: STORAGE_UNAVAILABLE.
     '''
-    table = get_table()
-    try:
-        response = table.get_item(Key = {'email': email})
-        user = response.get('Item')
-        if user:
-            message = f'User "{email}" retrieved successfully from DynamoDB.'
-            logger.info(message)
-        else:
-            message = f'User "{email}" not found in DynamoDB.'
-            logger.info(message)
-        return user
-    except ClientError as e:
-        error_msg = f'Error getting user "{email}" from DynamoDB: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'Database read error.'
-        ) from e
-    except Exception as e:
-        error_msg = f'Unexpected error getting user "{email}" from DynamoDB: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'Unexpected database read error.'
-        ) from e
+    return _guarded(f'reading {email}',
+                    lambda: get_table().get_item(Key = {'email': email}).get('Item'))
+
 
 def update_user_item(
-    email: str, update_expression: str,
-    expression_attribute_values: dict,
-    expression_attribute_names: dict | None = None
+    email: str,
+    update_expression: str,
+    expression_attribute_values: dict[str, Any],
+    expression_attribute_names: dict[str, str] | None = None
 ) -> dict[str, Any] | None:
     '''
-        Updates a user item in the DynamoDB table.
-        email: The partition key of the user to update.
-        update_expression: The update expression string (e.g., 'SET #fn = :fn, #ln = :ln').
-        expression_attribute_values: Dictionary of values to update (e.g.,
-        {':fn': 'New', ':ln': 'Last_Name'}).
-        expression_attribute_names: Optional, for reserved attribute names
-        (e.g., {'#fn': 'first_name'}).
+        Applies an update to one user and returns it as it is now.
+
+        Args:
+            email (str): The user.
+            update_expression (str): The DynamoDB update expression.
+            expression_attribute_values (dict[str, Any]): Its values.
+            expression_attribute_names (dict[str, str] | None): Its aliased
+                names, for reserved words.
+
+        Returns:
+            dict[str, Any] | None: The user updated.
+
+        Raises:
+            ServiceUnavailableError: STORAGE_UNAVAILABLE.
     '''
-    table = get_table()
-    update_kwargs = {
+    update_kwargs: dict[str, Any] = {
         'Key': {'email': email},
         'UpdateExpression': update_expression,
+        'ExpressionAttributeValues': expression_attribute_values,
         'ReturnValues': 'ALL_NEW'
     }
-    if expression_attribute_values:
-        update_kwargs['ExpressionAttributeValues'] = expression_attribute_values
-
     if expression_attribute_names:
         update_kwargs['ExpressionAttributeNames'] = expression_attribute_names
+    updated = _guarded(f'updating {email}',
+                       lambda: get_table().update_item(**update_kwargs).get('Attributes'))
+    message = f'User "{email}" updated in DynamoDB.'
+    logger.info(message)
+    return updated
 
-    try:
-        response = table.update_item(**update_kwargs)
-        updated_user = response.get('Attributes')
-        if updated_user:
-            message = f'User "{email}" updated successfully in DynamoDB.'
-            logger.info(message)
-        else:
-            error_msg = f'User "{email}" not found for update in DynamoDB.'
-            logger.warning(error_msg)
-        return updated_user
-    except ClientError as e:
-        error_msg = f'Error updating user "{email}" in DynamoDB: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'Unexpected database update error.'
-        ) from e
 
 def delete_user_item(email: str) -> bool:
     '''
-        Deletes a user item from the DynamoDB table.
+        Deletes one user.
+
+        Args:
+            email (str): The user.
+
+        Returns:
+            bool: Whether there was such a user.
+
+        Raises:
+            ServiceUnavailableError: STORAGE_UNAVAILABLE.
     '''
-    table = get_table()
-    try:
-        response = table.delete_item(
-            Key = {'email': email},
-            ReturnValues = 'ALL_OLD'
-        )
-        if response.get('Attributes'):
-            message = f'User "{email}" deleted successfully from DynamoDB.'
-            logger.info(message)
-            return True
-        error_msg = f'User "{email}" not found for deletion in DynamoDB.'
+    old = _guarded(f'deleting {email}', lambda: get_table().delete_item(
+        Key = {'email': email}, ReturnValues = 'ALL_OLD').get('Attributes'))
+    if not old:
+        error_msg = f'User "{email}" not found for deletion.'
         logger.warning(error_msg)
         return False
-    except ClientError as e:
-        error_msg = f'Error deleting user "{email}" from DynamoDB: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = f'Database delete error: {e.response['Error']['Message']}'
-        ) from e
-    except Exception as e:
-        error_msg = f'Unexpected error deleting user "{email}" from DynamoDB: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'Unexpected database delete error.'
-        ) from e
+    message = f'User "{email}" deleted from DynamoDB.'
+    logger.info(message)
+    return True
+
 
 def scan_all_users() -> list[dict[str, Any]]:
     '''
-        Scans the entire user table.
-        WARNING: Very inefficient for large tables. For administration/debugging purposes only.
+        Every user. A scan: the table holds the platform's users, a few dozen,
+        and the admin screens and the account list read them all.
+
+        Returns:
+            list[dict[str, Any]]: The users.
+
+        Raises:
+            ServiceUnavailableError: STORAGE_UNAVAILABLE.
     '''
-    table = get_table()
-    try:
+    def _scan() -> list[dict[str, Any]]:
+        table = get_table()
         response = table.scan()
         users = response.get('Items', [])
-        message = f'Scanned {len(users)} users from DynamoDB.'
-        logger.info(message)
         while 'LastEvaluatedKey' in response:
-            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            response = table.scan(ExclusiveStartKey = response['LastEvaluatedKey'])
             users.extend(response.get('Items', []))
-            message = f'Scanned additional {len(response.get('Items', []))
-                } users. Total: {len(users)}'
-            logger.info(message)
         return users
-    except ClientError as e:
-        error_msg = f'Error scanning all users from DynamoDB: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail=f'Database scan error: {e.response['Error']['Message']}'
-        ) from e
-    except Exception as e:
-        error_msg = f'Unexpected error scanning all users from DynamoDB: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail='Unexpected database scan error.'
-        ) from e
+
+    users = _guarded('scanning the users', _scan)
+    message = f'Scanned {len(users)} user(s) from DynamoDB.'
+    logger.info(message)
+    return users

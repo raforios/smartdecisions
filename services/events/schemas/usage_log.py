@@ -45,3 +45,12 @@ class UsageLogQuerySchema(BaseModel):
     limit: int = Field(100, ge=1, le=100)
     last_evaluated_key: str | None = Field(None,
                 description = 'The last evaluated key for pagination.')
+
+
+class UsageLogsPage(BaseModel):
+    '''
+        One page of the listing: the records and the cursor to the next page.
+    '''
+    records: list[UsageLogResponseSchema]
+    last_evaluated_key: str | None = Field(None,
+                description = 'Stringified JSON key to ask for the next page; None at the end.')

@@ -27,6 +27,7 @@ from typing import Any
 
 import pandas as pd
 
+from schemas.closed_options import PaymentTerms
 from schemas.receivables import (
     AgingBucket,
     AgingRow,
@@ -110,9 +111,6 @@ COLLECTOR = 'collector'
 CREDIT_LIMIT = 'credit_limit'
 PAID_AMOUNT = 'paid_amount'
 PAYMENT_DATE = 'payment_date'
-
-CREDIT = 'CREDIT'
-CASH = 'CASH'
 
 # The aging scale, in the order the buckets are reported. CURRENT is not an
 # overdue bucket: it is what has not fallen due yet.
@@ -235,6 +233,24 @@ def _loss_rate_of(
     return float(policy.loss_rates[-1]) if policy.loss_rates else 0.0
 
 
+def terms_are(
+    terms: pd.Series,
+    code: PaymentTerms
+) -> pd.Series:
+    '''
+        Which rows were sold on the given terms. The load already brought the
+        column to its codes; the upper case covers a frame built by hand.
+
+        Args:
+            terms (pd.Series): The `payment_terms` column.
+            code (PaymentTerms): Cash or credit.
+
+        Returns:
+            pd.Series: True where the row has those terms.
+    '''
+    return terms.astype(str).str.upper() == code.value
+
+
 def invoice_frame(sales: pd.DataFrame) -> pd.DataFrame | None:
     '''
         Collapses the sales rows into one row per invoice.
@@ -295,7 +311,7 @@ def _with_terms(
     '''
     frame = invoices.copy()
     days = pd.to_numeric(frame['credit_days'], errors = 'coerce')
-    is_credit = frame['terms'].astype(str).str.upper() == CREDIT
+    is_credit = terms_are(frame['terms'], PaymentTerms.CREDIT)
     fallback = days.where(days.notna(), policy.default_term_days)
 
     derived = frame['date'] + pd.to_timedelta(fallback.fillna(0), unit = 'D')
@@ -670,7 +686,7 @@ def _credit_margin(
     if not has_cost_data(sales):
         return CreditMargin(available = False, reason_code = 'NO_COST_COLUMN')
 
-    credit_rows = sales[TERMS].astype(str).str.upper() == CREDIT
+    credit_rows = terms_are(sales[TERMS], PaymentTerms.CREDIT)
     revenue, gross, cash_rate = _gross_margin(sales, credit_rows)
 
     rate = policy.financial_rate_daily

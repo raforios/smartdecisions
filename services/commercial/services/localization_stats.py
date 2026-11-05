@@ -48,6 +48,10 @@ def _stop_was_visited(
     '''
         True when any reported point names the stop's client or lies within the
         match radius of it.
+
+        Args:
+            stop (PlannedPointItem): The planned stop.
+            points (list[ExecutedPointItem]): The points the seller went through.
     '''
     for point in points:
         if stop.get('client_id') and point.get('client_id') == stop['client_id']:
@@ -103,6 +107,12 @@ def _executions_of(
         seller in the plan is the file's ("Ana"); the phone reports with the
         email it signed in with, so both are accepted, linked in the seller master.
         A plan with no seller keeps every execution, as before.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): The owner of the data.
+            plan (PlannedRouteItem): The planned route.
+            filters (ExecutedRouteFilterSchema): The days and sellers asked for.
     '''
     scoped = filters.model_copy(update = {'planned_route_id': plan['id']})
     routes = list_executed_routes(dynamodb_resource, owner_email, scoped)

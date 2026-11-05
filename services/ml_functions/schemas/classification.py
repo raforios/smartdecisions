@@ -262,6 +262,9 @@ class TiersRequest(BaseModel):
     ) -> list[float]:
         '''
             The cuts are shares, strictly increasing.
+
+            Args:
+                cuts (list[float]): The cut-off shares.
         '''
         if any(cut <= 0 or cut >= 1 for cut in cuts) or cuts != sorted(set(cuts)):
             raise ValueError('cuts must be strictly increasing shares between 0 and 1')

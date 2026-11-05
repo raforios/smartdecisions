@@ -35,9 +35,15 @@ from schemas.billing import (
     ProductsResponse,
     SettingsResponse
 )
+from schemas.billing_siat import InvoiceState
 from services.exceptions import RegisterAlreadyExistsError, RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
+from services.utils import get_current_time_gmt, load_parameters
+
+# The decimals of every amount the shop records or shows: sales, till,
+# purchases, returns and the dashboard read this one value.
+MONEY_DECIMALS: int = load_parameters({'BILLING_AMOUNT_DECIMALS': int})[
+    'BILLING_AMOUNT_DECIMALS']
 
 
 def new_id() -> str:
@@ -606,3 +612,46 @@ def expiry_order(lot: dict[str, Any]) -> tuple:
     '''
     expiry = lot.get('expiry_date')
     return (expiry is None, expiry or '', lot.get('received_at', ''))
+
+
+def stored_payments(stored: dict[str, Any]) -> list[dict[str, Any]]:
+    '''
+        What each means paid of a stored sale. A sale issued before payments
+        were combined paid its total one way.
+
+        Args:
+            stored (dict[str, Any]): The sale as stored.
+
+        Returns:
+            list[dict[str, Any]]: `{method, amount}` per means.
+    '''
+    return stored.get('payments') or [{'method': stored['payment_method'],
+                                       'amount': stored['total']}]
+
+
+def accepted_notes(stored: dict[str, Any]) -> list[dict[str, Any]]:
+    '''
+        The Notas de Crédito-Débito of a stored sale that the SIN holds: a
+        cancelled one gave everything back.
+
+        Args:
+            stored (dict[str, Any]): The sale as stored.
+
+        Returns:
+            list[dict[str, Any]]: The accepted notes, as stored.
+    '''
+    return [note for note in stored.get('credit_notes') or []
+            if note['state'] == InvoiceState.ACCEPTED.value]
+
+
+def buyer_email(stored: dict[str, Any]) -> str | None:
+    '''
+        Where the buyer of a stored sale receives its documents, if they said.
+
+        Args:
+            stored (dict[str, Any]): The sale as stored.
+
+        Returns:
+            str | None: The address, or None.
+    '''
+    return (stored.get('buyer') or {}).get('email')

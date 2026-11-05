@@ -66,6 +66,14 @@
         sessionStorage.clear();
     }
 
+    // What AUTH answers when it refuses a sign-in, in words.
+    const LOGIN_ERRORS = {
+        INVALID_CREDENTIALS: 'Correo o contraseña incorrectos.',
+        USER_INACTIVE: 'Tu usuario está inactivo. Pide al Administrador que lo active.',
+        STORAGE_UNAVAILABLE: 'El servicio de autenticación no responde. Intenta de nuevo en unos minutos.',
+        TOKEN_NOT_ISSUED: 'El servicio de autenticación no responde. Intenta de nuevo en unos minutos.'
+    };
+
     /**
      * Posts credentials to AUTH and returns the access token on success.
      * Throws an Error with a user-friendly message on failure.
@@ -91,8 +99,7 @@
         }
 
         if (!response.ok) {
-            const detail = payload && (payload.detail || payload.message);
-            throw new Error(detail || 'Credenciales inválidas.');
+            throw new Error(LOGIN_ERRORS[payload && payload.detail] || 'Credenciales inválidas.');
         }
 
         const token = payload.access_token;

@@ -32,7 +32,7 @@ from schemas.analytics import (
     TrendPoint
 )
 
-from services.analytics_utils import AMOUNT_DECIMALS, RANKING_SIZE
+from services.analytics_utils import RANKING_SIZE, money
 from services.currency import money_row, money_sums, money_total
 from services.logger_config import custom_logger as logger
 
@@ -45,11 +45,6 @@ _PRODUCT_ID = 'product_id'
 _PRODUCT_NAME = 'product_name'
 
 
-def _money(value: float) -> float:
-    '''Rounds a monetary amount to 2 decimals, guarding against NaN.'''
-    return round(float(value), AMOUNT_DECIMALS) if pd.notna(value) else 0.0
-
-
 def _label_series(
     dataframe: pd.DataFrame,
     id_col: str,
@@ -58,6 +53,11 @@ def _label_series(
     '''
         Returns a readable label per row: the human name when available, else the
         id. Lets rankings show "Tienda Doña Rosa" instead of "PDV-007".
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
+            id_col (str): The identifier column.
+            name_col (str): The name column.
     '''
     if name_col in dataframe.columns:
         names = dataframe[name_col].fillna('').astype(str).str.strip()
@@ -78,7 +78,7 @@ def _kpis(dataframe: pd.DataFrame) -> list[KpiCard]:
             list[KpiCard]: The headline cards of the commercial summary.
     '''
     sales_count = int(dataframe[_ORDER].nunique()) if _ORDER in dataframe else len(dataframe)
-    units = _money(dataframe[_QUANTITY].sum()) if _QUANTITY in dataframe else 0.0
+    units = money(dataframe[_QUANTITY].sum()) if _QUANTITY in dataframe else 0.0
     # The whole frame as one group: the total in each currency at once.
     totals = (money_total(dataframe, dataframe[_AMOUNT]) if _AMOUNT in dataframe
               else pd.Series({'bob': 0.0}))
@@ -109,6 +109,12 @@ def _ranking(
 
         Rows with zero sales are excluded: a "least sold" list is only useful
         among items that actually sold — listing products with 0 adds no value.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
+            label_series (pd.Series): The display name per identifier.
+            top (int): How many rows.
+            ascending (bool): Lowest first instead of highest.
     '''
     if _AMOUNT not in dataframe.columns:
         return []
@@ -128,6 +134,10 @@ def _distribution(
         Sales share by a categorical dimension (category/channel/region/...),
         returned as {label, amount, percentage} sorted by amount desc. Empty when
         the column is absent so the UI can hide that chart.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
+            dimension (str): The column to group by.
     '''
     if dimension not in dataframe.columns or _AMOUNT not in dataframe.columns:
         return []
@@ -151,6 +161,9 @@ def _monthly_trend(dataframe: pd.DataFrame) -> list[TrendPoint]:
     '''
         Monthly sales series as {month: 'YYYY-MM', amount}. Empty when there is no
         parseable date column.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
     '''
     if 'date' not in dataframe.columns or _AMOUNT not in dataframe.columns:
         return []

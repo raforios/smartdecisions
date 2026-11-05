@@ -9,8 +9,8 @@
     one keeps its cache.
 
     Usage:
-        python -m tools.deploy.deploy_demo_portal                  # informa qué haría
-        python -m tools.deploy.deploy_demo_portal --yes            # estampa, sube, invalida
+        python -m tools.deploy.deploy_demo_portal                  # reports what it would do
+        python -m tools.deploy.deploy_demo_portal --yes            # stamps, uploads, invalidates
         python -m tools.deploy.deploy_demo_portal --yes --only minerales
 '''
 import argparse

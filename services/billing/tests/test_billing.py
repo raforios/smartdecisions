@@ -624,3 +624,23 @@ def test_dashboard_ranks_products_by_what_they_charged(dynamodb):
     # 10 x 6 = 60 against 4 x 25 = 100: fewer boxes, more money.
     assert [row.sku for row in summary.top_products] == ['VIT-C', 'PARA500']
     assert summary.top_products[0].amount == 100.0
+
+
+def test_a_stored_sale_reads_its_payments_and_its_notes_in_force():
+    '''
+        A sale from before combined payments paid its total one way; only the
+        notes the SIN holds count, and the buyer's address is read once.
+    '''
+    old = {'payment_method': 'CASH', 'total': 50.0, 'buyer': {'email': 'a@b.bo'},
+           'credit_notes': [{'credit_note_id': 'N1', 'state': 'ACCEPTED'},
+                            {'credit_note_id': 'N2', 'state': 'CANCELLED'}]}
+    combined = {'payments': [{'method': 'CASH', 'amount': 20.0},
+                             {'method': 'DEBIT_CARD', 'amount': 30.0}],
+                'payment_method': 'DEBIT_CARD', 'total': 50.0, 'buyer': None}
+
+    assert billing.stored_payments(old) == [{'method': 'CASH', 'amount': 50.0}]
+    assert billing.stored_payments(combined) == combined['payments']
+    assert [note['credit_note_id'] for note in billing.accepted_notes(old)] == ['N1']
+    assert billing.accepted_notes(combined) == []
+    assert billing.buyer_email(old) == 'a@b.bo'
+    assert billing.buyer_email(combined) is None

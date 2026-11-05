@@ -15,7 +15,7 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
-from models.billing import LOTS_TABLE, SALES_TABLE, SALE_SORT_KEY
+from models.billing import LOTS_TABLE
 from schemas.billing import (
     ExpiringLot,
     LowStockProduct,
@@ -24,10 +24,10 @@ from schemas.billing import (
     TopProduct
 )
 from services.utils import load_parameters
-from services.billing import SortBounds, date_window, products_by_sku, read_partition
-from services.billing_cash import method_totals
+from services.billing import MONEY_DECIMALS, products_by_sku, read_partition
+from services.billing_payments import method_totals
 from services.billing_returns import net_of_returns
-from services.billing_sales import _sale_out
+from services.billing_sales import sale_out, stored_sales
 
 ENV_VARS = load_parameters({
     'BILLING_EXPIRY_ALERT_DAYS': int,
@@ -36,7 +36,6 @@ ENV_VARS = load_parameters({
 })
 EXPIRY_ALERT_DAYS = ENV_VARS['BILLING_EXPIRY_ALERT_DAYS']
 
-MONEY_DECIMALS = 2
 # How many rows each list carries. A counter screen is read at a glance; the
 # full lists live in their own sections.
 TOP_ROWS = ENV_VARS['BILLING_TOP_ROWS']
@@ -68,11 +67,11 @@ def dashboard(
     start = date_from or reference
     end = date_to or reference
 
-    stored = read_partition(dynamodb_resource, SALES_TABLE, owner, bounds = SortBounds(
-        sort_key = SALE_SORT_KEY, between = date_window(start.isoformat(), end.isoformat())))
+    stored = stored_sales(dynamodb_resource, owner, start.isoformat(), end.isoformat(),
+                          newest_first = False)
     # What the buyers kept: a return undoes its part of the sale.
     kept = [net_of_returns(row) for row in stored if row['status'] == SaleStatus.ISSUED.value]
-    issued = [_sale_out(row) for row in kept if row is not None]
+    issued = [sale_out(row) for row in kept if row is not None]
 
     products = products_by_sku(dynamodb_resource, owner)
     lots = read_partition(dynamodb_resource, LOTS_TABLE, owner)

@@ -21,12 +21,17 @@ from schemas.billing_returns import (
     CreditNoteIssuer,
     CreditNoteLineOut
 )
-from services.billing_invoice_xml import _amount, _put, put_detail_figures, require_homologated
+from services.billing import MONEY_DECIMALS
+from services.billing_invoice_xml import (
+    put_detail_figures,
+    put_element,
+    require_homologated,
+    xml_amount
+)
 from services.logger_config import custom_logger as logger
 
 ROOT_ELEMENT = 'notaFiscalComputarizadaCreditoDebito'
 
-MONEY_DECIMALS = 2
 
 
 def as_sold_line(line: CreditNoteLineOut) -> SaleLineOut:
@@ -63,35 +68,35 @@ def _build_header(
             note (CreditNoteDocument): The note.
     '''
     header = SubElement(root, 'cabecera')
-    _put(header, 'nitEmisor', issuer.nit)
-    _put(header, 'razonSocialEmisor', issuer.trade_name)
-    _put(header, 'municipio', issuer.municipality)
-    _put(header, 'telefono', issuer.phone)
-    _put(header, 'numeroNotaCreditoDebito', note.number)
-    _put(header, 'cuf', note.cuf)
-    _put(header, 'cufd', issuer.cufd)
-    _put(header, 'codigoSucursal', issuer.branch)
-    _put(header, 'direccion', issuer.address)
-    _put(header, 'codigoPuntoVenta', issuer.point_of_sale)
-    _put(header, 'fechaEmision', note.issued_at)
-    _put(header, 'nombreRazonSocial', note.buyer.name)
-    _put(header, 'codigoTipoDocumentoIdentidad', note.buyer.document_type)
-    _put(header, 'numeroDocumento', note.buyer.document)
-    _put(header, 'complemento', None)
-    _put(header, 'codigoCliente', note.buyer.document)
-    _put(header, 'numeroFactura', note.invoice.number)
-    _put(header, 'numeroAutorizacionCuf', note.invoice.cuf)
-    _put(header, 'fechaEmisionFactura', note.invoice.issued_at)
-    _put(header, 'montoTotalOriginal', _amount(note.original_total))
-    _put(header, 'montoTotalDevuelto', _amount(note.returned_total))
+    put_element(header, 'nitEmisor', issuer.nit)
+    put_element(header, 'razonSocialEmisor', issuer.trade_name)
+    put_element(header, 'municipio', issuer.municipality)
+    put_element(header, 'telefono', issuer.phone)
+    put_element(header, 'numeroNotaCreditoDebito', note.number)
+    put_element(header, 'cuf', note.cuf)
+    put_element(header, 'cufd', issuer.cufd)
+    put_element(header, 'codigoSucursal', issuer.branch)
+    put_element(header, 'direccion', issuer.address)
+    put_element(header, 'codigoPuntoVenta', issuer.point_of_sale)
+    put_element(header, 'fechaEmision', note.issued_at)
+    put_element(header, 'nombreRazonSocial', note.buyer.name)
+    put_element(header, 'codigoTipoDocumentoIdentidad', note.buyer.document_type)
+    put_element(header, 'numeroDocumento', note.buyer.document)
+    put_element(header, 'complemento', None)
+    put_element(header, 'codigoCliente', note.buyer.document)
+    put_element(header, 'numeroFactura', note.invoice.number)
+    put_element(header, 'numeroAutorizacionCuf', note.invoice.cuf)
+    put_element(header, 'fechaEmisionFactura', note.invoice.issued_at)
+    put_element(header, 'montoTotalOriginal', xml_amount(note.original_total))
+    put_element(header, 'montoTotalDevuelto', xml_amount(note.returned_total))
     # The invoices of this product carry no additional discount
     # (`descuentoAdicional` is nil), so there is none to prorate.
-    _put(header, 'montoDescuentoCreditoDebito', None)
-    _put(header, 'montoEfectivoCreditoDebito', _amount(note.tax_credit))
-    _put(header, 'codigoExcepcion', None)
-    _put(header, 'leyenda', note.legend)
-    _put(header, 'usuario', note.user)
-    _put(header, 'codigoDocumentoSector', SECTOR_DOCUMENT_CREDIT_DEBIT)
+    put_element(header, 'montoDescuentoCreditoDebito', None)
+    put_element(header, 'montoEfectivoCreditoDebito', xml_amount(note.tax_credit))
+    put_element(header, 'codigoExcepcion', None)
+    put_element(header, 'leyenda', note.legend)
+    put_element(header, 'usuario', note.user)
+    put_element(header, 'codigoDocumentoSector', SECTOR_DOCUMENT_CREDIT_DEBIT)
 
 
 def _build_details(
@@ -110,7 +115,7 @@ def _build_details(
     for line in lines:
         detail = SubElement(root, 'detalle')
         put_detail_figures(detail, line)
-        _put(detail, 'codigoDetalleTransaccion', transaction)
+        put_element(detail, 'codigoDetalleTransaccion', transaction)
 
 
 def build_credit_note_xml(

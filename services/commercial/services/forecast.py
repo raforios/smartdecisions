@@ -48,6 +48,10 @@ def _next_months(
 ) -> list[str]:
     '''
         Returns the `count` month labels (YYYY-MM) following `last_month`.
+
+        Args:
+            last_month (str): The last month with data.
+            count (int): How many months follow.
     '''
     period = pd.Period(last_month, freq = 'M')
     return [str(period + offset) for offset in range(1, count + 1)]
@@ -88,6 +92,9 @@ def _monthly_totals(dataframe: pd.DataFrame) -> pd.DataFrame:
     '''
         Returns monthly total sales indexed by 'YYYY-MM' (chronological):
         `bob` and, with the month-close factors, each month at its closing dollar.
+
+        Args:
+            dataframe (pd.DataFrame): Sales rows with canonical columns.
     '''
     fechas = pd.to_datetime(dataframe['date'], errors = 'coerce')
     valid = fechas.notna()
@@ -110,6 +117,13 @@ def _series_block(
         The history is what was sold, each month at its closing dollar; the
         projection is fitted on the bolivianos and stays in them, so the
         response shows it at today's rate.
+
+        Args:
+            name (str): What the series measures.
+            monthly (pd.DataFrame): The monthly totals.
+            months_ahead (int): How many months to project.
+            method (str): The projection method ML_FUNCTIONS runs.
+            auth_token (str): The caller's token, forwarded to the service it calls.
     '''
     if len(monthly) < 2:
         return None

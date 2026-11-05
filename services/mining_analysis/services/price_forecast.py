@@ -460,6 +460,7 @@ def _official_block(
         mineral_id (str | None): Mineral identifier, None when uncatalogued.
         projection (Projection): The daily projection already computed.
         reference (date): Today, which decides which period is in force.
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
 
     Returns:
         dict[str, Any]: `official_current`, `official_forecast` and the change
@@ -538,6 +539,7 @@ async def get_price_forecast_service(
         days_ahead (int): How many days to project.
         method (ForecastMethod): Requested projection method.
         auth_token (str): The caller's Authorization header, for ML_FUNCTIONS.
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
 
     Returns:
         dict[str, Any]: Payload matching PriceForecastResponse shape.
@@ -610,6 +612,7 @@ def _forecast_row(
 
     Args:
         request (ForecastRequest): Catalogue entry, history and horizon.
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
 
     Returns:
         dict[str, Any]: The mineral's row, daily projection and official

@@ -182,6 +182,9 @@ def load_daily_stock(
 def _merge_sale_lines(items: list[SaleItemSchema]) -> dict[str, float]:
     '''
         Units per SKU, adding repeated lines together.
+
+        Args:
+            items (list[SaleItemSchema]): The sold lines, a product possibly repeated.
     '''
     merged: dict[str, float] = {}
     for line in items:

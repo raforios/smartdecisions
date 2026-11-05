@@ -195,9 +195,26 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   reducida oficial), «Medio de Pago», precio sugerido en el producto de
   BILLING, códigos en inglés en COMMERCIAL y BILLING, chequeo
   `code-language` y dos hooks (verificación antes de cada commit y barrido
-  de idioma al terminar cada turno). **Retomar en sesión nueva:** primero la
-  revisión de código (SOLID, DRY, clean code) de los commits del 3 y 4-nov;
-  después el maestro de productos por SKU. Detalle en el plan único.
+  de idioma al terminar cada turno). **4-nov: revisión de código** (SOLID,
+  DRY, clean code) de los nueve commits del 3 y 4-nov aplicada en `tools/`,
+  BILLING (siete valores de la norma a `billing_parameters`, sembrados en
+  AWS) y COMMERCIAL (códigos en `Enum`, regla «precio o monto» en el
+  contrato); sin commit. **Falta que Rafael despliegue BILLING y
+  COMMERCIAL**; después pruebo y publico los dos portales. Siguiente: el
+  maestro de productos por SKU. Detalle en el plan único.
+- **4/5-nov: revisión de lo anterior** (Rafael: no confía en el trabajo
+  previo). Chequeos nuevos en `verify_service`: `private-imports`,
+  `docstring-args` (sólo `services/` y `schemas/`), firmas con un parámetro
+  por línea y `comment-language` más estricto; los diez en verde. AUTH
+  corregido (códigos en vez de frases, lógica a `services/users.py`, sin
+  mensajes de DynamoDB al cliente) y los dos portales traducen sus códigos.
+  `put_items` al final de los seis `crud.py`. 5-nov: EVENTS (una sola
+  implementación de los dos registros, `services/events.py`), FILES (capa
+  `services/files.py`, códigos y DTOs) y ML_FUNCTIONS (endpoints de
+  capacitación al estándar, sin cambiar lo que leen los notebooks)
+  corregidos; SES fuera del sandbox. Sin commit; falta desplegar AUTH,
+  EVENTS, FILES, ML_FUNCTIONS, MINING_ANALYSIS, BILLING y COMMERCIAL, y
+  después publicar los dos portales.
 - **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
   (26-oct), FINANCE (26-oct), ML_FUNCTIONS (25-oct). El
   servicio genérico de parámetros ya no existe en AWS, ni las tablas

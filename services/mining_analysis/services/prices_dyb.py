@@ -36,7 +36,7 @@ from models.mining_analysis import (
     MineralItem,
     MiningPriceItem
 )
-from services.crud import _convert_floats_to_decimals, find_item_by_key, query_by_partition
+from services.crud import find_item_by_key, put_items, query_by_partition
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
 
@@ -84,31 +84,6 @@ def _scan(
     return items
 
 
-def _write(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    items: list[dict[str, Any]]
-) -> int:
-    '''
-        Writes items in one batch, replacing any row with the same key.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            table_name (str): Target table.
-            items (list[dict[str, Any]]): Items to write.
-
-        Returns:
-            int: How many were written.
-    '''
-    if not items:
-        return 0
-    table = dynamodb_resource.Table(table_name)
-    with table.batch_writer() as batch:
-        for item in items:
-            batch.put_item(Item = _convert_floats_to_decimals(item))
-    return len(items)
-
-
 def list_minerals(dynamodb_resource: ServiceResource) -> list[MineralItem]:
     '''
         The whole mineral catalogue.
@@ -143,7 +118,7 @@ def put_mineral(
         'method': mineral.method,
         'created_at': mineral.created_at
     }
-    _write(dynamodb_resource, MINERALS_TABLE, [item])
+    put_items(dynamodb_resource, MINERALS_TABLE, [item])
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +212,7 @@ def put_prices_batch(
         Returns:
             int: How many were written.
     '''
-    return _write(dynamodb_resource, PRICES_TABLE, [price.to_item() for price in prices])
+    return put_items(dynamodb_resource, PRICES_TABLE, [price.to_item() for price in prices])
 
 
 def put_price(
@@ -298,7 +273,7 @@ def put_market_prices(
         Returns:
             int: Rows written.
     '''
-    written = _write(dynamodb_resource, MARKET_TABLE, [price.to_item() for price in prices])
+    written = put_items(dynamodb_resource, MARKET_TABLE, [price.to_item() for price in prices])
     if written:
         message = f'Wrote {written} market price(s) to {MARKET_TABLE}.'
         logger.info(message)
@@ -354,7 +329,7 @@ def put_royalty_rule(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             rule (RoyaltyRuleItem): The scale.
     '''
-    _write(dynamodb_resource, RULES_TABLE, [rule.to_item()])
+    put_items(dynamodb_resource, RULES_TABLE, [rule.to_item()])
     message = f'Royalty rule for mineral {rule.mineral_id} stored ({RULES_TABLE}).'
     logger.info(message)
 

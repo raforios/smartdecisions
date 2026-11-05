@@ -23,6 +23,9 @@ def normalize_name(name: str) -> str:
 
     Accent stripping is intentional: source files occasionally arrive with
     ASCII-only mineral names from older OCR pipelines.
+
+    Args:
+        name (str): A mineral name as written.
     '''
     base = unicodedata.normalize('NFKD', str(name).strip().lower())
     return ''.join(c for c in base if not unicodedata.combining(c))
@@ -54,6 +57,7 @@ async def get_all_prices_service(
     that catalogue anyway.
 
     Args:
+        dynamodb_resource (ServiceResource | None): The boto3 DynamoDB resource.
 
     Returns:
         list[dict[str, Any]]: Rows matching MiningPriceResponseSchema.

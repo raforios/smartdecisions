@@ -44,6 +44,9 @@ _ENV_VARS = load_parameters({
 })
 # What a stock photo or a purchase is married to the sales catalogue by.
 _CATALOGUE_KEY = 'product_id'
+
+# Metadata key under which a schema names its one-of columns.
+_ONE_OF = 'one_of'
 # Decimals a published amount carries. A decision —a distributor in bolivianos
 # and one in dollars do not round the same— so it is not a literal in the code.
 AMOUNT_DECIMALS: Final[int] = _ENV_VARS['AMOUNT_DECIMALS']
@@ -52,6 +55,20 @@ AMOUNT_DECIMALS: Final[int] = _ENV_VARS['AMOUNT_DECIMALS']
 # ---------------------------------------------------------------------------
 # Header mapping
 # ---------------------------------------------------------------------------
+
+def excel_row(index: object) -> int:
+    '''
+        The row a client sees in the sheet for a frame index: the frame counts
+        from zero and the sheet from one, under its header row.
+
+        Args:
+            index (object): The frame index of the row.
+
+        Returns:
+            int: The sheet row.
+    '''
+    return int(index) + 2
+
 
 def normalize_header(header: object) -> str:
     '''
@@ -163,7 +180,8 @@ def _checks_for(column: SalesColumn) -> list[pa.Check]:
 
 def _build_schema(
     columns: tuple[SalesColumn, ...],
-    description: str
+    description: str,
+    one_of: tuple[str, ...] = ()
 ) -> pa.DataFrameSchema:
     '''
         Builds the DataFrame schema of a contract.
@@ -171,6 +189,8 @@ def _build_schema(
         Args:
             columns (tuple[SalesColumn, ...]): The contract to enforce.
             description (str): What the schema is, for the error report.
+            one_of (tuple[str, ...]): Columns of which every row must carry at
+                least one; `validate` reads them from the schema's metadata.
 
         Returns:
             pa.DataFrameSchema: Schema in 'filter' mode, so unknown columns are
@@ -191,14 +211,18 @@ def _build_schema(
         strict = 'filter',
         coerce = True,
         ordered = False,
-        description = description
+        description = description,
+        metadata = {_ONE_OF: one_of}
     )
 
 
+# A sale carries its income with a unit price or a total (Rafael, 3-nov-2026);
+# the total is derived from the price when it is missing.
 SCHEMA: Final[pa.DataFrameSchema] = _build_schema(
     SALES_COLUMNS,
     f'SmartDecisions sales contract {TEMPLATE_VERSION}. Required: '
-    f'{", ".join(REQUIRED_COLUMNS)}. Optional: {", ".join(OPTIONAL_COLUMNS)}.'
+    f'{", ".join(REQUIRED_COLUMNS)}. Optional: {", ".join(OPTIONAL_COLUMNS)}.',
+    one_of = PRICE_COLUMNS
 )
 
 # The other contracts are validated with the same machinery: they are the
@@ -295,25 +319,30 @@ def _rule_code(check_name: str | None) -> ValidationRule:
     return ValidationRule.INVALID_VALUE
 
 
-def _unpriced_issues(dataframe: pd.DataFrame) -> list[ValidationIssue]:
+def _one_of_issues(
+    dataframe: pd.DataFrame,
+    columns: tuple[str, ...]
+) -> list[ValidationIssue]:
     '''
-        The sales rows with neither a unit price nor a total: without one of
-        them a sale has no income to analyse (Rafael, 3-nov-2026). Either is
-        enough; the total is derived from the price when it is missing.
+        The rows that carry none of the columns of which one is required.
 
         Args:
-            dataframe (pd.DataFrame): Canonical sales rows, before validation.
+            dataframe (pd.DataFrame): Canonical rows, before validation.
+            columns (tuple[str, ...]): The columns; empty when the contract has
+                no such rule.
 
         Returns:
-            list[ValidationIssue]: One REQUIRED_VALUE on `unit_price` per row.
+            list[ValidationIssue]: One REQUIRED_VALUE on the first column per row.
     '''
-    priced = pd.Series(False, index = dataframe.index)
-    for column in PRICE_COLUMNS:
+    if not columns:
+        return []
+    filled = pd.Series(False, index = dataframe.index)
+    for column in columns:
         if column in dataframe.columns:
-            priced |= pd.to_numeric(dataframe[column], errors = 'coerce').notna()
-    return [ValidationIssue(row = int(index) + 2, column = PRICE_COLUMNS[0], value = None,
+            filled |= pd.to_numeric(dataframe[column], errors = 'coerce').notna()
+    return [ValidationIssue(row = excel_row(index), column = columns[0], value = None,
                             rule_code = ValidationRule.REQUIRED_VALUE)
-            for index in dataframe.index[~priced]]
+            for index in dataframe.index[~filled]]
 
 
 def validate(
@@ -344,10 +373,10 @@ def validate(
         return ValidationResult(frame = dataframe, issues = issues)
 
     contract = schema if schema is not None else SCHEMA
-    issues.extend(_unpriced_issues(dataframe) if contract is SCHEMA else [])
+    issues.extend(_one_of_issues(dataframe, (contract.metadata or {}).get(_ONE_OF, ())))
     try:
-        # The contract runs whole even with unpriced rows, so one pass
-        # reports every issue of the file.
+        # The contract runs whole even with rows missing a one-of value, so
+        # one pass reports every issue of the file.
         validated = contract.validate(dataframe, lazy = True)
         return ValidationResult(frame = dataframe if issues else validated, issues = issues)
     except SchemaErrors as schema_errors:
@@ -384,7 +413,7 @@ def _schema_issues(schema_errors: SchemaErrors) -> list[ValidationIssue]:
             column_name = str(failure.get('column') or '(global)')
             value_repr = None if pd.isna(raw_failure_value) else str(raw_failure_value)
         issues.append(ValidationIssue(
-            row = int(row_idx) + 2 if pd.notna(row_idx) else 0,
+            row = excel_row(row_idx) if pd.notna(row_idx) else 0,
             column = column_name,
             value = value_repr,
             rule_code = _rule_code(str(check_name))
@@ -416,7 +445,7 @@ def unknown_value_issues(
     unknown = frame.loc[~frame[column].astype(str).isin(known)]
     return [
         ValidationIssue(
-            row = int(position) + 2,
+            row = excel_row(position),
             column = column,
             value = str(row[column]),
             rule_code = rule

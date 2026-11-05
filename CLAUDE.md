@@ -289,6 +289,12 @@ para que no diverjan del validador.
     misma pregunta qué deja de funcionar con cada opción. **Lo que una
     función aprobada usa no se quita**: si A usa a B, se quedan las dos.
 
+11. **Sin marcas de IA** (Rafael, 5-nov-2026): ningún archivo, comentario,
+    commit ni metadato dice que algo lo hizo o lo modificó una IA. Nada de
+    `Co-Authored-By`, «Generated with» ni firmas parecidas; el proyecto, el
+    boilerplate y sus patrones son de Rafael. `.claude/settings.json` lleva
+    la atribución apagada.
+
 ### Reparto de despliegues
 
 **El frontend lo despliega Claude. El backend lo despliega Rafael.** Nunca

@@ -88,6 +88,9 @@ def _build_dataset_item(payload: dict[str, Any]) -> IngestDataset:
         simple partition key named `id` (S). We keep `dataset_id` as a
         mirror attribute so callers and downstream services that already
         rely on the `dataset_id` label do not need to change.
+
+        Args:
+            payload (dict[str, Any]): The dataset and its metadata.
     '''
     now = get_current_time_gmt()
     dataset_id = payload.get('dataset_id') or str(uuid.uuid4())
@@ -117,6 +120,10 @@ def persist_dataset(
 ) -> dict[str, Any]:
     '''
         Persists a new ingested dataset record in DynamoDB.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            payload (dict[str, Any]): The dataset and its metadata.
     '''
     item = _build_dataset_item(payload)
     persisted = create_item(
@@ -218,6 +225,10 @@ def get_dataset_by_id(
 
         The AWS table uses `id` as the PK; we accept the logical
         `dataset_id` argument and use it as the key value.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            dataset_id (str): The dataset.
     '''
     return get_item_by_key(
         dynamodb_resource = dynamodb_resource,

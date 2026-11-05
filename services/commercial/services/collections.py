@@ -30,9 +30,14 @@ from schemas.commercial import (
     ValidationRule
 )
 from services.commercial import normalize_frame
-from services.load_contract import COLLECTION_HEADER_LOOKUP, COLLECTIONS_SCHEMA, validate
+from services.load_contract import (
+    AMOUNT_DECIMALS,
+    COLLECTION_HEADER_LOOKUP,
+    COLLECTIONS_SCHEMA,
+    excel_row,
+    validate
+)
 from services.load_files import read_file
-from services.load_contract import AMOUNT_DECIMALS
 from services.logger_config import custom_logger as logger
 
 _ORDER = 'order_id'
@@ -91,7 +96,7 @@ def _unmatched_issues(
     orphans = payments.loc[~payments[_ORDER].isin(invoices.index)]
     return [
         ValidationIssue(
-            row = int(position) + 2,
+            row = excel_row(position),
             column = _ORDER,
             value = str(row[_ORDER]),
             rule_code = ValidationRule.UNKNOWN_INVOICE

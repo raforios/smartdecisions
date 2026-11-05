@@ -339,9 +339,39 @@ def verify_document(
 
 
 @dataclass(frozen = True)
+class SiatDocument:
+    '''
+        One kind of fiscal document as the SIN tells them apart: the service
+        that takes it, its sector document and invoice type, and the names of
+        its three operations. An invoice and a Nota de Crédito-Débito travel
+        in the same envelopes and differ only in these.
+    '''
+    service: str
+    sector: int
+    invoice_type: int
+    reception: str
+    cancellation: str
+    reversal: str
+
+
+INVOICE_DOCUMENT: Final[SiatDocument] = SiatDocument(
+    service = SERVICE_INVOICE, sector = SECTOR_DOCUMENT_PURCHASE_SALE,
+    invoice_type = INVOICE_WITH_TAX_CREDIT, reception = 'recepcionFactura',
+    cancellation = 'anulacionFactura', reversal = 'reversionAnulacionFactura'
+)
+# The adjustment service only takes notes online: a note is never issued
+# offline.
+CREDIT_NOTE_DOCUMENT: Final[SiatDocument] = SiatDocument(
+    service = SERVICE_ADJUSTMENT, sector = SECTOR_DOCUMENT_CREDIT_DEBIT,
+    invoice_type = INVOICE_TYPE_ADJUSTMENT, reception = 'recepcionDocumentoAjuste',
+    cancellation = 'anulacionDocumentoAjuste', reversal = 'reversionAnulacionDocumentoAjuste'
+)
+
+
+@dataclass(frozen = True)
 class InvoiceSubmission:
     '''
-        One invoice as `recepcionFactura` takes it.
+        One document as its reception operation takes it.
 
         `archive` is the GZIPped XML as bytes. The WSDL types it
         `base64Binary`, so zeep encodes it on the wire; encoding it here as
@@ -353,12 +383,42 @@ class InvoiceSubmission:
     sent_at: str
 
 
-def send_invoice(
+def _envelope(
     emitter: Emitter,
-    submission: InvoiceSubmission
+    document: SiatDocument,
+    cuis: str,
+    cufd: str
+) -> dict[str, Any]:
+    '''
+        What every reception, cancellation and reversal of a document opens
+        with.
+
+        Args:
+            emitter (Emitter): Who is issuing.
+            document (SiatDocument): Which document.
+            cuis (str): The CUIS in force.
+            cufd (str): The CUFD in force.
+
+        Returns:
+            dict[str, Any]: The common fields of the request.
+    '''
+    return {
+        **base_request(emitter),
+        'cuis': cuis,
+        'cufd': cufd,
+        'codigoDocumentoSector': document.sector,
+        'codigoEmision': EMISSION_ONLINE,
+        'tipoFacturaDocumento': document.invoice_type
+    }
+
+
+def _send(
+    emitter: Emitter,
+    submission: InvoiceSubmission,
+    document: SiatDocument
 ) -> SiatReceipt:
     '''
-        Hands one invoice to the tax office.
+        Hands one document to the tax office.
 
         It travels with the SHA-256 of the archive, so the SIAT can tell a
         truncated upload from a bad document.
@@ -366,6 +426,7 @@ def send_invoice(
         Args:
             emitter (Emitter): Who is issuing.
             submission (InvoiceSubmission): The codes in force and the document.
+            document (SiatDocument): Which document.
 
         Returns:
             SiatReceipt: What the tax office answered.
@@ -373,18 +434,33 @@ def send_invoice(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable.
     '''
-    answer = invoke(SERVICE_INVOICE, 'recepcionFactura', {
-        **base_request(emitter),
-        'cuis': submission.cuis,
-        'cufd': submission.cufd,
-        'codigoDocumentoSector': SECTOR_DOCUMENT_PURCHASE_SALE,
-        'codigoEmision': EMISSION_ONLINE,
-        'tipoFacturaDocumento': INVOICE_WITH_TAX_CREDIT,
+    answer = invoke(document.service, document.reception, {
+        **_envelope(emitter, document, submission.cuis, submission.cufd),
         'archivo': submission.archive,
         'fechaEnvio': submission.sent_at,
         'hashArchivo': hashlib.sha256(submission.archive).hexdigest()
     })
     return _receipt_from(answer)
+
+
+def send_invoice(
+    emitter: Emitter,
+    submission: InvoiceSubmission
+) -> SiatReceipt:
+    '''
+        Hands one invoice to the tax office (`_send`).
+
+        Args:
+            emitter (Emitter): Who is issuing.
+            submission (InvoiceSubmission): The codes in force and the invoice.
+
+        Returns:
+            SiatReceipt: What the tax office answered.
+
+        Raises:
+            ServiceUnavailableError: The SIAT is unreachable.
+    '''
+    return _send(emitter, submission, INVOICE_DOCUMENT)
 
 
 def send_credit_note(
@@ -392,15 +468,11 @@ def send_credit_note(
     submission: InvoiceSubmission
 ) -> SiatReceipt:
     '''
-        Hands one Nota de Crédito-Débito to the adjustment service.
-
-        Same envelope as an invoice, with the sector document and invoice type
-        of an adjustment. The service only takes them online: a note is never
-        issued offline.
+        Hands one Nota de Crédito-Débito to the adjustment service (`_send`).
 
         Args:
             emitter (Emitter): Who is issuing.
-            submission (InvoiceSubmission): The codes in force and the document.
+            submission (InvoiceSubmission): The codes in force and the note.
 
         Returns:
             SiatReceipt: What the tax office answered.
@@ -408,25 +480,14 @@ def send_credit_note(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable.
     '''
-    answer = invoke(SERVICE_ADJUSTMENT, 'recepcionDocumentoAjuste', {
-        **base_request(emitter),
-        'cuis': submission.cuis,
-        'cufd': submission.cufd,
-        'codigoDocumentoSector': SECTOR_DOCUMENT_CREDIT_DEBIT,
-        'codigoEmision': EMISSION_ONLINE,
-        'tipoFacturaDocumento': INVOICE_TYPE_ADJUSTMENT,
-        'archivo': submission.archive,
-        'fechaEnvio': submission.sent_at,
-        'hashArchivo': hashlib.sha256(submission.archive).hexdigest()
-    })
-    return _receipt_from(answer)
+    return _send(emitter, submission, CREDIT_NOTE_DOCUMENT)
 
 
 @dataclass(frozen = True)
 class InvoiceCancellation:
     '''
-        One invoice as `anulacionFactura` takes it: the codes in force today,
-        not those it was issued with, and the reason.
+        One document as its cancellation operation takes it: the codes in
+        force today, not those it was issued with, and the reason.
     '''
     cuis: str
     cufd: str
@@ -434,12 +495,39 @@ class InvoiceCancellation:
     reason_code: int
 
 
+def _cancel(
+    emitter: Emitter,
+    cancellation: InvoiceCancellation,
+    document: SiatDocument
+) -> SiatReceipt:
+    '''
+        Cancels a document already accepted.
+
+        Args:
+            emitter (Emitter): Who is issuing.
+            cancellation (InvoiceCancellation): The codes, the CUF and the reason.
+            document (SiatDocument): Which document.
+
+        Returns:
+            SiatReceipt: What the tax office answered.
+
+        Raises:
+            ServiceUnavailableError: The SIAT is unreachable.
+    '''
+    answer = invoke(document.service, document.cancellation, {
+        **_envelope(emitter, document, cancellation.cuis, cancellation.cufd),
+        'cuf': cancellation.cuf,
+        'codigoMotivo': cancellation.reason_code
+    })
+    return _receipt_from(answer)
+
+
 def cancel_invoice(
     emitter: Emitter,
     cancellation: InvoiceCancellation
 ) -> SiatReceipt:
     '''
-        Cancels an invoice already accepted.
+        Cancels an invoice already accepted (`_cancel`).
 
         Args:
             emitter (Emitter): Who is issuing.
@@ -451,17 +539,7 @@ def cancel_invoice(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable.
     '''
-    answer = invoke(SERVICE_INVOICE, 'anulacionFactura', {
-        **base_request(emitter),
-        'cuis': cancellation.cuis,
-        'cufd': cancellation.cufd,
-        'cuf': cancellation.cuf,
-        'codigoDocumentoSector': SECTOR_DOCUMENT_PURCHASE_SALE,
-        'codigoEmision': EMISSION_ONLINE,
-        'tipoFacturaDocumento': INVOICE_WITH_TAX_CREDIT,
-        'codigoMotivo': cancellation.reason_code
-    })
-    return _receipt_from(answer)
+    return _cancel(emitter, cancellation, INVOICE_DOCUMENT)
 
 
 def cancel_credit_note(
@@ -469,7 +547,7 @@ def cancel_credit_note(
     cancellation: InvoiceCancellation
 ) -> SiatReceipt:
     '''
-        Cancels a Nota de Crédito-Débito already accepted.
+        Cancels a Nota de Crédito-Débito already accepted (`_cancel`).
 
         Args:
             emitter (Emitter): Who is issuing.
@@ -482,30 +560,19 @@ def cancel_credit_note(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable.
     '''
-    answer = invoke(SERVICE_ADJUSTMENT, 'anulacionDocumentoAjuste', {
-        **base_request(emitter),
-        'cuis': cancellation.cuis,
-        'cufd': cancellation.cufd,
-        'cuf': cancellation.cuf,
-        'codigoDocumentoSector': SECTOR_DOCUMENT_CREDIT_DEBIT,
-        'codigoEmision': EMISSION_ONLINE,
-        'tipoFacturaDocumento': INVOICE_TYPE_ADJUSTMENT,
-        'codigoMotivo': cancellation.reason_code
-    })
-    return _receipt_from(answer)
+    return _cancel(emitter, cancellation, CREDIT_NOTE_DOCUMENT)
 
 
 @dataclass(frozen = True)
 class DocumentReversal:
     '''
         One cancelled document whose cancellation is reverted: the codes in
-        force today and its CUF. `credit_note` picks the adjustment service
-        over the invoicing one.
+        force today, its CUF and which document it is.
     '''
     cuis: str
     cufd: str
     cuf: str
-    credit_note: bool = False
+    document: SiatDocument
 
 
 def revert_cancellation(
@@ -525,19 +592,10 @@ def revert_cancellation(
         Raises:
             ServiceUnavailableError: The SIAT is unreachable.
     '''
-    service, operation, sector, invoice_type = (
-        (SERVICE_ADJUSTMENT, 'reversionAnulacionDocumentoAjuste',
-         SECTOR_DOCUMENT_CREDIT_DEBIT, INVOICE_TYPE_ADJUSTMENT) if reversal.credit_note
-        else (SERVICE_INVOICE, 'reversionAnulacionFactura',
-              SECTOR_DOCUMENT_PURCHASE_SALE, INVOICE_WITH_TAX_CREDIT))
-    answer = invoke(service, operation, {
-        **base_request(emitter),
-        'cuis': reversal.cuis,
-        'cufd': reversal.cufd,
-        'cuf': reversal.cuf,
-        'codigoDocumentoSector': sector,
-        'codigoEmision': EMISSION_ONLINE,
-        'tipoFacturaDocumento': invoice_type
+    document = reversal.document
+    answer = invoke(document.service, document.reversal, {
+        **_envelope(emitter, document, reversal.cuis, reversal.cufd),
+        'cuf': reversal.cuf
     })
     return _receipt_from(answer)
 

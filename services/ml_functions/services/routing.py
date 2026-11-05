@@ -60,6 +60,10 @@ def _kmeans(
 ) -> np.ndarray:
     '''
         Lloyd's k-means: the group of each point.
+
+        Args:
+            points (np.ndarray): The points, in order.
+            spec (ClusterSpec): How many clusters and the seed.
     '''
     count = len(points)
     if spec.clusters <= 1 or count <= spec.clusters:
@@ -89,6 +93,11 @@ def _balance(
     '''
         Hands the points furthest from their own centroid to the nearest group
         that still has room, until no group passes an even share.
+
+        Args:
+            points (np.ndarray): The points, in order.
+            labels (np.ndarray): The cluster of each point.
+            clusters (int): How many clusters.
     '''
     labels = labels.copy()
     capacity = int(np.ceil(len(points) / clusters))
@@ -139,6 +148,9 @@ def cluster_points(
 def _nearest_neighbour(distances: np.ndarray) -> list[int]:
     '''
         A first tour that always hops to the closest stop not yet visited.
+
+        Args:
+            distances (np.ndarray): The distance matrix.
     '''
     unvisited = set(range(1, len(distances)))
     tour = [0]
@@ -157,6 +169,11 @@ def _two_opt(
 ) -> list[int]:
     '''
         Reverses every segment whose reversal shortens the open path.
+
+        Args:
+            tour (list[int]): The order to improve.
+            distances (np.ndarray): The distance matrix.
+            passes (int): How many improvement passes at most.
     '''
     best = tour[:]
     for _ in range(passes):

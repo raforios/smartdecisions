@@ -41,6 +41,19 @@ CHANGE_FIELDS = ('microservice', 'timestamp', 'entity_name', 'entity_id', 'actio
 LIST_SIZE = 20
 
 
+def _service_names(listed: str) -> list[str]:
+    '''
+        The services a query names, comma-separated.
+
+        Args:
+            listed (str): The names as received.
+
+        Returns:
+            list[str]: The names, trimmed, blanks dropped.
+    '''
+    return [name.strip() for name in listed.split(',') if name.strip()]
+
+
 def _recent(
     table: Any,
     microservice: str,
@@ -97,7 +110,7 @@ def recent_activity(
     '''
     now = get_current_time_gmt()
     since = (now - timedelta(hours = query.hours)).isoformat()
-    names = [name.strip() for name in query.microservices.split(',') if name.strip()]
+    names = _service_names(query.microservices)
     usage = dynamodb_resource.Table(USAGE_TABLE)
     audit = dynamodb_resource.Table(AUDIT_TABLE)
     calls = {name: _recent(usage, name, since, CALL_FIELDS) for name in names}
@@ -137,7 +150,7 @@ def my_changes(
             MyChangesResponseSchema: The period and the changes, newest first.
     '''
     since = (get_current_time_gmt() - timedelta(days = query.days)).isoformat()
-    names = [name.strip() for name in query.microservices.split(',') if name.strip()]
+    names = _service_names(query.microservices)
     audit = dynamodb_resource.Table(AUDIT_TABLE)
     changes = [change for name in names
                for change in _recent(audit, name, since, CHANGE_FIELDS, user)]

@@ -31,21 +31,21 @@ from schemas.billing import (
 from services.exceptions import RegisterNotFoundError
 from services.logger_config import custom_logger as logger
 from services.billing import (
+    MONEY_DECIMALS,
     SortBounds,
     date_window,
     document_id,
     from_dynamo,
     get_settings,
-    products_by_sku,
     new_id,
     next_number,
     now_iso,
+    products_by_sku,
     read_partition,
     write_item
 )
 from services.billing_stock import create_lot
 
-MONEY_DECIMALS = 2
 
 
 def receive_purchase(

@@ -23,6 +23,7 @@ from typing import Final
 
 import pandas as pd
 
+from schemas.closed_options import PaymentTerms
 from schemas.objectives import (
     ClientScoreSchema,
     ClusterCellSchema,
@@ -33,7 +34,7 @@ from schemas.objectives import (
 )
 from services.utils import load_parameters
 from services.logger_config import custom_logger as logger
-from services.receivables import CASH, TERMS
+from services.receivables import TERMS, terms_are
 
 # Business parameters. Defaults, not constants: the policy of an account
 # overrides them one by one, which is how two companies read the same sales
@@ -254,7 +255,7 @@ def _cash_collected(
     '''
     if TERMS not in sales.columns or _AMOUNT not in sales.columns:
         return pd.DataFrame(columns = [_ORDER, _PAID])
-    cash = sales.loc[sales[TERMS].astype(str).str.upper() == CASH, [_ORDER, _AMOUNT]]
+    cash = sales.loc[terms_are(sales[TERMS], PaymentTerms.CASH), [_ORDER, _AMOUNT]]
     cash = cash.assign(**{_ORDER: cash[_ORDER].astype(str)})
     paid = cash.groupby(_ORDER, as_index = False)[_AMOUNT].sum()
     paid = paid.rename(columns = {_AMOUNT: _PAID})

@@ -1,13 +1,71 @@
 '''
-    Machine Learning functions for linear regression, multiple linear
-    regression and logistic regression
+    Linear, multiple linear and logistic regression trained by gradient
+    descent: the functions the Machine Learning training notebooks call
+    through the API (Rafael, 5-nov-2026: they are kept for the courses).
+
+    The names of the API fields (x, y, w, b, J_history) are the notebooks'
+    contract; inside, the arrays carry what they mean.
 '''
-import math
 import copy
+import math
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
 from services.logger_config import custom_logger as logger
+
+# The history keeps at most this many snapshots, so a long run does not
+# exhaust memory.
+MAX_SNAPSHOTS = 10000
+# How many progress lines a run logs.
+PROGRESS_LINES = 10
+# exp(-z) overflows past this magnitude.
+SIGMOID_CLIP = 500
+# A logistic run stops when the cost improves by less than this.
+CONVERGENCE_EPSILON = 1e-6
+# Probability from which a logistic prediction is the positive class.
+DECISION_THRESHOLD = 0.5
+
+
+@dataclass(frozen = True)
+class DescentConfig:
+    '''
+        How a gradient descent runs.
+    '''
+    alpha: float
+    num_iters: int
+
+
+def _snapshot_interval(num_iters: int) -> float:
+    '''
+        Every how many iterations a run keeps a snapshot of its cost and
+        parameters.
+
+        Args:
+            num_iters (int): Iterations of the run.
+
+        Returns:
+            float: The interval.
+    '''
+    return np.ceil(num_iters / MAX_SNAPSHOTS)
+
+
+def _logs_progress(
+    iteration: int,
+    num_iters: int
+) -> bool:
+    '''
+        Whether this iteration logs its progress: about ten times per run.
+
+        Args:
+            iteration (int): The iteration, from zero.
+            num_iters (int): Iterations of the run.
+
+        Returns:
+            bool: True when it logs.
+    '''
+    return iteration % math.ceil(num_iters / PROGRESS_LINES) == 0
 
 
 # ----------------------------------------------------------------
@@ -15,528 +73,356 @@ from services.logger_config import custom_logger as logger
 # ----------------------------------------------------------------
 
 def compute_cost(
-    x: np.ndarray,
-    y: np.ndarray,
-    w: float,
-    b: float
+    features: np.ndarray,
+    targets: np.ndarray,
+    weight: float,
+    bias: float
 ) -> float:
     '''
-    Computes the cost function for linear regression.
-    Args:
-      x (ndarray (m,)): Data, m examples
-      y (ndarray (m,)): target values
-      w,b (scalar)   : model parameters
+        The cost of a one-feature linear model over its examples.
 
-    Returns
-        total_cost (float): The cost of using w,b as the parameters for linear regression
-        to fit the data points in x and y
+        Args:
+            features (np.ndarray): Shape (m,), one value per example.
+            targets (np.ndarray): Shape (m,), the target of each example.
+            weight (float): The model's weight.
+            bias (float): The model's bias.
+
+        Returns:
+            float: The mean squared error, halved.
     '''
-    m = x.shape[0]
+    examples = features.shape[0]
+    predictions = weight * features + bias
+    return np.sum((predictions - targets) ** 2) / (2 * examples)
 
-    f_wb = w * x + b
-    cost = np.sum((f_wb - y) ** 2) / (2 * m)
-
-    return cost
 
 def compute_gradient(
-    x: np.ndarray,
-    y: np.ndarray,
-    w: float,
-    b: float
+    features: np.ndarray,
+    targets: np.ndarray,
+    weight: float,
+    bias: float
 ) -> tuple[float, float]:
     '''
-    Computes the gradient for linear regression
+        The gradient of the cost of a one-feature linear model.
 
-    Args:
-      x (ndarray (m,)): Data, m examples
-      y (ndarray (m,)): target values
-      w,b (scalar)   : model parameters
+        Args:
+            features (np.ndarray): Shape (m,), one value per example.
+            targets (np.ndarray): Shape (m,), the target of each example.
+            weight (float): The model's weight.
+            bias (float): The model's bias.
 
-    Returns
-      dj_dw (scalar): The gradient of the cost w.r.t. the parameters w
-      dj_db (scalar): The gradient of the cost w.r.t. the parameter b
+        Returns:
+            tuple[float, float]: The gradient for the weight and for the bias.
     '''
-    m = x.shape[0]
-    dj_dw = 0
-    dj_db = 0
-    for i in range(m):
-        f_wb = w * x[i] + b
-        dj_dw += (f_wb - y[i]) * x[i]
-        dj_db += f_wb - y[i]
+    examples = features.shape[0]
+    errors = weight * features + bias - targets
+    return float(np.sum(errors * features) / examples), float(np.sum(errors) / examples)
 
-    dj_dw = dj_dw / m
-    dj_db = dj_db / m
-
-    return dj_dw, dj_db
 
 def gradient_descent(
-    x: np.ndarray,
-    y: np.ndarray,
-    w_in: float,
-    b_in: float,
-    config: dict[str, Any]
-) -> tuple[float, float, list[float], list[tuple[float, float]]]:
+    features: np.ndarray,
+    targets: np.ndarray,
+    weight: float,
+    bias: float,
+    config: DescentConfig
+) -> tuple[float, float, list[float], list[list[float]]]:
     '''
-    Performs gradient descent to fit w,b. Updates w,b by taking
-    num_iters gradient steps with learning rate alpha
+        Fits a one-feature linear model by gradient descent.
 
-    Args:
-      x (ndarray (m,)) : Data, m examples
-      y (ndarray (m,)) : target values
-      w_in,b_in (scalar): initial values of model parameters
-      config (dict): {
-        alpha (float):     Learning rate
-        num_iters (int):   number of iterations to run gradient descent
-      }
+        Args:
+            features (np.ndarray): Shape (m,), one value per example.
+            targets (np.ndarray): Shape (m,), the target of each example.
+            weight (float): The starting weight.
+            bias (float): The starting bias.
+            config (DescentConfig): Learning rate and iterations.
 
-    Returns:
-      w (scalar): Updated value of parameter after running gradient descent
-      b (scalar): Updated value of parameter after running gradient descent
-      J_history (list): History of cost values
-      p_history (list): History of parameters [w,b]
+        Returns:
+            tuple[float, float, list[float], list[list[float]]]: The final
+                weight and bias, and the history of the cost and of [weight,
+                bias].
     '''
-
-    # An array to store cost J and w's at each iteration primarily for graphing later
-    j_history = []
-    p_history = []
-    b = b_in
-    w = w_in
-    num_iters = config['num_iters']
-    save_interval = np.ceil(num_iters/10000) # prevent resource exhaustion for long runs
-
-    for i in range(num_iters):
-        # Calculate the gradient and update the parameters using gradient_function
-        dj_dw, dj_db = compute_gradient(x, y, w , b)
-
-        # Update Parameters using equation (3) above
-        b = b - config['alpha'] * dj_db
-        w = w - config['alpha'] * dj_dw
-
-        # Save cost J at each iteration
-        if i == 0 or i % save_interval == 0:
-            j_history.append(compute_cost(x, y, w , b))
-            p_history.append([w,b])
-
-        # Print cost every at intervals 10 times or as many iterations if < 10
-        if i % math.ceil(num_iters / 10) == 0:
-            message = f'''Iteration {i: 9d}:
-                Cost {j_history[-1]: 0.2f}
-                w: {w: 0.2f}, b:{b: 0.2f}
-                dj_dw: {dj_dw: 0.2f}, dj_db: {dj_db: 0.2f}'''
+    costs: list[float] = []
+    parameters: list[list[float]] = []
+    interval = _snapshot_interval(config.num_iters)
+    for iteration in range(config.num_iters):
+        weight_step, bias_step = compute_gradient(features, targets, weight, bias)
+        bias -= config.alpha * bias_step
+        weight -= config.alpha * weight_step
+        if iteration == 0 or iteration % interval == 0:
+            costs.append(compute_cost(features, targets, weight, bias))
+            parameters.append([weight, bias])
+        if _logs_progress(iteration, config.num_iters):
+            message = (f'Iteration {iteration:9d}: cost {costs[-1]:0.2f}, w {weight:0.2f}, '
+                       f'b {bias:0.2f}, dj_dw {weight_step:0.2f}, dj_db {bias_step:0.2f}.')
             logger.info(message)
+    message = f'Linear descent finished after {config.num_iters} iterations: cost {costs[-1]:0.2f}.'
+    logger.info(message)
+    return weight, bias, costs, parameters
 
-        if i == num_iters - 1:
-            message = f'Final Iteration {i + 1: 9d}:'
-            logger.info(message)
-            message = f'''
-                Cost:  {j_history[-1]: 0.2f}
-                w:     {w: 0.2f}
-                b:     {b: 0.2f}
-                dj_dw: {dj_dw: 0.2f}
-                dj_db: {dj_db: 0.2f}'''
-            logger.info(message)
-
-    return w, b, j_history, p_history
 
 # ----------------------------------------------------------------
 # MULTIPLE LINEAR REGRESSION
 # ----------------------------------------------------------------
 
 def predict_dot(
-    x_matrix: np.ndarray,
-    w: np.ndarray,
-    b: float
-) -> float:
+    features: np.ndarray,
+    weights: np.ndarray,
+    bias: float
+) -> np.ndarray:
     '''
-    single predict using linear regression
-    Args:
-      x (ndarray): Shape (n,) example with multiple features
-      w (ndarray): Shape (n,) model parameters
-      b (scalar):             model parameter
+        The predictions of a linear model.
 
-    Returns:
-      p (scalar):  prediction
+        Args:
+            features (np.ndarray): Shape (m, n) or (n,), the examples.
+            weights (np.ndarray): Shape (n,), one weight per feature.
+            bias (float): The model's bias.
+
+        Returns:
+            np.ndarray: One prediction per example.
     '''
-    p = np.dot(x_matrix, w) + b
-    return p
+    return np.dot(features, weights) + bias
+
 
 def compute_cost_matrix(
-    x_matrix: np.ndarray,
-    y: np.ndarray,
-    w: np.ndarray,
-    b: float
+    features: np.ndarray,
+    targets: np.ndarray,
+    weights: np.ndarray,
+    bias: float
 ) -> float:
     '''
-    compute cost
+        The cost of a linear model over its examples.
 
-    Args:
-      x_matrix (ndarray (m,n)): Data, m examples with n features
-      y (ndarray (m,)): target values
-      w (ndarray (n,)): model parameters
-      b (scalar)      : model parameter
-      
-    Returns:
-      cost (scalar): cost
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+            targets (np.ndarray): Shape (m,), the target of each example.
+            weights (np.ndarray): Shape (n,), one weight per feature.
+            bias (float): The model's bias.
+
+        Returns:
+            float: The mean squared error, halved.
     '''
-    m, _ = x_matrix.shape
+    examples, _ = features.shape
+    return np.sum((features @ weights + bias - targets) ** 2) / (2 * examples)
 
-    # calculate f_wb for all examples.
-    f_wb = x_matrix @ w + b
-    # calculate cost
-    cost = np.sum((f_wb - y) ** 2) / (2 * m)
-
-    return cost
-    # return(np.squeeze(cost))
 
 def compute_gradient_matrix(
-    x_matrix: np.ndarray,
-    y: np.ndarray,
-    w: np.ndarray,
-    b: float
+    features: np.ndarray,
+    targets: np.ndarray,
+    weights: np.ndarray,
+    bias: float
 ) -> tuple[np.ndarray, float]:
     '''
-    Computes the gradient for linear regression 
+        The gradient of the cost of a linear model.
 
-    Args:
-      x_matrix: (ndarray Shape (m,n)) matrix of examples 
-      y: (ndarray Shape (m,))  target value of each example
-      w: (ndarray Shape (n,))  parameters of the model
-      b: (scalar)              parameter of the model
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+            targets (np.ndarray): Shape (m,), the target of each example.
+            weights (np.ndarray): Shape (n,), one weight per feature.
+            bias (float): The model's bias.
 
-    Returns
-      dj_dw: (ndarray Shape (n,)) The gradient of the cost w.r.t. the parameters w.
-      dj_db: (scalar)             The gradient of the cost w.r.t. the parameter b.
+        Returns:
+            tuple[np.ndarray, float]: The gradient for each weight and for the
+                bias.
     '''
-    m, _ = x_matrix.shape
-    f_wb = x_matrix @ w + b
-    err = f_wb - y
-    dj_dw = (x_matrix.T @ err) / m
-    dj_db = np.sum(err) / m
+    examples, _ = features.shape
+    errors = features @ weights + bias - targets
+    return (features.T @ errors) / examples, float(np.sum(errors) / examples)
 
-    return dj_dw, dj_db
 
 def gradient_descent_matrix(
-    x_matrix: np.ndarray,
-    y: np.ndarray,
-    w_in: np.ndarray,
-    b_in: float,
-    config: dict[str, Any]
-) -> tuple[np.ndarray, float, list[float]]:
+    features: np.ndarray,
+    targets: np.ndarray,
+    weights: np.ndarray,
+    bias: float,
+    config: DescentConfig
+) -> tuple[np.ndarray, float, dict[str, list[Any]]]:
     '''
-    Performs batch gradient descent to learn w and b. Updates w and b by taking 
-    num_iters gradient steps with learning rate alpha
+        Fits a linear model by batch gradient descent.
 
-    Args:
-      x_matrix (ndarray (m,n))  : Data, m examples with n features
-      y (ndarray (m,))   : target values
-      w_in (ndarray (n,)): initial model parameters  
-      b_in (scalar)      : initial model parameter
-      cost_function      : function to compute cost
-      gradient_function  : function to compute the gradient
-      config (dict): {
-        alpha (float):     Learning rate
-        num_iters (int):   number of iterations to run gradient descent
-      }
-      
-    Returns:
-      w (ndarray (n,)): Updated values of parameters 
-      b (scalar)      : Updated value of parameter 
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+            targets (np.ndarray): Shape (m,), the target of each example.
+            weights (np.ndarray): Shape (n,), the starting weights.
+            bias (float): The starting bias.
+            config (DescentConfig): Learning rate and iterations.
+
+        Returns:
+            tuple[np.ndarray, float, dict[str, list[Any]]]: The final weights
+                and bias, and the history: 'cost', 'params', 'grads', 'iter'.
     '''
-
-    # An array to store cost J and w's at each iteration primarily for graphing later
-    w = copy.deepcopy(w_in)  #avoid modifying global w within function
-    b = b_in
-    alpha = config['alpha']
-    num_iters = config['num_iters']
-    save_interval = np.ceil(num_iters/10000) # prevent resource exhaustion for long runs
-    hist = {
-        'cost': [],
-        'params': [],
-        'grads': [],
-        'iter': []
-    }
-    for i in range(num_iters):
-
-        # Calculate the gradient and update the parameters
-        dj_dw, dj_db = compute_gradient_matrix(x_matrix, y, w, b)
-
-        # Update Parameters using w, b, alpha and gradient
-        w = w - alpha * dj_dw
-        b = b - alpha * dj_db
-
-        if i == 0 or i % save_interval == 0:
-            hist['cost'].append(compute_cost_matrix(x_matrix, y, w, b))
-            hist['params'].append([w, b])
-            hist['grads'].append([dj_dw, dj_db])
-            hist['iter'].append(i)
-
-        # Print cost every at intervals 10 times or as many iterations if < 10
-        if i % math.ceil(num_iters / 10) == 0:
-            message = f'''Iteration {i: 9d}:
-                Cost {hist['cost'][-1]: 0.2f}
-                w: {w}
-                b:{b: 0.2f}
-                dj_dw: {dj_dw}
-                dj_db: {dj_db: 0.2f}'''
-
+    # A copy: the caller's array is not moved under it.
+    weights = copy.deepcopy(weights)
+    history: dict[str, list[Any]] = {'cost': [], 'params': [], 'grads': [], 'iter': []}
+    interval = _snapshot_interval(config.num_iters)
+    for iteration in range(config.num_iters):
+        weights_step, bias_step = compute_gradient_matrix(features, targets, weights, bias)
+        weights = weights - config.alpha * weights_step
+        bias = bias - config.alpha * bias_step
+        if iteration == 0 or iteration % interval == 0:
+            history['cost'].append(compute_cost_matrix(features, targets, weights, bias))
+            history['params'].append([weights, bias])
+            history['grads'].append([weights_step, bias_step])
+            history['iter'].append(iteration)
+        if _logs_progress(iteration, config.num_iters):
+            message = (f'Iteration {iteration:9d}: cost {history["cost"][-1]:0.2f}, '
+                       f'w {weights}, b {bias:0.2f}.')
             logger.info(message)
+    message = (f'Multiple linear descent finished after {config.num_iters} iterations: '
+               f'cost {history["cost"][-1]:0.2f}.')
+    logger.info(message)
+    return weights, bias, history
 
-        if i == num_iters - 1:
-            message = f'Final Iteration {i + 1: 9d}:'
-            logger.info(message)
-            message = f'''
-                Cost:  {hist['cost'][-1]: 0.2f}
-                w:     {w}
-                b:     {b: 0.2f}
-                dj_dw: {dj_dw}
-                dj_db: {dj_db: 0.2f}'''
-            logger.info(message)
-
-    return w, b, hist
 
 # ----------------------------------------------------------------
-# z-score normalization
+# Z-SCORE NORMALIZATION
 # ----------------------------------------------------------------
+
 def zscore_normalize_features(
-    x_matrix: np.ndarray
+    features: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     '''
-    computes  x_matrix, zcore normalized by column
-    
-    Args:
-      x_matrix (ndarray (m,n))    : input data, m examples, n features
-      
-    Returns:
-      X_norm (ndarray (m,n)): input normalized by column
-      mu (ndarray (n,))    : mean of each feature
-      sigma (ndarray (n,)) : standard deviation of each feature
+        The features normalized by column to mean 0 and deviation 1.
+
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray, np.ndarray]: The normalized features,
+                the mean and the standard deviation of each column.
     '''
+    mean = np.mean(features, axis = 0)
+    deviation = np.std(features, axis = 0)
+    return (features - mean) / deviation, mean, deviation
 
-    # find the mean of each column/feature
-    mu = np.mean(x_matrix, axis = 0) # mu will have shape (n,)
-    # find the standard deviation of each column/feature
-    sigma = np.std(x_matrix, axis = 0) # sigma will have shape (n,)
-    # element-wise, subtract mu for that column from each example, divide by std for that column
-    x_norm = (x_matrix - mu) / sigma
-
-    return (x_norm, mu, sigma)
 
 # ----------------------------------------------------------------
 # LOGISTIC REGRESSION
 # ----------------------------------------------------------------
 
-def sigmoid(z: np.ndarray) -> np.ndarray:
+def sigmoid(values: np.ndarray) -> np.ndarray:
     '''
-    Compute the sigmoid of z.
+        The logistic function: any real number into the range 0 to 1. The
+        input is clipped so exp(-z) cannot overflow.
 
-    The sigmoid function, also known as the logistic function,
-    is a non-linear activation function used primarily in logistic
-    regression and neural networks. It maps any real-valued number
-    into a value between 0 and 1, making it suitable for binary
-    classification problems.
+        Args:
+            values (np.ndarray): A scalar or an array of any shape.
 
-    Args:
-        z (ndarray): A scalar or NumPy array of any shape.
-
-    Returns:
-        g (ndarray): The result of sigmoid(z), with the same shape as z.
-
-    Note:
-        The input `z` is clipped to the range [-500, 500] to prevent
-        potential numerical overflow errors when computing `np.exp(-z)`.
-        This ensures computational stability for very large or small
-        input values.
+        Returns:
+            np.ndarray: sigmoid of each value, in the input's shape.
     '''
+    return 1 / (1 + np.exp(-np.clip(values, -SIGMOID_CLIP, SIGMOID_CLIP)))
 
-    z = np.clip(z, -500, 500)
-    g = 1 / (1 + np.exp(-z))
-
-    return g
 
 def compute_cost_logistic(
-    x_matrix: np.ndarray,
-    y: np.ndarray,
-    w: np.ndarray,
-    b: float
+    features: np.ndarray,
+    targets: np.ndarray,
+    weights: np.ndarray,
+    bias: float
 ) -> float:
     '''
-    Computes the cost over all examples
-    Args:
-      x_matrix: (ndarray Shape (m,n)) data, m examples by n features
-      y: (ndarray Shape (m,))  target value
-      w: (ndarray Shape (n,))  values of parameters of the model
-      b: (scalar)              value of bias parameter of the model
-      *argv: unused, for compatibility with regularized version below
-    Returns:
-      total_cost: (scalar) cost
+        The log loss of a logistic model over its examples.
+
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+            targets (np.ndarray): Shape (m,), 0 or 1 for each example.
+            weights (np.ndarray): Shape (n,), one weight per feature.
+            bias (float): The model's bias.
+
+        Returns:
+            float: The mean log loss.
     '''
+    examples, _ = features.shape
+    probabilities = sigmoid(features @ weights + bias)
+    losses = -targets * np.log(probabilities) - (1 - targets) * np.log(1 - probabilities)
+    return float(np.sum(losses) / examples)
 
-    m, _ = x_matrix.shape
-    cost = 0
-
-    for i in range(m):
-        z = np.dot(x_matrix[i], w) + b
-        fwb = sigmoid(z)
-        cost += -y[i] * np.log(fwb) - (1 - y[i]) * np.log(1 - fwb)
-
-    cost = cost / m
-
-    return cost
 
 def compute_gradient_logistic(
-    x_matrix: np.ndarray,
-    y: np.ndarray,
-    w: np.ndarray,
-    b: float
+    features: np.ndarray,
+    targets: np.ndarray,
+    weights: np.ndarray,
+    bias: float
 ) -> tuple[np.ndarray, float]:
     '''
-    Computes the gradient for logistic regression
-    Args:
-      x_matrix: (ndarray Shape (m,n)) data, m examples by n features
-      y: (ndarray Shape (m,))  target value
-      w: (ndarray Shape (n,))  values of parameters of the model
-      b: (scalar)              value of bias parameter of the model
-      *argv: unused, for compatibility with regularized version below
-    Returns
-      dj_dw: (ndarray Shape (n,)) The gradient of the cost w.r.t. the parameters w.
-      dj_db: (scalar)             The gradient of the cost w.r.t. the parameter b.
+        The gradient of the log loss of a logistic model.
+
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+            targets (np.ndarray): Shape (m,), 0 or 1 for each example.
+            weights (np.ndarray): Shape (n,), one weight per feature.
+            bias (float): The model's bias.
+
+        Returns:
+            tuple[np.ndarray, float]: The gradient for each weight and for the
+                bias.
     '''
-    m, _ = x_matrix.shape
-    dj_dw = np.zeros(w.shape)
-    dj_db = 0
-
-    z_wb = sigmoid(x_matrix @ w + b)
-    err = z_wb - y
-
-    dj_dw = (x_matrix.T @ err) / m
-    dj_db = np.sum(err) / m
-
-    return dj_dw, dj_db
+    examples, _ = features.shape
+    errors = sigmoid(features @ weights + bias) - targets
+    return (features.T @ errors) / examples, float(np.sum(errors) / examples)
 
 
 def gradient_descent_logistic(
-    x_matrix: np.ndarray,
-    y: np.ndarray,
-    w_in: np.ndarray,
-    b_in: float,
-    config: dict[str, Any]
-) -> tuple[np.ndarray, float, list[float], list[np.ndarray]]:
+    features: np.ndarray,
+    targets: np.ndarray,
+    weights: np.ndarray,
+    bias: float,
+    config: DescentConfig
+) -> tuple[np.ndarray, float, list[float], list[list[Any]]]:
     '''
-    Performs batch gradient descent to learn theta. Updates theta by taking
-    num_iters gradient steps with learning rate alpha
+        Fits a logistic model by batch gradient descent, stopping early when
+        the cost stops improving.
 
-    Args:
-      x_matrix:    (ndarray Shape (m, n) data, m examples by n features
-      y:    (ndarray Shape (m,))  target value
-      w_in: (ndarray Shape (n,))  Initial values of parameters of the model
-      b_in: (scalar)              Initial value of parameter of the model
-      config (dict): {
-        alpha (float):     Learning rate
-        num_iters (int):   number of iterations to run gradient descent
-      }
-      lambda_: (scalar, float)    regularization constant
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+            targets (np.ndarray): Shape (m,), 0 or 1 for each example.
+            weights (np.ndarray): Shape (n,), the starting weights.
+            bias (float): The starting bias.
+            config (DescentConfig): Learning rate and iterations.
 
-    Returns:
-      w: (ndarray Shape (n,)) Updated values of parameters of the model after
-          running gradient descent
-      b: (scalar)                Updated value of parameter of the model after
-          running gradient descent
+        Returns:
+            tuple[np.ndarray, float, list[float], list[list[Any]]]: The final
+                weights and bias, and the history of the cost and of [weights,
+                bias].
     '''
-
-    # number of training examples
-    # m = len(x_matrix)
-
-    # An array to store cost J and w's at each iteration primarily for graphing later
-    j_history = []
-    w_history = []
-    # save_interval = np.ceil(num_iters/10000) # prevent resource exhaustion for long runs
-
-    # --- Early Stopping Variables ---
+    costs: list[float] = []
+    parameters: list[list[Any]] = []
     previous_cost = float('inf')
-    epsilon = 1e-6
-    num_iters = config['num_iters']
-
-    for i in range(num_iters):
-
-        # Calculate the gradient and update the parameters
-        dj_dw, dj_db = compute_gradient_logistic(x_matrix, y, w_in, b_in)
-
-        # Update Parameters using w, b, alpha and gradient
-        w_in = w_in - config['alpha'] * dj_dw
-        b_in = b_in - config['alpha'] * dj_db
-
-       # Calculate the current cost for this iteration (needed for early stopping)
-        current_cost = compute_cost_logistic(x_matrix, y, w_in, b_in)
-
-        # Save cost J at each iteration
-        if i == 0 or i % np.ceil(num_iters/10000) == 0:
-            j_history.append(current_cost)
-            w_history.append([w_in, b_in])
-
-        # --- Early Stopping ---
-        if i > 0:
-            if abs(previous_cost - current_cost) < epsilon or current_cost > previous_cost:
-                message = f'Convergence or lack of significant improvement detected. Iter: {i+1}.'
-                logger.info(message)
-                message = f'Current Cost:  {current_cost:.6f} Previous Cost: {previous_cost:.6f}'
-                logger.info(message)
-                message = f'w: {w_in} b: {b_in: .2f}'
-                logger.info(message)
-
-                break
-
-        # Update previous cost for the next iteration
+    interval = _snapshot_interval(config.num_iters)
+    for iteration in range(config.num_iters):
+        weights_step, bias_step = compute_gradient_logistic(features, targets, weights, bias)
+        weights = weights - config.alpha * weights_step
+        bias = bias - config.alpha * bias_step
+        current_cost = compute_cost_logistic(features, targets, weights, bias)
+        if iteration == 0 or iteration % interval == 0:
+            costs.append(current_cost)
+            parameters.append([weights, bias])
+        if iteration > 0 and (abs(previous_cost - current_cost) < CONVERGENCE_EPSILON
+                              or current_cost > previous_cost):
+            message = (f'Logistic descent converged at iteration {iteration + 1}: cost '
+                       f'{current_cost:.6f}, previous {previous_cost:.6f}.')
+            logger.info(message)
+            break
         previous_cost = current_cost
-
-        # Print cost every at intervals 10 times or as many iterations if < 10
-        if i % math.ceil(num_iters / 10) == 0:
-            message = f'''Iteration {i: 9d}:
-                Cost {j_history[-1]: 0.2f}
-                w: {[f'{x:.2f}' for x in w_in]}, b:{b_in: 0.2f}
-                dj_dw: {[f'{x:.2f}' for x in dj_dw]}, dj_db: {dj_db: 0.2f}'''
-
+        if _logs_progress(iteration, config.num_iters):
+            message = f'Iteration {iteration:9d}: cost {costs[-1]:0.2f}, b {bias:0.2f}.'
             logger.info(message)
+    return weights, bias, costs, parameters
 
-        if i == num_iters - 1:
-            message = f'Final Iteration {i + 1: 9d}:'
-            logger.info(message)
-            message = f'''
-                Cost:  {j_history[-1]: 0.2f}
-                w:     {[f'{x:.2f}' for x in w_in]}
-                b:     {b_in: .2f}
-                dj_dw: {[f'{x:.2f}' for x in dj_dw]}
-                dj_db: {dj_db: .2f}'''
-            logger.info(message)
-
-    return w_in, b_in, j_history, w_history
 
 def predict_logistic(
-    x_matrix: np.ndarray,
-    w: np.ndarray,
-    b: float
+    features: np.ndarray,
+    weights: np.ndarray,
+    bias: float
 ) -> np.ndarray:
     '''
-    Predict whether the label is 0 or 1 using learned logistic
-    regression parameters w
+        The class of each example under a logistic model.
 
-    Args:
-      x_matrix: (ndarray Shape (m,n)) data, m examples by n features
-      w: (ndarray Shape (n,))  values of parameters of the model
-      b: (scalar)              value of bias parameter of the model
+        Args:
+            features (np.ndarray): Shape (m, n), m examples with n features.
+            weights (np.ndarray): Shape (n,), one weight per feature.
+            bias (float): The model's bias.
 
-    Returns:
-      p: (ndarray (m,)) The predictions for x_matrix using a threshold at 0.5
+        Returns:
+            np.ndarray: Shape (m,), 1 where the probability reaches the
+                threshold, 0 elsewhere.
     '''
-    # number of training examples
-    m, _ = x_matrix.shape
-    p = np.zeros(m)
-
-    z_wb = x_matrix @ w + b
-
-    # Calculate the prediction for this example
-    f_wb = sigmoid(z_wb)
-
-    # Apply the threshold
-    p = (f_wb >= 0.5).astype(int)
-
-    return p
+    return (sigmoid(features @ weights + bias) >= DECISION_THRESHOLD).astype(int)

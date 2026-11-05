@@ -6,10 +6,18 @@
     from which the mapper, the DataFrame schema and the required/optional lists
     are derived) and the DTOs that describe the HTTP envelope.
 '''
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
 from pydantic import BaseModel, Field
+
+from schemas.closed_options import (
+    TEMPLATE_WORDS,
+    PaymentMethod,
+    PaymentTerms,
+    PurchaseCurrency,
+    VisitOutcome
+)
 
 
 @dataclass(frozen = True)
@@ -22,14 +30,31 @@ class ValueRules:
     minimum: float | None = None
     exclusive_minimum: float | None = None
     value_range: tuple[float, float] | None = None
-    # Accepted codes of a closed-option column. It exists because a badly
-    # typed payment condition must not pass as cash by omission: that would
-    # change the receivable balance without anybody noticing.
-    allowed: tuple[str, ...] | None = None
-    # How the client writes each code in the template, in the same order: the
-    # codes are English, the template is Spanish (CLAUDE.md §1), and this is
-    # the mapper between them.
-    labels: tuple[str, ...] | None = None
+    # The codes of a closed-option column. It exists because a badly typed
+    # payment condition must not pass as cash by omission: that would change
+    # the receivable balance without anybody noticing.
+    options: type[Enum] | None = field(default = None, hash = False)
+
+    @property
+    def allowed(self) -> tuple[str, ...] | None:
+        '''
+            The accepted codes, in the enum's order; None for an open column.
+
+            Returns:
+                tuple[str, ...] | None: The codes.
+        '''
+        return tuple(member.value for member in self.options) if self.options else None
+
+    def template_words(self) -> dict[str, str]:
+        '''
+            How the template writes each code (`TEMPLATE_WORDS`), the code
+            itself when it has no word.
+
+            Returns:
+                dict[str, str]: {code: word}, in the enum's order.
+        '''
+        words = TEMPLATE_WORDS.get(self.options, {})
+        return {member.value: words.get(member, member.value) for member in self.options or ()}
 
 
 @dataclass(frozen = True)
@@ -57,13 +82,6 @@ class SalesColumn:
     # them because the client has no such codes.
     filled_by_service: bool = False
 
-
-# The means of payment a sale accepts: the ones SmartBilling's till records,
-# cards as one.
-PAYMENT_METHODS: tuple[str, ...] = ('CASH', 'QR', 'CARD', 'BANK_TRANSFER', 'MOBILE_WALLET')
-PAYMENT_METHOD_LABELS: tuple[str, ...] = (
-    'Efectivo', 'QR', 'Tarjeta', 'Transferencia', 'Billetera móvil'
-)
 
 # Order is the contract order: the template presents its columns like this.
 SALES_COLUMNS: tuple[SalesColumn, ...] = (
@@ -100,14 +118,12 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
     # Optional. Without them the receivables analysis is not offered; with them
     # it turns on without the client loading anything separately.
     SalesColumn('payment_terms', 'Condicion Venta', False, 'object',
-                rules = ValueRules(max_length = 16, allowed = ('CASH', 'CREDIT'),
-                                   labels = ('Contado', 'Crédito'))),
+                rules = ValueRules(max_length = 16, options = PaymentTerms)),
     # How the buyer paid (Rafael, 3-nov-2026): the means the shop's till
     # already knows, to see which one is used most. Closed options, so a typo
     # does not split one means in two.
     SalesColumn('payment_method', 'Medio de Pago', False, 'object',
-                rules = ValueRules(max_length = 32, allowed = PAYMENT_METHODS,
-                                   labels = PAYMENT_METHOD_LABELS)),
+                rules = ValueRules(max_length = 32, options = PaymentMethod)),
     SalesColumn('credit_days', 'Plazo Dias', False, 'Int64',
                 rules = ValueRules(minimum = 0.0)),
     SalesColumn('due_date', 'Fecha Vencimiento', False, 'datetime64[ns]'),
@@ -197,7 +213,6 @@ STOCK_HEADERS: tuple[str, ...] = tuple(
 # the minimum to see what the last purchase cost against the previous ones.
 # The cost is per unit put in the warehouse, in the currency it was paid in;
 # the analysis brings it to bolivianos at the rate of the purchase day.
-PURCHASE_CURRENCIES: tuple[str, ...] = ('BOB', 'USD', 'USDT')
 PURCHASE_COLUMNS: tuple[SalesColumn, ...] = (
     SalesColumn('purchase_date', 'Fecha', True, 'datetime64[ns]',
                 template_required = True),
@@ -211,7 +226,7 @@ PURCHASE_COLUMNS: tuple[SalesColumn, ...] = (
     SalesColumn('unit_cost', 'Costo Unitario', True, 'float64',
                 rules = ValueRules(minimum = 0.0), template_required = True),
     SalesColumn('currency', 'Moneda', True, 'object',
-                rules = ValueRules(allowed = PURCHASE_CURRENCIES), template_required = True),
+                rules = ValueRules(options = PurchaseCurrency), template_required = True),
 )
 
 PURCHASE_HEADERS: tuple[str, ...] = tuple(
@@ -242,10 +257,7 @@ VISIT_COLUMNS: tuple[SalesColumn, ...] = (
     SalesColumn('longitude', 'Longitud', False, 'float64',
                 rules = ValueRules(value_range = (-180.0, 180.0))),
     SalesColumn('outcome', 'Resultado', False, 'object',
-                rules = ValueRules(max_length = 16,
-                                   allowed = ('SALE', 'NO_SALE', 'CLOSED', 'NOT_FOUND'),
-                                   labels = ('Venta', 'Sin venta', 'Cerrado',
-                                             'No encontrado'))),
+                rules = ValueRules(max_length = 16, options = VisitOutcome)),
     SalesColumn('order_id', 'Nro Factura', False, 'object',
                 rules = ValueRules(max_length = 64)),
 )

@@ -13,7 +13,7 @@ from controllers.users import (
     update_user,
     delete_user
 )
-from schemas.auth import SignupResponse
+from schemas.auth import AuthError, AuthResult, SignupResponse
 from schemas.users import UserUpdateRequest, UserResponse, PasswordChangeRequest
 from services.logger_config import custom_logger as logger
 from services.exceptions import RegisterNotFoundError
@@ -84,7 +84,7 @@ async def post_my_password(
     status_code = status.HTTP_200_OK,
     dependencies = [Depends(get_current_admin_user)]
 )
-async def read_user(email: str) -> list[UserResponse]:
+async def read_user(email: str) -> UserResponse:
     '''
         Endpoint to read a single user by email. Restricted to ADMIN.
     '''
@@ -92,9 +92,7 @@ async def read_user(email: str) -> list[UserResponse]:
     if not user:
         error_msg = f'Attempt to read non-existent user: {email}'
         logger.warning(error_msg)
-        raise RegisterNotFoundError(
-            detail = 'User not found'
-        )
+        raise RegisterNotFoundError(detail = AuthError.USER_NOT_FOUND.value)
     message = f'Accessed user details for: {email}'
     logger.info(message)
     return user
@@ -102,6 +100,7 @@ async def read_user(email: str) -> list[UserResponse]:
 
 @router.patch(
     '/{email}',
+    response_model = UserResponse,
     status_code = status.HTTP_200_OK,
     dependencies = [Depends(get_current_admin_user)]
 )
@@ -114,11 +113,9 @@ async def patch_user(
     '''
     updated_user = await update_user(email, user_update_data)
     if not updated_user:
-        error_msg = f'Failed to update user {email} for unknown reasons.'
-        logger.error(error_msg)
-        raise RegisterNotFoundError(
-            detail = 'User not found'
-        )
+        error_msg = f'Update of {email} refused: no such user.'
+        logger.warning(error_msg)
+        raise RegisterNotFoundError(detail = AuthError.USER_NOT_FOUND.value)
 
     message = f'User: {email} was updated'
     logger.info(message)
@@ -132,14 +129,14 @@ async def patch_user(
 )
 async def del_user(email: str) -> SignupResponse:
     '''
-    Endpoint para eliminar un usuario.
+        Deletes a user. Restricted to ADMIN.
     '''
     deleted = await delete_user(email)
     if not deleted:
         error_msg = f'User "{email}" not found for deletion.'
         logger.warning(error_msg)
-        raise RegisterNotFoundError(detail = 'User not found')
+        raise RegisterNotFoundError(detail = AuthError.USER_NOT_FOUND.value)
 
     message = f'User: {email} was deleted'
     logger.info(message)
-    return SignupResponse(user_email = email, message = 'User was deleted successfully')
+    return SignupResponse(user_email = email, message = AuthResult.USER_DELETED)

@@ -70,6 +70,9 @@ def confidence_for(days_quoted: int) -> EstimateConfidence:
 def _catalogue_entry(name: str) -> dict[str, str]:
     '''
         Published metadata (symbol, unit) of a catalogue mineral.
+
+        Args:
+            name (str): A mineral name as written.
     '''
     return next((item for item in OFFICIAL_MINERALS
                  if normalize_name(item['name']) == normalize_name(name)), {})
@@ -83,6 +86,11 @@ def _previous_official(
     '''
         The quotation in force on `as_of`: the official mean of the fortnight
         before the one in progress, from the official daily series.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            mineral_id (str): The mineral.
+            as_of (date_type): The day the estimate is for.
     '''
     year, month, half = prev_biweekly_period(*period_of(as_of))
     start, end = biweekly_period_bounds(year, month, half)

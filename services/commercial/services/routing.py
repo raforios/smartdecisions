@@ -30,6 +30,9 @@ def _fetch_osrm_route(coordinates: str) -> dict[str, Any]:
     '''
         Calls OSRM for a coordinate pair and returns the parsed JSON payload.
 
+        Args:
+            coordinates (str): The stops as (longitude, latitude), in order.
+
         Raises:
             ServiceUnavailableError: If OSRM is unreachable.
     '''

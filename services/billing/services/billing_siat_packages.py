@@ -34,6 +34,7 @@ from services import billing_siat_client as siat_client
 from services.billing_siat_client import Emitter
 from services.exceptions import InvalidInputError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
+from services.utils import load_parameters
 
 SERVICE_OPERATIONS = 'operaciones'
 
@@ -41,7 +42,8 @@ SERVICE_OPERATIONS = 'operaciones'
 COMMUNICATION_OK: Final[int] = 926
 
 # A package carries at most this many invoices: the SIN's own limit.
-MAX_PACKAGE_INVOICES: Final[int] = 500
+MAX_PACKAGE_INVOICES: int = load_parameters({'BILLING_MAX_PACKAGE_INVOICES': int})[
+    'BILLING_MAX_PACKAGE_INVOICES']
 
 
 @dataclass(frozen = True)

@@ -36,6 +36,7 @@ from schemas.billing import (
 from services.billing_payments import paid_by_card
 from services.exceptions import InvalidInputError
 from services.logger_config import custom_logger as logger
+from services.utils import load_parameters
 
 ROOT_ELEMENT = 'facturaComputarizadaCompraVenta'
 
@@ -52,10 +53,11 @@ NIL_ATTRIBUTE = '{%s}nil' % XSI_NAMESPACE
 # documents and nothing else.
 SECTOR_DOCUMENT = 1
 
-# The XSD caps `detalle` at 500 occurrences. A sale with more lines cannot be
-# sent as one invoice, and finding that out at the tax office instead of here
-# would mean the paper is already printed.
-MAX_DETAIL_LINES = 500
+# The XSD caps `detalle` (500 occurrences today). A sale with more lines
+# cannot be sent as one invoice, and finding that out at the tax office
+# instead of here would mean the paper is already printed.
+MAX_DETAIL_LINES: int = load_parameters({'BILLING_MAX_DETAIL_LINES': int})[
+    'BILLING_MAX_DETAIL_LINES']
 
 # Every amount in the schema is `xs:decimal` with two fraction digits. Sending
 # more is a validation error; sending a float's repr is how 0.1 + 0.2 reaches
@@ -63,7 +65,7 @@ MAX_DETAIL_LINES = 500
 AMOUNT_QUANTUM = Decimal('0.01')
 
 
-def _amount(value: float) -> str:
+def xml_amount(value: float) -> str:
     '''
         One amount as the schema wants it: two fraction digits, always.
 
@@ -76,7 +78,7 @@ def _amount(value: float) -> str:
     return str(Decimal(str(value)).quantize(AMOUNT_QUANTUM, rounding = ROUND_HALF_UP))
 
 
-def _put(
+def put_element(
     parent: Element,
     name: str,
     value: object
@@ -178,36 +180,36 @@ def _build_header(
             context (InvoiceContext): What the sale itself does not carry.
     '''
     header = SubElement(root, 'cabecera')
-    _put(header, 'nitEmisor', context.issuer_document)
-    _put(header, 'razonSocialEmisor', context.trade_name)
-    _put(header, 'municipio', context.municipality)
-    _put(header, 'telefono', context.phone)
-    _put(header, 'numeroFactura', context.invoice_number)
-    _put(header, 'cuf', context.cuf)
-    _put(header, 'cufd', context.cufd)
-    _put(header, 'codigoSucursal', context.branch)
-    _put(header, 'direccion', context.address)
-    _put(header, 'codigoPuntoVenta', context.point_of_sale)
-    _put(header, 'fechaEmision', context.issued_at)
-    _put(header, 'nombreRazonSocial', sale.buyer.name)
-    _put(header, 'codigoTipoDocumentoIdentidad', sale.buyer.document_type)
-    _put(header, 'numeroDocumento', sale.buyer.document)
-    _put(header, 'complemento', None)
-    _put(header, 'codigoCliente', sale.buyer.document)
-    _put(header, 'codigoMetodoPago', context.payment_method_code)
-    _put(header, 'numeroTarjeta', _card_for_xml(sale))
-    _put(header, 'montoTotal', _amount(sale.total))
-    _put(header, 'montoTotalSujetoIva', _amount(sale.total))
-    _put(header, 'codigoMoneda', context.currency_code)
-    _put(header, 'tipoCambio', _amount(context.exchange_rate))
-    _put(header, 'montoTotalMoneda', _amount(sale.total))
-    _put(header, 'montoGiftCard', None)
-    _put(header, 'descuentoAdicional', None)
-    _put(header, 'codigoExcepcion', context.exception_code)
-    _put(header, 'cafc', context.cafc)
-    _put(header, 'leyenda', context.legend)
-    _put(header, 'usuario', sale.created_by)
-    _put(header, 'codigoDocumentoSector', SECTOR_DOCUMENT)
+    put_element(header, 'nitEmisor', context.issuer_document)
+    put_element(header, 'razonSocialEmisor', context.trade_name)
+    put_element(header, 'municipio', context.municipality)
+    put_element(header, 'telefono', context.phone)
+    put_element(header, 'numeroFactura', context.invoice_number)
+    put_element(header, 'cuf', context.cuf)
+    put_element(header, 'cufd', context.cufd)
+    put_element(header, 'codigoSucursal', context.branch)
+    put_element(header, 'direccion', context.address)
+    put_element(header, 'codigoPuntoVenta', context.point_of_sale)
+    put_element(header, 'fechaEmision', context.issued_at)
+    put_element(header, 'nombreRazonSocial', sale.buyer.name)
+    put_element(header, 'codigoTipoDocumentoIdentidad', sale.buyer.document_type)
+    put_element(header, 'numeroDocumento', sale.buyer.document)
+    put_element(header, 'complemento', None)
+    put_element(header, 'codigoCliente', sale.buyer.document)
+    put_element(header, 'codigoMetodoPago', context.payment_method_code)
+    put_element(header, 'numeroTarjeta', _card_for_xml(sale))
+    put_element(header, 'montoTotal', xml_amount(sale.total))
+    put_element(header, 'montoTotalSujetoIva', xml_amount(sale.total))
+    put_element(header, 'codigoMoneda', context.currency_code)
+    put_element(header, 'tipoCambio', xml_amount(context.exchange_rate))
+    put_element(header, 'montoTotalMoneda', xml_amount(sale.total))
+    put_element(header, 'montoGiftCard', None)
+    put_element(header, 'descuentoAdicional', None)
+    put_element(header, 'codigoExcepcion', context.exception_code)
+    put_element(header, 'cafc', context.cafc)
+    put_element(header, 'leyenda', context.legend)
+    put_element(header, 'usuario', sale.created_by)
+    put_element(header, 'codigoDocumentoSector', SECTOR_DOCUMENT)
 
 
 def put_detail_figures(
@@ -223,17 +225,17 @@ def put_detail_figures(
             detail (Element): The `detalle` element.
             line (InvoiceLine): The line, with its SIN codes.
     '''
-    _put(detail, 'actividadEconomica', line.sin_activity_code)
-    _put(detail, 'codigoProductoSin', line.sin_product_code)
-    _put(detail, 'codigoProducto', line.sku)
-    _put(detail, 'descripcion', line.description)
-    _put(detail, 'cantidad', _amount(line.quantity))
-    _put(detail, 'unidadMedida', line.sin_unit_code)
-    _put(detail, 'precioUnitario', _amount(line.unit_price))
+    put_element(detail, 'actividadEconomica', line.sin_activity_code)
+    put_element(detail, 'codigoProductoSin', line.sin_product_code)
+    put_element(detail, 'codigoProducto', line.sku)
+    put_element(detail, 'descripcion', line.description)
+    put_element(detail, 'cantidad', xml_amount(line.quantity))
+    put_element(detail, 'unidadMedida', line.sin_unit_code)
+    put_element(detail, 'precioUnitario', xml_amount(line.unit_price))
     # Zero and not nil: a line with no discount has a discount OF zero, not
     # an unknown one. The SIN's own example XML sends it that way.
-    _put(detail, 'montoDescuento', _amount(line.discount))
-    _put(detail, 'subTotal', _amount(line.subtotal))
+    put_element(detail, 'montoDescuento', xml_amount(line.discount))
+    put_element(detail, 'subTotal', xml_amount(line.subtotal))
 
 
 def _build_detail(
@@ -250,8 +252,8 @@ def _build_detail(
     for line in lines:
         detail = SubElement(root, 'detalle')
         put_detail_figures(detail, line)
-        _put(detail, 'numeroSerie', None)
-        _put(detail, 'numeroImei', None)
+        put_element(detail, 'numeroSerie', None)
+        put_element(detail, 'numeroImei', None)
 
 
 def build_invoice_xml(

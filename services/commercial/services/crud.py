@@ -316,3 +316,30 @@ def query_by_partition(
     message = f'Query on {table_name} returned {len(items)} item(s).'
     logger.info(message)
     return items
+
+
+def put_items(
+    dynamodb_resource: ServiceResource,
+    table_name: str,
+    items: list[dict[str, Any]]
+) -> int:
+    '''
+        Writes items in one batch, replacing any row with the same key, with
+        their floats as Decimal as DynamoDB requires.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            table_name (str): Target table.
+            items (list[dict[str, Any]]): Items to write.
+
+        Returns:
+            int: How many were written.
+    '''
+    if not items:
+        return 0
+    with dynamodb_resource.Table(table_name).batch_writer() as batch:
+        for item in items:
+            batch.put_item(Item = _convert_floats_to_decimals(item))
+    message = f'Batch of {len(items)} item(s) written to {table_name}.'
+    logger.info(message)
+    return len(items)

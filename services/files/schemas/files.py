@@ -3,7 +3,46 @@
 '''
 
 import os
+from enum import Enum
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class FilesError(str, Enum):
+    '''
+        Why FILES refused a request: a code, the wording belongs to whoever
+        shows it.
+    '''
+    EMPTY_FILE = 'EMPTY_FILE'
+    UNSUPPORTED_FORMAT = 'UNSUPPORTED_FORMAT'
+    FILE_NOT_FOUND = 'FILE_NOT_FOUND'
+    ACCESS_DENIED = 'ACCESS_DENIED'
+    STORAGE_UNAVAILABLE = 'STORAGE_UNAVAILABLE'
+
+
+class FilesResult(str, Enum):
+    '''
+        What a request did, as a code.
+    '''
+    UPLOADED = 'UPLOADED'
+    DELETED = 'DELETED'
+
+
+# The files FILES takes, by extension, with the MIME type each travels as: the
+# one list the upload, the presigned URL and the read all check against.
+ALLOWED_TYPES: dict[str, str] = {
+    '.csv': 'text/csv',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.txt': 'text/plain',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.pdf': 'application/pdf',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+}
 
 class BaseS3FileModel(BaseModel):
     '''
@@ -24,8 +63,6 @@ class S3FileRequest(BaseS3FileModel):
     '''
         S3File Request model.
     '''
-    # Inherits fields and file_key from BaseS3FileModel
-    # pass # Pylint W0107 will no longer flag if there's content; it's fine as is if no content.
 
 class FileUploadData(BaseS3FileModel):
     '''
@@ -72,3 +109,30 @@ class PresignedUrlResponse(BaseModel):
     '''
     presigned_url: str = Field(..., description = 'The generated pre-signed URL.')
     file_key: str = Field(..., description = 'The full S3 key.')
+
+
+class FileReadResponse(BaseModel):
+    '''
+        A file read back: rows for a sheet, text for a .txt, base64 for the
+        rest. Only the field of its kind is sent.
+    '''
+    filename: str = Field(..., description = 'The object key read.')
+    data: list[dict[str, Any]] | None = Field(None, description = 'Rows of a CSV or Excel file.')
+    content: str | None = Field(None, description = 'Text of a .txt file.')
+    content_base64: str | None = Field(None, description = 'Bytes of a binary file, in base64.')
+
+
+class FileUploadResponse(BaseModel):
+    '''
+        A file stored.
+    '''
+    message: FilesResult = Field(..., description = 'UPLOADED.')
+    url: str = Field(..., description = 'The object URL.')
+    file_key: str = Field(..., description = 'The full S3 key.')
+
+
+class FileDeleteResponse(BaseModel):
+    '''
+        A file deleted.
+    '''
+    message: FilesResult = Field(..., description = 'DELETED.')

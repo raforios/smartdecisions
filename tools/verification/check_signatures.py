@@ -86,6 +86,10 @@ def _needs_fix(
         # description) is one parameter: its continuation sits deeper.
         if depth == 0 and len(code) - len(code.lstrip()) != indent:
             return True
+        # Two parameters on one line pass the indent test: one per line means
+        # one top-level parameter per line (found in AUTH on 4-nov-2026).
+        if depth == 0 and len(_split_top_level(code.rstrip(','), ',')) > 1:
+            return True
         depth += code.count('(') + code.count('[') - code.count(')') - code.count(']')
         if depth == 0 and not code.endswith(',') and index != end - 1:
             return True
@@ -119,7 +123,8 @@ def _split_top_level(
     separator: str
 ) -> list[str]:
     '''
-        Splits on a separator, ignoring the ones nested inside brackets.
+        Splits on a separator, ignoring the ones nested inside brackets or
+        inside a string literal.
 
         Args:
             text (str): Text to split.
@@ -128,13 +133,18 @@ def _split_top_level(
         Returns:
             list[str]: The pieces, stripped and non-empty.
     '''
-    pieces, depth, current = [], 0, ''
+    pieces, depth, current, quote = [], 0, '', ''
     for char in text:
-        if char in '([{':
+        # A separator inside a string literal (`delimiter = ','`) is text.
+        if quote:
+            quote = '' if char == quote else quote
+        elif char in '\'"':
+            quote = char
+        elif char in '([{':
             depth += 1
         elif char in ')]}':
             depth -= 1
-        if char == separator and depth == 0:
+        if char == separator and depth == 0 and not quote:
             pieces.append(current)
             current = ''
         else:

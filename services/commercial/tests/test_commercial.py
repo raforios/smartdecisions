@@ -9,7 +9,7 @@ from io import BytesIO
 import pandas as pd
 import pytest
 
-from schemas.commercial import ValidationRule
+from schemas.commercial import SALES_COLUMNS, ValidationRule
 from services.commercial import (
     COUNTER_CLIENT,
     _coerce_dates,
@@ -399,3 +399,17 @@ def test_the_dataset_model_declares_every_attribute_the_item_stores():
 
     assert set(built) <= declared
     assert attached <= declared
+
+
+def test_each_option_column_shows_its_own_words():
+    '''
+        Cash is 'Contado' as a payment condition and 'Efectivo' as a means of
+        payment: a `str` Enum equals its value, so one shared map would give
+        both columns the same word.
+    '''
+    rules = {column.canonical: column.rules for column in SALES_COLUMNS}
+
+    assert rules['payment_terms'].template_words() == {'CASH': 'Contado', 'CREDIT': 'Crédito'}
+    assert rules['payment_method'].template_words()['CASH'] == 'Efectivo'
+    assert rules['payment_terms'].allowed == ('CASH', 'CREDIT')
+    assert rules['pos_name'].allowed is None and rules['pos_name'].template_words() == {}

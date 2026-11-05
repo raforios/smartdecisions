@@ -65,6 +65,11 @@ class RowRejected(Exception):
         code: LoadError,
         value: object = None
     ) -> None:
+        '''
+            Args:
+                code (LoadError): The error code.
+                value (object): The value that broke the rule.
+        '''
         super().__init__(code.value)
         self.code = code
         self.value = None if value is None else str(value)

@@ -17,6 +17,9 @@
                      from typing, boilerplate and tests included
         log-vars     WARNING/ERROR logs use `error_msg`, INFO uses `message`
         code-language  Enum members and closed options in English
+        private-imports  no `_name` imported from another module of the service
+        docstring-args   every function of services/ and schemas/ documents its
+                     parameters under `Args:`
         events       every controller reports usage to EVENTS, and every
                      write is audited
 
@@ -55,6 +58,7 @@ from verify_checks import (
     check_size,
     check_tests,
     check_type_hints,
+    own_files,
     ROOT,
     PRODUCT_SERVICES,
     run_command
@@ -74,11 +78,26 @@ SPANISH_CODE_WORDS = frozenset({
 })
 
 
-def _codes_in(tree: ast.AST) -> list[tuple[int, str]]:
+def codes_in(tree: ast.AST) -> list[tuple[int, str]]:
     '''
         The codes a module declares: the names and values of every Enum
-        member, and every value offered as `allowed`.
+        member, and every value offered as `allowed`, written in place or
+        through a constant of the same module (`allowed = PAYMENT_METHODS`).
+
+        A constant was invisible until 4-nov-2026: the means of payment went
+        through one and the check passed without reading them.
+
+        Args:
+            tree (ast.AST): The parsed module.
+
+        Returns:
+            list[tuple[int, str]]: Line and code of each one.
     '''
+    constants = {target.id: node.value for node in ast.walk(tree)
+                 if isinstance(node, (ast.Assign, ast.AnnAssign))
+                 and isinstance(node.value, (ast.Tuple, ast.List))
+                 for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+                 if isinstance(target, ast.Name)}
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and any(
@@ -88,10 +107,12 @@ def _codes_in(tree: ast.AST) -> list[tuple[int, str]]:
                     found += [(item.lineno, target.id) for target in item.targets
                               if isinstance(target, ast.Name)]
                     found.append((item.lineno, str(item.value.value)))
-        if isinstance(node, ast.keyword) and node.arg == 'allowed' \
-                and isinstance(node.value, (ast.Tuple, ast.List)):
-            found += [(element.lineno, str(element.value)) for element in node.value.elts
-                      if isinstance(element, ast.Constant)]
+        if isinstance(node, ast.keyword) and node.arg == 'allowed':
+            options = (constants.get(node.value.id) if isinstance(node.value, ast.Name)
+                       else node.value)
+            if isinstance(options, (ast.Tuple, ast.List)):
+                found += [(element.lineno, str(element.value)) for element in options.elts
+                          if isinstance(element, ast.Constant)]
     return found
 
 
@@ -107,10 +128,109 @@ def check_code_language(service: Path) -> tuple[bool, str]:
     for path in sorted(service.rglob('*.py')):
         if '__pycache__' in path.parts or 'tests' in path.parts:
             continue
-        for number, code in _codes_in(ast.parse(path.read_text())):
+        for number, code in codes_in(ast.parse(path.read_text())):
             if SPANISH_CODE_WORDS & set(code.upper().split('_')):
                 hits.append(f'{path.relative_to(service)}:{number} {code}')
     return not hits, ', '.join(hits[:5]) if hits else 'none'
+
+
+# The service's own packages: an import from one of them is an import of the
+# service's own code, not of a library.
+OWN_PACKAGES = ('controllers', 'models', 'routes', 'schemas', 'services')
+
+
+def check_private_imports(service: Path) -> tuple[bool, str]:
+    '''
+        No `_name` imported from another module of the service: a function
+        another module needs is public, and its name says so.
+
+        On 4-nov-2026 the review found ten of them in BILLING and five in
+        COMMERCIAL; nothing measured it until then.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            tuple[bool, str]: Whether it passed, and the first findings.
+    '''
+    hits = []
+    for path in own_files(service):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module \
+                    and node.module.split('.')[0] in OWN_PACKAGES:
+                hits += [f'{path.relative_to(service)}:{node.lineno} {alias.name}'
+                         for alias in node.names
+                         if alias.name.startswith('_') and not alias.name.startswith('__')]
+    return not hits, ', '.join(hits[:5]) if hits else 'none'
+
+
+# Where the logic lives (CLAUDE.md §3). Routes and controllers carry the
+# endpoint's description, the one Swagger shows (Rafael, 4-nov-2026).
+DOCUMENTED_LAYERS = ('services', 'schemas')
+
+
+def _parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    '''
+        The parameters a docstring documents: all but `self` and `cls`.
+
+        Args:
+            node (ast.FunctionDef | ast.AsyncFunctionDef): The function.
+
+        Returns:
+            list[str]: Their names.
+    '''
+    args = node.args
+    return [param.arg for param in args.posonlyargs + args.args + args.kwonlyargs
+            + ([args.vararg] if args.vararg else []) + ([args.kwarg] if args.kwarg else [])
+            if param.arg not in ('self', 'cls')]
+
+
+def docstring_gaps(service: Path) -> list[str]:
+    '''
+        The functions of services/ and schemas/ whose docstring does not name
+        every parameter under `Args:`; nested functions are their parent's.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            list[str]: `path:line name` per gap.
+    '''
+    gaps = []
+    for path in own_files(service):
+        if path.relative_to(service).parts[0] not in DOCUMENTED_LAYERS:
+            continue
+        tree = ast.parse(path.read_text())
+        functions = [node for node in ast.walk(tree)
+                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        nested = {id(inner) for outer in functions for inner in ast.walk(outer)
+                  if inner is not outer and inner in functions}
+        for node in functions:
+            names = _parameters(node)
+            if id(node) in nested or not names:
+                continue
+            doc = ast.get_docstring(node) or ''
+            args = doc.split('Args:', 1)[1] if 'Args:' in doc else ''
+            if any(not re.search(rf'\b\*{{0,2}}{name}\b', args) for name in names):
+                gaps.append(f'{path.relative_to(service)}:{node.lineno} {node.name}')
+    return gaps
+
+
+def check_docstring_args(service: Path) -> tuple[bool, str]:
+    '''
+        Every function of services/ and schemas/ documents its parameters
+        under `Args:` (`.claude/rules/python.md`). 107 were missing when it was
+        added on 4-nov-2026.
+
+        Args:
+            service (Path): Service directory.
+
+        Returns:
+            tuple[bool, str]: Whether it passed, and the first findings.
+    '''
+    gaps = docstring_gaps(service)
+    more = f' … +{len(gaps) - 5}' if len(gaps) > 5 else ''
+    return not gaps, ', '.join(gaps[:5]) + more if gaps else 'none'
 
 
 CHECKS = (
@@ -129,6 +249,8 @@ CHECKS = (
     ('log-vars', check_log_vars),
     ('comment-language', check_comment_language),
     ('code-language', check_code_language),
+    ('private-imports', check_private_imports),
+    ('docstring-args', check_docstring_args),
     ('cross-duplicates', check_cross_service_duplicates),
     ('direct-s3', check_direct_s3),
     ('foreign-tables', check_foreign_tables),

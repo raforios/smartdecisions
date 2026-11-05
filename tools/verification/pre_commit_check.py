@@ -14,14 +14,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verify_checks import PRODUCT_SERVICES
+
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = ROOT.parent / '.venv' / 'bin' / 'python'
 VERIFY = ROOT / 'tools' / 'verification' / 'verify_service.py'
-
-# The ten services of BearSoft. The clients' services are never verified
-# here: they are not ours to change (CLAUDE.md §4).
-OWN_SERVICES = ('ai', 'auth', 'billing', 'commercial', 'events', 'files', 'finance',
-                'mining_analysis', 'ml_functions', 'quotes')
 
 
 def staged_targets() -> list[str]:
@@ -35,7 +32,8 @@ def staged_targets() -> list[str]:
     names = subprocess.run(['git', 'diff', '--cached', '--name-only'], cwd = ROOT,
                            capture_output = True, text = True, check = True).stdout.split()
     targets = sorted({f'services/{parts[1]}' for parts in (Path(name).parts for name in names)
-                      if len(parts) > 2 and parts[0] == 'services' and parts[1] in OWN_SERVICES})
+                      if len(parts) > 2 and parts[0] == 'services'
+                      and parts[1] in PRODUCT_SERVICES})
     if any(name.startswith('tools/') and name.endswith('.py') for name in names):
         targets.append('--tools')
     return targets

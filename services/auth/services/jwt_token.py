@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from jose import jwt, JWTError
 
+from schemas.auth import AuthError
 from services.logger_config import custom_logger as logger
 from services.exceptions import ServiceUnavailableError
 from services.environment import load_and_validate_env_vars
@@ -19,39 +20,42 @@ SECRET_KEY = ENV_VARS['SECRET_KEY']
 ALGORITHM = ENV_VARS['ALGORITHM']
 ACCESS_TOKEN_EXPIRE_MINUTES = ENV_VARS['ACCESS_TOKEN_EXPIRE_MINUTES']
 
-def create_access_token(
-    data: dict[str, Any],
-    expires_delta: timedelta | None = None
-) -> str:
+def create_access_token(data: dict[str, Any]) -> str:
     '''
-        Creates a JWT access token.
-        data: Dictionary of data to include in the token (e.g., email, user_id).
-        expires_delta: Optional, the token's lifetime. If not specified,
-        use ACCESS_TOKEN_EXPIRE_MINUTES.
+        Signs a token with the configured lifetime.
+
+        Args:
+            data (dict[str, Any]): The claims: email, role and client.
+
+        Returns:
+            str: The token.
+
+        Raises:
+            ServiceUnavailableError: TOKEN_NOT_ISSUED.
     '''
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes = int(ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({'exp': expire.timestamp()})
+    expire = datetime.now(timezone.utc) + timedelta(minutes = ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode = {**data, 'exp': expire.timestamp()}
 
     try:
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm = ALGORITHM)
         message = f'JWT created for user: {data.get('email')}'
         logger.info(message)
         return encoded_jwt
-    except Exception as e:
+    except JWTError as e:
         error_msg = f'Error creating JWT token for user {data.get('email')}: {e}'
         logger.critical(error_msg)
-        raise ServiceUnavailableError(
-            detail = 'Failed to create authentication token.'
-        ) from e
+        raise ServiceUnavailableError(detail = AuthError.TOKEN_NOT_ISSUED.value) from e
 
 def decode_access_token(token: str) -> dict[str, Any] | None:
     '''
-        Decodes and validates a JWT access token.
-        Returns the token data if valid, None if not.
+        The claims of a valid token.
+
+        Args:
+            token (str): The token as received.
+
+        Returns:
+            dict[str, Any] | None: The claims; None for an expired or forged
+                token.
     '''
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM])

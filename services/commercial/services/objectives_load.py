@@ -40,6 +40,7 @@ from services.load_contract import (
     AMOUNT_DECIMALS,
     OBJECTIVE_HEADER_LOOKUP,
     OBJECTIVES_SCHEMA,
+    excel_row,
     unknown_value_issues,
     validate
 )
@@ -131,7 +132,7 @@ def _malformed_period_issues(frame: pd.DataFrame) -> list[ValidationIssue]:
     malformed = frame.loc[~periods.str.match(_PERIOD_PATTERN)]
     return [
         ValidationIssue(
-            row = int(position) + 2,
+            row = excel_row(position),
             column = _PERIOD,
             value = str(row[_PERIOD]),
             rule_code = ValidationRule.INVALID_VALUE

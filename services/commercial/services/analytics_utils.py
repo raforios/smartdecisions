@@ -579,6 +579,9 @@ def load_dataframe(
 def _floats_to_decimal(value: Any) -> Any:
     '''
         Recursively converts floats to Decimal so DynamoDB accepts them.
+
+        Args:
+            value (Any): Any value about to be written to DynamoDB.
     '''
     if isinstance(value, float):
         return Decimal(str(value))
@@ -593,6 +596,9 @@ def _decimal_to_native(value: Any) -> Any:
     '''
         Inverse of `_floats_to_decimal` — used when serializing items back to
         the API response (FastAPI / Pydantic don't accept Decimal natively).
+
+        Args:
+            value (Any): Any value read from DynamoDB.
     '''
     if isinstance(value, Decimal):
         as_float = float(value)
@@ -612,6 +618,9 @@ def _build_run_item(payload: dict[str, Any]) -> dict[str, Any]:
         Each item carries `id = run_id` (UUID) so collisions are impossible,
         and `dataset_id` is a regular attribute used to filter runs by
         dataset.
+
+        Args:
+            payload (dict[str, Any]): The analysis run and its result.
     '''
     now = get_current_time_gmt()
     run_id = payload.get('run_id') or str(uuid.uuid4())
@@ -634,6 +643,10 @@ def persist_run(
 ) -> dict[str, Any]:
     '''
         Persists a finished analytics run.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            payload (dict[str, Any]): The analysis run and its result.
     '''
     item = _build_run_item(payload)
     create_item(

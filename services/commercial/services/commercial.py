@@ -23,6 +23,7 @@ from schemas.commercial import (
     STOCK_COLUMNS,
     VISIT_COLUMNS,
     IngestSummary,
+    SalesColumn,
     ValidationIssue,
     ValidationRule
 )
@@ -135,6 +136,9 @@ def _clean_id(value: object) -> object:
         floats (e.g. 20101122965.0) become their integer string ('20101122965')
         so the str_length contract holds and grouping stays consistent; blanks
         become NA so the validator flags them.
+
+        Args:
+            value (object): An identifier as read from the file.
     '''
     if pd.isna(value):
         return pd.NA
@@ -149,6 +153,9 @@ def _stringify_ids(dataframe: pd.DataFrame) -> pd.DataFrame:
         Coerces the identifier columns to clean strings. ERP exports often carry
         numeric codes (float/int dtype); without this, pandera's str_length check
         receives raw numbers and rejects otherwise-valid rows.
+
+        Args:
+            dataframe (pd.DataFrame): Rows with canonical columns.
     '''
     for column in _ID_COLUMNS:
         if column in dataframe.columns:
@@ -186,23 +193,13 @@ def _coerce_dates(values: pd.Series) -> pd.Series:
     return day_first if day_first.notna().sum() > iso.notna().sum() else iso
 
 
-# Every date column of every contract, not just the sale's: the due date and
-# the payment date arrive in the same formats and through the same door.
+# Every column of every contract: the due date and the payment date arrive in
+# the same formats and through the same door as the sale's.
+_ALL_COLUMNS: Final[tuple[SalesColumn, ...]] = (
+    SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS + PURCHASE_COLUMNS
+)
 _DATE_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
-    column.canonical
-    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS
-    + PURCHASE_COLUMNS
-    if column.dtype.startswith('datetime64')
-))
-
-# Closed-option columns are normalized before validating, because an ERP writes
-# 'Crédito', 'credito' or 'CRÉDITO' for the same thing and rejecting the row
-# over an accent would be rejecting correct data.
-_OPTION_COLUMNS: Final[tuple[str, ...]] = tuple(dict.fromkeys(
-    column.canonical
-    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS
-    + PURCHASE_COLUMNS
-    if column.rules.allowed is not None
+    column.canonical for column in _ALL_COLUMNS if column.dtype.startswith('datetime64')
 ))
 
 
@@ -228,6 +225,9 @@ def _spelled(value: object) -> str:
     '''
         A value as codes are compared: uppercase, no accents, trimmed, words
         joined by underscore ('sin venta' and 'Sin-Venta' both read SIN_VENTA).
+
+        Args:
+            value (object): The value as written.
     '''
     return normalize_header(value).upper().replace(' ', '_')
 
@@ -242,16 +242,18 @@ def _option_codes() -> dict[str, dict[str, str]]:
             dict[str, dict[str, str]]: {column: {spelling: code}}.
     '''
     codes: dict[str, dict[str, str]] = {}
-    for column in SALES_COLUMNS + COLLECTION_COLUMNS + STOCK_COLUMNS + VISIT_COLUMNS \
-            + PURCHASE_COLUMNS:
-        rules = column.rules
-        if rules.allowed is not None:
+    for column in _ALL_COLUMNS:
+        words = column.rules.template_words()
+        if words:
             codes.setdefault(column.canonical, {}).update(
-                {_spelled(code): code for code in rules.allowed}
-                | {_spelled(label): code for label, code in zip(rules.labels or (), rules.allowed)})
+                {_spelled(code): code for code in words}
+                | {_spelled(word): code for code, word in words.items()})
     return codes
 
 
+# Closed-option columns are normalized before validating, because an ERP writes
+# 'Crédito', 'credito' or 'CRÉDITO' for the same thing and rejecting the row
+# over an accent would be rejecting correct data.
 _OPTION_CODES: Final[dict[str, dict[str, str]]] = _option_codes()
 
 
@@ -268,10 +270,9 @@ def _normalize_options(dataframe: pd.DataFrame) -> pd.DataFrame:
         Returns:
             pd.DataFrame: Same frame with its option columns normalized.
     '''
-    for column in _OPTION_COLUMNS:
+    for column, codes in _OPTION_CODES.items():
         if column not in dataframe.columns:
             continue
-        codes = _OPTION_CODES[column]
         dataframe[column] = dataframe[column].map(
             lambda value, codes = codes: pd.NA if pd.isna(value) or not str(value).strip()
             else codes.get(_spelled(value), _spelled(value))

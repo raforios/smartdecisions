@@ -16,7 +16,7 @@ from schemas.billing import (
     SaleLineIn,
     SaleNoteIn
 )
-from services import billing_cash, billing_payments, billing_sales
+from services import billing_payments, billing_sales
 from services.exceptions import InvalidInputError
 from tests.test_billing import CASHIER, LATER, OWNER, _dynamodb, _receive, _register # pylint: disable=unused-import
 from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import
@@ -166,7 +166,7 @@ def test_the_till_counts_each_part_in_its_own_method(dynamodb):
     billing_sales.issue_sale(dynamodb, OWNER, _note(None, payment_method = CASH), CASHIER)
 
     totals = {row.payment_method: (row.count, row.total)
-              for row in billing_cash.method_totals(billing_sales.list_sales(dynamodb,
+              for row in billing_payments.method_totals(billing_sales.list_sales(dynamodb,
                                                                             OWNER).items)}
 
     assert totals == {CASH: (2, 230), WALLET: (1, 170)}

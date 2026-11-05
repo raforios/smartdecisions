@@ -45,5 +45,10 @@
     "security-guidance@claude-plugins-official": true,
     "hookify@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true
+  },
+  "includeCoAuthoredBy": false,
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }

@@ -138,7 +138,7 @@ def test_a_buyer_with_an_address_gets_the_invoice(
              for part in mail.iter_attachments()}
     number = note.invoice.number
     assert files[f'factura-{number}.pdf'].startswith(b'%PDF')
-    stored = billing_sales._read_sale(dynamodb, OWNER, note.sale_id) # pylint: disable=protected-access
+    stored = billing_sales.read_sale(dynamodb, OWNER, note.sale_id)
     assert files[f'factura-{number}.xml'].decode('utf-8') == stored['invoice_xml']
     assert stored['invoice']['emailed_at']
 

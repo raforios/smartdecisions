@@ -7,6 +7,8 @@ from typing import Any
 from functools import wraps
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
+
+from schemas.files import FilesError
 from services.exceptions import (
     ResourceNotFoundError,
     ForbiddenError,
@@ -32,33 +34,18 @@ def handle_aws_client_error(
             ServiceUnavailableError: For any other unexpected S3 errors.
     '''
     error_code = e.response.get('Error', {}).get('Code')
-    bucket_name = context_info.get('bucket_name')
-    file_key = context_info.get('file_key')
-    prefix = context_info.get('prefix')
-
-    error_msg: str
+    # The bucket, the key and the prefix go to the log, where the 404 must name
+    # them (Rafael, 19-oct-2026); the caller receives the code.
+    where = ', '.join(f'{name} {value}' for name, value in context_info.items() if value)
+    error_msg = f'S3 answered {error_code} for {where or "an S3 resource"}: {e}'
+    logger.error(error_msg, exc_info = True)
     match error_code:
         case 'NoSuchKey' | 'NoSuchBucket':
-            error_msg = f'Bucket {bucket_name} or file {file_key} not found.'
-            logger.error(error_msg, exc_info = True)
-            raise ResourceNotFoundError(detail = error_msg) from e
+            raise ResourceNotFoundError(detail = FilesError.FILE_NOT_FOUND.value) from e
         case 'AccessDenied':
-            msg_context = ''
-            if bucket_name:
-                msg_context += f'bucket {bucket_name}'
-            if file_key:
-                msg_context += f' or file {file_key}'
-            if prefix:
-                msg_context += f' or prefix {prefix}'
-            if not msg_context:
-                msg_context = 'S3 resource'
-            error_msg = f'Access denied to {msg_context}.'
-            logger.error(error_msg, exc_info = True)
-            raise ForbiddenError(detail = error_msg) from e
+            raise ForbiddenError(detail = FilesError.ACCESS_DENIED.value) from e
         case _:
-            error_msg = f'Unexpected S3 error: {e}'
-            logger.error(error_msg, exc_info = True)
-            raise ServiceUnavailableError(detail = error_msg) from e
+            raise ServiceUnavailableError(detail = FilesError.STORAGE_UNAVAILABLE.value) from e
 
 def handle_aws_operation(
     func: Callable[..., Awaitable[Any]]
@@ -74,20 +61,17 @@ def handle_aws_operation(
         try:
             return await func(*args, **kwargs)
         except ClientError as e:
-            # Check for explicit context argument first
-            context = kwargs.get('_context', {})
-
-            if not context:
-                # The names come from the call itself: as plain arguments
-                # (read: bucket_name, file_key) or as fields of the request
-                # body. Reading only the body left a read's 404 saying
-                # "Bucket None or file None" (Rafael, 19-oct-2026).
-                bound = inspect.signature(func).bind_partial(*args, **kwargs).arguments
-                request_body = next(iter(bound.values()), None)
-                for name in ('bucket_name', 'file_key', 'prefix'):
-                    value = bound.get(name, getattr(request_body, name, None))
-                    if value:
-                        context[name] = value
+            # The names come from the call itself: as plain arguments (read:
+            # bucket_name, file_key) or as fields of the request body. Reading
+            # only the body left a read's 404 saying "Bucket None or file None"
+            # (Rafael, 19-oct-2026).
+            context: dict[str, Any] = {}
+            bound = inspect.signature(func).bind_partial(*args, **kwargs).arguments
+            request_body = next(iter(bound.values()), None)
+            for name in ('bucket_name', 'file_key', 'prefix'):
+                value = bound.get(name, getattr(request_body, name, None))
+                if value:
+                    context[name] = value
 
             handle_aws_client_error(e, context)
         except HTTPException:
@@ -97,5 +81,5 @@ def handle_aws_operation(
         except Exception as e:
             error_msg = f'Internal server error while processing the operation: {e}'
             logger.error(error_msg, exc_info = True)
-            raise ServiceUnavailableError(detail = error_msg) from e
+            raise ServiceUnavailableError(detail = FilesError.STORAGE_UNAVAILABLE.value) from e
     return wrapper

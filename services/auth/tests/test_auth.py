@@ -73,8 +73,69 @@ def test_a_duplicate_caught_by_dynamodb_answers_already_registered(monkeypatch):
 
     monkeypatch.setattr(dynamodb, 'get_table', _Table)
 
-    with pytest.raises(exceptions.RegisterAlreadyExistsError):
+    with pytest.raises(exceptions.RegisterAlreadyExistsError) as raised:
         dynamodb.create_user_item({'email': 'dup@bearsoft.com.bo'})
+    assert raised.value.detail == 'EMAIL_TAKEN'
+
+
+def test_a_failure_of_the_table_answers_a_code_not_its_message(monkeypatch):
+    '''
+        DynamoDB's own words go to the log; the client receives
+        STORAGE_UNAVAILABLE and nothing about the table.
+    '''
+    # pylint: disable=import-outside-toplevel
+    import importlib
+
+    from botocore.exceptions import ClientError
+
+    monkeypatch.setenv('TABLE_NAME', 'auth-users-test')
+    monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
+    dynamodb = importlib.import_module('services.dynamodb')
+    exceptions = importlib.import_module('services.exceptions')
+
+    class _Table: # pylint: disable=too-few-public-methods
+        '''A table that is throttling.'''
+        def get_item(
+            self,
+            **_kwargs: object
+        ) -> None:
+            '''Fails as a throttled table does.'''
+            raise ClientError({'Error': {'Code': 'ThrottlingException',
+                                         'Message': 'Rate of requests exceeds the limit'}},
+                              'GetItem')
+
+    monkeypatch.setattr(dynamodb, 'get_table', _Table)
+
+    with pytest.raises(exceptions.ServiceUnavailableError) as raised:
+        dynamodb.get_user_by_email('any@bearsoft.com.bo')
+    assert raised.value.detail == 'STORAGE_UNAVAILABLE'
+
+
+def test_a_profile_change_aliases_reserved_words_and_hashes_the_password(monkeypatch):
+    '''
+        Role and status are reserved words of DynamoDB and travel aliased; the
+        password is stored hashed; a change with nothing in it writes nothing.
+    '''
+    # pylint: disable=import-outside-toplevel
+    import importlib
+
+    monkeypatch.setenv('TABLE_NAME', 'auth-users-test')
+    monkeypatch.setenv('TABLE_NAME_COMPANIES', 'auth-companies-test')
+    monkeypatch.setenv('TARGET_TIMEZONE', 'America/La_Paz')
+    monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
+    users = importlib.import_module('services.users')
+    request = importlib.import_module('schemas.users').UserUpdateRequest
+
+    update = users.user_update(request(role = Role.MANAGER, status = False,
+                                       first_name = 'Ana', password = 'secret-pass'))
+
+    assert update.names == {'#role': 'role', '#status': 'status'}
+    assert update.values[':role'] == 'MANAGER' and update.values[':status'] is False
+    assert update.values[':first_name'] == 'Ana'
+    assert verify_password('secret-pass', update.values[':hashed_password'])
+    assert update.expression.startswith('SET ')
+    assert 'date_update = :date_update' in update.expression
+    assert users.user_update(request()) is None
 
 
 def test_a_first_sign_in_starts_the_count_without_a_previous_one():

@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-from controllers import files
 from schemas.files import S3FileRequest
+from services import files
 from services.exceptions import (
     ForbiddenError,
     InvalidInputError,
@@ -57,10 +57,11 @@ def _read(
             content (bytes): What the object holds.
 
         Returns:
-            dict[str, Any]: What the controller returns.
+            dict[str, Any]: What the response carries: the route sends only the
+                field of the file's kind.
     '''
     monkeypatch.setattr(files, 's3_client', _FakeS3(content))
-    return asyncio.run(files.read_data_from_s3('bucket', file_key, 'acme'))
+    return asyncio.run(files.read_file('bucket', file_key, 'acme')).model_dump(exclude_none = True)
 
 
 def _client_error(code: str) -> ClientError:
@@ -87,8 +88,8 @@ def test_csv_comes_back_as_rows(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_csv_honours_the_delimiter(monkeypatch: pytest.MonkeyPatch) -> None:
     '''A file separated by semicolons is read with the delimiter the caller gives.'''
     monkeypatch.setattr(files, 's3_client', _FakeS3(b'codigo;monto\nA;1\n'))
-    result = asyncio.run(files.read_data_from_s3('bucket', 'carga.csv', 'acme', ';'))
-    assert result['data'] == [{'codigo': 'A', 'monto': 1}]
+    result = asyncio.run(files.read_file('bucket', 'carga.csv', 'acme', ';'))
+    assert result.data == [{'codigo': 'A', 'monto': 1}]
 
 
 def test_text_comes_back_whole(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -154,7 +155,7 @@ def test_unexpected_failure_is_still_unavailable(monkeypatch: pytest.MonkeyPatch
     '''Only the caller's mistakes are 400: anything unforeseen stays a 503.'''
     monkeypatch.setattr(files, 's3_client', _BrokenS3())
     with pytest.raises(ServiceUnavailableError):
-        asyncio.run(files.read_data_from_s3('bucket', 'carga.csv', 'acme'))
+        asyncio.run(files.read_file('bucket', 'carga.csv', 'acme'))
 
 
 class _MissingS3:  # pylint: disable=too-few-public-methods
@@ -171,10 +172,99 @@ class _MissingS3:  # pylint: disable=too-few-public-methods
         raise _client_error('NoSuchKey')
 
 
-def test_missing_file_names_bucket_and_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    '''The 404 says which file was missing, not "Bucket None or file None".'''
+def test_missing_file_answers_a_code_and_logs_bucket_and_key(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture
+) -> None:
+    '''
+        The caller receives FILE_NOT_FOUND; the log says which file was
+        missing, not "Bucket None or file None" (Rafael, 19-oct-2026).
+    '''
     monkeypatch.setattr(files, 's3_client', _MissingS3())
     with pytest.raises(ResourceNotFoundError) as raised:
-        asyncio.run(files.read_data_from_s3('ml-data-file-handler', 'carga.csv', 'acme'))
-    assert 'ml-data-file-handler' in raised.value.detail
-    assert 'carga.csv' in raised.value.detail
+        asyncio.run(files.read_file('ml-data-file-handler', 'carga.csv', 'acme'))
+    assert raised.value.detail == 'FILE_NOT_FOUND'
+    assert 'ml-data-file-handler' in caplog.text and 'carga.csv' in caplog.text
+
+
+class _RecordingS3:  # pylint: disable=too-few-public-methods
+    '''
+        Stands in for S3 on the writing side: records what it is asked.
+    '''
+    def __init__(self) -> None:
+        '''Starts with nothing asked.'''
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def put_object(
+        self,
+        **kwargs: Any
+    ) -> None:
+        '''Records a put.'''
+        self.calls.append(('put', kwargs))
+
+    def delete_object(
+        self,
+        **kwargs: Any
+    ) -> None:
+        '''Records a delete.'''
+        self.calls.append(('delete', kwargs))
+
+    def generate_presigned_url(
+        self,
+        **kwargs: Any
+    ) -> str:
+        '''Records a signature and answers a URL.'''
+        self.calls.append(('sign', kwargs))
+        return 'https://signed'
+
+    def get_paginator(
+        self,
+        _name: str
+    ) -> Any:
+        '''A paginator over two keys, one of them a folder.'''
+        class _Pages:  # pylint: disable=too-few-public-methods
+            '''One page of a listing.'''
+            def paginate(
+                self,
+                **_kwargs: Any
+            ) -> list[dict[str, Any]]:
+                '''The page.'''
+                return [{'Contents': [{'Key': 'raw/'}, {'Key': 'raw/a.csv'}]}]
+        return _Pages()
+
+
+def test_the_writing_side_answers_codes_and_refuses_what_it_does_not_take(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''
+        Store, delete, list and sign answer their DTOs with codes; a MIME type
+        or an extension outside the allowed list is refused before S3 is asked.
+    '''
+    # pylint: disable=import-outside-toplevel
+    from schemas.files import FileUploadData, PresignedUrlRequest
+
+    s3 = _RecordingS3()
+    monkeypatch.setattr(files, 's3_client', s3)
+    upload = FileUploadData(bucket_name = 'b', file_path = 'raw', file_name = 'a.csv',
+                            file_content = b'x', content_type = 'text/csv')
+
+    stored = asyncio.run(files.store_file(upload, 'acme'))
+    deleted = asyncio.run(files.delete_file('b', 'raw/a.csv', 'acme'))
+    listed = asyncio.run(files.list_files('b', 'raw/', 'acme'))
+    signed = asyncio.run(files.presigned_upload_url(PresignedUrlRequest(
+        bucket_name = 'b', file_path = 'raw', file_name = 'a.csv', validation = True), 'acme'))
+
+    assert (stored.message, stored.file_key) == ('UPLOADED', 'raw/a.csv')
+    assert deleted.message == 'DELETED'
+    assert listed == ['raw/a.csv']
+    assert signed.presigned_url == 'https://signed'
+    assert s3.calls[-1][1]['Params']['ContentType'] == 'text/csv'
+    with pytest.raises(InvalidInputError) as raised:
+        asyncio.run(files.store_file(upload.model_copy(update = {'content_type': 'app/x'}),
+                                     'acme'))
+    assert raised.value.detail == 'UNSUPPORTED_FORMAT'
+    with pytest.raises(InvalidInputError):
+        asyncio.run(files.presigned_upload_url(PresignedUrlRequest(
+            bucket_name = 'b', file_name = 'run.exe', validation = True), 'acme'))
+    # put, delete and sign: the two refusals never reached S3.
+    assert [kind for kind, _ in s3.calls] == ['put', 'delete', 'sign']

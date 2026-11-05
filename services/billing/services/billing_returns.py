@@ -19,7 +19,7 @@
 import gzip
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Final
+from typing import Any
 
 from boto3.resources.base import ServiceResource
 
@@ -53,41 +53,42 @@ from schemas.billing_reversals import ReversalError
 from schemas.billing_siat import InvoiceQrOut, InvoiceState, SaleInvoice, SiatCatalog, SiatCodesOut
 from services import billing_siat_client as siat_client
 from services.billing import (
+    MONEY_DECIMALS,
+    accepted_notes,
+    buyer_email,
     get_settings,
     new_id,
     now_iso,
     products_by_sku,
+    stored_payments,
     take_counter,
     write_item
 )
 from services.billing_cash import (
-    expected_cash,
+    require_cash,
     require_sale_session,
     require_till_open,
     void_movement,
     write_movement
 )
 from services.billing_credit_note_xml import as_sold_line, build_credit_note_xml
-from services.billing_invoicing import _qr_url, cancellation_deadline, invoice_lines, qr_svg
+from services.billing_invoicing import cancellation_deadline, invoice_lines, qr_svg, sin_qr_url
 from services.billing_mail import CreditNoteMail, send_credit_note, send_credit_note_cancellation
-from services.billing_sales import _read_sale, _sale_out
+from services.billing_sales import read_sale, sale_out
 from services.billing_siat import build_cuf, siat_stamp
 from services.billing_siat_client import Emitter, InvoiceCancellation, InvoiceSubmission
 from services.billing_siat_codes import current_codes, emitter_for, get_catalog
 from services.billing_stock import draw_down, give_back
 from services.exceptions import InvalidInputError, RegisterNotFoundError, ServiceUnavailableError
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
+from services.utils import get_current_time_gmt, load_parameters
 
-MONEY_DECIMALS = 2
 
-# montoEfectivoCreditoDebito: the VAT rate the norm fixes, applied to what is
-# returned (`docs/siat/SIAT.md`, «Nota de Crédito-Débito»).
-VAT_RATE: Final[float] = 0.13
-
-# A note past eighteen months from its invoice is not admitted (RND
-# 102100000011, art. 36).
-RETURN_DEADLINE_MONTHS: Final[int] = 18
+# The VAT rate applied to what is returned (montoEfectivoCreditoDebito), and
+# the months after its invoice a note is still admitted: both fixed by the
+# norm, and both parameters because a norm changes.
+PARAMETERS = load_parameters({'BILLING_VAT_RATE': float,
+                              'BILLING_RETURN_DEADLINE_MONTHS': int})
 
 # The note's number is its own sequence, apart from the invoices', and one per
 # branch and point of sale like theirs.
@@ -102,17 +103,17 @@ def return_deadline(issued_at: str) -> date:
             issued_at (str): The invoice's fechaEmision.
 
         Returns:
-            date: The same day, eighteen months later (the last day of that
+            date: The same day, the deadline's months later (the last day of that
                 month when it is shorter).
     '''
     issued = date.fromisoformat(issued_at[:10])
-    months = issued.month - 1 + RETURN_DEADLINE_MONTHS
+    months = issued.month - 1 + PARAMETERS['BILLING_RETURN_DEADLINE_MONTHS']
     year, month = issued.year + months // 12, months % 12 + 1
     following = date(year + month // 12, month % 12 + 1, 1)
     return date(year, month, min(issued.day, (following - date(year, month, 1)).days))
 
 
-def _returned_so_far(stored: dict[str, Any]) -> dict[str, list[SaleAllocation]]:
+def returned_so_far(stored: dict[str, Any]) -> dict[str, list[SaleAllocation]]:
     '''
         The units already returned, per SKU, by the notes the SIN holds.
 
@@ -123,9 +124,7 @@ def _returned_so_far(stored: dict[str, Any]) -> dict[str, list[SaleAllocation]]:
             dict[str, list[SaleAllocation]]: Allocations returned per SKU.
     '''
     returned: dict[str, list[SaleAllocation]] = {}
-    for note in stored.get('credit_notes') or []:
-        if note['state'] != InvoiceState.ACCEPTED.value:
-            continue
+    for note in accepted_notes(stored):
         for line in note['lines']:
             returned.setdefault(line['sku'], []).extend(
                 SaleAllocation(**allocation) for allocation in line['allocations'])
@@ -195,7 +194,7 @@ def _returned_lines(
                 than are left to return.
     '''
     sold = {line['sku']: SaleLineOut(**line) for line in stored['lines']}
-    returned = _returned_so_far(stored)
+    returned = returned_so_far(stored)
     lines: list[CreditNoteLineOut] = []
     for wanted in request.body.lines:
         line = sold.get(wanted.sku)
@@ -229,8 +228,7 @@ def net_of_returns(stored: dict[str, Any]) -> dict[str, Any] | None:
             dict[str, Any] | None: A copy with lines, totals and payments
                 reduced; None when everything came back.
     '''
-    notes = [note for note in stored.get('credit_notes') or []
-             if note['state'] == InvoiceState.ACCEPTED.value]
+    notes = accepted_notes(stored)
     if not notes:
         return stored
     back: dict[str, dict[str, float]] = {}
@@ -258,10 +256,8 @@ def net_of_returns(stored: dict[str, Any]) -> dict[str, Any] | None:
     for note in notes:
         for refund in note['refunds']:
             refunded[refund['method']] = refunded.get(refund['method'], 0) + refund['amount']
-    parts = stored.get('payments') or [{'method': stored['payment_method'],
-                                        'amount': stored['total']}]
     payments = [{**part, 'amount': round(part['amount'] - refunded.pop(part['method'], 0),
-                                         MONEY_DECIMALS)} for part in parts]
+                                         MONEY_DECIMALS)} for part in stored_payments(stored)]
     return {**stored, 'lines': kept,
             'payments': [part for part in payments if part['amount'] > 0],
             **{key: round(sum(line[key] for line in kept), MONEY_DECIMALS)
@@ -283,8 +279,7 @@ def _refunds(
         Returns:
             list[Payment]: One refund per means with something to give back.
     '''
-    parts = stored.get('payments') or [{'method': stored['payment_method'],
-                                        'amount': stored['total']}]
+    parts = stored_payments(stored)
     refunds: list[Payment] = []
     left = amount
     for index, part in enumerate(parts):
@@ -294,6 +289,33 @@ def _refunds(
         if share > 0:
             refunds.append(Payment(method = part['method'], amount = share))
     return refunds
+
+
+def _tax_credit(amount: float) -> float:
+    '''
+        The VAT of what is returned: the note's montoEfectivoCreditoDebito.
+
+        Args:
+            amount (float): What is returned.
+
+        Returns:
+            float: Its VAT.
+    '''
+    return round(amount * PARAMETERS['BILLING_VAT_RATE'], MONEY_DECIMALS)
+
+
+def cash_of(refunds: list[Payment]) -> float:
+    '''
+        What of a refund goes back in cash, the part that leaves a till.
+
+        Args:
+            refunds (list[Payment]): The refund per means.
+
+        Returns:
+            float: The cash part.
+    '''
+    return round(sum(refund.amount for refund in refunds
+                     if refund.method is PaymentMethod.CASH), MONEY_DECIMALS)
 
 
 def _invoice_details(
@@ -440,7 +462,7 @@ def _issue_note(
             number = stamp.number, cuf = stamp.cuf, issued_at = stamp.issued_at,
             buyer = Buyer(**(stored.get('buyer') or {})), invoice = invoice,
             original_total = stored['total'], returned_total = amount,
-            tax_credit = round(amount * VAT_RATE, MONEY_DECIMALS),
+            tax_credit = _tax_credit(amount),
             legend = invoice.legend, user = returned_by,
             original = _invoice_details([SaleLineOut(**line) for line in stored['lines']],
                                         products),
@@ -487,17 +509,15 @@ def return_sale(
                 homologated, or the SIN refused the note.
             ServiceUnavailableError: The SIAT is unreachable; nothing changed.
     '''
-    stored = _read_sale(dynamodb_resource, owner, request.sale_id)
+    stored = read_sale(dynamodb_resource, owner, request.sale_id)
     _check_returnable(stored)
     lines = _returned_lines(stored, request)
     amount = round(sum(line.total for line in lines), MONEY_DECIMALS)
     refunds = _refunds(stored, amount)
-    cash = round(sum(refund.amount for refund in refunds
-                     if refund.method is PaymentMethod.CASH), MONEY_DECIMALS)
+    cash = cash_of(refunds)
     # Before the SIN: a return the drawer cannot pay must not reach it.
     session_id = require_sale_session(dynamodb_resource, owner, returned_by)
-    if cash > expected_cash(dynamodb_resource, owner, session_id):
-        raise InvalidInputError(detail = BillingError.EXPENSE_EXCEEDS_CASH.value)
+    require_cash(dynamodb_resource, owner, session_id, cash)
 
     issued = _issue_note(dynamodb_resource, owner, stored, lines, returned_by)
 
@@ -509,10 +529,10 @@ def return_sale(
     note = CreditNoteOut(
         credit_note_id = new_id(), sale_id = request.sale_id, number = stamp.number,
         cuf = stamp.cuf, cufd = stamp.codes.cufd, issued_at = stamp.issued_at,
-        qr_url = _qr_url(stamp.emitter.nit, stamp.cuf, stamp.number),
+        qr_url = sin_qr_url(stamp.emitter.nit, stamp.cuf, stamp.number),
         state = InvoiceState.ACCEPTED, reception_code = issued.reception_code,
         siat_state = issued.siat_state, lines = lines, amount_returned = amount,
-        tax_credit = round(amount * VAT_RATE, MONEY_DECIMALS), refunds = refunds,
+        tax_credit = _tax_credit(amount), refunds = refunds,
         created_by = returned_by, created_at = now_iso(),
         refund_session_id = session_id if movement_id else None,
         refund_movement_id = movement_id
@@ -548,11 +568,11 @@ def _mail_note(
         Returns:
             CreditNoteOut: The note, with when it was mailed.
     '''
-    if not (stored.get('buyer') or {}).get('email'):
+    if not buyer_email(stored):
         return note
     item = next(item for item in stored['credit_notes']
                 if item['credit_note_id'] == note.credit_note_id)
-    if not send_credit_note(CreditNoteMail(_sale_out(stored), note), item['xml'],
+    if not send_credit_note(CreditNoteMail(sale_out(stored), note), item['xml'],
                             get_settings(dynamodb_resource, owner)):
         return note
     item['emailed_at'] = now_iso()
@@ -579,12 +599,10 @@ def list_credit_notes(
         Raises:
             RegisterNotFoundError: No such sale in this shop.
     '''
-    stored = _read_sale(dynamodb_resource, owner, sale_id)
+    stored = read_sale(dynamodb_resource, owner, sale_id)
     if stored is None:
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
-    # The XML stays in the table, as the invoice's does.
-    items = [CreditNoteOut(**{key: value for key, value in note.items() if key != 'xml'})
-             for note in stored.get('credit_notes') or []]
+    items = [note_out(note) for note in stored.get('credit_notes') or []]
     return CreditNotesResponse(items = items, total = len(items))
 
 
@@ -618,7 +636,7 @@ def cancel_credit_note(
                 are no longer on the shelf, or the SIN refused.
             ServiceUnavailableError: The SIAT is unreachable; nothing changed.
     '''
-    stored = _read_sale(dynamodb_resource, owner, cancellation.sale_id)
+    stored = read_sale(dynamodb_resource, owner, cancellation.sale_id)
     position, note = find_note(stored, cancellation.credit_note_id)
     if note.state != InvoiceState.ACCEPTED:
         raise InvalidInputError(detail = ReturnError.CREDIT_NOTE_CANCELLED.value)
@@ -654,17 +672,31 @@ def cancel_credit_note(
     })
     stored['credit_notes'][position].update(cancelled.model_dump(mode = 'json'))
     write_item(dynamodb_resource, SALES_TABLE, stored)
-    if (stored.get('buyer') or {}).get('email'):
+    if buyer_email(stored):
         reasons = {entry.code: entry.description for entry in get_catalog(
             dynamodb_resource, owner, SiatCatalog.CANCELLATION_REASONS).entries}
         send_credit_note_cancellation(
-            CreditNoteMail(_sale_out(stored), cancelled),
+            CreditNoteMail(sale_out(stored), cancelled),
             reasons.get(str(cancellation.reason_code), str(cancellation.reason_code)),
             get_settings(dynamodb_resource, owner))
 
     message = f'Credit note {note.number} of sale {stored["number"]} cancelled for {owner}.'
     logger.info(message)
     return cancelled
+
+
+def note_out(item: dict[str, Any]) -> CreditNoteOut:
+    '''
+        A stored note as it is answered: its XML stays in the table, as the
+        invoice's does.
+
+        Args:
+            item (dict[str, Any]): The note as stored in its sale.
+
+        Returns:
+            CreditNoteOut: The note, without its XML.
+    '''
+    return CreditNoteOut(**{key: value for key, value in item.items() if key != 'xml'})
 
 
 def find_note(
@@ -688,8 +720,7 @@ def find_note(
         raise RegisterNotFoundError(detail = BillingError.SALE_NOT_FOUND.value)
     for index, item in enumerate(stored.get('credit_notes') or []):
         if item['credit_note_id'] == credit_note_id:
-            return index, CreditNoteOut(**{key: value for key, value in item.items()
-                                           if key != 'xml'})
+            return index, note_out(item)
     raise RegisterNotFoundError(detail = ReturnError.CREDIT_NOTE_NOT_FOUND.value)
 
 
@@ -735,8 +766,5 @@ def credit_note_qr(
         Raises:
             RegisterNotFoundError: No such sale or note in this shop.
     '''
-    note = next((item for item in list_credit_notes(dynamodb_resource, owner, ref.sale_id).items
-                 if item.credit_note_id == ref.credit_note_id), None)
-    if note is None:
-        raise RegisterNotFoundError(detail = ReturnError.CREDIT_NOTE_NOT_FOUND.value)
+    _, note = find_note(read_sale(dynamodb_resource, owner, ref.sale_id), ref.credit_note_id)
     return InvoiceQrOut(sale_id = ref.sale_id, svg = qr_svg(note.qr_url))

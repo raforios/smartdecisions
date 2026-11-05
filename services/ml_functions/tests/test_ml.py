@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from services.machine_learning import (
+    DescentConfig,
     compute_cost,
     compute_cost_logistic,
     compute_cost_matrix,
@@ -27,7 +28,7 @@ from services.machine_learning import (
 # y = 2x + 1, the line every linear test must recover.
 X_LINE = np.array([1.0, 2.0, 3.0, 4.0])
 Y_LINE = 2 * X_LINE + 1
-TRAINING = {'alpha': 0.05, 'num_iters': 5000}
+TRAINING = DescentConfig(alpha = 0.05, num_iters = 5000)
 
 
 def test_cost_is_zero_on_the_exact_line() -> None:
@@ -122,3 +123,35 @@ def test_predict_logistic_threshold_is_one_half() -> None:
     '''Exactly one half counts as 1.'''
     predictions = predict_logistic(np.array([[0.0], [1.0], [-1.0]]), np.array([5.0]), 0)
     assert list(predictions) == [1, 1, 0]
+
+
+def test_the_training_endpoints_keep_the_notebooks_contract() -> None:
+    '''
+        The notebooks read these answers by their field names (x, y, w, b,
+        J_history) and two of them as a bare list and a bare number; the
+        service keeps every one of those shapes.
+    '''
+    # pylint: disable=import-outside-toplevel
+    from schemas import classification, common, prediction
+    from services import training
+
+    line = {'x': X_LINE.tolist(), 'y': Y_LINE.tolist()}
+    trained = training.train_linear(prediction.TrainLinearRegressionRequest(
+        **line, w_in = 0.0, b_in = 0.0, alpha = 0.05, num_iters = 2000))
+    matrix = training.linear_gradient(prediction.ComputeGradientLinearRequest(
+        x = [[1.0, 2.0], [3.0, 4.0]], y = [1.0, 2.0], w = [0.0, 0.0], b = 0.0))
+    logistic = training.train_logistic(classification.GradientDescentLogisticRequest(
+        x_matrix = [[0.0], [1.0], [2.0], [3.0]], y = [0.0, 0.0, 1.0, 1.0], w_in = [0.0],
+        b_in = 0.0, alpha = 0.5, num_iters = 200))
+
+    assert trained.w_final == pytest.approx(2, abs = 0.05)
+    assert set(trained.model_dump()) == {'w_final', 'b_final', 'J_history', 'p_history',
+                                         'num_iters'}
+    assert isinstance(matrix.dj_dw, list) and len(matrix.dj_dw) == 2
+    assert set(logistic.model_dump()) == {'w', 'b', 'J_history', 'p_history'}
+    assert training.sigmoid_batch(classification.SigmoidBatchRequest(z_values = [0])) == [0.5]
+    assert isinstance(training.logistic_cost(classification.ComputeCostLogisticRequest(
+        x_matrix = [[1.0]], y = [1.0], w = [0.0], b = 0.0)), float)
+    normalized = training.normalize(common.NormalizeFeaturesRequest(
+        x_matrix = [[1.0, 10.0], [3.0, 30.0]]))
+    assert normalized.mu == [2.0, 20.0]

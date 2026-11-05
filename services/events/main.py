@@ -18,8 +18,7 @@ from mangum import Mangum
 import uvicorn
 
 from routes.activity import router as activity_router
-from routes.audit import router as audit_router
-from routes.usage_log import router as usage_log_router
+from routes.events import router as events_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
 from services.api_exceptions import setup_exception_handlers
@@ -260,8 +259,7 @@ async def custom_swagger_ui() -> HTMLResponse:
     )
 
 app.include_router(activity_router, tags = ['Events'])
-app.include_router(audit_router, tags = ['Events'])
-app.include_router(usage_log_router, tags = ['Events'])
+app.include_router(events_router, tags = ['Events'])
 
 # Entry point to run the app
 def run_local() -> None:

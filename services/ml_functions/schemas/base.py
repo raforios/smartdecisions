@@ -19,6 +19,10 @@ class NumPyValidatorBase(BaseModel):
     ) -> Any:
         '''
         Validates that a list of lists can be safely converted to a NumPy array.
+
+        Args:
+            v (Any): The value received.
+            info (ValidationInfo): Pydantic validation context.
         '''
         field_name = info.field_name
         try:
