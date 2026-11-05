@@ -83,7 +83,8 @@ def test_both_logs_store_and_page_through_one_implementation(monkeypatch) -> Non
     '''
         A record gets its id and timestamp and its bodies capped; the listing
         answers the log's own page schema. Audit and usage go through the same
-        code, each with its table.
+        code, each with its table. The table is stood in for: the CI installs
+        only the service's requirements.
 
         The environment is set before the import because CI runs without
         `.env` and `services/events.py` validates it on import.
@@ -91,37 +92,35 @@ def test_both_logs_store_and_page_through_one_implementation(monkeypatch) -> Non
     # pylint: disable=import-outside-toplevel
     import importlib
 
-    import boto3
-    from moto import mock_aws
-
     monkeypatch.setenv('DYNAMODB_TABLE_NAME_AUDIT', 'events-audit-test')
     monkeypatch.setenv('DYNAMODB_TABLE_NAME_USAGE', 'events-usage-test')
     monkeypatch.setenv('TARGET_TIMEZONE', 'America/La_Paz')
-    monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
     events = importlib.import_module('services.events')
     usage_schemas = importlib.import_module('schemas.usage_log')
+    tables: dict[str, list[dict]] = {}
 
-    with mock_aws():
-        dynamodb = boto3.resource('dynamodb', region_name = 'us-east-1')
-        # The names the module read: the .env's when it is already imported.
-        for table in (events.AUDIT_LOG.table, events.USAGE_LOG.table):
-            dynamodb.create_table(TableName = table, BillingMode = 'PAY_PER_REQUEST',
-                                  KeySchema = [{'AttributeName': 'id', 'KeyType': 'HASH'}],
-                                  AttributeDefinitions = [{'AttributeName': 'id',
-                                                           'AttributeType': 'S'}])
+    def _create_item(**kwargs) -> dict:
+        tables.setdefault(kwargs['table_name'], []).append(kwargs['item_data'])
+        return kwargs['item_data']
 
-        stored = events.record_event(dynamodb, events.AUDIT_LOG, AuditRecordCreateSchema(
-            microservice = 'BILLING', entity_name = 'sale', entity_id = 7, action = 'CREATE',
-            user_id = 'cajera@farmacia.bo', new_values = 'x' * 5000))
-        events.record_event(dynamodb, events.USAGE_LOG, usage_schemas.UsageLogCreateSchema(
-            user_app = 'portal', microservice = 'BILLING', endpoint = '/v1/billing/sales',
-            method = 'POST', status_code = 201, ip_address = '10.0.0.1'))
+    def _read_page(**kwargs) -> dict:
+        return {'items': tables.get(kwargs['table_name'], []), 'last_evaluated_key': None}
 
-        audit_page = events.list_events(dynamodb, events.AUDIT_LOG, AuditRecordQuerySchema())
-        usage_page = events.list_events(dynamodb, events.USAGE_LOG, UsageLogQuerySchema())
+    monkeypatch.setattr(events, 'create_item', _create_item)
+    monkeypatch.setattr(events, 'get_all_records_paginated', _read_page)
+
+    stored = events.record_event(None, events.AUDIT_LOG, AuditRecordCreateSchema(
+        microservice = 'BILLING', entity_name = 'sale', entity_id = 7, action = 'CREATE',
+        user_id = 'cajera@farmacia.bo', new_values = 'x' * 5000))
+    events.record_event(None, events.USAGE_LOG, usage_schemas.UsageLogCreateSchema(
+        user_app = 'portal', microservice = 'BILLING', endpoint = '/v1/billing/sales',
+        method = 'POST', status_code = 201, ip_address = '10.0.0.1'))
+    audit_page = events.list_events(None, events.AUDIT_LOG, AuditRecordQuerySchema())
+    usage_page = events.list_events(None, events.USAGE_LOG, UsageLogQuerySchema())
 
     assert stored.id and stored.timestamp
     assert stored.new_values.endswith(TRUNCATION_MARKER)
     assert [record.id for record in audit_page.records] == [stored.id]
     assert isinstance(usage_page, usage_schemas.UsageLogsPage) and len(usage_page.records) == 1
     assert audit_page.last_evaluated_key is None
+    assert set(tables) == {events.AUDIT_LOG.table, events.USAGE_LOG.table}
