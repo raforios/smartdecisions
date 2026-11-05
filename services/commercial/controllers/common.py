@@ -29,7 +29,9 @@ from schemas.commercial import (
 )
 from schemas.channels import LoadMode
 from schemas.clients import ClientSource
+from schemas.products import ProductSource
 from services.clients import CLIENT_FRAME_COLUMNS, sync_master
+from services.products import sync_products
 from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
@@ -62,7 +64,7 @@ CSV_CONTENT_TYPE = 'text/csv'
 API_ORIGIN = 'API'
 # The templates are static objects in the default bucket, not something the
 # service builds: the format is fixed and the client is the one who complies
-# with it. There is one per contract —ventas, cobros, stock, visitas— because
+# with it. There is one per contract (sales, collections, stock, visits) because
 # a client who only sends yesterday's stock should not download a book with
 # three sheets they will never fill in.
 TEMPLATES_S3_PREFIX = ENV_VARS['TEMPLATES_S3_PREFIX'].strip('/')
@@ -386,7 +388,7 @@ async def store_companion(
     filename, auth_token = origin
     dataset_id = str(dataset['dataset_id'])
     if spec.names_clients and len(result.accepted) > 0:
-        result = with_known_clients(
+        result = with_known_masters(
             dynamodb_resource, str(dataset['owner_email']), result,
             ClientSource.API if filename == API_ORIGIN else ClientSource.FILE
         )
@@ -424,7 +426,7 @@ async def store_companion(
     )
 
 
-def with_known_clients(
+def with_known_masters(
     dynamodb_resource: ServiceResource,
     owner_email: str,
     result: Any,
@@ -432,8 +434,9 @@ def with_known_clients(
 ) -> Any:
     '''
         The validation result with its accepted rows passed through the client
-        master: the master learns the clients and fills in what it already
-        knew. Every door that loads sales goes through here.
+        and the product masters: each learns what the rows name and fills in
+        what it already knew. Every door that loads sales goes through here; a
+        frame without products leaves the product master as it was.
 
         Args:
             dynamodb_resource (ServiceResource): The DynamoDB resource.
@@ -444,13 +447,16 @@ def with_known_clients(
         Returns:
             Any: The same result, with the completed rows.
     '''
-    return replace(result, accepted = sync_master(
+    frame = sync_master(
         dynamodb_resource = dynamodb_resource,
         owner_email = owner_email,
         frame = result.accepted,
         columns = CLIENT_FRAME_COLUMNS,
         source = source
-    ))
+    )
+    frame = sync_products(dynamodb_resource, owner_email, frame,
+                          ProductSource.API if source is ClientSource.API else ProductSource.FILE)
+    return replace(result, accepted = frame)
 
 
 def store_new_dataset(
@@ -482,7 +488,7 @@ def store_new_dataset(
     fingerprint, source = origin
     has_valid_rows = len(result.accepted) > 0
     if has_valid_rows:
-        result = with_known_clients(dynamodb_resource, current_user, result, source)
+        result = with_known_masters(dynamodb_resource, current_user, result, source)
     # Accepted rows feed analytics, forecast and routes; the rejected ones go
     # to their own CSV so the client can fix just those and send them again.
     normalized_key = store_frame(result.accepted, 'normalized', auth_token)

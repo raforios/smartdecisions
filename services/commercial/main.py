@@ -20,6 +20,7 @@ import uvicorn
 from routes.analytics import router as analytics_router
 from routes.areas import router as areas_router
 from routes.clients import router as clients_router
+from routes.products import router as products_router
 from routes.daily_stock import router as daily_stock_router
 from routes.localization import router as localization_router
 from routes.optimization import router as optimization_router
@@ -277,6 +278,7 @@ app.include_router(localization_router)
 app.include_router(daily_stock_router)
 app.include_router(settings_router)
 app.include_router(clients_router)
+app.include_router(products_router)
 app.include_router(sellers_router)
 app.include_router(channels_router)
 app.include_router(commercial_router)

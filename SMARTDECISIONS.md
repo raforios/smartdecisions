@@ -212,9 +212,11 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   implementación de los dos registros, `services/events.py`), FILES (capa
   `services/files.py`, códigos y DTOs) y ML_FUNCTIONS (endpoints de
   capacitación al estándar, sin cambiar lo que leen los notebooks)
-  corregidos; SES fuera del sandbox. Sin commit; falta desplegar AUTH,
-  EVENTS, FILES, ML_FUNCTIONS, MINING_ANALYSIS, BILLING y COMMERCIAL, y
-  después publicar los dos portales.
+  corregidos; SES fuera del sandbox. Todo desplegado, probado en vivo y en
+  GitHub el 5-nov. FILES sólo opera sobre `ALLOWED_BUCKETS` (desplegado).
+- **5-nov: maestro de productos, paso 1** en código (`commercial_products`,
+  creada en AWS; SKU en ventas, contrato v6). Falta que Rafael despliegue
+  COMMERCIAL; después publico las plantillas v6.
 - **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
   (26-oct), FINANCE (26-oct), ML_FUNCTIONS (25-oct). El
   servicio genérico de parámetros ya no existe en AWS, ni las tablas

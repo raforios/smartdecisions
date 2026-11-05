@@ -30,6 +30,20 @@ from controllers import commercial as controllers
 from controllers import objectives as objectives_controller
 
 
+@pytest.fixture(autouse = True)
+def _no_product_master(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''
+        These tests stand the client master in for a double; the product
+        master rides the same pass and is stood in for the same way.
+
+        Args:
+            monkeypatch (pytest.MonkeyPatch): Replaces the product sync.
+    '''
+    monkeypatch.setattr(common, 'sync_products', lambda *args, **_kwargs: args[2])
+
+
+
+
 def _template_rows() -> pd.DataFrame:
     '''
         Builds sales rows with the published template headers.

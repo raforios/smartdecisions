@@ -36,7 +36,7 @@ from controllers.common import (
     store_frame,
     store_new_dataset,
     to_ingest_response,
-    with_known_clients
+    with_known_masters
 )
 from controllers.purchases_load import SPEC as PURCHASES
 from controllers.stock import SPEC as STOCK
@@ -553,7 +553,7 @@ async def push_sales_controller(
         owner_email = current_user
     )
     result = validate_rows_partial(prepare_sales_rows(rows_frame(push.rows)), API_ORIGIN)
-    result = with_known_clients(dynamodb_resource, current_user, result, ClientSource.API)
+    result = with_known_masters(dynamodb_resource, current_user, result, ClientSource.API)
 
     whole = result
     if push.mode is LoadMode.APPEND:

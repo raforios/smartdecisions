@@ -102,8 +102,10 @@ SALES_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(value_range = (-90.0, 90.0))),
     SalesColumn('longitude', 'Longitud', False, 'float64',
                 rules = ValueRules(value_range = (-180.0, 180.0))),
-    SalesColumn('product_id', 'Producto ID', True, 'object',
-                rules = ValueRules(max_length = 64), filled_by_service = True),
+    # The SKU of the producer, distributor or supplier (Rafael, 5-nov-2026):
+    # it is how the product master knows the product. Optional in the file;
+    # without it the product is known by its name, as before.
+    SalesColumn('product_id', 'SKU', True, 'object', rules = ValueRules(max_length = 64)),
     SalesColumn('product_name', 'Producto', False, 'object', template_required = True),
     SalesColumn('category', 'Categoria', False, 'object'),
     SalesColumn('quantity', 'Cantidad', True, 'float64',
@@ -355,7 +357,7 @@ class TemplateName(str, Enum):
     OBJECTIVES = OBJECTIVES_TEMPLATE
     PURCHASES = PURCHASES_TEMPLATE
 
-TEMPLATE_VERSION: str = 'v5'
+TEMPLATE_VERSION: str = 'v6'
 
 REQUIRED_COLUMNS: tuple[str, ...] = tuple(
     column.canonical for column in SALES_COLUMNS if column.required
@@ -380,7 +382,8 @@ PRICE_COLUMNS: tuple[str, str] = ('unit_price', 'total_amount')
 # margin depends on it (Rafael, 3-nov-2026); the supplier's suggested price is
 # the product's, not the sale's, and belongs to the product master.
 REDUCED_COLUMNS: tuple[str, ...] = (
-    'date', 'order_id', 'pos_name', 'seller', 'product_name', 'quantity', 'unit_price',
+    'date', 'order_id', 'pos_name', 'seller', 'product_id', 'product_name', 'quantity',
+    'unit_price',
     'unit_cost', 'total_amount', 'payment_terms', 'payment_method'
 )
 REDUCED_TEMPLATE_COLUMNS: tuple[SalesColumn, ...] = tuple(

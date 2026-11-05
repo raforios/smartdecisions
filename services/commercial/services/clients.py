@@ -39,6 +39,13 @@ from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
 from services.commercial_utils import from_dynamo, to_dynamo
+from services.master_records import (
+    NO_COORDINATE,
+    MasterTable,
+    clean_attributes,
+    feed_master,
+    is_empty
+)
 from services.logger_config import custom_logger as logger
 from services.sellers import register_sellers, sellers_from_frame
 from services.utils import get_current_time_gmt
@@ -65,52 +72,6 @@ _FIELD_PREFIX = 'FLD'
 # second seller registers the same shop or a duplicate, so it is a decision and
 # it lives in the environment.
 _COORDINATE_DECIMALS = ENV_VARS['FIELD_CLIENT_COORDINATE_DECIMALS']
-
-# A coordinate of exactly zero is the absence of a reading, not the Gulf of
-# Guinea. Stated here because the whole master agrees on it.
-_NO_COORDINATE = 0.0
-
-
-def _is_empty(value: Any) -> bool:
-    '''
-        Whether a value carries no information, and may therefore be filled in.
-
-        Args:
-            value (Any): Candidate value.
-
-        Returns:
-            bool: True when the field is considered empty.
-    '''
-    if value is None:
-        return True
-    if isinstance(value, float) and pd.isna(value):
-        return True
-    if isinstance(value, str) and not value.strip():
-        return True
-    return False
-
-
-def _clean(attributes: dict[str, Any]) -> dict[str, Any]:
-    '''
-        Drops the attributes that carry no information, so an absent field never
-        travels as a value that overwrites a known one. Coordinates at exactly
-        zero are dropped with them.
-
-        Args:
-            attributes (dict[str, Any]): Raw attributes of one client.
-
-        Returns:
-            dict[str, Any]: Only the attributes worth storing.
-    '''
-    cleaned: dict[str, Any] = {}
-    for key, value in attributes.items():
-        if _is_empty(value):
-            continue
-        if key in ('latitude', 'longitude') and float(value) == _NO_COORDINATE:
-            continue
-        cleaned[key] = value.strip() if isinstance(value, str) else value
-    return cleaned
-
 
 def to_client_response(item: ClientItem) -> ClientResponseSchema:
     '''
@@ -230,50 +191,18 @@ def upsert_clients(
         Returns:
             ClientUpsertResultSchema: Created, completed and unchanged counts.
     '''
-    table = dynamodb_resource.Table(CLIENTS_TABLE)
-    now = get_current_time_gmt().isoformat()
-    created = completed = unchanged = 0
-
+    # A code repeated in one load counts as it always did: the first creates,
+    # the next ones only complete what is still empty.
+    records: dict[str, dict[str, Any]] = {}
     for candidate in clients:
-        attributes = _clean(candidate.model_dump(exclude = {'id'}))
-        stored = find_item_by_key(
-            dynamodb_resource = dynamodb_resource,
-            table_name = CLIENTS_TABLE,
-            key = {'owner_email': owner_email, 'id': candidate.id}
-        )
-        if stored is None:
-            item: ClientItem = {
-                'owner_email': owner_email,
-                'id': candidate.id,
-                'source': source.value,
-                'created_at': now,
-                'updated_at': now,
-                **attributes
-            }
-            table.put_item(Item = to_dynamo(item))
-            created += 1
-            continue
-
-        missing = {
-            key: value for key, value in attributes.items()
-            if _is_empty(from_dynamo(stored.get(key)))
-        }
-        if not missing:
-            unchanged += 1
-            continue
-        stored.update(to_dynamo(missing))
-        stored['updated_at'] = now
-        table.put_item(Item = stored)
-        completed += 1
-
-    message = (f'Client master of {owner_email} fed from {source.value}: '
-               f'{created} created, {completed} completed, {unchanged} unchanged.')
-    logger.info(message)
-    return ClientUpsertResultSchema(
-        created = created,
-        completed = completed,
-        unchanged = unchanged
-    )
+        merged = records.setdefault(candidate.id, {})
+        for key, value in clean_attributes(candidate.model_dump(exclude = {'id'})).items():
+            if is_empty(merged.get(key)):
+                merged[key] = value
+    load = feed_master(dynamodb_resource, MasterTable(CLIENTS_TABLE, 'id'), owner_email,
+                       records, source.value)
+    return ClientUpsertResultSchema(created = load.created, completed = load.completed,
+                                    unchanged = load.unchanged)
 
 
 def update_client(
@@ -344,13 +273,13 @@ def clients_from_frame(
     clients: list[ClientUpsertSchema] = []
     for record in rows.to_dict(orient = 'records'):
         client_id = record.get(id_column)
-        if _is_empty(client_id):
+        if is_empty(client_id):
             continue
         name = record.get(name_column)
-        attributes = _clean({column: record.get(column) for column in columns})
+        attributes = clean_attributes({column: record.get(column) for column in columns})
         clients.append(ClientUpsertSchema(
             id = str(client_id),
-            name = str(name) if not _is_empty(name) else str(client_id),
+            name = str(name) if not is_empty(name) else str(client_id),
             **attributes
         ))
     return clients
@@ -385,7 +314,7 @@ def enrich_frame(
             continue
         replacement = codes.map(lambda code, field = column: known.get(code, {}).get(field))
         if column in ('latitude', 'longitude'):
-            blank = frame[column].isna() | (frame[column] == _NO_COORDINATE)
+            blank = frame[column].isna() | (frame[column] == NO_COORDINATE)
         else:
             blank = frame[column].isna()
         # Only where the master actually HAS something. Writing the misses too

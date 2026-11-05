@@ -38,6 +38,22 @@ class PurchaseCurrency(str, Enum):
     USDT = 'USDT'
 
 
+class ProductUnit(str, Enum):
+    '''
+        The units a product is sold in: a closed catalogue, so 'caja', 'Caja'
+        and 'CJ' cannot become three units (Rafael, 5-nov-2026).
+    '''
+    UNIT = 'UNIT'
+    PACK = 'PACK'
+    BOX = 'BOX'
+    DOZEN = 'DOZEN'
+    KILOGRAM = 'KILOGRAM'
+    GRAM = 'GRAM'
+    LITER = 'LITER'
+    MILLILITER = 'MILLILITER'
+    METER = 'METER'
+
+
 # How the client writes each code in the template: the codes are English, the
 # template is Spanish (CLAUDE.md §1), and this is the mapper between them. A
 # code without a word here is written as it is (the currencies). One map per
@@ -51,6 +67,17 @@ TEMPLATE_WORDS: dict[type[Enum], dict[Enum, str]] = {
         PaymentMethod.CARD: 'Tarjeta',
         PaymentMethod.BANK_TRANSFER: 'Transferencia',
         PaymentMethod.MOBILE_WALLET: 'Billetera móvil',
+    },
+    ProductUnit: {
+        ProductUnit.UNIT: 'Unidad',
+        ProductUnit.PACK: 'Paquete',
+        ProductUnit.BOX: 'Caja',
+        ProductUnit.DOZEN: 'Docena',
+        ProductUnit.KILOGRAM: 'Kilogramo',
+        ProductUnit.GRAM: 'Gramo',
+        ProductUnit.LITER: 'Litro',
+        ProductUnit.MILLILITER: 'Mililitro',
+        ProductUnit.METER: 'Metro',
     },
     VisitOutcome: {
         VisitOutcome.SALE: 'Venta',

@@ -80,6 +80,10 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/commercial/clients` | The company's **clients**. |
 | `GET` | `/v1/commercial/clients/{client_id}` | One **client**. |
 | `PATCH` | `/v1/commercial/clients/{client_id}` | Corrects a **client**. |
+| `POST` | `/v1/commercial/products` | Pushes the **product master**, keyed by the supplier's SKU. |
+| `GET` | `/v1/commercial/products` | The company's **products**. |
+| `GET` | `/v1/commercial/products/{sku}` | One **product**. |
+| `PATCH` | `/v1/commercial/products/{sku}` | Corrects a **product**. |
 | `GET` | `/v1/commercial/sellers` | The company's **sellers**. |
 | `PATCH` | `/v1/commercial/sellers/{seller_id}` | Links a **seller** to a user, or renames them. |
 
@@ -197,6 +201,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 |---|---|---|---|
 | `commercial_datasets` | `id` | — | A sales load: owner, status, summary and pointers to its files in S3 (the payments, stock, purchases, visits and objectives attached) |
 | `commercial_clients` | `owner_email` | `id` | Client master data |
+| `commercial_products` | `owner_email` | `sku` | Product master data |
 | `commercial_sellers` | `owner_email` | `id` | Seller master data and the user they sign in with |
 | `commercial_analytics_runs` | `id` | — | The opportunity runs |
 | `commercial_policies` | `owner_email` | — | The company's commercial policy (objective traffic light, bolivianos per point, share of cost in dollars) |

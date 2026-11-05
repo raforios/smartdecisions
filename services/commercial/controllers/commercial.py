@@ -11,7 +11,7 @@ from controllers.common import (
     native_numbers,
     store_frame,
     store_new_dataset,
-    with_known_clients,
+    with_known_masters,
     summary_of,
     to_ingest_response
 )
@@ -104,7 +104,7 @@ async def ingest_excel_controller(
         # company that uploaded coordinates once should not have to upload them
         # again to keep Routes alive, and an export that drops a column must
         # not blank what is already known about the client.
-        result = with_known_clients(dynamodb_resource, current_user, result,
+        result = with_known_masters(dynamodb_resource, current_user, result,
                                     ClientSource.FILE)
         # Store the NORMALIZED dataframe (canonical columns, ids filled) so every
         # downstream service reads a clean, uniform dataset without re-mapping.

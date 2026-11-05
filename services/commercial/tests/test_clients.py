@@ -45,15 +45,15 @@ class _FakeTable:
         self,
         Item: dict[str, Any]
     ) -> None:
-        '''Stores the item under its composite key.'''
-        self.rows[(Item['owner_email'], Item['id'])] = dict(Item)
+        '''Stores the item under its composite key: owner and code or SKU.'''
+        self.rows[(Item['owner_email'], Item.get('id', Item.get('sku')))] = dict(Item)
 
     def get_item(
         self,
         Key: dict[str, Any]
     ) -> dict[str, Any]:
         '''Returns the item under a composite key, or an empty response.'''
-        row = self.rows.get((Key['owner_email'], Key['id']))
+        row = self.rows.get((Key['owner_email'], Key.get('id', Key.get('sku'))))
         return {'Item': dict(row)} if row else {}
 
     def query(
