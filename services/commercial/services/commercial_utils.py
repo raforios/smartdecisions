@@ -26,11 +26,7 @@ from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError
 from services.load_files import read_dataframe
 from services.logger_config import custom_logger as logger
-from services.utils import (
-    get_current_time_gmt,
-    download_file_bytes,
-    store_file
-)
+from services.utils import download_file_bytes, get_current_time_gmt
 
 
 ENV_VARS = {
@@ -401,24 +397,3 @@ def read_stored_frame(
             pd.DataFrame: The rows the file holds.
     '''
     return read_dataframe(download_file_bytes(file_key, auth_token), file_key)
-
-
-def upload_bytes(
-    file_key: str,
-    data: bytes,
-    content_type: str,
-    auth_token: str
-) -> str:
-    '''
-        Stores bytes in the bucket through FILES and returns the object key.
-
-        Args:
-            file_key (str): Destination object key.
-            data (bytes): Content to store.
-            content_type (str): MIME type stored on the object.
-            auth_token (str): The caller's Authorization header.
-
-        Returns:
-            str: The stored object key.
-    '''
-    return store_file(file_key, data, auth_token, content_type)

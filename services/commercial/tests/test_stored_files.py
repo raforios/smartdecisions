@@ -87,3 +87,41 @@ def test_a_bucket_that_does_not_answer_is_unavailable(monkeypatch: pytest.Monkey
     with pytest.raises(ServiceUnavailableError) as raised:
         utils.download_file_bytes('k.csv', 'Bearer t')
     assert raised.value.detail == 'FILES_SERVICE_UNREACHABLE'
+
+
+def test_a_stored_frame_goes_up_through_the_url_files_signs(monkeypatch: pytest.MonkeyPatch):
+    '''
+        The block asks FILES where to put the file and sends the bytes to the
+        bucket with the MIME type FILES signs for the extension: a dataset
+        larger than the 6 MB a Lambda takes in still gets stored.
+    '''
+    calls: list[tuple[str, Any]] = []
+
+    def _post(
+        url: str,
+        **kwargs: Any
+    ) -> _Response:
+        calls.append(('post', url, kwargs['json']))
+        return _Response(200, {'presigned_url': 'https://bucket/put', 'file_key': kwargs['json']
+                               ['file_path'] + '/' + kwargs['json']['file_name']})
+
+    def _put(
+        url: str,
+        **kwargs: Any
+    ) -> _Response:
+        calls.append(('put', url, kwargs['headers']['Content-Type'], len(kwargs['data'])))
+        return _Response(200)
+
+    monkeypatch.setattr(utils, 'API_URL', 'https://api.test')
+    monkeypatch.setattr(utils, 'BUCKET_NAME', 'bucket')
+    monkeypatch.setattr(utils.req, 'post', _post)
+    monkeypatch.setattr(utils.req, 'put', _put)
+
+    stored = utils.store_file('commercial/normalized/x.csv', b'a,b\n1,2\n', 'Bearer t')
+
+    assert stored == 'commercial/normalized/x.csv'
+    assert calls == [
+        ('post', 'https://api.test/v1/s3/upload-presigned',
+         {'bucket_name': 'bucket', 'file_path': 'commercial/normalized', 'file_name': 'x.csv'}),
+        ('put', 'https://bucket/put', 'text/csv', 8)
+    ]

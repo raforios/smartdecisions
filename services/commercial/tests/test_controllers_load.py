@@ -100,7 +100,7 @@ def _stored():
     # would from the real service.
     with patch.object(controllers, 'read_stored_frame',
                       lambda *args, **kwargs: read_file(_template_file(), 'ventas.csv')), \
-         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(common, 'store_file', lambda **kwargs: kwargs['file_key']), \
          patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
          patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
          patch.object(controllers, 'delete_stored_file', lambda *args: None), \
@@ -158,7 +158,7 @@ def test_the_multipart_upload_also_feeds_the_client_master():
         return {**payload, 'dataset_id': 'ds-multipart',
                 'created_at': '2026-02-15T10:00:00Z'}
 
-    with patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+    with patch.object(common, 'store_file', lambda **kwargs: kwargs['file_key']), \
          patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
          patch.object(common, 'sync_master', _sync), \
          patch.object(controllers, 'persist_dataset', _persist):
@@ -448,7 +448,7 @@ def test_the_objectives_upload_returns_a_full_response():
                       lambda *args, **kwargs: _template_rows().rename(
                           columns = {'Cliente': 'pos_id'})), \
          patch.object(common, 'sync_master', _sync), \
-         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(common, 'store_file', lambda **kwargs: kwargs['file_key']), \
          patch.object(common, 'attach_to_dataset', lambda **kwargs: None):
         response = asyncio.run(objectives_controller.ingest_objectives_controller(
             dynamodb_resource = None,
@@ -575,7 +575,7 @@ def test_every_companion_upload_controller_returns_its_model(
          patch.object(module, 'load_sales_frame',
                       lambda *args, **kwargs: _normalized_sales()), \
          patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
-         patch.object(common, 'upload_bytes', lambda **kwargs: kwargs['file_key']), \
+         patch.object(common, 'store_file', lambda **kwargs: kwargs['file_key']), \
          patch.object(common, 'attach_to_dataset', lambda **kwargs: None):
         response = asyncio.run(controller(
             dynamodb_resource = None,

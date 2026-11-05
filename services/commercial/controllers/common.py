@@ -39,11 +39,10 @@ from services.load_files import serialize_dataframe
 from services.commercial_utils import (
     attach_to_dataset,
     persist_dataset,
-    read_stored_frame,
-    upload_bytes
+    read_stored_frame
 )
 from services.logger_config import custom_logger as logger
-from services.utils import DEFAULT_BUCKET_PATH
+from services.utils import DEFAULT_BUCKET_PATH, store_file
 
 # Only a slice of the issues travels in the JSON response / DynamoDB item
 # (400 KB limit); the full set lives in the rejected CSV in S3.
@@ -56,10 +55,6 @@ ENV_VARS = {
     })
 }
 MAX_ISSUES_ON_RESPONSE = ENV_VARS['MAX_ISSUES_ON_RESPONSE']
-# The MIME type of the rejected-rows download. It stays in the code because it
-# describes the format of the file, not a decision anybody would take
-# differently: a CSV is served as a CSV.
-CSV_CONTENT_TYPE = 'text/csv'
 # What the log calls a load that came through the API instead of a file.
 API_ORIGIN = 'API'
 # The templates are static objects in the default bucket, not something the
@@ -171,10 +166,9 @@ def store_frame(
     '''
     if frame.empty:
         return None
-    return upload_bytes(
+    return store_file(
         file_key = f'{DEFAULT_BUCKET_PATH}/{folder}/{uuid4().hex}.csv',
         data = serialize_dataframe(frame, f'{folder}.csv'),
-        content_type = CSV_CONTENT_TYPE,
         auth_token = auth_token
     )
 
@@ -397,11 +391,10 @@ async def store_companion(
 
     stored_key: str | None = None
     if has_rows:
-        stored_key = upload_bytes(
+        stored_key = store_file(
             file_key = f'{DEFAULT_BUCKET_PATH}/{spec.name}/{uuid4().hex}.csv',
             data = serialize_dataframe(result.accepted, f'{spec.name}.csv'),
-            content_type = CSV_CONTENT_TYPE,
-            auth_token = auth_token
+                auth_token = auth_token
         )
         attach_to_dataset(
             dynamodb_resource = dynamodb_resource,

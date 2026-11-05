@@ -578,7 +578,8 @@ def _handle_files_service(
 
         Actions and what each one expects:
             - read:   file_key, delimiter   -> the parsed rows
-            - create: file_key, data, content_type -> the stored object key
+            - create: file_key, data        -> the stored object key; the bytes
+                                               go to S3 through a URL FILES signs
             - delete: file_key              -> None
             - download: file_key            -> a short-lived URL of the object
 
@@ -606,13 +607,14 @@ def _handle_files_service(
                 params = {'delimiter': kwargs.get('delimiter') or ','}
             )
         elif action == 'create':
+            # Through a signed URL and not in the request body: a stored sales
+            # dataset is larger than the 6 MB a Lambda takes in.
             folder, _, name = file_key.rpartition('/')
             response = req.post(
-                f'{API_URL}/v1/s3/upload',
+                f'{API_URL}/v1/s3/upload-presigned',
                 headers = headers, timeout = FILES_TIMEOUT_SECONDS,
-                files = {'file': (name, kwargs['data'], kwargs['content_type'])},
-                data = {'bucket_name': BUCKET_NAME,
-                        'file_path': folder or DEFAULT_BUCKET_PATH}
+                json = {'bucket_name': BUCKET_NAME,
+                        'file_path': folder or DEFAULT_BUCKET_PATH, 'file_name': name}
             )
         elif action == 'download':
             response = req.get(
@@ -642,11 +644,40 @@ def _handle_files_service(
     if action == 'read':
         return (response.json() or {}).get('data') or []
     if action == 'create':
-        payload = response.json() if response.content else {}
-        return payload.get('file_key') or file_key
+        return _put_signed(response.json(), kwargs['data'], file_key)
     if action == 'download':
         return response.json()['url']
     return None
+
+
+def _put_signed(
+    signed: dict[str, Any],
+    data: bytes,
+    file_key: str
+) -> str:
+    '''
+        Sends the bytes to the URL FILES signed, with the MIME type FILES
+        signs for the extension.
+
+        Args:
+            signed (dict[str, Any]): FILES' answer: `presigned_url`, `file_key`.
+            data (bytes): Content to store.
+            file_key (str): The key, for its extension and the log.
+
+        Returns:
+            str: The stored object key, as FILES reports it.
+
+        Raises:
+            ServiceUnavailableError: The bucket did not take the bytes.
+    '''
+    try:
+        req.put(signed['presigned_url'], data = data, timeout = FILES_TIMEOUT_SECONDS,
+                headers = {'Content-Type': _guess_content_type(file_key)}).raise_for_status()
+    except req.exceptions.RequestException as error:
+        error_msg = f'Could not upload {file_key} through its signed URL: {error}'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.UNREACHABLE.value) from error
+    return signed.get('file_key') or file_key
 
 
 def read_file_rows(
@@ -679,27 +710,21 @@ def read_file_rows(
 def store_file(
     file_key: str,
     data: bytes,
-    auth_token: str,
-    content_type: str | None = None
+    auth_token: str
 ) -> str:
     '''
-        Stores bytes in the bucket through FILES.
+        Stores bytes in the bucket through FILES; FILES decides the MIME
+        type from the extension.
 
         Args:
             file_key (str): Destination object key.
             data (bytes): Content to store.
             auth_token (str): The caller's Authorization header.
-            content_type (str | None): MIME type; guessed from the name
-                when not given, so no service keeps its own table.
 
         Returns:
             str: The stored object key, as FILES reports it.
     '''
-    stored = _handle_files_service(
-        'create', auth_token,
-        file_key = file_key, data = data,
-        content_type = content_type or _guess_content_type(file_key)
-    )
+    stored = _handle_files_service('create', auth_token, file_key = file_key, data = data)
     message = f'Stored {stored} through FILES.'
     logger.info(message)
     return stored

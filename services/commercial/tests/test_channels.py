@@ -109,7 +109,7 @@ def world_fixture():
          patch.object(channels, 'load_sales_frame', lambda *args: _sales()), \
          patch.object(channels, 'read_stored_frame', _read_frame), \
          patch.object(common, 'read_stored_frame', _read_frame), \
-         patch.object(common, 'upload_bytes', _upload), \
+         patch.object(common, 'store_file', _upload), \
          patch.object(channels, 'attach_to_dataset', _attach), \
          patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
          patch.object(channels, 'delete_stored_file',
