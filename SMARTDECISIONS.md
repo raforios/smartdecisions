@@ -214,9 +214,15 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   capacitación al estándar, sin cambiar lo que leen los notebooks)
   corregidos; SES fuera del sandbox. Todo desplegado, probado en vivo y en
   GitHub el 5-nov. FILES sólo opera sobre `ALLOWED_BUCKETS` (desplegado).
-- **5-nov: maestro de productos, paso 1** en código (`commercial_products`,
-  creada en AWS; SKU en ventas, contrato v6). Falta que Rafael despliegue
-  COMMERCIAL; después publico las plantillas v6.
+- **5-nov: maestro de productos, paso 1** desplegado: SKU en ventas, stock y
+  compras (contrato v7, plantillas publicadas), por archivo y por API. Datos
+  de prueba recargados con SKU, un dataset por empresa: Andina 5.079 ventas
+  con todos sus complementos; Illimani 9.000 ventas (ver el tope de FILES).
+- **Tope de FILES (5-nov, sin resolver):** COMMERCIAL lee por FILES el
+  archivo de ventas y el dataset guardado; FILES devuelve las filas en JSON y
+  la respuesta de un Lambda no pasa de 6 MB (≈ 9.000 a 13.000 ventas). Una
+  carga mayor, agregar ventas a un dataset grande o colgarle complementos
+  falla con FILES_SERVICE_REJECTED.
 - **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
   (26-oct), FINANCE (26-oct), ML_FUNCTIONS (25-oct). El
   servicio genérico de parámetros ya no existe en AWS, ni las tablas
