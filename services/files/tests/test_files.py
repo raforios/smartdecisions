@@ -241,7 +241,8 @@ class _RecordingS3:  # pylint: disable=too-few-public-methods
                 **_kwargs: Any
             ) -> list[dict[str, Any]]:
                 '''The page.'''
-                return [{'Contents': [{'Key': 'raw/'}, {'Key': 'raw/a.csv'}]}]
+                folder = files.owner_folder('acme')
+                return [{'Contents': [{'Key': f'{folder}/raw/'}, {'Key': f'{folder}/raw/a.csv'}]}]
         return _Pages()
 
 
@@ -337,3 +338,28 @@ def test_a_large_file_reaches_its_caller_through_a_short_lived_url(
         asyncio.run(files.download_url('other-bucket', 'a.csv', 'acme'))
     with pytest.raises(InvalidInputError):
         asyncio.run(files.download_url('b', 'run.exe', 'acme'))
+
+
+def test_every_company_reaches_only_its_own_folder(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''
+        A key is resolved inside the caller's folder, so one company cannot
+        name another's file; a key that climbs out is refused; the templates
+        are read by everyone and written by nobody.
+    '''
+    s3 = _RecordingS3()
+    monkeypatch.setattr(files, 's3_client', s3)
+    andina = files.owned_key('commercial/normalized/a.csv', 'Distribuidora Andina S.R.L.')
+    illimani = files.owned_key('commercial/normalized/a.csv', 'Comercial Illimani S.R.L.')
+
+    assert andina.startswith('tenants/distribuidora-andina-s-r-l-') and andina != illimani
+    for bad in ('../other/a.csv', '/tenants/x/a.csv', ''):
+        with pytest.raises(InvalidInputError) as raised:
+            files.owned_key(bad, 'acme')
+        assert raised.value.detail == 'INVALID_KEY'
+    template = 'commercial/templates/plantilla_ventas.xlsx'
+    assert files.readable_key(template, 'acme') == template
+    assert files.owned_key(template, 'acme') != template
+
+    asyncio.run(files.download_url('b', 'commercial/normalized/a.csv', 'acme'))
+    assert s3.calls[-1][1]['Params']['Key'] == files.owned_key('commercial/normalized/a.csv',
+                                                                 'acme')

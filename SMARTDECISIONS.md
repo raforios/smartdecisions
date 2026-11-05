@@ -222,8 +222,9 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   URL firmada de descarga (`GET /v1/s3/download-url/...`, Rafael eligió que
   FILES siga siendo el único que toca el bucket); el bloque estándar FILES
   suma `download_file_bytes` y COMMERCIAL lee así sus archivos guardados y
-  las plantillas (ya no tiene cliente S3 propio). Falta desplegar FILES y
-  COMMERCIAL y recargar Illimani con sus 22.008 ventas.
+  las plantillas (ya no tiene cliente S3 propio). FILES guarda y lee todo
+  en la carpeta de cada empresa (`tenants/<empresa>/`). Falta desplegar FILES
+  y COMMERCIAL y recargar Illimani con sus 22.008 ventas.
 - **Desplegado (comprobado en AWS el 30-oct):** COMMERCIAL, QUOTES y AI
   (26-oct), FINANCE (26-oct), ML_FUNCTIONS (25-oct). El
   servicio genérico de parámetros ya no existe en AWS, ni las tablas

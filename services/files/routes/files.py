@@ -24,7 +24,7 @@ from schemas.files import (
     S3FileRequest
 )
 from services.environment import load_and_validate_env_vars
-from services.security import get_current_user
+from services.security import get_current_owner
 from services.logger_config import custom_logger as logger
 
 router = APIRouter(prefix = '/v1/s3', tags = ['Management S3 File System'])
@@ -45,7 +45,7 @@ ML_DATA_BUCKET_NAME = ENV_VARS['ML_DATA_BUCKET_NAME']
 async def read_s3_file_route(
     bucket_name: str,
     file_key: str,
-    current_user: str = Depends(get_current_user),
+    owner: str = Depends(get_current_owner),
     delimiter: str | None = Query(None, description = 'The delimiter used for CSV files.')
 ) -> FileReadResponse:
     '''
@@ -54,18 +54,18 @@ async def read_s3_file_route(
         Args:
             bucket_name (str): S3 bucket name.
             file_key (str): The file key (full path) within the S3 bucket.
-            current_user (str): The authenticated user.
+            owner (str): The caller's owner key; its files are the only ones it reaches.
 
         Returns:
             FileReadResponse: Rows, text or base64, by the kind of file.
     '''
-    message = f'User: {current_user} accessing file: {file_key} in bucket: {bucket_name
+    message = f'Owner: {owner} accessing file: {file_key} in bucket: {bucket_name
             } with delimiter {delimiter}.'
     logger.info(message)
     return await read_data_from_s3(
         bucket_name = bucket_name,
         file_key = file_key,
-        current_user = current_user,
+        owner = owner,
         delimiter = delimiter
     )
 
@@ -77,7 +77,7 @@ async def upload_file_to_s3_route(
     file: UploadFile = File(...),
     bucket_name: str = Form(..., description = 'Name of the S3 bucket.'),
     file_path: str = Form('', description='Path within the S3 bucket.'),
-    current_user: str = Depends(get_current_user)
+    owner: str = Depends(get_current_owner)
 ) -> FileUploadResponse:
     '''
         Uploads a file to a specified S3 bucket.
@@ -86,12 +86,12 @@ async def upload_file_to_s3_route(
             file (UploadFile): The file to upload.
             bucket_name (str): The S3 bucket name.
             file_path (str): The path within the S3 bucket (e.g., 'data/raw/').
-            current_user (str): The authenticated user.
+            owner (str): The caller's owner key; its files are the only ones it reaches.
 
         Returns:
             FileUploadResponse: UPLOADED, the URL and the key.
     '''
-    message = f'User: {current_user} attempting to upload file: {file.filename
+    message = f'Owner: {owner} attempting to upload file: {file.filename
             } to bucket: {bucket_name}/{file_path}.'
     logger.info(message)
 
@@ -105,7 +105,7 @@ async def upload_file_to_s3_route(
         content_type = file.content_type
     )
 
-    return await upload_s3_file(upload_data_obj, current_user)
+    return await upload_s3_file(upload_data_obj, owner)
 
 @router.delete(
     '/delete',
@@ -113,23 +113,23 @@ async def upload_file_to_s3_route(
 )
 async def delete_file_from_s3_route(
     request: S3FileRequest,
-    current_user: str = Depends(get_current_user)
+    owner: str = Depends(get_current_owner)
 ) -> FileDeleteResponse:
     '''
         Deletes a specified file from an S3 bucket.
 
         Args:
             request (S3FileRequest): Contains bucket_name, file_path, and file_name.
-            current_user (str): The authenticated user.
+            owner (str): The caller's owner key; its files are the only ones it reaches.
 
         Returns:
             FileDeleteResponse: DELETED.
     '''
-    message = f'User: {current_user} attempting to delete file: {
+    message = f'Owner: {owner} attempting to delete file: {
         request.file_key} from bucket: {request.bucket_name}.'
 
     logger.info(message)
-    return await delete_s3_file(request.bucket_name, request.file_key, current_user)
+    return await delete_s3_file(request.bucket_name, request.file_key, owner)
 
 @router.post(
     '/list-files',
@@ -137,25 +137,25 @@ async def delete_file_from_s3_route(
 )
 async def list_files_s3_route(
     request: ListFilesRequest,
-    current_user: str = Depends(get_current_user)
+    owner: str = Depends(get_current_owner)
 ) -> ListFilesResponse:
     '''
         Lists files in the predefined ML data S3 bucket with an optional prefix.
 
         Args:
             request (ListFilesRequest): Contains bucket_name and an optional prefix.
-            current_user (str): The authenticated user.
+            owner (str): The caller's owner key; its files are the only ones it reaches.
 
         Returns:
             ListFilesResponse: A dictionary with the list of files.
     '''
     target_bucket = request.bucket_name or ML_DATA_BUCKET_NAME
 
-    message = f'User: {current_user} attempting to list files in bucket: {
+    message = f'Owner: {owner} attempting to list files in bucket: {
             target_bucket} with prefix: {request.prefix}.'
 
     logger.info(message)
-    files_list = await list_s3_files(target_bucket, request.prefix, current_user)
+    files_list = await list_s3_files(target_bucket, request.prefix, owner)
 
     return ListFilesResponse(bucket_name = target_bucket, prefix = request.prefix,
                              files = files_list, count = len(files_list))
@@ -166,7 +166,7 @@ async def list_files_s3_route(
 )
 async def get_presigned_upload_url_route(
     request: PresignedUrlRequest,
-    current_user: str = Depends(get_current_user)
+    owner: str = Depends(get_current_owner)
 ) -> PresignedUrlResponse:
     '''
         Generates an S3 pre-signed URL for direct file upload from the client.
@@ -174,15 +174,15 @@ async def get_presigned_upload_url_route(
         Args:
             request (PresignedUrlRequest): Contains bucket_name, file_path, file_name,
             expiration_seconds.
-            current_user (str): The authenticated user.
+            owner (str): The caller's owner key; its files are the only ones it reaches.
 
         Returns:
             PresignedUrlResponse: A dictionary containing the pre-signed URL and the full S3 key.
     '''
-    message = (f'User: {current_user} requesting presigned URL for {request.file_key} '
+    message = (f'Owner: {owner} requesting presigned URL for {request.file_key} '
                f'in bucket {request.bucket_name}.')
     logger.info(message)
-    return await create_presigned_upload_url(request, current_user)
+    return await create_presigned_upload_url(request, owner)
 
 
 @router.get(
@@ -192,7 +192,7 @@ async def get_presigned_upload_url_route(
 async def get_download_url_route(
     bucket_name: str,
     file_key: str,
-    current_user: str = Depends(get_current_user)
+    owner: str = Depends(get_current_owner)
 ) -> FileDownloadResponse:
     '''
         A short-lived URL to fetch one object directly from the bucket: the
@@ -202,11 +202,11 @@ async def get_download_url_route(
         Args:
             bucket_name (str): S3 bucket name.
             file_key (str): The object key.
-            current_user (str): The authenticated user.
+            owner (str): The caller's owner key; its files are the only ones it reaches.
 
         Returns:
             FileDownloadResponse: The URL, the key and how long it lives.
     '''
-    message = f'User: {current_user} asking a download URL for {file_key} in {bucket_name}.'
+    message = f'Owner: {owner} asking a download URL for {file_key} in {bucket_name}.'
     logger.info(message)
-    return await create_download_url(bucket_name, file_key, current_user)
+    return await create_download_url(bucket_name, file_key, owner)

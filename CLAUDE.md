@@ -253,6 +253,14 @@ archivo de S3 se hace a través de FILES, nunca con un `boto3.client('s3')`
 propio. Única excepción, y se dice en voz alta: cuando ese rodeo perjudique el
 tiempo o la calidad del servicio que llama.
 
+**Cada empresa tiene su carpeta** (Rafael, 5-nov-2026): FILES guarda y lee
+todo dentro de `tenants/<empresa>/`, con la empresa del token (`client`, o el
+correo si no tiene). Los servicios y el portal nombran claves relativas y no
+pueden nombrar las de otra empresa; sólo las plantillas
+(`PUBLIC_READ_PREFIXES`) se leen en común y nadie las escribe por FILES. Un
+archivo grande se entrega como archivo, con una URL firmada de FILES
+(`download_file_bytes`), nunca leyendo el bucket por cuenta propia.
+
 Se agrega **sólo al servicio que lo necesita**, no a todos por simetría.
 **El bloque estándar vive al final de `services/finance/services/utils.py`**
 (aprobado por Rafael el 16-oct-2026), con sus códigos en

@@ -19,3 +19,4 @@ collect_ignore = [] if CONFIGURED else ['test_read_route.py']
 # the CI has no .env, so the suite names the ones its tests use.
 os.environ.setdefault('ALLOWED_BUCKETS', 'bucket b ml-data-file-handler')
 os.environ.setdefault('DOWNLOAD_URL_SECONDS', '300')
+os.environ.setdefault('PUBLIC_READ_PREFIXES', 'commercial/templates')

@@ -1,7 +1,9 @@
 '''
     Security service
 '''
-from fastapi import Header
+from typing import Any
+
+from fastapi import Depends, Header
 from jose import jwt, JWTError
 
 from services.logger_config import custom_logger as logger
@@ -81,3 +83,52 @@ async def get_current_user(authorization: str | None = Header(None)) -> str:
             headers = {'WWW-Authenticate': 'Bearer'},
         )
     return email
+
+
+# ---------------------------------------------------------------------------
+# Owner of the files (added 5-nov-2026, authorized by Rafael): the same
+# functions the services with the common boilerplate carry, so FILES keeps
+# every file inside the folder of the company that owns it.
+# ---------------------------------------------------------------------------
+
+async def get_current_payload(authorization: str | None = Header(None)) -> dict[str, Any]:
+    '''
+        Validates the token exactly like `get_current_user` and returns its
+        whole payload (email, role, client, exp).
+
+        Args:
+            authorization (str | None): The 'Authorization' header.
+
+        Returns:
+            dict[str, Any]: The decoded claims.
+    '''
+    await get_current_user(authorization)
+    token = authorization.split(' ', 1)[1]
+    return jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM])
+
+
+def resolve_owner(payload: dict[str, Any]) -> str:
+    '''
+        The key the caller's data lives under: their client, or their email
+        when they belong to none.
+
+        Args:
+            payload (dict[str, Any]): Decoded token claims.
+
+        Returns:
+            str: Owner key.
+    '''
+    return payload.get('client') or payload['email']
+
+
+async def get_current_owner(payload: dict[str, Any] = Depends(get_current_payload)) -> str:
+    '''
+        FastAPI dependency: the owner key of the caller's data.
+
+        Args:
+            payload (dict[str, Any]): Decoded token claims.
+
+        Returns:
+            str: Owner key.
+    '''
+    return resolve_owner(payload)

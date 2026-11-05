@@ -16,63 +16,63 @@ from services import files
 async def read_data_from_s3(
     bucket_name: str,
     file_key: str,
-    current_user: str,
+    owner: str,
     delimiter: str | None = None
 ) -> FileReadResponse:
     '''
         Reads an object.
     '''
-    return await files.read_file(bucket_name, file_key, current_user, delimiter)
+    return await files.read_file(bucket_name, file_key, owner, delimiter)
 
 
 async def upload_s3_file(
     upload_data: FileUploadData,
-    current_user: str
+    owner: str
 ) -> FileUploadResponse:
     '''
         Stores an object.
     '''
-    return await files.store_file(upload_data, current_user)
+    return await files.store_file(upload_data, owner)
 
 
 async def delete_s3_file(
     bucket_name: str,
     file_key: str,
-    current_user: str
+    owner: str
 ) -> FileDeleteResponse:
     '''
         Deletes an object.
     '''
-    return await files.delete_file(bucket_name, file_key, current_user)
+    return await files.delete_file(bucket_name, file_key, owner)
 
 
 async def list_s3_files(
     bucket_name: str,
     prefix: str,
-    current_user: str
+    owner: str
 ) -> list[str]:
     '''
         Lists the object keys under a prefix.
     '''
-    return await files.list_files(bucket_name, prefix, current_user)
+    return await files.list_files(bucket_name, prefix, owner)
 
 
 async def create_presigned_upload_url(
     request: PresignedUrlRequest,
-    current_user: str
+    owner: str
 ) -> PresignedUrlResponse:
     '''
         Signs a direct upload.
     '''
-    return await files.presigned_upload_url(request, current_user)
+    return await files.presigned_upload_url(request, owner)
 
 
 async def create_download_url(
     bucket_name: str,
     file_key: str,
-    current_user: str
+    owner: str
 ) -> FileDownloadResponse:
     '''
         Signs a direct download.
     '''
-    return await files.download_url(bucket_name, file_key, current_user)
+    return await files.download_url(bucket_name, file_key, owner)

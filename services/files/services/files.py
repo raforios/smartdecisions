@@ -3,7 +3,9 @@
     direct uploads. Every refusal is a code of `FilesError`.
 '''
 import base64
+import hashlib
 import os
+import re
 from io import BytesIO, StringIO
 
 import boto3
@@ -26,10 +28,20 @@ from services.exceptions import ForbiddenError, InvalidInputError
 from services.logger_config import custom_logger as logger
 from services.utils import handle_aws_operation
 
-ENV_VARS = load_and_validate_env_vars({'ALLOWED_BUCKETS': str, 'DOWNLOAD_URL_SECONDS': int})
+ENV_VARS = load_and_validate_env_vars({'ALLOWED_BUCKETS': str, 'DOWNLOAD_URL_SECONDS': int,
+                                       'PUBLIC_READ_PREFIXES': str})
 # The only buckets FILES works on: the caller names one of them, never any
 # other the Lambda's role happens to reach.
 ALLOWED_BUCKETS: frozenset[str] = frozenset(ENV_VARS['ALLOWED_BUCKETS'].split())
+
+# What every company may read and nobody writes through FILES: the templates.
+PUBLIC_READ_PREFIXES: tuple[str, ...] = tuple(
+    prefix.strip('/') + '/' for prefix in ENV_VARS['PUBLIC_READ_PREFIXES'].split())
+
+# Every other object lives in the folder of the company that owns it
+# (Rafael, 5-nov-2026): the caller names a key relative to its own folder, so
+# it cannot name another company's file.
+TENANTS_ROOT = 'tenants'
 
 s3_client = boto3.client('s3')
 
@@ -71,6 +83,69 @@ def require_allowed(
         error_msg = f'Unsupported file: extension {extension}, content type {content_type}.'
         logger.warning(error_msg)
         raise InvalidInputError(detail = FilesError.UNSUPPORTED_FORMAT.value)
+
+
+def owner_folder(owner: str) -> str:
+    '''
+        The folder of one owner: its name made safe for a key, and a digest
+        of the exact name so two names that read alike never share a folder.
+
+        Args:
+            owner (str): The owner key (client, or e-mail without one).
+
+        Returns:
+            str: Such as 'tenants/distribuidora-andina-s-r-l-3f2a1c'.
+    '''
+    slug = re.sub(r'[^a-z0-9]+', '-', owner.lower()).strip('-')
+    digest = hashlib.sha256(owner.encode('utf-8')).hexdigest()[:6]
+    return f'{TENANTS_ROOT}/{slug}-{digest}'
+
+
+def owned_key(
+    file_key: str,
+    owner: str
+) -> str:
+    '''
+        The full key of an object the caller owns: its relative key inside
+        the caller's folder.
+
+        Args:
+            file_key (str): The key as the caller names it.
+            owner (str): The caller's owner key.
+
+        Returns:
+            str: The key in the bucket.
+
+        Raises:
+            InvalidInputError: INVALID_KEY, for an empty key, an absolute one
+                or one that climbs out with '..'.
+    '''
+    relative = (file_key or '').strip()
+    if not relative or relative.startswith('/') or '..' in relative.split('/'):
+        error_msg = f'Key refused for {owner}: {file_key!r}.'
+        logger.warning(error_msg)
+        raise InvalidInputError(detail = FilesError.INVALID_KEY.value)
+    return f'{owner_folder(owner)}/{relative}'
+
+
+def readable_key(
+    file_key: str,
+    owner: str
+) -> str:
+    '''
+        The full key of an object the caller may read: a public template as
+        it is, anything else inside the caller's folder.
+
+        Args:
+            file_key (str): The key as the caller names it.
+            owner (str): The caller's owner key.
+
+        Returns:
+            str: The key in the bucket.
+    '''
+    if file_key.startswith(PUBLIC_READ_PREFIXES) and '..' not in file_key.split('/'):
+        return file_key
+    return owned_key(file_key, owner)
 
 
 def require_bucket(bucket_name: str) -> None:
@@ -132,7 +207,7 @@ def _sheet_rows(
 async def read_file(
     bucket_name: str,
     file_key: str,
-    current_user: str,
+    owner: str,
     delimiter: str | None = None
 ) -> FileReadResponse:
     '''
@@ -142,7 +217,8 @@ async def read_file(
         Args:
             bucket_name (str): The bucket.
             file_key (str): The object key.
-            current_user (str): Who reads it, for the log.
+            owner (str): The caller's owner key: the file is read inside its folder,
+                unless it is a public template.
             delimiter (str | None): The CSV separator; sniffed when None.
 
         Returns:
@@ -154,8 +230,9 @@ async def read_file(
     require_bucket(bucket_name)
     extension = extension_of(file_key)
     require_allowed(extension = extension)
-    content = s3_client.get_object(Bucket = bucket_name, Key = file_key)['Body'].read()
-    message = f'File {file_key} of bucket {bucket_name} read by {current_user}.'
+    content = s3_client.get_object(Bucket = bucket_name,
+                                   Key = readable_key(file_key, owner))['Body'].read()
+    message = f'File {file_key} of bucket {bucket_name} read by {owner}.'
     logger.info(message)
     if extension in SHEETS:
         return FileReadResponse(filename = file_key,
@@ -169,14 +246,14 @@ async def read_file(
 @handle_aws_operation
 async def store_file(
     upload_data: FileUploadData,
-    current_user: str
+    owner: str
 ) -> FileUploadResponse:
     '''
         Stores an object.
 
         Args:
             upload_data (FileUploadData): Where, what and its MIME type.
-            current_user (str): Who stores it, for the log.
+            owner (str): The caller's owner key: the file is stored in its folder.
 
         Returns:
             FileUploadResponse: UPLOADED, the URL and the key.
@@ -188,11 +265,12 @@ async def store_file(
     require_bucket(upload_data.bucket_name)
     require_allowed(extension = extension_of(upload_data.file_key),
                     content_type = upload_data.content_type)
-    s3_client.put_object(Bucket = upload_data.bucket_name, Key = upload_data.file_key,
+    s3_client.put_object(Bucket = upload_data.bucket_name,
+                         Key = owned_key(upload_data.file_key, owner),
                          Body = upload_data.file_content,
                          ContentType = upload_data.content_type)
     file_url = f'https://{upload_data.bucket_name}.s3.amazonaws.com/{upload_data.file_key}'
-    message = (f'File {upload_data.file_key} stored by {current_user} in bucket '
+    message = (f'File {upload_data.file_key} stored by {owner} in bucket '
                f'{upload_data.bucket_name}.')
     logger.info(message)
     return FileUploadResponse(message = FilesResult.UPLOADED, url = file_url,
@@ -203,7 +281,7 @@ async def store_file(
 async def delete_file(
     bucket_name: str,
     file_key: str,
-    current_user: str
+    owner: str
 ) -> FileDeleteResponse:
     '''
         Deletes an object.
@@ -211,7 +289,7 @@ async def delete_file(
         Args:
             bucket_name (str): The bucket.
             file_key (str): The object key.
-            current_user (str): Who deletes it, for the log.
+            owner (str): The caller's owner key: only its own files can go.
 
         Returns:
             FileDeleteResponse: DELETED.
@@ -220,8 +298,8 @@ async def delete_file(
             ForbiddenError: BUCKET_NOT_ALLOWED.
     '''
     require_bucket(bucket_name)
-    s3_client.delete_object(Bucket = bucket_name, Key = file_key)
-    message = f'File {file_key} deleted by {current_user} from bucket {bucket_name}.'
+    s3_client.delete_object(Bucket = bucket_name, Key = owned_key(file_key, owner))
+    message = f'File {file_key} deleted by {owner} from bucket {bucket_name}.'
     logger.info(message)
     return FileDeleteResponse(message = FilesResult.DELETED)
 
@@ -230,7 +308,7 @@ async def delete_file(
 async def list_files(
     bucket_name: str,
     prefix: str,
-    current_user: str
+    owner: str
 ) -> list[str]:
     '''
         The object keys under a prefix, folders left out.
@@ -238,7 +316,7 @@ async def list_files(
         Args:
             bucket_name (str): The bucket.
             prefix (str): The prefix.
-            current_user (str): Who lists, for the log.
+            owner (str): The caller's owner key: only its folder is listed.
 
         Returns:
             list[str]: The keys.
@@ -247,11 +325,12 @@ async def list_files(
             ForbiddenError: BUCKET_NOT_ALLOWED.
     '''
     require_bucket(bucket_name)
-    keys = [item['Key']
+    folder = owner_folder(owner) + '/'
+    keys = [item['Key'][len(folder):]
             for page in s3_client.get_paginator('list_objects_v2').paginate(
-                Bucket = bucket_name, Prefix = prefix)
+                Bucket = bucket_name, Prefix = folder + (prefix or '').lstrip('/'))
             for item in page.get('Contents', []) if not item['Key'].endswith('/')]
-    message = f'{current_user} listed {len(keys)} file(s) in {bucket_name} under {prefix}.'
+    message = f'{owner} listed {len(keys)} file(s) in {bucket_name} under {prefix}.'
     logger.info(message)
     return keys
 
@@ -259,7 +338,7 @@ async def list_files(
 @handle_aws_operation
 async def presigned_upload_url(
     request: PresignedUrlRequest,
-    current_user: str
+    owner: str
 ) -> PresignedUrlResponse:
     '''
         A URL the client uploads one object to directly, so the bytes do not
@@ -269,7 +348,7 @@ async def presigned_upload_url(
 
         Args:
             request (PresignedUrlRequest): Where and for how long.
-            current_user (str): Who asks, for the log.
+            owner (str): The caller's owner key: the URL points inside its folder.
 
         Returns:
             PresignedUrlResponse: The signed URL and the key.
@@ -284,11 +363,11 @@ async def presigned_upload_url(
     content_type = ALLOWED_TYPES[extension]
     url = s3_client.generate_presigned_url(
         ClientMethod = 'put_object',
-        Params = {'Bucket': request.bucket_name, 'Key': request.file_key,
+        Params = {'Bucket': request.bucket_name, 'Key': owned_key(request.file_key, owner),
                   'ContentType': content_type},
         ExpiresIn = request.expiration_seconds
     )
-    message = (f'{current_user} got a presigned URL for {request.file_key} in '
+    message = (f'{owner} got a presigned URL for {request.file_key} in '
                f'{request.bucket_name} ({content_type}).')
     logger.info(message)
     return PresignedUrlResponse(presigned_url = url, file_key = request.file_key)
@@ -298,7 +377,7 @@ async def presigned_upload_url(
 async def download_url(
     bucket_name: str,
     file_key: str,
-    current_user: str
+    owner: str
 ) -> FileDownloadResponse:
     '''
         A short-lived URL to fetch one object as it is stored: a file too
@@ -307,7 +386,7 @@ async def download_url(
         Args:
             bucket_name (str): The bucket.
             file_key (str): The object key.
-            current_user (str): Who asks, for the log.
+            owner (str): The caller's owner key: the URL points inside its folder.
 
         Returns:
             FileDownloadResponse: The URL, the key and how long it lives.
@@ -320,8 +399,9 @@ async def download_url(
     require_allowed(extension = extension_of(file_key))
     seconds = ENV_VARS['DOWNLOAD_URL_SECONDS']
     url = s3_client.generate_presigned_url(
-        ClientMethod = 'get_object', Params = {'Bucket': bucket_name, 'Key': file_key},
+        ClientMethod = 'get_object',
+        Params = {'Bucket': bucket_name, 'Key': readable_key(file_key, owner)},
         ExpiresIn = seconds)
-    message = f'{current_user} got a download URL for {file_key} in {bucket_name}.'
+    message = f'{owner} got a download URL for {file_key} in {bucket_name}.'
     logger.info(message)
     return FileDownloadResponse(url = url, file_key = file_key, expires_in = seconds)
