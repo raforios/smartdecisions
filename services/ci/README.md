@@ -207,21 +207,21 @@ BUCKET_PATH=""
 # --- PASO 3 ---
 # Modificar variables del archivo "deploy.config" con los valores obtenidos en el paso 2
 # --- Configuración VPC (Obligatoria para acceso a RDS) ---
-VPC_ID=vpc-00e5c84e1400a916f
-PRIVATE_SUBNET_IDS=subnet-07c1a8b67d2047ec3,subnet-07c7eeb3c2e5be2e0,subnet-007d8f014baf297ef,subnet-02403fd7434746c2d
-INTERNAL_SG_ID=sg-07495e1628e67b466
+VPC_ID=vpc-XXXXXXXXXXX
+PRIVATE_SUBNET_IDS=subnet-XXXXXXXX,subnet-XXXXXXXXX,subnet-XXXXXXXXX
+INTERNAL_SG_ID=sg-XXXXXXXXX
 # Esta configuración debe ser para los microservicios LOCALIZATION, FORMS, PLANNING, TRADE
 
 # --- PASO 4 ---
 # Modificar el archivo ".env" con los valores del RDS
 DB_USER="root"
-DB_PASSWORD="D3s4P1_M1cr0S3rv"
-DB_HOST="api-binaria-mysql-db.cgbqmuawkgko.us-east-1.rds.amazonaws.com"
+DB_PASSWORD="XXXXXXXXX"
+DB_HOST="CXXXXXXXXXX.com"
 DB_PORT="3306"
 
 # --- PASO 5 ---
 # Actualizar en el script "update_env_urls.sh" al inicio del archivo el segmento:
-CUSTOM_DOMAIN_BASE="https://api.binaria.app"
+CUSTOM_DOMAIN_BASE="https://api.xxxxx.com"
 
 # Esto se debe realizar con la URL del subdominio que se haya definido y a la cual se le ha creado un CERTIFICADO dentro del CERTIFICATE MANAGER de AWS. Este paso es manual y es mandatorio para los siguientes pasos. También se debe configurar el Cloud Flare con los valores del CNAME obtenido par ael dominio y los subdominios
 
@@ -235,7 +235,7 @@ CUSTOM_DOMAIN_BASE="https://api.binaria.app"
 
 # --- PASO 8 ---
 # Configurando el subdominio para los microservicios, previamente se debe editar algunos valores de este earchivo:
-CUSTOM_DOMAIN="api.binaria.app"
+CUSTOM_DOMAIN="api.xxxxx.com"
 CERTIFICATE_ARN="" # ARN obtenido del certificado creado
 ALB_ARN="" # Reemplaza con tu ALB ARN creado en el paso 2
 TG_ARN="" # Reemplaza con tu TG ARN creado en el paso 2
@@ -244,7 +244,7 @@ TG_ARN="" # Reemplaza con tu TG ARN creado en el paso 2
 
 # --- PASO 9 ---
 # Mapear los ID de los lambdas creados en el paso 1 con la URL del subdominio que acaabmos de configurar
-CUSTOM_DOMAIN="api.binaria.app"
+CUSTOM_DOMAIN="api.xxxxx.com"
 API_MAPPINGS=(
     "ID-LAMBDA-file:files"      # binaria-file-handler-service
     "ID-LAMBDA-events:events"     # binaria-events-handler-service
