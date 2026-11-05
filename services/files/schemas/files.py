@@ -18,6 +18,7 @@ class FilesError(str, Enum):
     UNSUPPORTED_FORMAT = 'UNSUPPORTED_FORMAT'
     FILE_NOT_FOUND = 'FILE_NOT_FOUND'
     ACCESS_DENIED = 'ACCESS_DENIED'
+    BUCKET_NOT_ALLOWED = 'BUCKET_NOT_ALLOWED'
     STORAGE_UNAVAILABLE = 'STORAGE_UNAVAILABLE'
 
 
@@ -98,10 +99,9 @@ class PresignedUrlRequest(BaseS3FileModel):
     '''
     expiration_seconds: int = Field(3600,
                     description = 'Expiration time of the URL in seconds.')
-    validation: bool = Field(...,
-                    description = 'If validation for file extension should be used.')
-    content_type: str | None = Field(None,
-                    description = 'Optional: The Content-Type of the file.')
+    # The extension is always checked and the MIME type is the one it calls
+    # for: the caller no longer chooses either (5-nov-2026). A `validation` or
+    # a `content_type` still sent by an old client is ignored.
 
 class PresignedUrlResponse(BaseModel):
     '''

@@ -14,3 +14,7 @@ from pathlib import Path
 CONFIGURED = ((Path(__file__).resolve().parents[1] / '.env').exists()
               or 'SECRET_KEY' in os.environ)
 collect_ignore = [] if CONFIGURED else ['test_read_route.py']
+
+# FILES works only on the buckets ALLOWED_BUCKETS names and reads it on import;
+# the CI has no .env, so the suite names the ones its tests use.
+os.environ.setdefault('ALLOWED_BUCKETS', 'bucket b ml-data-file-handler')

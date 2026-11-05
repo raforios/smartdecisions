@@ -23,6 +23,18 @@ from services.exceptions import (
 from services.utils import handle_aws_client_error
 
 
+@pytest.fixture(autouse = True)
+def _buckets(monkeypatch: pytest.MonkeyPatch) -> None:
+    '''
+        The buckets these tests name, allowed whatever the .env says.
+
+        Args:
+            monkeypatch (pytest.MonkeyPatch): Replaces the allowed buckets.
+    '''
+    monkeypatch.setattr(files, 'ALLOWED_BUCKETS', frozenset({'bucket', 'b',
+                                                             'ml-data-file-handler'}))
+
+
 class _FakeS3:  # pylint: disable=too-few-public-methods
     '''
         Stands in for the S3 client: every key holds the same bytes.
@@ -252,7 +264,7 @@ def test_the_writing_side_answers_codes_and_refuses_what_it_does_not_take(
     deleted = asyncio.run(files.delete_file('b', 'raw/a.csv', 'acme'))
     listed = asyncio.run(files.list_files('b', 'raw/', 'acme'))
     signed = asyncio.run(files.presigned_upload_url(PresignedUrlRequest(
-        bucket_name = 'b', file_path = 'raw', file_name = 'a.csv', validation = True), 'acme'))
+        bucket_name = 'b', file_path = 'raw', file_name = 'a.csv'), 'acme'))
 
     assert (stored.message, stored.file_key) == ('UPLOADED', 'raw/a.csv')
     assert deleted.message == 'DELETED'
@@ -265,6 +277,41 @@ def test_the_writing_side_answers_codes_and_refuses_what_it_does_not_take(
     assert raised.value.detail == 'UNSUPPORTED_FORMAT'
     with pytest.raises(InvalidInputError):
         asyncio.run(files.presigned_upload_url(PresignedUrlRequest(
-            bucket_name = 'b', file_name = 'run.exe', validation = True), 'acme'))
+            bucket_name = 'b', file_name = 'run.exe'), 'acme'))
     # put, delete and sign: the two refusals never reached S3.
     assert [kind for kind, _ in s3.calls] == ['put', 'delete', 'sign']
+
+
+def test_files_works_only_on_its_buckets_and_decides_the_type(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    '''
+        A bucket outside ALLOWED_BUCKETS is refused before S3 is asked, for
+        every operation; a presigned URL signs the MIME type of its extension,
+        whatever an old client still sends; an upload checks the extension
+        and not only the type it claims.
+    '''
+    # pylint: disable=import-outside-toplevel
+    from schemas.files import FileUploadData, PresignedUrlRequest
+
+    s3 = _RecordingS3()
+    monkeypatch.setattr(files, 's3_client', s3)
+    for call in (files.read_file('other-bucket', 'a.csv', 'acme'),
+                 files.delete_file('other-bucket', 'a.csv', 'acme'),
+                 files.list_files('other-bucket', '', 'acme'),
+                 files.presigned_upload_url(PresignedUrlRequest(
+                     bucket_name = 'other-bucket', file_name = 'a.csv'), 'acme')):
+        with pytest.raises(ForbiddenError) as raised:
+            asyncio.run(call)
+        assert raised.value.detail == 'BUCKET_NOT_ALLOWED'
+
+    asyncio.run(files.presigned_upload_url(PresignedUrlRequest.model_validate(
+        {'bucket_name': 'b', 'file_name': 'book.xlsx', 'validation': False,
+         'content_type': 'text/html'}), 'acme'))
+    assert s3.calls[-1][1]['Params']['ContentType'] == (
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    with pytest.raises(InvalidInputError):
+        asyncio.run(files.store_file(FileUploadData(
+            bucket_name = 'b', file_name = 'page.html', file_content = b'<html>',
+            content_type = 'text/csv'), 'acme'))
+    assert [kind for kind, _ in s3.calls] == ['sign']

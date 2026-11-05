@@ -5,7 +5,6 @@
 import base64
 import os
 from io import BytesIO, StringIO
-from mimetypes import guess_type
 
 import boto3
 import pandas as pd
@@ -21,9 +20,15 @@ from schemas.files import (
     PresignedUrlRequest,
     PresignedUrlResponse
 )
-from services.exceptions import InvalidInputError
+from services.environment import load_and_validate_env_vars
+from services.exceptions import ForbiddenError, InvalidInputError
 from services.logger_config import custom_logger as logger
 from services.utils import handle_aws_operation
+
+ENV_VARS = load_and_validate_env_vars({'ALLOWED_BUCKETS': str})
+# The only buckets FILES works on: the caller names one of them, never any
+# other the Lambda's role happens to reach.
+ALLOWED_BUCKETS: frozenset[str] = frozenset(ENV_VARS['ALLOWED_BUCKETS'].split())
 
 s3_client = boto3.client('s3')
 
@@ -67,18 +72,20 @@ def require_allowed(
         raise InvalidInputError(detail = FilesError.UNSUPPORTED_FORMAT.value)
 
 
-def content_type_for(file_name: str) -> str:
+def require_bucket(bucket_name: str) -> None:
     '''
-        The MIME type a name suggests, or a generic one.
+        Refuses a bucket outside ALLOWED_BUCKETS.
 
         Args:
-            file_name (str): The file name.
+            bucket_name (str): The bucket the caller named.
 
-        Returns:
-            str: The MIME type.
+        Raises:
+            ForbiddenError: BUCKET_NOT_ALLOWED.
     '''
-    mime_type, _ = guess_type(file_name)
-    return mime_type or 'application/octet-stream'
+    if bucket_name not in ALLOWED_BUCKETS:
+        error_msg = f'Bucket {bucket_name} refused: it is not one FILES works on.'
+        logger.warning(error_msg)
+        raise ForbiddenError(detail = FilesError.BUCKET_NOT_ALLOWED.value)
 
 
 def _sheet_rows(
@@ -143,6 +150,7 @@ async def read_file(
         Raises:
             InvalidInputError: UNSUPPORTED_FORMAT or EMPTY_FILE.
     '''
+    require_bucket(bucket_name)
     extension = extension_of(file_key)
     require_allowed(extension = extension)
     content = s3_client.get_object(Bucket = bucket_name, Key = file_key)['Body'].read()
@@ -173,9 +181,12 @@ async def store_file(
             FileUploadResponse: UPLOADED, the URL and the key.
 
         Raises:
-            InvalidInputError: UNSUPPORTED_FORMAT.
+            ForbiddenError: BUCKET_NOT_ALLOWED.
+            InvalidInputError: UNSUPPORTED_FORMAT, by extension or MIME type.
     '''
-    require_allowed(content_type = upload_data.content_type)
+    require_bucket(upload_data.bucket_name)
+    require_allowed(extension = extension_of(upload_data.file_key),
+                    content_type = upload_data.content_type)
     s3_client.put_object(Bucket = upload_data.bucket_name, Key = upload_data.file_key,
                          Body = upload_data.file_content,
                          ContentType = upload_data.content_type)
@@ -203,7 +214,11 @@ async def delete_file(
 
         Returns:
             FileDeleteResponse: DELETED.
+
+        Raises:
+            ForbiddenError: BUCKET_NOT_ALLOWED.
     '''
+    require_bucket(bucket_name)
     s3_client.delete_object(Bucket = bucket_name, Key = file_key)
     message = f'File {file_key} deleted by {current_user} from bucket {bucket_name}.'
     logger.info(message)
@@ -226,7 +241,11 @@ async def list_files(
 
         Returns:
             list[str]: The keys.
+
+        Raises:
+            ForbiddenError: BUCKET_NOT_ALLOWED.
     '''
+    require_bucket(bucket_name)
     keys = [item['Key']
             for page in s3_client.get_paginator('list_objects_v2').paginate(
                 Bucket = bucket_name, Prefix = prefix)
@@ -243,23 +262,25 @@ async def presigned_upload_url(
 ) -> PresignedUrlResponse:
     '''
         A URL the client uploads one object to directly, so the bytes do not
-        go through API Gateway. The MIME type is the one given, or the one the
-        name suggests.
+        go through API Gateway. The extension of the key written is always
+        checked and the MIME type is the one it calls for: the signature
+        fixes both, so the URL cannot carry anything else.
 
         Args:
-            request (PresignedUrlRequest): Where, for how long, and whether the
-                extension is checked.
+            request (PresignedUrlRequest): Where and for how long.
             current_user (str): Who asks, for the log.
 
         Returns:
             PresignedUrlResponse: The signed URL and the key.
 
         Raises:
-            InvalidInputError: UNSUPPORTED_FORMAT, when the extension is checked.
+            ForbiddenError: BUCKET_NOT_ALLOWED.
+            InvalidInputError: UNSUPPORTED_FORMAT.
     '''
-    if request.validation:
-        require_allowed(extension = extension_of(request.file_name))
-    content_type = request.content_type or content_type_for(request.file_name)
+    require_bucket(request.bucket_name)
+    extension = extension_of(request.file_key)
+    require_allowed(extension = extension)
+    content_type = ALLOWED_TYPES[extension]
     url = s3_client.generate_presigned_url(
         ClientMethod = 'put_object',
         Params = {'Bucket': request.bucket_name, 'Key': request.file_key,
