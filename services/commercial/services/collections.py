@@ -237,11 +237,15 @@ def validate_rows(
     # the caller decides whether to reject the file or just report it.
     accepted = validation.frame if validation.is_valid else mapped.iloc[0:0]
 
+    # Invoice numbers are text on both sides: a stored sales file read back by
+    # pandas turns '1050000021' into a number, and no payment matched it.
     invoices = (
-        sales.groupby(_ORDER)[_AMOUNT].sum()
+        sales.groupby(sales[_ORDER].astype(str))[_AMOUNT].sum()
         if _ORDER in sales.columns and _AMOUNT in sales.columns
         else pd.Series(dtype = 'float64')
     )
+    if not accepted.empty:
+        accepted = accepted.assign(**{_ORDER: accepted[_ORDER].astype(str)})
 
     if not accepted.empty:
         issues.extend(_unmatched_issues(accepted, invoices))

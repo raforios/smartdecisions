@@ -178,3 +178,19 @@ def test_sales_credit_columns_are_normalized_and_validated():
     rejected = parse_sales(bad, 'ventas.csv')
     assert rejected.issues
     assert 'payment_terms' in {issue.column for issue in rejected.issues}
+
+
+def test_a_numeric_invoice_number_read_back_from_storage_still_matches():
+    '''
+        A stored sales file read back by pandas turns '1050000021' into a
+        number; the payment of that invoice still finds it.
+    '''
+    sales = pd.DataFrame({'order_id': [1050000021], 'total_amount': [100.0]})
+    file_bytes = _collections_csv([
+        {'Nro Factura': '1050000021', 'Fecha Cobro': '2026-03-10', 'Monto Cobrado': 100.0}
+    ])
+
+    result = parse_and_validate(file_bytes, 'cobros.csv', sales)
+
+    assert not result.issues
+    assert result.summary.matched_invoices == 1
