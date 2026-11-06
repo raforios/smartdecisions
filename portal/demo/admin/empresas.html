@@ -18,7 +18,7 @@
     <script src="../js/api.js?v=d166c15dbf" defer></script>
     <script src="../js/ui.js?v=406a08249f" defer></script>
     <script src="../js/session.js?v=91bb432af9" defer></script>
-    <script src="empresas.js?v=ccb9b36c43" defer></script>
+    <script src="empresas.js?v=916eb678a5" defer></script>
 </head>
 <body>
 
@@ -41,6 +41,13 @@
                     <input type="text" id="companyName" minlength="3" maxlength="50"></label>
                 <label><span>NIT (sólo números)</span>
                     <input type="text" id="companyTaxId" maxlength="20" inputmode="numeric" pattern="[0-9]*"></label>
+                <label><span>Rubro</span>
+                    <select id="companySector"></select></label>
+                <label><span>Facturador (SmartBilling)</span>
+                    <select id="companyBilling">
+                        <option value="false">No lo contrató</option>
+                        <option value="true">Lo contrató</option>
+                    </select></label>
                 <label id="companyActiveField"><span>Estado</span>
                     <select id="companyActive">
                         <option value="true">Activa</option>
@@ -57,7 +64,7 @@
             <div class="table-wrapper">
                 <table class="data-table" id="companiesTable">
                     <thead><tr>
-                        <th>Empresa</th><th>NIT</th><th class="numeric">Usuarios</th><th>Estado</th><th></th>
+                        <th>Empresa</th><th>NIT</th><th>Rubro</th><th>Facturador</th><th class="numeric">Usuarios</th><th>Estado</th><th></th>
                     </tr></thead>
                     <tbody></tbody>
                 </table>

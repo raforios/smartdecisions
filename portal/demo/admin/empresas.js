@@ -4,7 +4,8 @@
  * Administración › Empresas — the customers of the platform (ADMIN only).
  *
  * A company is the `client` its users share and every service keys its data
- * by, so its name never changes; its NIT and whether it is active do. One
+ * by, so its name never changes; its NIT, its sector, whether it bought
+ * SmartBilling and whether it is active do (Rafael, 2-nov-2026). One
  * with users is not removed, it is deactivated (AUTH refuses it with
  * COMPANY_HAS_USERS).
  */
@@ -24,6 +25,13 @@ document.addEventListener('DOMContentLoaded', () => {
         DUPLICATE_COMPANY: 'Ya hay una empresa con ese nombre.',
         COMPANY_HAS_USERS: 'La empresa tiene usuarios: no se elimina, se deja inactiva.',
         COMPANY_INACTIVE: 'La empresa está inactiva.'
+    };
+    // The sectors AUTH accepts, in Spanish, in the order they are offered.
+    const SECTORS = {
+        FOOD_AND_DRINKS: 'Comidas y bebidas', RETAIL: 'Consumo minorista',
+        WHOLESALE: 'Consumo mayorista', HOME_SERVICES: 'Oficios a domicilio',
+        WORKSHOP: 'Taller', HEALTH: 'Salud', TRANSPORT: 'Transporte',
+        COURIER: 'Mensajería', PERSONAL_FINANCE: 'Finanzas personales'
     };
     const failure = (error, fallback) => {
         const code = error && (error.code || error.message);
@@ -59,6 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <tr>
                 <td><b>${escape(company.name)}</b></td>
                 <td>${escape(company.tax_id || '—')}</td>
+                <td>${escape(SECTORS[company.sector] || 'Sin rubro')}</td>
+                <td>${company.includes_billing ? 'Sí' : 'No'}</td>
                 <td class="numeric">${company.users}</td>
                 <td><span class="sd-status ${company.active ? 'is-on' : 'is-off'}">
                     ${company.active ? 'Activa' : 'Inactiva'}</span></td>
@@ -80,6 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#companyName').value = '';
         qs('#companyTaxId').value = creating ? '' : (company.tax_id || '');
         qs('#companyActive').value = creating ? 'true' : String(company.active);
+        qs('#companySector').innerHTML = '<option value="">Sin rubro</option>' +
+            Object.entries(SECTORS).map(([code, label]) =>
+                `<option value="${code}">${escape(label)}</option>`).join('');
+        qs('#companySector').value = (company && company.sector) || '';
+        qs('#companyBilling').value = String(Boolean(company && company.includes_billing));
         qs('#companyForm').hidden = false;
         qs(creating ? '#companyName' : '#companyTaxId').focus();
     }
@@ -93,16 +108,18 @@ document.addEventListener('DOMContentLoaded', () => {
     async function save(button) {
         const taxId = qs('#companyTaxId').value.trim() || null;
         if (taxId && !/^\d{5,20}$/.test(taxId)) { note('El NIT lleva sólo números, de 5 a 20.', 'error'); return; }
+        const profile = { sector: qs('#companySector').value || null,
+                          includes_billing: qs('#companyBilling').value === 'true' };
         const done = setButtonBusy(button, 'Guardando…');
         try {
             if (state.editing) {
                 await API.patch(`${BASE}/${encodeURIComponent(state.editing.name)}`,
-                    { tax_id: taxId, active: qs('#companyActive').value === 'true' });
+                    { tax_id: taxId, active: qs('#companyActive').value === 'true', ...profile });
                 toast(`Empresa ${state.editing.name} actualizada.`, 'success');
             } else {
                 const name = qs('#companyName').value.trim();
                 if (name.length < 3) { note('Escribe el nombre de la empresa.', 'error'); return; }
-                await API.post(BASE, { name, tax_id: taxId });
+                await API.post(BASE, { name, tax_id: taxId, ...profile });
                 toast(`Empresa ${name} creada.`, 'success');
             }
             closeForm();

@@ -8,7 +8,7 @@ import importlib
 
 import pytest
 
-from schemas.companies import CompanyError, CompanyRequest, CompanyUpdateRequest
+from schemas.companies import CompanyError, CompanyRequest, CompanyUpdateRequest, Sector
 from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 
 
@@ -72,6 +72,17 @@ def test_a_company_with_users_is_not_removed(companies) -> None:
     assert failure.value.detail == CompanyError.COMPANY_HAS_USERS.value
     changed = companies.update_company('Andina S.R.L.', CompanyUpdateRequest(active = False))
     assert changed.active is False
+
+
+def test_the_sector_and_the_invoicing_product_are_stored_and_changed(companies) -> None:
+    '''Stored as codes; an update changes only what it names.'''
+    created = companies.create_company(CompanyRequest(name = 'Andina S.R.L.',
+                                                      sector = Sector.WHOLESALE))
+    assert (created.sector, created.includes_billing) == (Sector.WHOLESALE, False)
+    changed = companies.update_company('Andina S.R.L.', CompanyUpdateRequest(
+        includes_billing = True))
+    assert (changed.sector, changed.includes_billing) == (Sector.WHOLESALE, True)
+    assert companies.get_company('Andina S.R.L.')['sector'] == 'WHOLESALE'
 
 
 def test_a_user_only_gets_an_existing_active_company(companies) -> None:

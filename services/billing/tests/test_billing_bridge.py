@@ -4,6 +4,7 @@
 
     The queue is replaced by a recorder.
 '''
+import re
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -199,3 +200,24 @@ def test_cancellations_and_returns_are_queued_with_the_switch_on( # pylint: disa
     assert queued[0][1]['body']['kind'] == 'RETURN'
     queued = _shared(billing_bridge.share_cancellation, dynamodb, sale.sale_id)
     assert queued[0][1]['body']['kind'] == 'CANCELLATION'
+
+
+def test_a_company_name_with_spaces_gets_a_valid_line_of_its_own(monkeypatch):
+    '''SQS refuses spaces in a group id; each shop still gets one line, always the same.'''
+    sent: list = []
+
+    class _Recording:  # pylint: disable=too-few-public-methods
+        '''An SQS client that keeps what it is sent.'''
+
+        def send_message(
+            self,
+            **message
+        ):
+            '''Keeps the message.'''
+            sent.append(message)
+    monkeypatch.setattr(billing_bridge.boto3, 'client', lambda _name: _Recording())
+    billing_bridge._queue('The Pharma', {'path': billing_bridge.PRODUCTS_PATH, 'body': {}, # pylint: disable=protected-access
+                                         'authorization': AUTHORIZATION})
+    group = sent[0]['MessageGroupId']
+    assert re.fullmatch(r'[0-9a-f]{64}', group)
+    assert group == billing_bridge.queue_group('The Pharma') != billing_bridge.queue_group('Otra')

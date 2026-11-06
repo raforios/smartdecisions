@@ -10,7 +10,7 @@ The **Auth-Handler-Service** is the source of truth for users, companies and rol
 
   * **Sign-in:** Checks e-mail and password and issues a JWT carrying `email`, `role` and `client` (the company); records the last sign-in, the previous one and the count.
   * **User Management:** Sign-up (`ADMIN` only), lookup, role and company changes, removal, and changing one's own password.
-  * **Company Management:** Creating, changing the tax id or status of, and removing the companies users belong to.
+  * **Company Management:** Creating, changing the tax id, sector, invoicing product or status of, and removing the companies users belong to. The sector is a closed catalogue (`Sector`: `FOOD_AND_DRINKS`, `RETAIL`, `WHOLESALE`, `HOME_SERVICES`, `WORKSHOP`, `HEALTH`, `TRANSPORT`, `COURIER`, `PERSONAL_FINANCE`) and `includes_billing` says whether the company bought SmartBilling; both live in the company, once for all its users.
   * **Roles:** Defined in `schemas/role.py`; SmartDecisions uses `ADMIN`, `MANAGER` and `SELLER`, and a new sign-up starts as `REQUESTER`.
   * **Passwords:** Hashed with plain `bcrypt` (`$2b$`), compatible with the older `passlib` hashes.
 
@@ -45,7 +45,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | :--- | :--- | :--- |
 | `GET` | `/v1/auth/companies` | Every **company**, with how many users it has. `ADMIN` only. |
 | `POST` | `/v1/auth/companies` | Adds a **company**. `ADMIN` only. |
-| `PATCH` | `/v1/auth/companies/{name}` | Changes a **company**'s tax id or status. `ADMIN` only. |
+| `PATCH` | `/v1/auth/companies/{name}` | Changes a **company**'s tax id, sector, invoicing product or status. `ADMIN` only. |
 | `DELETE` | `/v1/auth/companies/{name}` | Removes a **company** with no users. `ADMIN` only. |
 
 ### Users (`/v1/users`)

@@ -68,6 +68,8 @@ def _to_response(
     return CompanyResponse(
         name = item['name'],
         tax_id = item.get('tax_id'),
+        sector = item.get('sector'),
+        includes_billing = bool(item.get('includes_billing', False)),
         active = bool(item.get('active', True)),
         users = users,
         created_at = item['created_at'],
@@ -122,7 +124,9 @@ def create_company(company: CompanyRequest) -> CompanyResponse:
             RegisterAlreadyExistsError: DUPLICATE_COMPANY.
     '''
     now = get_current_time_gmt().isoformat()
-    item = {'name': company.name.strip(), 'tax_id': company.tax_id, 'active': True,
+    item = {'name': company.name.strip(), 'tax_id': company.tax_id,
+            'sector': company.sector.value if company.sector else None,
+            'includes_billing': company.includes_billing, 'active': True,
             'created_at': now, 'updated_at': now}
     try:
         _table().put_item(Item = item, ConditionExpression = 'attribute_not_exists(#n)',
@@ -142,7 +146,8 @@ def update_company(
     update: CompanyUpdateRequest
 ) -> CompanyResponse:
     '''
-        Changes a company's NIT or whether it is active; never its name.
+        Changes a company's NIT, sector, invoicing product or whether it is
+        active; never its name.
 
         Args:
             name (str): Company name.
@@ -157,7 +162,7 @@ def update_company(
     item = get_company(name)
     if not item:
         raise RegisterNotFoundError(detail = CompanyError.COMPANY_NOT_FOUND.value)
-    changes = update.model_dump(exclude_unset = True)
+    changes = update.model_dump(mode = 'json', exclude_unset = True)
     item = {**item, **changes, 'updated_at': get_current_time_gmt().isoformat()}
     _table().put_item(Item = item)
     message = f'Company "{name}" updated: {sorted(changes)}.'

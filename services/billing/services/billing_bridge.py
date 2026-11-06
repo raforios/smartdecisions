@@ -19,6 +19,7 @@
     of one shop never rewrite its dataset at the same time. Queuing takes
     milliseconds and never holds the sale back; a failure is only logged.
 '''
+import hashlib
 import json
 from typing import Any
 
@@ -214,6 +215,22 @@ def return_record(
     }
 
 
+def queue_group(owner: str) -> str:
+    '''
+        The shop's line in the FIFO queue. SQS takes only letters, digits and
+        punctuation there, and a company's name has spaces ("The Pharma"), so
+        the line is named by the name's fingerprint: always valid, the same
+        for the same shop, different between shops.
+
+        Args:
+            owner (str): The shop.
+
+        Returns:
+            str: Its message group id.
+    '''
+    return hashlib.sha256(owner.encode('utf-8')).hexdigest()
+
+
 def _queue(
     owner: str,
     request: dict[str, Any]
@@ -228,7 +245,7 @@ def _queue(
     try:
         boto3.client('sqs').send_message(
             QueueUrl = LIVE_QUEUE_URL, MessageBody = json.dumps(request),
-            MessageGroupId = owner, MessageDeduplicationId = new_id()
+            MessageGroupId = queue_group(owner), MessageDeduplicationId = new_id()
         )
     except (BotoCoreError, ClientError) as error:
         error_msg = f'SmartDecisions request {request["path"]} not queued: {error}'
