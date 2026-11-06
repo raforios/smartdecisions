@@ -34,7 +34,7 @@ from services.clients import CLIENT_FRAME_COLUMNS, sync_master
 from services.products import sync_products
 from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
-from services.exceptions import ResourceNotFoundError
+from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
 from services.load_files import serialize_dataframe
 from services.commercial_utils import (
     attach_to_dataset,
@@ -42,7 +42,7 @@ from services.commercial_utils import (
     read_stored_frame
 )
 from services.logger_config import custom_logger as logger
-from services.utils import DEFAULT_BUCKET_PATH, store_file
+from services.utils import DEFAULT_BUCKET_PATH, delete_stored_file, store_file
 
 # Only a slice of the issues travels in the JSON response / DynamoDB item
 # (400 KB limit); the full set lives in the rejected CSV in S3.
@@ -352,6 +352,33 @@ def merge_if_appending(
     return replace(whole, issues = result.issues)
 
 
+def retire_replaced_file(
+    replaced_key: str | None,
+    auth_token: str
+) -> None:
+    '''
+        Removes, through FILES, the file a load has just replaced.
+
+        A dataset keeps one key per file, so the previous object is unreachable
+        once the new key is attached: left behind, every live sale would leave
+        a whole copy of the dataset in the bucket. The new file is already in
+        place, so a failure here is only logged —raising would make the queue
+        retry a load that did get in, and append it twice.
+
+        Args:
+            replaced_key (str | None): The key the dataset held before; None
+                when the dataset had no such file.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+    '''
+    if not replaced_key:
+        return
+    try:
+        delete_stored_file(replaced_key, auth_token)
+    except ServiceUnavailableError as error:
+        error_msg = f'Replaced file {replaced_key} left in the bucket: {error.detail}'
+        logger.error(error_msg)
+
+
 async def store_companion(
     dynamodb_resource: ServiceResource,
     dataset: dict[str, Any],
@@ -390,6 +417,7 @@ async def store_companion(
     issues = result.issues[:MAX_ISSUES_ON_RESPONSE]
 
     stored_key: str | None = None
+    replaced_key = dataset.get(f'{spec.name}_s3_key')
     if has_rows:
         stored_key = store_file(
             file_key = f'{DEFAULT_BUCKET_PATH}/{spec.name}/{uuid4().hex}.csv',
@@ -405,6 +433,7 @@ async def store_companion(
                 f'{spec.name}_issues': [issue.model_dump(mode = 'json') for issue in issues]
             }
         )
+        retire_replaced_file(replaced_key, auth_token)
 
     message = (f'{spec.name.capitalize()} load for dataset {dataset_id} from "{filename}": '
                f'{result.summary.valid_rows} row(s), {len(result.issues)} issue(s).')

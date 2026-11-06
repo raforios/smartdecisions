@@ -183,6 +183,30 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
 > Lo escribe Claude cada vez que se detiene esperando algo. Sólo hechos
 > comprobados; el detalle vive en `docs/smartdecisions/plan.md`.
 
+**6-nov-2026.** Punto de retomada:
+
+- **Envío en vivo SmartBilling → COMMERCIAL, desplegado y probado en vivo
+  el 6-nov:** BILLING deja cada venta (emitida o transcrita) y cada producto
+  (creado o editado) en la cola FIFO `commercial-live-requests.fifo`, por
+  comercio, sólo con «Enviar a SmartDecisions» activado en Configuración;
+  COMMERCIAL la vacía en orden (`main.handler`, cada mensaje entra por la
+  ruta real con el token del cajero): `POST /v1/commercial/sales/live` suma
+  al último dataset o crea uno. Probado: crear y agregar, colas en 0.
+  Infraestructura en `ci/api/create_queues.sh` (lo llama `start.sh`).
+  Unidad del producto = catálogo cerrado `ProductUnit` en los dos.
+- **Archivos reemplazados (6-nov, falta desplegar COMMERCIAL):** cada carga
+  que reemplaza el archivo de un dataset (ventas por API y complementos)
+  borra el anterior por FILES; antes quedaba huérfano, y con el envío en
+  vivo cada venta dejaba una copia del dataset en S3.
+- **Siguiente, sin deuda (Rafael, 6-nov):** anulaciones y devoluciones
+  hacia COMMERCIAL. Respuesta de Rafael: las anulaciones se **conocen y se
+  analizan** (monto, cantidades), «quizá en otro lugar que enteramente
+  maneje anulaciones», con reporte y gráfico; las devoluciones parciales
+  van **por unidad** (compró 4, devuelve 1: menos monto, la unidad vuelve
+  al inventario), bajo la misma regla. Diseño por cerrar con Rafael antes
+  de programar.
+- Después: puente a FINANCE y rubro en la empresa (AUTH), plan 12.1.
+
 **3-nov-2026.**
 
 - **Desplegados el 3-nov (comprobado en AWS):** MINING_ANALYSIS (sin los

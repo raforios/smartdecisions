@@ -52,6 +52,7 @@ class ProductUnit(str, Enum):
     LITER = 'LITER'
     MILLILITER = 'MILLILITER'
     METER = 'METER'
+    SERVICE = 'SERVICE'
 
 
 # How the client writes each code in the template: the codes are English, the
@@ -78,6 +79,7 @@ TEMPLATE_WORDS: dict[type[Enum], dict[Enum, str]] = {
         ProductUnit.LITER: 'Litro',
         ProductUnit.MILLILITER: 'Mililitro',
         ProductUnit.METER: 'Metro',
+        ProductUnit.SERVICE: 'Servicio',
     },
     VisitOutcome: {
         VisitOutcome.SALE: 'Venta',

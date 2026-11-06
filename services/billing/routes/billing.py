@@ -35,7 +35,6 @@ from controllers.billing import (
     update_product_controller
 )
 from schemas.billing import (
-    BillingDashboard,
     BillingSettings,
     DateWindow,
     LotEdit,
@@ -55,6 +54,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SettingsResponse
 )
+from schemas.billing_reports import BillingDashboard
 from schemas.billing_siat import InvoiceQrOut, SaleCancelIn, SaleCancellation
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger

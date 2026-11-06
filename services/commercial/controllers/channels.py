@@ -31,6 +31,7 @@ from controllers.common import (
     CompanionSpec,
     load_sales_frame,
     native_numbers,
+    retire_replaced_file,
     rows_frame,
     store_companion,
     store_frame,
@@ -74,8 +75,9 @@ from services.commercial_utils import (
     attach_to_dataset,
     content_fingerprint,
     find_dataset_by_fingerprint,
-    read_stored_frame,
     get_owned_dataset,
+    list_datasets_for_owner,
+    read_stored_frame
 )
 from services.purchases_load import parse_frame as parse_purchases_frame
 from services.purchases_load import validate_rows as validate_purchases
@@ -547,6 +549,30 @@ async def push_sales_controller(
         Returns:
             IngestResponse: The dataset as it now stands.
     '''
+    return await _push_sales(dynamodb_resource, dataset_id, push, current_user, auth_token)
+
+
+async def _push_sales(
+    dynamodb_resource: ServiceResource,
+    dataset_id: str,
+    push: SalesPushSchema,
+    current_user: str,
+    auth_token: str
+) -> IngestResponse:
+    '''
+        Sales lines into an owned dataset, shared by the push door and the live
+        door so each is reported and audited once, by its own controller.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            dataset_id (str): Dataset the lines belong to.
+            push (SalesPushSchema): Mode and rows.
+            current_user (str): Authenticated caller and owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+
+        Returns:
+            IngestResponse: The dataset as it now stands.
+    '''
     dataset = get_owned_dataset(
         dynamodb_resource = dynamodb_resource,
         dataset_id = dataset_id,
@@ -562,6 +588,7 @@ async def push_sales_controller(
             whole = replace(validate_rows_partial(merged, API_ORIGIN),
                             issues = result.issues)
 
+    replaced_key = dataset.get('file_s3_key')
     file_key = store_frame(whole.accepted, 'normalized', auth_token)
     stored = attach_to_dataset(
         dynamodb_resource = dynamodb_resource,
@@ -576,6 +603,7 @@ async def push_sales_controller(
             ]
         }
     )
+    retire_replaced_file(replaced_key, auth_token)
     message = (f'Dataset {dataset_id} received {len(push.rows)} pushed line(s) '
                f'({push.mode.value}); {whole.summary.valid_rows} stored.')
     logger.info(message)
@@ -605,6 +633,29 @@ async def create_sales_dataset_controller(
             current_user (str): Authenticated caller, owner of the dataset.
             auth_token (str): The caller's Authorization header, forwarded to FILES.
             request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            IngestResponse: The new dataset, or the one that already held
+                these lines.
+    '''
+    return await _create_sales_dataset(dynamodb_resource, rows, current_user, auth_token)
+
+
+async def _create_sales_dataset(
+    dynamodb_resource: ServiceResource,
+    rows: SalesRowsSchema,
+    current_user: str,
+    auth_token: str
+) -> IngestResponse:
+    '''
+        A new dataset from posted lines, shared by the create door and the live
+        door so each is reported and audited once, by its own controller.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            rows (SalesRowsSchema): The lines.
+            current_user (str): Authenticated caller, owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
 
         Returns:
             IngestResponse: The new dataset, or the one that already held
@@ -702,3 +753,36 @@ async def ingest_purchases_from_s3_controller(
     )
     return await _from_s3(dynamodb_resource, dataset, payload, PURCHASES,
                           (parse_purchases_frame, auth_token))
+
+
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Dataset', 'UPLOAD')
+async def live_sales_controller(
+    dynamodb_resource: ServiceResource,
+    rows: SalesRowsSchema,
+    current_user: str,
+    auth_token: str,
+    request: Request # pylint: disable=unused-argument
+) -> IngestResponse:
+    '''
+        Sales that arrive as they happen —SmartBilling's till, later the
+        chat— go to the company's most recent dataset, appended; a company
+        with none gets one created (Rafael, 6-nov-2026). Both paths validate
+        and feed the masters exactly as the push and create doors do.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            rows (SalesRowsSchema): The lines.
+            current_user (str): Authenticated caller, owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            IngestResponse: The dataset the lines went into.
+    '''
+    latest = list_datasets_for_owner(dynamodb_resource, current_user, limit = 1)
+    if not latest:
+        return await _create_sales_dataset(dynamodb_resource, rows, current_user, auth_token)
+    return await _push_sales(dynamodb_resource, str(latest[0]['dataset_id']),
+                             SalesPushSchema(rows = rows.rows, mode = LoadMode.APPEND),
+                             current_user, auth_token)

@@ -161,6 +161,17 @@ export async function mountSettings(host) {
                         </option>
                     </select>
                 </label>
+                <label class="field">
+                    <span>Enviar a SmartDecisions</span>
+                    <select id="send_to_smartdecisions">
+                        <option value="false" ${settings?.send_to_smartdecisions ? '' : 'selected'}>
+                            No
+                        </option>
+                        <option value="true" ${settings?.send_to_smartdecisions ? 'selected' : ''}>
+                            Sí — cada venta y cada producto llegan a tu análisis comercial
+                        </option>
+                    </select>
+                </label>
 
                 ${settings ? `
                     <p class="muted small">
@@ -318,6 +329,8 @@ export async function mountSettings(host) {
                 purchase_series: host.querySelector('#purchase_series').value.trim() || 'C',
                 ticket_width: host.querySelector('#ticket_width').value,
                 discounts_enabled: host.querySelector('#discounts_enabled').value === 'true',
+                send_to_smartdecisions:
+                    host.querySelector('#send_to_smartdecisions').value === 'true',
                 branch: Number(host.querySelector('#branch').value) || 0,
                 point_of_sale: Number(host.querySelector('#point_of_sale').value) || 0,
                 buyer_required: host.querySelector('#buyer_required').value === 'true',

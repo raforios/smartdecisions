@@ -15,7 +15,6 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from schemas.billing import (
-    BillingDashboard,
     BillingSettings,
     DateWindow,
     LotEdit,
@@ -34,6 +33,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SettingsResponse
 )
+from schemas.billing_reports import BillingDashboard
 from schemas.billing_siat import InvoiceQrOut, SaleCancellation
 from services import (
     billing,
@@ -42,6 +42,7 @@ from services import (
     billing_sales,
     billing_stock
 )
+from services.billing_bridge import share_product, share_sale
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -103,13 +104,15 @@ async def create_product_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     product: ProductIn,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str # pylint: disable=unused-argument
 ) -> ProductOut:
     '''
-        Registers a SKU.
+        Registers a SKU, and hands it to SmartDecisions when the shop wants it.
     '''
-    return billing.create_product(dynamodb_resource, owner, product)
+    created = billing.create_product(dynamodb_resource, owner, product)
+    share_product(dynamodb_resource, owner, created, request)
+    return created
 
 
 @handle_service_errors(SERVICE)
@@ -118,13 +121,16 @@ async def update_product_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     edit: ProductEdit,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str # pylint: disable=unused-argument
 ) -> ProductOut:
     '''
-        Changes what a SKU says about itself.
+        Changes what a SKU says about itself, and hands the change to
+        SmartDecisions when the shop wants it.
     '''
-    return billing.update_product(dynamodb_resource, owner, edit.sku, edit.patch)
+    updated = billing.update_product(dynamodb_resource, owner, edit.sku, edit.patch)
+    share_product(dynamodb_resource, owner, updated, request)
+    return updated
 
 
 @handle_service_errors(SERVICE)
@@ -248,13 +254,16 @@ async def issue_sale_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     note: SaleNoteIn,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> SaleNoteOut:
     '''
-        Registers a sale and takes the units out of stock.
+        Registers a sale, takes the units out of stock, and hands the sale to
+        SmartDecisions when the shop wants it.
     '''
-    return billing_sales.issue_sale(dynamodb_resource, owner, note, current_user)
+    sale = billing_sales.issue_sale(dynamodb_resource, owner, note, current_user)
+    share_sale(dynamodb_resource, owner, sale, request)
+    return sale
 
 
 @handle_service_errors(SERVICE)

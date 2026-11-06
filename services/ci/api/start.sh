@@ -24,7 +24,9 @@
 #      MINING_ANALYSIS y FINANCE (el Análisis Financiero).
 #   5. BILLING (SmartBilling).
 #   6. Tareas programadas (create_schedules.sh): necesitan los Lambdas.
-#   7. Dominio api.bearsoft.com.bo y su puerta de entrada bearsoft-gateway
+#   7. Colas SQS entre servicios (create_queues.sh): leen los roles de los
+#      Lambdas, y el consumidor ya tiene que saber atender los mensajes.
+#   8. Dominio api.bearsoft.com.bo y su puerta de entrada bearsoft-gateway
 #      (setup_api_domain.sh): necesita los Lambdas. Se repite en cada
 #      despliegue porque es idempotente y agrega las rutas de un servicio nuevo.
 #
@@ -121,7 +123,9 @@ case "$1" in
         deploy_in_order ""
         echo "=== 6. Tareas programadas ==="
         ./create_schedules.sh
-        echo "=== 7. Dominio api.bearsoft.com.bo ==="
+        echo "=== 7. Colas SQS ==="
+        ./create_queues.sh
+        echo "=== 8. Dominio api.bearsoft.com.bo ==="
         domain_step || true
         ;;
     *)

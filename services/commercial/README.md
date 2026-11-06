@@ -60,6 +60,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | :--- | :--- | :--- |
 | `POST` | `/v1/commercial/sales/rows` | Creates a **sales load** from an ERP. |
 | `POST` | `/v1/commercial/{dataset_id}/sales/rows` | Adds **sales lines** from an ERP. |
+| `POST` | `/v1/commercial/sales/live` | Adds **sales lines as they happen** to the latest load, or creates one. |
 | `POST` | `/v1/commercial/{dataset_id}/collections/rows` | Pushes the **payments** from an ERP. |
 | `POST` | `/v1/commercial/{dataset_id}/stock/rows` | Pushes the day's **stock** from an ERP. |
 | `POST` | `/v1/commercial/{dataset_id}/purchases/rows` | Pushes the **purchases** from an ERP. |
@@ -70,6 +71,8 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `POST` | `/v1/commercial/{dataset_id}/purchases/from-s3` | Loads a **purchases** file already staged in S3. |
 | `POST` | `/v1/commercial/{dataset_id}/visits/from-s3` | Loads a **visits** file already staged in S3. |
 | `POST` | `/v1/commercial/{dataset_id}/objectives/from-s3` | Loads an **objectives** file already staged in S3. |
+
+**Queued requests.** SmartBilling does not call `sales/live` and `products` over HTTP: it leaves each request (path, body and the cashier's `Authorization`) in the FIFO queue `commercial-live-requests.fifo`, grouped by shop. The queue triggers this Lambda (batch of 1, `ReportBatchItemFailures`); `main.handler` serves each record through Mangum as the HTTP request it stands for, so it meets the same route, token, validation and audit. A request not answered with a 2xx is retried, and after 3 receives waits in `commercial-live-requests-dlq.fifo` (kept 14 days). Both queues, their permissions and the trigger are created by `ci/api/create_queues.sh`.
 
 ### Master Data
 

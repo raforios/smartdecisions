@@ -21,6 +21,7 @@ from schemas.billing_manual import (
 )
 from schemas.billing_siat import RecoveryOut
 from services import billing_manual
+from services.billing_bridge import share_sale
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -89,15 +90,18 @@ async def transcribe_invoice_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     transcription: ManualTranscription,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> SaleNoteOut:
     '''
-        Transcribes one paper invoice.
+        Transcribes one paper invoice: a sale like any other, so it reaches
+        SmartDecisions too when the shop wants it.
     '''
-    return billing_manual.transcribe_invoice(dynamodb_resource, owner,
+    sale = billing_manual.transcribe_invoice(dynamodb_resource, owner,
                                              transcription.contingency_id,
                                              transcription.invoice, current_user)
+    share_sale(dynamodb_resource, owner, sale, request)
+    return sale
 
 
 @handle_service_errors(SERVICE)

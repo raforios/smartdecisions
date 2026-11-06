@@ -29,6 +29,7 @@ Esta carpeta despliega los microservicios de BearSoft (los servicios base, Smart
 | `Dockerfile.local` | La receta única para correr un servicio en un contenedor local (por ejemplo, desde un docker-compose). El modo de uso está en su encabezado. | Sólo para pruebas locales. |
 | `create_dynamodb_tables.sh` | Crea las tablas DynamoDB que faltan. No borra ni modifica las que existen. | Sólo si agregas una tabla nueva. |
 | `create_schedules.sh` | Crea las tareas programadas (por ejemplo, la sincronización diaria del tipo de cambio). | No: `start.sh` lo llama. |
+| `create_queues.sh` | Crea las colas SQS entre servicios (hoy, la de SmartBilling hacia COMMERCIAL), sus colas de fallidos, los permisos de quien envía y de quien consume, y el disparador hacia el Lambda que la vacía. No borra nada. | `start.sh` lo llama en el despliegue completo. Tú, sólo si agregas una cola (caso B, paso 4). |
 | `setup_api_domain.sh` | Configura `api.bearsoft.com.bo`: certificado, dominio y la puerta de entrada `bearsoft-gateway`, con una ruta por servicio. | Sólo la primera vez o si algo del dominio falla. |
 | `update_service_urls.sh` | Cambia en los `.env` las direcciones con las que los servicios se llaman entre sí. | No: `start.sh --urls` lo llama. |
 
@@ -112,13 +113,14 @@ El script hace, en este orden (ver la [sección 8](#8-referencia-el-orden-de-des
 4. Despliega COMMERCIAL, MINING_ANALYSIS y FINANCE.
 5. Despliega BILLING.
 6. Crea las tareas programadas.
-7. Configura el dominio `api.bearsoft.com.bo` y su puerta de entrada `bearsoft-gateway`.
+7. Crea las colas SQS entre servicios.
+8. Configura el dominio `api.bearsoft.com.bo` y su puerta de entrada `bearsoft-gateway`.
 
 No cierres la terminal mientras corre. Al final debe decir **`Proceso de despliegue finalizado. ✅`**.
 
 ### Paso 3. Configurar el dominio (sólo la primera vez en una cuenta nueva)
 
-El paso 7 puede detenerse con un **AVISO** la primera vez. Es normal: el dominio necesita dos registros en **Cloudflare**, que se agregan a mano.
+El paso 8 puede detenerse con un **AVISO** la primera vez. Es normal: el dominio necesita dos registros en **Cloudflare**, que se agregan a mano.
 
 **3a. Si el aviso dice "valida el certificado en Cloudflare":**
 
@@ -224,7 +226,29 @@ El Lambda, su rol y su API los crea `build_and_deploy.sh` la primera vez; al ter
    ./create_dynamodb_tables.sh
    ```
 
-### Paso 4. Comprobar
+### Paso 4. Si agregaste una cola SQS nueva
+
+`./start.sh --redeploy` no crea colas. Para una cola nueva:
+
+1. Agrégala a la lista `QUEUES` de `create_queues.sh`, con el formato `"cola.fifo|lambda_que_consume|lambda_que_envía|visibilidad_s|retención_s|recepciones|descripción"`.
+2. Agrega su URL al `.env` del servicio que envía (sin comas ni llaves).
+3. Despliega **primero** los dos servicios, el que envía y el que consume: el consumidor tiene que saber atender los mensajes antes de recibirlos.
+4. Después ejecuta:
+   ```bash
+   ./create_queues.sh
+   ```
+
+Se puede repetir cuando quieras: deja cada cola, sus permisos y su disparador como dice la lista.
+
+Para ver si algo quedó sin atender en una cola de fallidos:
+
+```bash
+aws sqs get-queue-attributes --profile deploy_ml --region us-east-1 \
+  --queue-url https://sqs.us-east-1.amazonaws.com/732887652913/commercial-live-requests-dlq.fifo \
+  --attribute-names ApproximateNumberOfMessages
+```
+
+### Paso 5. Comprobar
 
 Sigue la [sección 6](#6-cómo-comprobar-que-un-despliegue-salió-bien).
 
@@ -357,7 +381,8 @@ Si algo falla y no está en la tabla: **lee primero los registros de CloudWatch*
 | 4 | COMMERCIAL, MINING_ANALYSIS, FINANCE | Consumen lo anterior. COMMERCIAL une INGEST, ANALYTICS y OPTIMIZATION desde el 23-oct-2026. |
 | 5 | BILLING | SmartBilling, independiente de SmartDecisions. |
 | 6 | Tareas programadas | Necesitan que los Lambdas existan. |
-| 7 | Dominio y gateway | Necesita que los Lambdas existan. Se repite en cada despliegue porque es seguro repetirlo y agrega las rutas de un servicio nuevo. |
+| 7 | Colas SQS | Leen los roles de los Lambdas que envían y consumen, y el consumidor tiene que saber atender los mensajes antes de que el disparador se los entregue. |
+| 8 | Dominio y gateway | Necesita que los Lambdas existan. Se repite en cada despliegue porque es seguro repetirlo y agrega las rutas de un servicio nuevo. |
 
 ### Las direcciones públicas
 

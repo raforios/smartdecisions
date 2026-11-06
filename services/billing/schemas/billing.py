@@ -183,6 +183,24 @@ class TicketWidth(str, Enum):
 
 # --- catalogue ---------------------------------------------------------------
 
+class ProductUnit(str, Enum):
+    '''
+        The units a product is sold in: a closed catalogue, the same codes
+        SmartDecisions keeps, so a product travels to its master as it is
+        (Rafael, 6-nov-2026).
+    '''
+    UNIT = 'UNIT'
+    PACK = 'PACK'
+    BOX = 'BOX'
+    DOZEN = 'DOZEN'
+    KILOGRAM = 'KILOGRAM'
+    GRAM = 'GRAM'
+    LITER = 'LITER'
+    MILLILITER = 'MILLILITER'
+    METER = 'METER'
+    SERVICE = 'SERVICE'
+
+
 class ProductIn(BaseModel):
     '''
         A SKU as the pharmacy registers it.
@@ -191,7 +209,7 @@ class ProductIn(BaseModel):
     description: str = Field(..., min_length = 1, max_length = 300)
     laboratory: str = Field(..., min_length = 1, max_length = 150,
                             description = 'Laboratory or importer that supplies it.')
-    unit: str = Field('UND', min_length = 1, max_length = 20)
+    unit: ProductUnit = ProductUnit.UNIT
     barcode: str | None = Field(None, max_length = 60)
     min_stock: float = Field(0, ge = 0)
     suggested_price: float | None = Field(
@@ -221,7 +239,7 @@ class ProductPatch(BaseModel):
     '''
     description: str | None = Field(None, min_length = 1, max_length = 300)
     laboratory: str | None = Field(None, min_length = 1, max_length = 150)
-    unit: str | None = Field(None, min_length = 1, max_length = 20)
+    unit: ProductUnit | None = None
     barcode: str | None = Field(None, max_length = 60)
     min_stock: float | None = Field(None, ge = 0)
     suggested_price: float | None = Field(None, ge = 0)
@@ -243,7 +261,7 @@ class ProductOut(BaseModel):
     sku: str
     description: str
     laboratory: str
-    unit: str
+    unit: ProductUnit
     barcode: str | None = None
     min_stock: float
     suggested_price: float | None = None
@@ -555,6 +573,14 @@ class BillingSettings(BaseModel):
         None,
         description = 'From this hour the screens warn about tills still open.'
     )
+    # --- SmartDecisions ----------------------------------------------------------
+    # Off by default: the products are sold apart and neither depends on the
+    # other. On, every sale issued and every product saved also reaches the
+    # shop's SmartDecisions as it happens (Rafael, 6-nov-2026).
+    send_to_smartdecisions: bool = Field(
+        False,
+        description = 'Send each sale and each product to SmartDecisions as it happens.'
+    )
 
 
 class SettingsResponse(BillingSettings):
@@ -563,81 +589,6 @@ class SettingsResponse(BillingSettings):
     '''
     next_sale_number: int
     next_purchase_number: int
-
-
-# --- counter dashboard -------------------------------------------------------
-
-class ExpiringLot(BaseModel):
-    '''
-        A batch close enough to its expiry date to act on: return it to the
-        laboratory, discount it, or push it at the counter.
-    '''
-    sku: str
-    description: str
-    lot_code: str | None = None
-    expiry_date: date
-    days_left: int
-    quantity_remaining: float
-    unit_cost: float
-    value_at_cost: float
-
-
-class LowStockProduct(BaseModel):
-    '''
-        A SKU at or under the minimum the pharmacy set for it.
-    '''
-    sku: str
-    description: str
-    available_quantity: float
-    min_stock: float
-
-
-class TopProduct(BaseModel):
-    '''
-        What sold most over the window, by amount charged.
-    '''
-    sku: str
-    description: str
-    quantity: float
-    amount: float
-
-
-class MethodTotal(BaseModel):
-    '''
-        What one payment method brought in.
-    '''
-    payment_method: PaymentMethod
-    count: int
-    total: float
-
-
-class BillingDashboard(BaseModel):
-    '''
-        What the person behind the counter needs to see when they open the
-        screen: what was sold, what it left, what is about to expire and what
-        is about to run out.
-
-        The window defaults to today because that is the question a till asks;
-        the same numbers answer for any range.
-    '''
-    date_from: date
-    date_to: date
-    sales_count: int
-    sales_amount: float
-    sales_cost: float
-    margin: float
-    margin_percent: float | None = Field(
-        None, description = 'Margin over the amount charged; None when nothing sold.'
-    )
-    average_ticket: float | None = None
-    cancelled_count: int
-    stock_value_at_cost: float
-    expiry_alert_days: int
-    expiring_soon: list[ExpiringLot]
-    expired: list[ExpiringLot]
-    low_stock: list[LowStockProduct]
-    top_products: list[TopProduct]
-    sales_by_method: list[MethodTotal] = []
 
 
 # --- grouped arguments -------------------------------------------------------

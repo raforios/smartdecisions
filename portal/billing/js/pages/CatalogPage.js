@@ -5,7 +5,7 @@
  * out next, and expanding a product shows all its batches in the order they
  * will be sold, with their expiry and cost. A batch is repriced right there.
  */
-import { BillingService, errorText } from '../services/BillingService.js';
+import { BillingService, UNIT_LABELS, errorText } from '../services/BillingService.js';
 import { escapeHtml, money, notify, setBusy, shortDate } from '../ui.js';
 
 /** A batch closer than these days to expiry asks for action before it is too late. */
@@ -166,6 +166,9 @@ export async function mountCatalog(host) {
             <div class="field-row">
                 <label class="field"><span>Laboratorio o proveedor</span>
                     <input type="text" id="laboratory" maxlength="150"></label>
+                <label class="field"><span>Unidad</span>
+                    <select id="unit">${Object.entries(UNIT_LABELS).map(([code, label]) =>
+                        `<option value="${code}">${label}</option>`).join('')}</select></label>
                 <label class="field"><span>Código de barras</span>
                     <input type="text" id="barcode" maxlength="60"></label>
                 <label class="field"><span>Stock mínimo</span>
@@ -203,6 +206,7 @@ export async function mountCatalog(host) {
                 sku: field('sku'),
                 description: field('description'),
                 laboratory: field('laboratory'),
+                unit: field('unit'),
                 barcode: field('barcode') || null,
                 min_stock: Number(host.querySelector('#min_stock').value) || 0,
                 suggested_price: field('suggested_price') === ''

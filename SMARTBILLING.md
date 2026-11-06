@@ -97,8 +97,12 @@ venta o de la devolución abierta; aviso al comprador por correo.
 8. **Lo común a todos los rubros** (plan de rubros, 10-oct): marca y
    categoría en el producto («Laboratorio» pasa a ser marca; «Requiere
    receta» queda como rasgo de farmacia) y el vendedor en la venta.
-9. **SmartBilling → SmartDecisions:** cada venta del mostrador entra al
-   análisis. Es la fase 12.1 del plan único.
+9. **SmartBilling → SmartDecisions:** ventas emitidas y transcritas, y
+   productos, desplegados y probados en vivo el 6-nov por la cola FIFO
+   `commercial-live-requests.fifo` (interruptor «Enviar a SmartDecisions» en
+   Configuración, apagado por defecto); unidad en catálogo cerrado. Falta
+   llevar anulaciones y devoluciones (por unidad) a SmartDecisions (estado
+   en `SMARTDECISIONS.md`, «Último estado», 6-nov).
 10. **Máscaras por rubro, sin fecha:** farmacia (la de hoy), comida rápida en
     sala (mesas, combos, comanda; la producción queda fuera) y los demás
     rubros (ferretería, librería, minimercado, ropa), cada uno definido con

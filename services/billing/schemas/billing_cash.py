@@ -14,7 +14,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from schemas.billing import MethodTotal
+from schemas.billing_reports import MethodTotal
 
 
 class CashSessionStatus(str, Enum):

@@ -16,11 +16,11 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 
 from models.billing import LOTS_TABLE
-from schemas.billing import (
+from schemas.billing import SaleStatus
+from schemas.billing_reports import (
+    BillingDashboard,
     ExpiringLot,
     LowStockProduct,
-    BillingDashboard,
-    SaleStatus,
     TopProduct
 )
 from services.utils import load_parameters

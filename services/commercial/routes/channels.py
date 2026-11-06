@@ -9,6 +9,7 @@ from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Header, Path as PathParam, Request, status
 
 from controllers.channels import (
+    live_sales_controller,
     ingest_collections_from_s3_controller,
     ingest_purchases_from_s3_controller,
     ingest_objectives_from_s3_controller,
@@ -213,6 +214,39 @@ async def create_sales_dataset_endpoint(
     message = f'User: {current_user}. Creating a dataset from {len(rows.rows)} line(s).'
     logger.info(message)
     return await create_sales_dataset_controller(
+        dynamodb_resource = dynamodb_resource,
+        rows = rows,
+        current_user = current_user,
+        auth_token = authorization,
+        request = request
+    )
+
+
+@router.post(
+    '/sales/live',
+    response_model = IngestResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Sales as they happen',
+    description = (
+        'For a system that sends each sale when it is made —SmartBilling\'s '
+        'till—: the lines go to the company\'s most recent dataset, appended, '
+        'and a company with none gets one created. Same contract, partial '
+        'acceptance and masters as every other door.'
+    )
+)
+async def live_sales_endpoint(
+    request: Request,
+    rows: SalesRowsSchema,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> IngestResponse:
+    '''
+        Endpoint receiving live sales lines.
+    '''
+    message = f'User: {current_user}. Receiving {len(rows.rows)} live sales line(s).'
+    logger.info(message)
+    return await live_sales_controller(
         dynamodb_resource = dynamodb_resource,
         rows = rows,
         current_user = current_user,

@@ -92,7 +92,7 @@ class ProductItem:
     sku: str
     description: str
     laboratory: str
-    unit: str = 'UND'
+    unit: str = 'UNIT'
     barcode: str | None = None
     min_stock: float = 0
     # The supplier's suggested price is the product's; what the shop charges

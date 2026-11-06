@@ -13,7 +13,6 @@ import pytest
 from controllers import billing as billing_controllers
 from controllers import billing_cash as controllers
 from schemas.billing import (
-    BillingDashboard,
     BillingError,
     BillingSettings,
     DateWindow,
@@ -35,6 +34,7 @@ from schemas.billing import (
     SaleNotesResponse,
     SettingsResponse
 )
+from schemas.billing_reports import BillingDashboard
 from schemas.billing_cash import (
     CashAlertsResponse,
     CashCloseIn,

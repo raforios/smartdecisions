@@ -21,11 +21,11 @@ from schemas.billing import (
     CARD_METHODS,
     SIN_PAYMENT_CODES,
     BillingError,
-    MethodTotal,
     Payment,
     PaymentMethod,
     SaleNoteIn
 )
+from schemas.billing_reports import MethodTotal
 from schemas.billing_siat import CatalogEntry
 from services.billing import MONEY_DECIMALS, stored_payments
 from services.exceptions import InvalidInputError

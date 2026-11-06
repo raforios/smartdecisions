@@ -96,6 +96,20 @@ export const PAYMENT_LABELS = {
 export const SALE_PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'MOBILE_WALLET', 'DEBIT_CARD',
                                      'CREDIT_CARD'];
 
+/** What each unit of the closed catalogue is called on screen, in offering order. */
+export const UNIT_LABELS = {
+    UNIT: 'Unidad',
+    PACK: 'Paquete',
+    BOX: 'Caja',
+    DOZEN: 'Docena',
+    KILOGRAM: 'Kilogramo',
+    GRAM: 'Gramo',
+    LITER: 'Litro',
+    MILLILITER: 'Mililitro',
+    METER: 'Metro',
+    SERVICE: 'Servicio'
+};
+
 /** Whether a method is a card, which carries the card number. */
 export const isCard = (method) => method === 'DEBIT_CARD' || method === 'CREDIT_CARD';
 

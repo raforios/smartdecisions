@@ -110,6 +110,8 @@ def world_fixture():
          patch.object(channels, 'read_stored_frame', _read_frame), \
          patch.object(common, 'read_stored_frame', _read_frame), \
          patch.object(common, 'store_file', _upload), \
+         patch.object(common, 'delete_stored_file',
+                      lambda key, _token: objects.pop(key, None)), \
          patch.object(channels, 'attach_to_dataset', _attach), \
          patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
          patch.object(channels, 'delete_stored_file',
@@ -473,6 +475,8 @@ def test_the_erp_pushes_sales_lines_into_its_dataset(world):
     assert response.summary.valid_rows == 2
     assert response.status == 'validated'
     assert world['dataset']['file_s3_key'].startswith(f'{DEFAULT_BUCKET_PATH}/normalized/')
+    # The file it replaced is gone: one copy of the dataset, not one per push.
+    assert list(world['objects']) == [world['dataset']['file_s3_key']]
 
 
 def test_pushing_the_same_line_twice_does_not_count_the_invoice_twice(world):
@@ -730,3 +734,38 @@ def test_the_purchases_s3_door_loads_its_file(world):
 
     assert response.summary.valid_rows == 1
     assert _stored_rows(world)['currency'].tolist() == ['BOB']
+
+
+def test_live_sales_go_to_the_latest_dataset_or_create_one(monkeypatch: pytest.MonkeyPatch):
+    '''
+        Sales sent as they happen are appended to the company's most recent
+        dataset; a company with none gets one created.
+    '''
+    live = channels
+    calls: list[tuple] = []
+
+    async def _push(*args):
+        calls.append(('push', args[1], args[2].mode))
+        return 'pushed'
+
+    async def _create(*args):
+        calls.append(('create', len(args[1].rows)))
+        return 'created'
+
+    monkeypatch.setattr(live, '_push_sales', _push)
+    monkeypatch.setattr(live, '_create_sales_dataset', _create)
+    rows = SalesRowsSchema(rows = [SaleRowSchema(date = '2026-11-06', order_id = 'N-1',
+                                                 product_name = 'Leche', quantity = 1)])
+
+    monkeypatch.setattr(live, 'list_datasets_for_owner',
+                        lambda *_args, **_kw: [{'dataset_id': 'ds-1'}])
+    first = asyncio.run(live.live_sales_controller(
+        dynamodb_resource = None, rows = rows, current_user = OWNER, auth_token = 'Bearer t',
+        request = None))
+    monkeypatch.setattr(live, 'list_datasets_for_owner', lambda *_args, **_kw: [])
+    second = asyncio.run(live.live_sales_controller(
+        dynamodb_resource = None, rows = rows, current_user = OWNER, auth_token = 'Bearer t',
+        request = None))
+
+    assert (first, second) == ('pushed', 'created')
+    assert calls == [('push', 'ds-1', LoadMode.APPEND), ('create', 1)]
