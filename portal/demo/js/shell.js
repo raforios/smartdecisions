@@ -38,7 +38,8 @@
         ['Resumen comercial', 'resumen'], ['Fuente de volumen', 'volumen'],
         ['Oportunidades', 'oportunidades'], ['Pronóstico', 'pronostico'],
         ['Segmentación', 'segmentacion'], ['Salud de cartera', 'cartera'],
-        ['Objetivos', 'objetivos'], ['Tipo de cambio', 'tipo-cambio']
+        ['Objetivos', 'objetivos'], ['Tipo de cambio', 'tipo-cambio'],
+        ['Anulaciones y devoluciones', 'anulaciones']
     ].map(([label, page]) => ({ label, page: `ventas/${page}.html` }));
     const MENU = [
         { group: '', items: [

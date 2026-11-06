@@ -12,6 +12,7 @@ from fastapi import Request
 from schemas.billing import SaleNoteOut
 from schemas.billing_returns import CreditNoteOut, CreditNoteRef
 from services import billing_reversals
+from services.billing_bridge import share_cancellation, share_return
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -23,14 +24,17 @@ async def revert_sale_cancellation_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     sale_id: str,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> SaleNoteOut:
     '''
-        Makes a cancelled invoice valid again.
+        Makes a cancelled invoice valid again, and tells SmartDecisions when
+        the shop wants it.
     '''
-    return billing_reversals.revert_sale_cancellation(dynamodb_resource, owner, sale_id,
+    sale = billing_reversals.revert_sale_cancellation(dynamodb_resource, owner, sale_id,
                                                       current_user)
+    share_cancellation(dynamodb_resource, owner, sale.sale_id, request)
+    return sale
 
 
 @handle_service_errors(SERVICE)
@@ -39,11 +43,14 @@ async def revert_credit_note_cancellation_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     ref: CreditNoteRef,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> CreditNoteOut:
     '''
-        Makes a cancelled Nota de Crédito-Débito valid again.
+        Makes a cancelled Nota de Crédito-Débito valid again, and tells
+        SmartDecisions when the shop wants it.
     '''
-    return billing_reversals.revert_credit_note_cancellation(dynamodb_resource, owner, ref,
+    note = billing_reversals.revert_credit_note_cancellation(dynamodb_resource, owner, ref,
                                                              current_user)
+    share_return(dynamodb_resource, owner, note, request)
+    return note

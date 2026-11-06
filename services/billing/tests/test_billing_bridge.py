@@ -14,8 +14,9 @@ from schemas.billing import (
     PurchaseLineIn,
     SaleLineIn
 )
-from services import billing, billing_bridge
+from services import billing, billing_bridge, billing_sales
 from tests.test_billing import ( # pylint: disable=unused-import
+    CASHIER,
     LATER,
     OWNER,
     _dynamodb,
@@ -23,6 +24,14 @@ from tests.test_billing import ( # pylint: disable=unused-import
     _register,
     _sell
 )
+from tests.test_billing_returns import ( # pylint: disable=unused-import
+    _adjustments,
+    _cancel,
+    _cancellations,
+    _return,
+    _sale
+)
+from tests.test_billing_sale_invoice import _sent # pylint: disable=unused-import
 
 AUTHORIZATION = 'Bearer cashier-token'
 
@@ -135,3 +144,58 @@ def test_a_queue_failure_is_logged_and_never_raises(monkeypatch):
     monkeypatch.setattr(billing_bridge.boto3, 'client', lambda _name: _Refusing())
     billing_bridge._queue(OWNER, {'path': billing_bridge.PRODUCTS_PATH, 'body': {}, # pylint: disable=protected-access
                                   'authorization': AUTHORIZATION})
+
+
+def test_a_cancellation_undoes_the_sale_and_leaves_nothing_of_it(dynamodb):
+    '''Cancelled, the record stands and the sale has no lines; valid again, it is reverted.'''
+    sale = _a_sale(dynamodb)
+    billing_sales.cancel_sale(dynamodb, OWNER, sale.sale_id, CASHIER)
+    stored = billing_sales.read_sale(dynamodb, OWNER, sale.sale_id)
+    record = billing_bridge.cancellation_record(dynamodb, OWNER, stored)
+    assert (record['kind'], record['state'], record['order_id']) == ('CANCELLATION', 'ACTIVE',
+                                                                     sale.number)
+    assert record['lines'] == [{'product_id': 'PARA500', 'product_name': sale.lines[0].description,
+                                'quantity': 2, 'amount': 12.0}]
+    assert record['rows'] == [] and record['reason'] is None
+
+    valid_again = billing_bridge.cancellation_record(dynamodb, OWNER,
+                                                     {**stored, 'status': 'ISSUED'})
+    assert valid_again['state'] == 'REVERTED'
+    assert [row['quantity'] for row in valid_again['rows']] == [2]
+
+
+def test_a_return_leaves_what_the_buyer_kept( # pylint: disable=unused-argument
+    dynamodb,
+    sale,
+    adjustments,
+    cancellations
+):
+    '''One of two units back: one undone, one kept; the note cancelled, both kept again.'''
+    note = _return(dynamodb, sale.sale_id)
+    stored = billing_sales.read_sale(dynamodb, OWNER, sale.sale_id)
+    record = billing_bridge.return_record(stored, stored['credit_notes'][0])
+    assert (record['kind'], record['state'], record['reversal_id']) == (
+        'RETURN', 'ACTIVE', f'NC-{note.number}')
+    assert [line['quantity'] for line in record['lines']] == [1]
+    assert [row['quantity'] for row in record['rows']] == [1]
+
+    _cancel(dynamodb, note)
+    stored = billing_sales.read_sale(dynamodb, OWNER, sale.sale_id)
+    record = billing_bridge.return_record(stored, stored['credit_notes'][0])
+    assert record['state'] == 'REVERTED'
+    assert [row['quantity'] for row in record['rows']] == [2]
+
+
+def test_cancellations_and_returns_are_queued_with_the_switch_on( # pylint: disable=unused-argument
+    dynamodb,
+    sale,
+    adjustments
+):
+    '''Both go to the reversals path, built from what BILLING stored.'''
+    _switch(dynamodb, True)
+    note = _return(dynamodb, sale.sale_id)
+    queued = _shared(billing_bridge.share_return, dynamodb, note)
+    assert queued[0][1]['path'] == billing_bridge.REVERSALS_PATH
+    assert queued[0][1]['body']['kind'] == 'RETURN'
+    queued = _shared(billing_bridge.share_cancellation, dynamodb, sale.sale_id)
+    assert queued[0][1]['body']['kind'] == 'CANCELLATION'

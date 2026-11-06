@@ -101,7 +101,7 @@ def _stored():
     with patch.object(controllers, 'read_stored_frame',
                       lambda *args, **kwargs: read_file(_template_file(), 'ventas.csv')), \
          patch.object(common, 'store_file', lambda **kwargs: kwargs['file_key']), \
-         patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
+         patch.object(common, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
          patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
          patch.object(controllers, 'delete_stored_file', lambda *args: None), \
          patch.object(controllers, 'persist_dataset', _persist), \
@@ -159,7 +159,7 @@ def test_the_multipart_upload_also_feeds_the_client_master():
                 'created_at': '2026-02-15T10:00:00Z'}
 
     with patch.object(common, 'store_file', lambda **kwargs: kwargs['file_key']), \
-         patch.object(controllers, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
+         patch.object(common, 'find_dataset_by_fingerprint', lambda **kwargs: None), \
          patch.object(common, 'sync_master', _sync), \
          patch.object(controllers, 'persist_dataset', _persist):
         response = asyncio.run(controllers.ingest_excel_controller(
@@ -391,7 +391,7 @@ def test_uploading_the_same_file_twice_does_not_duplicate_it():
     with patch.object(controllers, 'read_stored_frame',
                       lambda *args, **kwargs: read_file(_template_file(), 'ventas.csv')), \
          patch.object(controllers, 'delete_stored_file', lambda *args: None), \
-         patch.object(controllers, 'find_dataset_by_fingerprint',
+         patch.object(common, 'find_dataset_by_fingerprint',
                       lambda **kwargs: already), \
          patch.object(controllers, 'persist_dataset',
                       lambda **kwargs: written.append(kwargs) or already):

@@ -4,7 +4,12 @@
     When a shop turns `send_to_smartdecisions` on, every sale it issues and
     every product it saves also reaches its SmartDecisions: the sale lines go
     to the company's most recent dataset (`/v1/commercial/sales/live`) and the
-    product to its master (`/v1/commercial/products`).
+    product to its master (`/v1/commercial/products`). A cancellation or a
+    return —and undoing either— goes to `/v1/commercial/reversals`: recorded
+    apart, with the sale's lines as they now stand, so SmartDecisions counts
+    net sales and still knows what was undone (Rafael, 6-nov-2026). Both are
+    built from what BILLING stored, so the state of the sale or the note says
+    whether the cancellation or the return still stands.
 
     The request does not go out over HTTP from here: a Lambda freezes as soon
     as it answers, so a call left running after the sale may never leave
@@ -22,8 +27,13 @@ from botocore.exceptions import BotoCoreError, ClientError
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
-from schemas.billing import PaymentMethod, ProductOut, SaleNoteOut
+from schemas.billing import PaymentMethod, ProductOut, SaleNoteOut, SaleStatus
+from schemas.billing_returns import CreditNoteOut
+from schemas.billing_siat import InvoiceState, SiatCatalog
 from services.billing import MONEY_DECIMALS, get_settings, new_id
+from services.billing_returns import net_of_returns
+from services.billing_sales import read_sale, sale_out
+from services.billing_siat_codes import get_catalog
 from services.environment import load_and_validate_env_vars
 from services.exceptions import RegisterNotFoundError
 from services.logger_config import custom_logger as logger
@@ -33,6 +43,7 @@ LIVE_QUEUE_URL = load_and_validate_env_vars({'COMMERCIAL_LIVE_QUEUE_URL': str})[
 
 LIVE_SALES_PATH = '/v1/commercial/sales/live'
 PRODUCTS_PATH = '/v1/commercial/products'
+REVERSALS_PATH = '/v1/commercial/reversals'
 
 # The till's means of payment in SmartDecisions' codes: it keeps one card.
 PAYMENT_CODES: dict[PaymentMethod, str] = {
@@ -88,6 +99,118 @@ def product_record(product: ProductOut) -> dict[str, Any]:
         'supplier': product.laboratory,
         'unit': product.unit.value,
         'suggested_price': product.suggested_price
+    }
+
+
+def _undone_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    '''
+        Stored sale or note lines as SmartDecisions' undone lines.
+
+        Args:
+            lines (list[dict[str, Any]]): Lines with sku, description,
+                quantity and total.
+
+        Returns:
+            list[dict[str, Any]]: Product, units and bolivianos per line.
+    '''
+    return [{'product_id': line['sku'], 'product_name': line['description'],
+             'quantity': line['quantity'], 'amount': line['total']} for line in lines]
+
+
+def _standing_rows(stored: dict[str, Any]) -> list[dict[str, Any]]:
+    '''
+        The sale's lines as they now stand: nothing when it is cancelled,
+        what the buyer kept after the returns the SIN holds.
+
+        Args:
+            stored (dict[str, Any]): The sale as stored.
+
+        Returns:
+            list[dict[str, Any]]: Its lines in SmartDecisions' sales contract.
+    '''
+    if stored['status'] == SaleStatus.CANCELLED.value:
+        return []
+    kept = net_of_returns(stored)
+    return sale_rows(sale_out(kept)) if kept else []
+
+
+def _reason(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    code: Any
+) -> str | None:
+    '''
+        What the SIN's cancellation catalogue calls a reason: data the SIN
+        publishes, not wording of ours.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            code (Any): The reason code; None for an internal note.
+
+        Returns:
+            str | None: Its description; None without a code or a synced catalogue.
+    '''
+    if code is None:
+        return None
+    try:
+        entries = get_catalog(dynamodb_resource, owner, SiatCatalog.CANCELLATION_REASONS).entries
+    except RegisterNotFoundError:
+        return None
+    return next((entry.description for entry in entries if entry.code == str(code)), None)
+
+
+def cancellation_record(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    stored: dict[str, Any]
+) -> dict[str, Any]:
+    '''
+        A sale's cancellation as SmartDecisions records it; standing while the
+        sale is cancelled, reverted once it is valid again.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            stored (dict[str, Any]): The sale as stored after the change.
+
+        Returns:
+            dict[str, Any]: The record, in SmartDecisions' reversal contract.
+    '''
+    code = (stored.get('invoice') or {}).get('cancellation_reason')
+    return {
+        'reversal_id': stored['number'], 'kind': 'CANCELLATION',
+        'state': 'ACTIVE' if stored['status'] == SaleStatus.CANCELLED.value else 'REVERTED',
+        'order_id': stored['number'],
+        'date': str(stored.get('cancelled_at') or stored['created_at'])[:10],
+        'reason_code': int(code) if code else None,
+        'reason': _reason(dynamodb_resource, owner, code),
+        # What the cancellation undid: what the buyer still had of the sale.
+        'lines': _undone_lines((net_of_returns(stored) or stored)['lines']),
+        'rows': _standing_rows(stored)
+    }
+
+
+def return_record(
+    stored: dict[str, Any],
+    note: dict[str, Any]
+) -> dict[str, Any]:
+    '''
+        A credit note's return as SmartDecisions records it; standing while
+        the SIN holds the note, reverted once the note is cancelled.
+
+        Args:
+            stored (dict[str, Any]): The sale as stored after the change.
+            note (dict[str, Any]): The credit note, as stored in the sale.
+
+        Returns:
+            dict[str, Any]: The record, in SmartDecisions' reversal contract.
+    '''
+    return {
+        'reversal_id': f'NC-{note["number"]}', 'kind': 'RETURN',
+        'state': 'REVERTED' if note['state'] == InvoiceState.CANCELLED.value else 'ACTIVE',
+        'order_id': stored['number'], 'date': str(note['issued_at'])[:10],
+        'lines': _undone_lines(note['lines']), 'rows': _standing_rows(stored)
     }
 
 
@@ -180,3 +303,49 @@ def share_product(
     '''
     _share(dynamodb_resource, owner, request,
            (PRODUCTS_PATH, {'products': [product_record(product)]}))
+
+
+def share_cancellation(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    sale_id: str,
+    request: Request | None
+) -> None:
+    '''
+        Sends a sale's cancellation —or its reversion— to SmartDecisions, when
+        the shop wants it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            sale_id (str): The sale just cancelled or made valid again.
+            request (Request | None): The incoming request, for the token.
+    '''
+    stored = read_sale(dynamodb_resource, owner, sale_id)
+    if stored:
+        _share(dynamodb_resource, owner, request,
+               (REVERSALS_PATH, cancellation_record(dynamodb_resource, owner, stored)))
+
+
+def share_return(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    note: CreditNoteOut,
+    request: Request | None
+) -> None:
+    '''
+        Sends a return —or its cancellation, or that cancellation reverted— to
+        SmartDecisions, when the shop wants it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            note (CreditNoteOut): The credit note just issued or changed.
+            request (Request | None): The incoming request, for the token.
+    '''
+    stored = read_sale(dynamodb_resource, owner, note.sale_id)
+    stored_note = next((item for item in (stored or {}).get('credit_notes', [])
+                        if item['credit_note_id'] == note.credit_note_id), None)
+    if stored_note:
+        _share(dynamodb_resource, owner, request,
+               (REVERSALS_PATH, return_record(stored, stored_note)))

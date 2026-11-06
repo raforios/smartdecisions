@@ -16,6 +16,7 @@ from fastapi import HTTPException
 
 from controllers import channels
 from controllers import common
+from controllers import sales_load
 from controllers import stock as stock_controllers
 from services.load_files import read_file
 from services.utils import DEFAULT_BUCKET_PATH
@@ -106,13 +107,15 @@ def world_fixture():
         return dataset
 
     with patch.object(channels, 'get_owned_dataset', lambda **kwargs: dataset), \
+         patch.object(sales_load, 'get_owned_dataset', lambda **kwargs: dataset), \
+         patch.object(sales_load, 'read_stored_frame', _read_frame), \
+         patch.object(sales_load, 'attach_to_dataset', _attach), \
          patch.object(channels, 'load_sales_frame', lambda *args: _sales()), \
          patch.object(channels, 'read_stored_frame', _read_frame), \
          patch.object(common, 'read_stored_frame', _read_frame), \
          patch.object(common, 'store_file', _upload), \
          patch.object(common, 'delete_stored_file',
                       lambda key, _token: objects.pop(key, None)), \
-         patch.object(channels, 'attach_to_dataset', _attach), \
          patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
          patch.object(channels, 'delete_stored_file',
                       lambda file_key, auth_token: objects.pop(str(file_key), None)), \
@@ -638,7 +641,7 @@ def _create_sales(
 
     with patch.object(common, 'persist_dataset', _persist), \
          patch.object(common, 'sync_master', lambda **kwargs: kwargs['frame']), \
-         patch.object(channels, 'find_dataset_by_fingerprint', lambda **kwargs: existing):
+         patch.object(common, 'find_dataset_by_fingerprint', lambda **kwargs: existing):
         return asyncio.run(channels.create_sales_dataset_controller(
             dynamodb_resource = None,
             rows = SalesRowsSchema(rows = rows),
@@ -752,8 +755,8 @@ def test_live_sales_go_to_the_latest_dataset_or_create_one(monkeypatch: pytest.M
         calls.append(('create', len(args[1].rows)))
         return 'created'
 
-    monkeypatch.setattr(live, '_push_sales', _push)
-    monkeypatch.setattr(live, '_create_sales_dataset', _create)
+    monkeypatch.setattr(live, 'push_sales', _push)
+    monkeypatch.setattr(live, 'create_sales_dataset', _create)
     rows = SalesRowsSchema(rows = [SaleRowSchema(date = '2026-11-06', order_id = 'N-1',
                                                  product_name = 'Leche', quantity = 1)])
 

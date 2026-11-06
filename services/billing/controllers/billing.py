@@ -42,7 +42,7 @@ from services import (
     billing_sales,
     billing_stock
 )
-from services.billing_bridge import share_product, share_sale
+from services.billing_bridge import share_cancellation, share_product, share_sale
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -272,15 +272,18 @@ async def cancel_sale_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     cancellation: SaleCancellation,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> SaleNoteOut:
     '''
-        Cancels a note, at the SIN first when it is an invoice, and returns its
-        units to the batches they left.
+        Cancels a note, at the SIN first when it is an invoice, returns its
+        units to the batches they left, and tells SmartDecisions when the shop
+        wants it.
     '''
-    return billing_sales.cancel_sale(dynamodb_resource, owner, cancellation.sale_id,
+    sale = billing_sales.cancel_sale(dynamodb_resource, owner, cancellation.sale_id,
                                      current_user, cancellation.reason_code)
+    share_cancellation(dynamodb_resource, owner, sale.sale_id, request)
+    return sale
 
 
 @handle_service_errors(SERVICE)

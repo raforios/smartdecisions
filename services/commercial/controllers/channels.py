@@ -13,7 +13,6 @@
     stored, and the companion's own key decides what counts as a repeat.
 '''
 from collections.abc import Callable
-from dataclasses import replace
 from typing import Any
 
 import pandas as pd
@@ -27,22 +26,15 @@ from controllers.common import (
     LoadContext,
     merge_if_appending,
     API_ORIGIN,
-    MAX_ISSUES_ON_RESPONSE,
     CompanionSpec,
     load_sales_frame,
-    native_numbers,
-    retire_replaced_file,
     rows_frame,
-    store_companion,
-    store_frame,
-    store_new_dataset,
-    to_ingest_response,
-    with_known_masters
+    store_companion
 )
 from controllers.purchases_load import SPEC as PURCHASES
+from controllers.sales_load import create_sales_dataset, push_sales
 from controllers.stock import SPEC as STOCK
 from controllers.visits import SPEC as VISITS
-from schemas.clients import ClientSource
 from schemas.channels import (
     CollectionsPushSchema,
     ObjectivesPushSchema,
@@ -68,13 +60,7 @@ from services.objectives_load import parse_frame as parse_objectives_frame
 from services.objectives_load import prepare_rows as prepare_objectives
 from services.objectives_load import validate_rows as validate_objectives
 from services.commercial import fill_product_ids
-from services.commercial import prepare_rows as prepare_sales_rows
-from services.commercial import validate_rows_partial
-from services.load_files import serialize_dataframe
 from services.commercial_utils import (
-    attach_to_dataset,
-    content_fingerprint,
-    find_dataset_by_fingerprint,
     get_owned_dataset,
     list_datasets_for_owner,
     read_stored_frame
@@ -84,7 +70,6 @@ from services.purchases_load import validate_rows as validate_purchases
 from services.stock_load import parse_frame as parse_stock_frame
 from services.stock_load import prepare_rows as prepare_stock
 from services.stock_load import validate_rows as validate_stock
-from services.logger_config import custom_logger as logger
 from services.utils import audit_event, delete_stored_file, handle_service_errors
 from services.visits import parse_frame as parse_visits_frame
 from services.visits import prepare_rows as prepare_visits
@@ -477,49 +462,6 @@ async def ingest_visits_from_s3_controller(
     return stored
 
 
-# A sales line IS its invoice and its product: one line per product per
-# invoice. That is what lets an ERP push the same day twice —a retry, or a
-# correction to one line— without the invoice ending up counted twice.
-_SALES_MERGE_KEYS: tuple[str, ...] = ('order_id', 'product_id')
-
-
-def _merge_sales(
-    dataset: dict[str, Any],
-    accepted: Any,
-    auth_token: str
-) -> Any:
-    '''
-        Lands pushed sales lines on top of the ones the dataset already holds.
-
-        The stored rows are put through the same contract before comparing,
-        because they come back from CSV as text and a date that is a Timestamp
-        on one side and a string on the other never matches.
-
-        Args:
-            dataset (dict[str, Any]): The dataset item.
-            accepted (pd.DataFrame): The lines just accepted.
-            auth_token (str): The caller's Authorization header, forwarded to FILES.
-
-        Returns:
-            pd.DataFrame: Stored lines and new lines, deduplicated.
-    '''
-    stored_key = dataset.get('file_s3_key')
-    if not stored_key:
-        return accepted
-    previous = read_stored_frame(str(stored_key), auth_token)
-    if previous.empty:
-        return accepted
-    aligned = validate_rows_partial(previous, API_ORIGIN).accepted
-    merged = pd.concat([aligned, accepted], ignore_index = True)
-    keys = [key for key in _SALES_MERGE_KEYS if key in merged.columns]
-    if keys:
-        merged = merged.drop_duplicates(subset = keys, keep = 'last')
-    message = (f'Sales merge: {len(aligned)} stored + {len(accepted)} pushed = '
-               f'{len(merged)} line(s).')
-    logger.info(message)
-    return merged.reset_index(drop = True)
-
-
 @handle_service_errors('COMMERCIAL')
 @audit_event('COMMERCIAL', 'Dataset', 'UPDATE')
 async def push_sales_controller(
@@ -549,65 +491,7 @@ async def push_sales_controller(
         Returns:
             IngestResponse: The dataset as it now stands.
     '''
-    return await _push_sales(dynamodb_resource, dataset_id, push, current_user, auth_token)
-
-
-async def _push_sales(
-    dynamodb_resource: ServiceResource,
-    dataset_id: str,
-    push: SalesPushSchema,
-    current_user: str,
-    auth_token: str
-) -> IngestResponse:
-    '''
-        Sales lines into an owned dataset, shared by the push door and the live
-        door so each is reported and audited once, by its own controller.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            dataset_id (str): Dataset the lines belong to.
-            push (SalesPushSchema): Mode and rows.
-            current_user (str): Authenticated caller and owner of the dataset.
-            auth_token (str): The caller's Authorization header, forwarded to FILES.
-
-        Returns:
-            IngestResponse: The dataset as it now stands.
-    '''
-    dataset = get_owned_dataset(
-        dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id,
-        owner_email = current_user
-    )
-    result = validate_rows_partial(prepare_sales_rows(rows_frame(push.rows)), API_ORIGIN)
-    result = with_known_masters(dynamodb_resource, current_user, result, ClientSource.API)
-
-    whole = result
-    if push.mode is LoadMode.APPEND:
-        merged = _merge_sales(dataset, result.accepted, auth_token)
-        if len(merged) != len(result.accepted):
-            whole = replace(validate_rows_partial(merged, API_ORIGIN),
-                            issues = result.issues)
-
-    replaced_key = dataset.get('file_s3_key')
-    file_key = store_frame(whole.accepted, 'normalized', auth_token)
-    stored = attach_to_dataset(
-        dynamodb_resource = dynamodb_resource,
-        dataset_id = dataset_id,
-        payload = {
-            'file_s3_key': file_key,
-            'status': 'validated' if len(whole.accepted) else 'failed',
-            **whole.summary.model_dump(),
-            'issues': [
-                issue.model_dump(mode = 'json')
-                for issue in result.issues[:MAX_ISSUES_ON_RESPONSE]
-            ]
-        }
-    )
-    retire_replaced_file(replaced_key, auth_token)
-    message = (f'Dataset {dataset_id} received {len(push.rows)} pushed line(s) '
-               f'({push.mode.value}); {whole.summary.valid_rows} stored.')
-    logger.info(message)
-    return to_ingest_response(native_numbers(stored))
+    return await push_sales(dynamodb_resource, dataset_id, push, current_user, auth_token)
 
 
 @handle_service_errors('COMMERCIAL')
@@ -638,50 +522,7 @@ async def create_sales_dataset_controller(
             IngestResponse: The new dataset, or the one that already held
                 these lines.
     '''
-    return await _create_sales_dataset(dynamodb_resource, rows, current_user, auth_token)
-
-
-async def _create_sales_dataset(
-    dynamodb_resource: ServiceResource,
-    rows: SalesRowsSchema,
-    current_user: str,
-    auth_token: str
-) -> IngestResponse:
-    '''
-        A new dataset from posted lines, shared by the create door and the live
-        door so each is reported and audited once, by its own controller.
-
-        Args:
-            dynamodb_resource (ServiceResource): The DynamoDB resource.
-            rows (SalesRowsSchema): The lines.
-            current_user (str): Authenticated caller, owner of the dataset.
-            auth_token (str): The caller's Authorization header, forwarded to FILES.
-
-        Returns:
-            IngestResponse: The new dataset, or the one that already held
-                these lines.
-    '''
-    frame = prepare_sales_rows(rows_frame(rows.rows))
-    fingerprint = content_fingerprint(serialize_dataframe(frame, 'raw.csv'))
-    existing = find_dataset_by_fingerprint(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user,
-        fingerprint = fingerprint
-    )
-    if existing is not None:
-        message = (f'Dataset {existing["dataset_id"]} already holds these lines for '
-                   f'{current_user}; returning it.')
-        logger.info(message)
-        return to_ingest_response(existing, already_stored = True)
-
-    persisted = store_new_dataset(
-        dynamodb_resource, (current_user, auth_token),
-        validate_rows_partial(frame, API_ORIGIN), (fingerprint, ClientSource.API)
-    )
-    message = (f'Dataset {persisted["dataset_id"]} created for {current_user} from '
-               f'{len(rows.rows)} pushed line(s).')
-    logger.info(message)
-    return to_ingest_response(native_numbers(persisted))
+    return await create_sales_dataset(dynamodb_resource, rows, current_user, auth_token)
 
 
 @handle_service_errors('COMMERCIAL')
@@ -782,7 +623,7 @@ async def live_sales_controller(
     '''
     latest = list_datasets_for_owner(dynamodb_resource, current_user, limit = 1)
     if not latest:
-        return await _create_sales_dataset(dynamodb_resource, rows, current_user, auth_token)
-    return await _push_sales(dynamodb_resource, str(latest[0]['dataset_id']),
+        return await create_sales_dataset(dynamodb_resource, rows, current_user, auth_token)
+    return await push_sales(dynamodb_resource, str(latest[0]['dataset_id']),
                              SalesPushSchema(rows = rows.rows, mode = LoadMode.APPEND),
                              current_user, auth_token)

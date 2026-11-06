@@ -100,9 +100,10 @@ venta o de la devolución abierta; aviso al comprador por correo.
 9. **SmartBilling → SmartDecisions:** ventas emitidas y transcritas, y
    productos, desplegados y probados en vivo el 6-nov por la cola FIFO
    `commercial-live-requests.fifo` (interruptor «Enviar a SmartDecisions» en
-   Configuración, apagado por defecto); unidad en catálogo cerrado. Falta
-   llevar anulaciones y devoluciones (por unidad) a SmartDecisions (estado
-   en `SMARTDECISIONS.md`, «Último estado», 6-nov).
+   Configuración, apagado por defecto); unidad en catálogo cerrado.
+   Anulaciones, devoluciones y sus reversiones también llegan, desplegadas
+   el 6-nov; en vivo sólo se probó anular una nota interna (las demás
+   necesitan el SIN, en pausa).
 10. **Máscaras por rubro, sin fecha:** farmacia (la de hoy), comida rápida en
     sala (mesas, combos, comanda; la producción queda fuera) y los demás
     rubros (ferretería, librería, minimercado, ropa), cada uno definido con

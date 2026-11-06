@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         summary: 'Resumen comercial', volume: 'Fuente de volumen', opportunities: 'Oportunidades',
         forecast: 'Pronóstico de demanda', segmentation: 'Segmentación de clientes',
         portfolio: 'Salud de cartera', objectives: 'Cumplimiento de objetivos',
-        fx: 'Efecto del tipo de cambio'
+        fx: 'Efecto del tipo de cambio', reversals: 'Anulaciones y devoluciones'
     };
     const paint = (name, ...rest) => O.paint(name, TITLES[name], ...rest);
     const failed = (name) => paint(name, '—', 'No se pudo calcular. Entra para volver a intentar.');
@@ -107,6 +107,15 @@ document.addEventListener('DOMContentLoaded', () => {
             `${signed(data.growth_usd_pct)} medido en dólares, del primer al último mes.`);
     }
 
+    function reversals(data) {
+        if (!data.count) {
+            paint('reversals', '—', 'Sin anulaciones ni devoluciones en el período.');
+            return;
+        }
+        paint('reversals', `Bs ${number(M.bob(data.amount))}`,
+            `en ${number(data.count)} notas: ${number(data.quantity)} unidades.`);
+    }
+
     function opportunities(runs, datasetId) {
         const run = ((runs && runs.runs) || []).find((item) => item.dataset_id === datasetId);
         if (!run) {
@@ -138,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         O.analysis('portfolio', `${BASE}/portfolio/${id}${query}`, portfolio, () => failed('portfolio'));
         O.analysis('objectives', `${BASE}/objectives/${id}${query}`, objectives, () => failed('objectives'));
         O.analysis('fx', `${BASE}/fx-effect/${id}${fxQuery}`, fx, () => failed('fx'));
+        O.analysis('reversals', `${BASE}/reversals${query}`, reversals, () => failed('reversals'));
         window.SD_API.get(`${BASE}/runs`, { limit: 5 })
             .then((runs) => opportunities(runs, datasetId))
             .catch(() => failed('opportunities'));

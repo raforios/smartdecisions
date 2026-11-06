@@ -7,11 +7,12 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 
 from controllers.common import (
+    dataset_with_content,
+    store_new_or_known,
     caller_token,
     template_key,
     native_numbers,
     store_frame,
-    store_new_dataset,
     with_known_masters,
     summary_of,
     to_ingest_response
@@ -34,7 +35,6 @@ from schemas.commercial import (
     ValidationIssue
 )
 from services.exceptions import ResourceNotFoundError
-from services.logger_config import custom_logger as logger
 from services.commercial_utils import HISTORY_DEFAULT_LIMIT
 from services.commercial import parse_and_validate
 from services.commercial import parse_frame as parse_sales_frame
@@ -42,7 +42,6 @@ from services.load_files import serialize_dataframe
 from services.commercial_utils import (
     content_fingerprint,
     download_template_bytes,
-    find_dataset_by_fingerprint,
     get_owned_dataset,
     list_datasets_for_owner,
     persist_dataset,
@@ -85,16 +84,9 @@ async def ingest_excel_controller(
     # used to mint a new identifier, a new copy in S3 and a new history row
     # every time, with nothing telling the user they already had it.
     fingerprint = content_fingerprint(file_bytes)
-    existing = find_dataset_by_fingerprint(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user,
-        fingerprint = fingerprint
-    )
-    if existing is not None:
-        message = (f'Dataset {existing["dataset_id"]} already holds this exact '
-                   f'file for {current_user}; returning it.')
-        logger.info(message)
-        return to_ingest_response(existing, already_stored = True)
+    stored_before = dataset_with_content(dynamodb_resource, current_user, fingerprint)
+    if stored_before is not None:
+        return stored_before
 
     result = parse_and_validate(file_bytes, filename)
     is_valid = not result.issues
@@ -169,27 +161,15 @@ async def ingest_excel_from_s3_controller(
     # Same rule as the direct upload: identical content is the same dataset.
     # Fingerprinted over the canonical rows and not the raw bytes, so the same
     # data sent as .xlsx or as .csv is recognised as the one dataset it is.
-    fingerprint = content_fingerprint(serialize_dataframe(raw, 'raw.csv'))
-    existing = find_dataset_by_fingerprint(
-        dynamodb_resource = dynamodb_resource,
-        owner_email = current_user,
-        fingerprint = fingerprint
+    response, created = store_new_or_known(
+        dynamodb_resource, (current_user, auth_token), raw,
+        lambda frame: parse_sales_frame(frame, file_name), ClientSource.FILE
     )
-    if existing is not None:
-        message = (f'Dataset {existing["dataset_id"]} already holds this exact '
-                   f'file for {current_user}; returning it.')
-        logger.info(message)
-        return to_ingest_response(existing, already_stored = True)
-
-    persisted = store_new_dataset(
-        dynamodb_resource, (current_user, auth_token),
-        parse_sales_frame(raw, file_name), (fingerprint, ClientSource.FILE)
-    )
-
-    # The staged upload is temporary: its rows now live in the normalized
-    # dataset, so the raw copy is deleted instead of piling up in the bucket.
-    delete_stored_file(file_key, auth_token)
-    return to_ingest_response(persisted)
+    if created:
+        # The staged upload is temporary: its rows now live in the normalized
+        # dataset, so the raw copy is deleted instead of piling up in the bucket.
+        delete_stored_file(file_key, auth_token)
+    return response
 
 
 @handle_service_errors('COMMERCIAL', with_log = False)

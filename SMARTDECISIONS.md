@@ -194,17 +194,16 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   al último dataset o crea uno. Probado: crear y agregar, colas en 0.
   Infraestructura en `ci/api/create_queues.sh` (lo llama `start.sh`).
   Unidad del producto = catálogo cerrado `ProductUnit` en los dos.
-- **Archivos reemplazados (6-nov, falta desplegar COMMERCIAL):** cada carga
-  que reemplaza el archivo de un dataset (ventas por API y complementos)
-  borra el anterior por FILES; antes quedaba huérfano, y con el envío en
-  vivo cada venta dejaba una copia del dataset en S3.
-- **Siguiente, sin deuda (Rafael, 6-nov):** anulaciones y devoluciones
-  hacia COMMERCIAL. Respuesta de Rafael: las anulaciones se **conocen y se
-  analizan** (monto, cantidades), «quizá en otro lugar que enteramente
-  maneje anulaciones», con reporte y gráfico; las devoluciones parciales
-  van **por unidad** (compró 4, devuelve 1: menos monto, la unidad vuelve
-  al inventario), bajo la misma regla. Diseño por cerrar con Rafael antes
-  de programar.
+- **Archivos reemplazados (6-nov, desplegado):** cada carga que reemplaza
+  el archivo de un dataset (ventas por API y complementos) borra el anterior
+  por FILES.
+- **Anulaciones y devoluciones (6-nov, desplegado; probada en vivo la
+  anulación de una nota interna; devoluciones y reversiones, sólo con el SIN
+  simulado mientras sigan en pausa las pruebas con el SIN):** `POST/GET /v1/commercial/reversals`, tabla
+  `commercial_reversals` (creada). Ventas netas por unidad en el último
+  dataset; registro aparte con su reporte (mes, motivo, detalle) en
+  Comercial › Ventas › Anulaciones y devoluciones. BILLING envía anulación,
+  devolución, nota anulada y las dos reversiones por la misma cola.
 - Después: puente a FINANCE y rubro en la empresa (AUTH), plan 12.1.
 
 **3-nov-2026.**

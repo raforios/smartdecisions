@@ -18,6 +18,7 @@ from schemas.billing_returns import (
 )
 from schemas.billing_siat import InvoiceQrOut
 from services import billing_returns
+from services.billing_bridge import share_return
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -29,13 +30,16 @@ async def return_sale_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     sale_return: SaleReturn,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> CreditNoteOut:
     '''
-        Takes back all or part of an invoiced sale with a Nota de Crédito-Débito.
+        Takes back all or part of an invoiced sale with a Nota de Crédito-Débito,
+        and tells SmartDecisions when the shop wants it.
     '''
-    return billing_returns.return_sale(dynamodb_resource, owner, sale_return, current_user)
+    note = billing_returns.return_sale(dynamodb_resource, owner, sale_return, current_user)
+    share_return(dynamodb_resource, owner, note, request)
+    return note
 
 
 @handle_service_errors(SERVICE)
@@ -58,14 +62,17 @@ async def cancel_credit_note_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     cancellation: CreditNoteCancellation,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> CreditNoteOut:
     '''
-        Cancels a Nota de Crédito-Débito and undoes its return.
+        Cancels a Nota de Crédito-Débito, undoes its return, and tells
+        SmartDecisions when the shop wants it.
     '''
-    return billing_returns.cancel_credit_note(dynamodb_resource, owner, cancellation,
+    note = billing_returns.cancel_credit_note(dynamodb_resource, owner, cancellation,
                                               current_user)
+    share_return(dynamodb_resource, owner, note, request)
+    return note
 
 
 @handle_service_errors(SERVICE)

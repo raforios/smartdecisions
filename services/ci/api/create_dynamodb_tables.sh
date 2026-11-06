@@ -43,6 +43,13 @@ TABLES=(
     # ERP ("Ana", "V-017") y el vendedor ingresa con su correo. Acá se dice
     # una vez que son la misma persona. Misma clave que el de clientes.
     "commercial_sellers:owner_email:S:id:S"
+    # Maestro de productos: la clave de orden es el SKU del productor,
+    # distribuidor o proveedor (Rafael, 5-nov-2026).
+    "commercial_products:owner_email:S:sku:S"
+    # Anulaciones y devoluciones (Rafael, 6-nov-2026): se conocen y se
+    # analizan aparte, mientras las ventas quedan netas. La clave de orden es
+    # "{tipo}#{id}": una revertida vuelve a escribir la misma fila.
+    "commercial_reversals:owner_email:S:reversal_id:S"
     "commercial_analytics_runs:id:S"
     # Seguimiento de rutas (LOCALIZATION portado a COMMERCIAL). El dueño es
     # la partición: sólo se consulta la propia y una ruta ajena no existe. En

@@ -38,6 +38,8 @@ from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
 from services.load_files import serialize_dataframe
 from services.commercial_utils import (
     attach_to_dataset,
+    content_fingerprint,
+    find_dataset_by_fingerprint,
     persist_dataset,
     read_stored_frame
 )
@@ -350,6 +352,73 @@ def merge_if_appending(
         return result
     whole = context.validate_rows(merged, context.sales, context.origin)
     return replace(whole, issues = result.issues)
+
+
+def dataset_with_content(
+    dynamodb_resource: ServiceResource,
+    owner_email: str,
+    fingerprint: str
+) -> IngestResponse | None:
+    '''
+        The dataset that already holds this exact content, as the answer to
+        loading it again: the same content twice is the same dataset, not a
+        second identifier, a second copy in S3 and a second history row.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            owner_email (str): The owner, part of the lookup.
+            fingerprint (str): The content's fingerprint.
+
+        Returns:
+            IngestResponse | None: That dataset, or None when it is new.
+    '''
+    existing = find_dataset_by_fingerprint(
+        dynamodb_resource = dynamodb_resource,
+        owner_email = owner_email,
+        fingerprint = fingerprint
+    )
+    if existing is None:
+        return None
+    message = (f'Dataset {existing["dataset_id"]} already holds this content for '
+               f'{owner_email}; returning it.')
+    logger.info(message)
+    return to_ingest_response(existing, already_stored = True)
+
+
+def store_new_or_known(
+    dynamodb_resource: ServiceResource,
+    owner: tuple[str, str],
+    frame: pd.DataFrame,
+    validate: Callable[[pd.DataFrame], Any],
+    source: ClientSource
+) -> tuple[IngestResponse, bool]:
+    '''
+        A new dataset from rows that came without a file of their own —a
+        staged file read through FILES, or lines an ERP posts—, or the one
+        that already holds them. Fingerprinted over the canonical rows, so the
+        same data sent as .xlsx, .csv or JSON is the one dataset it is.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            owner (tuple[str, str]): The owner, and the Authorization header
+                forwarded to FILES.
+            frame (pd.DataFrame): The rows as they came.
+            validate (Callable[[pd.DataFrame], Any]): Their partial validation.
+            source (ClientSource): The door the rows came through.
+
+        Returns:
+            tuple[IngestResponse, bool]: The dataset, and whether it is new.
+    '''
+    current_user, _ = owner
+    fingerprint = content_fingerprint(serialize_dataframe(frame, 'raw.csv'))
+    known = dataset_with_content(dynamodb_resource, current_user, fingerprint)
+    if known is not None:
+        return known, False
+    persisted = store_new_dataset(dynamodb_resource, owner, validate(frame),
+                                  (fingerprint, source))
+    message = f'Dataset {persisted["dataset_id"]} created for {current_user}: {len(frame)} row(s).'
+    logger.info(message)
+    return to_ingest_response(native_numbers(persisted)), True
 
 
 def retire_replaced_file(

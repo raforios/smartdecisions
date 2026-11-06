@@ -74,7 +74,8 @@
         receivables: ['stampReceivables'],
         stock: ['stampStock'],
         stockHistory: ['stampStockHistory'],
-        purchases: ['stampPurchases']
+        purchases: ['stampPurchases'],
+        reversals: ['stampReversals']
     };
 
     function markStamp(kind, timestamp) {
@@ -91,7 +92,8 @@
     // Each area page carries only its own sections; the others are skipped.
     const ANALYSIS_SECTIONS = ['stepDashboard', 'stepVolume', 'stepForecast',
         'stepSegmentation', 'stepOpportunities', 'stepPortfolio', 'stepReceivables',
-        'stepStock', 'stepObjectives', 'stepFx', 'stepStockHistory', 'stepPurchases'];
+        'stepStock', 'stepObjectives', 'stepFx', 'stepStockHistory', 'stepPurchases',
+        'stepReversals'];
     function showAnalysisView(sectionId, scroll = true) {
         ANALYSIS_SECTIONS.forEach((id) => {
             const section = document.getElementById(id);
@@ -139,7 +141,8 @@
         stepObjectives: 'objectives',
         stepFx: 'fx',
         stepStockHistory: 'stockHistory',
-        stepPurchases: 'purchases'
+        stepPurchases: 'purchases',
+        stepReversals: 'reversals'
     };
 
     function restoreLastView() {
@@ -234,6 +237,15 @@
             ready: 'Compras listas.', failed: 'No se pudieron leer las compras.',
             fetch: () => window.SD_API.get(analysisUrl('purchases')),
             render: (...args) => A.renderPurchases(...args)
+        },
+        // The company's own record, not a dataset's: the window alone scopes it.
+        reversals: {
+            busy: 'Leyendo…', running: 'Leyendo las anulaciones y devoluciones…',
+            ready: 'Anulaciones y devoluciones listas.',
+            failed: 'No se pudieron leer las anulaciones y devoluciones.',
+            fetch: () => window.SD_API.get(
+                `${ANALYTICS_URL}/v1/commercial/reversals${analysisQuery()}`),
+            render: (...args) => A.renderReversals(...args)
         }
     };
 
@@ -405,7 +417,8 @@
         stockHistory: (payload) => A.renderStockHistoryChart(payload.photos || []),
         summary: (payload) => A.renderSummaryCharts(payload),
         forecast: (payload) => A.renderForecast(payload.data, payload.compare),
-        segmentation: (payload) => A.renderSegmentation(payload)
+        segmentation: (payload) => A.renderSegmentation(payload),
+        reversals: (payload) => A.renderReversalsChart(payload.months || [])
     };
 
     function mountChartCurrency() {

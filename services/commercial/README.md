@@ -90,6 +90,15 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/commercial/sellers` | The company's **sellers**. |
 | `PATCH` | `/v1/commercial/sellers/{seller_id}` | Links a **seller** to a user, or renames them. |
 
+### Cancellations and Returns
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/commercial/reversals` | Records a **cancellation or a return** (or its reversion) and replaces the sale's lines in the latest dataset with what the buyer kept. |
+| `GET` | `/v1/commercial/reversals` | **Cancellations and returns** by month and by reason, and every record. |
+
+A sale undone is recorded apart while the sales stay net (Rafael, 6-nov-2026): a cancellation takes the sale's lines out of the latest dataset, a return leaves the units the buyer kept. One record per cancellation or return, keyed `{kind}#{id}`; reverting it writes the same record as `REVERTED`, which stays listed and stops counting, and keeps the day it was undone. SmartBilling sends them through the same queue as its sales.
+
 ### Analyses
 
 | Method | Endpoint | Description |
@@ -205,6 +214,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `commercial_datasets` | `id` | — | A sales load: owner, status, summary and pointers to its files in S3 (the payments, stock, purchases, visits and objectives attached) |
 | `commercial_clients` | `owner_email` | `id` | Client master data |
 | `commercial_products` | `owner_email` | `sku` | Product master data |
+| `commercial_reversals` | `owner_email` | `reversal_id` | Cancellations and returns: kind, state, sale, day, reason, the products undone and their units and amount |
 | `commercial_sellers` | `owner_email` | `id` | Seller master data and the user they sign in with |
 | `commercial_analytics_runs` | `id` | — | The opportunity runs |
 | `commercial_policies` | `owner_email` | — | The company's commercial policy (objective traffic light, bolivianos per point, share of cost in dollars) |
