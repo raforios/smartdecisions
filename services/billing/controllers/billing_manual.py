@@ -22,7 +22,7 @@ from schemas.billing_manual import (
 from schemas.billing_siat import RecoveryOut
 from services import billing_manual
 from services.billing_bridge import share_sale
-from services.billing_finance import share_month
+from services.billing_movements import share_movement
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -102,7 +102,7 @@ async def transcribe_invoice_controller(
                                              transcription.contingency_id,
                                              transcription.invoice, current_user)
     share_sale(dynamodb_resource, owner, sale, request)
-    share_month(dynamodb_resource, owner, sale.created_at, request)
+    share_movement(dynamodb_resource, owner, sale.created_at, request)
     return sale
 
 

@@ -193,9 +193,9 @@
         }
     }
 
-    // The modules the company's data turns on (Rafael, 8-nov-2026): read once
-    // per dataset from its status and kept for the session, so every page
-    // hides the same things without asking again.
+    // The modules the company's data turns on (Rafael, 8-nov-2026). The last
+    // answer is kept so a page draws at once, and every page asks again: data
+    // that arrives live (SmartBilling's first purchase) turns a module on.
     const MODULES_KEY = 'sd_modules';
 
     function cachedModules() {
@@ -209,8 +209,6 @@
     }
 
     async function ensureModules() {
-        const cached = cachedModules();
-        if (cached) return cached;
         const datasetId = await ensureDataset();
         if (!datasetId) return null;
         try {

@@ -219,13 +219,18 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   FINANCE acepta por la cola a cualquier usuario de la empresa (Rafael,
   8-nov); la carga directa sigue siendo del gerente. El inventario se
   valora sin el IVA de las compras con factura, como FINANCE.
-- **Versión oficial reducida (8-nov, en código, falta desplegar COMMERCIAL y
-  BILLING y publicar el portal):** módulos activos según los datos; el
+- **Versión oficial reducida (8-nov, desplegada y probada con The Pharma y
+  Andina):** módulos activos según los datos; el
   portal oculta lo inactivo (menú, portadas, bloques con `data-module`); a
   quien carga datos le queda «Cargar datos» del módulo. Avisos con código
   sólo para lo que todavía no alcanza. BILLING manda el NIT/CI como código
   del cliente. Margen al precio sugerido en Rentabilidad › Margen por
   producto. Lo que falta para la versión oficial, en el plan (12.1).
+- **Inventario real desde SmartBilling (8-nov, en código, falta desplegar
+  BILLING y COMMERCIAL):** cada movimiento manda la foto del día de todos
+  los productos a `stock/live` y cada compra a `purchases/live`; la
+  categoría del producto de BILLING viaja al maestro. Siguiente: el
+  frontend de SmartBilling igual al de SmartDecisions, con `portal/common/`.
 
 **3-nov-2026.**
 

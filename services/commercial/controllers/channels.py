@@ -627,3 +627,89 @@ async def live_sales_controller(
     return await push_sales(dynamodb_resource, str(latest[0]['dataset_id']),
                              SalesPushSchema(rows = rows.rows, mode = LoadMode.APPEND),
                              current_user, auth_token)
+
+
+def _latest_owned(
+    dynamodb_resource: ServiceResource,
+    current_user: str
+) -> dict[str, Any] | None:
+    '''
+        The company's most recent dataset, where what arrives live belongs.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            current_user (str): Authenticated caller, owner of the dataset.
+
+        Returns:
+            dict[str, Any] | None: The dataset; None while the company has no sales.
+    '''
+    latest = list_datasets_for_owner(dynamodb_resource, current_user, limit = 1)
+    if not latest:
+        return None
+    return get_owned_dataset(dynamodb_resource = dynamodb_resource,
+                             dataset_id = str(latest[0]['dataset_id']),
+                             owner_email = current_user)
+
+
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Stock', 'UPLOAD')
+async def live_stock_controller(
+    dynamodb_resource: ServiceResource,
+    push: StockPushSchema,
+    current_user: str,
+    auth_token: str,
+    request: Request # pylint: disable=unused-argument
+) -> StockResponse:
+    '''
+        The shelf as SmartBilling holds it, sent at every movement (Rafael,
+        8-nov-2026): today's photo of each product in the latest dataset, so
+        Inventory reads the real stock and not only an uploaded one. A
+        company with no sales yet has no dataset to attach it to; the next
+        movement sends the whole shelf again.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            push (StockPushSchema): Mode and rows.
+            current_user (str): Authenticated caller, owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            StockResponse: Summary of what is stored and this push's issues.
+    '''
+    dataset = _latest_owned(dynamodb_resource, current_user)
+    if dataset is None:
+        return StockResponse(dataset_id = '', status = 'failed')
+    return await _push(dynamodb_resource = dynamodb_resource, dataset = dataset, push = push,
+                       spec = STOCK, pipeline = (prepare_stock, validate_stock, auth_token))
+
+
+@handle_service_errors('COMMERCIAL')
+@audit_event('COMMERCIAL', 'Purchases', 'UPLOAD')
+async def live_purchases_controller(
+    dynamodb_resource: ServiceResource,
+    push: PurchasesPushSchema,
+    current_user: str,
+    auth_token: str,
+    request: Request # pylint: disable=unused-argument
+) -> PurchasesResponse:
+    '''
+        A purchase as SmartBilling receives it (Rafael, 8-nov-2026), into the
+        latest dataset, so Purchases reads what the shop really bought.
+
+        Args:
+            dynamodb_resource (ServiceResource): The DynamoDB resource.
+            push (PurchasesPushSchema): Mode and rows.
+            current_user (str): Authenticated caller, owner of the dataset.
+            auth_token (str): The caller's Authorization header, forwarded to FILES.
+            request (Request): Incoming request, used by the decorators.
+
+        Returns:
+            PurchasesResponse: Summary of what is stored and this push's issues.
+    '''
+    dataset = _latest_owned(dynamodb_resource, current_user)
+    if dataset is None:
+        return PurchasesResponse(dataset_id = '', status = 'failed')
+    return await _push(dynamodb_resource = dynamodb_resource, dataset = dataset, push = push,
+                       spec = PURCHASES,
+                       pipeline = (fill_product_ids, validate_purchases, auth_token))

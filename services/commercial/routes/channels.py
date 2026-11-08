@@ -9,7 +9,9 @@ from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Header, Path as PathParam, Request, status
 
 from controllers.channels import (
+    live_purchases_controller,
     live_sales_controller,
+    live_stock_controller,
     ingest_collections_from_s3_controller,
     ingest_purchases_from_s3_controller,
     ingest_objectives_from_s3_controller,
@@ -220,6 +222,58 @@ async def create_sales_dataset_endpoint(
         auth_token = authorization,
         request = request
     )
+
+
+@router.post(
+    '/stock/live',
+    response_model = StockResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'The shelf as it moves',
+    description = (
+        'For a system that holds the real stock —SmartBilling—: the photo of '
+        'each product today goes to the company\'s most recent dataset, '
+        'appended by day and product. A company with no sales yet has no '
+        'dataset to attach it to and the answer says `failed`.'
+    )
+)
+async def live_stock_endpoint(
+    request: Request,
+    push: StockPushSchema,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> StockResponse:
+    '''
+        Endpoint receiving the live stock.
+    '''
+    return await live_stock_controller(dynamodb_resource = dynamodb_resource, push = push,
+                                       current_user = current_user, auth_token = authorization,
+                                       request = request)
+
+
+@router.post(
+    '/purchases/live',
+    response_model = PurchasesResponse,
+    status_code = status.HTTP_200_OK,
+    summary = 'Purchases as they are received',
+    description = (
+        'For a system that receives the merchandise —SmartBilling—: each '
+        'purchase goes to the company\'s most recent dataset, appended.'
+    )
+)
+async def live_purchases_endpoint(
+    request: Request,
+    push: PurchasesPushSchema,
+    dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
+    authorization: str = Header(None),
+    current_user: str = Depends(get_current_owner)
+) -> PurchasesResponse:
+    '''
+        Endpoint receiving a live purchase.
+    '''
+    return await live_purchases_controller(dynamodb_resource = dynamodb_resource, push = push,
+                                           current_user = current_user,
+                                           auth_token = authorization, request = request)
 
 
 @router.post(

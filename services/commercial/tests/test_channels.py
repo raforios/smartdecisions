@@ -772,3 +772,39 @@ def test_live_sales_go_to_the_latest_dataset_or_create_one(monkeypatch: pytest.M
 
     assert (first, second) == ('pushed', 'created')
     assert calls == [('push', 'ds-1', LoadMode.APPEND), ('create', 1)]
+
+
+def test_live_stock_and_purchases_go_to_the_latest_dataset(monkeypatch: pytest.MonkeyPatch):
+    '''
+        SmartBilling's shelf and purchases land on the latest dataset with
+        their own contract; a company with no sales yet has nowhere to put them.
+    '''
+    pushed: list = []
+
+    async def _push(**kwargs):
+        pushed.append((kwargs['dataset']['dataset_id'], kwargs['spec'].name))
+        return kwargs['spec'].response_model(dataset_id = kwargs['dataset']['dataset_id'],
+                                             status = 'validated')
+
+    monkeypatch.setattr(channels, '_push', _push)
+    stock = StockPushSchema(rows = [StockRowSchema(
+        snapshot_date = '2026-11-08', product_id = 'P1', product_name = 'Leche',
+        on_hand = 4, unit_price = 10)])
+    purchases = PurchasesPushSchema(rows = [PurchaseRowSchema(
+        purchase_date = '2026-11-08', supplier = 'Droguería', product_id = 'P1',
+        product_name = 'Leche', quantity = 5, unit_cost = 7, currency = 'BOB')])
+
+    def _call(
+        controller,
+        push
+    ):
+        return asyncio.run(controller(dynamodb_resource = None, push = push,
+                                      current_user = OWNER, auth_token = 'Bearer t',
+                                      request = None))
+
+    monkeypatch.setattr(channels, '_latest_owned', lambda *_args: None)
+    assert _call(channels.live_stock_controller, stock).status == 'failed' and not pushed
+    monkeypatch.setattr(channels, '_latest_owned', lambda *_args: {'dataset_id': 'DS-1'})
+    assert _call(channels.live_stock_controller, stock).dataset_id == 'DS-1'
+    _call(channels.live_purchases_controller, purchases)
+    assert pushed == [('DS-1', 'stock'), ('DS-1', 'purchases')]

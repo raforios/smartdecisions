@@ -166,6 +166,8 @@ export async function mountCatalog(host) {
             <div class="field-row">
                 <label class="field"><span>Laboratorio o proveedor</span>
                     <input type="text" id="laboratory" maxlength="150"></label>
+                <label class="field"><span>Categoría</span>
+                    <input type="text" id="category" maxlength="100"></label>
                 <label class="field"><span>Unidad</span>
                     <select id="unit">${Object.entries(UNIT_LABELS).map(([code, label]) =>
                         `<option value="${code}">${label}</option>`).join('')}</select></label>
@@ -207,6 +209,7 @@ export async function mountCatalog(host) {
                 description: field('description'),
                 laboratory: field('laboratory'),
                 unit: field('unit'),
+                category: field('category') || null,
                 barcode: field('barcode') || null,
                 min_stock: Number(host.querySelector('#min_stock').value) || 0,
                 suggested_price: field('suggested_price') === ''

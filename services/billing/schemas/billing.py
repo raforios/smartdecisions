@@ -210,6 +210,8 @@ class ProductIn(BaseModel):
     laboratory: str = Field(..., min_length = 1, max_length = 150,
                             description = 'Laboratory or importer that supplies it.')
     unit: ProductUnit = ProductUnit.UNIT
+    # What the shop groups it under: SmartDecisions' analyses by category read it.
+    category: str | None = Field(None, min_length = 1, max_length = 100)
     barcode: str | None = Field(None, max_length = 60)
     min_stock: float = Field(0, ge = 0)
     suggested_price: float | None = Field(
@@ -240,6 +242,7 @@ class ProductPatch(BaseModel):
     description: str | None = Field(None, min_length = 1, max_length = 300)
     laboratory: str | None = Field(None, min_length = 1, max_length = 150)
     unit: ProductUnit | None = None
+    category: str | None = Field(None, min_length = 1, max_length = 100)
     barcode: str | None = Field(None, max_length = 60)
     min_stock: float | None = Field(None, ge = 0)
     suggested_price: float | None = Field(None, ge = 0)
@@ -262,6 +265,7 @@ class ProductOut(BaseModel):
     description: str
     laboratory: str
     unit: ProductUnit
+    category: str | None = None
     barcode: str | None = None
     min_stock: float
     suggested_price: float | None = None

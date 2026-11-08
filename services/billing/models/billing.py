@@ -92,6 +92,7 @@ class ProductItem:
     sku: str
     description: str
     laboratory: str
+    category: str | None = None
     unit: str = 'UNIT'
     barcode: str | None = None
     min_stock: float = 0

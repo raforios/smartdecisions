@@ -13,7 +13,7 @@ from schemas.billing import SaleNoteOut
 from schemas.billing_returns import CreditNoteOut, CreditNoteRef
 from services import billing_reversals
 from services.billing_bridge import share_cancellation, share_return
-from services.billing_finance import share_month
+from services.billing_movements import share_movement
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -35,7 +35,7 @@ async def revert_sale_cancellation_controller(
     sale = billing_reversals.revert_sale_cancellation(dynamodb_resource, owner, sale_id,
                                                       current_user)
     share_cancellation(dynamodb_resource, owner, sale.sale_id, request)
-    share_month(dynamodb_resource, owner, sale.created_at, request)
+    share_movement(dynamodb_resource, owner, sale.created_at, request)
     return sale
 
 
@@ -55,5 +55,5 @@ async def revert_credit_note_cancellation_controller(
     note = billing_reversals.revert_credit_note_cancellation(dynamodb_resource, owner, ref,
                                                              current_user)
     share_return(dynamodb_resource, owner, note, request)
-    share_month(dynamodb_resource, owner, note.issued_at, request)
+    share_movement(dynamodb_resource, owner, note.issued_at, request)
     return note

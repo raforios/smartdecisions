@@ -28,16 +28,25 @@ from botocore.exceptions import BotoCoreError, ClientError
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
-from schemas.billing import PaymentMethod, ProductOut, SaleNoteOut, SaleStatus
+from models.billing import LOTS_TABLE
+from schemas.billing import PaymentMethod, ProductOut, PurchaseNoteOut, SaleNoteOut, SaleStatus
 from schemas.billing_returns import CreditNoteOut
 from schemas.billing_siat import InvoiceState, SiatCatalog
-from services.billing import MONEY_DECIMALS, get_settings, new_id
+from services.billing import (
+    MONEY_DECIMALS,
+    expiry_order,
+    get_settings,
+    new_id,
+    products_by_sku,
+    read_partition
+)
 from services.billing_returns import net_of_returns
 from services.billing_sales import read_sale, sale_out
 from services.billing_siat_codes import get_catalog
 from services.environment import load_and_validate_env_vars
 from services.exceptions import RegisterNotFoundError
 from services.logger_config import custom_logger as logger
+from services.utils import get_current_time_gmt
 
 LIVE_QUEUE_URL = load_and_validate_env_vars({'COMMERCIAL_LIVE_QUEUE_URL': str})[
     'COMMERCIAL_LIVE_QUEUE_URL']
@@ -45,6 +54,10 @@ LIVE_QUEUE_URL = load_and_validate_env_vars({'COMMERCIAL_LIVE_QUEUE_URL': str})[
 LIVE_SALES_PATH = '/v1/commercial/sales/live'
 PRODUCTS_PATH = '/v1/commercial/products'
 REVERSALS_PATH = '/v1/commercial/reversals'
+STOCK_PATH = '/v1/commercial/stock/live'
+PURCHASES_PATH = '/v1/commercial/purchases/live'
+# What BILLING records every amount in.
+CURRENCY = 'BOB'
 
 # The till's means of payment in SmartDecisions' codes: it keeps one card.
 PAYMENT_CODES: dict[PaymentMethod, str] = {
@@ -101,6 +114,7 @@ def product_record(product: ProductOut) -> dict[str, Any]:
         'sku': product.sku,
         'description': product.description,
         'supplier': product.laboratory,
+        'category': product.category,
         'unit': product.unit.value,
         'suggested_price': product.suggested_price
     }
@@ -374,3 +388,82 @@ def share_return(
     if stored_note:
         share_if_wanted(dynamodb_resource, owner, request,
                         (LIVE_QUEUE_URL, REVERSALS_PATH, return_record(stored, stored_note)))
+
+
+def stock_rows(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    day: str
+) -> list[dict[str, Any]]:
+    '''
+        Today's photo of every product on the shelf: units, cost and the price
+        the next batch sells at (Rafael, 8-nov-2026).
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            day (str): The photo's day, ISO date.
+
+        Returns:
+            list[dict[str, Any]]: Rows in SmartDecisions' stock contract.
+    '''
+    lots: dict[str, list[dict[str, Any]]] = {}
+    for lot in read_partition(dynamodb_resource, LOTS_TABLE, owner):
+        if float(lot['quantity_remaining']) > 0:
+            lots.setdefault(lot['sku'], []).append(lot)
+    rows = []
+    for sku, product in products_by_sku(dynamodb_resource, owner).items():
+        held = sorted(lots.get(sku, []), key = expiry_order)
+        units = sum(float(lot['quantity_remaining']) for lot in held)
+        cost = sum(float(lot['quantity_remaining']) * float(lot['unit_cost']) for lot in held)
+        price = float(held[0]['sale_price']) if held else float(
+            product.get('suggested_price') or 0)
+        rows.append({'snapshot_date': day, 'product_id': sku,
+                     'product_name': product['description'], 'on_hand': units,
+                     'unit_cost': round(cost / units, MONEY_DECIMALS) if units else None,
+                     'unit_price': price})
+    return rows
+
+
+def share_stock(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    request: Request | None
+) -> None:
+    '''
+        Sends today's shelf to SmartDecisions, when the shop wants it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            request (Request | None): The incoming request, for the token.
+    '''
+    rows = stock_rows(dynamodb_resource, owner, get_current_time_gmt().date().isoformat())
+    if rows:
+        share_if_wanted(dynamodb_resource, owner, request,
+                        (LIVE_QUEUE_URL, STOCK_PATH, {'mode': 'APPEND', 'rows': rows}))
+
+
+def share_purchase(
+    dynamodb_resource: ServiceResource,
+    owner: str,
+    purchase: PurchaseNoteOut,
+    request: Request | None
+) -> None:
+    '''
+        Sends a purchase just received to SmartDecisions, when the shop wants it.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner (str): The shop.
+            purchase (PurchaseNoteOut): The purchase.
+            request (Request | None): The incoming request, for the token.
+    '''
+    products = products_by_sku(dynamodb_resource, owner)
+    rows = [{'purchase_date': purchase.created_at[:10], 'supplier': purchase.supplier_name,
+             'product_id': line.sku,
+             'product_name': products.get(line.sku, {}).get('description', line.sku),
+             'quantity': line.quantity, 'unit_cost': line.unit_cost, 'currency': CURRENCY}
+            for line in purchase.lines]
+    share_if_wanted(dynamodb_resource, owner, request,
+                    (LIVE_QUEUE_URL, PURCHASES_PATH, {'mode': 'APPEND', 'rows': rows}))

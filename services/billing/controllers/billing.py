@@ -42,8 +42,14 @@ from services import (
     billing_sales,
     billing_stock
 )
-from services.billing_bridge import share_cancellation, share_product, share_sale
-from services.billing_finance import share_month
+from services.billing_bridge import (
+    share_cancellation,
+    share_product,
+    share_purchase,
+    share_sale,
+    share_stock
+)
+from services.billing_movements import share_movement
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -185,14 +191,16 @@ async def reprice_lot_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     edit: LotEdit,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str # pylint: disable=unused-argument
 ) -> LotsResponse:
     '''
-        Re-prices one batch and answers with the SKU's batches as they stand.
+        Re-prices one batch, answers with the SKU's batches as they stand, and
+        sends the shelf's new prices to SmartDecisions when the shop wants it.
     '''
     billing_stock.reprice_lot(dynamodb_resource, owner, edit.sku, edit.lot_id,
                               LotPricePatch(sale_price = edit.sale_price))
+    share_stock(dynamodb_resource, owner, request)
     return billing_stock.lots_of(dynamodb_resource, owner, edit.sku)
 
 
@@ -214,7 +222,8 @@ async def receive_purchase_controller(
     purchase = billing_purchases.receive_purchase(
         dynamodb_resource, owner, note, current_user
     )
-    share_month(dynamodb_resource, owner, purchase.created_at, request)
+    share_purchase(dynamodb_resource, owner, purchase, request)
+    share_movement(dynamodb_resource, owner, purchase.created_at, request)
     return purchase
 
 
@@ -267,7 +276,7 @@ async def issue_sale_controller(
     '''
     sale = billing_sales.issue_sale(dynamodb_resource, owner, note, current_user)
     share_sale(dynamodb_resource, owner, sale, request)
-    share_month(dynamodb_resource, owner, sale.created_at, request)
+    share_movement(dynamodb_resource, owner, sale.created_at, request)
     return sale
 
 
@@ -288,7 +297,7 @@ async def cancel_sale_controller(
     sale = billing_sales.cancel_sale(dynamodb_resource, owner, cancellation.sale_id,
                                      current_user, cancellation.reason_code)
     share_cancellation(dynamodb_resource, owner, sale.sale_id, request)
-    share_month(dynamodb_resource, owner, sale.created_at, request)
+    share_movement(dynamodb_resource, owner, sale.created_at, request)
     return sale
 
 

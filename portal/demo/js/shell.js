@@ -70,7 +70,7 @@
                 { label: 'Inventario', icon: 'stock', page: 'inventario/index.html', module: 'stock', children: [
                     { label: 'Stock del día', page: 'inventario/stock.html' },
                     { label: 'Evolución', page: 'inventario/evolucion.html' },
-                    { label: 'Stock en ruta', page: 'inventario/ruta.html' },
+                    { label: 'Stock en ruta', page: 'inventario/ruta.html', module: 'routes' },
                     { label: 'Cargar datos', page: 'inventario/cargar.html', roles: EDITORS }
                 ] },
                 { label: 'Compras', icon: 'purchases', page: 'compras/index.html', module: 'purchases', children: [
@@ -218,10 +218,10 @@
     });
     document.addEventListener('DOMContentLoaded', () => {
         hideInactiveBlocks();
-        // The first page of a session learns the modules after drawing the menu.
-        if (modules || !COMMERCIAL_ROLES.includes(role)) return;
+        // Drawn with the last answer; asked again, and redrawn if it changed.
+        if (!COMMERCIAL_ROLES.includes(role)) return;
         window.SD_API.ensureModules().then((found) => {
-            if (!found) return;
+            if (!found || JSON.stringify(found) === JSON.stringify(modules)) return;
             modules = found;
             const nav = document.getElementById('sdNav');
             if (nav) nav.innerHTML = menuMarkup(currentChain());
