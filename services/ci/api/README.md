@@ -29,7 +29,7 @@ Esta carpeta despliega los microservicios de BearSoft (los servicios base, Smart
 | `Dockerfile.local` | La receta única para correr un servicio en un contenedor local (por ejemplo, desde un docker-compose). El modo de uso está en su encabezado. | Sólo para pruebas locales. |
 | `create_dynamodb_tables.sh` | Crea las tablas DynamoDB que faltan. No borra ni modifica las que existen. | Sólo si agregas una tabla nueva. |
 | `create_schedules.sh` | Crea las tareas programadas (por ejemplo, la sincronización diaria del tipo de cambio). | No: `start.sh` lo llama. |
-| `create_queues.sh` | Crea las colas SQS entre servicios (hoy, la de SmartBilling hacia COMMERCIAL), sus colas de fallidos, los permisos de quien envía y de quien consume, y el disparador hacia el Lambda que la vacía. No borra nada. | `start.sh` lo llama en el despliegue completo. Tú, sólo si agregas una cola (caso B, paso 4). |
+| `create_queues.sh` | Crea las colas SQS entre servicios (hoy, las de SmartBilling hacia COMMERCIAL y hacia FINANCE), sus colas de fallidos, los permisos de quien envía y de quien consume, y el disparador hacia el Lambda que la vacía. No borra nada. | `start.sh` lo llama en el despliegue completo. Tú, sólo si agregas una cola (caso B, paso 4). |
 | `setup_api_domain.sh` | Configura `api.bearsoft.com.bo`: certificado, dominio y la puerta de entrada `bearsoft-gateway`, con una ruta por servicio. | Sólo la primera vez o si algo del dominio falla. |
 | `update_service_urls.sh` | Cambia en los `.env` las direcciones con las que los servicios se llaman entre sí. | No: `start.sh --urls` lo llama. |
 

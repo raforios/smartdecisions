@@ -6,6 +6,8 @@
     channels with one validator: rows by API, or a file already uploaded
     through FILES.
 '''
+from typing import Any
+
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Header, Query, Request, status
 
@@ -31,7 +33,13 @@ from schemas.entries import (
 )
 from services.db_connection import GET_DB_DEPENDENCY
 from services.logger_config import custom_logger as logger
-from services.security import get_current_user, require_roles
+from services.security import (
+    get_current_payload,
+    get_current_user,
+    require_roles,
+    resolve_owner
+)
+from services.utils import is_queued
 
 router = APIRouter(prefix = '/v1/finance', tags = ['Financial analysis — loads'])
 
@@ -42,6 +50,30 @@ router = APIRouter(prefix = '/v1/finance', tags = ['Financial analysis — loads
 # The financial analysis is for the people who run the client's business
 # (Rafael: «sólo la plana mayor»), not for the sellers on the street.
 FINANCE_ROLES = ('MANAGER',)
+
+
+
+async def _loading_client(
+    request: Request,
+    payload: dict[str, Any] = Depends(get_current_payload)
+) -> str:
+    '''
+        Who a load belongs to. A person loading figures must run the business
+        (FINANCE_ROLES); a load another application sends through the queue
+        —SmartBilling, on behalf of whoever sold— is accepted from any user of
+        the company (Rafael, 8-nov-2026): it is not a person loading figures.
+
+        Args:
+            request (Request): The incoming request.
+            payload (dict[str, Any]): The caller's token claims.
+
+        Returns:
+            str: The owner key.
+    '''
+    if is_queued(request):
+        return resolve_owner(payload)
+    return await require_roles(*FINANCE_ROLES)(payload)
+
 
 _PERIODICITY = Query(..., description = 'DAILY, MONTHLY or ANNUAL.')
 _DATE = Query(..., min_length = 4, max_length = 10, description = 'YYYY-MM-DD, YYYY-MM or YYYY.')
@@ -63,7 +95,7 @@ async def load_entries_endpoint(
     request: Request,
     load: EntryLoadSchema,
     dynamodb_resource: ServiceResource = Depends(GET_DB_DEPENDENCY),
-    client: str = Depends(require_roles(*FINANCE_ROLES)),
+    client: str = Depends(_loading_client),
     current_user: str = Depends(get_current_user)
 ) -> LoadResultSchema:
     '''

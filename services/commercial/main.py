@@ -2,7 +2,6 @@
     Commercial Microservice Main Handler
 '''
 from collections.abc import AsyncGenerator
-import json
 import socket
 from datetime import date, datetime, timezone
 from typing import Any
@@ -36,6 +35,7 @@ from services.api_exceptions import setup_exception_handlers
 from services.security import require_roles
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+from services.utils import serve_queued
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
@@ -302,41 +302,10 @@ if __name__ == '__main__':
     run_local()
 
 
-# The Lambda answers two kinds of caller. API Gateway sends HTTP events; the
-# FIFO queue SmartBilling fills sends records, each one an HTTP request kept
-# for later —path, body and the cashier's token— because a Lambda that
-# answered is frozen and cannot call out (Rafael, 6-nov-2026). Each record
-# goes through Mangum as the request it is, so the queued sale meets the same
-# route, token, validation and audit as one posted live.
+# The Lambda answers two kinds of caller: API Gateway's HTTP events, and the
+# records of the FIFO queue SmartBilling fills, each one an HTTP request kept
+# for later (the QUEUED REQUESTS block of `services/utils.py`).
 _asgi_handler = Mangum(app)
-
-QUEUE_SOURCE = 'aws:sqs'
-
-
-def _queued_request(record: dict[str, Any]) -> dict[str, Any]:
-    '''
-        The API Gateway (HTTP API 2.0) event a queued request stands for.
-
-        Args:
-            record (dict[str, Any]): One SQS record.
-
-        Returns:
-            dict[str, Any]: The event Mangum serves.
-    '''
-    request = json.loads(record['body'])
-    return {
-        'version': '2.0',
-        'routeKey': '$default',
-        'rawPath': request['path'],
-        'rawQueryString': '',
-        'headers': {'authorization': request['authorization'],
-                    'content-type': 'application/json'},
-        'requestContext': {'http': {'method': 'POST', 'path': request['path'],
-                                    'protocol': 'HTTP/1.1', 'sourceIp': QUEUE_SOURCE,
-                                    'userAgent': QUEUE_SOURCE}},
-        'body': json.dumps(request['body']),
-        'isBase64Encoded': False
-    }
 
 
 def handler(
@@ -346,26 +315,12 @@ def handler(
     '''
         Lambda entry point.
 
-        A queued request that is not answered with a 2xx is reported back as
-        failed: SQS retries it, and after the queue's receive count it waits
-        in the dead-letter queue instead of being lost.
-
         Args:
             event (dict[str, Any]): Raw Lambda event.
             context (Any): Lambda context, passed through to Mangum.
 
         Returns:
-            Any: The HTTP response, or the records that failed.
+            Any: The HTTP response, or the queued records that failed.
     '''
-    records = event.get('Records') if isinstance(event, dict) else None
-    if not records or records[0].get('eventSource') != QUEUE_SOURCE:
-        return _asgi_handler(event, context)
-    failures = []
-    for record in records:
-        response = _asgi_handler(_queued_request(record), context)
-        if not 200 <= response['statusCode'] < 300:
-            error_msg = (f'Queued request {record["messageId"]} answered '
-                         f'{response["statusCode"]}: {str(response.get("body"))[:200]}')
-            logger.error(error_msg)
-            failures.append({'itemIdentifier': record['messageId']})
-    return {'batchItemFailures': failures}
+    queued = serve_queued(event, context, _asgi_handler)
+    return queued if queued is not None else _asgi_handler(event, context)

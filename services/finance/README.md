@@ -57,6 +57,8 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `DELETE` | `/v1/finance/entries` | Removes one **amount**. |
 | `DELETE` | `/v1/finance/periods` | Empties a **period**. |
 
+**Queued loads.** SmartBilling does not call `loads` over HTTP: it leaves each load (path, body and the cashier's `Authorization`) in the FIFO queue `finance-live-requests.fifo`, grouped by shop. The queue triggers this Lambda (batch of 1, `ReportBatchItemFailures`), and the QUEUED REQUESTS block of `services/utils.py` serves each record through Mangum as the HTTP request it stands for. A load not answered with a 2xx is retried, and after 3 receives waits in `finance-live-requests-dlq.fifo` (kept 14 days). Created by `ci/api/create_queues.sh`.
+
 ### Report, Projection and Parameters
 
 | Method | Endpoint | Description |

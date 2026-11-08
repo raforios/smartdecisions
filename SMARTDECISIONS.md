@@ -204,7 +204,21 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   dataset; registro aparte con su reporte (mes, motivo, detalle) en
   Comercial › Ventas › Anulaciones y devoluciones. BILLING envía anulación,
   devolución, nota anulada y las dos reversiones por la misma cola.
-- Después: puente a FINANCE y rubro en la empresa (AUTH), plan 12.1.
+- **Rubro y facturador en la empresa (AUTH), 6-nov, desplegado.** Farmacia
+  de prueba = empresa «The Pharma», gerente `gerente@pharma.com`; probado
+  SmartBilling + SmartDecisions con el mismo usuario.
+- **Puente SmartBilling → FINANCE (8-nov, desplegado y probado en vivo con
+  `gerente@pharma.com`; el Estado de Resultados cuadra, costo de ventas
+  incluido; los datos de prueba se quedan para las demos):** cada operación
+  manda los montos MENSUALES de su mes y de los siguientes (FINANCE no
+  mezcla periodicidades en un período): ventas con y sin factura, productos
+  y servicios, devoluciones, compras, inventario inicial y final
+  reconstruido desde el stock de hoy. Cuentas en `billing_parameters`
+  (`BILLING_FINANCE_*`, sembradas). Cola `finance-live-requests.fifo`;
+  bloque estándar QUEUED REQUESTS en `utils.py` de COMMERCIAL y FINANCE.
+  FINANCE acepta por la cola a cualquier usuario de la empresa (Rafael,
+  8-nov); la carga directa sigue siendo del gerente. El inventario se
+  valora sin el IVA de las compras con factura, como FINANCE.
 
 **3-nov-2026.**
 

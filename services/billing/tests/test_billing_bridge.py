@@ -71,7 +71,8 @@ def _shared(
     '''
     queued: list = []
     request = SimpleNamespace(headers = {'Authorization': AUTHORIZATION})
-    with patch.object(billing_bridge, '_queue', lambda *call: queued.append(call)):
+    with patch.object(billing_bridge, 'queue_request',
+                      lambda _queue_url, *call: queued.append(call)):
         action(resource, OWNER, *arguments, request)
     return queued
 
@@ -143,8 +144,8 @@ def test_a_queue_failure_is_logged_and_never_raises(monkeypatch):
             '''Refuses, as a queue without permission does.'''
             raise billing_bridge.ClientError({'Error': {'Code': 'AccessDenied'}}, 'SendMessage')
     monkeypatch.setattr(billing_bridge.boto3, 'client', lambda _name: _Refusing())
-    billing_bridge._queue(OWNER, {'path': billing_bridge.PRODUCTS_PATH, 'body': {}, # pylint: disable=protected-access
-                                  'authorization': AUTHORIZATION})
+    billing_bridge.queue_request(billing_bridge.LIVE_QUEUE_URL, OWNER, {
+        'path': billing_bridge.PRODUCTS_PATH, 'body': {}, 'authorization': AUTHORIZATION})
 
 
 def test_a_cancellation_undoes_the_sale_and_leaves_nothing_of_it(dynamodb):
@@ -216,8 +217,8 @@ def test_a_company_name_with_spaces_gets_a_valid_line_of_its_own(monkeypatch):
             '''Keeps the message.'''
             sent.append(message)
     monkeypatch.setattr(billing_bridge.boto3, 'client', lambda _name: _Recording())
-    billing_bridge._queue('The Pharma', {'path': billing_bridge.PRODUCTS_PATH, 'body': {}, # pylint: disable=protected-access
-                                         'authorization': AUTHORIZATION})
+    billing_bridge.queue_request(billing_bridge.LIVE_QUEUE_URL, 'The Pharma', {
+        'path': billing_bridge.PRODUCTS_PATH, 'body': {}, 'authorization': AUTHORIZATION})
     group = sent[0]['MessageGroupId']
     assert re.fullmatch(r'[0-9a-f]{64}', group)
     assert group == billing_bridge.queue_group('The Pharma') != billing_bridge.queue_group('Otra')

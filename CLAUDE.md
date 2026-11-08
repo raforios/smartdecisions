@@ -94,8 +94,9 @@ nombrados por funcionalidad.
      **mismo boilerplate con las mismas funciones** (Rafael, 19-oct-2026;
      desde el 23-oct-2026 COMMERCIAL reemplaza a INGEST, ANALYTICS y
      OPTIMIZATION). Un cambio autorizado en uno se aplica a los seis en el
-     mismo paso; los bloques estándar (FILES, SERVICE PARAMETERS) van al
-     final del archivo, idénticos donde se usan, nunca en lugar de lo común.
+     mismo paso; los bloques estándar (FILES, SERVICE PARAMETERS, QUEUED
+     REQUESTS) van al final del archivo, idénticos donde se usan, nunca en
+     lugar de lo común.
 3. **No se inventan módulos de infraestructura** con nombres genéricos
    (`settings.py`, `config.py`, `text_catalog.py`). Lo común ya existe.
 

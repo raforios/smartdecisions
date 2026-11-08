@@ -7,6 +7,7 @@ import asyncio
 import json
 
 import main
+from services import utils
 
 LIVE_PATH = '/v1/commercial/sales/live'
 
@@ -16,7 +17,7 @@ def _record(
     authorization: str
 ) -> dict:
     '''One SQS record carrying a queued live sale.'''
-    return {'messageId': message_id, 'eventSource': main.QUEUE_SOURCE, 'body': json.dumps({
+    return {'messageId': message_id, 'eventSource': utils.QUEUE_SOURCE, 'body': json.dumps({
         'path': LIVE_PATH, 'authorization': authorization,
         'body': {'rows': [{'date': '2026-11-06', 'order_id': 'A-1', 'product_name': 'Leche',
                            'quantity': 1}]}})}

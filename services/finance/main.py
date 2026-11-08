@@ -26,6 +26,7 @@ from services.api_exceptions import setup_exception_handlers
 from services.security import require_roles
 from services.environment import load_and_validate_env_vars
 from services.logger_config import custom_logger as logger
+from services.utils import serve_queued
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
@@ -272,4 +273,25 @@ if __name__ == '__main__':
 
 
 # Lambda entry point: every invocation comes from API Gateway.
-handler = Mangum(app)
+# The Lambda answers two kinds of caller: API Gateway's HTTP events, and the
+# records of the FIFO queue SmartBilling fills, each one an HTTP request kept
+# for later (the QUEUED REQUESTS block of `services/utils.py`).
+_asgi_handler = Mangum(app)
+
+
+def handler(
+    event: dict[str, Any],
+    context: Any
+) -> Any:
+    '''
+        Lambda entry point.
+
+        Args:
+            event (dict[str, Any]): Raw Lambda event.
+            context (Any): Lambda context, passed through to Mangum.
+
+        Returns:
+            Any: The HTTP response, or the queued records that failed.
+    '''
+    queued = serve_queued(event, context, _asgi_handler)
+    return queued if queued is not None else _asgi_handler(event, context)

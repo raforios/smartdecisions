@@ -19,6 +19,7 @@ from schemas.billing_returns import (
 from schemas.billing_siat import InvoiceQrOut
 from services import billing_returns
 from services.billing_bridge import share_return
+from services.billing_finance import share_month
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -39,6 +40,7 @@ async def return_sale_controller(
     '''
     note = billing_returns.return_sale(dynamodb_resource, owner, sale_return, current_user)
     share_return(dynamodb_resource, owner, note, request)
+    share_month(dynamodb_resource, owner, note.issued_at, request)
     return note
 
 
@@ -72,6 +74,7 @@ async def cancel_credit_note_controller(
     note = billing_returns.cancel_credit_note(dynamodb_resource, owner, cancellation,
                                               current_user)
     share_return(dynamodb_resource, owner, note, request)
+    share_month(dynamodb_resource, owner, note.issued_at, request)
     return note
 
 

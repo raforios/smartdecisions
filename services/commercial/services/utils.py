@@ -887,3 +887,95 @@ def load_parameters(spec: dict[str, type]) -> dict[str, Any]:
         raise ValueError(error_msg)
     return {code: _typed_parameter(code, _SERVICE_PARAMETERS[code], kind)
             for code, kind in spec.items()}
+
+
+# ---------------------------------------------------------------------------
+# QUEUED REQUESTS: the standard block for a service a FIFO queue feeds
+# ---------------------------------------------------------------------------
+#
+# Rafael, 6-nov-2026: SmartBilling does not call SmartDecisions over HTTP —a
+# Lambda that answered is frozen and cannot call out—; it leaves each request
+# (path, body and the cashier's token) in a FIFO queue of the receiving
+# service. That queue triggers the service's Lambda with records instead of
+# HTTP events, and each record goes through Mangum as the request it stands
+# for: the same route, token, validation and audit as one posted live. A
+# request not answered with a 2xx is reported back as failed, so SQS retries
+# it and, after the queue's receive count, keeps it in the dead-letter queue.
+# Identical in every service that consumes a queue.
+
+QUEUE_SOURCE = 'aws:sqs'
+
+
+def queued_request(record: dict[str, Any]) -> dict[str, Any]:
+    '''
+        The API Gateway (HTTP API 2.0) event a queued request stands for.
+
+        Args:
+            record (dict[str, Any]): One SQS record.
+
+        Returns:
+            dict[str, Any]: The event Mangum serves.
+    '''
+    request = json.loads(record['body'])
+    return {
+        'version': '2.0',
+        'routeKey': '$default',
+        'rawPath': request['path'],
+        'rawQueryString': '',
+        'headers': {'authorization': request['authorization'],
+                    'content-type': 'application/json'},
+        'requestContext': {'http': {'method': 'POST', 'path': request['path'],
+                                    'protocol': 'HTTP/1.1', 'sourceIp': QUEUE_SOURCE,
+                                    'userAgent': QUEUE_SOURCE}},
+        'body': json.dumps(request['body']),
+        'isBase64Encoded': False
+    }
+
+
+def serve_queued(
+    event: Any,
+    context: Any,
+    serve: Callable[[dict[str, Any], Any], dict[str, Any]]
+) -> dict[str, Any] | None:
+    '''
+        Serves the records of a queue event, or None when the event is not one.
+
+        Args:
+            event (Any): Raw Lambda event.
+            context (Any): Lambda context.
+            serve (Callable[[dict[str, Any], Any], dict[str, Any]]): The
+                Mangum handler of the service.
+
+        Returns:
+            dict[str, Any] | None: The records that failed, as SQS reads them;
+                None for an event of any other kind.
+    '''
+    records = event.get('Records') if isinstance(event, dict) else None
+    if not records or records[0].get('eventSource') != QUEUE_SOURCE:
+        return None
+    failures = []
+    for record in records:
+        response = serve(queued_request(record), context)
+        if not 200 <= response['statusCode'] < 300:
+            error_msg = (f'Queued request {record["messageId"]} answered '
+                         f'{response["statusCode"]}: {str(response.get("body"))[:200]}')
+            logger.error(error_msg)
+            failures.append({'itemIdentifier': record['messageId']})
+    return {'batchItemFailures': failures}
+
+
+def is_queued(request: Request) -> bool:
+    '''
+        Whether a request came through the service's queue —another
+        application sending on its user's behalf— and not straight from a
+        person: API Gateway stamps the caller's real address, so a request
+        from outside can never carry the queue's mark.
+
+        Args:
+            request (Request): The incoming request.
+
+        Returns:
+            bool: True when it was served from a queue record.
+    '''
+    event = request.scope.get('aws.event') or {}
+    return event.get('requestContext', {}).get('http', {}).get('sourceIp') == QUEUE_SOURCE

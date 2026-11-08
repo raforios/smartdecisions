@@ -30,6 +30,9 @@ QUEUES=(
     # comercio nunca reescriben su dataset a la vez. Cola y no llamada HTTP:
     # un Lambda se congela al responder y la llamada puede no salir.
     "commercial-live-requests.fifo|commercial-handler-service|billing-handler-service|720|345600|3|Peticiones de SmartBilling que COMMERCIAL atiende en orden"
+    # SmartBilling → FINANCE (6-nov-2026): los montos del mes de cada venta,
+    # anulación, devolución o compra, y el inventario de cierre, por comercio.
+    "finance-live-requests.fifo|finance-handler-service|billing-handler-service|720|345600|3|Montos del mes que SmartBilling manda a FINANCE"
 )
 
 DLQ_RETENTION_SECONDS=1209600
@@ -128,6 +131,9 @@ echo ""
 echo "Proceso de creación de colas finalizado con éxito. ✅"
 echo ""
 echo "Para ver si algo quedó en una cola de fallidos:"
-echo "  aws sqs get-queue-attributes --queue-url \\"
-echo "      https://sqs.${REGION}.amazonaws.com/${ACCOUNT_ID}/commercial-live-requests-dlq.fifo \\"
-echo "      --attribute-names ApproximateNumberOfMessages --profile $PROFILE"
+for queue_config in "${QUEUES[@]}"; do
+    QUEUE="${queue_config%%|*}"
+    echo "  aws sqs get-queue-attributes --queue-url \\"
+    echo "      https://sqs.${REGION}.amazonaws.com/${ACCOUNT_ID}/${QUEUE%.fifo}-dlq.fifo \\"
+    echo "      --attribute-names ApproximateNumberOfMessages --profile $PROFILE"
+done

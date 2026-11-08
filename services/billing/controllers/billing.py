@@ -43,6 +43,7 @@ from services import (
     billing_stock
 )
 from services.billing_bridge import share_cancellation, share_product, share_sale
+from services.billing_finance import share_month
 from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
@@ -203,15 +204,18 @@ async def receive_purchase_controller(
     dynamodb_resource: ServiceResource,
     owner: str,
     note: PurchaseNoteIn,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str
 ) -> PurchaseNoteOut:
     '''
-        Records a delivery and puts its batches on the shelf.
+        Records a delivery, puts its batches on the shelf, and sends its month
+        to SmartDecisions' financial analysis when the shop wants it.
     '''
-    return billing_purchases.receive_purchase(
+    purchase = billing_purchases.receive_purchase(
         dynamodb_resource, owner, note, current_user
     )
+    share_month(dynamodb_resource, owner, purchase.created_at, request)
+    return purchase
 
 
 @handle_service_errors(SERVICE)
@@ -263,6 +267,7 @@ async def issue_sale_controller(
     '''
     sale = billing_sales.issue_sale(dynamodb_resource, owner, note, current_user)
     share_sale(dynamodb_resource, owner, sale, request)
+    share_month(dynamodb_resource, owner, sale.created_at, request)
     return sale
 
 
@@ -283,6 +288,7 @@ async def cancel_sale_controller(
     sale = billing_sales.cancel_sale(dynamodb_resource, owner, cancellation.sale_id,
                                      current_user, cancellation.reason_code)
     share_cancellation(dynamodb_resource, owner, sale.sale_id, request)
+    share_month(dynamodb_resource, owner, sale.created_at, request)
     return sale
 
 

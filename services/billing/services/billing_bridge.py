@@ -231,20 +231,22 @@ def queue_group(owner: str) -> str:
     return hashlib.sha256(owner.encode('utf-8')).hexdigest()
 
 
-def _queue(
+def queue_request(
+    queue_url: str,
     owner: str,
     request: dict[str, Any]
 ) -> None:
     '''
-        Leaves one request for COMMERCIAL in the shop's line; never raises.
+        Leaves one request for SmartDecisions in the shop's line; never raises.
 
         Args:
+            queue_url (str): The receiving service's queue.
             owner (str): The shop, which orders its own requests.
             request (dict[str, Any]): `path`, `body` and `authorization`.
     '''
     try:
         boto3.client('sqs').send_message(
-            QueueUrl = LIVE_QUEUE_URL, MessageBody = json.dumps(request),
+            QueueUrl = queue_url, MessageBody = json.dumps(request),
             MessageGroupId = queue_group(owner), MessageDeduplicationId = new_id()
         )
     except (BotoCoreError, ClientError) as error:
@@ -255,11 +257,11 @@ def _queue(
     logger.info(message)
 
 
-def _share(
+def share_if_wanted(
     dynamodb_resource: ServiceResource,
     owner: str,
     request: Request | None,
-    delivery: tuple[str, dict[str, Any]]
+    delivery: tuple[str, str, dict[str, Any]]
 ) -> None:
     '''
         Queues one delivery when the shop has the switch on.
@@ -268,7 +270,8 @@ def _share(
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The shop.
             request (Request | None): The incoming request, for the token.
-            delivery (tuple[str, dict[str, Any]]): The path and the body.
+            delivery (tuple[str, str, dict[str, Any]]): The queue, the path
+                and the body.
     '''
     authorization = request.headers.get('Authorization') if request is not None else None
     if not authorization:
@@ -280,8 +283,8 @@ def _share(
         return
     if not wanted:
         return
-    path, body = delivery
-    _queue(owner, {'path': path, 'body': body, 'authorization': authorization})
+    queue_url, path, body = delivery
+    queue_request(queue_url, owner, {'path': path, 'body': body, 'authorization': authorization})
 
 
 def share_sale(
@@ -299,7 +302,8 @@ def share_sale(
             sale (SaleNoteOut): The sale issued.
             request (Request | None): The incoming request, for the token.
     '''
-    _share(dynamodb_resource, owner, request, (LIVE_SALES_PATH, {'rows': sale_rows(sale)}))
+    share_if_wanted(dynamodb_resource, owner, request,
+                    (LIVE_QUEUE_URL, LIVE_SALES_PATH, {'rows': sale_rows(sale)}))
 
 
 def share_product(
@@ -318,8 +322,8 @@ def share_product(
             product (ProductOut): The product saved.
             request (Request | None): The incoming request, for the token.
     '''
-    _share(dynamodb_resource, owner, request,
-           (PRODUCTS_PATH, {'products': [product_record(product)]}))
+    share_if_wanted(dynamodb_resource, owner, request,
+                    (LIVE_QUEUE_URL, PRODUCTS_PATH, {'products': [product_record(product)]}))
 
 
 def share_cancellation(
@@ -340,8 +344,9 @@ def share_cancellation(
     '''
     stored = read_sale(dynamodb_resource, owner, sale_id)
     if stored:
-        _share(dynamodb_resource, owner, request,
-               (REVERSALS_PATH, cancellation_record(dynamodb_resource, owner, stored)))
+        share_if_wanted(dynamodb_resource, owner, request,
+                        (LIVE_QUEUE_URL, REVERSALS_PATH,
+                         cancellation_record(dynamodb_resource, owner, stored)))
 
 
 def share_return(
@@ -364,5 +369,5 @@ def share_return(
     stored_note = next((item for item in (stored or {}).get('credit_notes', [])
                         if item['credit_note_id'] == note.credit_note_id), None)
     if stored_note:
-        _share(dynamodb_resource, owner, request,
-               (REVERSALS_PATH, return_record(stored, stored_note)))
+        share_if_wanted(dynamodb_resource, owner, request,
+                        (LIVE_QUEUE_URL, REVERSALS_PATH, return_record(stored, stored_note)))
