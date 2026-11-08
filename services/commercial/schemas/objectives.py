@@ -18,6 +18,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from schemas.modules import AnalysisUnavailable
+
 from schemas.analytics import Amount, PeriodInfo, ReferenceRates
 
 
@@ -140,6 +142,7 @@ class ObjectivesBlockSchema(BaseModel):
     totals: ObjectivesTotalsSchema
     by_cluster: list[ClusterCellSchema] = Field(default_factory = list)
     clients: list[ClientScoreSchema] = Field(default_factory = list)
+    reason_code: AnalysisUnavailable | None = None
     policy: CommercialPolicySchema
     clients_without_objective: int = Field(
         0, ge = 0,

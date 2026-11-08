@@ -27,7 +27,7 @@
         box.innerHTML = '';
         [
             { label: 'Crecimiento en bolivianos', value: pct(data.growth_bob_pct),
-              hint: 'Primer mes contra último' },
+              hint: A.unavailableText(data.growth_reason) || 'Primer mes contra último' },
             { label: 'Crecimiento en dólares', value: pct(data.growth_usd_pct),
               hint: 'Si es menor que en Bs, parte del crecimiento es el tipo de cambio',
               variant: data.growth_usd_pct != null && data.growth_bob_pct != null

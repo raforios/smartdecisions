@@ -90,6 +90,10 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `GET` | `/v1/commercial/sellers` | The company's **sellers**. |
 | `PATCH` | `/v1/commercial/sellers/{seller_id}` | Links a **seller** to a user, or renames them. |
 
+### Official Reduced Version
+
+The reduced version is the official one (Rafael, 8-nov-2026): a module the business does not use is not shown, it is not reported as missing. `GET /v1/commercial/{dataset_id}` answers `modules` (`clients`, `receivables`, `stock`, `purchases`, `objectives`, `routes`), worked out from the data: the sales profile stored with the dataset (`sales_profile`: real clients other than the counter client, credit sales, locations) and the companions attached. The portal hides what is off. What the business does use but has too little data for yet comes back empty with an `AnalysisUnavailable` reason: `INSUFFICIENT_HISTORY` (forecast, seasonality), `SINGLE_MONTH` (exchange-rate growth, churn), `NO_PRICE_HISTORY` (price drift), `NO_CATEGORIES` (category mix), `NO_OBJECTIVES`. The profitability rows by product carry the supplier's suggested price from the product master, the margin it would give at what the product cost, and the gap. A pushed sales line may carry `pos_id`, the client's own code: SmartBilling sends the buyer's NIT or CI.
+
 ### Cancellations and Returns
 
 | Method | Endpoint | Description |

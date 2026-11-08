@@ -34,13 +34,14 @@
     // is its own page (`page`) or a view of its area page opened by its card
     // (`view`, the card's data-analysis or data-section, as `page#view`).
     // The financial part, the heart of the product, sits above Comercial.
+    // The third value is the module an option needs: by client, or objectives.
     const VENTAS = [
         ['Resumen comercial', 'resumen'], ['Fuente de volumen', 'volumen'],
-        ['Oportunidades', 'oportunidades'], ['Pronóstico', 'pronostico'],
-        ['Segmentación', 'segmentacion'], ['Salud de cartera', 'cartera'],
-        ['Objetivos', 'objetivos'], ['Tipo de cambio', 'tipo-cambio'],
+        ['Oportunidades', 'oportunidades', 'clients'], ['Pronóstico', 'pronostico'],
+        ['Segmentación', 'segmentacion', 'clients'], ['Salud de cartera', 'cartera', 'clients'],
+        ['Objetivos', 'objetivos', 'objectives'], ['Tipo de cambio', 'tipo-cambio'],
         ['Anulaciones y devoluciones', 'anulaciones']
-    ].map(([label, page]) => ({ label, page: `ventas/${page}.html` }));
+    ].map(([label, page, module]) => ({ label, page: `ventas/${page}.html`, module }));
     const MENU = [
         { group: '', items: [
             // The application's welcome; the financial part follows it.
@@ -62,23 +63,23 @@
                     ...VENTAS,
                     { label: 'Cargar datos', page: 'ventas/cargar.html', roles: EDITORS }
                 ] },
-                { label: 'Clientes', icon: 'clients', page: 'clientes/index.html', children: [
+                { label: 'Clientes', icon: 'clients', page: 'clientes/index.html', module: 'clients', children: [
                     { label: 'Cartera', page: 'clientes/cartera.html' },
                     { label: 'Ficha del cliente', page: 'clientes/ficha.html' }
                 ] },
-                { label: 'Inventario', icon: 'stock', page: 'inventario/index.html', children: [
+                { label: 'Inventario', icon: 'stock', page: 'inventario/index.html', module: 'stock', children: [
                     { label: 'Stock del día', page: 'inventario/stock.html' },
                     { label: 'Evolución', page: 'inventario/evolucion.html' },
                     { label: 'Stock en ruta', page: 'inventario/ruta.html' },
                     { label: 'Cargar datos', page: 'inventario/cargar.html', roles: EDITORS }
                 ] },
-                { label: 'Compras', icon: 'purchases', page: 'compras/index.html', children: [
+                { label: 'Compras', icon: 'purchases', page: 'compras/index.html', module: 'purchases', children: [
                     { label: 'Cargar datos', page: 'compras/cargar.html', roles: EDITORS }
                 ] },
-                { label: 'Cobranza', icon: 'receivables', page: 'cobranza/index.html', children: [
+                { label: 'Cobranza', icon: 'receivables', page: 'cobranza/index.html', module: 'receivables', children: [
                     { label: 'Cargar datos', page: 'cobranza/cargar.html', roles: EDITORS }
                 ] },
-                { label: 'Rutas', icon: 'routes', page: 'routes/index.html', children: [
+                { label: 'Rutas', icon: 'routes', page: 'routes/index.html', module: 'routes', children: [
                     { label: 'Histórico', view: 'planner' },
                     { label: 'Planes', view: 'plans' },
                     { label: 'En vivo', view: 'live' },
@@ -116,7 +117,24 @@
     const here = location.pathname.replace(/\/$/, '/index.html');
     const isHere = (page) => href(page) === here;
     const escape = (text) => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;');
-    const allowed = (node) => !node.roles || node.roles.includes(role);
+    // A module the company's data does not use is not shown (Rafael, 8-nov-2026):
+    // its options go, and for whoever loads data only its «Cargar datos» stays,
+    // so a business that starts using it has where to begin.
+    // Read straight from the session: this script runs before api.js.
+    let modules = (() => {
+        try {
+            const stored = JSON.parse(sessionStorage.getItem('sd_modules') || 'null');
+            return stored && stored.dataset === sessionStorage.getItem('sd_excel_dataset_id')
+                ? stored.modules : null;
+        } catch (error) {
+            return null;
+        }
+    })();
+    const moduleOff = (node) => Boolean(node.module && modules && modules[node.module] === false);
+    const uploadsOnly = (node) => EDITORS.includes(role) &&
+        (node.children || []).some((child) => child.label === 'Cargar datos');
+    const allowed = (node) => (!node.roles || node.roles.includes(role)) &&
+        (!moduleOff(node) || uploadsOnly(node));
 
     // A view lives on its parent's page.
     (function inheritPages(nodes, parent) {
@@ -145,7 +163,8 @@
     function nodeMarkup(node, depth, chain) {
         const open = chain.includes(node);
         const current = chain[chain.length - 1] === node;
-        const children = (node.children || []).filter(allowed);
+        const children = (node.children || []).filter(allowed)
+            .filter((child) => !moduleOff(node) || child.label === 'Cargar datos');
         const kids = open && children.length ? `<div class="sd-subitems sd-depth-${depth + 1}">${
             children.map((child) => nodeMarkup(child, depth + 1, chain)).join('')}</div>` : '';
         // An area carries an icon; an option is a plain line under it.
@@ -192,6 +211,23 @@
         '<span>Smart<b>Decisions</b></span></a>' +
         `<nav class="sd-nav" id="sdNav" aria-label="Menú principal">${
             menuMarkup(currentChain())}</nav>`;
+    // Any block of a page that depends on a module says so with data-module;
+    // here, the one place every page runs, it is hidden when the module is off.
+    const hideInactiveBlocks = () => document.querySelectorAll('[data-module]').forEach((node) => {
+        node.toggleAttribute('data-module-off', moduleOff({ module: node.dataset.module }));
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+        hideInactiveBlocks();
+        // The first page of a session learns the modules after drawing the menu.
+        if (modules || !COMMERCIAL_ROLES.includes(role)) return;
+        window.SD_API.ensureModules().then((found) => {
+            if (!found) return;
+            modules = found;
+            const nav = document.getElementById('sdNav');
+            if (nav) nav.innerHTML = menuMarkup(currentChain());
+            hideInactiveBlocks();
+        });
+    });
 
     const topbar = document.createElement('header');
     topbar.className = 'sd-topbar';

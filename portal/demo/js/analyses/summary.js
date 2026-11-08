@@ -168,6 +168,21 @@
             window.SD_MONEY.cells(row.margin, 2, 'hero') +
             `<td class="numeric">${A.formatDecimal(row.margin_percentage, 1)}%</td>`);
 
+        // Next to the real margin, the one the supplier's suggested price would
+        // give (Rafael, 3-nov and 8-nov-2026); a product without one shows «—».
+        const percent = (value) => (value == null ? '—' : `${A.formatDecimal(value, 1)}%`);
+        A.fillTable('marginProductTable', margen.by_product || [], (row) =>
+            `<td>${A.escapeHtml(A.dimensionLabel(row.label))}</td>` +
+            window.SD_MONEY.cells(row.amount) +
+            window.SD_MONEY.cells(row.margin, 2, 'hero') +
+            `<td class="numeric">${percent(row.margin_percentage)}</td>` +
+            `<td class="numeric">${row.suggested_price == null ? '—'
+                : A.formatDecimal(row.suggested_price, 2)}</td>` +
+            `<td class="numeric">${percent(row.margin_at_suggested)}</td>` +
+            `<td class="numeric ${row.margin_gap == null ? '' : A.deltaClass(row.margin_gap)}">` +
+            `${row.margin_gap == null ? '—' : A.formatDelta(row.margin_gap, ' pp')}</td>`,
+            { emptyText: 'Sin productos con costo.' });
+
         const alerts = margen.alerts || [];
         qs('#marginAlerts').hidden = alerts.length === 0;
         A.fillTable('marginAlertTable', alerts, (row) =>
@@ -210,6 +225,7 @@
         // nothing and the card would otherwise render an empty canvas.
         const seasonality = crecimiento.seasonality || [];
         qs('#seasonalityCard').hidden = seasonality.length === 0;
+        A.noteInCard('seasonalityCard', seasonality.length ? null : crecimiento.seasonality_reason);
         if (seasonality.length) {
             A.makeChart('chartSeasonality', {
                 type: 'line',
@@ -350,6 +366,10 @@
 
         const mix = volumen.category_mix || [];
         qs('#volumeMixCard').hidden = mix.length === 0;
+        // Sales without categories are a business that does not use them: hidden.
+        if (volumen.category_mix_reason !== 'NO_CATEGORIES') {
+            A.noteInCard('volumeMixCard', mix.length ? null : volumen.category_mix_reason);
+        }
         A.fillTable('volumeMixTable', mix, (row) =>
             `<td>${A.escapeHtml(A.dimensionLabel(row.label))}</td>` +
             `<td class="numeric">${A.formatDecimal(row.current_share, 1)}%</td>` +
@@ -457,6 +477,7 @@
 
         const prices = eficiencia.prices || [];
         qs('#priceCard').hidden = prices.length === 0;
+        A.noteInCard('priceCard', prices.length ? null : eficiencia.prices_reason);
         A.fillTable('priceTable', prices, (row) =>
             `<td>${A.escapeHtml(row.product)}</td>` +
             window.SD_MONEY.cells(row.previous_price) +

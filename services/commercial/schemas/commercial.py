@@ -11,6 +11,7 @@ from datetime import date, datetime
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from schemas.modules import ActiveModules
 from schemas.closed_options import (
     TEMPLATE_WORDS,
     PaymentMethod,
@@ -755,6 +756,8 @@ class IngestStatusResponse(BaseModel):
         description = 'Visits loaded against this dataset, when there are any: '
                       'the executed side of the routes.'
     )
+    modules: ActiveModules = Field(default_factory = ActiveModules,
+                                   description = 'What the portal shows; the rest it hides.')
     created_at: datetime
 
 

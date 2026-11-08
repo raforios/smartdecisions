@@ -22,6 +22,7 @@
 
 import pandas as pd
 
+from schemas.modules import AnalysisUnavailable
 from schemas.fx_effect import (
     CategoryFx,
     FxEffectBlock,
@@ -272,6 +273,8 @@ def build_fx_effect(
     growth_bob, growth_usd = _growth(monthly)
     block = FxEffectBlock(rate_today = rate_today, monthly = monthly,
                           growth_bob_pct = growth_bob, growth_usd_pct = growth_usd,
+                          growth_reason = (AnalysisUnavailable.SINGLE_MONTH
+                                           if growth_bob is None else None),
                           purchasing_power = _purchasing_power(frame, rate_today))
 
     if has_cost_data(frame):

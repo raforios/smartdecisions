@@ -45,6 +45,10 @@ class SaleRowSchema(BaseModel):
     """
     date: datetime.date
     order_id: str = Field(..., min_length = 1, max_length = 64)
+    pos_id: str | None = Field(
+        None, min_length = 1, max_length = 64,
+        description = 'The client\'s own code —SmartBilling sends the buyer\'s NIT or CI—; '
+                      'the client name stands for it when absent, as in the file.')
     pos_name: str | None = Field(None, max_length = 150)
     product_id: str | None = Field(
         None, min_length = 1, max_length = 64,

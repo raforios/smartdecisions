@@ -16,6 +16,7 @@ from typing import Any
 
 import pandas as pd
 
+from schemas.modules import AnalysisUnavailable
 from schemas.analytics import AnalyticsError, ForecastBlock
 from services.analytics_utils import AMOUNT_DECIMALS, FORECAST_MONTHS_AHEAD
 from services.currency import money_row, money_sums
@@ -192,5 +193,7 @@ def build_forecast(
     return ForecastBlock(
         method = method,
         months_ahead = months_ahead,
-        series = series
+        series = series,
+        # Sales the business does have, still too few months to project.
+        reason_code = None if series else AnalysisUnavailable.INSUFFICIENT_HISTORY
     )

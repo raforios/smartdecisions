@@ -23,6 +23,7 @@ from typing import Final
 
 import pandas as pd
 
+from schemas.modules import AnalysisUnavailable
 from schemas.closed_options import PaymentTerms
 from schemas.objectives import (
     ClientScoreSchema,
@@ -460,6 +461,7 @@ def build_objectives(
         logger.info(message)
         return ObjectivesBlockSchema(
             totals = _totals([], []),
+            reason_code = AnalysisUnavailable.NO_OBJECTIVES,
             policy = policy,
             clients_without_objective = int(sales[_POS].nunique())
             if _POS in sales.columns else 0

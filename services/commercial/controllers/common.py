@@ -36,6 +36,7 @@ from services.utils import load_parameters
 from services.environment import load_and_validate_env_vars
 from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
 from services.load_files import serialize_dataframe
+from services.modules import sales_profile
 from services.commercial_utils import (
     attach_to_dataset,
     content_fingerprint,
@@ -591,6 +592,7 @@ def store_new_dataset(
             'status': 'validated' if has_valid_rows else 'failed',
             'file_s3_key': normalized_key,
             'rejected_s3_key': rejected_key,
+            'sales_profile': sales_profile(result.accepted).model_dump(),
             'template_version': TEMPLATE_VERSION,
             'file_fingerprint': fingerprint,
             **result.summary.model_dump(),

@@ -84,8 +84,8 @@
         container.innerHTML = '';
         const series = data.series || [];
         if (!series.length) {
-            container.innerHTML = '<p class="insight-empty">No hay suficiente historial ' +
-                '(se necesitan al menos 2 meses) para proyectar.</p>';
+            container.innerHTML = `<p class="insight-empty">${A.escapeHtml(
+                A.unavailableText(data.reason_code || 'INSUFFICIENT_HISTORY'))}</p>`;
             return;
         }
         series.forEach((serie, index) => {

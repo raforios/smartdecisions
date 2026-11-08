@@ -71,6 +71,9 @@ def sale_rows(sale: SaleNoteOut) -> list[dict[str, Any]]:
     return [{
         'date': sale.created_at[:10],
         'order_id': sale.number,
+        # The buyer's NIT or CI is the client's code, so SmartDecisions' client
+        # card is the same client BILLING invoices (Rafael, 8-nov-2026).
+        'pos_id': sale.buyer.document or None,
         'pos_name': sale.buyer.name or None,
         'seller': sale.created_by,
         'product_id': line.sku,

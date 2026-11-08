@@ -12,6 +12,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, BeforeValidator, Field, ValidationInfo
 
+from schemas.modules import AnalysisUnavailable
+
 
 class AnalyticsError(str, Enum):
     '''
@@ -304,6 +306,7 @@ class ForecastBlock(BaseModel):
     method: str
     months_ahead: int
     series: list[ForecastSeries] = []
+    reason_code: AnalysisUnavailable | None = None
 
 
 class ForecastResponse(ForecastBlock):
@@ -405,6 +408,7 @@ class GrowthBlock(BaseModel):
     kpis: list[KpiCard] = []
     monthly_change: list[MonthlyChange] = []
     seasonality: list[SeasonIndex] = []
+    seasonality_reason: AnalysisUnavailable | None = None
 
 
 # --- Concentration (dependency risk) ---
@@ -483,6 +487,7 @@ class EfficiencyBlock(BaseModel):
     kpis: list[KpiCard] = []
     sellers: list[SellerProductivity] = []
     prices: list[PriceDrift] = []
+    prices_reason: AnalysisUnavailable | None = None
 
 
 # --- Gross margin (requires the optional unit-cost column) ---
@@ -494,6 +499,11 @@ class MarginRow(BaseModel):
     cost: Amount
     margin: Amount
     margin_percentage: float
+    # By product only: the margin selling at the supplier's suggested price
+    # would give, and how far the real one is from it (Rafael, 3-nov-2026).
+    suggested_price: float | None = Field(None, description = 'Bolivianos, from the master.')
+    margin_at_suggested: float | None = Field(None, description = 'Percent.')
+    margin_gap: float | None = Field(None, description = 'Real minus suggested, points.')
 
 
 class MarginAlertReason(str, Enum):
@@ -575,6 +585,7 @@ class PortfolioBlock(BaseModel):
     total_at_risk: int = 0
     lost: list[ClientAtRisk] = []
     total_lost: int = 0
+    churn_reason: AnalysisUnavailable | None = None
 
 
 class PortfolioResponse(PortfolioBlock):
@@ -731,6 +742,7 @@ class VolumeSourceBlock(BaseModel):
     clients: list[VolumeClient] = []
     matrix: list[VolumeMatrixCell] = []
     category_mix: list[CategoryMix] = []
+    category_mix_reason: AnalysisUnavailable | None = None
     decomposition: VolumeDecomposition = VolumeDecomposition()
 
 

@@ -108,6 +108,26 @@ def list_products(
     return ProductListResponseSchema(products = products, total = len(products))
 
 
+def suggested_prices(
+    dynamodb_resource: ServiceResource,
+    owner_email: str
+) -> dict[str, float]:
+    '''
+        The supplier's suggested price of each of the owner's products that
+        has one.
+
+        Args:
+            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
+            owner_email (str): Authenticated account that owns the data.
+
+        Returns:
+            dict[str, float]: Bolivianos per SKU.
+    '''
+    return {product.sku: product.suggested_price
+            for product in list_products(dynamodb_resource, owner_email).products
+            if product.suggested_price}
+
+
 def upsert_products(
     dynamodb_resource: ServiceResource,
     owner_email: str,

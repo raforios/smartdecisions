@@ -150,6 +150,7 @@ def test_commercial_summary_returns_a_full_response(
 ):
     '''The dashboard endpoint must build its response, blocks included.'''
     _flat_rate(monkeypatch)
+    _no_master(monkeypatch)
     response = _call(controllers.commercial_summary_controller, dataset)
 
     assert isinstance(response, CommercialSummaryResponse)
@@ -669,6 +670,7 @@ def test_the_summary_of_several_months_reads_at_todays_rate(
         and the total is read at today's rate, not month by month; every
         ranking keeps the order the bolivianos give.
     '''
+    _no_master(monkeypatch)
     _rising_rate(monkeypatch)
     sales = _sales_frame()
     today = controllers.get_current_time_gmt().date().isoformat()
@@ -729,6 +731,11 @@ def test_the_fx_effect_endpoint_returns_its_model_and_simulates(
     assert today.rate_today == 8.0 and not today.rate_is_hypothetical
     assert simulated.rate_today == 9.0 and simulated.rate_is_hypothetical
     assert simulated.totals.replacement_cost > today.totals.replacement_cost
+
+
+def _no_master(monkeypatch) -> None:
+    '''A product master with no suggested prices: the summary reads it from DynamoDB.'''
+    monkeypatch.setattr(controllers, 'suggested_prices', lambda *_args: {})
 
 
 def _flat_rate(monkeypatch) -> None:

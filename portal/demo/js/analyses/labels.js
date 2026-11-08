@@ -183,14 +183,47 @@
                 ? `Mismo mes de ${String(card.reference).slice(0, 4)} (YoY)`
                 : 'Se necesita un año de historial';
         }
+        // An empty figure that says why it is empty shows the why.
+        if (card && card.value == null && card.hint) return card.hint;
         // Same as the label: a hand-built card's note is the one the card
         // carries.
         return entry ? entry[1] : ((card && card.hint) || null);
     }
 
+    // Why part of an analysis is still empty: data the business does have, not
+    // enough of it yet (AnalysisUnavailable of COMMERCIAL, Rafael, 8-nov-2026).
+    const UNAVAILABLE_TEXTS = {
+        INSUFFICIENT_HISTORY: 'Todavía no hay suficientes meses de ventas para calcularlo.',
+        SINGLE_MONTH: 'Hace falta más de un mes de ventas para comparar.',
+        NO_PRICE_HISTORY: 'Todavía no hay precios de un mismo producto en meses distintos para compararlos.',
+        NO_CATEGORIES: 'Las ventas no traen categoría.',
+        NO_OBJECTIVES: 'No hay objetivos cargados para el período.'
+    };
+    const unavailableText = (code) => UNAVAILABLE_TEXTS[code] || '';
+
+    /**
+     * Shows a card with the reason its content is still empty in place of an
+     * empty chart or table; with no reason the card goes back to its content.
+     */
+    function noteInCard(cardId, code) {
+        const card = document.getElementById(cardId);
+        if (!card) return;
+        let note = card.querySelector('[data-unavailable]');
+        if (!note) {
+            note = document.createElement('p');
+            note.className = 'insight-empty';
+            note.dataset.unavailable = '';
+            card.append(note);
+        }
+        note.textContent = unavailableText(code);
+        note.hidden = !code;
+        card.querySelectorAll('canvas, .table-wrapper').forEach((node) => { node.hidden = Boolean(code); });
+        if (code) card.hidden = false;
+    }
+
     Object.assign(A, {
         ABC_DESCRIPTIONS, CONCENTRATION_LEVELS, FORECAST_METHODS, MARGIN_ALERT_REASONS,
-        PAYMENT_METHODS, VOLUME_LEVELS, dimensionLabel, errorText, kpiHint, kpiLabel, otherMethod,
-        riskReasonText, setLevelReading
+        PAYMENT_METHODS, VOLUME_LEVELS, dimensionLabel, errorText, kpiHint, kpiLabel, noteInCard,
+        otherMethod, riskReasonText, setLevelReading, unavailableText
     });
 })(window.SD_ANALYSIS = window.SD_ANALYSIS || {});

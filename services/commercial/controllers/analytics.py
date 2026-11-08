@@ -30,6 +30,7 @@ from schemas.fx_effect import FxEffectResponse
 from schemas.objectives import (
     ObjectivesResponse
 )
+from services.products import suggested_prices
 from services.objectives import build_objectives, select_objective_periods
 from services.objectives import resolve_policy as resolve_commercial_policy
 from services.receivables import build_receivables
@@ -298,7 +299,7 @@ async def commercial_summary_controller(
         volume_source = build_volume_source(dataframe),
         concentration = build_concentration(dataframe),
         efficiency = build_efficiency(dataframe),
-        margin = build_margin(dataframe),
+        margin = build_margin(dataframe, suggested_prices(dynamodb_resource, current_user)),
         chosen_month = build_chosen_month(
             dataframe, (params or {}).get('auth_token') or '',
             get_current_time_gmt().date().isoformat()),

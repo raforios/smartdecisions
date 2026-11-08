@@ -101,3 +101,15 @@ def test_margin_is_broken_down_by_seller():
     margin = build_margin(_sales_frame())
     by_seller = {row.label: row.margin for row in margin.by_seller}
     assert by_seller == {'Ana': 40.0, 'Beto': 10.0}
+
+
+def test_each_product_is_set_against_its_suggested_price():
+    '''Sold at 10 with a cost of 6 against a suggested 12: 40 % real, 50 % suggested, -10.'''
+    frame = pd.DataFrame({
+        'product_id': ['SKU-1', 'SKU-2'], 'product_name': ['Leche', 'Pan'],
+        'quantity': [2.0, 1.0], 'unit_cost': [6.0, 3.0], 'total_amount': [20.0, 5.0]
+    })
+    rows = {row.label: row for row in build_margin(frame, {'SKU-1': 12.0}).by_product}
+    assert (rows['Leche'].margin_percentage, rows['Leche'].suggested_price) == (40.0, 12.0)
+    assert (rows['Leche'].margin_at_suggested, rows['Leche'].margin_gap) == (50.0, -10.0)
+    assert rows['Pan'].suggested_price is None and rows['Pan'].margin_gap is None

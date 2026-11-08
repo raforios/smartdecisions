@@ -14,6 +14,7 @@
 
 import pandas as pd
 
+from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     EfficiencyBlock,
     KpiCard,
@@ -209,8 +210,10 @@ def build_efficiency(dataframe: pd.DataFrame) -> EfficiencyBlock:
     '''
     message = f'Building efficiency block over {len(dataframe)} rows.'
     logger.info(message)
+    prices = _price_drift(dataframe)
     return EfficiencyBlock(
         kpis = _drop_size_kpis(dataframe),
         sellers = _seller_productivity(dataframe),
-        prices = _price_drift(dataframe)
+        prices = prices,
+        prices_reason = None if prices else AnalysisUnavailable.NO_PRICE_HISTORY
     )

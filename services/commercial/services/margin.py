@@ -225,12 +225,54 @@ def _thin_margin_products(frame: pd.DataFrame) -> list[MarginAlert]:
     ]
 
 
-def build_margin(dataframe: pd.DataFrame) -> MarginBlock:
+def _against_suggested(
+    rows: list[MarginRow],
+    frame: pd.DataFrame,
+    suggested: dict[str, float]
+) -> list[MarginRow]:
+    '''
+        Puts next to each product's real margin the margin its suggested price
+        would give at what the product really cost, and the gap between them.
+
+        Args:
+            rows (list[MarginRow]): The by-product rows.
+            frame (pd.DataFrame): Rows carrying the margin columns.
+            suggested (dict[str, float]): Suggested price per SKU.
+
+        Returns:
+            list[MarginRow]: The rows, those with a suggested price completed.
+    '''
+    labels = label_series(frame, PRODUCT_ID, PRODUCT_NAME)
+    if labels is None or PRODUCT_ID not in frame.columns:
+        return rows
+    per_label = frame.assign(_label = labels.fillna('')).groupby('_label').agg(
+        sku = (PRODUCT_ID, 'first'), cost = ('line_cost', 'sum'), units = (QUANTITY, 'sum'))
+    completed = []
+    for row in rows:
+        price = suggested.get(str(per_label['sku'].get(row.label, '')))
+        units = float(per_label['units'].get(row.label, 0) or 0)
+        if not price or units <= 0:
+            completed.append(row)
+            continue
+        unit_cost = float(per_label['cost'][row.label]) / units
+        at_suggested = round(ratio(price - unit_cost, price) * 100, 1)
+        completed.append(row.model_copy(update = {
+            'suggested_price': price, 'margin_at_suggested': at_suggested,
+            'margin_gap': round(row.margin_percentage - at_suggested, 1)}))
+    return completed
+
+
+def build_margin(
+    dataframe: pd.DataFrame,
+    suggested: dict[str, float] | None = None
+) -> MarginBlock:
     '''
         Builds the whole profitability block from the normalized sales frame.
 
         Args:
             dataframe (pd.DataFrame): Normalized sales rows as produced by ingest.
+            suggested (dict[str, float] | None): Suggested price per SKU, from
+                the product master; the products without one are left blank.
 
         Returns:
             dict[str, Any]: 'available' (whether the file carried cost data),
@@ -252,9 +294,9 @@ def build_margin(dataframe: pd.DataFrame) -> MarginBlock:
         available = True,
         kpis = _kpis(frame),
         by_category = _breakdown(frame, categories, _TOP_ROWS),
-        by_product = _breakdown(
+        by_product = _against_suggested(_breakdown(
             frame, label_series(frame, PRODUCT_ID, PRODUCT_NAME), _TOP_ROWS
-        ),
+        ), frame, suggested or {}),
         by_client = _breakdown(
             frame, label_series(frame, CLIENT_ID, CLIENT_NAME), _TOP_ROWS
         ),

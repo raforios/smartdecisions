@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from schemas.billing import (
     BillingSettings,
+    Buyer,
     PaymentMethod,
     ProductUnit,
     PurchaseLineIn,
@@ -98,12 +99,20 @@ def test_a_sale_becomes_smartdecisions_sales_lines(dynamodb):
     sale = _a_sale(dynamodb).model_copy(update = {'payment_method': PaymentMethod.DEBIT_CARD})
     rows = billing_bridge.sale_rows(sale)
     assert rows == [{
-        'date': sale.created_at[:10], 'order_id': sale.number, 'pos_name': None,
+        'date': sale.created_at[:10], 'order_id': sale.number, 'pos_id': None, 'pos_name': None,
         'seller': sale.created_by, 'product_id': 'PARA500',
         'product_name': sale.lines[0].description, 'quantity': 2, 'unit_price': 6.0,
         'unit_cost': 3.0, 'total_amount': 12.0, 'payment_terms': 'CASH',
         'payment_method': 'CARD'
     }]
+
+
+def test_a_buyer_with_a_nit_is_the_client_code(dynamodb):
+    '''The NIT BILLING invoices with names the client in SmartDecisions too.'''
+    sale = _a_sale(dynamodb).model_copy(update = {
+        'buyer': Buyer(name = 'Clínica Sur', document = '1020304050')})
+    row = billing_bridge.sale_rows(sale)[0]
+    assert (row['pos_id'], row['pos_name']) == ('1020304050', 'Clínica Sur')
 
 
 def test_a_product_becomes_a_master_record(dynamodb):

@@ -193,7 +193,39 @@
         }
     }
 
+    // The modules the company's data turns on (Rafael, 8-nov-2026): read once
+    // per dataset from its status and kept for the session, so every page
+    // hides the same things without asking again.
+    const MODULES_KEY = 'sd_modules';
+
+    function cachedModules() {
+        try {
+            const stored = JSON.parse(sessionStorage.getItem(MODULES_KEY) || 'null');
+            return stored && stored.dataset === sessionStorage.getItem(DATASET_KEY)
+                ? stored.modules : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async function ensureModules() {
+        const cached = cachedModules();
+        if (cached) return cached;
+        const datasetId = await ensureDataset();
+        if (!datasetId) return null;
+        try {
+            const status = await get(`${window.SD_CONFIG.API_URL}/v1/commercial/` +
+                                     `${encodeURIComponent(datasetId)}`);
+            sessionStorage.setItem(MODULES_KEY,
+                JSON.stringify({ dataset: datasetId, modules: status.modules || null }));
+            return status.modules || null;
+        } catch (error) {
+            return null;
+        }
+    }
+
     window.SD_API = {
-        get, post, put, patch, del, postFormData, uploadToBucket, ensureDataset
+        get, post, put, patch, del, postFormData, uploadToBucket, ensureDataset,
+        ensureModules, cachedModules
     };
 })();

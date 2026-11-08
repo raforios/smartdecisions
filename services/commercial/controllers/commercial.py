@@ -18,6 +18,7 @@ from controllers.common import (
     to_ingest_response
 )
 from schemas.clients import ClientSource
+from schemas.modules import SalesProfile
 from schemas.commercial import (
     OPTIONAL_COLUMNS,
     SALES_TEMPLATE,
@@ -39,7 +40,9 @@ from services.commercial_utils import HISTORY_DEFAULT_LIMIT
 from services.commercial import parse_and_validate
 from services.commercial import parse_frame as parse_sales_frame
 from services.load_files import serialize_dataframe
+from services.modules import active_modules, sales_profile
 from services.commercial_utils import (
+    attach_to_dataset,
     content_fingerprint,
     download_template_bytes,
     get_owned_dataset,
@@ -109,6 +112,7 @@ async def ingest_excel_controller(
             'owner_email': current_user,
             'status': 'validated' if is_valid else 'failed',
             'file_s3_key': file_s3_key,
+            'sales_profile': sales_profile(result.accepted).model_dump(),
             'template_version': TEMPLATE_VERSION,
             'file_fingerprint': fingerprint,
             **result.summary.model_dump(),
@@ -249,7 +253,7 @@ async def list_datasets_controller(
 async def get_dataset_status_controller(
     dynamodb_resource: ServiceResource,
     dataset_id: str,
-    request: Request, # pylint: disable=unused-argument
+    request: Request,
     current_user: str # pylint: disable=unused-argument
 ) -> IngestStatusResponse:
     '''
@@ -260,6 +264,13 @@ async def get_dataset_status_controller(
         dataset_id = dataset_id,
         owner_email = current_user
     )
+    profile = item.get('sales_profile')
+    if profile is None and item.get('file_s3_key'):
+        # Stored before the profile existed: worked out once, then kept.
+        profile = sales_profile(read_stored_frame(item['file_s3_key'],
+                                                  caller_token(request))).model_dump()
+        attach_to_dataset(dynamodb_resource = dynamodb_resource, dataset_id = dataset_id,
+                          payload = {'sales_profile': profile})
     stored_collections = item.get('collections_summary')
     stored_stock = item.get('stock_summary')
     stored_visits = item.get('visits_summary')
@@ -282,6 +293,7 @@ async def get_dataset_status_controller(
         ),
         summary = summary_of(item),
         issues = [ValidationIssue(**issue) for issue in item.get('issues', [])],
+        modules = active_modules(item, SalesProfile(**(profile or {}))),
         created_at = item['created_at']
     )
 

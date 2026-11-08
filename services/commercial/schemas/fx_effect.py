@@ -6,6 +6,8 @@
 
 from pydantic import BaseModel, Field
 
+from schemas.modules import AnalysisUnavailable
+
 from schemas.analytics import Amount, PeriodInfo
 
 
@@ -85,6 +87,7 @@ class FxEffectBlock(BaseModel):
     rate_is_hypothetical: bool = False
     monthly: list[MonthlyFx] = Field(default_factory = list)
     growth_bob_pct: float | None = None
+    growth_reason: AnalysisUnavailable | None = None
     growth_usd_pct: float | None = None
     totals: FxTotals | None = Field(
         None, description = 'Absent when the file carries no unit cost.'

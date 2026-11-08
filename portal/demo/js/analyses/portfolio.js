@@ -11,7 +11,11 @@
     let riskClients = [];
 
     function renderPortfolio(data) {
-        A.fillKpis('portfolioKpis', data.kpis, (card) =>
+        // Churn compares two months: with one, its card says why it is empty.
+        const kpis = (data.kpis || []).map((card) => card.metric_code === 'CHURN_LAST_MONTH' &&
+            card.value == null && data.churn_reason
+            ? { ...card, hint: A.unavailableText(data.churn_reason) } : card);
+        A.fillKpis('portfolioKpis', kpis, (card) =>
             card.metric_code === 'CLIENTS_AT_RISK' ? 'warning' : '');
 
         const movement = data.movement || [];

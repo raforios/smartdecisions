@@ -34,6 +34,7 @@ from services.commercial_utils import (
     read_stored_frame
 )
 from services.logger_config import custom_logger as logger
+from services.modules import sales_profile
 
 # A sales line IS its invoice and its product: one line per product per
 # invoice. That is what lets an ERP push the same day twice —a retry, or a
@@ -114,6 +115,7 @@ def _store_sales(
         payload = {
             'file_s3_key': file_key,
             'status': 'validated' if len(whole.accepted) else 'failed',
+            'sales_profile': sales_profile(whole.accepted).model_dump(),
             **whole.summary.model_dump(),
             'issues': [
                 issue.model_dump(mode = 'json')

@@ -21,6 +21,7 @@ from typing import Any
 
 import pandas as pd
 
+from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     AbcClass,
     CategoryMix,
@@ -680,5 +681,9 @@ def build_volume_source(dataframe: pd.DataFrame) -> VolumeSourceBlock:
     if months is not None:
         block['category_mix'] = _category_mix(frame, parsed_dates, months)
         block['decomposition'] = _decomposition(frame, parsed_dates, months)
+    if not block.get('category_mix'):
+        categorized = 'category' in frame and frame['category'].notna().any()
+        block['category_mix_reason'] = (AnalysisUnavailable.INSUFFICIENT_HISTORY if categorized
+                                        else AnalysisUnavailable.NO_CATEGORIES)
 
     return VolumeSourceBlock(**block)

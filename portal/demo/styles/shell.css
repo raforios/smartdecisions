@@ -239,3 +239,6 @@ body[data-role="REQUESTER"] [data-manage] { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
     body.sd-app, .sd-sidebar, .sd-item { transition: none; }
 }
+
+/* A block of a module the company's data does not use (Rafael, 8-nov-2026). */
+[data-module-off] { display: none !important; }

@@ -15,6 +15,7 @@ from typing import Any
 
 import pandas as pd
 
+from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     ClientAtRisk,
     KpiCard,
@@ -355,11 +356,16 @@ def build_portfolio(dataframe: pd.DataFrame) -> PortfolioBlock:
                f'{len(at_risk)} at risk, {len(lost)} lost.')
     logger.info(message)
 
+    kpis = _portfolio_kpis(history, movement, dataframe, (len(at_risk), len(lost)))
+    churn = next((kpi.value for kpi in kpis
+                  if kpi.metric_code == MetricCode.CHURN_LAST_MONTH.value), None)
     return PortfolioBlock(
-        kpis = _portfolio_kpis(history, movement, dataframe, (len(at_risk), len(lost))),
+        kpis = kpis,
         movement = movement,
         at_risk = at_risk,
         total_at_risk = len(at_risk),
         lost = lost,
-        total_lost = len(lost)
+        total_lost = len(lost),
+        # Churn compares a month with the one before it.
+        churn_reason = AnalysisUnavailable.SINGLE_MONTH if churn is None else None
     )

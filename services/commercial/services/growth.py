@@ -15,6 +15,7 @@
 
 import pandas as pd
 
+from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     GrowthBlock,
     KpiCard,
@@ -182,8 +183,10 @@ def build_growth(dataframe: pd.DataFrame) -> GrowthBlock:
 
     message = f'Building growth block over {len(monthly)} months.'
     logger.info(message)
+    seasonality = _seasonality(monthly)
     return GrowthBlock(
         kpis = _growth_kpis(monthly),
         monthly_change = _monthly_variation(monthly),
-        seasonality = _seasonality(monthly)
+        seasonality = seasonality,
+        seasonality_reason = None if seasonality else AnalysisUnavailable.INSUFFICIENT_HISTORY
     )

@@ -198,6 +198,8 @@ def _dataset(owner: str) -> dict:
         'valid_rows': 98,
         'error_rows': 2,
         'created_at': '2026-08-10T12:36:39-04:00',
+        'sales_profile': {'named_clients': True, 'credit_sales': False, 'coordinates': False},
+        'stock_s3_key': 'ingest/stock/ds-001.csv'
     }
 
 
@@ -258,6 +260,27 @@ def test_the_owner_reads_their_own_dataset():
     assert response.dataset_id == 'ds-001'
     assert response.owner_email == 'yo@miempresa.com'
     assert response.summary.total_rows == 100
+    assert response.modules.clients and response.modules.stock
+    assert not response.modules.receivables and not response.modules.routes
+
+
+def test_a_dataset_stored_before_the_profile_gets_it_once():
+    '''Its sales are read the first time and the profile is kept, so it is not read again.'''
+    stored = {key: value for key, value in _dataset('yo@miempresa.com').items()
+              if key != 'sales_profile'}
+    attached: list = []
+    frame = pd.DataFrame({'pos_name': ['Mostrador', 'Mostrador'],
+                          'payment_terms': ['CREDIT', 'CASH']})
+    with patch('services.commercial_utils.get_dataset_by_id', lambda **kwargs: stored), \
+            patch.object(controllers, 'read_stored_frame', lambda *args: frame), \
+            patch.object(controllers, 'attach_to_dataset',
+                         lambda **kwargs: attached.append(kwargs['payload'])):
+        response = asyncio.run(controllers.get_dataset_status_controller(
+            dynamodb_resource = None, dataset_id = 'ds-001', request = None,
+            current_user = 'yo@miempresa.com'))
+    assert attached == [{'sales_profile': {'named_clients': False, 'credit_sales': True,
+                                           'coordinates': False}}]
+    assert response.modules.receivables and not response.modules.clients
 
 
 class _ListTable: # pylint: disable=too-few-public-methods
