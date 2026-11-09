@@ -71,7 +71,7 @@ def test_an_invoiced_purchase_values_the_shelf_without_its_vat(dynamodb):
     _sell(dynamodb, [SaleLineIn(sku = 'PARA500', quantity = 2)])
     month = get_current_time_gmt().date().isoformat()[:7]
     amounts = _amounts(billing_finance.finance_rows(dynamodb, OWNER, month))
-    net = 1 - billing_finance.VAT_RATE
+    net = 1 - billing_bridge.VAT_RATE
     assert amounts[ACCOUNTS['BILLING_FINANCE_PURCHASES_INVOICED']] == 30.0
     assert amounts[ACCOUNTS['BILLING_FINANCE_CLOSING_INVENTORY']] == round(8 * 3.0 * net, 2)
     cost_of_sales = (amounts[ACCOUNTS['BILLING_FINANCE_OPENING_INVENTORY']] +

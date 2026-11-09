@@ -136,7 +136,7 @@ async def update_product_controller(
         SmartDecisions when the shop wants it.
     '''
     updated = billing.update_product(dynamodb_resource, owner, edit.sku, edit.patch)
-    share_product(dynamodb_resource, owner, updated, request)
+    share_product(dynamodb_resource, owner, updated, request, edited = True)
     return updated
 
 

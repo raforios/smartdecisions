@@ -68,6 +68,7 @@ ON_HAND = 'on_hand'
 COMMITTED = 'committed'
 IN_TRANSIT = 'in_transit'
 UNIT_COST = 'unit_cost'
+UNIT_COST_NET = 'unit_cost_net'
 
 _COVERAGE_DECIMALS = _SETTINGS['STOCK_COVERAGE_DECIMALS']
 
@@ -262,11 +263,14 @@ def _rows(
         in_transit = (IN_TRANSIT, 'sum') if IN_TRANSIT in snapshot.columns
                      else (ON_HAND, 'size'),
         unit_cost = (UNIT_COST, 'mean') if UNIT_COST in snapshot.columns
-                    else (ON_HAND, 'size')
+                    else (ON_HAND, 'size'),
+        unit_cost_net = (UNIT_COST_NET, 'mean') if UNIT_COST_NET in snapshot.columns
+                        else (ON_HAND, 'size')
     )
     present = {'committed': COMMITTED in snapshot.columns,
                'in_transit': IN_TRANSIT in snapshot.columns,
-               'unit_cost': UNIT_COST in snapshot.columns}
+               'unit_cost': UNIT_COST in snapshot.columns,
+               'unit_cost_net': UNIT_COST_NET in snapshot.columns}
 
     rows = [
         _row_of(product, row, present, _Context(demand, costs, classes, as_of))
@@ -366,6 +370,9 @@ def _row_of(
             str(context.classes.get(product)) if product in context.classes.index else None
         ),
         stock_value = money(on_hand * cost) if cost is not None else None,
+        stock_value_net = (money(on_hand * float(row['unit_cost_net']))
+                           if present['unit_cost_net'] and pd.notna(row['unit_cost_net'])
+                           else None),
         excess_units = surplus,
         excess_value = money(surplus * cost) if cost is not None else None
     )
@@ -390,6 +397,7 @@ def _kpis(
             StockKpis: Position, money at rest and what is at risk.
     '''
     values = [row.stock_value for row in rows if row.stock_value is not None]
+    net_values = [row.stock_value_net for row in rows if row.stock_value_net is not None]
     excess_values = [row.excess_value for row in rows if row.excess_value is not None]
     coverages = [row.coverage_days for row in rows if row.coverage_days is not None]
     at_risk = [row for row in rows if row.status_code in _AT_RISK]
@@ -401,6 +409,7 @@ def _kpis(
         units_committed = money(sum(row.committed for row in rows)),
         units_available = money(sum(row.available for row in rows)),
         stock_value = money(sum(values)) if values else None,
+        stock_value_net = money(sum(net_values)) if net_values else None,
         out_of_stock = sum(1 for row in rows if row.status_code == StockStatus.OUT_OF_STOCK),
         at_risk = len(at_risk),
         excess_products = sum(1 for row in rows if row.status_code in _EXCESS),

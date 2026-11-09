@@ -31,7 +31,11 @@ class ProductBase(BaseModel):
     '''
     description: str | None = Field(None, max_length = 200)
     category: str | None = Field(None, max_length = 100)
-    brand: str | None = Field(None, max_length = 100)
+    brand: str | None = Field(None, max_length = 100,
+                              description = 'The commercial name it is sold under.')
+    # Who makes it —a pharmacy's laboratory—, inherent to the product; not the
+    # supplier, who is whom it is bought from on each purchase (Rafael, 8-nov-2026).
+    manufacturer: str | None = Field(None, max_length = 150)
     supplier: str | None = Field(None, max_length = 150)
     unit: ProductUnit | None = None
     suggested_price: float | None = Field(

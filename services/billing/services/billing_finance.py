@@ -45,7 +45,7 @@ from services.billing import (
     products_by_sku,
     read_partition
 )
-from services.billing_bridge import share_if_wanted
+from services.billing_bridge import lot_shares, merchandise_share, share_if_wanted
 from services.environment import load_and_validate_env_vars
 from services.utils import get_current_time_gmt, load_parameters
 
@@ -53,7 +53,6 @@ FINANCE_QUEUE_URL = load_and_validate_env_vars({'FINANCE_LIVE_QUEUE_URL': str})[
     'FINANCE_LIVE_QUEUE_URL']
 LOADS_PATH = '/v1/finance/loads'
 
-VAT_RATE = load_parameters({'BILLING_VAT_RATE': float})['BILLING_VAT_RATE']
 ACCOUNTS = load_parameters({
     'BILLING_FINANCE_SALES_INVOICED': str,
     'BILLING_FINANCE_SERVICES_INVOICED': str,
@@ -203,20 +202,6 @@ def _cost_of(
                for line in lines for allocation in line['allocations'])
 
 
-def _merchandise_share(purchase: dict[str, Any]) -> float:
-    '''
-        The share of a purchase's cost that is merchandise: all of it, or all
-        but the VAT when it came with an invoice.
-
-        Args:
-            purchase (dict[str, Any]): A stored purchase.
-
-        Returns:
-            float: 1, or 1 minus the VAT rate.
-    '''
-    return 1.0 - VAT_RATE if purchase.get('invoice_number') else 1.0
-
-
 def _closing_inventory(
     shelf: float,
     month: str,
@@ -236,7 +221,7 @@ def _closing_inventory(
     '''
     after = _month_after(month)
     factor = later['lot_factor']
-    bought = sum(float(purchase['total_cost']) * _merchandise_share(purchase)
+    bought = sum(float(purchase['total_cost']) * merchandise_share(purchase)
                  for purchase in later['purchases'] if purchase[PURCHASE_SORT_KEY] >= after)
     sales = _standing_sales(later['sales'])
     sold = sum(_cost_of(sale['lines'], factor) for sale in sales
@@ -308,11 +293,9 @@ def finance_rows(
     # Every purchase, not only the recent ones: a lot on the shelf may come
     # from any of them, and its invoice decides what it is worth.
     purchases = read_partition(dynamodb_resource, PURCHASES_TABLE, owner)
-    share = {purchase[PURCHASE_SORT_KEY]: _merchandise_share(purchase) for purchase in purchases}
     lots = read_partition(dynamodb_resource, LOTS_TABLE, owner)
     data = {'sales': _documents(dynamodb_resource, owner, (SALES_TABLE, SALE_SORT_KEY), reach),
-            'purchases': purchases,
-            'lot_factor': {lot['lot_id']: share.get(lot['purchase_id'], 1.0) for lot in lots}}
+            'purchases': purchases, 'lot_factor': lot_shares(lots, purchases)}
     units = {sku: product.get('unit') for sku, product in
              products_by_sku(dynamodb_resource, owner).items()}
     shelf = sum(float(lot['quantity_remaining']) * float(lot['unit_cost']) *

@@ -116,10 +116,10 @@ def test_a_buyer_with_a_nit_is_the_client_code(dynamodb):
 
 
 def test_a_product_becomes_a_master_record(dynamodb):
-    '''The laboratory is the supplier; the unit travels as its code.'''
+    '''The laboratory is the manufacturer; the unit travels as its code.'''
     product = _register(dynamodb)
     record = billing_bridge.product_record(product)
-    assert record['sku'] == 'PARA500' and record['supplier'] == product.laboratory
+    assert record['sku'] == 'PARA500' and record['manufacturer'] == product.laboratory
     assert record['unit'] == ProductUnit.UNIT.value
 
 
@@ -133,7 +133,8 @@ def test_with_the_switch_on_sale_and_product_are_queued_with_the_token(dynamodb)
     sale = _a_sale(dynamodb)
     _switch(dynamodb, True)
     assert _shared(billing_bridge.share_sale, dynamodb, sale) == [(OWNER, {
-        'path': billing_bridge.LIVE_SALES_PATH, 'body': {'rows': billing_bridge.sale_rows(sale)},
+        'method': 'POST', 'path': billing_bridge.LIVE_SALES_PATH,
+        'body': {'rows': billing_bridge.sale_rows(sale)},
         'authorization': AUTHORIZATION})]
     product = billing.get_product(dynamodb, OWNER, 'PARA500')
     queued = _shared(billing_bridge.share_product, dynamodb, product)
@@ -231,3 +232,16 @@ def test_a_company_name_with_spaces_gets_a_valid_line_of_its_own(monkeypatch):
     group = sent[0]['MessageGroupId']
     assert re.fullmatch(r'[0-9a-f]{64}', group)
     assert group == billing_bridge.queue_group('The Pharma') != billing_bridge.queue_group('Otra')
+
+
+def test_an_edited_product_goes_as_a_load_and_then_a_correction(dynamodb):
+    '''The load creates it if the master lacks it; the PATCH changes what the shop changed.'''
+    _switch(dynamodb, True)
+    product = _register(dynamodb).model_copy(update = {'category': 'Analgésicos'})
+    queued = [request for _owner, request in _shared(
+        lambda resource, owner, item, req: billing_bridge.share_product(
+            resource, owner, item, req, edited = True), dynamodb, product)]
+    assert [(sent['method'], sent['path']) for sent in queued] == [
+        ('POST', billing_bridge.PRODUCTS_PATH),
+        ('PATCH', f'{billing_bridge.PRODUCTS_PATH}/PARA500')]
+    assert 'sku' not in queued[1]['body'] and queued[1]['body']['category'] == 'Analgésicos'

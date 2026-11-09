@@ -203,6 +203,11 @@ STOCK_COLUMNS: tuple[SalesColumn, ...] = (
                 rules = ValueRules(max_length = 64)),
     SalesColumn('unit_cost', 'Costo Unitario', False, 'float64',
                 rules = ValueRules(minimum = 0.0)),
+    # Optional (Rafael, 8-nov-2026): the cost without the VAT of invoiced
+    # purchases, which is a tax credit; SmartBilling sends it so the shelf
+    # also reads as the financial analysis values it.
+    SalesColumn('unit_cost_net', 'Costo sin IVA', False, 'float64',
+                rules = ValueRules(minimum = 0.0)),
     # Required (Rafael, 07-oct): the stock is valued at what it sells for, and
     # the price of each photo is what says when the list has to be adjusted.
     SalesColumn('unit_price', 'Precio de Venta', True, 'float64',

@@ -95,7 +95,10 @@ venta o de la devolución abierta; aviso al comprador por correo.
    sucursales y pueden tener exceso de inventario en una y desean llevar a la
    otra para tener disponibilidad, no lo compliques».
 8. **Lo común a todos los rubros** (plan de rubros, 10-oct): marca y
-   categoría en el producto («Laboratorio» pasa a ser marca; «Requiere
+   categoría en el producto (corregido el 8-nov con Rafael: el
+   «Laboratorio» es el **fabricante**, ni la marca —el nombre comercial,
+   opcional— ni el proveedor —a quién se le compra, en cada compra—; la
+   categoría ya está desde el 8-nov; «Requiere
    receta» queda como rasgo de farmacia) y el vendedor en la venta.
 9. **SmartBilling → SmartDecisions:** ventas emitidas y transcritas, y
    productos, desplegados y probados en vivo el 6-nov por la cola FIFO

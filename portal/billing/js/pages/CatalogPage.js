@@ -164,7 +164,7 @@ export async function mountCatalog(host) {
                     <input type="text" id="description" maxlength="300"></label>
             </div>
             <div class="field-row">
-                <label class="field"><span>Laboratorio o proveedor</span>
+                <label class="field"><span>Laboratorio (fabricante)</span>
                     <input type="text" id="laboratory" maxlength="150"></label>
                 <label class="field"><span>Categoría</span>
                     <input type="text" id="category" maxlength="100"></label>

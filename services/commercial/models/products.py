@@ -22,6 +22,7 @@ class ProductItem(TypedDict, total = False):
     description: str
     category: str | None
     brand: str | None
+    manufacturer: str | None
     supplier: str | None
     unit: str | None
     suggested_price: float | None

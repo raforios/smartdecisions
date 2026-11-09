@@ -69,11 +69,18 @@
             'la venta observada en el período, no con una proyección. Se valoriza ' +
             `en bolivianos; USD y USDT al tipo de hoy. ${window.SD_MONEY.ratesNote(data.rates)}`;
 
+        // Without the VAT of invoiced purchases, as the financial analysis values
+        // it (Rafael, 8-nov-2026): only when the data brings it (SmartBilling).
+        const net = kpis.stock_value_net == null ? [] : [
+            { label: 'Valor sin IVA', value: kpis.stock_value_net, format: 'money3',
+              hint: 'Sin el IVA de las compras con factura, que es crédito fiscal: ' +
+                    'así lo valora el Análisis Financiero' }];
         A.fillKpis('stockKpis', [
             { label: 'Valor del inventario', value: kpis.stock_value, format: 'money3',
               hint: kpis.stock_value == null
                   ? 'Falta el costo unitario para valorizarlo'
                   : 'Existencia por su costo unitario' },
+            ...net,
             { label: 'Capital quieto', value: kpis.excess_value, format: 'money3',
               hint: `${A.formatInt(kpis.excess_products)} productos con exceso o sin ` +
                     'rotación' },

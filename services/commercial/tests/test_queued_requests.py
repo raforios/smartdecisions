@@ -56,3 +56,13 @@ def test_an_http_event_goes_to_mangum_untouched(monkeypatch):
     event = {'version': '2.0', 'rawPath': '/v1/commercial/health'}
     monkeypatch.setattr(main, '_asgi_handler', lambda received, _context: received)
     assert main.handler(event, None) is event
+
+
+def test_a_queued_correction_is_served_with_its_method():
+    '''A PATCH kept in the queue reaches the PATCH route, refused only for its token.'''
+    record = {'messageId': 'm-9', 'eventSource': utils.QUEUE_SOURCE, 'body': json.dumps({
+        'method': 'PATCH', 'path': '/v1/commercial/products/SKU-1',
+        'authorization': 'Bearer forged', 'body': {'category': 'Vitaminas'}})}
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    answer = main._asgi_handler(utils.queued_request(record), None) # pylint: disable=protected-access
+    assert answer['statusCode'] == 401

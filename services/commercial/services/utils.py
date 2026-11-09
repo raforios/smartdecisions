@@ -908,7 +908,8 @@ QUEUE_SOURCE = 'aws:sqs'
 
 def queued_request(record: dict[str, Any]) -> dict[str, Any]:
     '''
-        The API Gateway (HTTP API 2.0) event a queued request stands for.
+        The API Gateway (HTTP API 2.0) event a queued request stands for: a
+        POST unless the request names its method (a correction is a PATCH).
 
         Args:
             record (dict[str, Any]): One SQS record.
@@ -924,7 +925,8 @@ def queued_request(record: dict[str, Any]) -> dict[str, Any]:
         'rawQueryString': '',
         'headers': {'authorization': request['authorization'],
                     'content-type': 'application/json'},
-        'requestContext': {'http': {'method': 'POST', 'path': request['path'],
+        'requestContext': {'http': {'method': request.get('method', 'POST'),
+                                    'path': request['path'],
                                     'protocol': 'HTTP/1.1', 'sourceIp': QUEUE_SOURCE,
                                     'userAgent': QUEUE_SOURCE}},
         'body': json.dumps(request['body']),

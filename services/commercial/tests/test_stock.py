@@ -253,3 +253,16 @@ def test_snapshot_without_the_contract_columns_reports_the_same_code():
 
     assert block.available is False
     assert block.reason_code == StockUnavailable.NO_SNAPSHOT.value
+
+
+def test_the_shelf_reads_also_without_the_vat_when_it_comes():
+    '''
+        SmartBilling sends the cost without the VAT of invoiced purchases: the
+        shelf is valued both ways; a photo without it keeps only the cost.
+    '''
+    sales = pd.DataFrame(_daily_sales('Galleta', 10.0))
+    stock = pd.DataFrame([{**_snapshot('Galleta', 100.0, cost = 10.0), 'unit_cost_net': 8.7}])
+    view = build_stock(sales, stock)
+    assert (view.kpis.stock_value, view.kpis.stock_value_net) == (1000.0, 870.0)
+    plain = build_stock(sales, pd.DataFrame([_snapshot('Galleta', 100.0, cost = 10.0)]))
+    assert plain.kpis.stock_value_net is None

@@ -21,6 +21,7 @@
 '''
 import hashlib
 import json
+from urllib.parse import quote
 from typing import Any
 
 import boto3
@@ -28,7 +29,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
-from models.billing import LOTS_TABLE
+from models.billing import LOTS_TABLE, PURCHASES_TABLE, PURCHASE_SORT_KEY
 from schemas.billing import PaymentMethod, ProductOut, PurchaseNoteOut, SaleNoteOut, SaleStatus
 from schemas.billing_returns import CreditNoteOut
 from schemas.billing_siat import InvoiceState, SiatCatalog
@@ -46,8 +47,9 @@ from services.billing_siat_codes import get_catalog
 from services.environment import load_and_validate_env_vars
 from services.exceptions import RegisterNotFoundError
 from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
+from services.utils import get_current_time_gmt, load_parameters
 
+VAT_RATE = load_parameters({'BILLING_VAT_RATE': float})['BILLING_VAT_RATE']
 LIVE_QUEUE_URL = load_and_validate_env_vars({'COMMERCIAL_LIVE_QUEUE_URL': str})[
     'COMMERCIAL_LIVE_QUEUE_URL']
 
@@ -113,7 +115,10 @@ def product_record(product: ProductOut) -> dict[str, Any]:
     return {
         'sku': product.sku,
         'description': product.description,
-        'supplier': product.laboratory,
+        # The laboratory is who makes the product (Rafael, 8-nov-2026): neither
+        # its brand, the name it is sold under, nor its supplier, whom it is
+        # bought from on each purchase.
+        'manufacturer': product.laboratory,
         'category': product.category,
         'unit': product.unit.value,
         'suggested_price': product.suggested_price
@@ -278,7 +283,8 @@ def share_if_wanted(
     dynamodb_resource: ServiceResource,
     owner: str,
     request: Request | None,
-    delivery: tuple[str, str, dict[str, Any]]
+    delivery: tuple[str, str, dict[str, Any]],
+    method: str = 'POST'
 ) -> None:
     '''
         Queues one delivery when the shop has the switch on.
@@ -289,6 +295,7 @@ def share_if_wanted(
             request (Request | None): The incoming request, for the token.
             delivery (tuple[str, str, dict[str, Any]]): The queue, the path
                 and the body.
+            method (str): The HTTP method the receiving service serves it with.
     '''
     authorization = request.headers.get('Authorization') if request is not None else None
     if not authorization:
@@ -301,7 +308,8 @@ def share_if_wanted(
     if not wanted:
         return
     queue_url, path, body = delivery
-    queue_request(queue_url, owner, {'path': path, 'body': body, 'authorization': authorization})
+    queue_request(queue_url, owner, {'method': method, 'path': path, 'body': body,
+                                     'authorization': authorization})
 
 
 def share_sale(
@@ -327,20 +335,32 @@ def share_product(
     dynamodb_resource: ServiceResource,
     owner: str,
     product: ProductOut,
-    request: Request | None
+    request: Request | None,
+    edited: bool = False
 ) -> None:
     '''
         Sends a product just saved to SmartDecisions' master, when the shop
-        wants it.
+        wants it. An edit also goes as a correction (Rafael, 8-nov-2026): the
+        master only fills what it lacks on a load, and SmartBilling is where
+        the shop's products are kept, so what the shop changed must change
+        there too. The load goes first, so a product the master never had is
+        created before it is corrected.
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
             owner (str): The shop.
             product (ProductOut): The product saved.
             request (Request | None): The incoming request, for the token.
+            edited (bool): Whether it was an edit of a product already there.
     '''
+    record = product_record(product)
     share_if_wanted(dynamodb_resource, owner, request,
-                    (LIVE_QUEUE_URL, PRODUCTS_PATH, {'products': [product_record(product)]}))
+                    (LIVE_QUEUE_URL, PRODUCTS_PATH, {'products': [record]}))
+    if edited:
+        share_if_wanted(dynamodb_resource, owner, request,
+                        (LIVE_QUEUE_URL, f'{PRODUCTS_PATH}/{quote(product.sku, safe = "")}',
+                         {key: value for key, value in record.items() if key != 'sku'}),
+                        method = 'PATCH')
 
 
 def share_cancellation(
@@ -390,14 +410,47 @@ def share_return(
                         (LIVE_QUEUE_URL, REVERSALS_PATH, return_record(stored, stored_note)))
 
 
+def merchandise_share(purchase: dict[str, Any]) -> float:
+    '''
+        The share of a purchase's cost that is merchandise: all of it, or all
+        but the VAT when it came with an invoice, which is a tax credit.
+
+        Args:
+            purchase (dict[str, Any]): A stored purchase.
+
+        Returns:
+            float: 1, or 1 minus the VAT rate.
+    '''
+    return 1.0 - VAT_RATE if purchase.get('invoice_number') else 1.0
+
+
+def lot_shares(
+    lots: list[dict[str, Any]],
+    purchases: list[dict[str, Any]]
+) -> dict[str, float]:
+    '''
+        Each lot's merchandise share, from the purchase it came in.
+
+        Args:
+            lots (list[dict[str, Any]]): Stored lots.
+            purchases (list[dict[str, Any]]): Every stored purchase of the shop.
+
+        Returns:
+            dict[str, float]: Share per lot id.
+    '''
+    share = {purchase[PURCHASE_SORT_KEY]: merchandise_share(purchase) for purchase in purchases}
+    return {lot['lot_id']: share.get(lot['purchase_id'], 1.0) for lot in lots}
+
+
 def stock_rows(
     dynamodb_resource: ServiceResource,
     owner: str,
     day: str
 ) -> list[dict[str, Any]]:
     '''
-        Today's photo of every product on the shelf: units, cost and the price
-        the next batch sells at (Rafael, 8-nov-2026).
+        Today's photo of every product on the shelf: units, cost —also without
+        the VAT of invoiced purchases— and the price the next batch sells at
+        (Rafael, 8-nov-2026).
 
         Args:
             dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
@@ -407,8 +460,10 @@ def stock_rows(
         Returns:
             list[dict[str, Any]]: Rows in SmartDecisions' stock contract.
     '''
+    stored = read_partition(dynamodb_resource, LOTS_TABLE, owner)
+    shares = lot_shares(stored, read_partition(dynamodb_resource, PURCHASES_TABLE, owner))
     lots: dict[str, list[dict[str, Any]]] = {}
-    for lot in read_partition(dynamodb_resource, LOTS_TABLE, owner):
+    for lot in stored:
         if float(lot['quantity_remaining']) > 0:
             lots.setdefault(lot['sku'], []).append(lot)
     rows = []
@@ -416,11 +471,14 @@ def stock_rows(
         held = sorted(lots.get(sku, []), key = expiry_order)
         units = sum(float(lot['quantity_remaining']) for lot in held)
         cost = sum(float(lot['quantity_remaining']) * float(lot['unit_cost']) for lot in held)
+        net = sum(float(lot['quantity_remaining']) * float(lot['unit_cost']) *
+                  shares[lot['lot_id']] for lot in held)
         price = float(held[0]['sale_price']) if held else float(
             product.get('suggested_price') or 0)
         rows.append({'snapshot_date': day, 'product_id': sku,
                      'product_name': product['description'], 'on_hand': units,
                      'unit_cost': round(cost / units, MONEY_DECIMALS) if units else None,
+                     'unit_cost_net': round(net / units, MONEY_DECIMALS) if units else None,
                      'unit_price': price})
     return rows
 

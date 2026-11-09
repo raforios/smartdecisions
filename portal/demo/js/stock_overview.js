@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `<p class="sd-hero-value">Bs ${number(M.bob(kpis.stock_value))}</p>` +
             `<div class="sd-hero-other"><span>USD<b>${number(kpis.stock_value.usd)}</b></span>` +
             `<span>USDT<b>${number(kpis.stock_value.usdt)}</b></span>` +
+            (kpis.stock_value_net == null ? '' : `<span>Sin IVA<b>Bs ${
+                number(M.bob(kpis.stock_value_net))}</b></span>`) +
             `<span>Agotados<b>${number(kpis.out_of_stock)}</b></span>` +
             `<span>Por agotarse<b>${number(kpis.at_risk)}</b></span>` +
             `<span>Días de cobertura<b>${number(kpis.average_coverage_days, 1)}</b></span>` +

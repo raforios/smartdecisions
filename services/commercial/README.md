@@ -61,7 +61,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `POST` | `/v1/commercial/sales/rows` | Creates a **sales load** from an ERP. |
 | `POST` | `/v1/commercial/{dataset_id}/sales/rows` | Adds **sales lines** from an ERP. |
 | `POST` | `/v1/commercial/sales/live` | Adds **sales lines as they happen** to the latest load, or creates one. |
-| `POST` | `/v1/commercial/stock/live` | Today's **shelf** from a system that holds the real stock (SmartBilling), into the latest load. |
+| `POST` | `/v1/commercial/stock/live` | Today's **shelf** from a system that holds the real stock (SmartBilling), into the latest load; with `unit_cost_net` the stock is also valued without the VAT credit. |
 | `POST` | `/v1/commercial/purchases/live` | A **purchase** as it is received (SmartBilling), into the latest load. |
 | `POST` | `/v1/commercial/{dataset_id}/collections/rows` | Pushes the **payments** from an ERP. |
 | `POST` | `/v1/commercial/{dataset_id}/stock/rows` | Pushes the day's **stock** from an ERP. |

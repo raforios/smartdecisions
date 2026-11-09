@@ -134,6 +134,8 @@ class StockRowSchema(BaseModel):
     in_transit: float | None = Field(None, ge = 0)
     warehouse: str | None = Field(None, max_length = 64)
     unit_cost: float | None = Field(None, ge = 0)
+    unit_cost_net: float | None = Field(
+        None, ge = 0, description = 'The cost without the VAT of invoiced purchases.')
     unit_price: float = Field(..., ge = 0, description = 'What one unit sells for.')
 
 

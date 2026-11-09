@@ -227,10 +227,15 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
   del cliente. Margen al precio sugerido en Rentabilidad › Margen por
   producto. Lo que falta para la versión oficial, en el plan (12.1).
 - **Inventario real desde SmartBilling (8-nov, en código, falta desplegar
-  BILLING y COMMERCIAL):** cada movimiento manda la foto del día de todos
+  BILLING y COMMERCIAL; desplegado y probado el 8-nov):** cada movimiento manda la foto del día de todos
   los productos a `stock/live` y cada compra a `purchases/live`; la
   categoría del producto de BILLING viaja al maestro. Siguiente: el
   frontend de SmartBilling igual al de SmartDecisions, con `portal/common/`.
+- **8-nov, en código (falta desplegar BILLING, COMMERCIAL y FINANCE):**
+  editar un producto en SmartBilling corrige el maestro (la cola lleva el
+  método: PATCH); el laboratorio va como marca, no como proveedor; el stock
+  trae el costo sin IVA y SmartDecisions › Inventario muestra los dos
+  valores.
 
 **3-nov-2026.**
 

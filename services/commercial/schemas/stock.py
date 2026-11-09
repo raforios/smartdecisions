@@ -60,6 +60,7 @@ class StockRow(BaseModel):
     status_code: StockStatus = StockStatus.HEALTHY
     abc_class: str | None = None
     stock_value: Amount | None = None
+    stock_value_net: Amount | None = Field(None, description = 'Without the VAT credit.')
     excess_units: float = 0.0
     excess_value: Amount | None = None
 
@@ -74,6 +75,8 @@ class StockKpis(BaseModel):
     units_committed: float = 0.0
     units_available: float = 0.0
     stock_value: Amount | None = None
+    stock_value_net: Amount | None = Field(None, description = 'Without the VAT credit of '
+                                                              'invoiced purchases.')
     out_of_stock: int = 0
     at_risk: int = 0
     excess_products: int = 0
