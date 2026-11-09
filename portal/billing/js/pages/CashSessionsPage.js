@@ -7,12 +7,12 @@
  */
 import { BillingService, errorText } from '../services/BillingService.js';
 import { mountCloseForm, tillSummaryHtml } from './CashPage.js';
-import { escapeHtml, money, shortDate, stamp, todayIso } from '../ui.js';
+import { escapeHtml, money, shortDate, stamp, todayIso, rowIcon } from '../ui.js';
 
 function statusChip(till) {
-    if (till.status === 'CLOSED') return '<span class="chip chip-muted">Cerrada</span>';
-    if (till.expired) return '<span class="chip chip-danger">Abierta de otro día</span>';
-    return '<span class="chip chip-warn">Abierta</span>';
+    if (till.status === 'CLOSED') return '<span class="badge badge-muted">Cerrada</span>';
+    if (till.expired) return '<span class="badge badge-danger">Abierta de otro día</span>';
+    return '<span class="badge badge-warn">Abierta</span>';
 }
 
 function differenceCell(till) {
@@ -57,22 +57,22 @@ async function load(host) {
             user_email: host.querySelector('#user').value.trim() || null
         });
         holder.innerHTML = page.items.length ? `
-            <div class="table-scroll"><table class="data-table">
+            <div class="table-wrapper"><table class="data-table">
                 <thead><tr><th>Usuario</th><th>Día</th><th>Estado</th>
-                           <th class="num">Ventas</th><th class="num">Esperado</th>
-                           <th class="num">Contado</th><th class="num">Diferencia</th>
+                           <th class="numeric">Ventas</th><th class="numeric">Esperado</th>
+                           <th class="numeric">Contado</th><th class="numeric">Diferencia</th>
                            <th></th></tr></thead>
                 <tbody>${page.items.map((till) => `
                     <tr>
                         <td>${escapeHtml(till.user_email)}</td>
                         <td>${shortDate(till.business_day)}</td>
                         <td>${statusChip(till)}</td>
-                        <td class="num">${money(till.income_total)}</td>
-                        <td class="num">${money(till.expected_cash)}</td>
-                        <td class="num">${money(till.counted_cash)}</td>
-                        <td class="num">${differenceCell(till)}</td>
-                        <td><button class="btn btn-ghost btn-small open-till"
-                                    data-id="${escapeHtml(till.session_id)}">Ver</button></td>
+                        <td class="numeric">${money(till.income_total)}</td>
+                        <td class="numeric">${money(till.expected_cash)}</td>
+                        <td class="numeric">${money(till.counted_cash)}</td>
+                        <td class="numeric">${differenceCell(till)}</td>
+                        <td><button type="button" class="btn-icon open-till" data-tip="Ver" aria-label="Ver"
+                                    data-id="${escapeHtml(till.session_id)}">${rowIcon('eye')}</button></td>
                     </tr>`).join('')}</tbody>
             </table></div>`
             : '<p class="muted small">No hay cajas en ese rango.</p>';
@@ -89,11 +89,11 @@ async function load(host) {
  */
 export async function mountCashSessions(host) {
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Cajas</h2>
+        <header class="sd-page-head"><div>
+            <h1>Cajas</h1>
             <p class="muted">Cada caja es de un usuario y de un día: lo esperado, lo
                contado y la diferencia.</p>
-        </header>
+        </div></header>
         <section class="card">
             <div class="field-row">
                 <label class="field"><span>Desde</span>
@@ -102,9 +102,7 @@ export async function mountCashSessions(host) {
                     <input type="date" id="to" value="${todayIso()}"></label>
                 <label class="field"><span>Usuario (opcional)</span>
                     <input type="email" id="user" placeholder="correo@comercio"></label>
-                <div class="field" style="align-self: end">
-                    <button class="btn btn-secondary" id="reload">Ver</button>
-                </div>
+                <button class="btn btn-secondary" id="reload" data-btn-icon="filter">Ver</button>
             </div>
             <div id="tills"><p class="muted">Cargando…</p></div>
         </section>

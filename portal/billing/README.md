@@ -7,12 +7,12 @@ No framework: HTML5, Vanilla JS (ES modules) and CSS3, responsive.
 
 ```
 portal/billing/
-├── index.html            shell: sidebar, topbar, page host, modal, toasts
-├── login.html            sign-in against AUTH
-├── css/base.css          copy of the SmartDecisions sheet
-├── css/billing.css       what is BILLING's own
+├── index.html            page host; the frame is drawn by common/js/frame.js
+├── login.html            sign-in against AUTH, the same screen as SmartDecisions
+├── common -> ../common   shared with SmartDecisions: styles, frame, icons, pager
+├── css/billing.css       what is BILLING's own (counter, ticket, batches)
 └── js/
-    ├── app.js                  entry of index.html: sections and role gate
+    ├── app.js                  entry of index.html: menu, sections and role gate
     ├── login.js                entry of login.html
     ├── auth.js                 JWT helpers (email, role)
     ├── config.js               service URLs and storage keys

@@ -627,7 +627,7 @@ main p, main li { font-size: var(--fs-text); }
     padding: 0.15rem 0.45rem; border-radius: 999px;
 }
 
-/* ============ Tables (the only definition; every page loads demo.css) ============ */
+/* ============ Tables (the only definition; every page loads base.css) ============ */
 .table-wrapper {
     overflow-x: auto;
     border: 1px solid var(--border);
@@ -719,7 +719,7 @@ main p, main li { font-size: var(--fs-text); }
 .policy-source.is-default { color: var(--warning); }
 .row-actions { white-space: nowrap; }
 
-/* The one table pager (SD_UI.paginate in js/ui.js): ten rows a page, under
+/* The one table pager (SD_UI.paginate in common/js/ui.js): ten rows a page, under
    every table, the same in every page. */
 .pager { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.8rem; }
 .pager-info { color: var(--muted); font-size: var(--fs-text); font-variant-numeric: tabular-nums; }
@@ -736,6 +736,9 @@ main p, main li { font-size: var(--fs-text); }
     color: var(--muted); cursor: pointer;
 }
 .btn-icon .sd-icon { width: 1.1rem; height: 1.1rem; }
+/* A click on a button's drawing is a click on the button: handlers that read
+   event.target find the button, not the <svg> or its <path>. */
+.btn .sd-icon, .btn-icon .sd-icon { pointer-events: none; }
 .btn-icon:hover:not(:disabled), .btn-icon:focus-visible { color: var(--accent); background: var(--bg-alt); border-color: var(--border); }
 .btn-icon.is-delete:hover:not(:disabled) { color: var(--danger); }
 .btn-icon.is-save:hover:not(:disabled) { color: var(--success); }
@@ -774,3 +777,28 @@ main p, main li { font-size: var(--fs-text); }
 .figure-label { color: var(--muted); }
 .figure-value { color: var(--text-strong); text-align: right; font-variant-numeric: tabular-nums; }
 
+
+/* ============ Badges and empty tables (both products) ============ */
+/* A short state as a pill. The analyses give it their codes' tones
+   (analyses.css); these four are the plain ones. */
+.badge {
+    display: inline-block;
+    min-width: 1.6rem;
+    text-align: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    color: #fff;
+}
+.badge-info   { background: var(--accent-3); color: var(--text-strong); }
+.badge-muted  { background: var(--bg-alt); color: var(--muted); }
+.badge-warn   { background: var(--warning); }
+.badge-danger { background: var(--danger); }
+
+/* The one row of a table with nothing to show. */
+.empty-row td {
+    text-align: center;
+    color: var(--muted);
+    padding: 1.4rem;
+}

@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 left.email.localeCompare(right.email));
     }
 
-    /** Every matching user; the common pager (js/ui.js) shows ten at a time. */
+    /** Every matching user; the common pager (common/js/ui.js) shows ten at a time. */
     function paint() {
         const rows = visible();
         qs('#usersCount').textContent =

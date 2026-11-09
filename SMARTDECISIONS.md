@@ -183,7 +183,18 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
 > Lo escribe Claude cada vez que se detiene esperando algo. Sólo hechos
 > comprobados; el detalle vive en `docs/smartdecisions/plan.md`.
 
-**6-nov-2026.** Punto de retomada:
+**9-nov-2026.** Punto de retomada:
+
+- **Un solo frontend para los dos productos (9-nov, publicado y recorrido
+  en vivo):** `portal/common/` (hojas base, armado, cifras, login, íconos,
+  `frame.js`, paginador), enlazado por symlink en `portal/demo` y
+  `portal/billing`. SmartBilling quedó igual a SmartDecisions: login, menú
+  con grupos, ruta de navegación, tablas de 10 filas, botones por función,
+  acciones de fila con ícono. Regla en `.claude/rules/frontend.md`.
+- **Siguiente:** el «flujo mínimo del comercio» del plan (12.1), empezando
+  por el maestro de proveedores con tipos y la venta fraccionada.
+
+**6-nov-2026.** Lo anterior:
 
 - **Envío en vivo SmartBilling → COMMERCIAL, desplegado y probado en vivo
   el 6-nov:** BILLING deja cada venta (emitida o transcrita) y cada producto

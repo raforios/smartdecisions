@@ -1,5 +1,5 @@
-/* Análisis Financiero: only what demo.css and analyses.css do not already
-   define. Sizes and gaps come from the tokens of demo.css (three font sizes,
+/* Análisis Financiero: only what base.css and analyses.css do not already
+   define. Sizes and gaps come from the tokens of base.css (three font sizes,
    one block gap); nothing here sets its own. */
 
 /* A total line of a statement reads in bold, never bigger. */

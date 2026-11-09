@@ -6,7 +6,7 @@
  * would mean selling at a price nobody set.
  */
 import { BillingService, errorText } from '../services/BillingService.js';
-import { escapeHtml, money, notify, setBusy, shortDate, stamp, todayIso } from '../ui.js';
+import { escapeHtml, money, notify, setBusy, shortDate, stamp, todayIso, rowIcon } from '../ui.js';
 
 let catalogue = [];
 let lines = [];
@@ -19,16 +19,16 @@ function renderLines(host) {
                 <strong>${escapeHtml(line.description)}</strong>
                 <span class="muted">${escapeHtml(line.sku)}</span>
             </td>
-            <td class="num">${money(line.quantity, 0)}</td>
-            <td class="num">${money(line.unit_cost)}</td>
-            <td class="num">${money(line.sale_price)}</td>
+            <td class="numeric">${money(line.quantity, 0)}</td>
+            <td class="numeric">${money(line.unit_cost)}</td>
+            <td class="numeric">${money(line.sale_price)}</td>
             <td>${line.lot_code ? escapeHtml(line.lot_code) : '<span class="muted">—</span>'}</td>
             <td>${line.expiry_date ? shortDate(line.expiry_date)
                                    : '<span class="muted">sin fecha</span>'}</td>
-            <td class="num">${money(line.quantity * line.unit_cost)}
-                <button class="link-danger remove" title="Quitar">✕</button></td>
+            <td class="numeric">${money(line.quantity * line.unit_cost)}
+                <button type="button" class="btn-icon is-delete remove" data-tip="Quitar" aria-label="Quitar">${rowIcon('trash')}</button></td>
         </tr>`).join('')
-        : '<tr class="empty"><td colspan="7">Agrega los productos que llegaron.</td></tr>';
+        : '<tr class="empty-row"><td colspan="7">Agrega los productos que llegaron.</td></tr>';
 
     const total = lines.reduce((sum, line) => sum + line.quantity * line.unit_cost, 0);
     host.querySelector('#total-cost').textContent = money(total);
@@ -44,7 +44,7 @@ async function renderHistory(host) {
         holder.innerHTML = page.items.length ? `
             <table class="data-table">
                 <thead><tr><th>Nota</th><th>Proveedor</th><th>Fecha</th>
-                           <th class="num">Líneas</th><th class="num">Costo</th></tr></thead>
+                           <th class="numeric">Líneas</th><th class="numeric">Costo</th></tr></thead>
                 <tbody>
                     ${page.items.map((note) => `
                         <tr>
@@ -54,8 +54,8 @@ async function renderHistory(host) {
                                         escapeHtml(note.invoice_number)}</span>` : ''}</td>
                             <td>${escapeHtml(note.supplier_name)}</td>
                             <td>${stamp(note.created_at)}</td>
-                            <td class="num">${note.lines.length}</td>
-                            <td class="num">${money(note.total_cost)}</td>
+                            <td class="numeric">${note.lines.length}</td>
+                            <td class="numeric">${money(note.total_cost)}</td>
                         </tr>`).join('')}
                 </tbody>
             </table>`
@@ -74,11 +74,11 @@ async function renderHistory(host) {
 export async function mountPurchases(host) {
     lines = [];
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Recepción</h2>
+        <header class="sd-page-head"><div>
+            <h1>Recepción</h1>
             <p class="muted">Lo que entregó el laboratorio o la droguería. Cada línea
                se convierte en un lote con su costo, su precio y su vencimiento.</p>
-        </header>
+        </div></header>
 
         <section class="card">
             <h3>Datos de la entrega</h3>
@@ -109,17 +109,15 @@ export async function mountPurchases(host) {
                     <input type="text" id="lot_code" maxlength="60"></label>
                 <label class="field"><span>Vence</span>
                     <input type="date" id="expiry_date"></label>
-                <div class="field" style="align-self: end">
-                    <button class="btn btn-secondary" id="add">Agregar</button>
-                </div>
+                <button class="btn btn-secondary" id="add" data-btn-icon="plus">Agregar</button>
             </div>
 
-            <div class="table-scroll">
+            <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Producto</th><th class="num">Cantidad</th>
-                            <th class="num">Costo</th><th class="num">Precio</th>
-                            <th>Lote</th><th>Vence</th><th class="num">Importe</th></tr>
+                        <tr><th>Producto</th><th class="numeric">Cantidad</th>
+                            <th class="numeric">Costo</th><th class="numeric">Precio</th>
+                            <th>Lote</th><th>Vence</th><th class="numeric">Importe</th></tr>
                     </thead>
                     <tbody id="lines-body"></tbody>
                 </table>
@@ -128,7 +126,7 @@ export async function mountPurchases(host) {
             <div class="totals" style="margin-top: 1rem">
                 <div class="grand"><span>Costo total Bs</span><strong id="total-cost">0,00</strong></div>
             </div>
-            <button class="btn btn-primary" id="save" disabled>Registrar recepción</button>
+            <button class="btn btn-save" id="save" data-btn-icon="check" disabled>Registrar recepción</button>
         </section>
 
         <section class="card">

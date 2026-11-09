@@ -1,5 +1,5 @@
 /**
- * Sign-in screen.
+ * Sign-in screen, the same one SmartDecisions shows.
  *
  * Against AUTH, like every BearSoft product. If there is already a session, it
  * goes straight in instead of asking for the credentials again.
@@ -7,31 +7,71 @@
 import { isTokenExpired } from './auth.js';
 import { isAuthenticated, login } from './services/AuthService.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+/** "Recordar mi correo": the e-mail only, in this browser. */
+const REMEMBER_KEY = 'billing_login_email';
+
+function remembered() {
+    try {
+        return localStorage.getItem(REMEMBER_KEY) || '';
+    } catch (error) {
+        return '';
+    }
+}
+
+function store(value) {
+    try {
+        if (value) localStorage.setItem(REMEMBER_KEY, value);
+        else localStorage.removeItem(REMEMBER_KEY);
+    } catch (error) {
+        // Storage blocked: nothing is remembered.
+    }
+}
+
+// The classic scripts (common/js/ui.js) run before this module, so SD_UI exists.
+const start = () => {
     if (isAuthenticated() && !isTokenExpired()) {
         window.location.replace('index.html');
         return;
     }
 
-    const form = document.getElementById('login-form');
-    const submit = document.getElementById('login-submit');
-    const error = document.getElementById('login-error');
+    const { qs, setButtonBusy, revealToggle } = window.SD_UI;
+    const form = qs('#loginForm');
+    const note = qs('#loginNote');
+    const button = qs('#loginButton');
+    const remember = qs('#rememberEmail');
+    revealToggle(qs('#loginPassword'), qs('#passwordToggle'));
+
+    const email = remembered();
+    if (email) {
+        form.elements.email.value = email;
+        remember.checked = true;
+        qs('#loginPassword').focus();
+    }
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        error.hidden = true;
-        const label = submit.textContent;
-        submit.disabled = true;
-        submit.textContent = 'Entrando…';
+        note.className = 'form-note';
+        note.textContent = '';
+        const data = new FormData(form);
+        const address = String(data.get('email') || '').trim();
+        const password = String(data.get('password') || '');
+        if (!address || !password) {
+            note.classList.add('error');
+            note.textContent = 'Completa tu correo y tu contraseña.';
+            return;
+        }
+        const done = setButtonBusy(button, 'Entrando…');
         try {
-            const data = new FormData(form);
-            await login(data.get('email'), data.get('password'));
+            await login(address, password);
+            store(remember.checked ? address : '');
             window.location.replace('index.html');
         } catch (failure) {
-            error.textContent = failure.message || 'Credenciales inválidas.';
-            error.hidden = false;
-            submit.disabled = false;
-            submit.textContent = label;
+            note.classList.add('error');
+            note.textContent = failure.message || 'No se pudo iniciar sesión.';
+            done();
         }
     });
-});
+};
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+else start();

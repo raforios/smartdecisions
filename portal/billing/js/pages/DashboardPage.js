@@ -9,18 +9,18 @@ import { BillingService, PAYMENT_LABELS, errorText } from '../services/BillingSe
 import { escapeHtml, money, percent, shortDate, todayIso } from '../ui.js';
 
 function kpi(label, value, foot) {
-    return `<div class="card kpi">
-        <span class="label">${escapeHtml(label)}</span>
-        <span class="value">${value}</span>
-        ${foot ? `<span class="foot">${foot}</span>` : ''}
+    return `<div class="sd-stat">
+        <p class="sd-stat-label">${escapeHtml(label)}</p>
+        <p class="sd-stat-value">${value}</p>
+        ${foot ? `<p class="sd-stat-other">${foot}</p>` : ''}
     </div>`;
 }
 
 function expiryTable(rows, emptyText, showDays) {
     if (!rows.length) return `<p class="muted small">${escapeHtml(emptyText)}</p>`;
-    return `<div class="table-scroll"><table class="data-table">
+    return `<div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Producto</th><th>Lote</th><th>Vence</th>
-                   <th class="num">Quedan</th><th class="num">Al costo</th></tr></thead>
+                   <th class="numeric">Quedan</th><th class="numeric">Al costo</th></tr></thead>
         <tbody>${rows.map((row) => `
             <tr>
                 <td><strong>${escapeHtml(row.description)}</strong>
@@ -30,8 +30,8 @@ function expiryTable(rows, emptyText, showDays) {
                     ${shortDate(row.expiry_date)}
                     ${showDays ? `<span class="muted">en ${row.days_left} días</span>`
                                : `<span class="muted">hace ${-row.days_left} días</span>`}</td>
-                <td class="num">${money(row.quantity_remaining, 0)}</td>
-                <td class="num">${money(row.value_at_cost)}</td>
+                <td class="numeric">${money(row.quantity_remaining, 0)}</td>
+                <td class="numeric">${money(row.value_at_cost)}</td>
             </tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -43,19 +43,17 @@ function expiryTable(rows, emptyText, showDays) {
  */
 export async function mountDashboard(host) {
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Tablero</h2>
+        <header class="sd-page-head"><div>
+            <h1>Tablero</h1>
             <p class="muted">Qué se vendió, qué dejó, qué está por vencer y qué se acaba.</p>
-        </header>
+        </div></header>
         <section class="card">
             <div class="field-row">
                 <label class="field"><span>Desde</span>
                     <input type="date" id="from" value="${todayIso()}"></label>
                 <label class="field"><span>Hasta</span>
                     <input type="date" id="to" value="${todayIso()}"></label>
-                <div class="field" style="align-self: end">
-                    <button class="btn btn-secondary" id="reload">Ver</button>
-                </div>
+                <button class="btn btn-secondary" id="reload" data-btn-icon="filter">Ver</button>
             </div>
         </section>
         <div id="board"><p class="muted">Cargando…</p></div>`;
@@ -69,7 +67,7 @@ export async function mountDashboard(host) {
             });
 
             board.innerHTML = `
-                <div class="kpi-grid">
+                <div class="sd-grid sd-grid-quarters">
                     ${kpi('Vendido', `Bs ${money(data.sales_amount)}`,
                           `${data.sales_count} nota(s)` +
                           (data.cancelled_count ? ` · ${data.cancelled_count} anulada(s)` : ''))}
@@ -83,21 +81,21 @@ export async function mountDashboard(host) {
                           'al costo de cada lote')}
                 </div>
 
-                <div class="panel-grid">
+                <div class="sd-grid sd-grid-half">
                     <section class="card">
                         <h3>Ventas por medio de pago</h3>
                         <p class="muted small">Débito y crédito van separados; las notas
                            anteriores a la distinción figuran como tarjeta sin detalle.</p>
                         ${data.sales_by_method.length ? `
-                            <div class="table-scroll"><table class="data-table">
-                                <thead><tr><th>Medio</th><th class="num">Notas</th>
-                                           <th class="num">Bs</th></tr></thead>
+                            <div class="table-wrapper"><table class="data-table">
+                                <thead><tr><th>Medio</th><th class="numeric">Notas</th>
+                                           <th class="numeric">Bs</th></tr></thead>
                                 <tbody>${data.sales_by_method.map((row) => `
                                     <tr>
                                         <td>${escapeHtml(PAYMENT_LABELS[row.payment_method]
                                                          || row.payment_method)}</td>
-                                        <td class="num">${row.count}</td>
-                                        <td class="num">${money(row.total)}</td>
+                                        <td class="numeric">${row.count}</td>
+                                        <td class="numeric">${money(row.total)}</td>
                                     </tr>`).join('')}</tbody>
                             </table></div>`
                             : '<p class="muted small">No hubo ventas en el rango.</p>'}
@@ -119,15 +117,15 @@ export async function mountDashboard(host) {
                     <section class="card">
                         <h3>Bajo mínimo</h3>
                         ${data.low_stock.length ? `
-                            <div class="table-scroll"><table class="data-table">
-                                <thead><tr><th>Producto</th><th class="num">Disponible</th>
-                                           <th class="num">Mínimo</th></tr></thead>
+                            <div class="table-wrapper"><table class="data-table">
+                                <thead><tr><th>Producto</th><th class="numeric">Disponible</th>
+                                           <th class="numeric">Mínimo</th></tr></thead>
                                 <tbody>${data.low_stock.map((row) => `
                                     <tr>
                                         <td><strong>${escapeHtml(row.description)}</strong>
                                             <span class="muted">${escapeHtml(row.sku)}</span></td>
-                                        <td class="num warn">${money(row.available_quantity, 0)}</td>
-                                        <td class="num">${money(row.min_stock, 0)}</td>
+                                        <td class="numeric warn">${money(row.available_quantity, 0)}</td>
+                                        <td class="numeric">${money(row.min_stock, 0)}</td>
                                     </tr>`).join('')}</tbody>
                             </table></div>`
                             : '<p class="muted small">Nada por debajo del mínimo.</p>'}
@@ -137,15 +135,15 @@ export async function mountDashboard(host) {
                         <h3>Más vendidos</h3>
                         <p class="muted small">Por monto cobrado, no por cajas.</p>
                         ${data.top_products.length ? `
-                            <div class="table-scroll"><table class="data-table">
-                                <thead><tr><th>Producto</th><th class="num">Unidades</th>
-                                           <th class="num">Importe</th></tr></thead>
+                            <div class="table-wrapper"><table class="data-table">
+                                <thead><tr><th>Producto</th><th class="numeric">Unidades</th>
+                                           <th class="numeric">Importe</th></tr></thead>
                                 <tbody>${data.top_products.map((row) => `
                                     <tr>
                                         <td><strong>${escapeHtml(row.description)}</strong>
                                             <span class="muted">${escapeHtml(row.sku)}</span></td>
-                                        <td class="num">${money(row.quantity, 0)}</td>
-                                        <td class="num">${money(row.amount)}</td>
+                                        <td class="numeric">${money(row.quantity, 0)}</td>
+                                        <td class="numeric">${money(row.amount)}</td>
                                     </tr>`).join('')}</tbody>
                             </table></div>`
                             : '<p class="muted small">No hubo ventas en el rango.</p>'}

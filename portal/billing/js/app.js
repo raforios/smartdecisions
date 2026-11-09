@@ -22,18 +22,32 @@ import { mountCashSessions } from './pages/CashSessionsPage.js';
 import { mountCustomers } from './pages/CustomersPage.js';
 import { mountManualInvoices } from './pages/ManualInvoicesPage.js';
 
-const SECTIONS = {
-    counter: mountCounter,
-    cash: mountCash,
-    tills: mountCashSessions,
-    sales: mountSales,
-    customers: mountCustomers,
-    manual: mountManualInvoices,
-    catalog: mountCatalog,
-    purchases: mountPurchases,
-    dashboard: mountDashboard,
-    settings: mountSettings
-};
+/**
+ * The menu, in the frame SmartDecisions uses (`common/js/frame.js`): groups
+ * of sections, each with its icon and, when not everyone may use it, its
+ * roles.
+ */
+const MANAGERS = ['ADMIN', 'MANAGER'];
+const MENU = [
+    { group: 'Operación', items: [
+        { id: 'counter', label: 'Mostrador', icon: 'sales', mount: mountCounter },
+        { id: 'cash', label: 'Caja y egresos', icon: 'calculator', mount: mountCash },
+        { id: 'sales', label: 'Ventas', icon: 'receivables', mount: mountSales },
+        { id: 'customers', label: 'Clientes', icon: 'clients', mount: mountCustomers }
+    ] },
+    { group: 'Inventario', items: [
+        { id: 'catalog', label: 'Catálogo', icon: 'stock', mount: mountCatalog },
+        { id: 'purchases', label: 'Recepción', icon: 'purchases', mount: mountPurchases, roles: MANAGERS }
+    ] },
+    { group: 'Gestión', items: [
+        { id: 'dashboard', label: 'Tablero', icon: 'home', mount: mountDashboard },
+        { id: 'tills', label: 'Cajas', icon: 'lock', mount: mountCashSessions, roles: MANAGERS },
+        { id: 'manual', label: 'Facturas manuales', icon: 'edit', mount: mountManualInvoices, roles: MANAGERS },
+        { id: 'settings', label: 'Configuración', icon: 'settings', mount: mountSettings, roles: MANAGERS }
+    ] }
+];
+
+const ROLE_LABELS = { ADMIN: 'Administrador', MANAGER: 'Gerente', SELLER: 'Vendedor', REQUESTER: 'Consulta' };
 
 /** The open section survives an F5: the shift is not lost by reloading. */
 const LAST_SECTION_KEY = 'billing_section';
@@ -64,16 +78,45 @@ async function refreshTillAlert() {
     }
 }
 
+const role = getRole();
+const visibleMenu = () => MENU.map((section) => ({
+    ...section, items: section.items.filter((item) => !item.roles || item.roles.includes(role))
+})).filter((section) => section.items.length);
+const findSection = (id) => visibleMenu().flatMap((section) =>
+    section.items.map((item) => ({ section, item }))).find(({ item }) => item.id === id);
+
+/** The menu with the open section marked, the way SmartDecisions draws it. */
+function menuMarkup(current) {
+    const icon = window.SD_ICONS.svg;
+    return visibleMenu().map((section) => `<div class="sd-section"><p class="sd-group">${
+        escapeHtml(section.group)}</p>${section.items.map((item) => {
+        const active = item.id === current;
+        return `<a class="sd-item${active ? ' is-active' : ''}" href="#${item.id}" data-section="${item.id}"` +
+            `${active ? ' aria-current="page"' : ''}>${icon(item.icon)}<span>${escapeHtml(item.label)}</span></a>`;
+    }).join('')}</div>`).join('');
+}
+
+/** Group › section, as the breadcrumb of every SmartDecisions page. */
+function crumbsMarkup(found) {
+    if (!found) return '';
+    return `<span class="sd-crumb">${escapeHtml(found.section.group)}</span>` +
+        window.SD_ICONS.svg('chevronRight', 'sd-crumb-sep') +
+        `<span class="sd-crumb is-current" aria-current="page">${escapeHtml(found.item.label)}</span>`;
+}
+
+let closeMenu = () => {};
+
 async function show(name) {
     const view = document.getElementById('view');
-    const mount = SECTIONS[name];
-    if (!mount) return;
+    const found = findSection(name);
+    if (!found) return;
 
-    document.querySelectorAll('.nav-item').forEach((item) => {
-        if (item.dataset.section === name) item.setAttribute('aria-current', 'page');
-        else item.removeAttribute('aria-current');
-    });
+    document.getElementById('sdNav').innerHTML = menuMarkup(name);
+    document.getElementById('sdCrumbs').innerHTML = crumbsMarkup(found);
+    document.title = `${found.item.label} — SmartBilling`;
     sessionStorage.setItem(LAST_SECTION_KEY, name);
+    if (location.hash.slice(1) !== name) history.replaceState(null, '', `#${name}`);
+    closeMenu();
 
     // Each section mounts in its own container. If the user switches section
     // while the previous one waits for the API, the previous one keeps working
@@ -83,7 +126,7 @@ async function show(name) {
     container.innerHTML = '<p class="muted">Cargando…</p>';
     view.replaceChildren(container);
     try {
-        await mount(container);
+        await found.item.mount(container);
     } catch (error) {
         if (!container.isConnected) return;
         container.innerHTML = errorCard('No se pudo abrir la sección',
@@ -91,33 +134,40 @@ async function show(name) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    if (isTokenExpired()) {
-        clearSession();
-        window.location.replace(LOGIN_PATH);
-        return;
-    }
+function logout() {
+    clearSession();
+    window.location.replace(LOGIN_PATH);
+}
 
-    const role = getRole();
-    document.getElementById('userChip').textContent = `${getEmail() || 'usuario'} · ${role || '—'}`;
-    document.getElementById('logout').addEventListener('click', () => {
-        clearSession();
-        window.location.replace(LOGIN_PATH);
+/** The frame: brand, menu, breadcrumb, account and the shop's name. */
+function mountFrame() {
+    const frame = window.SD_FRAME.mount({
+        homeHref: '#counter',
+        logoSrc: 'assets/bear-face.jpg',
+        brandHtml: 'Smart<b>Billing</b>',
+        navHtml: menuMarkup(null),
+        crumbsHtml: '',
+        email: getEmail() || '',
+        roleLabel: ROLE_LABELS[role] || '',
+        footerLogoSrc: 'assets/bearsoft-logo.png'
     });
-
-    // A button the role cannot use is not shown: pressing it would only give
-    // a 403 and the feeling that the system is broken.
-    document.querySelectorAll('.nav-item[data-roles]').forEach((item) => {
-        if (!item.dataset.roles.split(',').includes(role)) item.hidden = true;
-    });
-
-    document.getElementById('nav').addEventListener('click', (event) => {
-        const button = event.target.closest('.nav-item');
-        if (button && !button.hidden) show(button.dataset.section);
-    });
-
+    closeMenu = frame.closeMenu;
     // The merchant's name in the bar: it tells one pharmacy from another when
     // someone manages several.
+    frame.topbar.querySelector('#sdTopActions').insertAdjacentHTML(
+        'afterbegin', '<span class="shop-name" id="shopName">Facturación</span>');
+    frame.topbar.querySelector('#logoutButton').addEventListener('click', logout);
+    // A section is a link (#cash): it opens without reloading the page.
+    window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+}
+
+const start = async () => {
+    if (isTokenExpired()) {
+        logout();
+        return;
+    }
+    mountFrame();
+
     try {
         const settings = await BillingService.getSettings();
         document.getElementById('shopName').textContent = settings.trade_name;
@@ -138,7 +188,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshTillAlert();
     setInterval(refreshTillAlert, TILL_ALERT_EVERY_MS);
 
-    const saved = sessionStorage.getItem(LAST_SECTION_KEY);
-    const visible = [...document.querySelectorAll('.nav-item')].filter((item) => !item.hidden);
-    await show(saved && SECTIONS[saved] ? saved : visible[0]?.dataset.section || 'counter');
-});
+    const asked = location.hash.slice(1) || sessionStorage.getItem(LAST_SECTION_KEY);
+    const first = visibleMenu()[0].items[0].id;
+    await show(findSection(asked) ? asked : first);
+};
+
+// Module scripts run after the classic ones (icons, frame, ui) they rely on.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+else start();

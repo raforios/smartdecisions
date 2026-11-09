@@ -14,7 +14,7 @@ import {
     isCard,
     errorText
 } from '../services/BillingService.js';
-import { escapeHtml, notify, setBusy, stamp } from '../ui.js';
+import { escapeHtml, notify, setBusy, stamp, rowIcon } from '../ui.js';
 
 /** The events of paper invoices, when the SIN's catalogue is not synced. */
 const PAPER_EVENTS = new Map([
@@ -52,8 +52,8 @@ function renderCafcs(host) {
         ? cafcs.map((cafc) => `
             <tr><td><strong>${escapeHtml(cafc.cafc)}</strong></td>
                 <td>${cafc.first_number} al ${cafc.last_number}</td>
-                <td class="num">${cafc.used_numbers.length}</td></tr>`).join('')
-        : '<tr class="empty"><td colspan="3">Todavía no registraste ningún CAFC.</td></tr>';
+                <td class="numeric">${cafc.used_numbers.length}</td></tr>`).join('')
+        : '<tr class="empty-row"><td colspan="3">Todavía no registraste ningún CAFC.</td></tr>';
     host.querySelector('#open-cafc').innerHTML = options(new Map(
         cafcs.map((cafc) => [cafc.cafc, cafc.cafc])));
 }
@@ -67,14 +67,14 @@ function renderContingencies(host) {
                 <td>${stamp(one.started_at)}</td><td>${stamp(one.ended_at)}</td>
                 <td>${escapeHtml(events.get(String(one.event)) || one.event)}</td>
                 <td>${escapeHtml(one.cafc)}</td>
-                <td class="num">${one.sale_ids.length}</td>
-                <td>${open ? '<span class="chip chip-warn">por enviar</span>'
-                           : `<span class="chip">enviada · evento ${one.event_reception_code}</span>`}</td>
-                <td>${open ? `<button class="btn btn-ghost btn-small transcribe">Transcribir</button>
-                              <button class="btn btn-ghost btn-small send">Enviar al SIN</button>` : ''}</td>
+                <td class="numeric">${one.sale_ids.length}</td>
+                <td>${open ? '<span class="badge badge-warn">por enviar</span>'
+                           : `<span class="badge badge-info">enviada · evento ${one.event_reception_code}</span>`}</td>
+                <td>${open ? `<button type="button" class="btn-icon transcribe" data-tip="Transcribir" aria-label="Transcribir">${rowIcon('edit')}</button>
+                              <button type="button" class="btn-icon send" data-tip="Enviar al SIN" aria-label="Enviar al SIN">${rowIcon('upload')}</button>` : ''}</td>
             </tr>`;
         }).join('')
-        : '<tr class="empty"><td colspan="7">No hay contingencias con facturas de papel.</td></tr>';
+        : '<tr class="empty-row"><td colspan="7">No hay contingencias con facturas de papel.</td></tr>';
 }
 
 async function load(host) {
@@ -253,21 +253,21 @@ async function loadCatalogues() {
 export async function mountManualInvoices(host) {
     await loadCatalogues();
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Facturas manuales</h2>
+        <header class="sd-page-head"><div>
+            <h1>Facturas manuales</h1>
             <p class="muted">Cuando el sistema no puede funcionar (falla de software, de
                equipo o corte de luz), se emiten las facturas de papel impresas con un
                CAFC. Al volver, se transcriben aquí tal como se escribieron y se envían
                al SIN dentro de las 72 horas.</p>
-        </header>
+        </div></header>
 
         <section class="card">
             <h3>CAFC</h3>
             <p class="muted small">El código que el SIN autorizó para tus facturas de
                contingencia, con el rango de números impresos.</p>
-            <div class="table-scroll">
+            <div class="table-wrapper">
                 <table class="data-table" data-no-pager>
-                    <thead><tr><th>CAFC</th><th>Números</th><th class="num">Usados</th></tr></thead>
+                    <thead><tr><th>CAFC</th><th>Números</th><th class="numeric">Usados</th></tr></thead>
                     <tbody id="cafc-body"></tbody>
                 </table>
             </div>
@@ -280,16 +280,16 @@ export async function mountManualInvoices(host) {
                     <input type="number" id="cafc-last" min="1" value="50"></label>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary" id="cafc-save" type="button">Registrar CAFC</button>
+                <button class="btn btn-save" id="cafc-save" data-btn-icon="check" type="button">Registrar CAFC</button>
             </div>
         </section>
 
         <section class="card">
             <h3>Contingencias con facturas de papel</h3>
-            <div class="table-scroll">
+            <div class="table-wrapper">
                 <table class="data-table">
                     <thead><tr><th>Inicio</th><th>Fin</th><th>Motivo</th><th>CAFC</th>
-                        <th class="num">Facturas</th><th>Estado</th><th></th></tr></thead>
+                        <th class="numeric">Facturas</th><th>Estado</th><th></th></tr></thead>
                     <tbody id="manual-body"></tbody>
                 </table>
             </div>
@@ -304,7 +304,7 @@ export async function mountManualInvoices(host) {
                     <input type="datetime-local" id="open-end"></label>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary" id="open-save" type="button">Abrir contingencia</button>
+                <button class="btn btn-primary" id="open-save" data-btn-icon="flag" type="button">Abrir contingencia</button>
             </div>
         </section>
 
@@ -331,7 +331,7 @@ export async function mountManualInvoices(host) {
             ).join('')}</datalist>
             <div id="manual-lines"></div>
             <div class="form-actions">
-                <button class="btn btn-ghost btn-small" id="line-add" type="button">Agregar producto</button>
+                <button class="btn btn-secondary btn-small" id="line-add" type="button" data-btn-icon="plus">Agregar producto</button>
             </div>
             <div class="field-row">
                 <label class="field"><span>Forma de pago</span>
@@ -341,8 +341,8 @@ export async function mountManualInvoices(host) {
                     <input type="text" id="paper-card" maxlength="30"></label>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary" id="transcribe-save" type="button">Transcribir factura</button>
-                <button class="btn btn-ghost" id="transcribe-back" type="button">Volver</button>
+                <button class="btn btn-save" id="transcribe-save" data-btn-icon="check" type="button">Transcribir factura</button>
+                <button class="btn btn-cancel" id="transcribe-back" data-btn-icon="chevronLeft" type="button">Volver</button>
             </div>
         </section>`;
 

@@ -7,7 +7,7 @@
  */
 import { hasRole } from '../auth.js';
 import { BillingService, errorText } from '../services/BillingService.js';
-import { escapeHtml, notify, setBusy, stamp } from '../ui.js';
+import { escapeHtml, notify, setBusy, stamp, rowIcon } from '../ui.js';
 
 let customers = [];
 /** The SIN's identity document types, by code. */
@@ -22,7 +22,7 @@ function rowHtml(customer, canEdit) {
             <td>${customer.name ? escapeHtml(customer.name) : '<span class="muted">—</span>'}</td>
             <td>${customer.email ? escapeHtml(customer.email) : '<span class="muted">—</span>'}</td>
             <td>${customer.last_invoiced_at ? stamp(customer.last_invoiced_at) : '—'}</td>
-            <td>${canEdit ? '<button class="btn btn-ghost btn-small edit">Corregir</button>' : ''}</td>
+            <td>${canEdit ? `<button type="button" class="btn-icon edit" data-tip="Corregir" aria-label="Corregir">${rowIcon('edit')}</button>` : ''}</td>
         </tr>`;
 }
 
@@ -35,7 +35,7 @@ function render(host) {
         (customer.email || '').toLowerCase().includes(needle));
     host.querySelector('#customers-body').innerHTML = shown.length
         ? shown.map((customer) => rowHtml(customer, canEdit)).join('')
-        : '<tr class="empty"><td colspan="6">Todavía no hay clientes: se agregan solos al facturar.</td></tr>';
+        : '<tr class="empty-row"><td colspan="6">Todavía no hay clientes: se agregan solos al facturar.</td></tr>';
     host.querySelector('#summary').textContent = `${shown.length} de ${customers.length} cliente(s)`;
 }
 
@@ -44,7 +44,7 @@ async function load(host) {
         customers = (await BillingService.listCustomers()).items;
         render(host);
     } catch (error) {
-        host.querySelector('#customers-body').innerHTML = `<tr class="empty"><td colspan="6">${
+        host.querySelector('#customers-body').innerHTML = `<tr class="empty-row"><td colspan="6">${
             escapeHtml(errorText(error, 'No se pudieron leer los clientes.'))}</td></tr>`;
     }
 }
@@ -93,11 +93,11 @@ function wireEditor(host) {
  */
 export async function mountCustomers(host) {
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Clientes</h2>
+        <header class="sd-page-head"><div>
+            <h1>Clientes</h1>
             <p class="muted">Los compradores a los que facturaste. Se agregan solos
                al facturar; un dato mal escrito se corrige aquí.</p>
-        </header>
+        </div></header>
 
         <section class="card">
             <label class="field">
@@ -105,7 +105,7 @@ export async function mountCustomers(host) {
                 <input type="search" id="filter" placeholder="NIT o CI, nombre o correo">
             </label>
             <p class="muted small" id="summary"></p>
-            <div class="table-scroll">
+            <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr><th>NIT / CI</th><th>Tipo</th><th>Nombre</th><th>Correo</th>
@@ -125,8 +125,8 @@ export async function mountCustomers(host) {
             <label class="field"><span>Correo para enviar la factura</span>
                 <input type="email" id="edit-email" maxlength="254"></label>
             <div class="form-actions">
-                <button class="btn btn-primary" id="edit-save" type="button">Guardar</button>
-                <button class="btn btn-ghost" id="edit-back" type="button">Volver</button>
+                <button class="btn btn-save" id="edit-save" data-btn-icon="check" type="button">Guardar</button>
+                <button class="btn btn-cancel" id="edit-back" data-btn-icon="chevronLeft" type="button">Volver</button>
             </div>
         </section>`;
 

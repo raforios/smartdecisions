@@ -13,7 +13,7 @@
 import { BillingService, PAYMENT_LABELS, errorText } from '../services/BillingService.js';
 import { hasRole } from '../auth.js';
 import { invoiceQr, printCreditNote, printTicket, ticketHtml } from './TicketPrinter.js';
-import { escapeHtml, money, notify, setBusy, stamp, todayIso } from '../ui.js';
+import { escapeHtml, money, notify, setBusy, stamp, todayIso, rowIcon } from '../ui.js';
 
 let settings = null;
 
@@ -24,9 +24,9 @@ function rowHtml(note) {
             ${note.invoice ? `data-invoice="${note.invoice.number}"` : ''}>
             <td><strong>${escapeHtml(note.number)}</strong>
                 ${note.invoice ? `<span class="muted">Factura ${note.invoice.number}</span>` : ''}
-                ${note.invoice?.emailed_at ? '<span class="chip">enviada</span>' : ''}
-                ${cancelled ? '<span class="chip chip-danger">anulada</span>' : ''}
-                ${note.invoice?.reverted_at ? '<span class="chip">anulación revertida</span>' : ''}</td>
+                ${note.invoice?.emailed_at ? '<span class="badge badge-info">enviada</span>' : ''}
+                ${cancelled ? '<span class="badge badge-danger">anulada</span>' : ''}
+                ${note.invoice?.reverted_at ? '<span class="badge badge-info">anulación revertida</span>' : ''}</td>
             <td>${stamp(note.created_at)}</td>
             <td>${note.buyer?.name ? escapeHtml(note.buyer.name)
                                    : '<span class="muted">mostrador</span>'}
@@ -34,21 +34,21 @@ function rowHtml(note) {
                     ? `<span class="muted">${escapeHtml(note.buyer.document)}</span>` : ''}</td>
             <td>${note.payments?.length > 1 ? 'Combinado'
                 : escapeHtml(PAYMENT_LABELS[note.payment_method] || note.payment_method)}</td>
-            <td class="num">${note.lines.length}</td>
-            <td class="num">${money(note.total)}</td>
-            <td class="num">${cancelled ? '—' : money(note.margin)}</td>
+            <td class="numeric">${note.lines.length}</td>
+            <td class="numeric">${money(note.total)}</td>
+            <td class="numeric">${cancelled ? '—' : money(note.margin)}</td>
             <td>
-                <button class="btn btn-ghost btn-small view">Ver</button>
-                <button class="btn btn-ghost btn-small print">Imprimir</button>
+                <button type="button" class="btn-icon view" data-tip="Ver" aria-label="Ver">${rowIcon('eye')}</button>
+                <button type="button" class="btn-icon print" data-tip="Imprimir" aria-label="Imprimir">${rowIcon('print')}</button>
                 ${note.invoice && note.buyer?.email
-                    ? '<button class="btn btn-ghost btn-small mail">Enviar</button>' : ''}
+                    ? `<button type="button" class="btn-icon mail" data-tip="Enviar por correo" aria-label="Enviar por correo">${rowIcon('mail')}</button>` : ''}
                 ${!cancelled && note.invoice?.state === 'ACCEPTED' && hasRole('ADMIN', 'MANAGER')
-                    ? '<button class="btn btn-ghost btn-small return">Devolución</button>' : ''}
+                    ? `<button type="button" class="btn-icon return" data-tip="Devolución" aria-label="Devolución">${rowIcon('undo')}</button>` : ''}
                 ${!cancelled && !note.invoice?.reverted_at && hasRole('ADMIN', 'MANAGER')
-                    ? '<button class="btn btn-ghost btn-small cancel">Anular</button>' : ''}
+                    ? `<button type="button" class="btn-icon is-delete cancel" data-tip="Anular" aria-label="Anular">${rowIcon('close')}</button>` : ''}
                 ${cancelled && note.invoice?.cancelled_at_sin && !note.invoice.reverted_at
                     && hasRole('ADMIN', 'MANAGER')
-                    ? '<button class="btn btn-ghost btn-small revert">Revertir anulación</button>'
+                    ? `<button type="button" class="btn-icon revert" data-tip="Revertir anulación" aria-label="Revertir anulación">${rowIcon('refresh')}</button>`
                     : ''}
             </td>
         </tr>`;
@@ -56,7 +56,7 @@ function rowHtml(note) {
 
 async function load(host) {
     const body = host.querySelector('#sales-body');
-    body.innerHTML = '<tr class="empty"><td colspan="8">Cargando…</td></tr>';
+    body.innerHTML = '<tr class="empty-row"><td colspan="8">Cargando…</td></tr>';
     try {
         const page = await BillingService.listSales({
             date_from: host.querySelector('#from').value,
@@ -64,11 +64,11 @@ async function load(host) {
         });
         body.innerHTML = page.items.length
             ? page.items.map(rowHtml).join('')
-            : '<tr class="empty"><td colspan="8">No hay notas en ese rango.</td></tr>';
+            : '<tr class="empty-row"><td colspan="8">No hay notas en ese rango.</td></tr>';
         host.querySelector('#summary').textContent =
             `${page.total} nota(s) · Bs ${money(page.total_amount)} cobrados`;
     } catch (error) {
-        body.innerHTML = `<tr class="empty"><td colspan="8">${
+        body.innerHTML = `<tr class="empty-row"><td colspan="8">${
             escapeHtml(errorText(error, 'No se pudieron leer las notas.'))}</td></tr>`;
     }
 }
@@ -152,23 +152,23 @@ async function showReturns(host, sale) {
         `Devoluciones de la factura ${sale.invoice.number}`;
     host.querySelector('#return-notes').innerHTML = notes.length ? `
         <table class="data-table">
-            <thead><tr><th>Nota</th><th>Fecha</th><th class="num">Devuelto</th><th></th></tr></thead>
+            <thead><tr><th>Nota</th><th>Fecha</th><th class="numeric">Devuelto</th><th></th></tr></thead>
             <tbody>${notes.map((note) => `
                 <tr data-note="${escapeHtml(note.credit_note_id)}"
                     class="${note.state === 'CANCELLED' ? 'muted' : ''}">
                     <td><strong>${note.number}</strong>
-                        ${note.emailed_at ? '<span class="chip">enviada</span>' : ''}
+                        ${note.emailed_at ? '<span class="badge badge-info">enviada</span>' : ''}
                         ${note.state === 'CANCELLED'
-                            ? '<span class="chip chip-danger">anulada</span>' : ''}
-                        ${note.reverted_at ? '<span class="chip">anulación revertida</span>' : ''}</td>
+                            ? '<span class="badge badge-danger">anulada</span>' : ''}
+                        ${note.reverted_at ? '<span class="badge badge-info">anulación revertida</span>' : ''}</td>
                     <td>${stamp(note.created_at)}</td>
-                    <td class="num">${money(note.amount_returned)}</td>
-                    <td><button class="btn btn-ghost btn-small print-note">Imprimir</button>
+                    <td class="numeric">${money(note.amount_returned)}</td>
+                    <td><button type="button" class="btn-icon print-note" data-tip="Imprimir" aria-label="Imprimir">${rowIcon('print')}</button>
                         ${note.state === 'ACCEPTED' && !note.reverted_at
-                            ? '<button class="btn btn-ghost btn-small cancel-note">Anular</button>'
+                            ? `<button type="button" class="btn-icon is-delete cancel-note" data-tip="Anular" aria-label="Anular">${rowIcon('close')}</button>`
                             : ''}
                         ${note.state === 'CANCELLED' && !note.reverted_at
-                            ? '<button class="btn btn-ghost btn-small revert-note">Revertir anulación</button>'
+                            ? `<button type="button" class="btn-icon revert-note" data-tip="Revertir anulación" aria-label="Revertir anulación">${rowIcon('refresh')}</button>`
                             : ''}</td>
                 </tr>`).join('')}</tbody>
         </table>` : '<p class="muted small">Esta factura no tiene devoluciones.</p>';
@@ -177,9 +177,9 @@ async function showReturns(host, sale) {
         return `
             <tr>
                 <td>${escapeHtml(line.sku)} - ${escapeHtml(line.description)}</td>
-                <td class="num">${money(line.quantity)}</td>
-                <td class="num">${money(back[line.sku] || 0)}</td>
-                <td class="num"><input type="number" class="return-quantity" min="0"
+                <td class="numeric">${money(line.quantity)}</td>
+                <td class="numeric">${money(back[line.sku] || 0)}</td>
+                <td class="numeric"><input type="number" class="return-quantity" min="0"
                     max="${left}" step="any" value="0" data-sku="${escapeHtml(line.sku)}"
                     ${left > 0 ? '' : 'disabled'}></td>
             </tr>`;
@@ -324,11 +324,11 @@ export async function mountSales(host) {
     settings = await BillingService.getSettings();
 
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Ventas</h2>
+        <header class="sd-page-head"><div>
+            <h1>Ventas</h1>
             <p class="muted">Una nota no se edita: se anula, y sus unidades vuelven
                a los lotes de los que salieron.</p>
-        </header>
+        </div></header>
 
         <section class="card">
             <div class="field-row">
@@ -336,18 +336,16 @@ export async function mountSales(host) {
                     <input type="date" id="from" value="${todayIso(-7)}"></label>
                 <label class="field"><span>Hasta</span>
                     <input type="date" id="to" value="${todayIso()}"></label>
-                <div class="field" style="align-self: end">
-                    <button class="btn btn-secondary" id="reload">Buscar</button>
-                </div>
+                <button class="btn btn-secondary" id="reload" data-btn-icon="filter">Buscar</button>
             </div>
             <p class="muted small" id="summary"></p>
 
-            <div class="table-scroll">
+            <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr><th>Nota</th><th>Fecha</th><th>Cliente</th><th>Pago</th>
-                            <th class="num">Líneas</th><th class="num">Total</th>
-                            <th class="num">Margen</th><th></th></tr>
+                            <th class="numeric">Líneas</th><th class="numeric">Total</th>
+                            <th class="numeric">Margen</th><th></th></tr>
                     </thead>
                     <tbody id="sales-body"></tbody>
                 </table>
@@ -365,8 +363,8 @@ export async function mountSales(host) {
             <p class="muted small">Se anula en Impuestos Nacionales y las unidades
                vuelven a stock. No se puede deshacer.</p>
             <div class="form-actions">
-                <button class="btn btn-danger" id="cancel-confirm" type="button">Anular</button>
-                <button class="btn btn-ghost" id="cancel-back" type="button">Volver</button>
+                <button class="btn btn-delete" id="cancel-confirm" data-btn-icon="close" type="button">Anular</button>
+                <button class="btn btn-cancel" id="cancel-back" data-btn-icon="chevronLeft" type="button">Volver</button>
             </div>
         </section>
 
@@ -374,7 +372,7 @@ export async function mountSales(host) {
              units go back to stock and the money back to the buyer. -->
         <section class="card" id="return-panel" hidden>
             <h3 id="return-title">Devoluciones</h3>
-            <div class="table-scroll" id="return-notes"></div>
+            <div class="table-wrapper" id="return-notes"></div>
             <div id="note-cancel" hidden>
                 <h4 id="note-cancel-title">Anular nota de crédito-débito</h4>
                 <label class="field">
@@ -384,23 +382,23 @@ export async function mountSales(host) {
                 <p class="muted small">Se anula en Impuestos Nacionales: las unidades vuelven a
                    salir de stock y la devolución deja de contar en la caja.</p>
                 <div class="form-actions">
-                    <button class="btn btn-danger" id="note-cancel-confirm" type="button">Anular nota</button>
-                    <button class="btn btn-ghost" id="note-cancel-back" type="button">Volver</button>
+                    <button class="btn btn-delete" id="note-cancel-confirm" data-btn-icon="close" type="button">Anular nota</button>
+                    <button class="btn btn-cancel" id="note-cancel-back" data-btn-icon="chevronLeft" type="button">Volver</button>
                 </div>
             </div>
             <h4>Nueva devolución</h4>
-            <div class="table-scroll">
+            <div class="table-wrapper">
                 <table class="data-table">
-                    <thead><tr><th>Producto</th><th class="num">Vendido</th>
-                        <th class="num">Ya devuelto</th><th class="num">Devuelve</th></tr></thead>
+                    <thead><tr><th>Producto</th><th class="numeric">Vendido</th>
+                        <th class="numeric">Ya devuelto</th><th class="numeric">Devuelve</th></tr></thead>
                     <tbody id="return-lines"></tbody>
                 </table>
             </div>
             <p class="muted small">Se emite una nota de crédito-débito a Impuestos Nacionales;
                si la acepta, las unidades vuelven a stock y el efectivo sale de tu caja.</p>
             <div class="form-actions">
-                <button class="btn btn-primary" id="return-confirm" type="button">Devolver</button>
-                <button class="btn btn-ghost" id="return-back" type="button">Volver</button>
+                <button class="btn btn-primary" id="return-confirm" data-btn-icon="undo" type="button">Devolver</button>
+                <button class="btn btn-cancel" id="return-back" data-btn-icon="chevronLeft" type="button">Volver</button>
             </div>
         </section>
 

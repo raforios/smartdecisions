@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Newest first: the current rate is what a reader looks for. Every
-        // row is drawn; the common pager (js/ui.js) shows ten at a time.
+        // row is drawn; the common pager (common/js/ui.js) shows ten at a time.
         body.innerHTML = rows.reverse().join('');
     }
 

@@ -1,4 +1,4 @@
-/* Styles of the analysis pages (Ventas, Inventario, Cobranza). Continues the shared demo.css palette. */
+/* Styles of the analysis pages (Ventas, Inventario, Cobranza). Continues the shared base.css palette. */
 
 /* This module renders wide analytical tables and chart grids, so it uses more
    of the screen than the marketing-oriented pages of the demo. */
@@ -219,16 +219,11 @@
 .filter-label input:focus { outline: none; border-color: var(--accent); }
 .filter-count { color: var(--muted); font-size: var(--fs-text); }
 
-/* Tables: defined once in demo.css. */
+/* Tables: defined once in base.css. */
 
 .based-on {
     color: var(--muted);
     font-size: var(--fs-text);
-}
-.empty-row td {
-    text-align: center;
-    color: var(--muted);
-    padding: 1.4rem;
 }
 
 @media (max-width: 720px) {
@@ -484,17 +479,7 @@
 .data-table td.hero { font-weight: 600; color: var(--text-strong); }
 .cell-note { color: var(--muted); }
 
-/* --- ABC class badges --- */
-.badge {
-    display: inline-block;
-    min-width: 1.6rem;
-    text-align: center;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
-    font-size: var(--fs-label);
-    font-weight: 600;
-    color: #fff;
-}
+/* --- ABC class badges (the pill itself is in base.css) --- */
 .badge-a { background: var(--success); }
 .badge-b { background: var(--accent-3); color: var(--text-strong); }
 .badge-c { background: var(--muted); }

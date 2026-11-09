@@ -195,22 +195,7 @@
             .join(icon('chevronRight', 'sd-crumb-sep'));
     }
 
-    /** "gerente.demo@…" → "GD": the avatar of the account. */
-    function initials(address) {
-        const parts = String(address).split('@')[0].split(/[._-]+/).filter(Boolean);
-        return escape(parts.slice(0, 2).map((part) => part[0].toUpperCase()).join('') || '?');
-    }
-
     const email = window.SD_AUTH.getEmail();
-    const sidebar = document.createElement('aside');
-    sidebar.className = 'sd-sidebar';
-    sidebar.id = 'sdSidebar';
-    sidebar.innerHTML =
-        `<a class="sd-brand" href="${href('home.html')}">` +
-        `<img src="${new URL('assets/bear-face.jpg', ROOT).pathname}" alt="">` +
-        '<span>Smart<b>Decisions</b></span></a>' +
-        `<nav class="sd-nav" id="sdNav" aria-label="Menú principal">${
-            menuMarkup(currentChain())}</nav>`;
     // Any block of a page that depends on a module says so with data-module;
     // here, the one place every page runs, it is hidden when the module is off.
     const hideInactiveBlocks = () => document.querySelectorAll('[data-module]').forEach((node) => {
@@ -229,34 +214,21 @@
         });
     });
 
-    const topbar = document.createElement('header');
-    topbar.className = 'sd-topbar';
-    topbar.innerHTML =
-        `<button type="button" class="sd-menu-toggle" id="sdMenuToggle" aria-label="Mostrar u ocultar el menú">${
-            icon('menu')}</button>` +
-        `<nav class="sd-crumbs" id="sdCrumbs" aria-label="Ubicación">${
-            crumbsMarkup(currentChain())}</nav>` +
-        '<div class="sd-top-actions" id="sdTopActions">' +
-        '<div class="sd-account">' +
-        `<button type="button" class="sd-account-button" id="sdAccountButton" aria-haspopup="true" ` +
-        `aria-expanded="false" aria-controls="sdAccountMenu"><span class="sd-avatar">${initials(email)}</span>` +
-        `<span class="sd-account-role">${ROLE_LABELS[role] || ''}</span>${icon('chevronDown', 'sd-caret')}</button>` +
-        '<div class="sd-account-menu" id="sdAccountMenu" hidden>' +
-        `<p class="sd-account-email" id="userChip">${escape(email)}</p>` +
-        `<p class="sd-account-meta">${ROLE_LABELS[role] || ''}</p>` +
-        '<span class="session-chip" id="sessionChip" hidden></span>' +
-        `<a class="sd-account-item" href="${href('cuenta.html')}">${icon('user')}<span>Mi cuenta</span></a>` +
-        (role === 'MANAGER' ? `<a class="sd-account-item" href="${href('parametros/index.html')}">` +
-            `${icon('settings')}<span>Configuración</span></a>` : '') +
-        `<button type="button" class="sd-account-item" id="logoutButton">${icon('logout')}` +
-        '<span>Salir</span></button></div></div></div>';
-
-    const overlay = document.createElement('div');
-    overlay.className = 'sd-overlay';
-
-    document.body.classList.add('sd-app');
+    const asset = (name) => new URL(`assets/${name}`, ROOT).pathname;
+    const { topbar, closeMenu } = window.SD_FRAME.mount({
+        homeHref: href('home.html'),
+        logoSrc: asset('bear-face.jpg'),
+        brandHtml: 'Smart<b>Decisions</b>',
+        navHtml: menuMarkup(currentChain()),
+        crumbsHtml: crumbsMarkup(currentChain()),
+        email,
+        roleLabel: ROLE_LABELS[role] || '',
+        accountItems: `<a class="sd-account-item" href="${href('cuenta.html')}">${icon('user')}<span>Mi cuenta</span></a>` +
+            (role === 'MANAGER' ? `<a class="sd-account-item" href="${href('parametros/index.html')}">` +
+                `${icon('settings')}<span>Configuración</span></a>` : ''),
+        footerLogoSrc: asset('bearsoft-logo.png')
+    });
     document.body.dataset.role = role;
-    document.body.prepend(sidebar, overlay, topbar);
 
     // Static markup names its icons (data-icon); they are drawn here, once.
     document.querySelectorAll('[data-icon]').forEach((node) => {
@@ -265,57 +237,6 @@
 
     // Pages that never wired the button (Minerales, Factores) still sign out.
     topbar.querySelector('#logoutButton').addEventListener('click', () => window.SD_AUTH.logout());
-
-    // The account menu: opens on its button, closes on a click outside or Escape.
-    const accountButton = topbar.querySelector('#sdAccountButton');
-    const accountMenu = topbar.querySelector('#sdAccountMenu');
-    const showAccount = (open) => {
-        accountMenu.hidden = !open;
-        accountButton.setAttribute('aria-expanded', String(open));
-    };
-    accountButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        showAccount(accountMenu.hidden);
-    });
-    document.addEventListener('click', (event) => {
-        if (!accountMenu.hidden && !accountMenu.contains(event.target)) showAccount(false);
-    });
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') showAccount(false);
-    });
-
-    // The footer is BearSoft's mark, the same on every page.
-    const footer = document.querySelector('.demo-footer') || document.createElement('footer');
-    footer.className = 'demo-footer sd-footer';
-    footer.innerHTML = '<a href="https://bearsoft.com.bo" target="_blank" rel="noopener" ' +
-        `aria-label="BearSoft"><img src="${new URL('assets/bearsoft-logo.png', ROOT).pathname}" ` +
-        'alt="BearSoft"></a>';
-    if (!footer.isConnected) document.body.append(footer);
-
-    // On a narrow screen the menu slides over the page; on a wide one it
-    // folds away to give tables and charts the whole width, and the choice is
-    // remembered on this browser.
-    const COLLAPSED_KEY = 'sd_menu_collapsed';
-    const narrow = window.matchMedia('(max-width: 1000px)');
-    const toggle = (open) => document.body.classList.toggle('sd-menu-open', open);
-    try {
-        document.body.classList.toggle('sd-collapsed', localStorage.getItem(COLLAPSED_KEY) === '1');
-    } catch (storageError) {
-        // Without storage the menu simply starts open.
-    }
-    topbar.querySelector('#sdMenuToggle').addEventListener('click', () => {
-        if (narrow.matches) {
-            toggle(true);
-            return;
-        }
-        const collapsed = document.body.classList.toggle('sd-collapsed');
-        try {
-            localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
-        } catch (storageError) {
-            // The menu still folds; it just will not be remembered.
-        }
-    });
-    overlay.addEventListener('click', () => toggle(false));
 
     /** Repaints the menu and the breadcrumb for the option now on screen. */
     function mark() {
@@ -358,7 +279,7 @@
     window.addEventListener('hashchange', () => {
         mark();
         openFromHash();
-        toggle(false);
+        closeMenu();
     });
     document.addEventListener('DOMContentLoaded', () => setTimeout(openFromHash, 0));
 

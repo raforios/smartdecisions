@@ -9,11 +9,25 @@ paths:
 
 Vanilla JS sin build, servido desde S3 + CloudFront.
 
+## Lo común: `portal/common/`
+
+SmartDecisions (`portal/demo`) y SmartBilling (`portal/billing`) se ven
+iguales (Rafael, 9-nov-2026: «Tablas, paginación, colores estructura todo
+debe ser igual»). Lo compartido vive una vez en `portal/common/`: las hojas
+`base.css` (tokens, botones, tarjetas, tablas, badges), `shell.css` (barra
+lateral y superior), `panels.css` (cifras y paneles) y `login.css`; y los
+scripts `icons.js`, `frame.js` (dibuja y maneja el armado) y `ui.js`
+(toast, botones, paginador). Cada portal lo enlaza con un symlink
+`common -> ../common`, así la ruta local y la publicada son la misma; `aws s3
+sync` sigue el symlink y lo sube a `/common/` de cada sitio. Lo propio de
+cada producto (el menú, `analyses.css`, `billing.css`) no redefine nada de lo
+común.
+
 ## Rutas: absolutas en el login, relativas en los módulos
 
 La distribución mapea **404 → `/index.html` dejando la URL intacta**, así que la
 página de login (`portal/demo/index.html`) puede ejecutarse bajo cualquier
-subruta. Por eso **sus** rutas son absolutas (`/styles/demo.css`): con rutas
+subruta. Por eso **sus** rutas son absolutas (`/common/styles/base.css`): con rutas
 relativas sus scripts se resolvían contra esa subruta, devolvían HTML y el
 navegador lanzaba `Unexpected token '<'`, con un bucle de recarga que impedía
 cerrar la pestaña.
@@ -44,14 +58,14 @@ se muestra un código crudo al usuario.
   módulo y mal en otro.
 - **Tres tamaños de letra** para todo lo que no es título ni cifra
   (Rafael, 14-oct): `--fs-text` (texto y controles), `--fs-table` (celdas) y
-  `--fs-label` (rótulos chicos), en `styles/demo.css`. Lo que importa va en
+  `--fs-label` (rótulos chicos), en `common/styles/base.css`. Lo que importa va en
   negrita, nunca más grande. Ningún `font-size` suelto en rem para texto.
 - **La tabla (`.table-wrapper`, `.data-table`) se define en
-  `styles/demo.css`.** `routes.css` la redefinía y sus tablas salían más
+  `common/styles/base.css`.** `routes.css` la redefinía y sus tablas salían más
   grandes que las demás; ya no. `minerales.css` conserva su variante de
   Minerales y Factores, pero con los mismos tamaños (`--fs-table`).
 - **Una sola separación entre bloques** (tarjetas, paneles, gráficos, mapas),
-  en horizontal y en vertical: `--gap-block` en `styles/demo.css` (Rafael,
+  en horizontal y en vertical: `--gap-block` en `common/styles/base.css` (Rafael,
   14-oct). Ninguna grilla de tarjetas con su propio `gap` en rem.
 - **Los controles respiran:** botones, cajas y tablas nunca pegados
   (`.form-actions`, `.field`, `.field-row`); una caja de texto suelta toma el
@@ -64,13 +78,13 @@ se muestra un código crudo al usuario.
   tabla son íconos con tooltip (`.btn-icon` + `data-tip` + `aria-label`).
   Toda contraseña lleva el ojo (`SD_UI.revealToggle`). `data-icon` es de
   `shell.js`, que reemplaza el contenido entero: no se usa en botones.
-- Los tokens de color viven en `styles/demo.css` y son los mismos que los de
+- Los tokens de color viven en `common/styles/base.css` y son los mismos que los de
   `bearsoft.com.bo`. Azules fríos, verde-azulado de acento, sin dorados.
 
 ## Tablas
 
 Diez filas por página en **toda** tabla (Rafael, 21-oct). El paginador es uno
-solo, automático, en `js/ui.js` (`SD_UI.paginate`): el módulo dibuja todas
+solo, automático, en `common/js/ui.js` (`SD_UI.paginate`): el módulo dibuja todas
 las filas y el paginador oculta las que no están en la página, con la altura
 de la primera para que la tarjeta no salte. Ningún módulo escribe su propio
 paginador ni filas de relleno. Una fila `.detail-row` viaja con la de arriba.

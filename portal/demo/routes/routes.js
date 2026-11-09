@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#stopsCard').hidden = false;
     }
 
-    // Draws every stop; the common pager (js/ui.js) shows ten at a time, so
+    // Draws every stop; the common pager (common/js/ui.js) shows ten at a time, so
     // the card keeps its height whether a day has eight stops or eighty.
     function paintStops() {
         const stops = state.stops || [];

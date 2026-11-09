@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
                `<p class="metric-value">${T.escapeHtml(value)}</p></div>`;
     }
 
-    // Draws every row; the common pager (js/ui.js) shows ten at a time.
+    // Draws every row; the common pager (common/js/ui.js) shows ten at a time.
     function paintPage() {
         const rows = state.sellers;
 

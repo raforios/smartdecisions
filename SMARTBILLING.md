@@ -25,6 +25,7 @@ SmartDecisions.
 - Facturación: emisión en línea, anulación hasta el día 9 del mes siguiente,
   QR, ticket con la representación gráfica, interruptor en Configuración.
 - Maestro de clientes con su NIT o CI.
+- Frontend igual al de SmartDecisions sobre `portal/common/` (9-nov).
 - Contingencia automática fuera de línea: paquetes al SIN y regla programada
   cada 5 minutos (`billing-siat-contingency`).
 - Pagos combinados con su código del SIN; QR separado en transferencia
@@ -91,6 +92,9 @@ venta o de la devolución abierta; aviso al comprador por correo.
    recibir por partes y quedar pendientes»; recibir sin pedido previo: «sí»;
    producto–proveedor: «debemos mantener el registro de todo». Rafael, 2-nov:
    «esto debemos terminar». También lo usa el chat (`idea/plan_chat.md`, 6.2).
+   Desde el 9-nov es parte del «flujo mínimo del comercio» del plan
+   (`docs/smartdecisions/plan.md`, 12.1), con venta fraccionada, inventario
+   inicial, ajustes, kárdex y crédito en cuotas.
 7. **Traspaso entre sucursales** (Rafael, 04-oct): «algunas empresas tienen 2
    sucursales y pueden tener exceso de inventario en una y desean llevar a la
    otra para tener disponibilidad, no lo compliques».

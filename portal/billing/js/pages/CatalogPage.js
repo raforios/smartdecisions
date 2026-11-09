@@ -6,7 +6,7 @@
  * will be sold, with their expiry and cost. A batch is repriced right there.
  */
 import { BillingService, UNIT_LABELS, errorText } from '../services/BillingService.js';
-import { escapeHtml, money, notify, setBusy, shortDate } from '../ui.js';
+import { escapeHtml, money, notify, setBusy, shortDate, rowIcon } from '../ui.js';
 
 /** A batch closer than these days to expiry asks for action before it is too late. */
 const EXPIRY_WARNING_DAYS = 60;
@@ -21,12 +21,12 @@ function daysTo(isoDate) {
 
 function expiryChip(isoDate) {
     const days = daysTo(isoDate);
-    if (days === null) return '<span class="chip chip-muted">sin fecha</span>';
-    if (days < 0) return `<span class="chip chip-danger">vencido ${shortDate(isoDate)}</span>`;
+    if (days === null) return '<span class="badge badge-muted">sin fecha</span>';
+    if (days < 0) return `<span class="badge badge-danger">vencido ${shortDate(isoDate)}</span>`;
     if (days <= EXPIRY_WARNING_DAYS) {
-        return `<span class="chip chip-warn">${shortDate(isoDate)} · ${days} d</span>`;
+        return `<span class="badge badge-warn">${shortDate(isoDate)} · ${days} d</span>`;
     }
-    return `<span class="chip">${shortDate(isoDate)}</span>`;
+    return `<span class="badge badge-info">${shortDate(isoDate)}</span>`;
 }
 
 function rowHtml(product) {
@@ -39,19 +39,19 @@ function rowHtml(product) {
                 <span class="muted">${escapeHtml(product.sku)} · ${
                     escapeHtml(product.laboratory)}</span>
             </td>
-            <td class="num ${product.below_minimum ? 'warn' : ''}">
+            <td class="numeric ${product.below_minimum ? 'warn' : ''}">
                 ${money(product.available_quantity, 0)}
                 ${product.below_minimum
                     ? `<span class="muted">mín. ${money(product.min_stock, 0)}</span>` : ''}
             </td>
-            <td class="num">${money(product.sale_price)}
+            <td class="numeric">${money(product.sale_price)}
                 ${product.suggested_price != null
                     ? `<span class="muted">sugerido ${money(product.suggested_price)}</span>` : ''}</td>
             <td>${product.next_expiry ? expiryChip(product.next_expiry)
                                       : '<span class="muted">—</span>'}</td>
-            <td>${product.is_active ? '' : '<span class="chip chip-muted">de baja</span>'}</td>
+            <td>${product.is_active ? '' : '<span class="badge badge-muted">de baja</span>'}</td>
         </tr>
-        <tr class="lots-row" data-sku="${escapeHtml(product.sku)}" hidden><td colspan="5"></td></tr>`;
+        <tr class="lots-row detail-row" data-sku="${escapeHtml(product.sku)}" hidden><td colspan="5"></td></tr>`;
 }
 
 function render(host, term) {
@@ -63,7 +63,7 @@ function render(host, term) {
 
     host.querySelector('#catalog-body').innerHTML = shown.length
         ? shown.map(rowHtml).join('')
-        : '<tr class="empty"><td colspan="5">Sin resultados.</td></tr>';
+        : '<tr class="empty-row"><td colspan="5">Sin resultados.</td></tr>';
     host.querySelector('#count').textContent =
         `${shown.length} de ${products.length} productos`;
 }
@@ -78,17 +78,15 @@ async function showLots(host, sku, holder) {
             <label class="field"><span>Precio sugerido por el proveedor</span>
                 <input type="number" class="suggested" min="0" step="any"
                        value="${product?.suggested_price ?? ''}"></label>
-            <div class="field" style="align-self: end">
-                <button class="btn btn-ghost btn-small save-suggested">Guardar</button>
-            </div>
+            <button class="btn btn-save btn-small save-suggested" data-btn-icon="check">Guardar</button>
         </div>`;
     try {
         const lots = await BillingService.lots(sku, { only_available: false });
         holder.innerHTML = suggested + (lots.items.length ? `
             <table class="data-table">
                 <thead>
-                    <tr><th>Lote</th><th>Vence</th><th class="num">Quedan</th>
-                        <th class="num">Costo</th><th class="num">Precio</th><th></th></tr>
+                    <tr><th>Lote</th><th>Vence</th><th class="numeric">Quedan</th>
+                        <th class="numeric">Costo</th><th class="numeric">Precio</th><th></th></tr>
                 </thead>
                 <tbody>
                     ${lots.items.map((lot) => `
@@ -96,15 +94,15 @@ async function showLots(host, sku, holder) {
                             <td>${lot.lot_code ? escapeHtml(lot.lot_code)
                                                 : '<span class="muted">sin código</span>'}</td>
                             <td>${expiryChip(lot.expiry_date)}</td>
-                            <td class="num ${lot.quantity_remaining ? '' : 'muted'}">
+                            <td class="numeric ${lot.quantity_remaining ? '' : 'muted'}">
                                 ${money(lot.quantity_remaining, 0)} de ${
                                     money(lot.quantity_received, 0)}</td>
-                            <td class="num">${money(lot.unit_cost)}</td>
-                            <td class="num">
+                            <td class="numeric">${money(lot.unit_cost)}</td>
+                            <td class="numeric">
                                 <input type="number" class="price" min="0.01" step="any"
                                        value="${lot.sale_price}" aria-label="Precio">
                             </td>
-                            <td><button class="btn btn-ghost btn-small reprice">Guardar</button></td>
+                            <td><button type="button" class="btn-icon is-save reprice" data-tip="Guardar precio" aria-label="Guardar precio">${rowIcon('check')}</button></td>
                         </tr>`).join('')}
                 </tbody>
             </table>
@@ -124,11 +122,11 @@ async function showLots(host, sku, holder) {
  */
 export async function mountCatalog(host) {
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Catálogo</h2>
+        <header class="sd-page-head"><div>
+            <h1>Catálogo</h1>
             <p class="muted">El precio que se ve es el del lote que sale próximo:
                es lo que dice la etiqueta del estante.</p>
-        </header>
+        </div></header>
 
         <section class="card">
             <div class="field-row">
@@ -136,18 +134,16 @@ export async function mountCatalog(host) {
                     <span>Buscar</span>
                     <input type="search" id="filter" placeholder="Código, descripción o laboratorio">
                 </label>
-                <div class="field" style="align-self: end">
-                    <button class="btn btn-primary" id="new">Nuevo producto</button>
-                </div>
+                <button class="btn btn-primary" id="new" data-btn-icon="plus">Nuevo producto</button>
             </div>
             <p class="muted small" id="count"></p>
 
-            <div class="table-scroll">
+            <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Producto</th><th class="num">Disponible</th>
-                            <th class="num">Precio</th><th>Vence</th><th></th>
+                            <th>Producto</th><th class="numeric">Disponible</th>
+                            <th class="numeric">Precio</th><th>Vence</th><th></th>
                         </tr>
                     </thead>
                     <tbody id="catalog-body"></tbody>
@@ -178,8 +174,8 @@ export async function mountCatalog(host) {
                 <label class="field"><span>Precio sugerido por el proveedor</span>
                     <input type="number" id="suggested_price" min="0" step="any"></label>
             </div>
-            <button class="btn btn-primary" id="create">Registrar</button>
-            <button class="btn btn-ghost" id="cancel">Cancelar</button>
+            <button class="btn btn-save" id="create" data-btn-icon="check">Registrar</button>
+            <button class="btn btn-cancel" id="cancel" data-btn-icon="close">Cancelar</button>
         </section>`;
 
     products = (await BillingService.listProducts()).items;

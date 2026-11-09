@@ -91,12 +91,12 @@ export async function mountSettings(host) {
     const value = (field, fallback = '') => escapeHtml(settings?.[field] ?? fallback);
 
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Configuración</h2>
+        <header class="sd-page-head"><div>
+            <h1>Configuración</h1>
             <p class="muted">Lo que se imprime en cada nota y cómo se numeran.</p>
-        </header>
+        </div></header>
 
-        <div class="panel-grid">
+        <div class="sd-grid sd-grid-half">
             <section class="card">
                 <h3>El comercio</h3>
                 <label class="field">
@@ -220,7 +220,7 @@ export async function mountSettings(host) {
                     deben ser los que registraste en el SIN.
                 </p>
                 <div class="form-actions">
-                    <button class="btn btn-secondary" id="sync-catalogs" type="button">
+                    <button class="btn btn-secondary" id="sync-catalogs" data-btn-icon="refresh" type="button">
                         Sincronizar catálogos del SIN
                     </button>
                 </div>
@@ -236,10 +236,10 @@ export async function mountSettings(host) {
                     </label>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-secondary" id="contingency-start" type="button">
+                    <button class="btn btn-secondary" id="contingency-start" data-btn-icon="flag" type="button">
                         Emitir fuera de línea
                     </button>
-                    <button class="btn btn-secondary" id="contingency-recover" type="button">
+                    <button class="btn btn-secondary" id="contingency-recover" data-btn-icon="refresh" type="button">
                         Reintentar envío ahora
                     </button>
                 </div>
@@ -287,7 +287,7 @@ export async function mountSettings(host) {
                     el monto. El nombre no es obligatorio.
                 </p>
 
-                <button class="btn btn-primary btn-block" id="save">Guardar</button>
+                <button class="btn btn-save btn-block" id="save" data-btn-icon="check">Guardar</button>
             </section>
         </div>`;
 

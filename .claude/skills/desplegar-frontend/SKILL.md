@@ -63,7 +63,7 @@ python3 - <<'PY'
 import hashlib, urllib.request
 from pathlib import Path
 BASE, HOST = Path('portal/demo'), 'https://smartdecisions.bearsoft.com.bo'
-for rel in ('home.html', 'js/config.js', 'styles/demo.css'):
+for rel in ('home.html', 'js/config.js', 'common/styles/base.css'):
     local = hashlib.sha256((BASE / rel).read_bytes()).hexdigest()[:10]
     remote = hashlib.sha256(urllib.request.urlopen(
         f'{HOST}/{rel}', timeout = 20).read()).hexdigest()[:10]

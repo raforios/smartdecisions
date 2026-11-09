@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!day.items.length) note('#stockViewNote', `No hay stock cargado para ${day.date}.`);
     }
 
-    // Draws every row; the common pager (js/ui.js) shows ten at a time.
+    // Draws every row; the common pager (common/js/ui.js) shows ten at a time.
     function paintPage() {
         const items = state.items;
 

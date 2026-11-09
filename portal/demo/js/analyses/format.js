@@ -66,7 +66,7 @@
 
     /**
      * Fills a table body from rows, building each cell from `cells(row)`.
-     * Every row is drawn; the common pager (`SD_UI`, js/ui.js) shows ten.
+     * Every row is drawn; the common pager (`SD_UI`, common/js/ui.js) shows ten.
      */
     function fillTable(tableId, rows, cells, options = {}) {
         const all = rows || [];

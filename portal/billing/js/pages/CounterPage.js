@@ -19,7 +19,7 @@ import {
     errorText
 } from '../services/BillingService.js';
 import { printTicket } from './TicketPrinter.js';
-import { escapeHtml, money, notify, setBusy } from '../ui.js';
+import { escapeHtml, money, notify, setBusy, rowIcon } from '../ui.js';
 
 /** Debit and credit stay apart for the reports; for the SIN both are card. */
 const PAYMENT_METHODS = SALE_PAYMENT_METHODS.map((value) => [value, PAYMENT_LABELS[value]]);
@@ -60,7 +60,7 @@ function paymentParts(host) {
 function renderBasket(host) {
     const body = host.querySelector('#basket-body');
     if (!basket.size) {
-        body.innerHTML = `<tr class="empty"><td colspan="5">
+        body.innerHTML = `<tr class="empty-row"><td colspan="5">
             Escanea o busca un producto para empezar.</td></tr>`;
     } else {
         body.innerHTML = [...basket.values()].map((line) => `
@@ -69,19 +69,19 @@ function renderBasket(host) {
                     <strong>${escapeHtml(line.product.description)}</strong>
                     <span class="muted">${escapeHtml(line.product.sku)}</span>
                 </td>
-                <td class="num">
+                <td class="numeric">
                     <input type="number" class="qty" min="0.01" step="any"
                            value="${line.quantity}" aria-label="Cantidad">
                 </td>
-                <td class="num">${money(line.product.sale_price)}</td>
-                <td class="num">
+                <td class="numeric">${money(line.product.sale_price)}</td>
+                <td class="numeric">
                     <input type="number" class="discount" min="0" step="any"
                            value="${line.discount || 0}" aria-label="Descuento"
                            ${settings?.discounts_enabled ? '' : 'disabled'}>
                 </td>
-                <td class="num">
+                <td class="numeric">
                     ${money(line.quantity * (line.product.sale_price || 0) - (line.discount || 0))}
-                    <button class="link-danger remove" title="Quitar">✕</button>
+                    <button type="button" class="btn-icon is-delete remove" data-tip="Quitar" aria-label="Quitar">${rowIcon('trash')}</button>
                 </td>
             </tr>`).join('');
     }
@@ -289,11 +289,11 @@ async function renderInvoicing(host) {
  */
 export async function mountCounter(host) {
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Mostrador</h2>
+        <header class="sd-page-head"><div>
+            <h1>Mostrador</h1>
             <p class="muted">El precio sale del lote que va a salir, y el lote que
                sale es el que vence antes.</p>
-        </header>
+        </div></header>
 
         <div id="till-bar"></div>
         <div id="siat-bar"></div>
@@ -307,15 +307,15 @@ export async function mountCounter(host) {
                 </label>
                 <div class="results" id="search-results" hidden></div>
 
-                <div class="table-scroll">
+                <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Producto</th>
-                                <th class="num">Cantidad</th>
-                                <th class="num">Precio</th>
-                                <th class="num">Descuento</th>
-                                <th class="num">Importe</th>
+                                <th class="numeric">Cantidad</th>
+                                <th class="numeric">Precio</th>
+                                <th class="numeric">Descuento</th>
+                                <th class="numeric">Importe</th>
                             </tr>
                         </thead>
                         <tbody id="basket-body"></tbody>
@@ -380,7 +380,7 @@ export async function mountCounter(host) {
                     <input type="text" id="sale-notes" maxlength="300">
                 </label>
 
-                <button class="btn btn-primary btn-block" id="charge" disabled>
+                <button class="btn btn-save btn-block" id="charge" data-btn-icon="check" disabled>
                     Cobrar e imprimir
                 </button>
                 <p class="muted small" id="document-kind"></p>

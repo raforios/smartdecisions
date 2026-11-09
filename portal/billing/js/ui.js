@@ -6,18 +6,9 @@
  * badges— that no longer have anyone to serve.
  */
 
-/** Avisos efímeros. El host vive en `index.html`. */
+/** Short-lived notices: the same toast SmartDecisions shows (`common/js/ui.js`). */
 export function notify(message, variant = 'info') {
-    const host = document.getElementById('toast-host');
-    if (!host) return;
-    const toast = document.createElement('div');
-    toast.className = `toast is-${variant}`;
-    toast.textContent = message;
-    host.appendChild(toast);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 220);
-    }, 3800);
+    window.SD_UI.toast(message, variant);
 }
 
 /**
@@ -79,17 +70,17 @@ export function todayIso(offsetDays = 0) {
 }
 
 /**
- * Deshabilita un botón mientras corre su acción y devuelve cómo restaurarlo.
- * Dos toques en "Cobrar" serían dos notas y dos impresiones.
+ * Disables a button while its action runs and returns how to restore it.
+ * Two taps on "Cobrar" would be two notes and two prints. The common helper
+ * keeps the button's icon (`common/js/ui.js`).
  */
 export function setBusy(button, busyLabel) {
-    const label = button.textContent;
-    button.disabled = true;
-    button.textContent = busyLabel;
-    return () => {
-        button.disabled = false;
-        button.textContent = label;
-    };
+    return window.SD_UI.setButtonBusy(button, busyLabel);
+}
+
+/** The drawing of a row action (`.btn-icon`), from the common icon set. */
+export function rowIcon(name) {
+    return window.SD_ICONS.svg(name);
 }
 
 /** Error card, for when a screen cannot even open. */

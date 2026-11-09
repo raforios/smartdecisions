@@ -1,5 +1,5 @@
 /* Minerales and Factores externos — module styles.
-   Only what this module adds; everything shared lives in ../styles/demo.css */
+   Only what this module adds; everything shared lives in ../styles/base.css */
 
 .controls-card { margin-bottom: 1.25rem; }
 
@@ -51,7 +51,7 @@
 
 .ai-slot { margin-left: auto; }
 
-/* The interpretation panel is styled once, in demo.css. The copy that
+/* The interpretation panel is styled once, in base.css. The copy that
    lived here overrode that one —this file loads later— and made the same note
    look one size in Quotes and another in the Commercial Summary. */
 

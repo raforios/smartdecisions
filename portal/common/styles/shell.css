@@ -1,5 +1,5 @@
 /* The frame shared by every module page: side menu, top bar and breadcrumb.
- * Built by js/shell.js; the colours are the tokens of demo.css. */
+ * Built by js/shell.js; the colours are the tokens of base.css. */
 
 :root {
     --sidebar-width: 256px;

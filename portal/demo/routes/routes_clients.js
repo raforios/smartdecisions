@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         paintPage();
     }
 
-    // Draws every row; the common pager (js/ui.js) shows ten at a time.
+    // Draws every row; the common pager (common/js/ui.js) shows ten at a time.
     function paintPage() {
         const rows = state.shown;
 

@@ -1,6 +1,6 @@
 /* The pieces of the summaries (Principal and each area): the highlighted
  * figure, the figures beside it, the chart panels and the short lists.
- * Colours come from the tokens of demo.css and shell.css. */
+ * Colours come from the tokens of base.css and shell.css. */
 
 .sd-page-head {
     display: flex;
@@ -33,6 +33,8 @@
 .sd-grid-top { grid-template-columns: 1.6fr repeat(3, 1fr); }
 .sd-grid-wide { grid-template-columns: 2fr 1fr; }
 .sd-grid-half { grid-template-columns: 1fr 1fr; }
+/* Four figures of the same weight, side by side (SmartBilling's till and board). */
+.sd-grid-quarters { grid-template-columns: repeat(4, 1fr); }
 
 /* ---------- The one highlighted figure ---------- */
 .sd-hero {
@@ -280,11 +282,12 @@
     .sd-tiles { grid-template-columns: repeat(2, 1fr); }
     .sd-grid-top { grid-template-columns: repeat(3, 1fr); }
     .sd-grid-top .sd-hero { grid-column: 1 / -1; }
+    .sd-grid-quarters { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 800px) {
     .sd-tiles { grid-template-columns: 1fr; }
     .sd-tile-wide { grid-column: auto; }
-    .sd-grid-top, .sd-grid-wide, .sd-grid-half { grid-template-columns: 1fr; }
+    .sd-grid-top, .sd-grid-wide, .sd-grid-half, .sd-grid-quarters { grid-template-columns: 1fr; }
 }
 
 /* While the answers travel: grey bars where the figures will be. */

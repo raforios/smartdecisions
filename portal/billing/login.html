@@ -3,39 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BILLING — Iniciar sesión</title>
-    <link rel="stylesheet" href="css/base.css">
-    <link rel="stylesheet" href="css/billing.css">
+    <title>Iniciar sesión — SmartBilling</title>
+    <link rel="stylesheet" href="common/styles/base.css">
+    <link rel="stylesheet" href="common/styles/login.css">
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-bear-64.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-bear-32.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <script src="common/js/ui.js" defer></script>
+    <script src="common/js/icons.js" defer></script>
     <script type="module" src="js/login.js"></script>
 </head>
-<body class="login-page">
+<body class="sd-login">
 
-<main class="login-box">
-    <div class="app-brand">
-        <img src="assets/bear-face.jpg" alt="" aria-hidden="true">
-        <div>
-            <h1>BILLING</h1>
-            <small>Facturación de BearSoft</small>
+<div class="login-shell">
+    <section class="login-brand" aria-hidden="true">
+        <div class="login-mark">
+            <img src="assets/bear-face.jpg" alt="">
+            <span>Smart<b>Billing</b></span>
         </div>
-    </div>
+        <div class="login-message">
+            <h2>Vende, factura y cuida tu inventario.</h2>
+            <p>El mostrador, la caja, las compras y la factura del SIN en un solo lugar.</p>
+        </div>
+        <div class="login-maker">
+            <span>Un producto de</span>
+            <img src="assets/bearsoft-logo-white.png" alt="BearSoft">
+        </div>
+    </section>
 
-    <form id="login-form" class="card">
-        <h2>Inicia sesión</h2>
-        <label class="field">
-            <span>Email</span>
-            <input type="email" name="email" autocomplete="email" required>
-        </label>
-        <label class="field">
-            <span>Contraseña</span>
-            <input type="password" name="password" autocomplete="current-password" required>
-        </label>
-        <p class="form-error" id="login-error" hidden></p>
-        <button type="submit" id="login-submit" class="btn btn-primary btn-block">Entrar</button>
-    </form>
-
-    <p class="muted small">Una iniciativa de <strong>BearSoft</strong></p>
-</main>
+    <section class="login-form-side">
+        <form id="loginForm" class="login-form" novalidate>
+            <h1>Inicia sesión</h1>
+            <p class="login-lead">Entra con el correo y la contraseña de tu cuenta.</p>
+            <label class="login-field">
+                <span>Correo</span>
+                <span class="login-input">
+                    <input type="email" name="email" required autocomplete="email" autofocus>
+                </span>
+            </label>
+            <label class="login-field">
+                <span>Contraseña</span>
+                <span class="login-input has-toggle sd-reveal">
+                    <input type="password" name="password" id="loginPassword" required
+                           autocomplete="current-password">
+                    <button type="button" class="sd-reveal-toggle" id="passwordToggle"
+                            aria-label="Mostrar la contraseña" aria-pressed="false"></button>
+                </span>
+            </label>
+            <!-- Only the e-mail is kept, never the password nor the session. -->
+            <label class="login-remember">
+                <input type="checkbox" id="rememberEmail"><span>Recordar mi correo</span>
+            </label>
+            <button type="submit" class="btn btn-primary login-submit" id="loginButton" data-btn-icon="login">Entrar</button>
+            <p class="form-note" id="loginNote" aria-live="polite"></p>
+        </form>
+    </section>
+</div>
 
 </body>
 </html>

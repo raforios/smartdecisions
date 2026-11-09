@@ -17,7 +17,7 @@ import {
     currentTillOrNull,
     errorText
 } from '../services/BillingService.js';
-import { escapeHtml, money, notify, setBusy, shortDate, stamp } from '../ui.js';
+import { escapeHtml, money, notify, setBusy, shortDate, stamp, rowIcon } from '../ui.js';
 
 /** The initial note, according to the difference. The user completes it. */
 export function differenceNote(difference) {
@@ -32,47 +32,47 @@ export function tillSummaryHtml(till) {
     const income = till.income.length
         ? till.income.map((row) => `
             <tr><td>${escapeHtml(PAYMENT_LABELS[row.payment_method] || row.payment_method)}</td>
-                <td class="num">${row.count}</td>
-                <td class="num">${money(row.total)}</td></tr>`).join('')
+                <td class="numeric">${row.count}</td>
+                <td class="numeric">${money(row.total)}</td></tr>`).join('')
         : '<tr><td colspan="3" class="muted">Sin ventas en este turno.</td></tr>';
     const expenses = till.expenses.length
         ? till.expenses.map((row) => `
             <tr><td>${escapeHtml(EXPENSE_LABELS[row.expense_type] || row.expense_type)}</td>
-                <td class="num">${row.count}</td>
-                <td class="num">${money(row.total)}</td></tr>`).join('')
+                <td class="numeric">${row.count}</td>
+                <td class="numeric">${money(row.total)}</td></tr>`).join('')
         : '<tr><td colspan="3" class="muted">Sin egresos.</td></tr>';
 
     return `
-        <div class="kpi-grid">
-            <div class="card kpi"><span class="label">Efectivo inicial</span>
-                <span class="value">Bs ${money(till.opening_cash)}</span>
-                <span class="foot">Abierta ${stamp(till.opened_at)}</span></div>
-            <div class="card kpi"><span class="label">Ventas del turno</span>
-                <span class="value">Bs ${money(till.income_total)}</span>
-                <span class="foot">todos los medios de pago</span></div>
-            <div class="card kpi"><span class="label">Egresos</span>
-                <span class="value">Bs ${money(till.expenses_total)}</span>
-                <span class="foot">salieron en efectivo</span></div>
-            <div class="card kpi"><span class="label">Efectivo esperado</span>
-                <span class="value">Bs ${money(till.expected_cash)}</span>
-                <span class="foot">inicial + ventas en efectivo − egresos</span></div>
+        <div class="sd-grid sd-grid-quarters">
+            <div class="sd-stat"><p class="sd-stat-label">Efectivo inicial</p>
+                <p class="sd-stat-value">Bs ${money(till.opening_cash)}</p>
+                <p class="sd-stat-other">Abierta ${stamp(till.opened_at)}</p></div>
+            <div class="sd-stat"><p class="sd-stat-label">Ventas del turno</p>
+                <p class="sd-stat-value">Bs ${money(till.income_total)}</p>
+                <p class="sd-stat-other">todos los medios de pago</p></div>
+            <div class="sd-stat"><p class="sd-stat-label">Egresos</p>
+                <p class="sd-stat-value">Bs ${money(till.expenses_total)}</p>
+                <p class="sd-stat-other">salieron en efectivo</p></div>
+            <div class="sd-stat"><p class="sd-stat-label">Efectivo esperado</p>
+                <p class="sd-stat-value">Bs ${money(till.expected_cash)}</p>
+                <p class="sd-stat-other">inicial + ventas en efectivo − egresos</p></div>
         </div>
-        <div class="panel-grid">
+        <div class="sd-grid sd-grid-half">
             <section class="card">
                 <h3>Ingresos por medio de pago</h3>
                 <p class="muted small">Transferencias, billeteras y tarjetas no están en el cajón: se concilian
                    con el banco y el POS.</p>
-                <div class="table-scroll"><table class="data-table">
-                    <thead><tr><th>Medio</th><th class="num">Ventas</th>
-                               <th class="num">Bs</th></tr></thead>
+                <div class="table-wrapper"><table class="data-table">
+                    <thead><tr><th>Medio</th><th class="numeric">Ventas</th>
+                               <th class="numeric">Bs</th></tr></thead>
                     <tbody>${income}</tbody>
                 </table></div>
             </section>
             <section class="card">
                 <h3>Egresos por tipo</h3>
-                <div class="table-scroll"><table class="data-table">
-                    <thead><tr><th>Tipo</th><th class="num">Cantidad</th>
-                               <th class="num">Bs</th></tr></thead>
+                <div class="table-wrapper"><table class="data-table">
+                    <thead><tr><th>Tipo</th><th class="numeric">Cantidad</th>
+                               <th class="numeric">Bs</th></tr></thead>
                     <tbody>${expenses}</tbody>
                 </table></div>
             </section>
@@ -101,7 +101,7 @@ export function mountCloseForm(holder, till, { noteRequired, onClosed }) {
             </div>
             <label class="field"><span>Observación${noteRequired ? ' (obligatoria)' : ''}</span>
                 <textarea id="close-note" maxlength="500" rows="2"></textarea></label>
-            <button class="btn btn-primary" id="close-till" disabled>Cerrar caja</button>
+            <button class="btn btn-save" id="close-till" data-btn-icon="lock" disabled>Cerrar caja</button>
         </section>`;
 
     const counted = holder.querySelector('#counted');
@@ -147,16 +147,16 @@ export function mountCloseForm(holder, till, { noteRequired, onClosed }) {
 
 function mountOpenForm(host) {
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Caja</h2>
+        <header class="sd-page-head"><div>
+            <h1>Caja</h1>
             <p class="muted">Para vender, abre tu caja con el efectivo que hay en el cajón.</p>
-        </header>
+        </div></header>
         <section class="card">
             <div class="field-row">
                 <label class="field"><span>Efectivo inicial (Bs)</span>
                     <input type="number" id="opening" min="0" step="0.01" value="0"></label>
             </div>
-            <button class="btn btn-primary" id="open-till">Abrir caja</button>
+            <button class="btn btn-primary" id="open-till" data-btn-icon="power">Abrir caja</button>
         </section>`;
     host.querySelector('#open-till').addEventListener('click', async (event) => {
         const done = setBusy(event.currentTarget, 'Abriendo…');
@@ -173,21 +173,21 @@ function mountOpenForm(host) {
 
 function movementsHtml(till) {
     if (!till.movements.length) return '<p class="muted small">Sin egresos en este turno.</p>';
-    return `<div class="table-scroll"><table class="data-table">
+    return `<div class="table-wrapper"><table class="data-table">
         <thead><tr><th>Hora</th><th>Tipo</th><th>Concepto</th>
-                   <th class="num">Bs</th><th></th></tr></thead>
+                   <th class="numeric">Bs</th><th></th></tr></thead>
         <tbody>${till.movements.map((row) => `
             <tr class="${row.status === 'CANCELLED' ? 'muted' : ''}">
                 <td>${stamp(row.created_at)}</td>
                 <td>${escapeHtml(EXPENSE_LABELS[row.expense_type] || row.expense_type)}</td>
                 <td>${escapeHtml(row.concept)}</td>
-                <td class="num">${money(row.amount)}</td>
+                <td class="numeric">${money(row.amount)}</td>
                 <td>${row.status === 'CANCELLED'
-                    ? `<span class="chip chip-muted">Anulado por ${escapeHtml(row.cancelled_by)}</span>`
+                    ? `<span class="badge badge-muted">Anulado por ${escapeHtml(row.cancelled_by)}</span>`
                     : row.expense_type === 'REFUND'
-                    ? '<span class="chip chip-muted">Por nota de crédito-débito</span>'
-                    : `<button class="link-danger cancel-expense"
-                               data-id="${escapeHtml(row.movement_id)}">Anular</button>`}</td>
+                    ? '<span class="badge badge-muted">Por nota de crédito-débito</span>'
+                    : `<button type="button" class="btn-icon is-delete cancel-expense" data-tip="Anular" aria-label="Anular"
+                               data-id="${escapeHtml(row.movement_id)}">${rowIcon('close')}</button>`}</td>
             </tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -205,12 +205,12 @@ export async function mountCash(host) {
     }
 
     host.innerHTML = `
-        <header class="page-head">
-            <h2>Caja y egresos</h2>
+        <header class="sd-page-head"><div>
+            <h1>Caja y egresos</h1>
             <p class="muted">Turno del ${shortDate(till.business_day)}.
                ${till.expired ? '<strong class="danger">Es de un día anterior: ciérrala para '
                    + 'poder vender hoy.</strong>' : ''}</p>
-        </header>
+        </div></header>
         ${tillSummaryHtml(till)}
         <section class="card" ${till.expired ? 'hidden' : ''}>
             <h3>Registrar un egreso</h3>
@@ -227,7 +227,7 @@ export async function mountCash(host) {
                     <input type="text" id="expense-concept" maxlength="200"
                            placeholder="A quién y por qué"></label>
             </div>
-            <button class="btn btn-secondary" id="add-expense">Registrar egreso</button>
+            <button class="btn btn-primary" id="add-expense" data-btn-icon="plus">Registrar egreso</button>
         </section>
         <section class="card">
             <h3>Egresos del turno</h3>

@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qs('#optimizeAcceptButton').disabled = study.already_optimal;
     }
 
-    // Draws every stop; the common pager (js/ui.js) shows ten at a time.
+    // Draws every stop; the common pager (common/js/ui.js) shows ten at a time.
     function paintTable(study) {
         const stops = study.optimized.stops;
         const tbody = qs('#optimizeTable tbody');

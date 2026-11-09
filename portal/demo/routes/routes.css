@@ -1,4 +1,4 @@
-/* Module-specific styles for /demo/routes/. Continues the shared demo.css palette. */
+/* Module-specific styles for /demo/routes/. Continues the shared base.css palette. */
 
 .container { max-width: 1400px; }
 
@@ -163,7 +163,7 @@
 
 /* --- Stops table --- */
 .stops-card h3 { margin-top: 0; }
-/* .table-wrapper and .data-table: defined once in styles/demo.css. */
+/* .table-wrapper and .data-table: defined once in styles/base.css. */
 
 
 
