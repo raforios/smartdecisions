@@ -54,7 +54,7 @@ export async function mountWarehouse(host, { go, view }) {
             <h1>${escapeHtml(warehouse.code)} · ${escapeHtml(warehouse.name)}</h1>
             <p>${escapeHtml(facility.name)} · ${metres(warehouse.width_m)} × ${metres(warehouse.length_m)},
                ${metres(warehouse.height_m)} de alto. Cada elemento toma el pasillo que tiene al lado y el número
-               del tramo donde está: impares de un lado, pares del otro.</p>
+               del módulo donde está: impares de un lado, pares del otro.</p>
         </div>
         <label class="field warehouse-pick"><span>Almacén</span>
             <select id="warehousePick">${warehouses.map((one) => `<option value="${escapeHtml(one.id)}"
@@ -82,7 +82,7 @@ export async function mountWarehouse(host, { go, view }) {
                         <label class="field"><span>Nombre</span><input name="name" maxlength="40" placeholder="Galletas, Saldos…"></label>
                         <label class="field"><span>Largo (m)</span><input type="number" name="aisle_length" step="0.5" min="2" value="40" required></label>
                         <label class="field"><span>Ancho (m)</span><input type="number" name="aisle_width" step="0.5" min="1" value="3.5" required></label>
-                        <label class="field"><span>Tramo (m)</span><input type="number" name="bay_m" step="0.5" min="0.5" value="${DEFAULT_BAY_M}" required></label>
+                        <label class="field"><span>Módulo (m)</span><input type="number" name="bay_m" step="0.5" min="0.5" value="${DEFAULT_BAY_M}" required></label>
                         <button type="submit" class="btn btn-secondary" data-btn-icon="plus">Agregar pasillo</button>
                     </form>
                 </div>
@@ -146,7 +146,7 @@ export async function mountWarehouse(host, { go, view }) {
     function propose(next, what) {
         const arranged = arrange(next);
         if (sharedBays(elementsOf(arranged)).length) {
-            notify('Ese tramo del pasillo ya tiene un elemento de ese lado: volvió a su lugar.', 'error');
+            notify('Ese módulo del pasillo ya tiene un elemento de ese lado: volvió a su lugar.', 'error');
             refresh();
             return;
         }
@@ -231,10 +231,10 @@ export async function mountWarehouse(host, { go, view }) {
                 <div class="field-row">
                     <label class="field"><span>Largo (m)</span><input type="number" name="span" step="0.5" min="2" value="${runsAcross(item) ? item.width_m : item.length_m}"></label>
                     <label class="field"><span>Ancho (m)</span><input type="number" name="breadth" step="0.5" min="1" value="${runsAcross(item) ? item.length_m : item.width_m}"></label>
-                    <label class="field"><span>Tramo (m)</span><input type="number" name="bay_m" step="0.5" min="0.5" value="${item.bay_m || DEFAULT_BAY_M}"></label>
+                    <label class="field"><span>Módulo (m)</span><input type="number" name="bay_m" step="0.5" min="0.5" value="${item.bay_m || DEFAULT_BAY_M}"></label>
                 </div>
                 <p class="muted small">Corre ${runsAcross(item) ? 'de izquierda a derecha' : 'de arriba abajo'}. Cada
-                   tramo es una posición: impares de un lado, pares del otro. Mover un elemento sólo cambia su código.</p>
+                   módulo es una posición: impares de un lado, pares del otro. Mover un elemento sólo cambia su código.</p>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-secondary btn-small" data-btn-icon="check">Aplicar</button>
                     <button type="button" class="btn btn-ghost btn-small" data-btn-icon="refresh" id="rotate">Girar 90°</button>
