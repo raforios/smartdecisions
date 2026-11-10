@@ -18,7 +18,7 @@ const ELEMENT_TYPES = [
       default_size: { width_m: 6, length_m: 1.2, height_m: 6 }, default_levels: 4 },
     { code: 'SHELF', name: 'Estante', code_letter: 'E', has_levels: true, color: '#12796f',
       default_size: { width_m: 3, length_m: 0.6, height_m: 2.2 }, default_levels: 5 },
-    { code: 'PALLET', name: 'Palé', code_letter: 'T', has_levels: false, color: '#a06a12',
+    { code: 'PALLET', name: 'Palet en piso', code_letter: 'T', has_levels: false, color: '#a06a12',
       default_size: { width_m: 1.2, length_m: 1, height_m: 1.5 }, default_levels: 1 },
     { code: 'FLOOR', name: 'Piso', code_letter: 'Z', has_levels: false, color: '#6b7590',
       default_size: { width_m: 6, length_m: 4, height_m: 0 }, default_levels: 1 }

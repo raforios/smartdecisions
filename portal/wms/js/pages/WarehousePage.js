@@ -73,7 +73,7 @@ export async function mountWarehouse(host, { go, view }) {
                         <label class="field"><span>Fondo (m)</span><input type="number" name="length_m" step="0.1" min="0.5" required></label>
                         <label class="field"><span>Alto (m)</span><input type="number" name="height_m" step="0.1" min="0"></label>
                         <label class="field" data-levels><span>Niveles</span><input type="number" name="levels" min="1" max="12"></label>
-                        <label class="field"><span id="palletsLabel">Palés por nivel</span><input type="number" name="capacity_pallets" min="0"></label>
+                        <label class="field"><span id="palletsLabel">Palets por nivel</span><input type="number" name="capacity_pallets" min="0"></label>
                         <label class="field"><span>Peso máx. (kg)</span><input type="number" name="capacity_weight_kg" min="0"></label>
                         <button type="submit" class="btn btn-primary" data-btn-icon="plus">Agregar elemento</button>
                     </form>
@@ -207,7 +207,7 @@ export async function mountWarehouse(host, { go, view }) {
                     <label class="field"><span>Alto (m)</span><input type="number" name="height_m" step="0.1" min="0" value="${item.height_m}"></label>
                 </div>
                 <div class="field-row">
-                    <label class="field"><span>Palés por ${type.has_levels ? 'nivel' : 'ubicación'}</span><input type="number" name="capacity_pallets" min="0" value="${item.capacity_pallets ?? ''}"></label>
+                    <label class="field"><span>Palets por ${type.has_levels ? 'nivel' : 'ubicación'}</span><input type="number" name="capacity_pallets" min="0" value="${item.capacity_pallets ?? ''}"></label>
                     <label class="field"><span>Peso máx. (kg)</span><input type="number" name="capacity_weight_kg" min="0" value="${item.capacity_weight_kg ?? ''}"></label>
                 </div>
                 <div class="form-actions">
@@ -331,7 +331,7 @@ export async function mountWarehouse(host, { go, view }) {
         });
         elementForm.elements.capacity_weight_kg.value = '';
         elementForm.querySelector('[data-levels]').hidden = !type.has_levels;
-        host.querySelector('#palletsLabel').textContent = type.has_levels ? 'Palés por nivel' : 'Palés';
+        host.querySelector('#palletsLabel').textContent = type.has_levels ? 'Palets por nivel' : 'Palets';
     };
     elementForm.elements.type.addEventListener('change', suggest);
     suggest();
