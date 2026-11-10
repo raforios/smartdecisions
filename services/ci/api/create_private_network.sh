@@ -25,9 +25,9 @@
 # tres están), DB_HOST para su .env, y el SQL que crea la base y el usuario de
 # cada servicio.
 #
-# La contraseña del usuario maestro la genera RDS y la guarda en Secrets
-# Manager (~US$ 0,40 al mes): nadie la escribe ni queda en ningún archivo. El
-# maestro sólo crea bases y usuarios: ningún servicio lo usa.
+# Pide la contraseña del usuario maestro al crear la instancia; no se guarda en
+# ningún archivo ni en Secrets Manager (Rafael, 10-nov-2026: sin costos
+# evitables). El maestro sólo crea bases y usuarios: ningún servicio lo usa.
 
 # Detiene la ejecución si algún comando falla
 set -e
@@ -236,18 +236,22 @@ if ! aws_cli rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GR
 fi
 
 if ! aws_cli rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" >/dev/null 2>&1; then
+    echo -n "  Contraseña del usuario ${DB_USERNAME} (mínimo 8 caracteres; no se guarda): "
+    read -rs DB_PASSWORD
+    echo ""
     # Sin versión: la que AWS tiene por defecto para PostgreSQL, que desde la
     # 15 exige SSL (rds.force_ssl = 1) en su grupo de parámetros por defecto.
     aws_cli rds create-db-instance --db-instance-identifier "$DB_INSTANCE_ID" \
         --engine postgres --db-instance-class "$DB_INSTANCE_CLASS" \
         --allocated-storage "$DB_STORAGE_GB" --storage-type gp3 --storage-encrypted \
         --master-username "$DB_USERNAME" \
-        --manage-master-user-password \
+        --master-user-password "$DB_PASSWORD" \
         --db-subnet-group-name "$DB_SUBNET_GROUP" --vpc-security-group-ids "$DB_SG" \
         --no-publicly-accessible --no-multi-az \
         --backup-retention-period "$DB_BACKUP_DAYS" --copy-tags-to-snapshot \
         --deletion-protection \
         --tags "Key=Name,Value=${DB_INSTANCE_ID}" "Key=Project,Value=${PROJECT}" >/dev/null
+    unset DB_PASSWORD
     echo "  Base creándose: $DB_INSTANCE_ID (tarda 5 a 10 minutos)"
     aws_cli rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_ID"
 else
@@ -271,9 +275,6 @@ echo "  PRIVATE_SUBNET_IDS=${PRIVATE_SUBNET_IDS}"
 echo "  INTERNAL_SG_ID=${LAMBDA_SG}"
 echo "Para su .env: DB_HOST=${DB_HOST}, DB_PORT=5432, DB_DIALECT=postgresql+psycopg2, y su DATABASE, DB_USER y DB_PASSWORD."
 echo "PostgreSQL ${DB_VERSION}."
-DB_SECRET=$(aws_cli rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
-    --query 'DBInstances[0].MasterUserSecret.SecretArn' --output text)
-echo "Contraseña del usuario ${DB_USERNAME}: en Secrets Manager, ${DB_SECRET}"
 echo ""
 echo "Una sola vez por servicio, conectado como ${DB_USERNAME} desde la red privada"
 echo "(la contraseña de cada usuario la eliges tú y va sólo a su .env):"
