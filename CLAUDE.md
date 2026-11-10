@@ -51,7 +51,7 @@ Le gusta que respetes los archivos "md" que se crearon y configuraron para el en
 |---|---|
 | Lenguaje | Python 3.14, tipado moderno |
 | Web | FastAPI + Uvicorn, Mangum sobre Lambda |
-| ORM | SQLAlchemy (MySQL / PostgreSQL) |
+| ORM | SQLAlchemy sobre PostgreSQL (RDS) |
 | NoSQL | `boto3` para DynamoDB |
 | Validación | Pydantic V2 |
 | Testing | Pytest |
@@ -142,8 +142,15 @@ un solo microservicio con varias partes, como FINANCE) y MINING_ANALYSIS
 comercios sobre DynamoDB, con las farmacias como primer vertical. Se vende solo
 o junto a SmartDecisions.
 
-**De referencia al crear uno nuevo:** `quotes` para DynamoDB; `localization` o
-`trade` para MySQL. Todo debe ser uniforme entre servicios: mismos nombres,
+**Dónde guarda sus datos cada servicio** (Rafael, 10-nov-2026): el que necesita
+transaccionalidad (WMS, BILLING, COMMERCIAL, FINANCE) va a la **instancia RDS
+PostgreSQL compartida**, con **su propia base de datos, usuario y contraseña**;
+PostgreSQL no consulta entre bases, así que ninguno lee las tablas de otro. El
+resto (AUTH, EVENTS, FILES, AI, MINING_ANALYSIS, QUOTES) sigue en DynamoDB; ML_FUNCTIONS
+no guarda nada. La red y la instancia las crea `services/ci/api/create_private_network.sh`.
+
+**De referencia al crear uno nuevo:** `quotes` para DynamoDB; para PostgreSQL,
+`core/db_connection.py` y el skill `/nuevo-microservicio`. Todo debe ser uniforme entre servicios: mismos nombres,
 misma disposición, mismas soluciones para los mismos problemas.
 
 **No pertenecen al API:** TRADE, FORMS y LOCALIZATION son del cliente Binaria.

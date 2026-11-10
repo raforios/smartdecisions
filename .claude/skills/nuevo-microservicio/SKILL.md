@@ -8,14 +8,24 @@ allowed-tools: Bash(mkdir *), Bash(cp *), Bash(ls *), Bash(diff *), Bash(python3
 Crea el andamiaje de `services/$1/` copiando el patrón existente. **No
 escribas lógica de negocio en este paso**; primero la estructura, y se reporta.
 
-## Servicio de referencia
+## Dónde guarda sus datos
 
-- **DynamoDB** (`$2 = dynamo`, el caso normal): copia de `quotes`.
-- **MySQL / PostgreSQL** (`$2 = sql`): copia de `localization` para un solo
-  proceso, de `trade` si son varios procesos independientes.
+La pregunta es si el servicio necesita **transaccionalidad** (Rafael,
+10-nov-2026): varias filas que cambian juntas o ninguna, integridad entre
+tablas, consultas que cruzan datos, volumen que crece con cada operación.
 
-Sin RDS por presupuesto: todo servicio nuevo va a DynamoDB salvo que Rafael diga
-lo contrario.
+- **Transaccional** (`$2 = sql`): va a la **instancia RDS PostgreSQL
+  compartida** (`services/ci/api/create_private_network.sh`), con **su propia
+  base de datos, su usuario y su contraseña**: ningún servicio entra a la base
+  de otro. El servicio corre en la red privada (`VPC_ID`,
+  `PRIVATE_SUBNET_IDS`, `INTERNAL_SG_ID` en su `deploy.config`) y se conecta
+  con `core/db_connection.py` (dialecto `postgresql+psycopg2`). Es el caso de
+  WMS, BILLING, COMMERCIAL y FINANCE.
+- **Clave y valor, registros o configuración** (`$2 = dynamo`): DynamoDB con
+  pago por uso; copia de `quotes`. Es el caso de AUTH, EVENTS, FILES, AI,
+  MINING_ANALYSIS y QUOTES.
+
+Si no está claro a cuál pertenece, se pregunta antes de crear nada.
 
 ## Las cinco capas, y cómo se nombran
 

@@ -1,9 +1,16 @@
 #!/bin/bash
 
-# Crea la red privada y la base de datos del WMS: una VPC propia con una subred
-# pública (sólo para la instancia NAT) y dos privadas (los Lambdas y la base),
-# una instancia NAT chica en EC2 para que los Lambdas de la red privada lleguen
-# a AUTH, EVENTS y FILES, y un RDS PostgreSQL que no se expone a internet.
+# Crea la red privada y la instancia RDS PostgreSQL que comparten los servicios
+# transaccionales (Rafael, 10-nov-2026): el WMS, BILLING, COMMERCIAL y FINANCE.
+# Una VPC con una subred pública (sólo para la instancia NAT) y dos privadas
+# (los Lambdas y la base), una instancia NAT chica en EC2 para que los Lambdas
+# de la red privada lleguen a AUTH, EVENTS y FILES, una salida directa a
+# DynamoDB (los servicios siguen usando sus tablas) y el RDS, que no se expone
+# a internet.
+#
+# Una instancia, una base de datos por servicio, cada una con su propio usuario
+# y contraseña: PostgreSQL no permite consultar entre bases distintas, así que
+# ningún servicio puede leer las tablas de otro (CLAUDE.md §4).
 #
 # Por qué así (Rafael, 9-nov-2026): sólo el costo que no se puede evitar. El
 # NAT Gateway cuesta ~US$ 33 al mes; la instancia NAT t4g.nano, ~US$ 7,40 con
@@ -12,20 +19,21 @@
 # Es idempotente: cada recurso se busca por su etiqueta Name y sólo se crea si
 # falta. No borra ni modifica lo que existe.
 #
-# Va ANTES del primer despliegue del WMS: al terminar imprime VPC_ID,
-# PRIVATE_SUBNET_IDS e INTERNAL_SG_ID para el deploy.config del servicio
-# (build_and_deploy.sh pone el Lambda en la red privada cuando los tres
-# están), y DB_HOST para su .env.
+# Va ANTES del primer despliegue de un servicio con base de datos: al terminar
+# imprime VPC_ID, PRIVATE_SUBNET_IDS e INTERNAL_SG_ID para el deploy.config de
+# cada uno (build_and_deploy.sh pone el Lambda en la red privada cuando los
+# tres están), DB_HOST para su .env, y el SQL que crea la base y el usuario de
+# cada servicio.
 #
-# Pide la contraseña del usuario maestro de la base al crearla; no se guarda
-# en ningún archivo: va al .env del WMS a mano, como en BINARIA.
+# Pide la contraseña del usuario maestro al crear la instancia; no se guarda en
+# ningún archivo. El maestro sólo crea bases y usuarios: ningún servicio lo usa.
 
 # Detiene la ejecución si algún comando falla
 set -e
 
 REGION="us-east-1"
 PROFILE="deploy_ml"
-PROJECT="bearsoft-wms"
+PROJECT="bearsoft-private"
 
 # --- Red ---
 VPC_CIDR="10.40.0.0/16"
@@ -42,11 +50,12 @@ NAT_AMI_OWNER="568608671756"
 NAT_AMI_NAME="fck-nat-al2023-*-arm64-ebs"
 
 # --- Base de datos ---
-DB_INSTANCE_ID="${PROJECT}-db"
+DB_INSTANCE_ID="bearsoft-postgres"
 DB_INSTANCE_CLASS="db.t4g.micro"
 DB_STORAGE_GB=20
-DB_NAME="wms"
-DB_USERNAME="wms_admin"
+DB_USERNAME="bearsoft_admin"
+# Una base y un usuario por servicio transaccional; agregar uno es sumarlo acá.
+SERVICE_DATABASES=(wms billing commercial finance)
 DB_BACKUP_DAYS=7
 
 aws_cli() {
@@ -67,7 +76,7 @@ tag() {
 
 AZS=($(aws_cli ec2 describe-availability-zones --query 'AvailabilityZones[0:2].ZoneName' --output text))
 
-echo "Red y base de datos del WMS (${REGION}, perfil ${PROFILE})"
+echo "Red privada y base PostgreSQL compartida (${REGION}, perfil ${PROFILE})"
 
 # ---------------------------------------------------------------- VPC ---
 VPC_ID=$(find_tagged vpcs "${PROJECT}-vpc" 'Vpcs[0].VpcId')
@@ -137,11 +146,11 @@ ensure_sg() {
 }
 
 # Los Lambdas: salen a donde necesiten, nadie entra.
-LAMBDA_SG=$(ensure_sg "${PROJECT}-lambda-sg" "WMS Lambdas")
+LAMBDA_SG=$(ensure_sg "${PROJECT}-lambda-sg" "BearSoft private Lambdas")
 LAMBDA_SG="${LAMBDA_SG#new:}"
 
-# La base: sólo los Lambdas del WMS, sólo PostgreSQL.
-DB_SG=$(ensure_sg "${PROJECT}-db-sg" "WMS PostgreSQL")
+# La base: sólo los Lambdas de la red privada, sólo PostgreSQL.
+DB_SG=$(ensure_sg "${PROJECT}-db-sg" "BearSoft PostgreSQL")
 if [[ "$DB_SG" == new:* ]]; then
     DB_SG="${DB_SG#new:}"
     aws_cli ec2 authorize-security-group-ingress --group-id "$DB_SG" \
@@ -149,7 +158,7 @@ if [[ "$DB_SG" == new:* ]]; then
 fi
 
 # La instancia NAT: recibe todo lo que sale de la VPC y no acepta nada de afuera.
-NAT_SG=$(ensure_sg "${PROJECT}-nat-sg" "WMS NAT instance")
+NAT_SG=$(ensure_sg "${PROJECT}-nat-sg" "BearSoft NAT instance")
 if [[ "$NAT_SG" == new:* ]]; then
     NAT_SG="${NAT_SG#new:}"
     aws_cli ec2 authorize-security-group-ingress --group-id "$NAT_SG" \
@@ -205,11 +214,22 @@ if [ -z "$PRIVATE_RTB" ]; then
     echo "  Rutas de las subredes privadas: a internet por la instancia NAT"
 fi
 
+# Las tablas DynamoDB se alcanzan sin pasar por la instancia NAT: el endpoint de
+# tipo gateway es gratuito y no tiene límite de tráfico.
+DYNAMO_ENDPOINT=$(aws_cli ec2 describe-vpc-endpoints \
+    --filters "Name=vpc-id,Values=${VPC_ID}" "Name=service-name,Values=com.amazonaws.${REGION}.dynamodb" \
+    --query 'VpcEndpoints[0].VpcEndpointId' --output text | sed 's/^None$//')
+if [ -z "$DYNAMO_ENDPOINT" ]; then
+    aws_cli ec2 create-vpc-endpoint --vpc-id "$VPC_ID" --vpc-endpoint-type Gateway \
+        --service-name "com.amazonaws.${REGION}.dynamodb" --route-table-ids "$PRIVATE_RTB" >/dev/null
+    echo "  Salida directa a DynamoDB desde las subredes privadas"
+fi
+
 # ------------------------------------------------------ Base de datos ---
 DB_SUBNET_GROUP="${PROJECT}-db-subnets"
 if ! aws_cli rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GROUP" >/dev/null 2>&1; then
     aws_cli rds create-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP" \
-        --db-subnet-group-description "WMS private subnets" \
+        --db-subnet-group-description "BearSoft private subnets" \
         --subnet-ids "${PRIVATE_SUBNETS[@]}" >/dev/null
     echo "  Grupo de subredes de la base creado: $DB_SUBNET_GROUP"
 fi
@@ -223,7 +243,7 @@ if ! aws_cli rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID
     aws_cli rds create-db-instance --db-instance-identifier "$DB_INSTANCE_ID" \
         --engine postgres --db-instance-class "$DB_INSTANCE_CLASS" \
         --allocated-storage "$DB_STORAGE_GB" --storage-type gp3 --storage-encrypted \
-        --db-name "$DB_NAME" --master-username "$DB_USERNAME" \
+        --master-username "$DB_USERNAME" \
         --master-user-password "$DB_PASSWORD" \
         --db-subnet-group-name "$DB_SUBNET_GROUP" --vpc-security-group-ids "$DB_SG" \
         --no-publicly-accessible --no-multi-az \
@@ -248,13 +268,17 @@ fi
 PRIVATE_SUBNET_IDS=$(IFS=,; echo "${PRIVATE_SUBNETS[*]}")
 
 echo ""
-echo "Listo. Para services/wms/deploy.config:"
+echo "Listo. Para el deploy.config de cada servicio con base de datos:"
 echo "  VPC_ID=${VPC_ID}"
 echo "  PRIVATE_SUBNET_IDS=${PRIVATE_SUBNET_IDS}"
 echo "  INTERNAL_SG_ID=${LAMBDA_SG}"
-echo "Para services/wms/.env (la contraseña la pones tú):"
-echo "  DB_HOST=${DB_HOST}"
-echo "  DB_PORT=5432"
-echo "  DB_NAME=${DB_NAME}"
-echo "  DB_USER=${DB_USERNAME}"
-echo "  PostgreSQL ${DB_VERSION}"
+echo "Para su .env: DB_HOST=${DB_HOST}, DB_PORT=5432, y su DB_NAME, DB_USER y DB_PASSWORD."
+echo "PostgreSQL ${DB_VERSION}."
+echo ""
+echo "Una sola vez por servicio, conectado como ${DB_USERNAME} desde la red privada"
+echo "(la contraseña de cada usuario la eliges tú y va sólo a su .env):"
+for service in "${SERVICE_DATABASES[@]}"; do
+    echo "  CREATE ROLE ${service} LOGIN PASSWORD '<contraseña de ${service}>';"
+    echo "  CREATE DATABASE ${service} OWNER ${service};"
+    echo "  REVOKE ALL ON DATABASE ${service} FROM PUBLIC;"
+done

@@ -131,7 +131,10 @@ límite de tasa.
 
 ### Infraestructura
 
-- **Sin RDS por presupuesto.** Todo servicio nuevo: DynamoDB + Lambda + S3.
+- **Datos según transaccionalidad** (10-nov-2026): WMS, BILLING, COMMERCIAL y
+  FINANCE en una instancia RDS PostgreSQL compartida, una base, usuario y
+  contraseña por servicio, en red privada con instancia NAT
+  (`services/ci/api/create_private_network.sh`); el resto en DynamoDB.
 - **Un solo EVENTS para pruebas y producción** hasta pasar de 10 clientes
   reales.
 - **Un dominio para toda la API**, `bearsoft-gateway` (HTTP API, formato 2.0),
