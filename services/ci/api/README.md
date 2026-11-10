@@ -30,6 +30,7 @@ Esta carpeta despliega los microservicios de BearSoft (los servicios base, Smart
 | `create_dynamodb_tables.sh` | Crea las tablas DynamoDB que faltan. No borra ni modifica las que existen. | Sólo si agregas una tabla nueva. |
 | `create_schedules.sh` | Crea las tareas programadas (por ejemplo, la sincronización diaria del tipo de cambio). | No: `start.sh` lo llama. |
 | `create_queues.sh` | Crea las colas SQS entre servicios (hoy, las de SmartBilling hacia COMMERCIAL y hacia FINANCE), sus colas de fallidos, los permisos de quien envía y de quien consume, y el disparador hacia el Lambda que la vacía. No borra nada. | `start.sh` lo llama en el despliegue completo. Tú, sólo si agregas una cola (caso B, paso 4). |
+| `create_wms_network.sh` | Crea la red privada y la base del WMS: VPC propia, instancia NAT t4g.nano (fck-nat) que se repone sola, y RDS PostgreSQL db.t4g.micro sin acceso público. Pide la contraseña de la base y no la guarda; al final imprime los valores para el `deploy.config` y el `.env` del WMS. Idempotente; no borra nada. | Una sola vez, antes del primer despliegue del WMS. `start.sh` no lo llama. |
 | `setup_api_domain.sh` | Configura `api.bearsoft.com.bo`: certificado, dominio y la puerta de entrada `bearsoft-gateway`, con una ruta por servicio. | Sólo la primera vez o si algo del dominio falla. |
 | `update_service_urls.sh` | Cambia en los `.env` las direcciones con las que los servicios se llaman entre sí. | No: `start.sh --urls` lo llama. |
 
