@@ -16,6 +16,7 @@ Esta carpeta despliega los microservicios de BearSoft (los servicios base, Smart
 6. [Cómo comprobar que un despliegue salió bien](#6-cómo-comprobar-que-un-despliegue-salió-bien)
 7. [Problemas conocidos y cómo resolverlos](#7-problemas-conocidos-y-cómo-resolverlos)
 8. [Referencia: el orden de despliegue y por qué](#8-referencia-el-orden-de-despliegue-y-por-qué)
+9. [La base PostgreSQL compartida: cómo se armó y cómo se administra](#9-la-base-postgresql-compartida-cómo-se-armó-y-cómo-se-administra)
 
 ---
 
@@ -410,3 +411,121 @@ Una sola puerta de entrada, el API HTTP **`bearsoft-gateway`**, recibe todo lo q
 Los servicios propios no tienen API por servicio: su `deploy.config` no lleva `API_NAME`, así que `build_and_deploy.sh` no lo crea y sólo se llega a ellos por el gateway. La excepción es EVENTS, que conserva `events-handler-service` porque el entorno de desarrollo de BINARIA apunta a esa URL.
 
 **Si un servicio agrega un prefijo de rutas nuevo** (un `APIRouter(prefix = '/v1/algo')` que no estaba), agrégalo a la lista `ROUTES` de `setup_api_domain.sh` y ejecuta el script.
+
+---
+
+## 9. La base PostgreSQL compartida: cómo se armó y cómo se administra
+
+Los servicios transaccionales (WMS, BILLING, COMMERCIAL y FINANCE) usan una sola instancia RDS PostgreSQL, **cada uno con su propia base de datos, su usuario y su contraseña**. PostgreSQL no consulta entre bases distintas, así que ningún servicio puede leer las tablas de otro. El resto sigue en DynamoDB. Se armó el 10-nov-2026 con estos pasos; sirven igual para rehacerla en otra cuenta.
+
+### Lo que quedó creado
+
+| Recurso | Valor |
+|---|---|
+| Instancia RDS | `bearsoft-postgres` — PostgreSQL 18, `db.t4g.micro`, 20 GB, una zona, sin acceso público, cifrada, protección contra borrado, 7 días de respaldo, SSL obligatorio (`rds.force_ssl = 1`) |
+| Dirección | `bearsoft-postgres.cwi4asu25chp.us-east-1.rds.amazonaws.com`, puerto 5432 |
+| Usuario maestro | `bearsoft_admin`. Sólo crea bases y usuarios; ningún servicio lo usa. Su contraseña la puso Rafael y no está en ningún archivo ni en Secrets Manager |
+| Red | VPC `vpc-0026d4620efe85a8d` (10.40.0.0/16): una subred pública para la NAT y dos privadas en dos zonas |
+| Salida a internet | Instancia NAT `i-0ccca9cb40756e2f8` (t4g.nano, imagen fck-nat), con alarmas que la recuperan o la reinician solas. No se usa NAT Gateway: cuesta ~US$ 33 al mes contra ~US$ 7,40 |
+| Salida a DynamoDB | Endpoint de tipo gateway, gratuito: las tablas DynamoDB no pasan por la NAT |
+| Bases y usuarios | `wms`, `billing`, `commercial` y `finance`, cada base cuyo dueño es el usuario del mismo nombre, sin acceso para nadie más |
+| Costo | ~US$ 22 al mes (RDS ~US$ 14,6 más NAT ~US$ 7,40) |
+
+### Paso 1. Crear la red, la NAT y la instancia
+
+```bash
+cd services/ci/api
+./create_private_network.sh
+```
+
+Pide la contraseña del usuario maestro (no se ve al escribirla y no se guarda). La base tarda entre 5 y 10 minutos. Al terminar imprime los valores para el `deploy.config` y el `.env` de cada servicio. Es idempotente: si algo ya existe, lo deja como está.
+
+> El 10-nov la instancia se creó primero con la contraseña administrada por Secrets Manager y después se pasó a contraseña propia desde la consola (RDS → `bearsoft-postgres` → Modificar → «Autoadministrado» → Aplicar inmediatamente), lo que borró el secreto. Ya no hace falta: el script pide la contraseña.
+
+### Paso 2. Dejar la NAT lista para administrar la base
+
+```bash
+./setup_db_admin_access.sh
+```
+
+Le da a la instancia NAT un rol de Systems Manager (`AmazonSSMManagedInstanceCore`) y le permite llegar al puerto 5432 de la base. Necesita un perfil de AWS con permisos de IAM. **Reinicia la NAT** al asociarle el rol: una instancia que arrancó sin rol deja su agente de Systems Manager sin credenciales y la sesión responde «*is not connected*» (pasó el 10-nov). Sin costo.
+
+### Paso 3. Entrar a la base
+
+1. Consola de AWS → EC2 → instancia `bearsoft-private-nat` → **Conectar** → **Session Manager** → Conectar. Se abre una terminal en el navegador, sin claves SSH ni puertos abiertos.
+2. La primera vez, instalar el cliente:
+   ```bash
+   sudo dnf install -y postgresql17
+   ```
+3. Conectarse como el usuario maestro (pide su contraseña):
+   ```bash
+   psql "host=bearsoft-postgres.cwi4asu25chp.us-east-1.rds.amazonaws.com user=bearsoft_admin dbname=postgres sslmode=require"
+   ```
+   El aviso «psql major version 17, server major version 18» es normal: el cliente 17 funciona con el servidor 18.
+
+### Paso 4. Crear la base y el usuario de un servicio
+
+Dentro de `psql`, sin contraseñas a la vista (ejemplo con `billing`):
+
+```sql
+CREATE ROLE billing LOGIN;
+GRANT billing TO bearsoft_admin;          -- deja al maestro crear la base a nombre de billing
+CREATE DATABASE billing OWNER billing;
+REVOKE ALL ON DATABASE billing FROM PUBLIC;
+```
+
+Y la contraseña del usuario, que `psql` pide dos veces sin mostrarla y envía cifrada (no queda en pantalla ni en el historial):
+
+```
+\password billing
+```
+
+Para comprobar:
+
+```sql
+SELECT datname, pg_get_userbyid(datdba) AS owner, datacl
+FROM pg_database WHERE datname IN ('wms', 'billing', 'commercial', 'finance');
+```
+
+Cada base debe tener como dueño a su usuario y en `datacl` sólo a ese usuario. `\q` para salir.
+
+### Paso 5. Conectar un servicio
+
+En su `deploy.config` (`build_and_deploy.sh` pone el Lambda en la red privada cuando están los tres):
+
+```
+VPC_ID=vpc-0026d4620efe85a8d
+PRIVATE_SUBNET_IDS=subnet-055c08b73630d98ef,subnet-02438e837f9aad3cc
+INTERNAL_SG_ID=sg-0ac7095f7df0a1469
+```
+
+En su `.env` (nombres de `core/db_connection.py`, los mismos de LOCALIZATION):
+
+```
+DB_USER='billing'
+DB_HOST='bearsoft-postgres.cwi4asu25chp.us-east-1.rds.amazonaws.com'
+DB_PORT=5432
+DATABASE='billing'
+DB_DIALECT='postgresql+psycopg2'
+DB_POOL_SIZE=1
+DB_MAX_OVERFLOW=0
+DB_SSLMODE='require'
+DB_PASSWORD=...   # la pone quien la creó en el paso 4
+```
+
+Una conexión por proceso porque cada ejecución de Lambda en paralelo tiene su propio pool y la `db.t4g.micro` acepta unas 80 conexiones. Cuando haga falta más, va un RDS Proxy delante y se sube `DB_POOL_SIZE`.
+
+### Paso 6. Crear las tablas del servicio
+
+El esquema de cada servicio se genera de sus modelos (en BILLING, `models/billing_schema.sql`, que una prueba mantiene igual a los modelos). Se aplica desde la misma sesión, conectado como el usuario del servicio:
+
+```bash
+psql "host=bearsoft-postgres.cwi4asu25chp.us-east-1.rds.amazonaws.com user=billing dbname=billing sslmode=require"
+```
+
+y pegando el contenido del archivo. Sin Alembic: los cambios de esquema se versionan a mano en ese archivo.
+
+### Cuando crezca
+
+Por orden, según se necesite: agrandar la instancia y activar el crecimiento automático del disco; RDS Proxy (las conexiones se agotan antes que la capacidad); réplica de lectura para reportes; llevar la base del WMS a su propia instancia (un volcado y una restauración, sin tocar a los demás); Aurora, que sigue siendo PostgreSQL. Para pasar de la instancia NAT al NAT Gateway: crear el gateway en la subred pública y cambiar la ruta `0.0.0.0/0` de la tabla privada (`replace-route`); ni el código ni los Lambdas cambian.
+
