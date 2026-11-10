@@ -16,6 +16,12 @@ import {
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const SHOWN_CHANGES = 12;
+/**
+ * An aisle on the plan: its number, which goes in the codes, and its name when
+ * the warehouse calls it something else («Galletas», «Saldos»).
+ */
+export const aisleLabel = (aisle) => (aisle.name && aisle.name !== `Pasillo ${aisle.number}`
+    ? `P${aisle.number} · ${aisle.name}` : `Pasillo ${aisle.number}`);
 /** The aisle's fill: diagonal stripes, the floor marking of a real aisle. */
 const AISLE_STRIPES = '<pattern id="aisleStripes" width="1" height="1" patternUnits="userSpaceOnUse" ' +
     'patternTransform="rotate(45)"><rect width="1" height="1" fill="var(--plan-aisle)"></rect>' +
@@ -60,13 +66,23 @@ export async function mountWarehouse(host, { go, view }) {
             <section class="card plan-card">
                 <div class="plan-tools">
                     <form id="addElement" class="tool-group" novalidate>
-                        <label class="field"><span>Elemento</span>
+                        <p class="tool-title">Nuevo elemento</p>
+                        <label class="field"><span>Tipo</span>
                             <select name="type">${types.map((one) => `<option value="${one.code}">${escapeHtml(one.name)}</option>`).join('')}</select></label>
+                        <label class="field"><span>Ancho (m)</span><input type="number" name="width_m" step="0.1" min="0.5" required></label>
+                        <label class="field"><span>Fondo (m)</span><input type="number" name="length_m" step="0.1" min="0.5" required></label>
+                        <label class="field"><span>Alto (m)</span><input type="number" name="height_m" step="0.1" min="0"></label>
+                        <label class="field" data-levels><span>Niveles</span><input type="number" name="levels" min="1" max="12"></label>
+                        <label class="field"><span id="palletsLabel">Palés por nivel</span><input type="number" name="capacity_pallets" min="0"></label>
+                        <label class="field"><span>Peso máx. (kg)</span><input type="number" name="capacity_weight_kg" min="0"></label>
                         <button type="submit" class="btn btn-primary" data-btn-icon="plus">Agregar elemento</button>
                     </form>
                     <form id="addAisle" class="tool-group" novalidate>
-                        <label class="field"><span>Largo del pasillo (m)</span><input type="number" name="length" step="0.5" min="2" value="40"></label>
-                        <label class="field"><span>Ancho (m)</span><input type="number" name="width" step="0.5" min="1" value="3.5"></label>
+                        <p class="tool-title">Nuevo pasillo</p>
+                        <label class="field"><span>Nombre</span><input name="name" maxlength="40" placeholder="Galletas, Saldos…"></label>
+                        <label class="field"><span>Largo (m)</span><input type="number" name="aisle_length" step="0.5" min="2" value="40" required></label>
+                        <label class="field"><span>Ancho (m)</span><input type="number" name="aisle_width" step="0.5" min="1" value="3.5" required></label>
+                        <label class="field"><span>Tramo (m)</span><input type="number" name="bay_m" step="0.5" min="0.5" value="${DEFAULT_BAY_M}" required></label>
                         <button type="submit" class="btn btn-secondary" data-btn-icon="plus">Agregar pasillo</button>
                     </form>
                 </div>
@@ -101,7 +117,7 @@ export async function mountWarehouse(host, { go, view }) {
         look: (item) => {
             if (item.entity === 'AISLE') {
                 return { kind: 'aisle', fill: 'url(#aisleStripes)', stroke: 'var(--plan-aisle-line)',
-                         label: `Pasillo ${item.number}`, title: `${item.name} · ${metres(item.width_m)} × ${metres(item.length_m)}` };
+                         label: aisleLabel(item), title: `${item.name} · ${metres(item.width_m)} × ${metres(item.length_m)}` };
             }
             const type = typeOf(item);
             const code = codeOf(item);
@@ -207,7 +223,7 @@ export async function mountWarehouse(host, { go, view }) {
     function aislePanel(item) {
         return `
             <form id="itemForm" class="panel-form" novalidate>
-                <h3>Pasillo ${item.number}</h3>
+                <h3>${escapeHtml(aisleLabel(item))}</h3>
                 <div class="field-row">
                     <label class="field"><span>Número</span><input type="number" name="number" min="1" value="${item.number}"></label>
                     <label class="field"><span>Nombre</span><input name="name" value="${escapeHtml(item.name)}"></label>
@@ -305,20 +321,42 @@ export async function mountWarehouse(host, { go, view }) {
         propose([...draft, { ...item, pos_x_m: spot.x, pos_y_m: spot.y }], 'Agregar');
     }
 
-    host.querySelector('#addElement').addEventListener('submit', (event) => {
+    // Each element is entered with its own measures: the type only proposes them.
+    const elementForm = host.querySelector('#addElement');
+    const suggest = () => {
+        const type = types.find((one) => one.code === elementForm.elements.type.value);
+        Object.entries({ ...type.default_size, levels: type.default_levels,
+                         capacity_pallets: type.has_levels ? 2 : 1 }).forEach(([key, value]) => {
+            elementForm.elements[key].value = value;
+        });
+        elementForm.elements.capacity_weight_kg.value = '';
+        elementForm.querySelector('[data-levels]').hidden = !type.has_levels;
+        host.querySelector('#palletsLabel').textContent = type.has_levels ? 'Palés por nivel' : 'Palés';
+    };
+    elementForm.elements.type.addEventListener('change', suggest);
+    suggest();
+    elementForm.addEventListener('submit', (event) => {
         event.preventDefault();
-        const type = types.find((one) => one.code === event.currentTarget.elements.type.value);
+        if (!elementForm.reportValidity()) return;
+        const type = types.find((one) => one.code === elementForm.elements.type.value);
         place({ id: crypto.randomUUID(), entity: 'ELEMENT', warehouse_id: warehouse.id, type: type.code,
-                levels: type.default_levels, ...type.default_size, capacity_pallets: type.has_levels ? 2 : 1,
-                capacity_weight_kg: null, number: 0, aisle_id: null });
+                width_m: numberOf(elementForm, 'width_m', type.default_size.width_m),
+                length_m: numberOf(elementForm, 'length_m', type.default_size.length_m),
+                height_m: numberOf(elementForm, 'height_m', 0),
+                levels: type.has_levels ? numberOf(elementForm, 'levels', type.default_levels) : 1,
+                capacity_pallets: numberOf(elementForm, 'capacity_pallets', null),
+                capacity_weight_kg: numberOf(elementForm, 'capacity_weight_kg', null), number: 0, aisle_id: null });
     });
     host.querySelector('#addAisle').addEventListener('submit', (event) => {
         event.preventDefault();
         const form = event.currentTarget;
+        if (!form.reportValidity()) return;
         const number = Math.max(0, ...aislesOf(draft).map((one) => one.number)) + 1;
         place({ id: crypto.randomUUID(), entity: 'AISLE', warehouse_id: warehouse.id, number,
-                name: `Pasillo ${number}`, width_m: numberOf(form, 'length', 40), length_m: numberOf(form, 'width', 3.5),
-                bay_m: DEFAULT_BAY_M });
+                name: form.elements.name.value.trim() || `Pasillo ${number}`,
+                width_m: numberOf(form, 'aisle_length', 40), length_m: numberOf(form, 'aisle_width', 3.5),
+                bay_m: numberOf(form, 'bay_m', DEFAULT_BAY_M) });
+        form.elements.name.value = '';
     });
     host.querySelector('#warehousePick').addEventListener('change', (event) => {
         selection.warehouse = event.target.value;

@@ -57,7 +57,10 @@ function bayNumber(element, aisle) {
 
 /**
  * Every element with the aisle it sits beside and its number there.
- * Elements away from every aisle are numbered among themselves, by position.
+ *
+ * Elements away from every aisle keep the number they had, so adding or
+ * moving one does not renumber the rest; a new one (or one that comes from an
+ * aisle and finds its number taken) gets the next free number of its type.
  */
 export function assignAisles(elements, aisles) {
     const loose = [];
@@ -65,11 +68,27 @@ export function assignAisles(elements, aisles) {
         const aisle = nearestAisle(element, aisles);
         const next = { ...element, aisle_id: aisle ? aisle.id : null };
         if (aisle) next.number = bayNumber(next, aisle);
-        else loose.push(next);
+        else loose.push({ item: next, keeps: !element.aisle_id && element.number > 0 });
         return next;
     });
-    loose.sort((one, other) => one.pos_y_m - other.pos_y_m || one.pos_x_m - other.pos_x_m)
-        .forEach((item, index) => { item.number = index + 1; });
+    const used = new Map();
+    const take = (type, number) => {
+        if (!used.has(type)) used.set(type, new Set());
+        used.get(type).add(number);
+    };
+    // Those that already had a number here keep it, first come first served.
+    loose.filter((one) => one.keeps).forEach((one) => {
+        const taken = used.get(one.item.type);
+        if (taken && taken.has(one.item.number)) one.keeps = false;
+        else take(one.item.type, one.item.number);
+    });
+    loose.filter((one) => !one.keeps)
+        .sort((one, other) => one.item.pos_y_m - other.item.pos_y_m || one.item.pos_x_m - other.item.pos_x_m)
+        .forEach((one) => {
+            const taken = used.get(one.item.type) || new Set();
+            one.item.number = Math.max(0, ...taken) + 1;
+            take(one.item.type, one.item.number);
+        });
     return placed;
 }
 

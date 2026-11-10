@@ -3,6 +3,7 @@
  * warehouse's), what changed in it one by one, and the plan as it was.
  */
 import { PlanEditor } from '../plan.js';
+import { aisleLabel } from './WarehousePage.js';
 import { elementTypes, listFacilities, listWarehouses, versions } from '../store.js';
 import { escapeHtml, icon, metres, selection, stamp } from '../ui.js';
 
@@ -91,7 +92,7 @@ export async function mountHistory(host) {
                              label: item.code, sub: item.name, title: `${item.code} · ${metres(item.width_m)} × ${metres(item.length_m)}` };
                 }
                 return item.entity === 'AISLE'
-                    ? { kind: 'aisle', fill: 'var(--plan-aisle)', stroke: 'var(--plan-aisle-line)', label: `Pasillo ${item.number}` }
+                    ? { kind: 'aisle', fill: 'var(--plan-aisle)', stroke: 'var(--plan-aisle-line)', label: aisleLabel(item) }
                     : { kind: 'element', fill: typeColor(item.type), stroke: 'var(--plan-element-line)',
                         label: `${(types.find((one) => one.code === item.type) || {}).code_letter || ''}${item.number}` };
             }
