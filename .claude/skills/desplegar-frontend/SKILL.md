@@ -53,6 +53,21 @@ aws cloudfront create-invalidation --distribution-id EWVWU4A03ZZ4Z \
     --paths '/*' --profile deploy_ml --query 'Invalidation.Status' --output text
 ```
 
+## Portal del WMS — `portal/wms`
+
+Bucket `bearsoft-wms-portal`, distribución `E3DFC400U5HW7L`
+(`https://d79wksn0qih5l.cloudfront.net`, sin dominio propio todavía), perfil
+`deploy_ml`. Igual que SmartBilling: módulos ES con `--cache-control no-cache`.
+El symlink `common` se sube como carpeta (`aws s3 sync` sigue symlinks).
+
+```bash
+cd portal/wms
+aws s3 sync . s3://bearsoft-wms-portal/ --exclude README.md --exclude ".*" --exclude "*/.*" \
+    --cache-control no-cache --profile deploy_ml --no-progress
+aws cloudfront create-invalidation --distribution-id E3DFC400U5HW7L \
+    --paths '/*' --profile deploy_ml --query 'Invalidation.Status' --output text
+```
+
 ## Verificación obligatoria
 
 **Un despliegue no termina hasta comprobar que lo publicado es lo local.** Se ha
