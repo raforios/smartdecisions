@@ -1,27 +1,18 @@
 '''
     Test package bootstrap.
 
-    Two things must be in place *before* any test module imports the service:
-
-        1. The DB_* environment variables, because core.db_connection
-           validates its configuration at import time (the engine itself is
-           created lazily and never actually connects during the tests).
-        2. The scripts/ directory on sys.path, because the catalog importer is
-           a standalone script that lives outside the package.
-
-    Doing both here — the package initializer, which Python always runs first —
-    lets every test module keep its imports at the top of the file.
+    The database settings must be in place before any test module imports
+    the service, because core.db_connection builds its engine on import. The
+    tests run on an in-memory SQLite database shared by every session: no
+    PostgreSQL and no network. Doing it here, the package initializer that
+    Python always runs first, lets every test module keep its imports at the
+    top of the file; a real `.env` is never read for these values.
 '''
 import os
-import sys
 
-_SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-os.environ.setdefault('DB_USER', 'test')
-os.environ.setdefault('DB_PASSWORD', 'test')
-os.environ.setdefault('DB_HOST', 'localhost')
-os.environ.setdefault('DATABASE', 'test')
-os.environ.setdefault('DB_PORT', '3306')
-os.environ.setdefault('DB_DIALECT', 'mysql+pymysql')
-
-sys.path.insert(0, os.path.join(_SERVICE_DIR, 'scripts'))
+for _name, _value in {
+    'DB_USER': 'test', 'DB_PASSWORD': 'test', 'DB_HOST': 'localhost',
+    'DATABASE': ':memory:', 'DB_PORT': '5432', 'DB_DIALECT': 'sqlite+pysqlite',
+    'DB_POOL_SIZE': '1', 'DB_MAX_OVERFLOW': '0', 'DB_SSLMODE': 'disable'
+}.items():
+    os.environ[_name] = _value

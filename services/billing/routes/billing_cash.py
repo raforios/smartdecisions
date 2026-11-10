@@ -12,7 +12,7 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path, Query, Request, status
 
-from core.db_connection import GET_DB_DEPENDENCY
+from core.db_connection_dydb import GET_DB_DEPENDENCY
 from core.logger_config import custom_logger as logger
 from core.security import get_current_owner, get_current_payload, get_current_user
 from controllers.billing_cash import (

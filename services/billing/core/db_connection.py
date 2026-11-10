@@ -1,51 +1,122 @@
 '''
-    DynamoDB Connection
+    Database Connection
+
+    Taken from LOCALIZATION and TRADE, tested there with MySQL and PostgreSQL
+    (Rafael, 10-nov-2026), with three changes for this platform:
+
+        - Lambda: every concurrent execution is its own process with its own
+          pool, so the pool size comes from the .env (one connection per
+          process until an RDS Proxy sits in front).
+        - SSL: the shared instance only accepts encrypted connections; the
+          mode comes from the .env so a MySQL service is not forced into it.
+        - SQLite (the tests): no pool sizes, and one connection shared by
+          every session so an in-memory database lives for the whole run.
 '''
-from collections.abc import Callable
-import boto3
-from botocore.exceptions import ClientError
-from core.logger_config import custom_logger as logger
-from core.exceptions import ServiceUnavailableError
+from collections.abc import Callable, Generator
 
-# Initializes the boto3 connection
-dynamodb_resource = boto3.resource('dynamodb')
+from sqlalchemy import URL, create_engine
+from sqlalchemy.engine.base import Engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
-def get_db_resource() -> Callable:
+from core.environment import load_and_validate_env_vars
+
+ENV_VARS = load_and_validate_env_vars(
+    {
+        'DB_USER': str,
+        'DB_PASSWORD': str,
+        'DB_HOST': str,
+        'DATABASE': str,
+        'DB_PORT': int,
+        'DB_DIALECT': str,
+        'DB_POOL_SIZE': int,
+        'DB_MAX_OVERFLOW': int,
+        'DB_SSLMODE': str
+    }
+)
+
+
+class Base(DeclarativeBase):  # pylint: disable=too-few-public-methods
     '''
-        Returns a callable that provides the DynamoDB resource.
-        
+        Base class of every SQLAlchemy model of the service.
+    '''
+
+
+def get_database_engine(db_dialect: str) -> Engine:
+    '''
+        Creates the SQLAlchemy engine for the configured database.
+
+        Args:
+            db_dialect (str): The dialect and driver, e.g. 'postgresql+psycopg2',
+                'mysql+pymysql' or 'sqlite+pysqlite'.
+
         Returns:
-            Callable: A callable to obtain a DynamoDB resource.
-    '''
-    def _get_db():
-        '''
-        Provides the DynamoDB resource as a dependency.
-        '''
-        return dynamodb_resource
-    return _get_db
+            Engine: The configured database engine.
 
-def get_table(table_name: str):
-    '''
-        Returns a reference to the specified DynamoDB table.
+        Raises:
+            ValueError: If the URL cannot be built from the configuration.
+            RuntimeError: For any other error while creating the engine.
     '''
     try:
-        table = dynamodb_resource.Table(table_name)
-        message = f'DynamoDB table "{table_name}" accessed successfully.'
-        logger.info(message)
-        return table
-    except ClientError as e:
-        error_msg = f'Error accessing DynamoDB table "{table_name}": {
-            e.response.get("Error", {}).get("Message")}'
-        logger.error(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = f'Database initialization error: {error_msg}'
-        ) from e
-    except Exception as e:
-        error_msg = f'Unexpected error when getting DynamoDB table {table_name}: {e}'
-        logger.critical(error_msg, exc_info = True)
-        raise ServiceUnavailableError(
-            detail = 'Unexpected database initialization error.'
-        ) from e
+        if db_dialect.startswith('sqlite'):
+            return create_engine(
+                URL.create(db_dialect, database = ENV_VARS['DATABASE']),
+                connect_args = {'check_same_thread': False},
+                poolclass = StaticPool
+            )
+        url_database = URL.create(
+            db_dialect,
+            username = ENV_VARS['DB_USER'],
+            password = ENV_VARS['DB_PASSWORD'],
+            host = ENV_VARS['DB_HOST'],
+            database = ENV_VARS['DATABASE'],
+            port = ENV_VARS['DB_PORT']
+        )
+        connect_args = ({'sslmode': ENV_VARS['DB_SSLMODE']}
+                        if db_dialect.startswith('postgresql') else {})
+        return create_engine(
+            url_database,
+            connect_args = connect_args,
+            pool_pre_ping = True,
+            pool_size = ENV_VARS['DB_POOL_SIZE'],
+            max_overflow = ENV_VARS['DB_MAX_OVERFLOW'],
+            pool_timeout = 30,
+            echo = False
+        )
+    except ValueError as val_e:
+        raise ValueError(
+            f'Error creating database URL or engine: {val_e}. Check DB_PORT or dialect.'
+        ) from val_e
+    except Exception as general_e:
+        raise RuntimeError(
+            f'An unexpected error occurred while creating the database engine: {general_e}'
+        ) from general_e
 
-# Dependency instance, for FastAPI to inject
-GET_DB_DEPENDENCY: Callable = get_db_resource() # pylint: disable=invalid-name
+
+def get_db_session(engine: Engine) -> Callable[[], Generator[Session, None, None]]:
+    '''
+        Returns a generator function that provides a database session.
+
+        Args:
+            engine (Engine): The database engine to use.
+
+        Returns:
+            Callable: A generator function to obtain a DB session; FastAPI
+                closes it when the request ends.
+    '''
+    session_factory = sessionmaker(autocommit = False, autoflush = False, bind = engine)
+
+    def _get_db() -> Generator[Session, None, None]:
+        '''
+            Opens a session for one request and always closes it.
+        '''
+        db: Session = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+    return _get_db
+
+
+ENGINE: Engine = get_database_engine(ENV_VARS['DB_DIALECT'])
+GET_DB_DEPENDENCY: Callable = get_db_session(ENGINE)  # pylint: disable=invalid-name

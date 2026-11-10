@@ -10,3 +10,5 @@ lxml
 zeep
 segno
 fpdf2
+sqlalchemy
+psycopg2-binary

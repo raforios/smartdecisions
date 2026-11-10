@@ -27,6 +27,7 @@ PRODUCT_SERVICES = (
     'auth', 'events', 'files', 'ml_functions', 'ai',
 )
 BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dydb.py', 'db_connection.py',
+               'db_connection_dydb.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
                'utils.py'}
 SPLIT_AT = 800

@@ -23,7 +23,7 @@ from mangum import Mangum
 import uvicorn
 
 from core.api_exceptions import setup_exception_handlers
-from core.db_connection import dynamodb_resource
+from core.db_connection_dydb import dynamodb_resource
 from core.security import require_roles
 from core.environment import load_and_validate_env_vars
 from core.logger_config import custom_logger as logger

@@ -1,345 +1,238 @@
 '''
-    CRUD Service
+    CRUD service
+
+    Taken from LOCALIZATION and TRADE (Rafael, 10-nov-2026). One change: the
+    owner is part of every query (CLAUDE.md §8). A record is looked up by its
+    owner and its own key, never by an id alone, so a record of another
+    company answers exactly like one that does not exist.
+
+    The functions flush and never commit: the controller commits once, at
+    the end of the operation, so a sale and its stock movement are saved
+    together or not at all.
 '''
-import json
-import decimal
 from typing import Any
-from boto3.resources.base import ServiceResource
-from boto3.dynamodb.conditions import Attr, Key
-from botocore.exceptions import ClientError as AWSClientError
+
+from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from core.db_connection import Base
+from core.exceptions import RegisterNotFoundError
 from core.logger_config import custom_logger as logger
-from core.exceptions import RegisterAlreadyExistsError, RegisterNotFoundError
 
-TABLE_SCHEMA = {
-    'audit_records': {'pk': 'id', 'sk': 'sk', 'index': 'sk-pk-index'},
-    'usage_logs': {'pk': 'id', 'sk': 'sk', 'index': 'sk-pk-index'},
-}
 
-def _convert_floats_to_decimals(data: Any) -> Any:
+def handle_db_exception(
+    e: Exception,
+    operation: str,
+    entity_id: Any = None
+) -> None:
     '''
-        Recursively converts all float values in a dictionary or list
-        to Decimal objects for DynamoDB compatibility.
-    '''
-    if isinstance(data, float):
-        return decimal.Decimal(str(data))
-    if isinstance(data, dict):
-        return {k: _convert_floats_to_decimals(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [_convert_floats_to_decimals(v) for v in data]
-    return data
+        Logs a database failure and re-raises it as the error the caller expects.
 
-def create_item(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    item_data: dict[str, Any],
-    unique_key_attribute: str
-) -> dict[str, Any]:
-    '''
-        Adds a new item to a DynamoDB table, enforcing uniqueness on the
-        partition-key attribute supplied by the caller.
+        Not-found and integrity errors go up as they are: the controller gives
+        them their business meaning (a duplicate SKU, a missing note). Any
+        other database failure becomes a RuntimeError.
 
         Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            table_name (str): Target DynamoDB table.
-            item_data (dict[str, Any]): Item to insert.
-            unique_key_attribute (str): Attribute used to enforce uniqueness via
-                an 'attribute_not_exists' condition (typically the partition key).
-
-        Returns:
-            dict[str, Any]: The persisted item.
+            e (Exception): The error raised by the database call.
+            operation (str): What was being done, for the log.
+            entity_id (Any): Which record, for the log.
 
         Raises:
-            RegisterAlreadyExistsError: If an item with the same key already exists.
+            RegisterNotFoundError: When that was the error.
+            IntegrityError: When a unique or foreign key constraint failed.
+            RuntimeError: For any other failure.
     '''
-    try:
-        table = dynamodb_resource.Table(table_name)
-
-        item_data_processed = _convert_floats_to_decimals(item_data)
-
-        table.put_item(
-            Item = item_data_processed,
-            ConditionExpression = f'attribute_not_exists({unique_key_attribute})'
-        )
-        message = f'Item added successfully to {table_name}.'
-        logger.info(message)
-        return item_data_processed
-    except AWSClientError as e:
-        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            error_msg = (
-                f'Item with {unique_key_attribute}='
-                f'{item_data.get(unique_key_attribute)} already exists.'
-            )
-            logger.warning(error_msg, exc_info = True)
-            raise RegisterAlreadyExistsError(detail = error_msg) from e
-        error_msg = f'Error adding item to {table_name}: {e}'
+    entity = entity_id if entity_id is not None else 'entity'
+    if isinstance(e, RegisterNotFoundError):
+        raise e
+    if isinstance(e, IntegrityError):
+        error_msg = f'Integrity error during {operation} for {entity}: {e}'
         logger.error(error_msg, exc_info = True)
         raise e
+    if isinstance(e, SQLAlchemyError):
+        error_msg = f'SQLAlchemy error during {operation} for {entity}: {e}'
+        logger.error(error_msg, exc_info = True)
+        raise RuntimeError('A database error occurred during the operation.') from e
+    error_msg = f'Unexpected error during {operation} for {entity}: {e}'
+    logger.critical(error_msg, exc_info = True)
+    raise RuntimeError('An unexpected internal error occurred.') from e
 
-def get_item_by_id(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    item_id: str
-) -> dict[str, Any]:
-    '''
-        Retrieves an item from a DynamoDB table by its ID.
-    '''
-    table = dynamodb_resource.Table(table_name)
-    response = table.get_item(
-        Key={
-            'id': item_id
-        }
-    )
-    item = response.get('Item')
-    if not item:
-        error_msg = f'Item with id {item_id} not found in {table_name}.'
-        logger.warning(error_msg)
-        raise RegisterNotFoundError(detail = error_msg)
 
-    message = f'Item with id {item_id} retrieved successfully.'
-    logger.info(message)
-    return item
+def create_record(
+    db: Session,
+    model: type[Base],
+    create_data: BaseModel,
+    extra_fields: dict[str, Any] | None = None,
+    exclude_relations: list[str] | None = None
+) -> Base:
+    '''
+        Creates a record from a Pydantic schema.
+
+        Args:
+            db (Session): The database session.
+            model (type[Base]): The SQLAlchemy model class.
+            create_data (BaseModel): The data of the new record.
+            extra_fields (dict[str, Any] | None): Fields the schema does not
+                carry, such as the owner.
+            exclude_relations (list[str] | None): Schema fields that are
+                relations, created by the caller.
+
+        Returns:
+            Base: The new record, with its database defaults filled in.
+    '''
+    try:
+        data_dict = create_data.model_dump(exclude = set(exclude_relations or []))
+        data_dict.update(extra_fields or {})
+        db_record = model(**data_dict)
+        db.add(db_record)
+        db.flush()
+        db.refresh(db_record)
+        return db_record
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        handle_db_exception(e, f'creation of {model.__name__}')
+        raise
+
+
+def find_record(
+    db: Session,
+    model: type[Base],
+    owner: str,
+    **keys: Any
+) -> Base | None:
+    '''
+        The owner's record with those keys, or None.
+
+        Args:
+            db (Session): The database session.
+            model (type[Base]): The SQLAlchemy model class.
+            owner (str): Whose record it is: always part of the query.
+            **keys (Any): The record's own key columns and values.
+
+        Returns:
+            Base | None: The record, or None when the owner has none.
+    '''
+    try:
+        return db.query(model).filter_by(owner = owner, **keys).one_or_none()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        handle_db_exception(e, f'retrieval of {model.__name__}', keys)
+        raise
+
+
+def get_record(
+    db: Session,
+    model: type[Base],
+    owner: str,
+    **keys: Any
+) -> Base:
+    '''
+        The owner's record with those keys.
+
+        Args:
+            db (Session): The database session.
+            model (type[Base]): The SQLAlchemy model class.
+            owner (str): Whose record it is: always part of the query.
+            **keys (Any): The record's own key columns and values.
+
+        Returns:
+            Base: The record.
+
+        Raises:
+            RegisterNotFoundError: When the owner has no such record, which
+                is also the answer for another company's record.
+    '''
+    record = find_record(db, model, owner, **keys)
+    if record is None:
+        message = f'{model.__name__} {keys} not found.'
+        logger.warning(message)
+        raise RegisterNotFoundError(detail = message)
+    return record
+
+
+def update_record(
+    db: Session,
+    db_record: Base,
+    update_data: BaseModel,
+    exclude_relations: list[str] | None = None
+) -> Base:
+    '''
+        Applies to a record the fields the schema sets.
+
+        Args:
+            db (Session): The database session.
+            db_record (Base): The record, as read with get_record.
+            update_data (BaseModel): The changes; unset fields are left alone.
+            exclude_relations (list[str] | None): Schema fields that are relations.
+
+        Returns:
+            Base: The updated record.
+    '''
+    try:
+        changes = update_data.model_dump(exclude_unset = True,
+                                         exclude = set(exclude_relations or []))
+        for key, value in changes.items():
+            setattr(db_record, key, value)
+        db.add(db_record)
+        db.flush()
+        return db_record
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        handle_db_exception(e, f'update of {type(db_record).__name__}')
+        raise
+
+
+def delete_record(
+    db: Session,
+    model: type[Base],
+    owner: str,
+    **keys: Any
+) -> None:
+    '''
+        Deletes the owner's record with those keys.
+
+        Args:
+            db (Session): The database session.
+            model (type[Base]): The SQLAlchemy model class.
+            owner (str): Whose record it is.
+            **keys (Any): The record's own key columns and values.
+
+        Raises:
+            RegisterNotFoundError: When the owner has no such record.
+    '''
+    record = get_record(db, model, owner, **keys)
+    try:
+        db.delete(record)
+        db.flush()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        handle_db_exception(e, f'deletion of {model.__name__}', keys)
+        raise
+
 
 def get_all_records_paginated(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    query_params: dict[str, Any],
-) -> dict[str, Any]:
+    db: Session,
+    model: type[Base],
+    owner: str,
+    pagination: tuple[int, int],
+    order_by: Any = None
+) -> list[Base]:
     '''
-        Retrieves all items from a DynamoDB table with optional pagination and filters.
+        A page of the owner's records.
+
+        Args:
+            db (Session): The database session.
+            model (type[Base]): The SQLAlchemy model class.
+            owner (str): Whose records: always part of the query.
+            pagination (tuple[int, int]): How many to skip and how many to return.
+            order_by (Any): The column or expression that orders the page.
+
+        Returns:
+            list[Base]: The records of that page.
     '''
+    skip, limit = pagination
     try:
-        table = dynamodb_resource.Table(table_name)
-        scan_kwargs = {'Limit': query_params.get('limit', 100)}
-
-        filters = {k: v for k, v in query_params.items() if v is not None and k \
-            not in ['limit', 'last_evaluated_key']}
-
-        if filters:
-            filter_expressions = [Attr(key).eq(value) for key, value in filters.items()]
-            combined_expression = filter_expressions[0]
-            for expr in filter_expressions[1:]:
-                combined_expression &= expr
-            scan_kwargs['FilterExpression'] = combined_expression
-
-        if 'last_evaluated_key' in query_params and query_params['last_evaluated_key']:
-            scan_kwargs['ExclusiveStartKey'] = json.loads(query_params['last_evaluated_key'])
-
-        response = table.scan(**scan_kwargs)
-
-        last_evaluated_key_json = json.dumps(response.get('LastEvaluatedKey'),
-                    separators=(',', ':')) if response.get('LastEvaluatedKey') else None
-
-        message = f'Retrieved {len(response.get("Items", []))} records from {table_name}.'
-        logger.info(message)
-
-        return {
-            'items': response.get('Items', []),
-            'last_evaluated_key': last_evaluated_key_json
-        }
-
-    except AWSClientError as e:
-        error_msg = f'Error retrieving all items from {table_name}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-    except json.JSONDecodeError as e:
-        logger.error('Invalid JSON format for last_evaluated_key.', exc_info = True)
-        raise e
-
-
-# ----------------------------------------------------------------------------
-# Boilerplate extensions (added 2026-05-04 for the Mining Summit service).
-#
-# The functions below complement the original CRUD primitives with helpers
-# required by services that do not key items by 'id':
-#
-#   * get_item_by_key             - generic version of get_item_by_id that
-#                                   accepts an arbitrary primary key dict
-#                                   (single or composite).
-#   * find_item_by_key            - same as above but returns None instead of
-#                                   raising RegisterNotFoundError, useful for
-#                                   "exists?" checks.
-#   * put_unique_composite_item   - inserts an item enforcing uniqueness on a
-#                                   (partition_key, sort_key) tuple.
-#   * query_by_partition          - efficient Query (no Scan) by partition
-#                                   value, with optional sort-key range.
-#
-# These helpers are generic and reusable; any other DynamoDB-backed service
-# can adopt them without modifying the original CRUD primitives above.
-# ----------------------------------------------------------------------------
-
-
-def get_item_by_key(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    key: dict[str, Any]
-) -> dict[str, Any]:
-    '''
-        Retrieves an item from a DynamoDB table by its primary key (single or
-        composite). Raises RegisterNotFoundError if the item does not exist.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            table_name (str): Target DynamoDB table.
-            key (dict[str, Any]): Primary key mapping (e.g., {'ci': '123'} or
-                {'ci': '123', 'attendance_date': '2026-05-04'}).
-
-        Returns:
-            dict[str, Any]: The retrieved item.
-    '''
-    table = dynamodb_resource.Table(table_name)
-    response = table.get_item(Key = key)
-    item = response.get('Item')
-    if not item:
-        error_msg = f'Item with key {key} not found in {table_name}.'
-        logger.warning(error_msg)
-        raise RegisterNotFoundError(detail = error_msg)
-    message = f'Item with key {key} retrieved successfully from {table_name}.'
-    logger.info(message)
-    return item
-
-
-def find_item_by_key(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    key: dict[str, Any]
-) -> dict[str, Any] | None:
-    '''
-        Retrieves an item from a DynamoDB table by its primary key, returning
-        None if the item does not exist (no exception is raised).
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            table_name (str): Target DynamoDB table.
-            key (dict[str, Any]): Primary key mapping.
-
-        Returns:
-            dict[str, Any] | None: The retrieved item or None.
-    '''
-    table = dynamodb_resource.Table(table_name)
-    response = table.get_item(Key = key)
-    return response.get('Item')
-
-
-def put_unique_composite_item(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    item_data: dict[str, Any],
-    partition_key: str,
-    sort_key: str
-) -> dict[str, Any]:
-    '''
-        Inserts an item into a composite-key DynamoDB table enforcing
-        uniqueness on the (partition_key, sort_key) tuple.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            table_name (str): Target DynamoDB table.
-            item_data (dict[str, Any]): Item to insert.
-            partition_key (str): Partition key attribute name.
-            sort_key (str): Sort key attribute name.
-
-        Returns:
-            dict[str, Any]: The persisted item.
-
-        Raises:
-            RegisterAlreadyExistsError: If a record with the same composite
-                key already exists.
-    '''
-    try:
-        table = dynamodb_resource.Table(table_name)
-        item_data_processed = _convert_floats_to_decimals(item_data)
-
-        table.put_item(
-            Item = item_data_processed,
-            ConditionExpression = (
-                f'attribute_not_exists({partition_key}) '
-                f'AND attribute_not_exists({sort_key})'
-            )
-        )
-        message = f'Composite item added successfully to {table_name}.'
-        logger.info(message)
-        return item_data_processed
-    except AWSClientError as e:
-        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            error_msg = (
-                f'Item with {partition_key}={item_data.get(partition_key)} '
-                f'and {sort_key}={item_data.get(sort_key)} already exists '
-                f'in {table_name}.'
-            )
-            logger.warning(error_msg, exc_info = True)
-            raise RegisterAlreadyExistsError(detail = error_msg) from e
-        error_msg = f'Error adding composite item to {table_name}: {e}'
-        logger.error(error_msg, exc_info = True)
-        raise e
-
-
-# pylint: disable=too-many-arguments, too-many-positional-arguments
-def query_by_partition(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    partition_key: str,
-    partition_value: str,
-    sort_key: str | None = None,
-    sort_between: dict[str, str] | None = None
-) -> list[dict[str, Any]]:
-    '''
-        Performs an efficient Query (not Scan) on a composite-key table by
-        partition value, optionally bounding the sort key.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            table_name (str): Target DynamoDB table.
-            partition_key (str): Partition key attribute name.
-            partition_value (str): Partition key value to match.
-            sort_key (str | None): Sort key attribute name (when bounding).
-            sort_between (dict[str, str] | None): Bounds for the sort key,
-                accepting 'from' and/or 'to' (inclusive).
-
-        Returns:
-            list[dict[str, Any]]: Matched items.
-    '''
-    table = dynamodb_resource.Table(table_name)
-    key_condition = Key(partition_key).eq(partition_value)
-
-    if sort_key and sort_between:
-        date_from = sort_between.get('from')
-        date_to = sort_between.get('to')
-        if date_from and date_to:
-            key_condition = key_condition & Key(sort_key).between(date_from, date_to)
-        elif date_from:
-            key_condition = key_condition & Key(sort_key).gte(date_from)
-        elif date_to:
-            key_condition = key_condition & Key(sort_key).lte(date_to)
-
-    response = table.query(KeyConditionExpression = key_condition)
-    items = response.get('Items', [])
-    message = f'Query on {table_name} returned {len(items)} item(s).'
-    logger.info(message)
-    return items
-
-
-def put_items(
-    dynamodb_resource: ServiceResource,
-    table_name: str,
-    items: list[dict[str, Any]]
-) -> int:
-    '''
-        Writes items in one batch, replacing any row with the same key, with
-        their floats as Decimal as DynamoDB requires.
-
-        Args:
-            dynamodb_resource (ServiceResource): The boto3 DynamoDB resource.
-            table_name (str): Target table.
-            items (list[dict[str, Any]]): Items to write.
-
-        Returns:
-            int: How many were written.
-    '''
-    if not items:
-        return 0
-    with dynamodb_resource.Table(table_name).batch_writer() as batch:
-        for item in items:
-            batch.put_item(Item = _convert_floats_to_decimals(item))
-    message = f'Batch of {len(items)} item(s) written to {table_name}.'
-    logger.info(message)
-    return len(items)
+        query = db.query(model).filter_by(owner = owner)
+        if order_by is not None:
+            query = query.order_by(order_by)
+        return query.offset(skip).limit(limit).all()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        handle_db_exception(e, f'page of {model.__name__}')
+        raise
