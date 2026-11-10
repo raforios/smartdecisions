@@ -26,7 +26,7 @@ PRODUCT_SERVICES = (
     # Base: generic, for any product
     'auth', 'events', 'files', 'ml_functions', 'ai',
 )
-BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py',
+BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dydb.py', 'db_connection.py',
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
                'utils.py'}
 SPLIT_AT = 800
